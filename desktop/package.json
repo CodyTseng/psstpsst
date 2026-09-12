@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "license": "MIT",
   "description": "Electron runtime for the PsstPsst encrypted messenger",
-  "author": "Cody Tseng",
+  "author": {
+    "name": "Cody Tseng",
+    "email": "codytseng98@gmail.com"
+  },
   "private": true,
   "repository": "https://github.com/codytseng/psstpsst",
   "main": "dist/main.js",

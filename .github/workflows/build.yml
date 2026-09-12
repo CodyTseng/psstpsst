@@ -267,8 +267,8 @@ jobs:
             "PsstPsst-${version}-mac-arm64.zip"
             "PsstPsst-${version}-win-x64.exe"
             "PsstPsst-${version}-win-arm64.exe"
-            "PsstPsst-${version}-linux-x64.AppImage"
-            "PsstPsst-${version}-linux-x64.deb"
+            "PsstPsst-${version}-linux-x86_64.AppImage"
+            "PsstPsst-${version}-linux-amd64.deb"
             "PsstPsst-${version}-linux-arm64.AppImage"
             "PsstPsst-${version}-linux-arm64.deb"
           )

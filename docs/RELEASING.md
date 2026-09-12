@@ -251,6 +251,10 @@ Electron Builder writes artifacts to `release/`:
 - Windows: x64/arm64 NSIS
 - Linux: x64/arm64 AppImage and DEB
 
+Linux x64 artifacts use the target's architecture spelling: `linux-x86_64.AppImage`
+and `linux-amd64.deb`. ARM64 artifacts use `linux-arm64` for both targets. Keep
+the release workflow's required asset names aligned with these output names.
+
 Build Electron on each target operating system because the application includes
 platform-native dependencies and a host-specific Nearby helper.
 
