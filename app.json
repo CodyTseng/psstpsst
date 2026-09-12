@@ -1,0 +1,178 @@
+{
+  "expo": {
+    "name": "PsstPsst",
+    "slug": "psstpsst",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/images/icon.png",
+    "scheme": "psstpsst",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "chat.psstpsst.app",
+      "buildNumber": "1",
+      "supportsTablet": true
+    },
+    "android": {
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "package": "chat.psstpsst.app"
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#3A76F0",
+          "android": {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 76
+          }
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID to confirm Lightning payments."
+        }
+      ],
+      [
+        "expo-localization",
+        {
+          "supportedLocales": [
+            "en",
+            "zh",
+            "zh-Hant",
+            "ar",
+            "de",
+            "es",
+            "fa",
+            "fr",
+            "hi",
+            "hu",
+            "it",
+            "ja",
+            "ko",
+            "pl",
+            "pt-BR",
+            "pt-PT",
+            "ru",
+            "th",
+            "tr"
+          ]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can send images, add custom emoji, and scan QR codes."
+        }
+      ],
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "activationRule": {
+              "supportsText": true,
+              "supportsWebUrlWithMaxCount": 1,
+              "supportsImageWithMaxCount": 10,
+              "supportsMovieWithMaxCount": 10,
+              "supportsFileWithMaxCount": 10,
+              "supportsAttachmentsWithMaxCount": 10
+            }
+          },
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "text/*",
+              "image/*",
+              "video/*",
+              "audio/*",
+              "application/*"
+            ],
+            "multipleShareMimeTypes": [
+              "image/*",
+              "video/*",
+              "audio/*",
+              "application/*",
+              "*/*"
+            ]
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera so you can take photos and scan QR codes."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos and videos to your library.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to record voice messages."
+        }
+      ],
+      "expo-image",
+      [
+        "./plugins/with-local-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png"
+        }
+      ],
+      "expo-background-task",
+      "./plugins/with-proximity-bluetooth",
+      "./plugins/with-device-orientation-policy",
+      "./plugins/with-pointer-hover",
+      "./plugins/with-ios-warning-cleanup",
+      "./plugins/with-third-party-notices",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "usePrecompiledModules": false
+          }
+        }
+      ],
+      "expo-web-browser",
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "reactCompiler": true
+    }
+  }
+}

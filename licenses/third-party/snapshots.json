@@ -1,0 +1,96 @@
+{
+  "reviewed": "2026-09-12",
+  "versions": {
+    "electron": "43.4.0",
+    "sharp": "0.35.4",
+    "sharp-libvips-posix": "1.3.3",
+    "sharp-win32": "0.35.4",
+    "@solar-icons/react-native": "1.1.1",
+    "expo-sqlite": "56.0.6",
+    "better-sqlite3": "13.0.3"
+  },
+  "files": [
+    {
+      "path": "common/solar-wrapper-MIT.txt",
+      "source": "node_modules/@solar-icons/react-native/LICENSE",
+      "sha256": "79ca906d7d543e10e4630cddb239c3765678fa18d624a33b99b65bf19e51741a"
+    },
+    {
+      "path": "common/solar-icons-attribution.txt",
+      "source": "node_modules/@solar-icons/react-native/LICENSE-THIRD-PARTY",
+      "sha256": "055cc14f0eca227d9af49d408e3c5d3407fb688158e123b28f67177e1ec5f7d8"
+    },
+    {
+      "path": "desktop/electron-MIT.txt",
+      "source": "node_modules/electron/dist/LICENSE",
+      "sha256": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d"
+    },
+    {
+      "path": "desktop/sharp-Apache-2.0.txt",
+      "source": "node_modules/sharp/LICENSE",
+      "sha256": "73ba74dfaa520b49a401b5d21459a8523a146f3b7518a833eea5efa85130bf68"
+    },
+    {
+      "path": "common/noise-c.txt",
+      "source": "Upstream source files and URLs are recorded verbatim in this notice collection.",
+      "sha256": "0bf0a1b906899da6dd7f42844c7afd8eb227fdd718466702e1f32219d3f26220"
+    },
+    {
+      "path": "common/secp256k1.txt",
+      "source": "Upstream source files and URLs are recorded verbatim in this notice collection.",
+      "sha256": "e8808b1cb5d557fd63f4c67e96ea5a27ec926c91613b93cf0e781bb329efff42"
+    },
+    {
+      "path": "common/mobile-native.txt",
+      "source": "Upstream source files and URLs are recorded verbatim in this notice collection.",
+      "sha256": "c6fcdf4ec79f7be86767d2d4c43f673e847e96789f512d9b12a20bc97d50b802"
+    },
+    {
+      "path": "desktop/sharp-libvips-posix.txt",
+      "source": "Upstream source files and URLs are recorded verbatim in this notice collection.",
+      "sha256": "4c39e39eef3a3b2de2dc0bf51e27dc9c40d09a7fb16c3b5f2783a3fa7bca3c4e"
+    },
+    {
+      "path": "desktop/sharp-libvips-windows.txt",
+      "source": "Upstream source files and URLs are recorded verbatim in this notice collection.",
+      "sha256": "3ea076aad6e38fe7a591c482f238f4484f861a192698f7876f2c28ac62280e20"
+    },
+    {
+      "path": "desktop/librsvg-rust.txt",
+      "source": "Upstream source files and URLs are recorded verbatim in this notice collection.",
+      "sha256": "33197033e2136938d37df4065568fb7038055105abcfe761d3c094f5cd1e7d59"
+    },
+    {
+      "path": "common/mobile-sources.json",
+      "source": "Reviewed upstream mobile native source locations and checksums.",
+      "sha256": "5b68a9db7e33feec226945f63745145ef6b6f617443f1001cee8008e68c05e58"
+    },
+    {
+      "path": "desktop/dependency-sources.json",
+      "source": "Reviewed upstream native library and Rust source locations and checksums.",
+      "sha256": "6c4344bd8cc566aff3011908cb3e1b1c915f34a284f870c681dd2dc963372213"
+    },
+    {
+      "path": "common/CC-BY-4.0.txt",
+      "source": "https://creativecommons.org/licenses/by/4.0/legalcode.txt",
+      "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411"
+    },
+    {
+      "path": "common/sqlite.txt",
+      "source": "Original sqlite3.h header, shared by SQLite 3.50.3 (expo-sqlite) and 3.53.4 (better-sqlite3).",
+      "sha256": "85806d613cfda5901f848b3b5b4b04396c8c64e89c97c0af3706c42b0c44bb47"
+    },
+    {
+      "path": "common/xcpretty.txt",
+      "source": "https://registry.npmjs.org/@expo/xcpretty/-/xcpretty-4.4.5.tgz (package.json and README.md); standard terms retained from the prior reviewed npm inventory, not an upstream notice.",
+      "sha256": "25a6a103d0f984f8ed3547fba9f86c5fb19c7f9932b9a81eb48f036aaf968ad3"
+    }
+  ],
+  "npmOverrides": {
+    "@expo/xcpretty": {
+      "version": "4.4.5",
+      "integrity": "sha512-J3eL4n4h5QTwfD0SIz8OIk6/+sOL/hFZAMacgCM07UNlxBQfJipEpIC2AQxvGkbYeStByJ0TVhQAJo+DeNgaSQ==",
+      "file": "common/xcpretty.txt"
+    }
+  }
+}

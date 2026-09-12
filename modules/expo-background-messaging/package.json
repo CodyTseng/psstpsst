@@ -1,0 +1,8 @@
+{
+  "name": "expo-background-messaging",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Android foreground-service bridge for PsstPsst messaging",
+  "main": "src/index.ts",
+  "private": true
+}

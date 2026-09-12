@@ -1,0 +1,610 @@
+modules/expo-noise/vendor/noise-c/LICENSE
+
+Copyright (C) 2016 Southern Storm Software, Pty Ltd.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+
+modules/expo-noise/vendor/noise-c/src/protocol/names.c
+modules/expo-noise/vendor/noise-c/src/protocol/rand_os.c
+modules/expo-noise/vendor/noise-c/src/protocol/internal.h
+modules/expo-noise/vendor/noise-c/src/protocol/dhstate.c
+modules/expo-noise/vendor/noise-c/src/protocol/randstate.c
+modules/expo-noise/vendor/noise-c/src/protocol/handshakestate.c
+modules/expo-noise/vendor/noise-c/src/protocol/patterns.c
+modules/expo-noise/vendor/noise-c/src/protocol/hashstate.c
+modules/expo-noise/vendor/noise-c/src/protocol/cipherstate.c
+modules/expo-noise/vendor/noise-c/src/protocol/signstate.c
+modules/expo-noise/vendor/noise-c/src/protocol/errors.c
+modules/expo-noise/vendor/noise-c/src/protocol/symmetricstate.c
+modules/expo-noise/vendor/noise-c/src/protobufs/protobufs.c
+modules/expo-noise/vendor/noise-c/src/keys/loader.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/dh-newhope.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/dh-curve25519.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/sign-ed25519.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/cipher-aesgcm.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/cipher-chachapoly.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/hash-sha512.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/hash-blake2s.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/hash-sha256.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/dh-curve448.c
+modules/expo-noise/vendor/noise-c/src/backend/ref/hash-blake2b.c
+modules/expo-noise/vendor/noise-c/src/crypto/sha2/sha256.h
+modules/expo-noise/vendor/noise-c/src/crypto/sha2/sha512.h
+modules/expo-noise/vendor/noise-c/src/crypto/sha2/sha256.c
+modules/expo-noise/vendor/noise-c/src/crypto/sha2/sha512.c
+modules/expo-noise/vendor/noise-c/src/crypto/blake2/blake2b.h
+modules/expo-noise/vendor/noise-c/src/crypto/blake2/blake2s.h
+modules/expo-noise/vendor/noise-c/src/crypto/blake2/blake2-endian.h
+modules/expo-noise/vendor/noise-c/src/crypto/blake2/blake2b.c
+modules/expo-noise/vendor/noise-c/src/crypto/blake2/blake2s.c
+modules/expo-noise/vendor/noise-c/src/crypto/chacha/chacha.c
+modules/expo-noise/vendor/noise-c/src/crypto/ghash/ghash.h
+modules/expo-noise/vendor/noise-c/src/crypto/ghash/ghash.c
+modules/expo-noise/vendor/noise-c/src/crypto/curve448/curve448.c
+modules/expo-noise/vendor/noise-c/src/crypto/curve448/curve448.h
+modules/expo-noise/vendor/noise-c/include/noise/keys.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol.h
+modules/expo-noise/vendor/noise-c/include/noise/protobufs.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/signstate.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/cipherstate.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/hashstate.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/symmetricstate.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/errors.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/constants.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/buffer.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/names.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/util.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/randstate.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/handshakestate.h
+modules/expo-noise/vendor/noise-c/include/noise/protocol/dhstate.h
+modules/expo-noise/vendor/noise-c/include/noise/keys/loader.h
+
+/*
+ * Copyright (C) 2016 Southern Storm Software, Pty Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+modules/expo-noise/vendor/noise-c/src/protocol/rand_sodium.c
+modules/expo-noise/vendor/noise-c/src/protocol/util.c
+modules/expo-noise/vendor/noise-c/src/protocol/internal.c
+modules/expo-noise/vendor/noise-c/src/backend/sodium/dh-curve25519.c
+modules/expo-noise/vendor/noise-c/src/backend/sodium/sign-ed25519.c
+modules/expo-noise/vendor/noise-c/src/backend/sodium/cipher-aesgcm.c
+modules/expo-noise/vendor/noise-c/src/backend/sodium/cipher-chachapoly.c
+modules/expo-noise/vendor/noise-c/src/backend/sodium/hash-sha512.c
+modules/expo-noise/vendor/noise-c/src/backend/sodium/hash-sha256.c
+modules/expo-noise/vendor/noise-c/src/backend/sodium/hash-blake2b.c
+modules/expo-noise/vendor/noise-c/src/backend/openssl/cipher-aesgcm.c
+
+/*
+ * Copyright (C) 2016 Southern Storm Software, Pty Ltd.
+ * Copyright (C) 2016 Topology LP.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+modules/expo-noise/vendor/noise-c/src/keys/certificate.c
+modules/expo-noise/vendor/noise-c/include/noise/keys/certificate.h
+
+/*
+ * Copyright (C) 2016 Southern Storm Software, Pty Ltd.
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/donna/poly1305-donna-8.h
+
+/*
+	poly1305 implementation using 8 bit * 8 bit = 16 bit multiplication and 32 bit addition
+
+	based on the public domain reference version in supercop by djb
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/donna/curve25519-donna-c64.c
+
+/* Copyright 2008, Google Inc.
+ * All rights reserved.
+ *
+ * Code released into the public domain.
+ *
+ * curve25519-donna: Curve25519 elliptic curve, public key function
+ *
+ * http://code.google.com/p/curve25519-donna/
+ *
+ * Adam Langley <agl@imperialviolet.org>
+ *
+ * Derived from public domain C code by Daniel J. Bernstein <djb@cr.yp.to>
+ *
+ * More information about curve25519 can be found here
+ *   http://cr.yp.to/ecdh.html
+ *
+ * djb's sample implementation of curve25519 is written in a special assembly
+ * language called qhasm and uses the floating point registers.
+ *
+ * This is, almost, a clean room reimplementation from the curve25519 paper. It
+ * uses many of the tricks described therein. Only the crecip function is taken
+ * from the sample implementation.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/donna/curve25519-donna.c
+
+/* Copyright 2008, Google Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following disclaimer
+ * in the documentation and/or other materials provided with the
+ * distribution.
+ *     * Neither the name of Google Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * curve25519-donna: Curve25519 elliptic curve, public key function
+ *
+ * http://code.google.com/p/curve25519-donna/
+ *
+ * Adam Langley <agl@imperialviolet.org>
+ *
+ * Derived from public domain C code by Daniel J. Bernstein <djb@cr.yp.to>
+ *
+ * More information about curve25519 can be found here
+ *   http://cr.yp.to/ecdh.html
+ *
+ * djb's sample implementation of curve25519 is written in a special assembly
+ * language called qhasm and uses the floating point registers.
+ *
+ * This is, almost, a clean room reimplementation from the curve25519 paper. It
+ * uses many of the tricks described therein. Only the crecip function is taken
+ * from the sample implementation. */
+
+modules/expo-noise/vendor/noise-c/src/crypto/newhope/LICENSE
+
+Authors: Erdem Alkim, Léo Ducas, Thomas Pöppelmann, Peter Schwabe
+Public domain.
+
+
+modules/expo-noise/vendor/noise-c/src/crypto/newhope/crypto_stream_chacha20.c
+
+/* Based on the public domain implemntation in
+ * crypto_stream/chacha20/e/ref from http://bench.cr.yp.to/supercop.html
+ * by Daniel J. Bernstein */
+
+modules/expo-noise/vendor/noise-c/src/crypto/newhope/fips202.c
+
+/* Based on the public domain implementation in
+ * crypto_hash/keccakc512/simple/ from http://bench.cr.yp.to/supercop.html
+ * by Ronny Van Keer 
+ * and the public domain "TweetFips202" implementation
+ * from https://twitter.com/tweetfips202
+ * by Gilles Van Assche, Daniel J. Bernstein, and Peter Schwabe */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/LICENSE.txt
+
+The MIT License (MIT)
+
+Copyright (c) 2011 Stanford University.
+Copyright (c) 2014 Cryptography Research, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/modm-donna-64bit.h
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/modm-donna-32bit.h
+
+/*
+	Public domain by Andrew M. <liquidsun@gmail.com>
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/ed25519.c
+
+/*
+	Public domain by Andrew M. <liquidsun@gmail.com>
+
+	Ed25519 reference implementation using Ed25519-donna
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/ed25519-donna.h
+
+/*
+	Public domain by Andrew M. <liquidsun@gmail.com>
+	Modified from the amd64-51-30k implementation by
+		Daniel J. Bernstein
+		Niels Duif
+		Tanja Lange
+		Peter Schwabe
+		Bo-Yin Yang
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/curve25519-donna-32bit.h
+
+/*
+	Public domain by Andrew M. <liquidsun@gmail.com>
+	See: https://github.com/floodyberry/curve25519-donna
+
+	32 bit integer curve25519 implementation
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/curve25519-donna-sse2.h
+
+/*
+	Public domain by Andrew M. <liquidsun@gmail.com>
+	See: https://github.com/floodyberry/curve25519-donna
+
+	SSE2 curve25519 implementation
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/curve25519-donna-64bit.h
+
+/*
+	Public domain by Adam Langley <agl@imperialviolet.org> &
+	                 Andrew M. <liquidsun@gmail.com>
+	See: https://github.com/floodyberry/curve25519-donna
+
+	64bit integer curve25519 implementation
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/ed25519/curve25519-donna-helpers.h
+
+/*
+	Public domain by Andrew M. <liquidsun@gmail.com>
+	See: https://github.com/floodyberry/curve25519-donna
+
+	Curve25519 implementation agnostic helpers
+*/
+
+modules/expo-noise/vendor/noise-c/src/crypto/aes/rijndael-alg-fst.c
+
+/**
+ * rijndael-alg-fst.c
+ *
+ * @version 3.0 (December 2000)
+ *
+ * Optimised ANSI C code for the Rijndael cipher (now AES)
+ *
+ * @author Vincent Rijmen <vincent.rijmen@esat.kuleuven.ac.be>
+ * @author Antoon Bosselaers <antoon.bosselaers@esat.kuleuven.ac.be>
+ * @author Paulo Barreto <paulo.barreto@terra.com.br>
+ *
+ * This code is hereby placed in the public domain.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHORS ''AS IS'' AND ANY EXPRESS
+ * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/aes/rijndael-alg-fst.h
+
+/**
+ * rijndael-alg-fst.h
+ *
+ * @version 3.0 (December 2000)
+ *
+ * Optimised ANSI C code for the Rijndael cipher (now AES)
+ *
+ * @author Vincent Rijmen <vincent.rijmen@esat.kuleuven.ac.be>
+ * @author Antoon Bosselaers <antoon.bosselaers@esat.kuleuven.ac.be>
+ * @author Paulo Barreto <paulo.barreto@terra.com.br>
+ *
+ * This code is hereby placed in the public domain.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHORS ''AS IS'' AND ANY EXPRESS
+ * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/test/bench.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/include/ridinghood.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/scalarmul.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/barrett_field.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/goldilocks.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p480/magic.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/barrett_field.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/sha512.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/word.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/magic.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/magic.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/arch_ref64/p521.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/arch_ref64/p521.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/arch_x86_64_r12/p521.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/arch_x86_64_r12/p521.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_ref64/p448.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_ref64/p448.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_neon_experimental/p448.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_neon_experimental/p448.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_arm_32/p448.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_arm_32/p448.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_x86_64/p448.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_x86_64/x86-64-arith.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_x86_64/p448.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_32/p448.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/arch_32/p448.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p480/arch_x86_64/p480.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p480/arch_x86_64/p480.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p480/arch_x86_64/x86-64-arith.h
+
+/* Copyright (c) 2014 Cryptography Research, Inc.
+ * Released under the MIT License.  See LICENSE.txt for license information.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/include/goldilocks.h
+
+/* Copyright (c) 2014-2015 Cryptography Research, Inc.
+ * Released under the MIT License.  See LICENSE.txt for license information.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/arithmetic.c
+
+/**
+ * @cond internal
+ * @file field.c
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @brief High-level arithmetic routines, independent of field (except 3 mod 4).
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/ec_point.c
+
+/**
+ * @cond internal
+ * @file ec_point.c
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @warning This file was automatically generated.
+ *     Then it was edited by hand.  Good luck, have fun.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/sha512.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/crandom.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/intrinsics.h
+
+/* Copyright (c) 2011 Stanford University.
+ * Copyright (c) 2014 Cryptography Research, Inc.
+ * Released under the MIT License.  See LICENSE.txt for license information.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p480/f_magic.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/f_magic.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/f_magic.h
+
+/**
+ * @file f_magic.h
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @brief Goldilocks magic numbers (group orders, coefficients, algo params etc).
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p480/f_field.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/f_field.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/f_field.h
+
+/**
+ * @file f_field.h
+ * @brief Field-specific code.
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p480/f_arithmetic.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p448/f_arithmetic.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/p521/f_arithmetic.c
+
+/**
+ * @cond internal
+ * @file f_arithmetic.c
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @brief Field-specific arithmetic.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/ec_point.h
+
+/**
+ * @file ec_point.h
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @warning This file was automatically generated.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/magic.h
+
+/**
+ * @file magic.h
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @brief Curve-independent declarations of magic numbers.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/config.h
+
+/**
+ * @file config.h
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @brief Goldilocks top-level configuration flags.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/field.h
+
+/**
+ * @file field.h
+ * @brief Generic field header.
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/crandom.h
+
+/* Copyright (c) 2011 Stanford University.
+ * Copyright (c) 2014-2015 Cryptography Research, Inc.
+ * Released under the MIT License.  See LICENSE.txt for license information.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/scalarmul.h
+
+/**
+ * @file scalarmul.h
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/include/constant_time.h
+
+/**
+ * @file constant_time.h
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ *
+ * @brief Constant-time routines.
+ */
+
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/bat/api_sign.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/bat/sign.c
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/bat/api_dh.h
+modules/expo-noise/vendor/noise-c/src/crypto/goldilocks/src/bat/dh.c
+
+/**
+ * @file sizes.h
+ * @copyright
+ *   Copyright (c) 2014 Cryptography Research, Inc.  \n
+ *   Released under the MIT License.  See LICENSE.txt for license information.
+ * @author Mike Hamburg
+ * @brief BATMAN / SUPERCOP glue for benchmarking.
+ */

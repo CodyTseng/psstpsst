@@ -1,0 +1,82 @@
+@expo/xcpretty@4.4.5
+
+The integrity-verified npm archive declares BSD-3-Clause but does not include a standalone license file. Published metadata and README are retained verbatim below. The standard BSD-3-Clause terms are retained from the previous reviewed inventory as a reference, not as an original upstream notice. Template copyright placeholders are not assertions of authorship. The missing upstream copyright notice remains a release-review limitation.
+
+package.json
+
+{
+  "name": "@expo/xcpretty",
+  "description": "Parse and format xcodebuild logs",
+  "version": "4.4.5",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "author": "Evan Bacon <bacon@expo.io> (https://github.com/evanbacon)",
+  "homepage": "https://github.com/expo/expo-cli",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/expo/expo-cli.git"
+  },
+  "bin": {
+    "excpretty": "./build/cli.js"
+  },
+  "scripts": {
+    "watch": "tsc --watch",
+    "build": "tsc",
+    "prepare": "bun run clean && bun run build",
+    "clean": "rimraf build ./tsconfig.tsbuildinfo",
+    "lint": "eslint . --ext .ts",
+    "test": "jest"
+  },
+  "keywords": [
+    "xcodebuild",
+    "formatter",
+    "logging"
+  ],
+  "files": [
+    "build"
+  ],
+  "dependencies": {
+    "@babel/code-frame": "^7.20.0",
+    "chalk": "^4.1.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/babel__code-frame": "^7.27.0",
+    "@types/js-yaml": "^4.0.1",
+    "@types/node": "^20.16.13"
+  }
+}
+
+README.md
+
+# @expo/xcpretty
+
+This can be used to parse and format xcodebuild logs.
+The default error and warning format matches that of other tools in the Expo ecosystem.
+
+```ts
+import { Formatter } from '@expo/xcpretty';
+
+const formatter = new Formatter({ projectRoot: '/' });
+
+const lines = formatter.pipe('xcodebuild log results...');
+
+for (const line of lines) {
+  console.log(line);
+}
+```
+
+BSD-3-Clause standard terms (reference only)
+
+Copyright (c) <year> <owner>. 
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

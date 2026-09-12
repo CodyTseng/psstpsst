@@ -1,0 +1,97 @@
+{
+  "components": "Native implementation sources and React Native build dependencies represented by mobile-native.txt.",
+  "sources": [
+    {
+      "component": "React Native 0.85.3",
+      "url": "https://codeload.github.com/facebook/react-native/tar.gz/refs/tags/v0.85.3",
+      "sha256": "769876166291a84867b8b15f70fe6e92d8dcfbb220ba1ef2e2fb2123e9755260",
+      "size": 18044226
+    },
+    {
+      "component": "Hermes 250829098.0.10",
+      "url": "https://codeload.github.com/facebook/hermes/tar.gz/refs/tags/hermes-v250829098.0.10",
+      "sha256": "0e918d45c53bf8e21aa579122e291f429f4a0c84685ce5fcd2b926499f44b147",
+      "size": 22283625
+    },
+    {
+      "component": "Fresco 3.6.0",
+      "url": "https://codeload.github.com/facebook/fresco/tar.gz/refs/tags/v3.6.0",
+      "sha256": "9de3d9f7c04cf81855c4cf06b932ea233ac80ef4ae4047d16d30f11189784567",
+      "size": 41861397
+    },
+    {
+      "component": "libavif Android 14d8e3c4",
+      "url": "https://codeload.github.com/AOMediaCodec/libavif/tar.gz/14d8e3c4",
+      "sha256": "4a68d9624e9f460a8ed5e2b359736deda960b0ed7263ec325bc7b36cab539d7a",
+      "size": 13655131
+    },
+    {
+      "component": "ZXing-C++ 3.0.2",
+      "url": "https://codeload.github.com/zxing-cpp/zxing-cpp/tar.gz/refs/tags/v3.0.2",
+      "sha256": "b063dacf384c7bb93ab2c3eea247cc06b4525330f0efa631907aa3029f7e2144",
+      "size": 1039644
+    },
+    {
+      "component": "fbjni 0.7.0",
+      "url": "https://codeload.github.com/facebookincubator/fbjni/tar.gz/refs/tags/v0.7.0",
+      "sha256": "9e356cc4db48634cc2b3199305c9f1bad396f5844847ff61ba3b3f8080577059",
+      "size": 178900
+    },
+    {
+      "component": "React Native Android Boost 1.83.0",
+      "url": "https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.gz",
+      "sha256": "c0685b68dd44cc46574cce86c4e17c0f611b15e195be9848dfd0769a0a207628",
+      "size": 144645738
+    },
+    {
+      "component": "React Native iOS Boost 1.84.0",
+      "url": "https://archives.boost.io/release/1.84.0/source/boost_1_84_0.tar.gz",
+      "sha256": "a5800f405508f5df8114558ca9855d2640a2de8f0445f051fa1c7c3383045724",
+      "size": 145151722
+    },
+    {
+      "component": "React Native Folly 2024.11.18.00",
+      "url": "https://codeload.github.com/facebook/folly/tar.gz/refs/tags/v2024.11.18.00",
+      "sha256": "b2c6879ba8ba625218d1ab9eefcc1611a9003d05bc2cb1a38f3bae21892e5167",
+      "size": 4192545
+    },
+    {
+      "component": "React Native double-conversion 1.1.6",
+      "url": "https://codeload.github.com/google/double-conversion/tar.gz/refs/tags/v1.1.6",
+      "sha256": "6b850acd8e88515764472c52973277744a945f9a769a93968efc42efef64d67a",
+      "size": 7012573
+    },
+    {
+      "component": "React Native fmt 12.1.0",
+      "url": "https://codeload.github.com/fmtlib/fmt/tar.gz/refs/tags/12.1.0",
+      "sha256": "ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea",
+      "size": 711419
+    },
+    {
+      "component": "React Native glog 0.3.5",
+      "url": "https://codeload.github.com/google/glog/tar.gz/refs/tags/v0.3.5",
+      "sha256": "7580e408a2c0b5a89ca214739978ce6ff480b5e7d8d7698a2aa92fadc484d1e0",
+      "size": 532275
+    },
+    {
+      "component": "React Native fast_float 8.0.0",
+      "url": "https://codeload.github.com/fastfloat/fast_float/tar.gz/refs/tags/v8.0.0",
+      "sha256": "f312f2dc34c61e665f4b132c0307d6f70ad9420185fa831911bc24408acf625d",
+      "size": 120849
+    },
+    {
+      "component": "libavif dav1d 1.4.3",
+      "url": "https://codeload.github.com/videolan/dav1d/tar.gz/refs/tags/1.4.3",
+      "sha256": "88a023e58d955e0886faf49c72940e0e90914a948a8e60c1326ce3e09e7a6099",
+      "size": 1630254
+    },
+    {
+      "component": "libavif libyuv 464c51a0",
+      "url": "https://codeload.github.com/lemenkov/libyuv/tar.gz/464c51a0353c71f08fe45f683d6a97a638d47833",
+      "sha256": "687353f9dbc389fcdff562654362a461eec2f02bff98314ff69bf6d81a7e69d9",
+      "size": 573393,
+      "origin": "https://chromium.googlesource.com/libyuv/libyuv/+archive/464c51a0.tar.gz",
+      "note": "GitHub mirror archive file contents verified identical to the official Gitiles archive for commit 464c51a0353c71f08fe45f683d6a97a638d47833; Gitiles gzip archive bytes vary between requests."
+    }
+  ]
+}

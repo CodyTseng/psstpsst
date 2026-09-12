@@ -1,0 +1,164 @@
+react-remove-scroll-bar@2.3.8
+
+The published package declares MIT in package.json but does not include a standalone license file. The standard license terms follow the retained upstream metadata and README. Template copyright placeholders in the standard text are not assertions of authorship.
+
+package.json
+
+{
+  "name": "react-remove-scroll-bar",
+  "version": "2.3.8",
+  "description": "Removes body scroll without content _shake_",
+  "main": "dist/es5/index.js",
+  "jsnext:main": "dist/es2015/index.js",
+  "module": "dist/es2015/index.js",
+  "types": "dist/es5/index.d.ts",
+  "scripts": {
+    "dev": "lib-builder dev",
+    "test": "jest",
+    "test:ci": "jest --runInBand --coverage",
+    "build": "lib-builder build && yarn size:report",
+    "release": "yarn build && yarn test",
+    "size": "yarn size-limit",
+    "size:report": "yarn --silent size-limit --json > .size.json",
+    "lint": "lib-builder lint",
+    "format": "lib-builder format",
+    "update": "lib-builder update",
+    "prepublish": "yarn build && yarn changelog",
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
+    "changelog:rewrite": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0",
+    "storybook": "start-storybook -p 6006"
+  },
+  "keywords": [
+    "scroll"
+  ],
+  "author": "Anton Korzunov <thekashey@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "^11.0.2",
+    "size-limit": "^11.0.2",
+    "@storybook/react": "^6.4.22",
+    "@testing-library/react": "^12.1.5",
+    "@types/react": "^16.14.56",
+    "@theuiteam/lib-builder": "^0.1.4",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6"
+  },
+  "engines": {
+    "node": ">=10"
+  },
+  "peerDependencies": {
+    "@types/react": "*",
+    "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "constants"
+  ],
+  "repository": "https://github.com/theKashey/react-remove-scroll-bar",
+  "dependencies": {
+    "react-style-singleton": "^2.2.2",
+    "tslib": "^2.0.0"
+  },
+  "module:es2019": "dist/es2019/index.js",
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix",
+      "git add"
+    ],
+    "*.{js,css,json,md}": [
+      "prettier --write",
+      "git add"
+    ]
+  },
+  "prettier": {
+    "printWidth": 120,
+    "trailingComma": "es5",
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": true
+  }
+}
+
+<h1>react-remove-scroll-bar</h1>
+
+[![npm](https://img.shields.io/npm/v/react-remove-scroll-bar.svg)](https://www.npmjs.com/package/react-remove-scroll-bar)
+[![bundle size](https://badgen.net/bundlephobia/minzip/react-remove-scroll-bar)](https://bundlephobia.com/result?p=react-remove-scroll-bar)
+[![downloads](https://badgen.net/npm/dm/react-remove-scroll-bar)](https://www.npmtrends.com/react-remove-scroll-bar)
+
+<hr />
+
+> v1+ for React 15, v2+ requires React 16.8+
+
+Removes scroll bar (by setting `overflow: hidden` on body), and preserves the scroll bar "gap".
+
+Read - it just makes scroll bar invisible.
+
+Does nothing if scroll bar does not consume any space.
+
+# Usage
+
+```js
+import {RemoveScrollBar} from 'react-remove-scroll-bar';
+
+<RemoveScrollBar /> -> no scroll bar
+```
+
+### The Right Border
+To prevent content jumps __position:fixed__ elements with `right:0`  should have additional classname applied.
+It will just provide a _non-zero_ right, when it needed, to maintain the right "gap".
+```js
+import {zeroRightClassName,fullWidthClassName, noScrollbarsClassName} from 'react-remove-scroll-bar';
+
+// to set `right:0` on an element
+<div className={zeroRightClassName} />
+
+// to set `width:100%` on an element
+<div className={fullWidthClassName} />
+
+// to remove scrollbar from an element
+<div className={noScrollbarsClassName} />
+
+```
+
+# Size
+500b after compression (excluding tslib).
+
+# Scroll-Locky
+All code is a result of a [react-scroll-locky](https://github.com/theKashey/react-scroll-locky) refactoring.
+
+# Article
+There is a medium article about preventing the body scroll - [How to fight the <body> scroll](https://medium.com/@antonkorzunov/how-to-fight-the-body-scroll-2b00267b37ac)
+
+# License
+MIT
+
+
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.

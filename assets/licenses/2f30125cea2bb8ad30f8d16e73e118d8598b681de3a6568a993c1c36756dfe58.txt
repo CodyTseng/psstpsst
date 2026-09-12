@@ -1,0 +1,69 @@
+fast-base64-decode@1.0.0
+
+The published package declares MIT in package.json but does not include a standalone license file. The standard license terms follow the retained upstream metadata and README. Template copyright placeholders in the standard text are not assertions of authorship.
+
+package.json
+
+{
+  "name": "fast-base64-decode",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": "LinusU/fast-base64-decode",
+  "scripts": {
+    "test": "standard && node test"
+  },
+  "devDependencies": {
+    "standard": "^11.0.1"
+  },
+  "keywords": [
+    "base64-decode",
+    "base64",
+    "decode"
+  ],
+  "files": [
+    "index.d.ts",
+    "index.js"
+  ]
+}
+
+# Fast Base64 Decoding
+
+A fast Base64 decoder with a low level API. If you want a high level API, look at [base64-js](https://github.com/beatgammit/base64-js).
+
+## Installation
+
+```sh
+npm install --save fast-base64-decode
+```
+
+## Usage
+
+```js
+const base64Decode = require('fast-base64-decode')
+
+// You need to know the length of the decoded data
+const result = new Uint8Array(13)
+
+// Pass the string to decode, and a `UInt8Array` where the bytes will be written
+base64Decode('SGVsbG8sIFdvcmxkIQ==', result)
+```
+
+
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.

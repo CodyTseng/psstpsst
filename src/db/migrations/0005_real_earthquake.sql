@@ -1,0 +1,1 @@
+ALTER TABLE `messages` ADD `source_relays` text;

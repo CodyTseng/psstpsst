@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `last_read_message_id` text;

@@ -1,0 +1,343 @@
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/COPYING
+
+Copyright (c) 2013 Pieter Wuille
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/contrib/lax_der_parsing.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/contrib/lax_der_parsing.c
+
+/***********************************************************************
+ * Copyright (c) 2015 Pieter Wuille                                    *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/contrib/lax_der_privatekey_parsing.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/contrib/lax_der_privatekey_parsing.h
+
+/***********************************************************************
+ * Copyright (c) 2014, 2015 Pieter Wuille                              *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/precompute_ecmult_gen.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/precomputed_ecmult_gen.h
+
+/*********************************************************************************
+ * Copyright (c) 2013, 2014, 2015, 2021 Thomas Daede, Cory Fields, Pieter Wuille *
+ * Distributed under the MIT software license, see the accompanying              *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.          *
+ *********************************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar_8x32_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/bench.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar_4x64.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/hash_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/bench.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/hash.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar_8x32.h
+
+/***********************************************************************
+ * Copyright (c) 2014 Pieter Wuille                                    *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/field_10x26_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/field_10x26.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/field_5x52.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/field.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/field_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/field_5x52_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecdsa.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/group.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/util.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/field_5x52_int128_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar_4x64_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/group_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/eckey_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/testrand.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/eckey.h
+
+/***********************************************************************
+ * Copyright (c) 2013, 2014 Pieter Wuille                              *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/testrand_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/secp256k1.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecdsa_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/recovery/tests_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/recovery/main_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2013-2015 Pieter Wuille                               *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_compute_table.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/precomputed_ecmult.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/precompute_ecmult.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_compute_table_impl.h
+
+/*****************************************************************************************************
+ * Copyright (c) 2013, 2014, 2017, 2021 Pieter Wuille, Andrew Poelstra, Jonas Nick, Russell O'Connor *
+ * Distributed under the MIT software license, see the accompanying                                  *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.                              *
+ *****************************************************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modinv32_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modinv32.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modinv64.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modinv64_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2020 Peter Dettman                                    *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ **********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scratch.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scratch_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2017 Andrew Poelstra                                  *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_gen_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_gen_compute_table_impl.h
+
+/***********************************************************************
+ * Copyright (c) Pieter Wuille, Gregory Maxwell, Peter Dettman         *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/selftest.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/assumptions.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/extrakeys/tests_exhaustive_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/schnorrsig/tests_exhaustive_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2020 Pieter Wuille                                    *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/hsort_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/hsort.h
+
+/***********************************************************************
+ * Copyright (c) 2021 Russell O'Connor, Jonas Nick                     *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/tests_common.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/unit_test.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/unit_test.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/testutil.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/musig/session_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/musig/keyagg.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/musig/tests_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/musig/keyagg_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/musig/session.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/ellswift/bench_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/ellswift/tests_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/ellswift/tests_exhaustive_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/ellswift/main_impl.h
+
+/***********************************************************************
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_const_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2015, 2022 Pieter Wuille, Andrew Poelstra             *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/tests_exhaustive.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/recovery/tests_exhaustive_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2016 Andrew Poelstra                                  *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_gen.h
+
+/***********************************************************************
+ * Copyright (c) Pieter Wuille, Peter Dettman                          *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar_low_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_const.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/ecdh/tests_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/ecdh/main_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2015 Andrew Poelstra                                  *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult.h
+
+/***********************************************************************
+ * Copyright (c) 2013, 2014, 2017 Pieter Wuille, Andrew Poelstra       *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_impl.h
+
+/******************************************************************************
+ * Copyright (c) 2013, 2014, 2017 Pieter Wuille, Andrew Poelstra, Jonas Nick  *
+ * Distributed under the MIT software license, see the accompanying           *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.       *
+ ******************************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/tests.c
+
+/***********************************************************************
+ * Copyright (c) 2013, 2014, 2015 Pieter Wuille, Gregory Maxwell       *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/checkmem.h
+
+/***********************************************************************
+ * Copyright (c) 2022 Pieter Wuille                                    *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/util.h
+
+/* We use a memory barrier that scares the compiler away from optimizing out the memset.
+     *
+     * Quoting Adam Langley <agl@google.com> in commit ad1907fe73334d6c696c8539646c21b11178f20f
+     * in BoringSSL (ISC License):
+     *    As best as we can tell, this is sufficient to break any optimisations that
+     *    might try to eliminate "superfluous" memsets.
+     * This method is used in memzero_explicit() the Linux kernel, too. Its advantage is that it
+     * is pretty efficient, because the compiler can still implement the memset() efficiently,
+     * just not remove it entirely. See "Dead Store Elimination (Still) Considered Harmful" by
+     * Yang et al. (USENIX Security 2017) for more background.
+     */
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ctime_tests.c
+
+/***********************************************************************
+ * Copyright (c) 2020 Gregory Maxwell                                  *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/ecmult_gen_compute_table.h
+
+/***********************************************************************
+ * Copyright (c) Pieter Wuille, Gregory Maxwell                        *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/bench_internal.c
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/recovery/bench_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2014-2015 Pieter Wuille                               *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/bench_ecmult.c
+
+/***********************************************************************
+ * Copyright (c) 2017 Pieter Wuille                                    *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/scalar_low.h
+
+/***********************************************************************
+ * Copyright (c) 2015, 2022 Andrew Poelstra, Pieter Wuille             *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/asm/field_10x26_arm.s
+
+/***********************************************************************
+ * Copyright (c) 2014 Wladimir J. van der Laan                         *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/musig/main_impl.h
+
+/**********************************************************************
+ * Distributed under the MIT software license, see the accompanying   *
+ * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
+ **********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/ecdh/bench_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2015 Pieter Wuille, Andrew Poelstra                   *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/extrakeys/tests_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/extrakeys/main_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2020 Jonas Nick                                       *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
+
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/schnorrsig/bench_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/schnorrsig/tests_impl.h
+modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src/modules/schnorrsig/main_impl.h
+
+/***********************************************************************
+ * Copyright (c) 2018-2020 Andrew Poelstra, Jonas Nick                 *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/

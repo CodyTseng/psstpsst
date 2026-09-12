@@ -1,0 +1,32 @@
+plugins {
+  id 'com.android.library'
+  id 'org.jetbrains.kotlin.android'
+}
+
+group = 'chat.psstpsst.app'
+version = '0.1.0'
+
+android {
+  namespace 'chat.psstpsst.app.cryptoaccelerator'
+  compileSdk rootProject.ext.compileSdkVersion
+
+  defaultConfig {
+    minSdkVersion rootProject.ext.minSdkVersion
+
+    externalNativeBuild {
+      cmake {
+        arguments '-DANDROID_STL=c++_shared'
+      }
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path 'src/main/cpp/CMakeLists.txt'
+    }
+  }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+}

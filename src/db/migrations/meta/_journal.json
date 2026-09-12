@@ -1,0 +1,335 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1779856361586,
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1780027226643,
+      "tag": "0001_tricky_shard",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780028518923,
+      "tag": "0002_bored_randall",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780214382842,
+      "tag": "0003_known_slapstick",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780309037646,
+      "tag": "0004_magenta_malcolm_colcord",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1780547997792,
+      "tag": "0005_real_earthquake",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781020000000,
+      "tag": "0006_favorite_flag",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781200000000,
+      "tag": "0007_media_server_lists",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781300000000,
+      "tag": "0008_delivery_copies",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781400000000,
+      "tag": "0009_message_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781500000000,
+      "tag": "0010_blocked_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1781600000000,
+      "tag": "0011_message_fts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1781700000000,
+      "tag": "0012_last_read_cursor",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1781800000000,
+      "tag": "0013_rename_favorite_to_pinned",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1781900000000,
+      "tag": "0014_peer_dm_info",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1782000000000,
+      "tag": "0015_message_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1782100000000,
+      "tag": "0016_media_gallery_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1782200000000,
+      "tag": "0017_account_scoped_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1782300000000,
+      "tag": "0018_attachment_downloaded_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1782400000000,
+      "tag": "0019_account_sort_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1782500000000,
+      "tag": "0020_collapse_conversation_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1782600000000,
+      "tag": "0021_wallets",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1782700000000,
+      "tag": "0022_wallet_balance",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1782800000000,
+      "tag": "0023_wallet_sort_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1782900000000,
+      "tag": "0024_wallet_transaction_invoice_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1783000000000,
+      "tag": "0025_profile_lightning_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1783100000000,
+      "tag": "0026_device_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1783200000000,
+      "tag": "0027_pending_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1783300000000,
+      "tag": "0028_message_millisecond_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1783386400000,
+      "tag": "0029_referenced_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1784073600000,
+      "tag": "0030_direct_media_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1784160000000,
+      "tag": "0031_normalize_attachment_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1784558976413,
+      "tag": "0032_colorful_famine",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1785997455891,
+      "tag": "0033_proximity-messaging",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1786123132779,
+      "tag": "0034_proximity-peer-nickname",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1786272962810,
+      "tag": "0035_proximity-connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1786294503498,
+      "tag": "0036_proximity-connection-failure",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1786376399093,
+      "tag": "0037_restore_proximity_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1786526768299,
+      "tag": "0038_peer_relay_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1787325351659,
+      "tag": "0039_good_mole_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1787330352719,
+      "tag": "0040_demonic_marauders",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1787713197678,
+      "tag": "0041_proximity-conversation-owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1788236104614,
+      "tag": "0042_proximity-file-transfer",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1788243966688,
+      "tag": "0043_attachment-send-options",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1788710534296,
+      "tag": "0044_contact-sync-state",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1789008062527,
+      "tag": "0045_configuration-outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1789009794271,
+      "tag": "0046_local-account-setup",
+      "breakpoints": true
+    }
+  ]
+}

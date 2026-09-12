@@ -1,0 +1,18 @@
+plugins {
+  id 'com.android.library'
+  id 'org.jetbrains.kotlin.android'
+}
+
+group = 'chat.psstpsst.app'
+version = '0.1.0'
+
+android {
+  namespace 'chat.psstpsst.app.backgroundmessaging'
+  compileSdk rootProject.ext.compileSdkVersion
+  defaultConfig { minSdkVersion rootProject.ext.minSdkVersion }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation 'com.facebook.react:react-android'
+}

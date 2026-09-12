@@ -1,0 +1,22 @@
+name: Third-party notices
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  notices:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      # Verification reads committed snapshots only; no install or network is required.
+      - run: npm run licenses:check
+      - run: npm run licenses:test

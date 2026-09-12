@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+@import 'uniwind';
+
+/* Electron renderer chrome is shared by Metro development and packaged builds.
+ * The root marker is installed synchronously by the custom entry, so ordinary
+ * web keeps its browser-native controls. */
+html[data-psstpsst-electron] {
+  --psstpsst-scrollbar-radius: 9999px;
+  --psstpsst-scrollbar-thumb: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+html[data-psstpsst-electron] textarea {
+  field-sizing: content;
+  resize: none !important;
+}
+
+/* Expo Router renders tab items and links as anchors; without this Chromium
+ * raises a URL drag ghost when the pointer drags across them. */
+html[data-psstpsst-electron] a {
+  -webkit-user-drag: none;
+}
+
+html[data-psstpsst-electron] *:focus,
+html[data-psstpsst-electron] *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+html[data-psstpsst-electron] * {
+  scrollbar-width: none;
+}
+
+html[data-psstpsst-electron] *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html[data-psstpsst-electron] .psstpsst-scrollbar-overlay-thumb {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--psstpsst-scrollbar-thumb);
+  border-radius: var(--psstpsst-scrollbar-radius);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+html[data-psstpsst-electron] .psstpsst-scrollbar-overlay-thumb.psstpsst-scroll-active {
+  opacity: 1;
+}

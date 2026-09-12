@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'org.jetbrains.kotlin.android'
+}
+
+group = 'chat.psstpsst.app'
+version = '0.1.0'
+
+android {
+  namespace 'chat.psstpsst.app.localnotifications'
+  compileSdk rootProject.ext.compileSdkVersion
+  defaultConfig { minSdkVersion rootProject.ext.minSdkVersion }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation 'com.facebook.react:react-android'
+  implementation 'androidx.core:core:1.17.0'
+  // Preserve best-effort badge support on launchers with vendor-specific APIs.
+  implementation 'me.leolin:ShortcutBadger:1.1.22@aar'
+}

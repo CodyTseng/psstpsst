@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ExpoNoiseModule"],
+    "podspecPath": "./ExpoNoise.podspec"
+  },
+  "android": {
+    "modules": ["chat.psstpsst.app.noise.ExpoNoiseModule"]
+  }
+}

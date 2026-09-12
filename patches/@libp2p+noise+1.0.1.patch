@@ -1,0 +1,69 @@
+diff --git a/node_modules/@libp2p/noise/dist/src/index.d.ts b/node_modules/@libp2p/noise/dist/src/index.d.ts
+index 1102eec..7ea61fe 100644
+--- a/node_modules/@libp2p/noise/dist/src/index.d.ts
++++ b/node_modules/@libp2p/noise/dist/src/index.d.ts
+@@ -39,6 +39,8 @@ import type { NoiseInit, NoiseExtensions } from './noise.js';
+ import type { KeyPair } from './types.js';
+ import type { ComponentLogger, ConnectionEncrypter, Metrics, PeerId, PrivateKey, Upgrader } from '@libp2p/interface';
+ export { pureJsCrypto } from './crypto/js.js';
++export { wrapCrypto } from './crypto.js';
++export { CipherState, XXHandshakeState, ZEROLEN } from './protocol.js';
+ export type { ICryptoInterface } from './crypto.js';
+ export type { NoiseInit, NoiseExtensions, KeyPair };
+ export interface NoiseComponents {
+diff --git a/node_modules/@libp2p/noise/dist/src/index.js b/node_modules/@libp2p/noise/dist/src/index.js
+index 7977c01..d24a3e2 100644
+--- a/node_modules/@libp2p/noise/dist/src/index.js
++++ b/node_modules/@libp2p/noise/dist/src/index.js
+@@ -37,6 +37,8 @@
+  */
+ import { Noise } from './noise.js';
+ export { pureJsCrypto } from './crypto/js.js';
++export { wrapCrypto } from './crypto.js';
++export { CipherState, XXHandshakeState, ZEROLEN } from './protocol.js';
+ export function noise(init = {}) {
+     return (components) => new Noise(components, init);
+ }
+diff --git a/node_modules/@libp2p/noise/package.json b/node_modules/@libp2p/noise/package.json
+--- a/node_modules/@libp2p/noise/package.json
++++ b/node_modules/@libp2p/noise/package.json
+@@ -39,6 +39,21 @@
+     ".": {
+       "types": "./dist/src/index.d.ts",
+       "import": "./dist/src/index.js"
++    },
++    "./crypto": {
++      "types": "./dist/src/crypto.d.ts",
++      "import": "./dist/src/crypto.js",
++      "default": "./dist/src/crypto.js"
++    },
++    "./crypto/js": {
++      "types": "./dist/src/crypto/js.d.ts",
++      "import": "./dist/src/crypto/js.js",
++      "default": "./dist/src/crypto/js.js"
++    },
++    "./protocol": {
++      "types": "./dist/src/protocol.d.ts",
++      "import": "./dist/src/protocol.js",
++      "default": "./dist/src/protocol.js"
+     }
+   },
+   "scripts": {
+diff --git a/node_modules/@libp2p/noise/dist/src/protocol.js b/node_modules/@libp2p/noise/dist/src/protocol.js
+--- a/node_modules/@libp2p/noise/dist/src/protocol.js
++++ b/node_modules/@libp2p/noise/dist/src/protocol.js
+@@ -1,5 +1,4 @@
+ import { Uint8ArrayList } from 'uint8arraylist';
+-import { fromString as uint8ArrayFromString } from 'uint8arrays';
+ import { alloc as uint8ArrayAlloc } from 'uint8arrays/alloc';
+ import { InvalidCryptoExchangeError } from './errors.js';
+ import { Nonce } from './nonce.js';
+@@ -40,7 +39,7 @@ export class SymmetricState {
+     crypto;
+     constructor(crypto, protocolName) {
+         this.crypto = crypto;
+-        const protocolNameBytes = uint8ArrayFromString(protocolName, 'utf-8');
++        const protocolNameBytes = new TextEncoder().encode(protocolName);
+         this.h = hashProtocolName(crypto, protocolNameBytes);
+         this.ck = this.h;
+         this.cs = new CipherState(crypto);

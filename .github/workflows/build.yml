@@ -1,0 +1,316 @@
+name: Build Apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_REPOSITORY: codytseng/psstpsst
+  EXPO_PUBLIC_APP_ENV: production
+
+jobs:
+  validate-version:
+    name: Validate version and signing
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Verify third-party notices
+        run: |
+          npm run licenses:check
+          npm run licenses:test
+      - name: Validate signing configuration
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          node scripts/release-signing.mjs check macos
+          node scripts/release-signing.mjs check android
+      - name: Match tag to desktop and Android versions
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REPOSITORY,,}" != "$RELEASE_REPOSITORY" ]]; then
+            echo "Tag releases must run in $RELEASE_REPOSITORY, not $GITHUB_REPOSITORY."
+            exit 1
+          fi
+
+          expected="v$(node -p "require('./desktop/package.json').version")"
+          if [[ "$GITHUB_REF_NAME" != "$expected" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match desktop/package.json version $expected."
+            exit 1
+          fi
+
+          expected_android="v$(node -p "require('./app.json').expo.version")"
+          if [[ "$GITHUB_REF_NAME" != "$expected_android" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match app.json version $expected_android."
+            exit 1
+          fi
+
+  build:
+    name: ${{ matrix.name }}
+    needs: validate-version
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64
+            artifact: electron-macos-arm64
+            runner: macos-15
+            builder-args: --mac --arm64
+          - name: Windows x64
+            artifact: electron-windows-x64
+            runner: windows-2025
+            builder-args: --win --x64
+          - name: Windows arm64
+            artifact: electron-windows-arm64
+            runner: windows-11-arm
+            builder-args: --win --arm64
+          - name: Linux x64
+            artifact: electron-linux-x64
+            runner: ubuntu-24.04
+            builder-args: --linux --x64
+          - name: Linux arm64
+            artifact: electron-linux-arm64
+            runner: ubuntu-24.04-arm
+            builder-args: --linux --arm64
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Use stable Rust
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        shell: bash
+        env:
+          CSC_LINK: ${{ startsWith(matrix.runner, 'macos-') && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ startsWith(matrix.runner, 'macos-') && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ startsWith(matrix.runner, 'macos-') && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(matrix.runner, 'macos-') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ startsWith(matrix.runner, 'macos-') && secrets.APPLE_TEAM_ID || '' }}
+          WIN_CSC_LINK: ${{ startsWith(matrix.runner, 'windows-') && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ startsWith(matrix.runner, 'windows-') && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+        run: |
+          signing_args=()
+          if [[ "$RUNNER_OS" == "macOS" && -z "${CSC_LINK:-}" ]]; then
+            echo "MAC_CSC_LINK is not configured; producing an unsigned macOS artifact."
+            signing_args+=(--config.mac.forceCodeSigning=false --config.mac.identity=null)
+            signing_args+=(--config.mac.hardenedRuntime=false --config.mac.notarize=false)
+          fi
+          npm run electron:package -- ${{ matrix.builder-args }} --publish never "${signing_args[@]}"
+
+      - name: Verify macOS signature and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+        run: |
+          if [[ -n "$CSC_LINK" ]]; then
+            codesign --verify --deep --strict --verbose=2 release/mac-arm64/PsstPsst.app
+            spctl --assess --type execute --verbose=2 release/mac-arm64/PsstPsst.app
+            xcrun stapler validate release/mac-arm64/PsstPsst.app
+          fi
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            release/*.AppImage
+            release/*.blockmap
+            release/*.deb
+            release/*.dmg
+            release/*.exe
+            release/*.yml
+            release/*.zip
+            !release/builder-*.yml
+            !release/builder-*.yaml
+
+  build-android:
+    name: Android APK
+    needs: validate-version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CI: '1'
+      NODE_ENV: production
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install APK signing tools
+        run: sdkmanager "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Check Android dependencies
+        shell: bash
+        run: |
+          (cd android && ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
+          node scripts/check-android-dependencies.mjs android-dependencies.txt
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew :app:assembleRelease --no-daemon --max-workers=2
+
+      - name: Verify APK scanner dependencies
+        run: python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Sign and verify APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          version="$(node -p "require('./app.json').expo.version")"
+          node scripts/release-signing.mjs sign-android \
+            android/app/build/outputs/apk/release/app-release.apk \
+            "release/PsstPsst-${version}-android.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          if-no-files-found: error
+          retention-days: 14
+          path: release/*.apk
+
+  publish-draft:
+    name: Publish draft release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [build, build-android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: electron-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v8
+        with:
+          name: android-apk
+          path: release-assets
+
+      - name: Validate release assets
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          required_assets=(
+            "PsstPsst-${version}-android.apk"
+            "latest-mac.yml"
+            "latest-x64.yml"
+            "latest-arm64.yml"
+            "latest-linux.yml"
+            "latest-linux-arm64.yml"
+            "PsstPsst-${version}-mac-arm64.dmg"
+            "PsstPsst-${version}-mac-arm64.zip"
+            "PsstPsst-${version}-win-x64.exe"
+            "PsstPsst-${version}-win-arm64.exe"
+            "PsstPsst-${version}-linux-x64.AppImage"
+            "PsstPsst-${version}-linux-x64.deb"
+            "PsstPsst-${version}-linux-arm64.AppImage"
+            "PsstPsst-${version}-linux-arm64.deb"
+          )
+
+          missing_assets=0
+          for asset in "${required_assets[@]}"; do
+            if [[ ! -f "release-assets/$asset" ]]; then
+              echo "::error file=release-assets/$asset::Required release asset is missing."
+              missing_assets=1
+            fi
+          done
+
+          if (( missing_assets != 0 )); then
+            exit 1
+          fi
+
+      - name: Create or update draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if draft_state="$(
+            gh release view "$GITHUB_REF_NAME" \
+              --repo "$RELEASE_REPOSITORY" \
+              --json isDraft \
+              --jq .isDraft \
+              2>/dev/null
+          )"; then
+            if [[ "$draft_state" != "true" ]]; then
+              echo "::error::Release $GITHUB_REF_NAME is already published; refusing to replace live update assets."
+              exit 1
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$RELEASE_REPOSITORY" \
+              --draft \
+              --verify-tag \
+              --generate-notes \
+              --title "PsstPsst $version"
+          fi
+
+          gh release upload "$GITHUB_REF_NAME" release-assets/* \
+            --repo "$RELEASE_REPOSITORY" \
+            --clobber

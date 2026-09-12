@@ -1,0 +1,42 @@
+diff --git a/node_modules/react-native-view-shot/lib/RNViewShot.web.js b/node_modules/react-native-view-shot/lib/RNViewShot.web.js
+index 1399f75..67132ee 100644
+--- a/node_modules/react-native-view-shot/lib/RNViewShot.web.js
++++ b/node_modules/react-native-view-shot/lib/RNViewShot.web.js
+@@ -6,7 +6,15 @@ async function captureRef(view, options) {
+     }
+     // TODO: implement snapshotContentContainer option
++    const bounds = view.getBoundingClientRect();
++    const requestedScale = options.width &&
++        options.height &&
++        bounds.width > 0 &&
++        bounds.height > 0
++        ? Math.max(options.width / bounds.width, options.height / bounds.height)
++        : undefined;
+     const h2cOptions = {
+         useCORS: true,
++        ...(requestedScale ? { scale: requestedScale } : {}),
+     };
+     let renderedCanvas = await html2canvas(view, h2cOptions);
+     if (options.width && options.height) {
+diff --git a/node_modules/react-native-view-shot/src/RNViewShot.web.ts b/node_modules/react-native-view-shot/src/RNViewShot.web.ts
+index bcb448d..630d324 100644
+--- a/node_modules/react-native-view-shot/src/RNViewShot.web.ts
++++ b/node_modules/react-native-view-shot/src/RNViewShot.web.ts
+@@ -14,8 +14,17 @@ async function captureRef(
+ 
+   // TODO: implement snapshotContentContainer option
+ 
++  const bounds = view.getBoundingClientRect();
++  const requestedScale =
++    options.width &&
++    options.height &&
++    bounds.width > 0 &&
++    bounds.height > 0
++      ? Math.max(options.width / bounds.width, options.height / bounds.height)
++      : undefined;
+   const h2cOptions = {
+     useCORS: true,
++    ...(requestedScale ? {scale: requestedScale} : {}),
+   };
+   let renderedCanvas = await html2canvas(view, h2cOptions);
+ 

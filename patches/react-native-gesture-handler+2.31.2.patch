@@ -1,0 +1,298 @@
+diff --git a/node_modules/react-native-gesture-handler/lib/commonjs/RNGestureHandlerModule.web.js b/node_modules/react-native-gesture-handler/lib/commonjs/RNGestureHandlerModule.web.js
+index dc6ed3f..b8f894f 100644
+--- a/node_modules/react-native-gesture-handler/lib/commonjs/RNGestureHandlerModule.web.js
++++ b/node_modules/react-native-gesture-handler/lib/commonjs/RNGestureHandlerModule.web.js
+@@ -50,6 +50,11 @@ var _default = exports.default = {
+   attachGestureHandler(handlerTag,
+   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   newView, _actionType, propsRef) {
++    // The handler may already be dropped when attach runs after the component
++    // unmounted (e.g. async ref updates); on native this is a no-op.
++    if ((0, _EnableNewWebImplementation.isNewWebImplementationEnabled)() && !_NodeManager.default.hasHandler(handlerTag)) {
++      return;
++    }
+     if (!(newView instanceof Element || newView instanceof _react.default.Component)) {
+       shouldPreventDrop = true;
+       const handler = (0, _EnableNewWebImplementation.isNewWebImplementationEnabled)() ? _NodeManager.default.getHandler(handlerTag) : HammerNodeManager.getHandler(handlerTag);
+@@ -66,6 +71,11 @@ var _default = exports.default = {
+   },
+   updateGestureHandler(handlerTag, newConfig) {
+     if ((0, _EnableNewWebImplementation.isNewWebImplementationEnabled)()) {
++      // The handler may already be dropped when an update queued earlier runs
++      // after unmount; treat it as a no-op like on native.
++      if (!_NodeManager.default.hasHandler(handlerTag)) {
++        return;
++      }
+       _NodeManager.default.getHandler(handlerTag).updateGestureConfig(newConfig);
+       _InteractionManager.default.instance.configureInteractions(_NodeManager.default.getHandler(handlerTag), newConfig);
+     } else {
+diff --git a/node_modules/react-native-gesture-handler/lib/commonjs/components/Swipeable.js b/node_modules/react-native-gesture-handler/lib/commonjs/components/Swipeable.js
+index e7e2354..12e019b 100644
+--- a/node_modules/react-native-gesture-handler/lib/commonjs/components/Swipeable.js
++++ b/node_modules/react-native-gesture-handler/lib/commonjs/components/Swipeable.js
+@@ -340,12 +340,13 @@ class Swipeable extends _react.Component {
+           touchAction: "pan-y",
+           onHandlerStateChange: this.onTapHandlerStateChange,
+           children: /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.Animated.View, {
+-            pointerEvents: rowState === 0 ? 'auto' : 'box-only',
+             style: [{
+               transform: [{
+                 translateX: this.transX
+               }]
+-            }, this.props.childrenContainerStyle],
++            }, this.props.childrenContainerStyle, {
++              pointerEvents: rowState === 0 ? 'auto' : 'box-only'
++            }],
+             children: children
+           })
+         })]
+diff --git a/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.web.js b/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.web.js
+index fd40c95..e3c90aa 100644
+--- a/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.web.js
++++ b/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.web.js
+@@ -11,16 +11,26 @@ const GestureStateManager = exports.GestureStateManager = {
+     return {
+       handlerTag,
+       begin: () => {
+-        _NodeManager.default.getHandler(handlerTag).begin();
++        // The handler may already be dropped when a queued state change runs
++        // after unmount; treat calls on unknown tags as no-ops like on native.
++        if (_NodeManager.default.hasHandler(handlerTag)) {
++          _NodeManager.default.getHandler(handlerTag).begin();
++        }
+       },
+       activate: () => {
+-        _NodeManager.default.getHandler(handlerTag).activate(true);
++        if (_NodeManager.default.hasHandler(handlerTag)) {
++          _NodeManager.default.getHandler(handlerTag).activate(true);
++        }
+       },
+       fail: () => {
+-        _NodeManager.default.getHandler(handlerTag).fail();
++        if (_NodeManager.default.hasHandler(handlerTag)) {
++          _NodeManager.default.getHandler(handlerTag).fail();
++        }
+       },
+       end: () => {
+-        _NodeManager.default.getHandler(handlerTag).end();
++        if (_NodeManager.default.hasHandler(handlerTag)) {
++          _NodeManager.default.getHandler(handlerTag).end();
++        }
+       }
+     };
+   }
+diff --git a/node_modules/react-native-gesture-handler/lib/commonjs/web/tools/NodeManager.js b/node_modules/react-native-gesture-handler/lib/commonjs/web/tools/NodeManager.js
+index 810dff2..947e783 100644
+--- a/node_modules/react-native-gesture-handler/lib/commonjs/web/tools/NodeManager.js
++++ b/node_modules/react-native-gesture-handler/lib/commonjs/web/tools/NodeManager.js
+@@ -7,6 +7,9 @@ exports.default = void 0;
+ // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+ class NodeManager {
+   static gestures = {};
++  static hasHandler(tag) {
++    return tag in this.gestures;
++  }
+   static getHandler(tag) {
+     if (tag in this.gestures) {
+       return this.gestures[tag];
+diff --git a/node_modules/react-native-gesture-handler/lib/module/RNGestureHandlerModule.web.js b/node_modules/react-native-gesture-handler/lib/module/RNGestureHandlerModule.web.js
+index c4c1b6b..910fad0 100644
+--- a/node_modules/react-native-gesture-handler/lib/module/RNGestureHandlerModule.web.js
++++ b/node_modules/react-native-gesture-handler/lib/module/RNGestureHandlerModule.web.js
+@@ -45,6 +45,11 @@ export default {
+   attachGestureHandler(handlerTag,
+   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   newView, _actionType, propsRef) {
++    // The handler may already be dropped when attach runs after the component
++    // unmounted (e.g. async ref updates); on native this is a no-op.
++    if (isNewWebImplementationEnabled() && !NodeManager.hasHandler(handlerTag)) {
++      return;
++    }
+     if (!(newView instanceof Element || newView instanceof React.Component)) {
+       shouldPreventDrop = true;
+       const handler = isNewWebImplementationEnabled() ? NodeManager.getHandler(handlerTag) : HammerNodeManager.getHandler(handlerTag);
+@@ -61,6 +66,11 @@ export default {
+   },
+   updateGestureHandler(handlerTag, newConfig) {
+     if (isNewWebImplementationEnabled()) {
++      // The handler may already be dropped when an update queued earlier runs
++      // after unmount; treat it as a no-op like on native.
++      if (!NodeManager.hasHandler(handlerTag)) {
++        return;
++      }
+       NodeManager.getHandler(handlerTag).updateGestureConfig(newConfig);
+       InteractionManager.instance.configureInteractions(NodeManager.getHandler(handlerTag), newConfig);
+     } else {
+diff --git a/node_modules/react-native-gesture-handler/lib/module/components/Swipeable.js b/node_modules/react-native-gesture-handler/lib/module/components/Swipeable.js
+index b3bbc4a..9f2080a 100644
+--- a/node_modules/react-native-gesture-handler/lib/module/components/Swipeable.js
++++ b/node_modules/react-native-gesture-handler/lib/module/components/Swipeable.js
+@@ -335,12 +335,13 @@ export default class Swipeable extends Component {
+           touchAction: "pan-y",
+           onHandlerStateChange: this.onTapHandlerStateChange,
+           children: /*#__PURE__*/_jsx(Animated.View, {
+-            pointerEvents: rowState === 0 ? 'auto' : 'box-only',
+             style: [{
+               transform: [{
+                 translateX: this.transX
+               }]
+-            }, this.props.childrenContainerStyle],
++            }, this.props.childrenContainerStyle, {
++              pointerEvents: rowState === 0 ? 'auto' : 'box-only'
++            }],
+             children: children
+           })
+         })]
+diff --git a/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/gestureStateManager.web.js b/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/gestureStateManager.web.js
+index 4b4677a..1eafb9e 100644
+--- a/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/gestureStateManager.web.js
++++ b/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/gestureStateManager.web.js
+@@ -6,16 +6,26 @@ export const GestureStateManager = {
+     return {
+       handlerTag,
+       begin: () => {
+-        NodeManager.getHandler(handlerTag).begin();
++        // The handler may already be dropped when a queued state change runs
++        // after unmount; treat calls on unknown tags as no-ops like on native.
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).begin();
++        }
+       },
+       activate: () => {
+-        NodeManager.getHandler(handlerTag).activate(true);
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).activate(true);
++        }
+       },
+       fail: () => {
+-        NodeManager.getHandler(handlerTag).fail();
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).fail();
++        }
+       },
+       end: () => {
+-        NodeManager.getHandler(handlerTag).end();
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).end();
++        }
+       }
+     };
+   }
+diff --git a/node_modules/react-native-gesture-handler/lib/module/web/tools/NodeManager.js b/node_modules/react-native-gesture-handler/lib/module/web/tools/NodeManager.js
+index ea156f2..6542907 100644
+--- a/node_modules/react-native-gesture-handler/lib/module/web/tools/NodeManager.js
++++ b/node_modules/react-native-gesture-handler/lib/module/web/tools/NodeManager.js
+@@ -3,6 +3,9 @@
+ // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+ export default class NodeManager {
+   static gestures = {};
++  static hasHandler(tag) {
++    return tag in this.gestures;
++  }
+   static getHandler(tag) {
+     if (tag in this.gestures) {
+       return this.gestures[tag];
+diff --git a/node_modules/react-native-gesture-handler/src/RNGestureHandlerModule.web.ts b/node_modules/react-native-gesture-handler/src/RNGestureHandlerModule.web.ts
+index a9584ba..5a6d7b1 100644
+--- a/node_modules/react-native-gesture-handler/src/RNGestureHandlerModule.web.ts
++++ b/node_modules/react-native-gesture-handler/src/RNGestureHandlerModule.web.ts
+@@ -67,6 +67,15 @@ export default {
+     _actionType: ActionType,
+     propsRef: React.RefObject<unknown>
+   ) {
++    // The handler may already be dropped when attach runs after the component
++    // unmounted (e.g. async ref updates); on native this is a no-op.
++    if (
++      isNewWebImplementationEnabled() &&
++      !NodeManager.hasHandler(handlerTag)
++    ) {
++      return;
++    }
++
+     if (!(newView instanceof Element || newView instanceof React.Component)) {
+       shouldPreventDrop = true;
+ 
+@@ -91,6 +100,12 @@ export default {
+   },
+   updateGestureHandler(handlerTag: number, newConfig: Config) {
+     if (isNewWebImplementationEnabled()) {
++      // The handler may already be dropped when an update queued earlier runs
++      // after unmount; treat it as a no-op like on native.
++      if (!NodeManager.hasHandler(handlerTag)) {
++        return;
++      }
++
+       NodeManager.getHandler(handlerTag).updateGestureConfig(newConfig);
+ 
+       InteractionManager.instance.configureInteractions(
+diff --git a/node_modules/react-native-gesture-handler/src/components/Swipeable.tsx b/node_modules/react-native-gesture-handler/src/components/Swipeable.tsx
+index 5ea40b0..5c4dadf 100644
+--- a/node_modules/react-native-gesture-handler/src/components/Swipeable.tsx
++++ b/node_modules/react-native-gesture-handler/src/components/Swipeable.tsx
+@@ -564,12 +564,12 @@ export default class Swipeable extends Component<
+             touchAction="pan-y"
+             onHandlerStateChange={this.onTapHandlerStateChange}>
+             <Animated.View
+-              pointerEvents={rowState === 0 ? 'auto' : 'box-only'}
+               style={[
+                 {
+                   transform: [{ translateX: this.transX! }],
+                 },
+                 this.props.childrenContainerStyle,
++                { pointerEvents: rowState === 0 ? 'auto' : 'box-only' },
+               ]}>
+               {children}
+             </Animated.View>
+diff --git a/node_modules/react-native-gesture-handler/src/handlers/gestures/gestureStateManager.web.ts b/node_modules/react-native-gesture-handler/src/handlers/gestures/gestureStateManager.web.ts
+index e45da69..9d8ea8b 100644
+--- a/node_modules/react-native-gesture-handler/src/handlers/gestures/gestureStateManager.web.ts
++++ b/node_modules/react-native-gesture-handler/src/handlers/gestures/gestureStateManager.web.ts
+@@ -7,19 +7,29 @@ export const GestureStateManager = {
+       handlerTag,
+ 
+       begin: () => {
+-        NodeManager.getHandler(handlerTag).begin();
++        // The handler may already be dropped when a queued state change runs
++        // after unmount; treat calls on unknown tags as no-ops like on native.
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).begin();
++        }
+       },
+ 
+       activate: () => {
+-        NodeManager.getHandler(handlerTag).activate(true);
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).activate(true);
++        }
+       },
+ 
+       fail: () => {
+-        NodeManager.getHandler(handlerTag).fail();
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).fail();
++        }
+       },
+ 
+       end: () => {
+-        NodeManager.getHandler(handlerTag).end();
++        if (NodeManager.hasHandler(handlerTag)) {
++          NodeManager.getHandler(handlerTag).end();
++        }
+       },
+     };
+   },
+diff --git a/node_modules/react-native-gesture-handler/src/web/tools/NodeManager.ts b/node_modules/react-native-gesture-handler/src/web/tools/NodeManager.ts
+index a228833..6335b1b 100644
+--- a/node_modules/react-native-gesture-handler/src/web/tools/NodeManager.ts
++++ b/node_modules/react-native-gesture-handler/src/web/tools/NodeManager.ts
+@@ -9,6 +9,10 @@ export default abstract class NodeManager {
+     InstanceType<ValueOf<typeof Gestures>>
+   > = {};
+ 
++  public static hasHandler(tag: number): boolean {
++    return tag in this.gestures;
++  }
++
+   public static getHandler(tag: number): IGestureHandler {
+     if (tag in this.gestures) {
+       return this.gestures[tag] as IGestureHandler;

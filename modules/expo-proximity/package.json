@@ -1,0 +1,8 @@
+{
+  "name": "expo-proximity",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Native BLE transport for PsstPsst proximity messaging",
+  "main": "src/index.ts",
+  "private": true
+}

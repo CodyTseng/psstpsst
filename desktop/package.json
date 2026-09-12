@@ -1,0 +1,101 @@
+{
+  "name": "psstpsst-desktop",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Electron runtime for the PsstPsst encrypted messenger",
+  "author": "Cody Tseng",
+  "private": true,
+  "repository": "https://github.com/codytseng/psstpsst",
+  "main": "dist/main.js",
+  "dependencies": {
+    "archiver": "^8.0.0",
+    "better-sqlite3": "^13.0.3",
+    "electron-updater": "^6.8.9",
+    "sharp": "^0.35.3",
+    "write-file-atomic": "^7.0.1",
+    "yauzl": "^3.4.0"
+  },
+  "build": {
+    "appId": "chat.psstpsst.app",
+    "productName": "PsstPsst",
+    "directories": {
+      "output": "../release"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "dist/**/*"
+    ],
+    "asarUnpack": [
+      "dist/database-worker.js",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../licenses",
+        "to": "ThirdPartyNotices/licenses",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "..",
+        "to": "ThirdPartyNotices",
+        "filter": ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+      },
+      {
+        "from": "../node_modules/electron/dist",
+        "to": "ThirdPartyNotices/electron",
+        "filter": ["LICENSE", "LICENSES.chromium.html"]
+      },
+      {
+        "from": "../assets/images/tray",
+        "to": "tray",
+        "filter": ["**/*.png"]
+      },
+      {
+        "from": "native/proximity/bin",
+        "to": "proximity",
+        "filter": ["**/*"]
+      }
+    ],
+    "protocols": [
+      {
+        "name": "PsstPsst",
+        "schemes": ["psstpsst"]
+      }
+    ],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "../assets/images/icon.png",
+      "category": "public.app-category.social-networking",
+      "forceCodeSigning": true,
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "Allow PsstPsst to discover and communicate with nearby PsstPsst users.",
+        "NSCameraUsageDescription": "Allow PsstPsst to use the camera to take photos and scan QR codes.",
+        "NSMicrophoneUsageDescription": "Allow PsstPsst to use the microphone to record voice messages."
+      }
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "../assets/images/icon.png",
+      "publish": {
+        "provider": "github",
+        "owner": "codytseng",
+        "repo": "psstpsst",
+        "channel": "latest-${arch}",
+        "releaseType": "draft"
+      }
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "../assets/images/icon.png",
+      "category": "Network"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "codytseng",
+      "repo": "psstpsst",
+      "releaseType": "draft"
+    }
+  }
+}

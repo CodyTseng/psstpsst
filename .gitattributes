@@ -1,0 +1,10 @@
+# Preserve reviewed upstream notice bytes across platforms.
+licenses/third-party/**/*.txt -text
+licenses/third-party/**/*.json text eol=lf
+
+# Generated notice assets are content-addressed; never rewrite their bytes.
+assets/licenses/*.txt -text
+src/generated/licenses/* text eol=lf
+package-lock.json text eol=lf
+LICENSE text eol=lf
+licenses/zxing-cpp/* -text

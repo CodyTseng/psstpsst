@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ExpoCryptoAcceleratorModule"]
+  },
+  "android": {
+    "modules": ["chat.psstpsst.app.cryptoaccelerator.ExpoCryptoAcceleratorModule"]
+  }
+}

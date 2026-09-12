@@ -1,0 +1,92 @@
+[
+  {
+    "id": "psstpsst",
+    "name": "PsstPsst",
+    "license": "MIT",
+    "repository": "https://github.com/codytseng/psstpsst",
+    "files": [
+      "LICENSE"
+    ]
+  },
+  {
+    "id": "solar-icons",
+    "name": "Solar Icons (480 Design)",
+    "license": "CC-BY-4.0",
+    "website": "https://www.figma.com/community/file/1166831539721848736",
+    "files": [
+      "licenses/third-party/common/solar-icons-attribution.txt",
+      "licenses/third-party/common/CC-BY-4.0.txt"
+    ]
+  },
+  {
+    "id": "noise-c",
+    "name": "Noise-C",
+    "license": "MIT and bundled notices",
+    "repository": "https://github.com/rweather/noise-c",
+    "files": [
+      "licenses/third-party/common/noise-c.txt"
+    ]
+  },
+  {
+    "id": "secp256k1",
+    "name": "libsecp256k1",
+    "license": "MIT",
+    "repository": "https://github.com/bitcoin-core/secp256k1",
+    "files": [
+      "licenses/third-party/common/secp256k1.txt"
+    ]
+  },
+  {
+    "id": "zxing-cpp",
+    "name": "ZXing-C++",
+    "version": "3.0.2",
+    "license": "Apache-2.0",
+    "repository": "https://github.com/zxing-cpp/zxing-cpp",
+    "files": [
+      "licenses/zxing-cpp/LICENSE",
+      "licenses/zxing-cpp/NOTICE"
+    ]
+  },
+  {
+    "id": "libvips-posix",
+    "name": "sharp-libvips and dependencies (macOS / Linux)",
+    "version": "1.3.3",
+    "license": "LGPL-3.0-or-later and bundled notices",
+    "repository": "https://github.com/lovell/sharp-libvips",
+    "files": [
+      "licenses/third-party/desktop/sharp-libvips-posix.txt"
+    ]
+  },
+  {
+    "id": "libvips-windows",
+    "name": "sharp and libvips dependencies (Windows)",
+    "version": "0.35.4",
+    "license": "LGPL-3.0-or-later and bundled notices",
+    "repository": "https://github.com/lovell/sharp-libvips",
+    "files": [
+      "licenses/third-party/desktop/sharp-libvips-windows.txt"
+    ]
+  },
+  {
+    "id": "sqlite-expo",
+    "name": "SQLite (Expo)",
+    "version": "3.50.3",
+    "license": "Public domain",
+    "repository": "https://sqlite.org/src",
+    "website": "https://sqlite.org",
+    "files": [
+      "licenses/third-party/common/sqlite.txt"
+    ]
+  },
+  {
+    "id": "sqlite-desktop",
+    "name": "SQLite (better-sqlite3)",
+    "version": "3.53.4",
+    "license": "Public domain",
+    "repository": "https://sqlite.org/src",
+    "website": "https://sqlite.org",
+    "files": [
+      "licenses/third-party/common/sqlite.txt"
+    ]
+  }
+]
