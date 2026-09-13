@@ -1,0 +1,14 @@
+{
+  "production": {
+    "name": "PsstPsst",
+    "id": "chat.psstpsst.app",
+    "scheme": "psstpsst",
+    "packageName": "psstpsst-desktop"
+  },
+  "development": {
+    "name": "PsstPsst Dev",
+    "id": "chat.psstpsst.app.dev",
+    "scheme": "psstpsst-dev",
+    "packageName": "psstpsst-desktop-dev"
+  }
+}

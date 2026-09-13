@@ -4,11 +4,12 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { prepareElectronDevRuntime } from './electron-dev-runtime.mjs';
 
 const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const expoCli = path.join(projectRoot, 'node_modules', 'expo', 'bin', 'cli');
-const electronBinary = require('electron');
+const electronBinary = await prepareElectronDevRuntime(projectRoot, require('electron'));
 const electronMain = path.join(projectRoot, 'desktop', 'dist', 'main.js');
 const rendererHost = 'localhost';
 const firstRendererPort = 8081;

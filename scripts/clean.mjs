@@ -21,6 +21,7 @@ const targets = [
   'ios',
   'android',
   'desktop/dist',
+  'desktop/.dev-runtime',
   'desktop/native/proximity/bin',
   'desktop/native/proximity/linux/target',
   'desktop/native/proximity/windows/target',

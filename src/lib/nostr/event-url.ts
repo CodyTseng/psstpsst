@@ -5,7 +5,7 @@ export const NOSTR_EVENT_URL_PREFERENCE_KEY = 'chat.nostrEventUrl';
 
 const NON_APP_SCHEMES = new Set([
   'javascript:', 'vbscript:', 'data:', 'file:', 'blob:', 'about:',
-  'app:', 'psstpsst:', 'psstpsst-file:',
+  'app:', 'psstpsst:', 'psstpsst-dev:', 'psstpsst-file:',
 ]);
 
 /** Accept web and app URL templates, including opaque links such as `nostr:{id}`. */

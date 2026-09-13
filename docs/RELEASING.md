@@ -6,6 +6,47 @@ Zapstore and F-Droid, and local iOS builds. CI currently builds macOS arm64,
 Windows x64/arm64, Linux x64/arm64, and a universal Android APK. It does not build
 or upload iOS apps, submit to F-Droid, or publish Nostr events to Zapstore.
 
+## Development and production identities
+
+`EXPO_PUBLIC_APP_ENV=development` selects **PsstPsst Dev**, application ID
+`chat.psstpsst.app.dev`, and URL scheme `psstpsst-dev`. Production uses
+**PsstPsst**, `chat.psstpsst.app`, and `psstpsst`. Missing or unknown environment
+values select production. The identities are defined in
+`config/app-identities.json`; `app.json` retains production version metadata.
+
+`npm run start`, `npm run android`, `npm run ios`, and `npm run electron:dev`
+select development. Existing generated native projects must be regenerated once
+after this change, and whenever switching environments:
+
+```sh
+EXPO_PUBLIC_APP_ENV=development npx expo prebuild --clean --platform android
+# Or, for iOS:
+EXPO_PUBLIC_APP_ENV=development npx expo prebuild --clean --platform ios
+```
+
+Prebuild replaces generated native files; keep native customizations in config
+plugins. The new app has separate accounts, settings, and OS permissions; it
+does not migrate the old installation's data.
+
+Electron development uses its own user-data directory and single-instance lock,
+registers only its development URL scheme, and disables release-feed updates.
+On macOS, the development launcher creates and ad-hoc signs a cached
+`desktop/.dev-runtime/PsstPsst Dev.app` host so OS permissions use the development
+bundle ID. It rebuilds this copy when Electron or the identity changes.
+
+To create installable development desktop packages:
+
+```sh
+npm run electron:package:dev -- --mac --arm64 --publish never
+```
+
+Packages go to `release/development/`. The normal platform signing requirements
+still apply. To test without a macOS signing identity, append
+`--config.mac.forceCodeSigning=false --config.mac.identity=null
+--config.mac.hardenedRuntime=false --config.mac.notarize=false`.
+CI explicitly selects production for both manual builds and tagged releases;
+development packages must not be uploaded to the production update feed.
+
 ## First public release
 
 Before making the repository public or publishing its first release:

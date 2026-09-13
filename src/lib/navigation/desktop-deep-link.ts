@@ -1,3 +1,5 @@
+import identities from '../../../config/app-identities.json';
+
 const MAX_DEEP_LINK_LENGTH = 8 * 1024;
 
 /** Convert the registered desktop protocol into a safe Expo Router location. */
@@ -12,7 +14,10 @@ export function normalizeDesktopDeepLink(value: string): string | null {
   } catch {
     return null;
   }
-  if (url.protocol !== 'psstpsst:' || url.username || url.password || url.port || url.hash) {
+  // The main process only forwards the scheme registered by this app variant.
+  const appScheme = url.protocol === `${identities.production.scheme}:`
+    || url.protocol === `${identities.development.scheme}:`;
+  if (!appScheme || url.username || url.password || url.port || url.hash) {
     return null;
   }
 

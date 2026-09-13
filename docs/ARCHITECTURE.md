@@ -25,6 +25,10 @@ UI (src/app, src/components)
 
 Dependencies point inward. Core code does not know which runtime is active.
 
+Development and production use separate installed identities, OS permissions,
+URL schemes, and local data. Desktop identity is fixed by packaged metadata
+(unpackaged runs are development); development must never consume production updates.
+
 ## 2. Layer boundaries
 
 ### UI

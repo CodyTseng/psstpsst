@@ -9,6 +9,7 @@ dist/
 web-build/
 expo-env.d.ts
 /desktop/dist/
+/desktop/.dev-runtime/
 /desktop/native/proximity/bin/
 /desktop/native/proximity/*/target/
 release/

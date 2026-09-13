@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { mkdirSync, promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -49,6 +49,18 @@ import {
   WINDOW_MIN_HEIGHT,
 } from './window-state';
 import { isWindowUserPresent } from './window-presence';
+import identities from '../config/app-identities.json';
+
+// Packaged identity comes from signed metadata, never the launch environment.
+const IS_DEVELOPMENT_APP = !app.isPackaged || app.getName() === identities.development.name;
+const APP_IDENTITY = IS_DEVELOPMENT_APP ? identities.development : identities.production;
+app.setName(APP_IDENTITY.name);
+if (IS_DEVELOPMENT_APP) {
+  const userData = path.join(app.getPath('appData'), APP_IDENTITY.name);
+  mkdirSync(userData, { recursive: true });
+  app.setPath('userData', userData);
+  app.setPath('sessionData', userData);
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -91,7 +103,7 @@ let trayUnreadRevision = 0;
 const trayUnreadIcons = new Map<string, NativeImage>();
 let pendingDeepLink: string | null = null;
 
-const APP_SCHEME = 'psstpsst';
+const APP_SCHEME = APP_IDENTITY.scheme;
 const DEVELOPMENT_RENDERER_ORIGIN = resolveDevelopmentRendererOrigin();
 const NOTIFICATION_ICON_MAX_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_DELAY_MS = 5_000;
@@ -1005,6 +1017,7 @@ function createWindow(): BrowserWindow {
     ? fitWindowBounds(saved.bounds, screen.getDisplayMatching(saved.bounds).workArea)
     : null;
   const window = new BrowserWindow({
+    title: APP_IDENTITY.name,
     ...(bounds ?? { width: 960, height: 720 }),
     useContentSize: !bounds,
     minWidth: WINDOW_MIN_WIDTH,
@@ -1134,7 +1147,7 @@ async function openWindow(): Promise<void> {
 }
 
 async function start(): Promise<void> {
-  app.setAppUserModelId('chat.psstpsst.app');
+  app.setAppUserModelId(APP_IDENTITY.id);
   const userDataPath = app.getPath('userData');
   windowStateStore = new WindowStateStore(path.join(userDataPath, 'window-state.json'));
   await windowStateStore.load();
@@ -1155,7 +1168,7 @@ async function start(): Promise<void> {
     (id) => webContents.fromId(id) ?? null,
   );
   appUpdateService = new DesktopAppUpdater({
-    enabled: app.isPackaged,
+    enabled: app.isPackaged && !IS_DEVELOPMENT_APP,
     updater: autoUpdater,
     emitStatus: (status) => mainWindow?.webContents.send(IPC.appUpdateStatus, status),
     prepareToInstall: async () => {
@@ -1191,9 +1204,9 @@ async function start(): Promise<void> {
   }
   trayBaseIcon = trayIcon;
   tray = new Tray(trayIcon);
-  tray.setToolTip('PsstPsst');
+  tray.setToolTip(APP_IDENTITY.name);
   const trayMenu = Menu.buildFromTemplate([
-    { label: 'Show PsstPsst', click: showMainWindow },
+    { label: `Show ${APP_IDENTITY.name}`, click: showMainWindow },
     { label: 'Quit', click: () => app.quit() },
   ]);
   configureTrayInteractions(tray, trayMenu, showMainWindow, process.platform);
@@ -1208,7 +1221,7 @@ async function start(): Promise<void> {
     // No persisted background schedule yet.
   }
   await openWindow();
-  if (app.isPackaged) {
+  if (app.isPackaged && !IS_DEVELOPMENT_APP) {
     const updateTimer = setTimeout(() => void appUpdateService?.check(), UPDATE_CHECK_DELAY_MS);
     updateTimer.unref();
   }
