@@ -559,13 +559,17 @@ and Expo's [local release guide](https://docs.expo.dev/guides/local-app-producti
 
 ## Version and release checklist
 
-1. Set `desktop/package.json`'s `version` and `app.json`'s `expo.version` to the
-   same release version. Update the workspace lockfile if the desktop package
-   version changes. The tag must match exactly, for example `v1.2.3`.
+1. Set the root and desktop `package.json` versions and `app.json`'s
+   `expo.version` to the same release version. Update the root and desktop
+   workspace versions in the lockfile too. The tag must match exactly, for
+   example `v1.2.3`. Even a version-only lockfile edit changes the license input
+   hash: run `npm run licenses:generate`, `npm run licenses:check`, and
+   `npm run licenses:test`, then commit the generated changes before tagging.
 2. Increase `app.json`'s `expo.android.versionCode` for each Android update and
-   `expo.ios.buildNumber` for each iOS upload. Both are explicitly initialized to
-   `1`; neither is derived from CI run numbers. Use the same Android version code
-   across channels for the same release.
+   `expo.ios.buildNumber` for each iOS upload. Both are maintained explicitly;
+   neither is derived from CI run numbers. Use the same Android version code
+   across channels for the same release. Update the F-Droid recipe and its build
+   command example, and name the Fastlane changelog after that version code.
 3. Configure all five macOS and all four Android secrets before the first tag
    run. Windows signing remains separately configured through `WIN_CSC_LINK`
    and `WIN_CSC_KEY_PASSWORD`.

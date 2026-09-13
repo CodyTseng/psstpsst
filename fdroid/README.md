@@ -28,7 +28,7 @@ file into a fork of https://gitlab.com/fdroid/fdroiddata for validation and revi
    subset of this review.
 6. Remove `disable` in the validation copy, then run `fdroid readmeta`,
    `fdroid lint chat.psstpsst.app`, `fdroid rewritemeta chat.psstpsst.app`, and
-   `fdroid build --server chat.psstpsst.app:1` in the configured fdroiddata
+   `fdroid build --server chat.psstpsst.app:2` in the configured fdroiddata
    checkout. Compare the rebuilt APK with the published APK using F-Droid's
    reproducible-build verification. Investigate native build paths, generated
    files, and tool versions if they differ.
