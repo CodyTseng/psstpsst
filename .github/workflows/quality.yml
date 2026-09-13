@@ -42,3 +42,5 @@ jobs:
         run: npm run test:dependencies
       - name: App identity regressions
         run: node --test scripts/app-identities.test.mjs
+      - name: Electron signing regressions
+        run: node --test scripts/electron-signing.test.mjs

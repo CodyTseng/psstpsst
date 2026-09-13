@@ -90,8 +90,8 @@ cd psstpsst
 npm ci
 ```
 
-The commands below build standalone apps with bundled JavaScript; no Metro
-server is needed to run them. They use the production identity (**PsstPsst**,
+The local builds below need no release signing credentials. They bundle
+JavaScript, so no Metro server is needed to run them. They use the production identity (**PsstPsst**,
 `chat.psstpsst.app`). For development with Fast Refresh, use `npm start` plus
 `npm run ios:dev` / `npm run android:dev`, or `npm run electron:dev`; see
 [CONTRIBUTING.md](CONTRIBUTING.md#running-the-app).
@@ -113,31 +113,20 @@ for local use. It is not signed with the official release key and cannot update
 an installation signed with a different key. For your own distribution key, see
 [Android signing](docs/RELEASING.md#android-developer-owned-apk-signing).
 
-### iOS Release build
+### iOS simulator
 
-On macOS, configure your Apple development team in `expo.ios.appleTeamId` in
-`app.json` and prepare signing for the app and share extension as described in
-[iOS signing](docs/RELEASING.md#signing-configuration-and-archive), then run:
+On macOS, build a standalone Release app for the simulator without signing
+credentials:
 
 ```bash
 npm run ios:prebuild
 npm run ios:build
 ```
 
-Select a connected iPhone or a simulator. This compiles and installs a Release
-build with bundled JavaScript. A physical device requires provisioning for the
-app and share extension; a simulator build cannot be installed on an iPhone.
-
-To create an archive after prebuild and signing setup:
-
-```bash
-npm run ios:archive
-```
-
-The result is `release/PsstPsst.xcarchive`. Open it in Xcode Organizer to export
-an IPA for your provisioning method or distribute through App Store Connect.
-An archive is not itself an installable IPA; see the
-[iOS release guide](docs/RELEASING.md#signing-configuration-and-archive).
+Select an iOS simulator when prompted. Installing on a physical iPhone requires
+signing and provisioning for the app and share extension. See the
+[iOS release guide](docs/RELEASING.md#signing-configuration-and-archive) for device
+signing, archives, IPA export, and TestFlight distribution.
 
 For both mobile platforms, run `*:prebuild` on initial setup and after changing
 native configuration, plugins, dependencies, or the app environment. It replaces
@@ -160,9 +149,8 @@ architecture; CI builds the additional architectures listed above.
 
 On macOS, this command disables certificate signing and notarization, so no Apple
 release credentials are needed. The local package may be blocked by Gatekeeper.
-For a signed distribution build, configure the credentials and use
-`npm run electron:package:signed`; see
-[RELEASING.md](docs/RELEASING.md#macos-developer-id-signing-and-notarization).
+For signed distribution builds, see the
+[local macOS signing guide](docs/RELEASING.md#local-macos-signing).
 
 ### Clean build outputs
 

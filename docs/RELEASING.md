@@ -160,21 +160,113 @@ submits for notarization, and staples the ticket. Without any macOS credentials,
 a manual branch run explicitly disables signing, hardened runtime, and
 notarization for its test artifact. Tag runs never use that fallback.
 
-For a local signed build, set `CSC_LINK` to the absolute `.p12` path and load
-`CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`
-into the environment through your private secret management. Then run:
+#### Local macOS signing
+
+For local builds without release credentials, use `npm run electron:package` as
+shown in the [README](../README.md#desktop-installers). The steps below produce
+a Developer ID-signed build and optionally submit it to Apple for notarization.
+They do not upload to GitHub or require GitHub Secrets.
+
+**1. Select a signing certificate.** Choose one of the following two methods.
+If the Developer ID Application certificate and its private key are already
+installed in the login keychain, run:
+
+```bash
+export CSC_KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
+security find-identity -v -p codesigning "$CSC_KEYCHAIN"
+```
+
+The output lists a 40-character SHA-1 fingerprint followed by each certificate's
+name. Copy the fingerprint for the certificate you intend to use:
+
+```bash
+export CSC_NAME="REPLACE_WITH_40_CHARACTER_SHA1"
+```
+
+Selecting by fingerprint avoids ambiguity when multiple certificates have the
+same name. In Keychain Access, the certificate under **My Certificates** must
+expand to show its private key. If the keychain prompts for access during
+signing, authorize `codesign` to use that key.
+
+Alternatively, use a password-protected `.p12` containing the certificate and
+private key. Keep it outside the repository. In macOS's default zsh:
+
+```zsh
+export CSC_LINK="/absolute/path/developer-id.p12"
+read -rs 'CSC_KEY_PASSWORD?p12 password: '; echo
+export CSC_KEY_PASSWORD
+```
+
+Use one certificate source at a time. The `.p12` route imports the certificate
+into a temporary keychain.
+
+**2. Configure notarization for distribution.** Set your Apple Account email and
+10-character developer Team ID. Generate an app-specific password at
+[Apple Account](https://account.apple.com/) and enter it with hidden input:
+
+```zsh
+export APPLE_ID="your-apple-account@example.com"
+export APPLE_TEAM_ID="YOURTEAMID"
+read -rs 'APPLE_APP_SPECIFIC_PASSWORD?Apple app-specific password: '; echo
+export APPLE_APP_SPECIFIC_PASSWORD
+```
+
+The app-specific password is not your Apple Account login password. Keep these
+values in your terminal session or private secret manager, not committed files.
+When these credentials are present, electron-builder signs, submits to Apple,
+waits for notarization, and staples the resulting ticket.
+
+**3. Build in the same terminal.** From the repository root:
 
 ```bash
 npm ci
 npm run electron:package:signed -- --mac --arm64
+```
+
+For a signed local build without notarization, skip step 2 and run instead:
+
+```bash
+npm run electron:package:signed -- --mac --arm64 --config.mac.notarize=false
+```
+
+Signing alone does not provide Apple's notarization ticket for distribution.
+Both commands disable GitHub publishing. The output is
+`release/PsstPsst-<version>-mac-arm64.dmg` and `.zip`, with the application at
+`release/mac-arm64/PsstPsst.app`.
+
+**4. Verify the result.** Verify the signature for either build:
+
+```bash
 codesign --verify --deep --strict --verbose=2 release/mac-arm64/PsstPsst.app
+```
+
+For a notarized build, also check Gatekeeper acceptance and the stapled ticket:
+
+```bash
 spctl --assess --type execute --verbose=2 release/mac-arm64/PsstPsst.app
 xcrun stapler validate release/mac-arm64/PsstPsst.app
 ```
 
-The public installers are `release/PsstPsst-<version>-mac-arm64.dmg` and `.zip`.
+**Troubleshooting duplicate certificate names.** If `codesign` reports
+`ambiguous`, select the intended identity using its SHA-1 fingerprint in step 1.
+Do not delete certificates just to resolve name matching. Run `npm ci` if the
+installed signer still passes a name instead of a fingerprint; this reapplies
+the repository's signing fix.
+
+If switching certificate sources in an existing shell, clear variables from the
+previous method: `CSC_LINK` and `CSC_KEY_PASSWORD` when switching to the login
+keychain, or `CSC_KEYCHAIN` and `CSC_NAME` when switching to a `.p12`. Also update
+any shell configuration or secret-manager setup that restores those values.
+
+`patches/app-builder-lib+26.15.3.patch` fixes this version's signing path, which
+replaces the selected fingerprint with a potentially ambiguous certificate name.
+The patch preserves the fingerprint when invoking the signer and is applied by
+`npm ci`. Run `node --test scripts/electron-signing.test.mjs` when updating
+electron-builder; remove the patch once the upstream signing path preserves
+fingerprints and the regression test passes without it.
+
 Test the downloaded package on another Mac as well. See
-[electron-builder's v26 notarization guide](https://www.electron.build/v26/docs/features/code-signing/notarization/).
+[electron-builder's v26 notarization guide](https://www.electron.build/v26/docs/notarization/).
 
 ### Android: developer-owned APK signing
 
