@@ -44,6 +44,7 @@ type Props = {
   visible: boolean;
   accountPubkey: string;
   wallets: WalletRow[];
+  receivingAddress: string;
   onClose: () => void;
   onAdd: () => void;
 };
@@ -79,7 +80,9 @@ function moveRow(slots: Slots, from: number, to: number): Slots {
   return next;
 }
 
-export function WalletPickerSheet({ visible, accountPubkey, wallets, onClose, onAdd }: Props) {
+export function WalletPickerSheet({
+  visible, accountPubkey, wallets, receivingAddress, onClose, onAdd,
+}: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const [editing, setEditing] = useState(false);
@@ -230,6 +233,7 @@ export function WalletPickerSheet({ visible, accountPubkey, wallets, onClose, on
                     editProgress={editProgress}
                     editing={editing}
                     displayName={displayName}
+                    isReceivingWallet={Boolean(wallet.lud16) && wallet.lud16 === receivingAddress}
                     onSelect={(id) => {
                       void setDefaultWallet(accountPubkey, id).catch(reportUpdateFailure);
                       onClose();
@@ -297,6 +301,7 @@ type RowProps = {
   editProgress: SharedValue<number>;
   editing: boolean;
   displayName: string;
+  isReceivingWallet: boolean;
   onSelect: (walletId: string) => void;
   onRename: () => void;
   onRemove: () => void;
@@ -311,6 +316,7 @@ function WalletPickerRow({
   editProgress,
   editing,
   displayName,
+  isReceivingWallet,
   onSelect,
   onRename,
   onRemove,
@@ -437,15 +443,20 @@ function WalletPickerRow({
           <GripVertical strokeWidth={iconStrokeWidth.default} size={20} color={c.textMuted} />
         </Animated.View>
 
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <AppText
             variant="subtitle"
             weight="regular"
             numberOfLines={1}
-            style={wallet.isDefault ? { color: c.accent } : undefined}
+            style={{ flexShrink: 1, ...(wallet.isDefault ? { color: c.accent } : undefined) }}
           >
             {displayName}
           </AppText>
+          {isReceivingWallet && !editing ? (
+            <AppText variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {t('wallet.receiving_wallet')}
+            </AppText>
+          ) : null}
         </View>
 
         {wallet.isDefault ? (

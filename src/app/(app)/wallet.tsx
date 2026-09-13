@@ -1,6 +1,7 @@
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { Refresh as RefreshCw } from '@solar-icons/react-native/category/arrows/Linear/Refresh';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
+import { InfoCircle as Info } from '@solar-icons/react-native/category/ui/Linear/InfoCircle';
 import { Wallet } from '@solar-icons/react-native/category/money/Linear/Wallet';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,16 +16,13 @@ import { IconButton } from '@/components/common/IconButton';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { WalletPickerSheet } from '@/components/wallet/WalletPickerSheet';
 import { WalletTransactionRow } from '@/components/wallet/WalletTransactionRow';
-import { useProfile } from '@/hooks/use-profile';
+import { useReceivingWallet } from '@/hooks/use-receiving-wallet';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWallets, useWalletTransactions } from '@/hooks/use-wallets';
-import { platform } from '@/platform';
 import { formatNumber } from '@/services/wallet/bolt11';
-import { publishReceivingWalletAddress } from '@/services/wallet/receiving-wallet.service';
 import { refreshWallet, type WalletError } from '@/services/wallet/wallet.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useReceivingWalletPromptStore } from '@/stores/receiving-wallet-prompt.store';
-import { showToast } from '@/stores/toast.store';
 import { useWalletPrefsStore } from '@/stores/wallet-prefs.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
@@ -38,7 +36,7 @@ export default function WalletScreen() {
   const { scrolled, scrollProps } = useScrolled();
   const navigation = useNavigation();
   const { wallets, loaded: walletsLoaded } = useWallets(accountPubkey);
-  const profile = useProfile(accountPubkey);
+  const { receivingAddress, showReceivingWalletConfirmation } = useReceivingWallet(accountPubkey);
   const defaultWallet = wallets.find((w) => w.isDefault) ?? wallets[0] ?? null;
   const defaultWalletId = defaultWallet?.id ?? null;
   const defaultWalletRef = useRef(defaultWallet);
@@ -51,11 +49,6 @@ export default function WalletScreen() {
   const [balanceSnapshot, setBalanceSnapshot] = useState<{ walletId: string; balanceMsat: number | null } | null>(null);
   const [refreshingWalletId, setRefreshingWalletId] = useState<string | null>(null);
   const [errorSnapshot, setErrorSnapshot] = useState<{ walletId: string; message: string } | null>(null);
-  const [settingReceivingWalletId, setSettingReceivingWalletId] = useState<string | null>(null);
-  const [pendingReceivingProfile, setPendingReceivingProfile] = useState<{
-    address: string;
-    previousEventId: string | null;
-  } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [refreshSpin] = useState(() => new Animated.Value(0));
   const refreshing = refreshingWalletId === defaultWalletId;
@@ -125,47 +118,6 @@ export default function WalletScreen() {
     router.push('/wallet-add');
   }
 
-  const setAsReceivingWallet = useCallback(
-    (walletId: string, address: string, previousEventId: string | null) => {
-      if (!accountPubkey || settingReceivingWalletId) return;
-      setSettingReceivingWalletId(walletId);
-
-      // Let the loading state paint before SQLite reads and event signing run.
-      setTimeout(() => {
-        void (async () => {
-          try {
-            await publishReceivingWalletAddress(accountPubkey, address);
-            setPendingReceivingProfile({ address, previousEventId });
-            setSettingReceivingWalletId(null);
-            showToast(t('wallet.receiving_wallet_set'));
-          } catch {
-            void platform.confirmationDialog.notify({ title: t('wallet.receiving_wallet_failed'), okLabel: t('common.ok') });
-            setSettingReceivingWalletId(null);
-          }
-        })();
-      }, 0);
-    },
-    [accountPubkey, settingReceivingWalletId, t],
-  );
-
-  const showReceivingWalletConfirmation = useCallback(
-    (walletId: string, address: string, cancelLabel: string) => {
-      void platform.confirmationDialog
-        .confirm({
-          title: t('wallet.set_receiving_wallet_title'),
-          message: t('wallet.set_receiving_wallet_message', { address }),
-          cancelLabel,
-          confirmLabel: t('wallet.set_receiving_wallet_confirm'),
-        })
-        .then((confirmed) => {
-          if (confirmed) {
-            setAsReceivingWallet(walletId, address, profile?.rawEvent?.id ?? null);
-          }
-        });
-    },
-    [profile?.rawEvent?.id, setAsReceivingWallet, t],
-  );
-
   useEffect(() => {
     if (!accountPubkey) return;
     return navigation.addListener(
@@ -182,14 +134,6 @@ export default function WalletScreen() {
     );
   }, [accountPubkey, navigation, showReceivingWalletConfirmation, t]);
 
-  function confirmSetAsReceivingWallet() {
-    const wallet = defaultWallet;
-    const address = wallet?.lud16;
-    if (!wallet || !address || settingReceivingWalletId) return;
-
-    showReceivingWalletConfirmation(wallet.id, address, t('common.cancel'));
-  }
-
   const walletName = defaultWallet ? defaultWallet.customName || defaultWallet.name : '';
   const displayedBalanceMsat =
     balanceSnapshot?.walletId === defaultWalletId ? balanceSnapshot.balanceMsat : defaultWallet?.balanceMsat ?? null;
@@ -201,15 +145,6 @@ export default function WalletScreen() {
         ? t('wallet.unknown')
         : t('wallet.balance_hidden');
   const showBalanceUnit = balanceVisible && displayedBalanceMsat != null;
-  const profileLightningAddress = profile?.lud16 || profile?.lud06 || '';
-  const waitingForProfileUpdate =
-    pendingReceivingProfile !== null &&
-    pendingReceivingProfile.address === defaultWallet?.lud16 &&
-    pendingReceivingProfile.previousEventId === (profile?.rawEvent?.id ?? null);
-  const showSetReceivingWallet =
-    Boolean(defaultWallet?.lud16) &&
-    defaultWallet?.lud16 !== profileLightningAddress &&
-    !waitingForProfileUpdate;
   const refreshRotation = refreshSpin.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
@@ -232,8 +167,9 @@ export default function WalletScreen() {
               <View
                 style={{
                   alignItems: 'center',
-                  gap: spacing.sm,
-                  paddingVertical: spacing.xl,
+                  gap: spacing.md,
+                  paddingTop: spacing.xl,
+                  paddingBottom: spacing.sm,
                 }}
               >
                 <View style={{ alignSelf: 'stretch' }}>
@@ -262,17 +198,6 @@ export default function WalletScreen() {
                   <AppText variant="caption" tone="warning" align="center">
                     {error}
                   </AppText>
-                ) : null}
-                {showSetReceivingWallet ? (
-                  <AppButton
-                    label={t('wallet.set_receiving_wallet')}
-                    variant="ghost"
-                    size="sm"
-                    corner="full"
-                    fullWidth={false}
-                    loading={settingReceivingWalletId === defaultWallet.id}
-                    onPress={confirmSetAsReceivingWallet}
-                  />
                 ) : null}
               </View>
 
@@ -338,6 +263,7 @@ export default function WalletScreen() {
           visible={pickerOpen}
           accountPubkey={accountPubkey}
           wallets={wallets}
+          receivingAddress={receivingAddress}
           onClose={() => setPickerOpen(false)}
           onAdd={openAddWallet}
         />
@@ -361,18 +287,27 @@ export default function WalletScreen() {
         }
         right={
           defaultWallet ? (
-            <IconButton
-              variant="plain"
-              size={uiDensity.headerActionSize}
-              onPress={refresh}
-              hitSlop={6}
-              icon={
-                <Animated.View style={{ transform: [{ rotate: refreshRotation }] }}>
-                  <RefreshCw size={uiDensity.headerActionIconSize} color={c.text} />
-                </Animated.View>
-              }
-              accessibilityLabel={t('wallet.refresh')}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <IconButton
+                variant="plain"
+                size={uiDensity.headerActionSize}
+                onPress={refresh}
+                hitSlop={6}
+                icon={
+                  <Animated.View style={{ transform: [{ rotate: refreshRotation }] }}>
+                    <RefreshCw size={uiDensity.headerActionIconSize} color={c.text} />
+                  </Animated.View>
+                }
+                accessibilityLabel={t('wallet.refresh')}
+              />
+              <IconButton
+                variant="plain"
+                size={uiDensity.headerActionSize}
+                icon={<Info size={uiDensity.headerActionIconSize} color={c.text} />}
+                accessibilityLabel={t('wallet.details')}
+                onPress={() => router.push({ pathname: '/wallet-detail/[id]', params: { id: defaultWallet.id } })}
+              />
+            </View>
           ) : undefined
         }
       />

@@ -265,6 +265,9 @@ Secondary text and icon buttons share the same `surfaceElevated` resting fill
 as list rows in both themes, with a hairline border and the shared interaction
 overlay.
 
+Value rows that open a name editor use a trailing directional chevron, not a
+pencil icon, matching other editable settings rows.
+
 Quiet destructive icon actions use a soft danger fill with a danger-coloured
 glyph; solid danger fills remain reserved for prominent destructive actions.
 
