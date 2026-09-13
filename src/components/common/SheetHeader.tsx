@@ -11,7 +11,8 @@ import { IconButton } from './IconButton';
 type Props = {
   title: string;
   onClose: () => void;
-  /** One optional IconButton using the standard title-bar action sizing. */
+  showHandle?: boolean;
+  /** One optional secondary IconButton (accent for Done), with title-bar sizing. */
   action?: React.ReactNode;
 };
 
@@ -19,14 +20,16 @@ type Props = {
  * Fixed task/detail-sheet chrome. The title is centered against the full sheet,
  * independently of the close and trailing-action widths, matching ScreenHeader.
  */
-export function SheetHeader({ title, onClose, action }: Props) {
+export function SheetHeader({ title, onClose, action, showHandle = true }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
+  // The compact grabber already occupies sm + xs above this header.
+  const topInset = showHandle ? spacing.xs : spacing.lg;
 
   return (
     <View
       style={{
-        height: uiDensity.headerActionSize + spacing.sm,
+        height: topInset + uiDensity.headerActionSize + spacing.sm,
         justifyContent: 'center',
         pointerEvents: 'box-none',
       }}
@@ -34,13 +37,13 @@ export function SheetHeader({ title, onClose, action }: Props) {
       <View
         style={{
           position: 'absolute',
-          top: 0,
+          top: topInset,
           start: 0,
           end: 0,
-          bottom: 0,
+          bottom: spacing.sm,
           alignItems: 'center',
           justifyContent: 'center',
-          paddingHorizontal: spacing['3xl'] + spacing.xl,
+          paddingHorizontal: spacing.lg + uiDensity.headerActionSize + spacing.sm,
           pointerEvents: 'none',
         }}
       >
@@ -59,19 +62,19 @@ export function SheetHeader({ title, onClose, action }: Props) {
       <View
         style={{
           position: 'absolute',
-          top: 0,
+          top: topInset,
           start: 0,
           end: 0,
-          bottom: 0,
+          bottom: spacing.sm,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          paddingHorizontal: spacing.sm,
+          paddingHorizontal: spacing.lg,
           pointerEvents: 'box-none',
         }}
       >
         <IconButton
-          variant="plain"
+          variant="secondary"
           size={uiDensity.headerActionSize}
           onPress={onClose}
           icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text} />}

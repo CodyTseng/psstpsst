@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
+import { InteractivePressable as Pressable, supportsHoverPointer } from '@/components/common/InteractivePressable';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -49,8 +49,7 @@ const ROW_HEIGHT = uiDensity.listRowTwoLineHeight;
 const AVATAR_SIZE = uiDensity.conversationAvatarSize;
 const ROW_VERTICAL_PADDING = (ROW_HEIGHT - AVATAR_SIZE) / 2;
 // The interaction pill bleeds 8px past the 16px sheet gutter. Its content inset
-// restores avatars to 16px, while edge actions start at the pill edge so their
-// 20px glyphs also land on the same visible 16px gutter.
+// restores avatars and trailing action containers to the sheet gutter.
 const ROW_BLEED = spacing.sm;
 const ROW_CONTENT_INSET = spacing.sm;
 // Edit-mode "rails" the row squeezes its avatar/name between: a leading grip
@@ -59,7 +58,7 @@ const ROW_CONTENT_INSET = spacing.sm;
 // column — same width, same right offset — so they sit at the exact same spot
 // and just cross-fade in place when edit toggles.
 const GRIP_W = 36;
-const TRAIL_W = 36;
+const TRAIL_W = uiDensity.headerActionSize;
 // How long a press must hold before a drag-reorder takes over (matches the
 // quick-reactions editor). Short enough to feel instant, long enough that a
 // downward flick still goes to the sheet's pull-to-dismiss instead.
@@ -68,7 +67,6 @@ const LONG_PRESS_MS = 180;
 // and the sheet resize together.
 const EDIT_MS = 200;
 const HEIGHT_MS = 220;
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Slots = Record<string, number>;
 
@@ -219,7 +217,7 @@ function AccountSwitcherBody({ onClose, onAddAccount, onHeaderActionChange }: Bo
       showEditToggle ? (
         <IconButton
           accessibilityLabel={t(editing ? 'common.done' : 'common.edit')}
-          variant={editing ? 'accent' : 'plain'}
+          variant={editing ? 'accent' : 'secondary'}
           size={uiDensity.headerActionSize}
           icon={editing
             ? <Check strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.accentForeground} />
@@ -402,6 +400,8 @@ function SwitcherRow({
     // rows open it only as edit progresses (for the delete) — both to TRAIL_W, so
     // the tick and delete land identically.
     const trailing = isActive ? TRAIL_W : editProgress.value * TRAIL_W;
+    const startInset = ROW_CONTENT_INSET + editProgress.value * GRIP_W;
+    const endInset = ROW_CONTENT_INSET + trailing;
     return {
       transform: [{ translateY: y.value }, { scale: withSpring(dragging.value ? 1.03 : 1) }],
       zIndex: dragging.value ? 1 : 0,
@@ -410,8 +410,9 @@ function SwitcherRow({
         : pressed.value
           ? c.interactionOverlay
           : 'transparent',
-      paddingStart: ROW_CONTENT_INSET + editProgress.value * GRIP_W,
-      paddingEnd: ROW_CONTENT_INSET + trailing,
+      // Resolve logical insets before Reanimated writes directly to the DOM.
+      paddingLeft: direction === 'rtl' ? endInset : startInset,
+      paddingRight: direction === 'rtl' ? startInset : endInset,
     };
   });
   const gripStyle = useAnimatedStyle(() => ({ opacity: editProgress.value }));
@@ -422,14 +423,16 @@ function SwitcherRow({
   // disabled Pan never fires (the disabled gesture never fails, so the tap
   // waits forever); switching the whole composed gesture per mode keeps the
   // tap live. See docs/ARCHITECTURE.md overlays/modals.
+  // Keep animated styles on the host view; a Pressable style callback can
+  // overwrite imperative animation updates when its interaction state changes.
   return (
     <GestureDetector gesture={editing ? pan : tap}>
-      <AnimatedPressable
+      <Animated.View
         accessible={false}
-        hoverFeedback={!editing}
-        fallbackHoverOpacity={false}
-        onHoverIn={() => setHovered(true)}
-        onHoverOut={() => setHovered(false)}
+        onPointerEnter={(event) => {
+          if (supportsHoverPointer(event.nativeEvent.pointerType)) setHovered(true);
+        }}
+        onPointerLeave={() => setHovered(false)}
         style={[
           {
             position: 'absolute',
@@ -447,6 +450,7 @@ function SwitcherRow({
             alignItems: 'center',
             gap: spacing.md,
             borderRadius: radius.lg,
+            cursor: 'pointer',
           },
           rowStyle,
           hovered && !editing ? { backgroundColor: c.interactionOverlay } : undefined,
@@ -486,7 +490,7 @@ function SwitcherRow({
         {isActive ? (
           <Animated.View
             style={[
-              { position: 'absolute', end: 0, top: 0, bottom: 0, width: TRAIL_W, alignItems: 'center', justifyContent: 'center' },
+              { position: 'absolute', end: ROW_CONTENT_INSET, top: 0, bottom: 0, width: TRAIL_W, alignItems: 'center', justifyContent: 'center' },
               checkStyle,
               { pointerEvents: 'none' },
             ]}
@@ -498,7 +502,7 @@ function SwitcherRow({
             once fully editing. */}
         <Animated.View
           style={[
-            { position: 'absolute', end: 0, top: 0, bottom: 0, width: TRAIL_W, alignItems: 'center', justifyContent: 'center' },
+            { position: 'absolute', end: ROW_CONTENT_INSET, top: 0, bottom: 0, width: TRAIL_W, alignItems: 'center', justifyContent: 'center' },
             deleteStyle,
             { pointerEvents: editing ? 'auto' : 'none' },
           ]}
@@ -511,7 +515,7 @@ function SwitcherRow({
             accessibilityLabel={t('account.remove_confirm')}
           />
         </Animated.View>
-      </AnimatedPressable>
+      </Animated.View>
     </GestureDetector>
   );
 }

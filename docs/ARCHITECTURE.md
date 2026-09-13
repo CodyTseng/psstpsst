@@ -419,6 +419,9 @@ Native modal presentation is serialized. A modal that opens another closes
 first and continues from `onClosed`; guessed delays are not a coordination
 mechanism. Gesture-heavy overlays keep animation and gesture arbitration on the
 UI thread.
+On Electron, Reanimated writes styles directly to the DOM. Resolve animated
+logical insets to direction-aware CSS properties; React Native's `paddingStart`
+and `paddingEnd` aliases are not translated along that update path.
 
 Message lists, composers, and account services remain mounted only when their
 state is still relevant. Route parameters carry identifiers, never large

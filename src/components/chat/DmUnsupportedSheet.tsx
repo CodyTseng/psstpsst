@@ -85,6 +85,7 @@ export function DmUnsupportedSheet({
       headerAction={
         <IconButton
           accessibilityLabel={t('composer.recheck')}
+          variant="secondary"
           size={uiDensity.headerActionSize}
           icon={<RefreshCw strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.accent} />}
           onPress={onRecheck}

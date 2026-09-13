@@ -22,10 +22,11 @@ import { AppInput } from '@/components/common/AppInput';
 import { AppText } from '@/components/common/AppText';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { IconButton } from '@/components/common/IconButton';
-import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
+import { supportsHoverPointer } from '@/components/common/InteractivePressable';
 import { InputDialog } from '@/components/common/InputDialog';
 import { ListRow } from '@/components/common/ListRow';
 import Plus from 'lucide-react-native/icons/plus';
+import { useLanguageDirection } from '@/i18n/direction';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import type { WalletRow } from '@/services/wallet/wallet.service';
@@ -49,20 +50,19 @@ type Props = {
 
 const ROW_HEIGHT = uiDensity.listRowHeight;
 // Match AccountSwitcherSheet: the interaction pill bleeds 8px past the sheet
-// gutter, while content and edge glyphs remain on the shared 16px visual rail.
+// gutter, while content and trailing action containers align with the header.
 const ROW_BLEED = spacing.sm;
 const ROW_CONTENT_INSET = spacing.sm;
 const GRIP_W = 36;
-const CHECK_W = 36;
+const CHECK_W = uiDensity.headerActionSize;
 const ACTION_BUTTON_SIZE = uiDensity.iconButtonSize;
-// Two action buttons plus their gap. On compact density, preserve the same
-// symmetric slack that centers one button in the shared 36px edge rail.
+// Two action buttons plus their gap and symmetric slack, keeping the delete
+// button centered beneath the header action at either platform density.
 const ACTION_W =
   ACTION_BUTTON_SIZE * 2 + spacing.sm + (CHECK_W - ACTION_BUTTON_SIZE);
 const LONG_PRESS_MS = 180;
 const EDIT_MS = 200;
 const HEIGHT_MS = 220;
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Slots = Record<string, number>;
 
@@ -158,7 +158,7 @@ export function WalletPickerSheet({ visible, accountPubkey, wallets, onClose, on
   const headerAction = !renaming && wallets.length > 0 ? (
     <IconButton
       accessibilityLabel={t(editing ? 'common.done' : 'common.edit')}
-      variant={editing ? 'accent' : 'plain'}
+      variant={editing ? 'accent' : 'secondary'}
       size={uiDensity.headerActionSize}
       icon={editing
         ? <Check strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.accentForeground} />
@@ -318,6 +318,7 @@ function WalletPickerRow({
 }: RowProps) {
   const { t } = useTranslation();
   const c = useThemeColors();
+  const direction = useLanguageDirection();
   const y = useSharedValue(index * ROW_HEIGHT);
   const dragging = useSharedValue(false);
   const pressed = useSharedValue(false);
@@ -367,9 +368,10 @@ function WalletPickerRow({
     });
 
   const rowStyle = useAnimatedStyle(() => {
-    const trailing = wallet.isDefault
+    const startInset = ROW_CONTENT_INSET + editProgress.value * GRIP_W;
+    const endInset = ROW_CONTENT_INSET + (wallet.isDefault
       ? CHECK_W + editProgress.value * (ACTION_W - CHECK_W)
-      : editProgress.value * ACTION_W;
+      : editProgress.value * ACTION_W);
     return {
       transform: [{ translateY: y.value }, { scale: withSpring(dragging.value ? 1.03 : 1) }],
       zIndex: dragging.value ? 1 : 0,
@@ -378,8 +380,10 @@ function WalletPickerRow({
         : pressed.value
           ? c.interactionOverlay
           : 'transparent',
-      paddingStart: ROW_CONTENT_INSET + editProgress.value * GRIP_W,
-      paddingEnd: ROW_CONTENT_INSET + trailing,
+      // Reanimated updates the DOM directly on Electron. Resolve logical
+      // insets here because paddingStart/End are not CSS properties.
+      paddingLeft: direction === 'rtl' ? endInset : startInset,
+      paddingRight: direction === 'rtl' ? startInset : endInset,
     };
   });
   const gripStyle = useAnimatedStyle(() => ({ opacity: editProgress.value }));
@@ -388,17 +392,20 @@ function WalletPickerRow({
 
   // See AccountSwitcherSheet: on the web renderer an Exclusive-composed Tap
   // against a disabled Pan never fires, so compose per mode instead.
+  // Apply animated styles directly to the host view so Pressable interaction
+  // updates cannot overwrite the row's animated position and edit insets.
   return (
     <GestureDetector gesture={editing ? pan : tap}>
-      <AnimatedPressable
+      <Animated.View
         accessible={false}
-        hoverFeedback={!editing}
-        fallbackHoverOpacity={false}
-        onHoverIn={() => setHovered(true)}
-        onHoverOut={() => setHovered(false)}
+        onPointerEnter={(event) => {
+          if (supportsHoverPointer(event.nativeEvent.pointerType)) setHovered(true);
+        }}
+        onPointerLeave={() => setHovered(false)}
         style={[
           {
             position: 'absolute',
+            direction,
             start: -ROW_BLEED,
             end: -ROW_BLEED,
             top: 0,
@@ -406,6 +413,7 @@ function WalletPickerRow({
             flexDirection: 'row',
             alignItems: 'center',
             borderRadius: radius.lg,
+            cursor: 'pointer',
           },
           rowStyle,
           hovered && !editing ? { backgroundColor: c.interactionOverlay } : undefined,
@@ -445,7 +453,7 @@ function WalletPickerRow({
             style={[
               {
                 position: 'absolute',
-                end: 0,
+                end: ROW_CONTENT_INSET,
                 top: 0,
                 bottom: 0,
                 width: CHECK_W,
@@ -464,7 +472,7 @@ function WalletPickerRow({
           style={[
             {
               position: 'absolute',
-              end: 0,
+              end: ROW_CONTENT_INSET,
               top: 0,
               bottom: 0,
               width: ACTION_W,
@@ -492,7 +500,7 @@ function WalletPickerRow({
             accessibilityLabel={t('wallet.remove_confirm')}
           />
         </Animated.View>
-      </AnimatedPressable>
+      </Animated.View>
     </GestureDetector>
   );
 }

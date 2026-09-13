@@ -339,13 +339,16 @@ or detail sheet uses the shared fixed sheet header: a close action at the start,
 a truly centred single-line title, and at most one task-scoped action at the end.
 Both sheet-header actions use Lucide icons only, with localized accessibility labels.
 They reuse the title bar's icon size and circular control shape, with equal
-insets at both edges. Quiet actions share the title bar's neutral hover/pressed
-fill. Edit uses Lucide's square-pen glyph; Done uses a filled primary action
+insets from the sheet's top and side edges, using the standard sheet gutter.
+The title clears the grabber and stays vertically centred with both actions.
+Quiet actions use the secondary fill, border, and shared interaction overlay.
+Edit uses Lucide's square-pen glyph; Done uses a filled primary action
 with a contrasting check glyph. Keep the grabber and header
 compact rather than stacking a standalone handle's drag padding above the task
 controls.
-Fixed business content such as recipient summaries, search, or filters sits
-below that header. Sheet titles never scroll with the body. The full emoji
+Every sheet header reserves `spacing.sm` below its controls before
+the body or fixed business content, such as recipient summaries, search, or
+filters. Sheet titles never scroll with the body. The full emoji
 picker is the registered tool-surface exception: its search and category rail
 replace the standard header.
 

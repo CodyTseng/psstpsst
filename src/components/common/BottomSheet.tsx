@@ -62,7 +62,7 @@ type Props<ItemT = never> = {
    * close/title/action header below the grabber. Omit only for a short,
    * self-explanatory action sheet. */
   title?: string;
-  /** One optional IconButton using the standard title-bar action sizing. */
+  /** One optional secondary IconButton (accent for Done), with title-bar sizing. */
   headerAction?: ReactNode;
   /** Optional non-scrolling business content below the standard header. It
    * receives the same ungated pull-to-dismiss gesture as the grabber. */
@@ -563,7 +563,7 @@ export function BottomSheet<ItemT = never>({
       {title != null ? (
         <GestureDetector gesture={sheetHeaderPan}>
           <View>
-            <SheetHeader title={title} onClose={onClose} action={headerAction} />
+            <SheetHeader title={title} onClose={onClose} action={headerAction} showHandle={showHandle} />
           </View>
         </GestureDetector>
       ) : null}
