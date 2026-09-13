@@ -8,6 +8,7 @@
     "scheme": "psstpsst",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "appleTeamId": "V8288WZJ27",
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "chat.psstpsst.app",
       "buildNumber": "2",
@@ -42,6 +43,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/with-ios-signing",
       "expo-router",
       [
         "expo-splash-screen",

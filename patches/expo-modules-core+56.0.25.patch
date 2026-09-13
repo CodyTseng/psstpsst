@@ -1,0 +1,12 @@
+diff --git a/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift b/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift
+--- a/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift
++++ b/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift
+@@ -13,7 +13,7 @@
+   }
+ 
+   func equals(_ type: AnyDynamicType) -> Bool {
+-    return type is Data.Type
++    return type is Self
+   }
+ 
+   /**

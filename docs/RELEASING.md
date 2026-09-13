@@ -482,6 +482,11 @@ npm ci
 Complete Xcode's first-launch setup and license prompts before building. See the
 [Expo SDK 56 requirements](https://docs.expo.dev/versions/v56.0.0/).
 
+After changing native dependencies or their patches, run
+`node --test scripts/ios-dependency-fixes.test.mjs` on macOS. These native probes
+cover long-press activation/cancellation and binary-data dynamic type equality;
+also build the iOS Release configuration to verify integration with UIKit and JSI.
+
 ### Simulator and device development
 
 Start Metro with `npm start`, then run `npm run ios:dev` in another terminal and
@@ -512,7 +517,9 @@ distribution identity. Xcode can manage iOS certificates and provisioning
 profiles through automatic signing.
 
 1. In `app.json`, set `expo.ios.appleTeamId` to your team's ID so the setting
-   survives regeneration. Keep `expo.ios.bundleIdentifier` registered to that
+   survives regeneration. Keep `with-ios-signing` before target-creating plugins
+   in the plugins array: it applies the team after those plugins create extensions.
+   Keep `expo.ios.bundleIdentifier` registered to that
    team. Increment `expo.ios.buildNumber` before each new uploaded build.
 2. Generate the iOS project and open the workspace:
 
