@@ -117,6 +117,7 @@ jobs:
       - name: Build packages
         shell: bash
         env:
+          npm_config_script_shell: bash
           CSC_LINK: ${{ startsWith(matrix.runner, 'macos-') && secrets.MAC_CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ startsWith(matrix.runner, 'macos-') && secrets.MAC_CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ startsWith(matrix.runner, 'macos-') && secrets.APPLE_ID || '' }}
@@ -131,7 +132,7 @@ jobs:
             signing_args+=(--config.mac.forceCodeSigning=false --config.mac.identity=null)
             signing_args+=(--config.mac.hardenedRuntime=false --config.mac.notarize=false)
           fi
-          npm run electron:package -- ${{ matrix.builder-args }} --publish never "${signing_args[@]}"
+          npm run electron:package:signed -- ${{ matrix.builder-args }} "${signing_args[@]}"
 
       - name: Verify macOS signature and notarization
         if: runner.os == 'macOS'
@@ -195,7 +196,7 @@ jobs:
         run: npm ci --include=dev
 
       - name: Generate Android project
-        run: npx expo prebuild --platform android --clean --no-install
+        run: npm run android:prebuild
 
       - name: Check Android dependencies
         shell: bash
@@ -204,8 +205,7 @@ jobs:
           node scripts/check-android-dependencies.mjs android-dependencies.txt
 
       - name: Build release APK
-        working-directory: android
-        run: ./gradlew :app:assembleRelease --no-daemon --max-workers=2
+        run: npm run android:build
 
       - name: Verify APK scanner dependencies
         run: python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release.apk

@@ -14,9 +14,9 @@ or upload iOS apps, submit to F-Droid, or publish Nostr events to Zapstore.
 values select production. The identities are defined in
 `config/app-identities.json`; `app.json` retains production version metadata.
 
-`npm run start`, `npm run android`, `npm run ios`, and `npm run electron:dev`
-select development. Existing generated native projects must be regenerated once
-after this change, and whenever switching environments:
+`npm run start`, `npm run android:dev`, `npm run ios:dev`, and `npm run electron:dev`
+select development. Regenerate existing native projects whenever switching
+environments. To switch back to development after a production build:
 
 ```sh
 EXPO_PUBLIC_APP_ENV=development npx expo prebuild --clean --platform android
@@ -34,16 +34,24 @@ On macOS, the development launcher creates and ad-hoc signs a cached
 `desktop/.dev-runtime/PsstPsst Dev.app` host so OS permissions use the development
 bundle ID. It rebuilds this copy when Electron or the identity changes.
 
+`electron:package` and `electron:package:signed` explicitly select production;
+`electron:package:dev` selects development. All three pass that environment
+through native compilation, renderer bundling, and packaging. The local
+`electron:package` and `electron:package:dev` commands disable macOS certificate
+signing and notarization. `electron:package:signed` retains the release signing
+requirements; CI uses it with an explicit unsigned fallback for manual builds
+without credentials. All three packaging commands disable publishing by default;
+`electron:publish` builds with release signing and uploads to a draft GitHub
+Release.
+
 To create installable development desktop packages:
 
 ```sh
-npm run electron:package:dev -- --mac --arm64 --publish never
+npm run electron:package:dev -- --mac --arm64
 ```
 
-Packages go to `release/development/`. The normal platform signing requirements
-still apply. To test without a macOS signing identity, append
-`--config.mac.forceCodeSigning=false --config.mac.identity=null
---config.mac.hardenedRuntime=false --config.mac.notarize=false`.
+Packages go to `release/development/`. On macOS they require no signing identity
+and are not notarized.
 CI explicitly selects production for both manual builds and tagged releases;
 development packages must not be uploaded to the production update feed.
 
@@ -158,7 +166,7 @@ into the environment through your private secret management. Then run:
 
 ```bash
 npm ci
-npm run electron:package -- --mac --arm64 --publish never
+npm run electron:package:signed -- --mac --arm64
 codesign --verify --deep --strict --verbose=2 release/mac-arm64/PsstPsst.app
 spctl --assess --type execute --verbose=2 release/mac-arm64/PsstPsst.app
 xcrun stapler validate release/mac-arm64/PsstPsst.app
@@ -212,8 +220,8 @@ npm ci
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 sdkmanager "build-tools;36.0.0"
-npx expo prebuild --platform android --clean --no-install
-(cd android && ./gradlew :app:assembleRelease --no-daemon --max-workers=2)
+npm run android:prebuild
+npm run android:build
 node scripts/release-signing.mjs check android
 node scripts/release-signing.mjs sign-android \
   android/app/build/outputs/apk/release/app-release.apk \
@@ -283,12 +291,12 @@ npm run electron:build
 Create artifacts for the current host platform:
 
 ```bash
-npm run electron:package -- --publish never
+npm run electron:package
 ```
 
 Electron Builder writes artifacts to `release/`:
 
-- macOS: DMG and ZIP; packaging intentionally requires a valid signing identity
+- macOS: DMG and ZIP; local packaging disables certificate signing and notarization
 - Windows: x64/arm64 NSIS
 - Linux: x64/arm64 AppImage and DEB
 
@@ -319,7 +327,7 @@ platform directly to a draft GitHub release, load `GH_TOKEN` from your secret
 manager into the environment, then run:
 
 ```bash
-npm run electron:package -- --publish always
+npm run electron:publish
 ```
 
 Keep the release as a draft until every platform artifact and metadata file is
@@ -345,7 +353,7 @@ Complete Xcode's first-launch setup and license prompts before building. See the
 
 ### Simulator and device development
 
-Start Metro with `npm start`, then run `npm run ios` in another terminal and
+Start Metro with `npm start`, then run `npm run ios:dev` in another terminal and
 select a simulator or attached device. The script compiles, installs, and opens
 the app. A simulator does not need a distribution certificate. For a physical
 device, sign in under **Xcode > Settings > Accounts**, enable Developer Mode on
@@ -355,10 +363,15 @@ behavior on physical devices.
 For a release-mode device build with bundled JavaScript:
 
 ```bash
-npx expo run:ios --configuration Release --device
+npm run ios:prebuild
+npm run ios:build
 ```
 
-This installs a local build; it does not create a TestFlight submission.
+This installs a standalone production build without a Metro server; it does not
+export an IPA or create a TestFlight submission. `ios:prebuild` replaces the
+generated iOS project, so preserve native customizations in app config or plugins.
+Repeat prebuild when switching environments or changing native configuration,
+plugins, or dependencies; subsequent builds can use `ios:build` directly.
 
 ### Signing configuration and archive
 
@@ -373,7 +386,7 @@ profiles through automatic signing.
 2. Generate the iOS project and open the workspace:
 
    ```bash
-   npx expo prebuild --platform ios --clean
+   npm run ios:prebuild
    xed ios
    ```
 
@@ -404,11 +417,7 @@ profiles through automatic signing.
 For a command-line archive after signing is configured:
 
 ```bash
-mkdir -p release
-xcodebuild -workspace ios/PsstPsst.xcworkspace -scheme PsstPsst \
-  -configuration Release -destination 'generic/platform=iOS' \
-  -archivePath "$PWD/release/PsstPsst.xcarchive" \
-  -allowProvisioningUpdates archive
+npm run ios:archive
 ```
 
 The `.xcarchive` is an archive, not an installable `.ipa`. Use Organizer's

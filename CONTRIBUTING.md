@@ -33,7 +33,7 @@ local native modules; Expo Go is not sufficient for the complete application.
 Fork and clone the repository, then work from its root directory.
 
 On Windows, use Git Bash and add `--script-shell=bash` to npm run commands, for
-example `npm --script-shell=bash run electron:dev`. The development scripts use
+example `npm --script-shell=bash run electron:dev`. The npm scripts use
 POSIX environment assignments; the desktop native helper still builds through
 Windows PowerShell.
 
@@ -49,9 +49,9 @@ Git. Expo creates them on the first native build. Regenerate them after changing
 platform you are working on (iOS requires macOS):
 
 ```bash
-npx expo prebuild --platform ios --clean
+EXPO_PUBLIC_APP_ENV=development npx expo prebuild --platform ios --clean
 # Or, for Android:
-npx expo prebuild --platform android --clean
+EXPO_PUBLIC_APP_ENV=development npx expo prebuild --platform android --clean
 ```
 
 `--clean` replaces the selected native project directory. Save any native edits
@@ -60,6 +60,11 @@ Do not place lasting native configuration directly in those generated
 directories; use `app.json`, a config plugin, or a local Expo module instead.
 
 ## Running the app
+
+These commands run development builds with Metro and Fast Refresh. For standalone
+apps with bundled JavaScript, see [Build from source](README.md#build-from-source).
+After a production mobile build, regenerate the native project with the
+`EXPO_PUBLIC_APP_ENV=development` prebuild command above before running `*:dev`.
 
 ### iOS
 
@@ -72,12 +77,12 @@ npm start
 Then compile, install, and open the iOS development build from another terminal:
 
 ```bash
-npm run ios
+npm run ios:dev
 ```
 
 The script prompts for a simulator or connected device. Use a physical device
 for Bluetooth, notification, background-task, camera, and biometric testing.
-Native changes require rebuilding with `npm run ios`; JavaScript and styling
+Native changes require rebuilding with `npm run ios:dev`; JavaScript and styling
 changes use Fast Refresh through the running Metro server.
 
 ### Android
@@ -92,12 +97,12 @@ Then compile, install, and open the Android development build from another
 terminal:
 
 ```bash
-npm run android
+npm run android:dev
 ```
 
 The script prompts for an emulator or connected device. Use a physical device
 for Bluetooth, notification, background-task, camera, and biometric testing.
-Native changes require rebuilding with `npm run android`; JavaScript and styling
+Native changes require rebuilding with `npm run android:dev`; JavaScript and styling
 changes use Fast Refresh through the running Metro server.
 
 ### Electron
