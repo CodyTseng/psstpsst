@@ -532,6 +532,7 @@
     "delivery_note_android": "Android mesaj bağlantısını arka planda etkin tutabilir, ancak sistem veya cihaz üreticisi bunu durdurabilir. Daha güvenilir bildirimler için sistem ayarlarında PsstPsst'in arka planda çalışmasına izin ver ve pil optimizasyonundan hariç tut. Seçenekler cihaza göre değişir.",
     "delivery_note_desktop": "Bildirimler PsstPsst sistem tepsisinde çalışmaya devam ederken gelir. Uygulamadan tamamen çıkmak arka plan kontrollerini durdurur.",
     "privacy_note": "Bu bilgiler varsayılan olarak gizlidir. Gösterirsen bu cihazın bildirim geçmişinde kalabilirler.",
+    "system_permission_note": "Sistem ayarlarında da PsstPsst bildirimlerine izin ver. Uygulama, sistem bildirimlerinin açık olup olmadığını kontrol edemez.",
     "permission_denied_title": "Bildirimler kapalı",
     "permission_denied_message": "Yeni mesaj bildirimleri almak için sistem ayarlarında PsstPsst bildirimlerine izin ver.",
     "unavailable_title": "Bildirimler kullanılamıyor",

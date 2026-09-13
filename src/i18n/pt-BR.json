@@ -535,6 +535,7 @@
     "delivery_note_android": "O Android pode manter a conexão de mensagens ativa em segundo plano, mas o sistema ou o fabricante do dispositivo pode interrompê-la. Para receber notificações com mais confiabilidade, permita que o PsstPsst seja executado em segundo plano e exclua-o da otimização de bateria nas configurações do sistema. As opções variam conforme o dispositivo.",
     "delivery_note_desktop": "As notificações chegam enquanto o PsstPsst continuar em execução na bandeja do sistema. Sair completamente do app interrompe as verificações em segundo plano.",
     "privacy_note": "Esses dados ficam ocultos por padrão. Se você os mostrar, eles poderão permanecer no histórico de notificações deste dispositivo.",
+    "system_permission_note": "Permita também as notificações do PsstPsst nas configurações do sistema. O aplicativo não consegue verificar se as notificações do sistema estão ativadas.",
     "permission_denied_title": "As notificações estão desativadas",
     "permission_denied_message": "Permita as notificações do PsstPsst nas configurações do sistema para receber avisos de novas mensagens.",
     "unavailable_title": "As notificações não estão disponíveis",

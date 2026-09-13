@@ -258,6 +258,13 @@ the release workflow's required asset names aligned with these output names.
 Build Electron on each target operating system because the application includes
 platform-native dependencies and a host-specific Nearby helper.
 
+On macOS, `electron:build:native` also builds the in-process notification permission
+bridge with Xcode's Clang and the lockfile's build-only `node-api-headers`. Its
+universal `.node` binary and header license are packaged outside ASAR and signed
+with the app. Verify notifications in a signed build: first authorization, denial,
+opening System Settings, and toggling OS permission while the settings screen is
+open. The in-app toggle must refresh when returning to the app.
+
 Packaged builds check the public `codytseng/psstpsst` GitHub Releases feed after
 startup. A new version is never downloaded automatically, and a downloaded
 version is never installed on quit: the user confirms each phase separately.

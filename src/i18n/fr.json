@@ -535,6 +535,7 @@
     "delivery_note_android": "Android peut maintenir la connexion aux messages en arrière-plan, mais le système ou le fabricant de l'appareil peut l'arrêter. Pour des notifications plus fiables, autorisez PsstPsst à fonctionner en arrière-plan et excluez l'application de l'optimisation de la batterie dans les réglages système. Les options varient selon l'appareil.",
     "delivery_note_desktop": "Les notifications arrivent tant que PsstPsst reste actif dans la zone de notification. Quitter complètement l'application interrompt les vérifications en arrière-plan.",
     "privacy_note": "Ces informations sont masquées par défaut. Si vous les affichez, elles peuvent rester dans l’historique des notifications de cet appareil.",
+    "system_permission_note": "Autorisez également les notifications de PsstPsst dans les réglages système. L’application ne peut pas vérifier si les notifications système sont activées.",
     "permission_denied_title": "Les notifications sont désactivées",
     "permission_denied_message": "Autorisez les notifications de PsstPsst dans les réglages système pour être averti des nouveaux messages.",
     "unavailable_title": "Les notifications ne sont pas disponibles",

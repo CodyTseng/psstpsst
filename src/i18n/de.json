@@ -532,6 +532,7 @@
     "delivery_note_android": "Android kann die Nachrichtenverbindung im Hintergrund aktiv halten, aber das System oder der Gerätehersteller kann sie beenden. Erlaube PsstPsst für zuverlässigere Benachrichtigungen die Hintergrundausführung und nimm die App in den Systemeinstellungen von der Akkuoptimierung aus. Die Optionen unterscheiden sich je nach Gerät.",
     "delivery_note_desktop": "Benachrichtigungen treffen ein, solange PsstPsst im Infobereich ausgeführt wird. Wenn du die App vollständig beendest, werden auch die Hintergrundprüfungen beendet.",
     "privacy_note": "Diese Angaben sind standardmäßig ausgeblendet. Wenn du sie anzeigst, können sie im Benachrichtigungsverlauf dieses Geräts verbleiben.",
+    "system_permission_note": "Erlaube Benachrichtigungen für PsstPsst auch in den Systemeinstellungen. Die App kann nicht prüfen, ob Systembenachrichtigungen aktiviert sind.",
     "permission_denied_title": "Benachrichtigungen sind deaktiviert",
     "permission_denied_message": "Erlaube PsstPsst-Benachrichtigungen in den Systemeinstellungen, um über neue Nachrichten informiert zu werden.",
     "unavailable_title": "Benachrichtigungen sind nicht verfügbar",

@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { AppState } from 'react-native';
+import { AppState, Linking } from 'react-native';
 
 import type { NotificationsPort } from '../ports/notifications';
 
@@ -46,6 +46,11 @@ export const notificationsAdapter: NotificationsPort = {
 
   setDefaultHandler() {
     // Native lifecycle handling suppresses foreground delivery without a JS round trip.
+  },
+
+  async openSettings() {
+    await Linking.openSettings();
+    return true;
   },
 
   async present(content) {

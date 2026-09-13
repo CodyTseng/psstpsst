@@ -535,6 +535,7 @@
     "delivery_note_android": "Android può mantenere attiva in background la connessione ai messaggi, ma il sistema o il produttore del dispositivo può interromperla. Per notifiche più affidabili, consenti a PsstPsst di funzionare in background ed escludilo dall'ottimizzazione della batteria nelle impostazioni di sistema. Le opzioni variano in base al dispositivo.",
     "delivery_note_desktop": "Le notifiche arrivano finché PsstPsst rimane in esecuzione nell'area di notifica. Uscendo completamente dall'app si interrompono anche i controlli in background.",
     "privacy_note": "Questi dettagli sono nascosti per impostazione predefinita. Se li mostri, potrebbero rimanere nella cronologia delle notifiche del dispositivo.",
+    "system_permission_note": "Consenti le notifiche di PsstPsst anche nelle impostazioni di sistema. L’app non può verificare se le notifiche di sistema sono attive.",
     "permission_denied_title": "Le notifiche sono disattivate",
     "permission_denied_message": "Consenti le notifiche di PsstPsst nelle impostazioni di sistema per ricevere avvisi sui nuovi messaggi.",
     "unavailable_title": "Le notifiche non sono disponibili",

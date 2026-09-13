@@ -538,6 +538,7 @@
     "delivery_note_android": "Android może utrzymywać połączenie z wiadomościami w tle, ale system lub producent urządzenia może je zatrzymać. Aby zwiększyć niezawodność powiadomień, zezwól PsstPsst na działanie w tle i wyłącz dla niego optymalizację baterii w ustawieniach systemu. Opcje różnią się w zależności od urządzenia.",
     "delivery_note_desktop": "Powiadomienia przychodzą, dopóki PsstPsst działa w zasobniku systemowym. Całkowite zamknięcie aplikacji zatrzymuje sprawdzanie w tle.",
     "privacy_note": "Te dane są domyślnie ukryte. Po ich wyświetleniu mogą pozostać w historii powiadomień tego urządzenia.",
+    "system_permission_note": "Zezwól też na powiadomienia PsstPsst w ustawieniach systemowych. Aplikacja nie może sprawdzić, czy powiadomienia systemowe są włączone.",
     "permission_denied_title": "Powiadomienia są wyłączone",
     "permission_denied_message": "Aby otrzymywać powiadomienia o nowych wiadomościach, zezwól na powiadomienia PsstPsst w ustawieniach systemowych.",
     "unavailable_title": "Powiadomienia są niedostępne",

@@ -212,6 +212,11 @@ Mobile local notifications and badges use the project-owned native notification
 module behind the platform ports; no remote push SDK is linked. Notification
 cleanup must preserve Android's foreground-service notification.
 
+On macOS, an in-process Node-API bridge queries and requests notification
+authorization asynchronously for the app's own identity. Capability probes must
+not request permission or stand in for an OS grant. Notification settings refresh
+authorization on foreground return; opening system settings is a typed port action.
+
 Notifications are privacy-first and best-effort. Sender information (avatar and
 display name together) and message content are two device preferences that
 default off. A device-level quiet-hours window (do not disturb) suppresses

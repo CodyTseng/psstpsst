@@ -532,6 +532,7 @@
     "delivery_note_android": "Android 可以讓訊息連線在背景運作，但系統或裝置廠商仍可能停止它。為提高通知穩定性，請在系統設定中允許 PsstPsst 於背景運作，並將它排除於電池最佳化之外。實際選項因裝置而異。",
     "delivery_note_desktop": "PsstPsst 保持在系統匣中執行時才能接收通知。完全結束應用程式後，背景檢查也會停止。",
     "privacy_note": "這些資訊預設隱藏。開啟後，相關資訊可能會保留在裝置的通知記錄中。",
+    "system_permission_note": "請同時在系統設定中允許 PsstPsst 傳送通知。應用程式無法檢查系統通知是否已開啟。",
     "permission_denied_title": "通知已關閉",
     "permission_denied_message": "請在系統設定中允許 PsstPsst 通知，以接收新訊息通知。",
     "unavailable_title": "通知無法使用",

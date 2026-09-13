@@ -532,6 +532,7 @@
     "delivery_note_android": "Android 可以保持消息连接在后台运行，但系统或设备厂商仍可能停止它。为提高通知稳定性，请在系统设置中允许 PsstPsst 后台运行，并将它排除在电池优化之外。具体选项因设备而异。",
     "delivery_note_desktop": "PsstPsst 保持在系统托盘中运行时才能接收通知。完全退出应用后，后台检查也会停止。",
     "privacy_note": "这些信息默认隐藏。开启后，相应信息可能会保留在设备的通知记录中。",
+    "system_permission_note": "请同时在系统设置中允许 PsstPsst 发送通知。应用无法检查系统通知是否已开启。",
     "permission_denied_title": "通知已关闭",
     "permission_denied_message": "请在系统设置中允许 PsstPsst 发送通知，以便接收新消息提醒。",
     "unavailable_title": "通知不可用",

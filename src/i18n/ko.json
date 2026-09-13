@@ -532,6 +532,7 @@
     "delivery_note_android": "Android는 메시지 연결을 백그라운드에서 유지할 수 있지만 시스템이나 기기 제조사가 중지할 수 있습니다. 알림을 더 안정적으로 받으려면 시스템 설정에서 PsstPsst의 백그라운드 실행을 허용하고 배터리 최적화에서 제외하세요. 설정 항목은 기기마다 다릅니다.",
     "delivery_note_desktop": "PsstPsst가 시스템 트레이에서 실행 중인 동안 알림을 받을 수 있습니다. 앱을 완전히 종료하면 백그라운드 확인도 중지됩니다.",
     "privacy_note": "이 정보는 기본적으로 숨겨집니다. 표시하면 이 기기의 알림 기록에 남을 수 있습니다.",
+    "system_permission_note": "시스템 설정에서도 PsstPsst 알림을 허용하세요. 앱에서는 시스템 알림이 켜져 있는지 확인할 수 없습니다.",
     "permission_denied_title": "알림이 꺼져 있음",
     "permission_denied_message": "새 메시지 알림을 받으려면 시스템 설정에서 PsstPsst 알림을 허용하세요.",
     "unavailable_title": "알림을 사용할 수 없음",

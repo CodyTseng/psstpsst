@@ -181,6 +181,9 @@ export type ElectronBridge = {
   };
   notifications: {
     isSupported(): boolean;
+    hasPermission(): Promise<boolean>;
+    ensurePermission(): Promise<boolean>;
+    openSettings(): Promise<boolean>;
     show(content: NotificationPresentationContent): Promise<boolean>;
     dismissAll(): Promise<void>;
   };

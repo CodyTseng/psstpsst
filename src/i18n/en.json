@@ -532,6 +532,7 @@
     "delivery_note_android": "Android can keep the messaging connection active in the background, but the system or device maker may stop it. For more reliable notifications, allow PsstPsst to run in the background and exclude it from battery optimization in system settings. Options vary by device.",
     "delivery_note_desktop": "Notifications arrive while PsstPsst remains running in the system tray. Fully quitting the app stops background checks.",
     "privacy_note": "These details are hidden by default. If you show them, they may remain in this device's notification history.",
+    "system_permission_note": "Also allow notifications for PsstPsst in your system settings. The app cannot check whether system notifications are enabled.",
     "permission_denied_title": "Notifications are off",
     "permission_denied_message": "Allow notifications for PsstPsst in your system settings to be notified about new messages.",
     "unavailable_title": "Notifications aren't available",

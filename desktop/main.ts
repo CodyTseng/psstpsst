@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -29,6 +30,7 @@ import {
 import { formatBadgeCount } from '../src/lib/badge-count';
 import { NOSTR_EVENT_URL_PREFERENCE_KEY } from '../src/lib/nostr/event-url';
 import { DesktopAppUpdater } from './app-updater';
+import { DesktopNotificationPermissions, type MacNotificationPermissions } from './notification-permissions';
 import { BackgroundScheduler } from './background-scheduler';
 import { DatabaseService } from './database-service';
 import { FileService } from './file-service';
@@ -69,6 +71,14 @@ let proximityService: ProximityService | null = null;
 let noiseService: NoiseService | null = null;
 let appUpdateService: DesktopAppUpdater | null = null;
 const notifications = new Map<string, Notification>();
+const notificationPermissions = new DesktopNotificationPermissions({
+  platform: process.platform,
+  isSupported: () => Notification.isSupported(),
+  loadMacPermissions: () => createRequire(__filename)(
+    path.join(__dirname, 'native/notification-permissions.node'),
+  ) as MacNotificationPermissions,
+  openExternal: (url) => shell.openExternal(url),
+});
 const backgroundScheduler = new BackgroundScheduler({
   canRun: () => mainWindow !== null && !mainWindow.isDestroyed(),
   startRun: (runId) => mainWindow?.webContents.send(IPC.backgroundRun, runId),
@@ -833,10 +843,13 @@ function registerIpcHandlers(): void {
   // Synchronous query (the bridge contract is sync): preload asks once via
   // `sendSync` at startup, so this uses `on` + `returnValue`, not `handle`.
   ipcMain.on(IPC.notificationSupported, (event) => {
-    event.returnValue = Notification.isSupported();
+    event.returnValue = notificationPermissions.isSupported();
   });
+  handle(IPC.notificationHasPermission, () => notificationPermissions.hasPermission());
+  handle(IPC.notificationEnsurePermission, () => notificationPermissions.ensurePermission());
+  handle(IPC.notificationOpenSettings, () => notificationPermissions.openSettings());
   handle(IPC.notificationShow, async (_event, content) => {
-    if (!Notification.isSupported()) return false;
+    if (!(await notificationPermissions.hasPermission())) return false;
     if (!content || typeof content !== 'object') {
       throw new TypeError('notification content must be an object');
     }

@@ -532,6 +532,7 @@
     "delivery_note_android": "Az Android aktívan tarthatja az üzenetkapcsolatot a háttérben, de a rendszer vagy az eszköz gyártója leállíthatja. A megbízhatóbb értesítésekhez engedélyezd a PsstPsst háttérbeli futását, és vedd ki az akkumulátor-optimalizálás alól a rendszerbeállításokban. A lehetőségek eszközönként eltérnek.",
     "delivery_note_desktop": "Az értesítések addig érkeznek, amíg a PsstPsst fut a rendszertálcán. Az alkalmazás teljes bezárása leállítja a háttérbeli ellenőrzést.",
     "privacy_note": "Ezek az adatok alapértelmezés szerint rejtve vannak. Ha megjeleníted őket, megmaradhatnak az eszköz értesítési előzményeiben.",
+    "system_permission_note": "A rendszerbeállításokban is engedélyezd a PsstPsst értesítéseit. Az alkalmazás nem tudja ellenőrizni, hogy a rendszer értesítései be vannak-e kapcsolva.",
     "permission_denied_title": "Az értesítések ki vannak kapcsolva",
     "permission_denied_message": "Az új üzenetekről szóló értesítésekhez engedélyezd a PsstPsst értesítéseit a rendszerbeállításokban.",
     "unavailable_title": "Az értesítések nem érhetők el",

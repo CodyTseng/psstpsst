@@ -2,7 +2,7 @@ import { Bell } from '@solar-icons/react-native/category/notifications/Linear/Be
 import { MoonSleep } from '@solar-icons/react-native/category/weather/Linear/MoonSleep';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
@@ -11,7 +11,8 @@ import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { formatMinutes, TimeOfDayPicker } from '@/components/common/TimeOfDayPicker';
 import { Toggle } from '@/components/common/Toggle';
-import { IS_ANDROID, IS_ELECTRON, IS_IOS } from '@/lib/platform';
+import { DESKTOP_OS, IS_ANDROID, IS_ELECTRON, IS_IOS } from '@/lib/platform';
+import { useNotificationStatus } from '@/hooks/use-notification-status';
 import { platform } from '@/platform';
 import { notificationService } from '@/services/notifications/notification.service';
 import {
@@ -38,8 +39,7 @@ export default function NotificationsSettings() {
   const { t, i18n } = useTranslation();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
-  const [enabled, setEnabled] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { enabled, busy, toggle, openSettings } = useNotificationStatus();
   const [contentPreferences, setContentPreferences] =
     useState<NotificationContentPreferences | null>(null);
   const [savingContentPreference, setSavingContentPreference] = useState<
@@ -52,13 +52,11 @@ export default function NotificationsSettings() {
   useEffect(() => {
     let active = true;
     void Promise.all([
-      notificationService.getStatus(),
       notificationService.getContentPreferences(),
       notificationService.getDndWindow(),
     ])
-      .then(([status, preferences, dnd]) => {
+      .then(([preferences, dnd]) => {
         if (!active) return;
-        setEnabled(status.enabled && status.granted);
         setContentPreferences(preferences);
         setDndWindow(dnd);
       })
@@ -75,43 +73,32 @@ export default function NotificationsSettings() {
 
   async function onToggle(next: boolean) {
     if (busy) return;
-    setBusy(true);
     try {
-      if (next) {
-        const status = await notificationService.enable();
-        if (!status.granted) {
-          // OS permission denied — can't enable. Native: point the user to the
-          // system settings page (urlOpener has no app-settings concept, so RN
-          // Linking stays for this one native-only link). Desktop has no such
-          // page — just explain the denial.
-          if (IS_ELECTRON) {
-            void platform.confirmationDialog.notify({
-              title: t('notifications.unavailable_title'),
-              message: t('notifications.unavailable_message'),
-              okLabel: t('common.ok'),
-            });
-          } else {
-            void platform.confirmationDialog
-              .confirm({
-                title: t('notifications.permission_denied_title'),
-                message: t('notifications.permission_denied_message'),
-                cancelLabel: t('common.cancel'),
-                confirmLabel: t('notifications.open_settings'),
-              })
-              .then((confirmed) => {
-                if (confirmed) void Linking.openSettings();
-              });
-          }
-          setEnabled(false);
-          return;
+      const status = await toggle(next);
+      if (next && status && !status.granted) {
+        if (!platform.notifications.isAvailable() || (IS_ELECTRON && DESKTOP_OS !== 'darwin')) {
+          await platform.confirmationDialog.notify({
+            title: t('notifications.unavailable_title'),
+            message: t('notifications.unavailable_message'),
+            okLabel: t('common.ok'),
+          });
+        } else {
+          const confirmed = await platform.confirmationDialog.confirm({
+            title: t('notifications.permission_denied_title'),
+            message: t('notifications.permission_denied_message'),
+            cancelLabel: t('common.cancel'),
+            confirmLabel: t('notifications.open_settings'),
+          });
+          if (confirmed) await openSettings();
         }
-        setEnabled(true);
-      } else {
-        await notificationService.disable();
-        setEnabled(false);
       }
-    } finally {
-      setBusy(false);
+    } catch (error) {
+      console.warn('[notifications] Unable to change notification permission.', error);
+      await platform.confirmationDialog.notify({
+        title: t('notifications.unavailable_title'),
+        message: t('notifications.unavailable_message'),
+        okLabel: t('common.ok'),
+      });
     }
   }
 
@@ -185,6 +172,11 @@ export default function NotificationsSettings() {
               trailing={<Toggle value={enabled} onValueChange={onToggle} disabled={busy} />}
             />
           </ListGroup>
+          {IS_ELECTRON && DESKTOP_OS !== 'darwin' && (
+            <AppText variant="caption" tone="muted" style={{ paddingHorizontal: spacing.xs }}>
+              {t('notifications.system_permission_note')}
+            </AppText>
+          )}
           <AppText variant="caption" tone="muted" style={{ paddingHorizontal: spacing.xs }}>
             {t(DELIVERY_NOTE_KEY)}
           </AppText>

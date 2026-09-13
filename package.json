@@ -105,6 +105,7 @@
     "eslint-config-expo": "~56.0.4",
     "jest": "~29.7.0",
     "jest-expo": "~56.0.5",
+    "node-api-headers": "1.9.0",
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
@@ -116,7 +117,7 @@
     "web": "EXPO_PUBLIC_APP_ENV=development expo start --web",
     "electron:build:main": "esbuild desktop/main.ts desktop/preload.ts desktop/database-worker.ts desktop/noise-worker.ts --bundle --platform=node --format=cjs --target=node22 --outdir=desktop/dist --external:electron --external:electron-updater --external:better-sqlite3 --external:sharp",
     "electron:build:renderer": "node scripts/build-electron-renderer.mjs",
-    "electron:build:native": "node scripts/build-electron-proximity.mjs",
+    "electron:build:native": "node scripts/build-electron-proximity.mjs && node scripts/build-electron-notifications.mjs",
     "electron:build": "npm run electron:build:main && npm run electron:build:renderer",
     "electron:rebuild": "cd desktop && electron-builder install-app-deps",
     "electron:launch": "electron desktop/dist/main.js",

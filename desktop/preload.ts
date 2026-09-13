@@ -41,7 +41,7 @@ ipcRenderer.on(IPC.deepLinkAvailable, () => {
   for (const listener of deepLinkListeners) listener();
 });
 
-// `Notification.isSupported()` lives in the main process. The bridge contract
+// The side-effect-free capability check lives in the main process. The bridge contract
 // is sync (the port's capability probe), so resolve it once, eagerly, over a
 // synchronous IPC round-trip at preload time.
 const notificationSupported = ipcRenderer.sendSync(IPC.notificationSupported) as boolean;
@@ -195,6 +195,9 @@ const bridge: ElectronBridge = {
   },
   notifications: {
     isSupported: () => notificationSupported,
+    hasPermission: () => invoke(IPC.notificationHasPermission),
+    ensurePermission: () => invoke(IPC.notificationEnsurePermission),
+    openSettings: () => invoke(IPC.notificationOpenSettings),
     show: (content) => invoke(IPC.notificationShow, content),
     dismissAll: () => invoke(IPC.notificationDismissAll),
   },

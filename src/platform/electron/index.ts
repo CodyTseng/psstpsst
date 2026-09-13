@@ -109,8 +109,9 @@ export function createElectronAdapters(): PlatformAdapters {
           if (focused) listener();
         });
       },
-      hasPermission: () => Promise.resolve(bridge.notifications.isSupported()),
-      ensurePermission: () => Promise.resolve(bridge.notifications.isSupported()),
+      hasPermission: () => bridge.notifications.hasPermission(),
+      ensurePermission: () => bridge.notifications.ensurePermission(),
+      openSettings: () => bridge.notifications.openSettings(),
       setDefaultHandler() {},
       present: (content) => bridge.notifications.show(content),
       dismissAll: () => bridge.notifications.dismissAll(),

@@ -49,6 +49,8 @@ export interface NotificationsPort {
    * OS still allows asking. Returns the final granted state.
    */
   ensurePermission(channelName: string): Promise<boolean>;
+  /** Open OS notification settings when supported. Returns whether a page opened. */
+  openSettings(): Promise<boolean>;
   /**
    * Set the foreground presentation handler. We only post while backgrounded,
    * so this is a sane default for edge cases; idempotent.

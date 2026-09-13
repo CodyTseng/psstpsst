@@ -381,6 +381,12 @@ the page themselves.
 
 Loading, empty, error, and disabled are distinct states.
 
+Notification controls show the effective app preference and OS permission together
+where permission can be queried. Otherwise, keep visible guidance to enable
+notifications in system settings and explain that system permission cannot be checked.
+When the OS denies permission, explain how to enable it in system settings and
+refresh the control when the user returns.
+
 Electron application updates require separate download and install
 confirmations. Declining either action must not start it implicitly later.
 
