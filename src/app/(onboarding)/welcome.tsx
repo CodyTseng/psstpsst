@@ -297,7 +297,7 @@ export default function Welcome() {
   }
 
   return (
-    <AppScreen edges={canCancel ? ['bottom'] : ['top', 'bottom']}>
+    <AppScreen edges={['bottom']}>
       <View style={{ flex: 1, flexDirection: wide ? 'row' : 'column' }}>
         {/* Artwork blends directly into the page canvas. */}
         {wide ? null : (
