@@ -1,0 +1,9 @@
+First public release of PsstPsst.
+
+- End-to-end encrypted, one-to-one messaging over Nostr
+- Nearby messaging over Bluetooth without internet access
+- Photos, voice messages, files, replies, and reactions
+- Light and dark themes with selectable accent colors
+- Identity transfer and chat-history export/import
+
+Back up your identity and chat history before moving devices. Background delivery depends on device and battery settings.

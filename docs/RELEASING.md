@@ -339,6 +339,42 @@ and [apksigner reference](https://developer.android.com/tools/apksigner).
 
 ### Zapstore and F-Droid
 
+Store copy and the icon live in `fastlane/metadata/android/en-US/`. Keep
+`title.txt`, `short_description.txt` (under 80 characters),
+`full_description.txt`, and `changelogs/<versionCode>.txt` (at most 500
+characters) up to date before each release tag. Shared screenshots live in
+`images/phoneScreenshots/1.png` through `4.png`. For the first release, the
+maintainer has chosen to reuse the supplied iPhone promotional artwork for
+Android listings; see `docs/images/store/README.md`. Refresh the store icon from
+`assets/images/icon.png` when branding changes.
+
+The root `zapstore.yaml` selects the official stable GitHub APK and reads this
+Fastlane directory. After committing and pushing the metadata and publishing
+the GitHub release, check APK selection without publishing:
+
+```sh
+zsp publish --check zapstore.yaml
+```
+
+Use `zsp publish --wizard` for first-time identity setup. Preserve the checked-in
+source, APK match pattern, and Fastlane selection when reviewing wizard edits.
+Add the chosen public `pubkey` to the config and push it before relay ownership
+verification. Subsequent interactive publishing can use browser signing:
+
+```sh
+SIGN_WITH=browser zsp publish zapstore.yaml
+```
+
+This last command publishes publicly; `--check` only verifies APK selection.
+Leave release notes to the selected GitHub release rather than hard-coding
+the first version's changelog in `zapstore.yaml`.
+
+The disabled F-Droid submission draft lives in
+[`fdroid/metadata/chat.psstpsst.app.yml`](../fdroid/metadata/chat.psstpsst.app.yml).
+Complete the toolchain, release-commit, signing-fingerprint, and reproducibility
+steps in [`fdroid/README.md`](../fdroid/README.md) before submitting it. Local
+YAML validation does not establish F-Droid build or inclusion readiness.
+
 For Zapstore, publish the signed APK as a public GitHub Release asset first.
 Install the official `zsp` publisher, then use `zsp publish --wizard`, selecting
 `https://github.com/codytseng/psstpsst` as the release source. Review the generated

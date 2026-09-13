@@ -1,0 +1,15 @@
+# Run from the repository root. See docs/RELEASING.md before first publication.
+repository: https://github.com/codytseng/psstpsst
+match: '^PsstPsst-[0-9]+\.[0-9]+\.[0-9]+-android\.apk$'
+name: PsstPsst
+license: MIT
+website: https://psstpsst.chat
+tags:
+  - messaging
+  - privacy
+  - nostr
+metadata_sources:
+  - fastlane
+# Add the publisher's public npub with `zsp publish --wizard`, then commit it
+# before publishing so the relay can verify repository ownership.
+# Keep signing credentials outside this file; use SIGN_WITH at publish time.

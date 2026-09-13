@@ -1,0 +1,46 @@
+# Submission draft, not an approved or reproducibly verified build recipe.
+# Complete fdroid/README.md before enabling or submitting this build.
+Categories:
+  - Internet
+License: MIT
+AuthorName: Cody Tseng
+WebSite: https://psstpsst.chat
+SourceCode: https://github.com/codytseng/psstpsst
+IssueTracker: https://github.com/codytseng/psstpsst/issues
+Changelog: https://github.com/codytseng/psstpsst/releases
+
+AutoName: PsstPsst
+
+RepoType: git
+Repo: https://github.com/codytseng/psstpsst.git
+Binaries: https://github.com/codytseng/psstpsst/releases/download/v%v/PsstPsst-%v-android.apk
+# Add AllowedAPKSigningKeys with the verified release certificate SHA-256
+# fingerprint (64 lowercase hexadecimal characters, without colons).
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    disable: Pending release commit, signing fingerprint, toolchain provisioning, and reproducibility verification
+    # Replace with the full commit hash of the published v0.1.0 tag.
+    commit: v0.1.0
+    output: android/app/build/outputs/apk/release/app-release-unsigned.apk
+    ndk: 27.1.12297006
+    # Node.js 22, npm, JDK 17, and Android build tools must be provisioned
+    # and pinned against the upstream release environment before enabling.
+    init:
+      - node -e 'if (process.versions.node.split(".")[0] !== "22") process.exit(1)'
+      - CI=1 NODE_ENV=production ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --include=dev
+      - CI=1 NODE_ENV=production npm run android:prebuild
+      - sed -i '/signingConfig signingConfigs.debug/d' android/app/build.gradle
+      - rm android/app/debug.keystore
+    build:
+      - (cd android && EXPO_PUBLIC_APP_ENV=production ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
+      - node scripts/check-android-dependencies.mjs android-dependencies.txt
+      - CI=1 NODE_ENV=production npm run android:build
+      - python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+AutoUpdateMode: None
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
+UpdateCheckData: 'app.json|"versionCode":\s*(\d+)|.|"version":\s*"([^"]+)"'
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1
