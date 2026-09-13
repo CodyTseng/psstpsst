@@ -575,6 +575,10 @@
     "screenshot_preview_exit": "Zakończ podgląd zrzutów ekranu"
   },
   "app_update": {
+    "check": "Sprawdź aktualizacje",
+    "up_to_date": "Masz najnowszą wersję",
+    "check_failed": "Nie udało się sprawdzić aktualizacji. Spróbuj ponownie później.",
+    "busy": "Aktualizacja jest już w toku.",
     "available_title": "Dostępna jest aktualizacja",
     "available_message": "Wersja {{version}} jest gotowa do pobrania.",
     "download": "Pobierz",

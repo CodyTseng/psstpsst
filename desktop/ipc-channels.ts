@@ -1,4 +1,5 @@
 export const IPC = {
+  appUpdateCheck: 'psstpsst:app-update:check',
   appUpdateGetStatus: 'psstpsst:app-update:get-status',
   appUpdateDownload: 'psstpsst:app-update:download',
   appUpdateInstall: 'psstpsst:app-update:install',

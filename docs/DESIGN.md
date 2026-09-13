@@ -389,6 +389,8 @@ refresh the control when the user returns.
 
 Electron application updates require separate download and install
 confirmations. Declining either action must not start it implicitly later.
+Manual update checks provide explicit result feedback and allow users to revisit
+a previously declined update.
 
 - Never infer “loaded” from an empty array. Wait for an explicit resolved flag.
 - Fast local reads use a blank stable placeholder; genuinely slow remote reads

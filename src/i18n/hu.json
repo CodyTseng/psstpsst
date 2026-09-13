@@ -569,6 +569,10 @@
     "screenshot_preview_exit": "Kilépés a képernyőkép-előnézetből"
   },
   "app_update": {
+    "check": "Frissítések keresése",
+    "up_to_date": "A legújabb verziót használod",
+    "check_failed": "Nem sikerült frissítéseket keresni. Próbáld újra később.",
+    "busy": "Már folyamatban van egy frissítés.",
     "available_title": "Frissítés érhető el",
     "available_message": "A(z) {{version}} verzió letölthető.",
     "download": "Letöltés",

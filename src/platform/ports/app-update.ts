@@ -7,6 +7,7 @@ export type AppUpdateStatus =
 
 /** Electron application-binary updates. Mobile stores own this capability. */
 export interface AppUpdatePort {
+  check(): Promise<AppUpdateStatus>;
   getStatus(): Promise<AppUpdateStatus>;
   download(): Promise<void>;
   install(): Promise<void>;

@@ -23,6 +23,7 @@ export type ElectronDirectoryEntry = {
 
 export type ElectronBridge = {
   appUpdate: {
+    check(): Promise<AppUpdateStatus>;
     getStatus(): Promise<AppUpdateStatus>;
     download(): Promise<void>;
     install(): Promise<void>;

@@ -569,6 +569,10 @@
     "screenshot_preview_exit": "Screenshot-Vorschau beenden"
   },
   "app_update": {
+    "check": "Nach Updates suchen",
+    "up_to_date": "Du bist auf dem neuesten Stand",
+    "check_failed": "Updates konnten nicht geprüft werden. Bitte versuche es später erneut.",
+    "busy": "Ein Update läuft bereits.",
     "available_title": "Update verfügbar",
     "available_message": "Version {{version}} kann heruntergeladen werden.",
     "download": "Herunterladen",

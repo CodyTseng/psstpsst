@@ -572,6 +572,10 @@
     "screenshot_preview_exit": "Sair da prévia de capturas de tela"
   },
   "app_update": {
+    "check": "Verificar atualizações",
+    "up_to_date": "Você está com a versão mais recente",
+    "check_failed": "Não foi possível verificar atualizações. Tente novamente mais tarde.",
+    "busy": "Uma atualização já está em andamento.",
     "available_title": "Atualização disponível",
     "available_message": "A versão {{version}} está pronta para baixar.",
     "download": "Baixar",

@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import { autoUpdater } from 'electron-updater';
 import sharp from 'sharp';
+import writeFileAtomic from 'write-file-atomic';
 import {
   app,
   BrowserWindow,
@@ -294,6 +295,13 @@ async function loadNotificationIcon(value: unknown): Promise<NativeImage | undef
 }
 
 function registerIpcHandlers(): void {
+  handle(IPC.appUpdateCheck, async () => {
+    if (!appUpdateService || !app.isPackaged || IS_DEVELOPMENT_APP) {
+      throw new Error('Application updates are unavailable');
+    }
+    await appUpdateService.check();
+    return appUpdateService.getStatus();
+  });
   handle(IPC.appUpdateGetStatus, () => appUpdateService?.getStatus() ?? { state: 'idle' });
   handle(IPC.appUpdateDownload, () => {
     if (!appUpdateService) throw new Error('Application updater is unavailable');
@@ -1090,6 +1098,9 @@ function createWindow(): BrowserWindow {
     window.webContents.send(IPC.windowFocusChanged, isWindowUserPresent(window));
   };
   window.on('focus', sendWindowPresence);
+  window.on('focus', () => {
+    if (!shuttingDown) void appUpdateService?.checkIfDue();
+  });
   window.on('blur', sendWindowPresence);
   window.on('show', sendWindowPresence);
   window.on('hide', sendWindowPresence);
@@ -1167,7 +1178,21 @@ async function start(): Promise<void> {
     (owner) => owner.send(IPC.databaseChanged, {}),
     (id) => webContents.fromId(id) ?? null,
   );
+  const updateCheckPath = path.join(userDataPath, 'update-check.json');
+  let lastCheckedAt = 0;
+  try {
+    const saved = JSON.parse(await fs.readFile(updateCheckPath, 'utf8'));
+    if (Number.isSafeInteger(saved.lastCheckedAt) && saved.lastCheckedAt > 0) {
+      lastCheckedAt = saved.lastCheckedAt;
+    }
+  } catch {
+    // Missing or invalid metadata makes the next foreground check due.
+  }
   appUpdateService = new DesktopAppUpdater({
+    lastCheckedAt,
+    saveLastCheckedAt: (timestamp) => writeFileAtomic(
+      updateCheckPath, JSON.stringify({ lastCheckedAt: timestamp }),
+    ),
     enabled: app.isPackaged && !IS_DEVELOPMENT_APP,
     updater: autoUpdater,
     emitStatus: (status) => mainWindow?.webContents.send(IPC.appUpdateStatus, status),
@@ -1222,7 +1247,7 @@ async function start(): Promise<void> {
   }
   await openWindow();
   if (app.isPackaged && !IS_DEVELOPMENT_APP) {
-    const updateTimer = setTimeout(() => void appUpdateService?.check(), UPDATE_CHECK_DELAY_MS);
+    const updateTimer = setTimeout(() => void appUpdateService?.checkIfDue(), UPDATE_CHECK_DELAY_MS);
     updateTimer.unref();
   }
 }

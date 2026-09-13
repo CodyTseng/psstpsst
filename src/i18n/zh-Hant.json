@@ -569,6 +569,10 @@
     "screenshot_preview_exit": "結束截圖預覽"
   },
   "app_update": {
+    "check": "檢查更新",
+    "up_to_date": "目前已是最新版本",
+    "check_failed": "無法檢查更新，請稍後重試。",
+    "busy": "更新正在進行中。",
     "available_title": "有可用更新",
     "available_message": "版本 {{version}} 已可下載。",
     "download": "下載",

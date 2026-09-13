@@ -67,6 +67,7 @@ ipcRenderer.on(
 
 const bridge: ElectronBridge = {
   appUpdate: {
+    check: () => invoke(IPC.appUpdateCheck),
     getStatus: () => invoke(IPC.appUpdateGetStatus),
     download: () => invoke(IPC.appUpdateDownload),
     install: () => invoke(IPC.appUpdateInstall),

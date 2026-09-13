@@ -569,6 +569,10 @@
     "screenshot_preview_exit": "Ekran görüntüsü önizlemesinden çık"
   },
   "app_update": {
+    "check": "Güncellemeleri denetle",
+    "up_to_date": "En güncel sürümü kullanıyorsunuz",
+    "check_failed": "Güncellemeler denetlenemedi. Lütfen daha sonra tekrar deneyin.",
+    "busy": "Bir güncelleme zaten devam ediyor.",
     "available_title": "Güncelleme mevcut",
     "available_message": "{{version}} sürümü indirilmeye hazır.",
     "download": "İndir",

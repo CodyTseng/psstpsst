@@ -16,7 +16,12 @@ export type DesktopAutoUpdater = Pick<
   | 'on'
 >;
 
+export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 type Options = {
+  lastCheckedAt?: number;
+  now?: () => number;
+  saveLastCheckedAt?: (timestamp: number) => Promise<void>;
   enabled: boolean;
   updater: DesktopAutoUpdater;
   emitStatus: (status: AppUpdateStatus) => void;
@@ -33,8 +38,10 @@ export class DesktopAppUpdater {
   private checking: Promise<void> | null = null;
   private downloading: Promise<void> | null = null;
   private availableVersion: string | null = null;
+  private lastCheckedAt: number;
 
   constructor(private readonly options: Options) {
+    this.lastCheckedAt = options.lastCheckedAt ?? 0;
     const { updater } = options;
     updater.autoDownload = false;
     updater.autoInstallOnAppQuit = false;
@@ -78,16 +85,34 @@ export class DesktopAppUpdater {
     return this.status;
   }
 
+  async checkIfDue(): Promise<void> {
+    const now = (this.options.now ?? Date.now)();
+    if (
+      this.lastCheckedAt > 0 && now >= this.lastCheckedAt &&
+      now - this.lastCheckedAt < UPDATE_CHECK_INTERVAL_MS
+    ) return;
+    await this.check().catch(() => {});
+  }
+
   check(): Promise<void> {
-    if (!this.options.enabled || this.status.state === 'downloaded') return Promise.resolve();
+    if (!this.options.enabled || this.status.state === 'downloaded' ||
+        this.status.state === 'downloading') return Promise.resolve();
     if (this.checking) return this.checking;
 
-    const task = this.options.updater
-      .checkForUpdates()
+    this.lastCheckedAt = (this.options.now ?? Date.now)();
+    const timestamp = this.lastCheckedAt;
+    this.setStatus({ state: 'checking' });
+    const task = Promise.resolve().then(async () => {
+      await this.options.saveLastCheckedAt?.(timestamp).catch((error) => {
+        console.warn('[updates] Unable to save update check time:', error);
+      });
+      return this.options.updater.checkForUpdates();
+    })
       .then(() => undefined)
       .catch((error) => {
         console.warn('[updates] Update check failed:', error);
         if (this.status.state === 'checking') this.setStatus({ state: 'idle' });
+        throw error;
       })
       .finally(() => {
         if (this.checking === task) this.checking = null;

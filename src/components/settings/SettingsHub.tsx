@@ -13,6 +13,7 @@ import { InfoCircle } from '@solar-icons/react-native/category/ui/Linear/InfoCir
 import { Camera } from '@solar-icons/react-native/category/video/Linear/Camera';
 import { QrCode } from '@solar-icons/react-native/category/security/Linear/QrCode';
 import { ServerSquare } from '@solar-icons/react-native/category/devices/Linear/ServerSquare';
+import { Refresh } from '@solar-icons/react-native/category/arrows/Linear/Refresh';
 import Languages from 'lucide-react-native/icons/languages';
 import { UserCircle as CircleUserRound } from '@solar-icons/react-native/category/users/Linear/UserCircle';
 import { useEffect, useRef, useState } from 'react';
@@ -38,6 +39,9 @@ import { NpubQrSheet } from '@/components/profile/NpubQrSheet';
 import { useProfile } from '@/hooks/use-profile';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWidePaneSelection } from '@/hooks/use-wide-pane-selection';
+import { IS_ELECTRON } from '@/lib/platform';
+import { platform } from '@/platform';
+import { checkForAppUpdates } from '@/services/app-update';
 import { IS_DEVELOPMENT_BUILD } from '@/lib/environment';
 import { resolveName } from '@/lib/nostr/display-name';
 import { pubkeyToNpub } from '@/lib/nostr/keys';
@@ -57,6 +61,7 @@ export function SettingsHub() {
   const profile = useProfile(activePubkey);
   const navigation = useNavigation();
   const scrollRef = useRef<ScrollView>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const selection = useWidePaneSelection();
@@ -79,6 +84,21 @@ export function SettingsHub() {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     });
   }, [navigation]);
+
+  async function checkUpdates() {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    try {
+      await checkForAppUpdates();
+    } catch {
+      await platform.confirmationDialog.notify({
+        title: t('app_update.check_failed'),
+        okLabel: t('common.ok'),
+      });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
 
   function openMyProfile() {
     if (activePubkey) openInDetailPane(`/profile/${encodeURIComponent(activePubkey)}`);
@@ -254,6 +274,15 @@ export function SettingsHub() {
                 if (router.canDismiss()) router.dismissAll();
                 router.navigate(screenshotPreviewEnabled ? '/me' : '/');
               }}
+            />
+          ) : null}
+          {IS_ELECTRON ? (
+            <ListRow
+              icon={<Refresh size={22} color={c.text} />}
+              title={t('app_update.check')}
+              loading={checkingUpdate}
+              disabled={checkingUpdate}
+              onPress={() => void checkUpdates()}
             />
           ) : null}
           <ListRow

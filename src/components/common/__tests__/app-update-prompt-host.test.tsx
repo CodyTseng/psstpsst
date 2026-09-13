@@ -1,5 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { checkForAppUpdates } from '@/services/app-update';
 import type { AppUpdateStatus } from '@/platform';
 import { AppUpdatePromptHost } from '../AppUpdatePromptHost';
 
@@ -11,6 +12,7 @@ const mockDownload = jest.fn(async () => {
   mockCurrentStatus = { state: 'downloaded', version: '1.2.0' };
   mockStatusListener?.(mockCurrentStatus);
 });
+const mockCheck = jest.fn(async () => mockCurrentStatus);
 const mockInstall = jest.fn(async () => {});
 const mockShowToast = jest.fn();
 
@@ -18,6 +20,7 @@ jest.mock('@/lib/platform', () => ({ IS_ELECTRON: true }));
 jest.mock('@/platform', () => ({
   platform: {
     appUpdate: {
+      check: () => mockCheck(),
       getStatus: jest.fn(async () => mockCurrentStatus),
       download: () => mockDownload(),
       install: () => mockInstall(),
@@ -54,6 +57,7 @@ describe('AppUpdatePromptHost', () => {
     mockNotify.mockClear();
     mockDownload.mockClear();
     mockInstall.mockClear();
+    mockCheck.mockReset().mockImplementation(async () => mockCurrentStatus);
     mockShowToast.mockClear();
   });
 
@@ -110,4 +114,51 @@ describe('AppUpdatePromptHost', () => {
     expect(mockDownload).toHaveBeenCalledTimes(1);
     expect(mockInstall).toHaveBeenCalledTimes(1);
   });
+  it('reopens a declined update on a manual check', async () => {
+    mockConfirm.mockResolvedValue(false);
+    await mount();
+    await act(async () => { await checkForAppUpdates(); });
+    expect(mockConfirm).toHaveBeenCalledTimes(2);
+    expect(mockDownload).not.toHaveBeenCalled();
+  });
+
+  it('reopens a deferred installation without downloading again', async () => {
+    mockCurrentStatus = { state: 'downloaded', version: '1.2.0' };
+    mockConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    await mount();
+    await act(async () => { await checkForAppUpdates(); });
+    expect(mockInstall).toHaveBeenCalledTimes(1);
+    expect(mockDownload).not.toHaveBeenCalled();
+  });
+
+  it('reports an up-to-date result', async () => {
+    mockCurrentStatus = { state: 'idle' };
+    await mount();
+    await act(async () => { await checkForAppUpdates(); });
+    expect(mockShowToast).toHaveBeenCalledWith('app_update.up_to_date');
+  });
+
+  it('reports check failure without claiming the app is up to date', async () => {
+    mockCurrentStatus = { state: 'idle' };
+    mockCheck.mockRejectedValueOnce(new Error('offline'));
+    await mount();
+    await act(async () => { await checkForAppUpdates(); });
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({ title: 'app_update.check_failed' }));
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  it('serializes manual checks with automatic status prompts', async () => {
+    mockCurrentStatus = { state: 'idle' };
+    mockConfirm.mockResolvedValue(false);
+    await mount();
+    mockCheck.mockImplementationOnce(async () => {
+      mockCurrentStatus = { state: 'available', version: '1.2.0' };
+      mockStatusListener?.(mockCurrentStatus);
+      return mockCurrentStatus;
+    });
+    await act(async () => { await Promise.all([checkForAppUpdates(), checkForAppUpdates()]); });
+    expect(mockCheck).toHaveBeenCalledTimes(1);
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+  });
+
 });

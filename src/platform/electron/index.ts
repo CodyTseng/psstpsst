@@ -25,6 +25,7 @@ export function createElectronAdapters(): PlatformAdapters {
   return {
     bundledNotices: electronBundledNoticesAdapter,
     appUpdate: {
+      check: () => bridge.appUpdate.check(),
       getStatus: () => bridge.appUpdate.getStatus(),
       download: () => bridge.appUpdate.download(),
       install: () => bridge.appUpdate.install(),

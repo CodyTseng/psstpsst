@@ -569,6 +569,10 @@
     "screenshot_preview_exit": "스크린샷 미리보기 종료"
   },
   "app_update": {
+    "check": "업데이트 확인",
+    "up_to_date": "최신 버전입니다",
+    "check_failed": "업데이트를 확인하지 못했습니다. 나중에 다시 시도해 주세요.",
+    "busy": "업데이트가 이미 진행 중입니다.",
     "available_title": "업데이트가 있습니다",
     "available_message": "버전 {{version}}을 다운로드할 수 있습니다.",
     "download": "다운로드",

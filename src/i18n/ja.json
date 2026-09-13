@@ -569,6 +569,10 @@
     "screenshot_preview_exit": "スクリーンショットのプレビューを終了"
   },
   "app_update": {
+    "check": "更新を確認",
+    "up_to_date": "最新バージョンです",
+    "check_failed": "更新を確認できませんでした。後でもう一度お試しください。",
+    "busy": "更新はすでに進行中です。",
     "available_title": "アップデートがあります",
     "available_message": "バージョン {{version}} をダウンロードできます。",
     "download": "ダウンロード",

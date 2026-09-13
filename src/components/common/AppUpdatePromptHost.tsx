@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform, type AppUpdateStatus } from '@/platform';
+import { registerAppUpdateCheck } from '@/services/app-update';
 import { showToast } from '@/stores/toast.store';
 
 /**
  * Presents the two explicit decisions in the Electron update flow: download,
- * then restart and install. A declined action is not asked again in the same
- * session, and the main process never installs a downloaded update on quit.
+ * then restart and install. Automatic prompts do not repeat declined actions
+ * in the same session; manual checks can reopen them. The main process never
+ * installs a downloaded update on quit.
  */
 export function AppUpdatePromptHost() {
   const { t } = useTranslation();
@@ -85,11 +87,41 @@ export function AppUpdatePromptHost() {
       }
     };
 
+    const removeManualCheck = registerAppUpdateCheck(async () => {
+      if (busy.current) {
+        showToast(t('app_update.busy'));
+        return;
+      }
+      busy.current = true;
+      let current: AppUpdateStatus;
+      try {
+        current = await platform.appUpdate.check();
+      } catch {
+        if (active) await platform.confirmationDialog.notify({
+          title: t('app_update.check_failed'),
+          okLabel: t('common.ok'),
+        });
+        return;
+      } finally {
+        busy.current = false;
+      }
+      if (!active) return;
+      if (current.state === 'idle') {
+        showToast(t('app_update.up_to_date'));
+      } else if (current.state === 'available' || current.state === 'downloaded') {
+        prompted.current.delete(`${current.state}:${current.version}`);
+        prompted.current.delete(`install:${current.version}`);
+        await handleStatus(current);
+      } else {
+        showToast(t('app_update.busy'));
+      }
+    });
     const remove = platform.appUpdate.addStatusListener((status) => void handleStatus(status));
     void platform.appUpdate.getStatus().then(handleStatus).catch(() => {});
     return () => {
       active = false;
       remove();
+      removeManualCheck();
     };
   }, [t]);
 

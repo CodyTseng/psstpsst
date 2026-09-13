@@ -407,7 +407,10 @@ opening System Settings, and toggling OS permission while the settings screen is
 open. The in-app toggle must refresh when returning to the app.
 
 Packaged builds check the public `codytseng/psstpsst` GitHub Releases feed after
-startup. A new version is never downloaded automatically, and a downloaded
+startup and when the window returns to the foreground, at most roughly once per
+24 hours. The last attempt time persists across restarts; manual checks in
+Me → Check for updates bypass this interval and can reopen declined update prompts.
+A new version is never downloaded automatically, and a downloaded
 version is never installed on quit: the user confirms each phase separately.
 The updater supports the signed macOS DMG/ZIP, Windows NSIS, and Linux AppImage
 targets.

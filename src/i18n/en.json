@@ -569,6 +569,10 @@
     "screenshot_preview_exit": "Exit screenshot preview"
   },
   "app_update": {
+    "check": "Check for updates",
+    "up_to_date": "You’re up to date",
+    "check_failed": "Couldn’t check for updates. Please try again later.",
+    "busy": "An update is already in progress.",
     "available_title": "Update available",
     "available_message": "Version {{version}} is ready to download.",
     "download": "Download",

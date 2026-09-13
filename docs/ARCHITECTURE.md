@@ -69,9 +69,9 @@ the renderer's perspective on every runtime.
 - Messages are immutable and deduplicated by event ID.
 - Conversations are read models derived from messages and relationship state.
 - Device preferences stay in SQLite; private keys and wallet secrets stay in
-  secure storage. Electron boot-time window geometry is the exception: the main
-  process owns an atomic local file so it can restore the window before the
-  renderer and its database migrations start.
+  secure storage. Electron boot-time metadata is the exception: the main
+  process owns atomic local files for window geometry and update-check timing,
+  independently of renderer startup and database migrations.
 - Attachment bytes live in managed files, not database blobs.
 - Local contact edits and their pending sync revision commit atomically. Remote
   contact snapshots cannot overwrite unsigned edits or queued publications;
