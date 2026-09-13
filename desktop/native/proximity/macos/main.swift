@@ -96,6 +96,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
   private var mailboxCharacteristic: CBMutableCharacteristic?
   private var peripherals: [String: CBPeripheral] = [:]
   private var profileByEndpoint: [String: CBCharacteristic] = [:]
+  private var serviceDiscoveryEndpoints = Set<String>()
   private var mailboxByEndpoint: [String: CBCharacteristic] = [:]
   private var subscribedCentrals: [String: CBCentral] = [:]
   private var peripheralOnlyEndpoints = Set<String>()
@@ -117,6 +118,11 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
   private var scanGeneration = 0
   private var advertisingRequested = false
   private var lastBluetoothState: String?
+
+  private func discoverPeerServices(_ peripheral: CBPeripheral) {
+    guard serviceDiscoveryEndpoints.insert(peripheral.identifier.uuidString).inserted else { return }
+    peripheral.discoverServices([serviceUUID])
+  }
 
   private func trace(_ message: @autoclosure () -> String) {
     #if DEBUG
@@ -171,6 +177,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
       central?.cancelPeripheralConnection(peripheral)
     }
     profileByEndpoint.removeValue(forKey: rawEndpoint)
+    serviceDiscoveryEndpoints.remove(rawEndpoint)
     mailboxByEndpoint.removeValue(forKey: rawEndpoint)
     nextPacketIds.removeValue(forKey: endpointId)
   }
@@ -218,6 +225,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
     mailboxCharacteristic = nil
     peripherals.removeAll()
     profileByEndpoint.removeAll()
+    serviceDiscoveryEndpoints.removeAll()
     mailboxByEndpoint.removeAll()
     subscribedCentrals.removeAll()
     peripheralOnlyEndpoints.removeAll()
@@ -242,6 +250,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
         central?.cancelPeripheralConnection(peripheral)
       }
       profileByEndpoint.removeValue(forKey: rawEndpoint)
+      serviceDiscoveryEndpoints.remove(rawEndpoint)
       mailboxByEndpoint.removeValue(forKey: rawEndpoint)
     } else if endpointId.hasPrefix("p:") {
       // CoreBluetooth cannot force-disconnect a subscribed Central. Keep the
@@ -285,7 +294,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
       if let characteristic = profileByEndpoint[rawEndpoint] {
         peripheral.readValue(for: characteristic)
       } else {
-        peripheral.discoverServices([serviceUUID])
+        discoverPeerServices(peripheral)
       }
       return
     }
@@ -299,7 +308,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
     if let characteristic = profileByEndpoint[rawEndpoint] {
       peripheral.readValue(for: characteristic)
     } else {
-      peripheral.discoverServices([serviceUUID])
+      discoverPeerServices(peripheral)
     }
   }
 
@@ -487,7 +496,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
           value: ["endpointId": endpointId, "state": "connected", "generation": generation]
         )
       }
-      peripheral.discoverServices([serviceUUID])
+      discoverPeerServices(peripheral)
     }
   }
 
@@ -502,7 +511,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
       name: "onConnection",
       value: ["endpointId": endpointId, "state": "connected", "generation": generation]
     )
-    peripheral.discoverServices([serviceUUID])
+    discoverPeerServices(peripheral)
   }
 
   func centralManager(
@@ -527,6 +536,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
     let generation = connectionGenerations[endpoint] ?? 0
     activeConnectionEndpoints.remove(endpoint)
     profileByEndpoint.removeValue(forKey: rawEndpoint)
+    serviceDiscoveryEndpoints.remove(rawEndpoint)
     mailboxByEndpoint.removeValue(forKey: rawEndpoint)
     nextPacketIds.removeValue(forKey: endpoint)
     clearInbound(endpointId: endpoint)
@@ -552,6 +562,7 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
     let generation = connectionGenerations[endpoint] ?? 0
     activeConnectionEndpoints.remove(endpoint)
     profileByEndpoint.removeValue(forKey: rawEndpoint)
+    serviceDiscoveryEndpoints.remove(rawEndpoint)
     mailboxByEndpoint.removeValue(forKey: rawEndpoint)
     nextPacketIds.removeValue(forKey: endpoint)
     clearInbound(endpointId: endpoint)
@@ -563,7 +574,10 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
   }
 
   func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-    guard error == nil else { return }
+    guard error == nil else {
+      serviceDiscoveryEndpoints.remove(peripheral.identifier.uuidString)
+      return
+    }
     for service in peripheral.services ?? [] where service.uuid == serviceUUID {
       peripheral.discoverCharacteristics([profileUUID, mailboxUUID], for: service)
     }
@@ -574,7 +588,10 @@ private final class MacOSProximityTransport: NSObject, CBCentralManagerDelegate,
     didDiscoverCharacteristicsFor service: CBService,
     error: Error?
   ) {
-    guard error == nil else { return }
+    guard error == nil else {
+      serviceDiscoveryEndpoints.remove(peripheral.identifier.uuidString)
+      return
+    }
     let endpoint = peripheral.identifier.uuidString
     for characteristic in service.characteristics ?? [] {
       if characteristic.uuid == profileUUID {

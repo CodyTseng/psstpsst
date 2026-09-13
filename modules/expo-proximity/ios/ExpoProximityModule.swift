@@ -38,6 +38,7 @@ public final class ExpoProximityModule: Module {
   private var mailboxCharacteristic: CBMutableCharacteristic?
   private var peripherals: [String: CBPeripheral] = [:]
   private var profileByEndpoint: [String: CBCharacteristic] = [:]
+  private var serviceDiscoveryEndpoints = Set<String>()
   private var mailboxByEndpoint: [String: CBCharacteristic] = [:]
   private var subscribedCentrals: [String: CBCentral] = [:]
   private var peripheralOnlyEndpoints = Set<String>()
@@ -60,6 +61,11 @@ public final class ExpoProximityModule: Module {
   private var scanIsContinuous = false
   private var scanGeneration = 0
   private var advertisingRequested = false
+
+  private func discoverPeerServices(_ peripheral: CBPeripheral) {
+    guard serviceDiscoveryEndpoints.insert(peripheral.identifier.uuidString).inserted else { return }
+    peripheral.discoverServices([serviceUUID])
+  }
 
   private func trace(_ message: @autoclosure () -> String) {
     #if DEBUG
@@ -129,6 +135,7 @@ public final class ExpoProximityModule: Module {
         self.mailboxCharacteristic = nil
         self.peripherals.removeAll()
         self.profileByEndpoint.removeAll()
+        self.serviceDiscoveryEndpoints.removeAll()
         self.mailboxByEndpoint.removeAll()
         self.subscribedCentrals.removeAll()
         self.peripheralOnlyEndpoints.removeAll()
@@ -151,6 +158,7 @@ public final class ExpoProximityModule: Module {
           self.central?.cancelPeripheralConnection(peripheral)
         }
         self.profileByEndpoint.removeValue(forKey: rawEndpoint)
+        self.serviceDiscoveryEndpoints.remove(rawEndpoint)
         self.mailboxByEndpoint.removeValue(forKey: rawEndpoint)
         self.nextPacketIds.removeValue(forKey: endpointId)
         promise.resolve()
@@ -169,6 +177,7 @@ public final class ExpoProximityModule: Module {
             self.central?.cancelPeripheralConnection(peripheral)
           }
           self.profileByEndpoint.removeValue(forKey: rawEndpoint)
+          self.serviceDiscoveryEndpoints.remove(rawEndpoint)
           self.mailboxByEndpoint.removeValue(forKey: rawEndpoint)
         } else if endpointId.hasPrefix("p:") {
           // CoreBluetooth does not let a Peripheral force-disconnect a
@@ -226,7 +235,7 @@ public final class ExpoProximityModule: Module {
           if let characteristic = self.profileByEndpoint[rawEndpoint] {
             peripheral.readValue(for: characteristic)
           } else {
-            peripheral.discoverServices([serviceUUID])
+            self.discoverPeerServices(peripheral)
           }
           promise.resolve()
           return
@@ -240,7 +249,7 @@ public final class ExpoProximityModule: Module {
         if let characteristic = self.profileByEndpoint[rawEndpoint] {
           peripheral.readValue(for: characteristic)
         } else {
-          peripheral.discoverServices([serviceUUID])
+          self.discoverPeerServices(peripheral)
         }
         promise.resolve()
       }
@@ -417,7 +426,7 @@ public final class ExpoProximityModule: Module {
           "endpointId": endpointId, "state": "connected", "generation": generation,
         ])
       }
-      peripheral.discoverServices([serviceUUID])
+      discoverPeerServices(peripheral)
     }
   }
 
@@ -431,7 +440,7 @@ public final class ExpoProximityModule: Module {
     sendEvent("onConnection", [
       "endpointId": endpointId, "state": "connected", "generation": generation,
     ])
-    peripheral.discoverServices([serviceUUID])
+    discoverPeerServices(peripheral)
   }
 
   fileprivate func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral,
@@ -439,6 +448,7 @@ public final class ExpoProximityModule: Module {
   {
     let endpoint = peripheral.identifier.uuidString
     profileByEndpoint.removeValue(forKey: endpoint)
+    serviceDiscoveryEndpoints.remove(endpoint)
     mailboxByEndpoint.removeValue(forKey: endpoint)
     let endpointId = "c:\(endpoint)"
     let generation = connectionGenerations[endpointId] ?? 0
@@ -461,7 +471,10 @@ public final class ExpoProximityModule: Module {
   }
 
   fileprivate func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-    guard error == nil else { return }
+    guard error == nil else {
+      serviceDiscoveryEndpoints.remove(peripheral.identifier.uuidString)
+      return
+    }
     for service in peripheral.services ?? [] where service.uuid == serviceUUID {
       peripheral.discoverCharacteristics([profileUUID, mailboxUUID], for: service)
     }
@@ -474,6 +487,7 @@ public final class ExpoProximityModule: Module {
     let generation = connectionGenerations[endpoint] ?? 0
     activeConnectionEndpoints.remove(endpoint)
     profileByEndpoint.removeValue(forKey: rawEndpoint)
+    serviceDiscoveryEndpoints.remove(rawEndpoint)
     mailboxByEndpoint.removeValue(forKey: rawEndpoint)
     nextPacketIds.removeValue(forKey: endpoint)
     clearInbound(endpointId: endpoint)
@@ -487,7 +501,10 @@ public final class ExpoProximityModule: Module {
   fileprivate func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService,
     error: Error?)
   {
-    guard error == nil else { return }
+    guard error == nil else {
+      serviceDiscoveryEndpoints.remove(peripheral.identifier.uuidString)
+      return
+    }
     let endpoint = peripheral.identifier.uuidString
     for characteristic in service.characteristics ?? [] {
       if characteristic.uuid == profileUUID {

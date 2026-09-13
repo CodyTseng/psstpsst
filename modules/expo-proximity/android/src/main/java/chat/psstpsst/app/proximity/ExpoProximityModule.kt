@@ -22,6 +22,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
 import android.os.SystemClock
+import android.util.Log
 import android.util.Base64
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -32,6 +33,7 @@ import java.util.UUID
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.random.Random
 
 private val SERVICE_UUID: UUID = UUID.fromString("45d8b02f-6d80-4fc6-914e-b85fcd0440d3")
 private val PROFILE_UUID: UUID = UUID.fromString("55980cee-27e5-48a9-bf1c-ab5da34b4402")
@@ -91,8 +93,13 @@ class ExpoProximityModule : Module() {
   private val connectionGenerations = mutableMapOf<String, Long>()
   private val activeConnectionEndpoints = mutableSetOf<String>()
   private var scanStopRunnable: Runnable? = null
-  private var isScanning = false
-  private var isAdvertising = false
+  private val isScanning get() = discoveryConnections.isScanning
+  private var advertiseCallback: AdvertiseCallback? = null
+  private val inboundProfileEndpoints = mutableSetOf<String>()
+  private val discoveryConnections = DiscoveryConnectionQueue(
+    schedule = { task, delayMs -> handler.postDelayed(task, delayMs) },
+    cancel = { task -> handler.removeCallbacks(task) },
+  )
 
   private val manager: BluetoothManager?
     get() = appContext.reactContext?.getSystemService(BluetoothManager::class.java)
@@ -149,10 +156,13 @@ class ExpoProximityModule : Module() {
     AsyncFunction("stopSessionAsync") { promise: Promise ->
       handler.post {
         stopScan()
+        discoveryConnections.stopSession()
+        inboundProfileEndpoints.clear()
         rejectAllWrites("ERR_PROXIMITY_STOPPED", "The nearby session stopped.")
         clearAllInbound()
-        adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
-        isAdvertising = false
+        val callback = advertiseCallback
+        advertiseCallback = null
+        if (callback != null) adapter?.bluetoothLeAdvertiser?.stopAdvertising(callback)
         gatts.values.forEach { it.close() }
         gatts.clear()
         profiles.clear()
@@ -179,6 +189,7 @@ class ExpoProximityModule : Module() {
     AsyncFunction("preferPeripheralAsync") { endpointId: String, promise: Promise ->
       handler.post {
         val rawEndpoint = endpointId.removePrefix("c:")
+        discoveryConnections.remove(rawEndpoint)
         peripheralOnlyEndpoints.add(rawEndpoint)
         activeConnectionEndpoints.remove("c:$rawEndpoint")
         profiles.remove(rawEndpoint)
@@ -196,6 +207,7 @@ class ExpoProximityModule : Module() {
     AsyncFunction("disconnectAsync") { endpointId: String, promise: Promise ->
       handler.post {
         val rawEndpoint = endpointId.drop(2)
+        discoveryConnections.remove(rawEndpoint)
         nextPacketIds.remove(endpointId)
         clearInbound(endpointId)
         rejectWrite(endpointId, "ERR_PROXIMITY_DISCONNECTED", "The nearby peer disconnected.")
@@ -352,7 +364,9 @@ class ExpoProximityModule : Module() {
       if (!server.addService(service)) error("Unable to publish the nearby GATT service")
       gattServer = server
     }
-    if (isAdvertising) return
+    // The callback owns both the pending start and the active advertisement.
+    // Scanning can start before onStartSuccess arrives; it must not restart it.
+    if (advertiseCallback != null) return
 
     val settings = AdvertiseSettings.Builder()
       .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
@@ -361,8 +375,14 @@ class ExpoProximityModule : Module() {
       .build()
     val data = AdvertiseData.Builder().addServiceUuid(ParcelUuid(SERVICE_UUID)).build()
     val advertiser = bluetoothAdapter.bluetoothLeAdvertiser ?: error("BLE advertising is unavailable")
-    advertiser.stopAdvertising(advertiseCallback)
-    advertiser.startAdvertising(settings, data, advertiseCallback)
+    val callback = createAdvertiseCallback()
+    advertiseCallback = callback
+    try {
+      advertiser.startAdvertising(settings, data, callback)
+    } catch (error: Exception) {
+      advertiseCallback = null
+      throw error
+    }
   }
 
   private fun startScan(durationMs: Int) {
@@ -373,7 +393,7 @@ class ExpoProximityModule : Module() {
     scanStopRunnable?.let(handler::removeCallbacks)
     scanStopRunnable = null
     scanner.stopScan(scanCallback)
-    isScanning = false
+    discoveryConnections.stopScan()
     val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()
     val settings = ScanSettings.Builder()
       .setScanMode(
@@ -383,11 +403,11 @@ class ExpoProximityModule : Module() {
       .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
       .build()
     scanner.startScan(listOf(filter), settings, scanCallback)
-    isScanning = true
+    discoveryConnections.startScan()
     if (durationMs > 0) {
       val stop = Runnable {
         scanner.stopScan(scanCallback)
-        isScanning = false
+        discoveryConnections.stopScan()
         scanStopRunnable = null
       }
       scanStopRunnable = stop
@@ -400,35 +420,44 @@ class ExpoProximityModule : Module() {
     scanStopRunnable?.let(handler::removeCallbacks)
     scanStopRunnable = null
     adapter?.bluetoothLeScanner?.stopScan(scanCallback)
-    isScanning = false
+    discoveryConnections.stopScan()
   }
 
-  private val advertiseCallback = object : AdvertiseCallback() {
-    override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
-      handler.post {
-        isAdvertising = true
-      }
-    }
-
+  private fun createAdvertiseCallback() = object : AdvertiseCallback() {
     override fun onStartFailure(errorCode: Int) {
       handler.post {
-        isAdvertising = false
+        if (advertiseCallback !== this) return@post
+        advertiseCallback = null
+        Log.w("PsstNearby", "BLE advertising failed ($errorCode)")
       }
     }
   }
 
   private val scanCallback = object : ScanCallback() {
     override fun onScanResult(callbackType: Int, result: ScanResult) {
-      val endpoint = result.device.address
-      recordSignal(endpoint, result.rssi)
-      if (endpoint in peripheralOnlyEndpoints) return
-      if (gatts[endpoint] == null) {
-        val context = appContext.reactContext ?: return
-        gatts[endpoint] = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-          result.device.connectGatt(context, false, clientCallback, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
-        } else {
-          result.device.connectGatt(context, false, clientCallback)
+      handler.post {
+        if (!isScanning) return@post
+        val endpoint = result.device.address
+        recordSignal(endpoint, result.rssi)
+        if (endpoint in peripheralOnlyEndpoints || gatts[endpoint] != null) return@post
+        // CoreBluetooth may leave its Central connection pending if Android
+        // opens the opposite link first. Allow inbound discovery to win, then
+        // attach our GATT client to that same link. Jitter also separates two
+        // Android peers; a bounded fallback still discovers passive devices.
+        discoveryConnections.enqueue(endpoint, Random.nextLong(2_500, 4_000)) {
+          if (gattServer == null || endpoint in peripheralOnlyEndpoints || gatts[endpoint] != null) {
+            return@enqueue
+          }
+          val context = appContext.reactContext ?: return@enqueue
+          try {
+            gatts[endpoint] = result.device.connectGatt(
+              context, false, clientCallback, android.bluetooth.BluetoothDevice.TRANSPORT_LE,
+            )
+          } catch (error: Exception) {
+            Log.w("PsstNearby", "BLE discovery connection could not start", error)
+          }
         }
+        if (endpoint in inboundProfileEndpoints) discoveryConnections.promote(endpoint)
       }
     }
   }
@@ -655,6 +684,13 @@ class ExpoProximityModule : Module() {
   private val serverCallback = object : BluetoothGattServerCallback() {
     override fun onConnectionStateChange(device: android.bluetooth.BluetoothDevice, status: Int, newState: Int) {
       val endpoint = "p:${device.address}"
+      handler.post {
+        if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+          inboundProfileEndpoints.remove(device.address)
+        } else if (newState == BluetoothProfile.STATE_CONNECTED && gatts[device.address] == null) {
+          discoveryConnections.defer(device.address, 10_000)
+        }
+      }
       if (newState == BluetoothProfile.STATE_DISCONNECTED) {
         val generation = connectionGenerations[endpoint] ?: 0
         activeConnectionEndpoints.remove(endpoint)
@@ -690,6 +726,11 @@ class ExpoProximityModule : Module() {
         offset,
         profile.copyOfRange(offset, profile.size),
       )
+      handler.post {
+        if (gattServer == null) return@post
+        inboundProfileEndpoints.add(device.address)
+        discoveryConnections.promote(device.address)
+      }
     }
 
     override fun onCharacteristicWriteRequest(device: android.bluetooth.BluetoothDevice, requestId: Int, characteristic: BluetoothGattCharacteristic, preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray) {
