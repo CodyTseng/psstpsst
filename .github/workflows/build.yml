@@ -66,6 +66,19 @@ jobs:
             exit 1
           fi
 
+          version_code="$(node -p "require('./app.json').expo.android.versionCode")"
+          notes_file="fastlane/metadata/android/en-US/changelogs/${version_code}.txt"
+          if [[ ! -s "$notes_file" ]]; then
+            echo "Release notes are missing or empty: $notes_file"
+            exit 1
+          fi
+
+          notes_characters="$(wc -m < "$notes_file")"
+          if (( notes_characters > 500 )); then
+            echo "Release notes exceed the 500-character store limit: $notes_file"
+            exit 1
+          fi
+
   build:
     name: ${{ matrix.name }}
     needs: validate-version
@@ -239,6 +252,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
+
       - name: Download packages
         uses: actions/download-artifact@v8
         with:
@@ -291,6 +306,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
+          version_code="$(node -p "require('./app.json').expo.android.versionCode")"
+          notes_file="fastlane/metadata/android/en-US/changelogs/${version_code}.txt"
           if draft_state="$(
             gh release view "$GITHUB_REF_NAME" \
               --repo "$RELEASE_REPOSITORY" \
@@ -302,12 +319,16 @@ jobs:
               echo "::error::Release $GITHUB_REF_NAME is already published; refusing to replace live update assets."
               exit 1
             fi
+            gh release edit "$GITHUB_REF_NAME" \
+              --repo "$RELEASE_REPOSITORY" \
+              --title "PsstPsst $version" \
+              --notes-file "$notes_file"
           else
             gh release create "$GITHUB_REF_NAME" \
               --repo "$RELEASE_REPOSITORY" \
               --draft \
               --verify-tag \
-              --generate-notes \
+              --notes-file "$notes_file" \
               --title "PsstPsst $version"
           fi
 

@@ -342,7 +342,9 @@ and [apksigner reference](https://developer.android.com/tools/apksigner).
 Store copy and the icon live in `fastlane/metadata/android/en-US/`. Keep
 `title.txt`, `short_description.txt` (under 80 characters),
 `full_description.txt`, and `changelogs/<versionCode>.txt` (at most 500
-characters) up to date before each release tag. Shared screenshots live in
+characters) up to date before each release tag. The tag workflow also uses that
+changelog as the GitHub draft release notes, so keep it concise and user-facing.
+Shared screenshots live in
 `images/phoneScreenshots/1.png` through `4.png`. For the first release, the
 maintainer has chosen to reuse the supplied iPhone promotional artwork for
 Android listings; see `docs/images/store/README.md`. Refresh the store icon from

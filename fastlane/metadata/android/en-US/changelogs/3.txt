@@ -1,0 +1,8 @@
+PsstPsst 0.2.1
+
+- Save photos, videos, and other attachments to your device on mobile and desktop.
+- See in-app banners for new messages while PsstPsst is open.
+- Send and retry messages more reliably, with clearer feedback when delivery fails.
+- Fixed crashes affecting Android, app startup, voice recording, and navigation.
+- Fixed Android back navigation in the media viewer and chat composer.
+- Polished video playback and message action menus.
