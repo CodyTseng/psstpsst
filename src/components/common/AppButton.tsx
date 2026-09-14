@@ -185,6 +185,9 @@ export function AppButton({
             <InteractionOverlay borderRadius={buttonRadius} />
           ) : null}
           <View
+            // Loading changes opacity and adds the spinner. Keep this native node
+            // stable so Fabric never has to reparent the label during that commit.
+            collapsable={false}
             style={{
               flexDirection: orientation === 'vertical' ? 'column' : 'row',
               alignItems:

@@ -1,4 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { View } from 'react-native';
 
 import { AppButton } from '../AppButton';
 import { AppText } from '../AppText';
@@ -164,5 +165,29 @@ describe('AppButton layout', () => {
         opacity: 0.85,
       });
     }
+  });
+
+  it('keeps the content native hierarchy stable while loading changes', () => {
+    act(() => {
+      renderer = create(<AppButton label="Action" loading={false} />);
+    });
+
+    const content = () =>
+      renderer!.root
+        .findAllByType(View)
+        .find(
+          (view) =>
+            view.props.collapsable === false &&
+            !Array.isArray(view.props.style) &&
+            view.props.style.maxWidth === '100%',
+        );
+
+    expect(content()?.props.style).toMatchObject({ opacity: 1 });
+
+    act(() => {
+      renderer!.update(<AppButton label="Action" loading />);
+    });
+
+    expect(content()?.props.style).toMatchObject({ opacity: 0 });
   });
 });
