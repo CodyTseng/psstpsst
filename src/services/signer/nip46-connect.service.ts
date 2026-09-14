@@ -24,7 +24,9 @@ export const NIP46_DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol'];
 const APP_NAME = 'PsstPsst';
 
 function openAuthUrl(url: string): void {
-  void platform.urlOpener.openExternalUrl(url);
+  void platform.urlOpener.openExternalUrl(url).catch((error) => {
+    console.warn('[nip46] Failed to open the authorization URL.', error);
+  });
 }
 
 /**

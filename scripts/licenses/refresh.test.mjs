@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { sha256 } from './catalog.mjs';
+import { packageKey, sha256 } from './catalog.mjs';
 import { refreshInventory, reviewedLibvipsNotice } from './refresh.mjs';
 
 test('libvips notices require the reviewed version and exact nonempty snapshot', async () => {
@@ -29,7 +29,7 @@ test('libvips notices require the reviewed version and exact nonempty snapshot',
     await assert.rejects(reviewedLibvipsNotice(root, pkg, { ...snapshots, files: [] }, texts), /Reviewed snapshot changed/);
     const overridden = { ...pkg, name: '@expo/xcpretty', version: '4.4.5', license: 'BSD-3-Clause' };
     const overrideSnapshots = { ...snapshots, npmOverrides: {
-      [overridden.name]: { version: overridden.version, integrity: overridden.integrity, file },
+      [packageKey(overridden)]: { version: overridden.version, integrity: overridden.integrity, file },
     } };
     const overrideLock = { packages: { [`node_modules/${overridden.name}`]: overridden } };
     await fs.writeFile(path.join(root, 'licenses/third-party/snapshots.json'), JSON.stringify(overrideSnapshots));

@@ -10,8 +10,10 @@ import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { LicenseState } from '@/components/licenses/LicenseState';
 import { useLicenseCatalog, useProjectNotices } from '@/hooks/use-licenses';
+import { routeOpaqueIdParam } from '@/lib/navigation/route-params';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useDirectionalIconStyle } from '@/i18n/direction';
 import { IS_ELECTRON } from '@/lib/platform';
@@ -34,7 +36,9 @@ function renderChunk({ item }: { item: NoticeChunk }) {
 }
 
 export default function OpenSourceProject() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const parsedId = routeOpaqueIdParam(params.id);
+  const id = parsedId ?? '';
   const { t } = useTranslation();
   const c = useThemeColors();
   const direction = useDirectionalIconStyle();
@@ -49,6 +53,7 @@ export default function OpenSourceProject() {
     setLinkError(false);
     void openProjectUrl(url).catch(() => setLinkError(true));
   };
+  if (!parsedId) return <InvalidRouteRedirect />;
   return (
     <AppScreen edges={['bottom']}>
       <FlatList

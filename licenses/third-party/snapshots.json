@@ -6,7 +6,7 @@
     "sharp-libvips-posix": "1.3.3",
     "sharp-win32": "0.35.4",
     "@solar-icons/react-native": "1.1.1",
-    "expo-sqlite": "56.0.6",
+    "expo-sqlite": "57.0.3",
     "better-sqlite3": "13.0.3"
   },
   "files": [
@@ -43,7 +43,7 @@
     {
       "path": "common/mobile-native.txt",
       "source": "Upstream source files and URLs are recorded verbatim in this notice collection.",
-      "sha256": "c6fcdf4ec79f7be86767d2d4c43f673e847e96789f512d9b12a20bc97d50b802"
+      "sha256": "e9d186e1fa5984a3f10d47427e891cf870faaf505498cf457a437d50a1f4d225"
     },
     {
       "path": "desktop/sharp-libvips-posix.txt",
@@ -63,7 +63,7 @@
     {
       "path": "common/mobile-sources.json",
       "source": "Reviewed upstream mobile native source locations and checksums.",
-      "sha256": "5b68a9db7e33feec226945f63745145ef6b6f617443f1001cee8008e68c05e58"
+      "sha256": "a45dc1140533b540629213c18d0967e9db7aae9f64a685dd5bbf309a3d54fa63"
     },
     {
       "path": "desktop/dependency-sources.json",
@@ -84,6 +84,11 @@
       "path": "common/xcpretty.txt",
       "source": "https://registry.npmjs.org/@expo/xcpretty/-/xcpretty-4.4.5.tgz (package.json and README.md); standard terms retained from the prior reviewed npm inventory, not an upstream notice.",
       "sha256": "25a6a103d0f984f8ed3547fba9f86c5fb19c7f9932b9a81eb48f036aaf968ad3"
+    },
+    {
+      "path": "common/react-native-MIT.txt",
+      "source": "node_modules/react-native/LICENSE; shared by React Native workspace packages that omit a notice from their npm archive.",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
     }
   ],
   "npmOverrides": {
@@ -91,6 +96,161 @@
       "version": "4.4.5",
       "integrity": "sha512-J3eL4n4h5QTwfD0SIz8OIk6/+sOL/hFZAMacgCM07UNlxBQfJipEpIC2AQxvGkbYeStByJ0TVhQAJo+DeNgaSQ==",
       "file": "common/xcpretty.txt"
+    },
+    "@react-native/babel-preset": {
+      "version": "0.86.3",
+      "integrity": "sha512-/eqs/Hy9RZRcjdcs4wj3Cqmxvtb3NM5g+Uuh1RIvsjynMO8PRsrVWWLWgBcZL/jYUo+ogXd2NFB0W8L5Bg89xw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/jest-preset": {
+      "version": "0.86.3",
+      "integrity": "sha512-oMmBwXUpTgJvGlcXQQPuiQLykoM8jsWYp6RwdJ2NWyIWzJcGp1rmSr3XV7istoIcUt0wdOVLtQs0A0nDm9ND+A==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/assets-registry": {
+      "version": "0.86.3",
+      "integrity": "sha512-TDhgCZA4wjJg84d5A9swiOQYPIWSKEEVdg9IwMFZDupQzW/F3QoLUrfAJOcalgqTDA9/buTB8awhE3Whwg6u9Q==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/babel-plugin-codegen": {
+      "version": "0.86.3",
+      "integrity": "sha512-O6Xza4JBGPIU8J7YbKTyBoYL4thpy8jMW/oaLDWdAyOwYHKIjK47pAL5HUEbOe2bWz2PEKjbYRF2ApkJv1ottQ==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/codegen": {
+      "version": "0.86.3",
+      "integrity": "sha512-Ux4jHi0fh+bdtVEcL0gaPLbY56V+SvFUDl/8sRAE1jdb4k+o7fT/4Nc29yz4X+qfjstkSqObQTMBGhdzxH9JvA==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/community-cli-plugin": {
+      "version": "0.86.3",
+      "integrity": "sha512-qSDL9LQc5mZSZPNczT95WU9YQuPzxBklgON9vLhhqfI0yWIwKInqFx88dQ/uiEXBtf0yossthaQIqA4Ml6bF6g==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/debugger-frontend": {
+      "version": "0.86.3",
+      "integrity": "sha512-TQmeofQ0PcuylhhlleOeuzHYZfbrgm3gayXzowqUEzgRisTm1D40/J3ggqs7XkQi5HP5ZA3n8dHmKL9vIzPcsw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/debugger-shell": {
+      "version": "0.86.3",
+      "integrity": "sha512-O4ds+J7xZfxkbih9T+cAGegBdvKSPKYJm/lDgC9CpEjFMkmzWTpVLU3Qsv9sqZuo58z+sGhIcJfPsCFFWHpqbQ==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/dev-middleware": {
+      "version": "0.86.3",
+      "integrity": "sha512-LiEPTqTg/63bYUnrPyHLfjTDCNhA/+CUqI1+DsA9tYyewtSbULd5awsva6SgE10I+2iMhgKXS3ymkhU/kSCrGA==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/gradle-plugin": {
+      "version": "0.86.3",
+      "integrity": "sha512-lxmx0GqLEWRIpZfpYFXlYVIs3ENQwaW6Vmp6oi29l2GoQJ1wZfFZRdMimDWlGEk8LKfHar3QH3iaPMkTcK9lEQ==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/js-polyfills": {
+      "version": "0.86.3",
+      "integrity": "sha512-eYIJ0es967+tePBFQDnl/gidVFxLns3fnbiK6rxscQrGodvuUO6hwxpQnfNynJ8MjbbndImXihXjcnJdc7SzJg==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/metro-babel-transformer": {
+      "version": "0.86.3",
+      "integrity": "sha512-0nlwVkG0uT9o72nrGTKUz/IqDnCkM4zE0ihe4r+OJcxH93yBdDm58AXJ3EXZeSjv3osHEFXU7ceajdZiS34mTw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/metro-config": {
+      "version": "0.86.3",
+      "integrity": "sha512-qdzDMepV2xdUhsO4XC7idnnbt8K6+Hd59AjeK9y4KS86fxSQq5oL0TAbqUuajDGR7beNQoYTuS6AowN/zP0oaQ==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/normalize-colors@0.86.3": {
+      "version": "0.86.3",
+      "integrity": "sha512-Cv3CDkprb67GrzuaS9BGbBJC/6G4lIw3nyKOHRKTqTTum4bn37y5+R0Z04L8mcbQN85eEohNrRwb7IOM4j6uvg==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "@react-native/virtualized-lists": {
+      "version": "0.86.3",
+      "integrity": "sha512-1j44NEyNn05Ut40vHAmoSWbsIcybFkMAOBTwQt1PrESyfSS+qBoyU1LGIogNva0VIa0rQyEC5PzbA7R4/7Nhyw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-ty/tx/imE5Ph2gvPU788Ckim6RAC2tyZxLz2hWRgC9U7/fGKV7qY/slADy0qHPEw9cpUgc4BfmV3oUsYwm7oeg==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-babel-transformer@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-B1ozl6KxFHbQjXZ2U8WiTPWXylqiD3V4EXyV5r0fqETOrqIrJlBvbVTD82UxIN+B3Vpe4l8G1tb15ocd2RyOQA==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-cache@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-KBJVpb02oKNO+jlWQ1Aax7cd11YP0MClDaMgx6C4MhyZ9g95J/dC1Bo6sCzXaU9L9h/w5cQfT5zDkGW5sOj99A==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-cache-key@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-6tyXt1BZ/3U183XV48oif7Nm65TE+pTo0Vs31u4FxMgqiYQR/SiSr3RoXn3pmy4pd280ZmLmct0x3jZpu0pV4A==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-config@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-cD2mLEofcuV26kxSV4hfV1Pbuh6igdUhYQriO8ZVeJ7HyZfq4/wqHV0gSR7fEO8NUp9odr60/Kzm5YakmghWwQ==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-core@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-ZqYskM8+f3PFMosBDJd8DLqRvT1ltRGhWL/ZfTpBvf4SoadO30VVrdhAoHFVGz3G1CJpWa3fgZH7nnnX/ybllA==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-file-map@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-ov9VywWBsHPt54Zc7/DxWvqjTwxuZvhfeyHg8ZAMGKtf2PcH1wS3EnoBH7In53Rspk/eXVWAO5+avxunPn081w==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-minify-terser@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-SqhB/Kxrw0XfyW0k8mEscqX/CQopm6Fp3EpdSIPzvKfGgQp9bTMahg9PAdVsXUmIWwErbmFw1VqB+VFBOKksUw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-resolver@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-PplpGc/OCLxgKeLNsLQO/VHsYDIvkcGGr3zNT7UanHCGRqhxKv245o+naV8cRI4/pcLqyc+9j+J0AJbT3Kp5Sg==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-runtime@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-47EYO/DOai0PA3GoAyDpyXOgHNMwbl/Z9dQlQineDLHkpD42xOwMrIx1crT0+n6F+aGoEyxZmeFwfMzaIqVqKQ==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-source-map@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-4p/EplRbgNxhdqA6kAj1AmIq9qqYXYSAjgxuZ73rYA+p037xDDrxK8CyDKNfbn1k6aMuVt8LV0fpt7NHUTKiZw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-symbolicate@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-wJFyyF5ysbVyoYVWGL6GwVMiNnGllwDU2gF096376fl0fc8IFUlADSyNlswj31K9og2sOilXe/FdyWFPczPUYg==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-transform-plugins@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-pROPMFaj25Y9+3LlLqpBRz/7B/2YPnfEQz/z3juYxkh3FGQ+3c/Qh4E+khPSTdwTw0M6LitLYHMqaHMbQmuBJw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "metro-transform-worker@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-xLTVrOENaHR9DiuhnHS+zcle0rKsCy2CpXSIx7xD+zhJs+qVRNUyV7Z1zIt/0P/d0cSGVx846R+dIjHEudhcww==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "ob1@0.84.6": {
+      "version": "0.84.6",
+      "integrity": "sha512-+s+6zjd0X68hfAcn92NsEPXnSYOF3O7exw/Fj4UfRTB+UL+Tdjdkzu5/4WquXlzqgvNm8FWuuW6/0Yd8S2rYxw==",
+      "file": "common/react-native-MIT.txt"
+    },
+    "hermes-compiler": {
+      "version": "250829098.0.17",
+      "integrity": "sha512-qG1PXzTEtriF6oQLZF3vyHhSMxOdW5h2TqqLri0rdpstPustd2fSvRZQMVAPdlhgFwBfYnj3OUZtiO6LjYsEFw==",
+      "file": "common/react-native-MIT.txt"
     }
   }
 }

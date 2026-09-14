@@ -6,7 +6,10 @@ let listenersInstalled = false;
 let nativeEnabled: boolean | null = null;
 
 function loadModule() {
-  modulePromise ??= import('../../../modules/expo-file-drop/src');
+  modulePromise ??= import('../../../modules/expo-file-drop/src').catch((error) => {
+    modulePromise = null;
+    throw error;
+  });
   return modulePromise;
 }
 
@@ -43,13 +46,18 @@ function installListeners(native: Awaited<ReturnType<typeof loadModule>>['defaul
 }
 
 function syncEnabled(): void {
-  void loadModule().then(({ default: native }) => {
-    installListeners(native);
-    const enabled = targets.some((target) => target.enabled);
-    if (nativeEnabled === enabled) return;
-    nativeEnabled = enabled;
-    return native.setEnabledAsync(enabled);
-  });
+  void loadModule()
+    .then(({ default: native }) => {
+      installListeners(native);
+      const enabled = targets.some((target) => target.enabled);
+      if (nativeEnabled === enabled) return;
+      nativeEnabled = enabled;
+      return native.setEnabledAsync(enabled);
+    })
+    .catch((error) => {
+      nativeEnabled = null;
+      console.warn('[file-drop] Failed to update the native drop target.', error);
+    });
 }
 
 export const fileDropAdapter: FileDropPort = {

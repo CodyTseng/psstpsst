@@ -1,21 +1,8 @@
 {
   "reviewed": "2026-09-14",
-  "lockfileSha256": "a4f81ce71a26134046f613c022a30a4ff696a553fc66522bb7c8cd336df10048",
+  "lockfileSha256": "f2bed3c0abf53f8ad9831ab0997f25a077713dd36e21193ec155177bf58aa450",
   "scope": "All locked non-development npm packages on all platforms, plus the shipped Electron runtime. Includes build utilities; not an exact binary inventory.",
   "packages": [
-    {
-      "name": "@adobe/css-tools",
-      "version": "4.5.0",
-      "license": "MIT",
-      "integrity": "sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==",
-      "repository": "https://github.com/adobe/css-tools.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "326ff3850062286003ff4cbdaa8f61764e128f9a6532431bccf97e4e2bd75059"
-        }
-      ]
-    },
     {
       "name": "@babel/code-frame",
       "version": "7.29.7",
@@ -980,10 +967,11 @@
     },
     {
       "name": "@babel/plugin-transform-regenerator",
-      "version": "7.29.7",
+      "version": "7.29.8",
       "license": "MIT",
-      "integrity": "sha512-rNNFV0DBAJp988xW2DOntfDoYn1eR8GGF5AT5vYc+rjyfaQkM242c9tZUHHPe7KYaiJizXPWhQTzzdbXySyhBw==",
+      "integrity": "sha512-0UpIXPtdDtMXfnV2OJAVMLpj3H/92vmkA6lpSRakmycJvj3VUy6Xs1dM8tXRugupykr5WB+LpiVl0J8LMVg2mg==",
       "repository": "https://github.com/babel/babel.git",
+      "homepage": "https://babel.dev/docs/en/next/babel-plugin-transform-regenerator",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1252,10 +1240,11 @@
     },
     {
       "name": "@expo-google-fonts/material-symbols",
-      "version": "0.4.44",
+      "version": "0.4.47",
       "license": "MIT AND Apache-2.0",
-      "integrity": "sha512-36JP9Chcy/QEVZ9ZGY4i6zInlyFPbQjkIm6gRNuWWltScIj0WR8rddcD57EIjSC5YKCe2ZKLO6eO/N5r8Jit0A==",
+      "integrity": "sha512-5G4ObZlyGvDzx6g/+NC+RAMeeCc3dc0/HLu/llY5dYZUlNDYzaZWQZwPUzoTixf27riT8I7ur9mQKPYCPFDJzQ==",
       "repository": "git+https://github.com/expo/google-fonts.git",
+      "homepage": "https://github.com/expo/google-fonts/tree/master/font-packages/material-symbols#readme",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1269,9 +1258,9 @@
     },
     {
       "name": "@expo/cli",
-      "version": "56.1.25",
+      "version": "57.0.24",
       "license": "MIT",
-      "integrity": "sha512-5tBKSRoGWwGfQfA2IupoUf2WMcRYGAO1mCvjTIJ1u+ff3+f4uAJQxB5xdD6VjU8G3KHdLSDhsc7UL4uKIjwtSA==",
+      "integrity": "sha512-CCBkvhPgAcrzJQ3daYbyOD6YuqKKkvOIyUfAbsUIvlpLomIlocYxFHYdmaC/KHqfCsbGFYSV/QKTSYshhSFNEA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/cli",
       "licenseFiles": [
@@ -1296,9 +1285,9 @@
     },
     {
       "name": "@expo/config-plugins",
-      "version": "56.0.16",
+      "version": "57.0.9",
       "license": "MIT",
-      "integrity": "sha512-IfdCDxIGpaeaBN+r1DFg3j8Vmg/pN0G58WMaJwJw++dopSU0CLmXL8348llPKvvUpSEQQhx6TyVi5au6spZCbw==",
+      "integrity": "sha512-hHgfL1avkCdEvDSw7IwlKwRYYNgcxzbNNMIk6W6lTkJpY0MajinAfeJUS0J+wPCsjUfGbVqOJM+XhPaO5ulUxg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/guides/config-plugins/",
       "licenseFiles": [
@@ -1310,10 +1299,11 @@
     },
     {
       "name": "@expo/config-types",
-      "version": "56.0.7",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-V7bxawNsNned/yMppAHdisIOxniZXgPKRWpIUiQOQBs45/A5MBd2gfDM4Ecq5gnbilnQUTaI6Zxn6JcW7L3TAA==",
+      "integrity": "sha512-ewW08OonrcRIsRKIlFvvcmmafE5zemb1ocu3HkNwtVPyRtj2w42pZCAkMIROYpcVBaPnc3mDT9UZDzwXWC3i6g==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/config-types#readme",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1323,9 +1313,9 @@
     },
     {
       "name": "@expo/config",
-      "version": "56.0.14",
+      "version": "57.0.9",
       "license": "MIT",
-      "integrity": "sha512-OxKFAjFiOoWIBornS+QeACEt1HyIidZhLL1RKe+lyY/afk+c2H3BT8ftMLTp7NgQ28Af4MuKu8sJznUEEQFs1A==",
+      "integrity": "sha512-dmzlKraIFxa7wLwV6K7WzI8jp6QZpW6Mc5mGjLimJUFjzh4uQdYaT3m3plEutM5yxBoBEwqzks7l+I/ljCbxAQ==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/config#readme",
       "licenseFiles": [
@@ -1350,10 +1340,11 @@
     },
     {
       "name": "@expo/devtools",
-      "version": "56.0.2",
+      "version": "57.0.1",
       "license": "MIT",
-      "integrity": "sha512-ANl4kPdbe0/HQYWkDEN79S6bQhI+i/ZCnPxuC853pPsB4svhINC7Ku9lmGOKPsUUWWnrHg1spkDGQBZ4sD6JxQ==",
+      "integrity": "sha512-GyUf+wFNkbttaX0jR7MZa9bm77U0IrLg6d2AjpxdyoXw/w4abHoXG0oFufwLMgP9zLTd5+Ct4X/ffNUTnlzZgg==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/devtools#readme",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1363,27 +1354,15 @@
     },
     {
       "name": "@expo/dom-webview",
-      "version": "56.0.6",
+      "version": "57.0.1",
       "license": "MIT",
-      "integrity": "sha512-DQY3Tj5nrPbpIfEQiD9xbyEFTu25yEORa02Eyzl5rXszDzxDT4VkZDHkyErNQOyE1qjublJHNFhE5bDm4tRfqA==",
+      "integrity": "sha512-lAKsME4SAq+8sf56oN0DX5TBYyruupoRxbWbD2xf9RnKY8y6x8eb9LCE5pxSN0qyWdqnp+0wmyWzDkKboThKAw==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/dom-webview",
       "licenseFiles": [
         {
           "source": "LICENSE",
           "sha256": "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
-        }
-      ]
-    },
-    {
-      "name": "@expo/env",
-      "version": "2.3.1",
-      "license": "MIT",
-      "integrity": "sha512-JvBdZa5OkTd+dGEtt3fLW9OF6RlIp9SNu9VyMSiWPV5szMDTSAYbX8Uj3cRvZcU1zzaRbqnTSsHk2AE8WXHfxQ==",
-      "repository": "https://github.com/expo/expo.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "9d9cf7980a46628abcbcf88577ecaed2968b69f9123d6aaba6f9496ed3648c1a"
         }
       ]
     },
@@ -1403,10 +1382,11 @@
     },
     {
       "name": "@expo/expo-modules-macros-plugin",
-      "version": "0.2.2",
+      "version": "0.6.1",
       "license": "MIT",
-      "integrity": "sha512-4IMzPDIo/VOXREQjsJtliSfqYVZvfzU2SLFS/9sKMWF848S8CHx+e/E+Vf0TcMvpWCCKX5umyqxb13KJJ+YUzg==",
+      "integrity": "sha512-cpsLZE4rqkc1Y3eZTkxB98jrqY1YXgetmtxFt8q89jBRmk3quRuk1BZo+VcnCSObZardjg99r1k5xijEMONFGA==",
       "repository": "git+https://github.com/expo/expo-modules-macros-plugin.git",
+      "homepage": "https://github.com/expo/expo-modules-macros-plugin",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1416,9 +1396,9 @@
     },
     {
       "name": "@expo/fingerprint",
-      "version": "0.19.10",
+      "version": "0.20.13",
       "license": "MIT",
-      "integrity": "sha512-ZA/THeLUJruSIlyd0p3W9loXXWqYp/VpKBYWSDu+dJk/gUymBuJ1Y2VTnW06TTuMQXvuaA8LsJOS+dnX9DM4Ng==",
+      "integrity": "sha512-h1x+w+JpNRu88a/5SMZRzJs9YDGR/f7R8ApCr7OdenhqmJ00hFxQMzvxajDLL+1P2Y2g/ND0xksusqvBqWSW5Q==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/fingerprint#readme",
       "licenseFiles": [
@@ -1430,9 +1410,9 @@
     },
     {
       "name": "@expo/image-utils",
-      "version": "0.10.5",
+      "version": "0.11.5",
       "license": "MIT",
-      "integrity": "sha512-s40rjuVtsawTe5Gkx0SorxoUChz10jLUU9tlysqUyND5l1DiWx5ZiJ86Bt0/TnSWkRqCMj4JECe6zyuNoRmlGw==",
+      "integrity": "sha512-KPQBTpmpAfy/Vu9y4wPW808/qtZxjYmyJg8cm2QCPAupp+qEWA3b5zmk0ulOwQ9OgeHxuCPgUqWgkwHFo7UsrQ==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/%40expo/image-utils#readme",
       "licenseFiles": [
@@ -1444,27 +1424,14 @@
     },
     {
       "name": "@expo/inline-modules",
-      "version": "0.0.16",
+      "version": "0.1.7",
       "license": "MIT",
-      "integrity": "sha512-w/Iqfn+gkIhIbJEh+bahCn3PqJEUvoP3Vw0t63wbrCoDZaOOTDcyQ/WqkGStu069e2n85dacEYbymw3Ep8FFDA==",
+      "integrity": "sha512-Bz/khd1gIJqDkje7t5ejD5e9jFbm4xEJzWSwRKadRo6gruepbw1xJ3Eb+e58OS8fY1ZNQYjzZbspnuph67sN0g==",
       "repository": "https://github.com/expo/expo.git",
       "licenseFiles": [
         {
           "source": "LICENSE",
           "sha256": "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
-        }
-      ]
-    },
-    {
-      "name": "@expo/json-file",
-      "version": "10.2.0",
-      "license": "MIT",
-      "integrity": "sha512-S6XzKe3R9GQeHiUPXc3xJjOv2VJhOEwFYf7xdC2z2cUqt3kZJ9mSO877sNQloVdnW/SUCtPY3bexlM7nwq+CAQ==",
-      "repository": "https://github.com/expo/expo.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4"
         }
       ]
     },
@@ -1483,9 +1450,9 @@
     },
     {
       "name": "@expo/local-build-cache-provider",
-      "version": "56.0.12",
+      "version": "57.0.8",
       "license": "MIT",
-      "integrity": "sha512-HJFHU1TXSdS41U61k361TXwc0uqCwzI7mxHXJLBMJR+PV5Rw7xHSRUY33bZ0b+FJ2plcQbrhUVUMNkOuJhcqaA==",
+      "integrity": "sha512-SEdE0pAQrr90bRh3MNR0ZuwoIBw390cYdFgbn7Vk0Mtm9EHaBfP7kYj+2hXnXZJgOEm3/JMtfoD3rV7rWA9FGg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/local-build-cache-provider#readme",
       "licenseFiles": [
@@ -1497,9 +1464,10 @@
     },
     {
       "name": "@expo/log-box",
-      "version": "56.0.14",
+      "version": "57.0.4",
       "license": "MIT",
-      "integrity": "sha512-3Eadcxz0J2NESG2iKe8DnAggsRCWqY0mBLhgQPNzClPVjS6o4NyD0F8kuOvWNngFwpJBC08HhY2o8P1mgSgeJg==",
+      "integrity": "sha512-IxwS9s1L2muj8mj8AQSuiy7u8OFJdc02NRFo2me/Tj6DiaeG5SREqmpBE4rQpR2cadqSg5jl8Qab8Cjie616dg==",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/log-box",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1509,9 +1477,9 @@
     },
     {
       "name": "@expo/metro-config",
-      "version": "56.0.19",
+      "version": "57.0.12",
       "license": "MIT",
-      "integrity": "sha512-Dh48EFBloqVZVMvc/GpX8oNyLslrTTR+MXviTVUWjLZAOB2Olj6Mk0SPNy/IOX9LnXvGaz484vTT0M2rttfpfA==",
+      "integrity": "sha512-S62Lrq35HZqBFD55423pmWb8PjaiR/W02zQC1uECBmw1vTN8WZaFz4TJ0i21EeJzwfebMb9MLxL8JZ102Z6VbA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/metro-config#readme",
       "licenseFiles": [
@@ -1523,9 +1491,9 @@
     },
     {
       "name": "@expo/metro-file-map",
-      "version": "56.0.4",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-f+zB0/gOabExV46MryvvQFkWh5au42Pm2CVIY/2TuYN/eIp3bxieOXPPnKCvj+WVM93aliGNiVUF323rorM3xw==",
+      "integrity": "sha512-1OXy+uPYY5uc7Tm4VBsd2NRn+3wHhqeqNuEO/Xo4kmYgv8FjYgUAc+bUXON9FpC2ikcLn4EVlGM9ce2exx9Mlg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/metro-file-map#readme",
       "licenseFiles": [
@@ -1537,9 +1505,9 @@
     },
     {
       "name": "@expo/metro-runtime",
-      "version": "56.0.21",
+      "version": "57.0.15",
       "license": "MIT",
-      "integrity": "sha512-3zESpoHWC4wuI5KKsqui7PkrozHIe8+kOcenpVJ2bkf5qkdtN+zBa7gUqickb3b+iUK8efjKnT4e6WUG2oOu3w==",
+      "integrity": "sha512-9RaFkqIzRud6ol9fc5ZKHgNDYeDjQVBdAQC+rjSQ6RiKV0pY+SjDqGmKY5a4M9TaV0qLMCNNrp5R88BqC2xbuQ==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/metro-runtime",
       "licenseFiles": [
@@ -1590,10 +1558,11 @@
     },
     {
       "name": "@expo/plist",
-      "version": "0.7.0",
+      "version": "0.8.1",
       "license": "MIT",
-      "integrity": "sha512-vrpryU1GoqSIRNqRB2D3IjXDmzNYfiQpEF6AH/xknlD7eiYmEDt3mb26V7cLcedcPG8PY/1xWHdBXVQJfEAh6Q==",
+      "integrity": "sha512-3gTReGIUm0oRaMClsAJYxBnVPCl6fVpsl8HS+DTVxDhW4GyVyxg9E/Znm3BvcHtUJ51RJJI14pC1wvrNilCRHw==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/plist#readme",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1603,9 +1572,9 @@
     },
     {
       "name": "@expo/prebuild-config",
-      "version": "56.0.23",
+      "version": "57.0.16",
       "license": "MIT",
-      "integrity": "sha512-cXHsaLMMN1NJUV84TAXbajdllzQVFwtZ4dW+iyWEjc1nFGiMih66Oj7EfvhAM2y6IvsDEEu02XoCnl4zlAlRHA==",
+      "integrity": "sha512-QA8oMZ7y70kjOzw+abhRl9uYC8Nu/abeUTHr0YVxb3pgIC14gc7w543bYtI+5gEDI3q55jKUViIauC76QvZN1w==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/prebuild-config#readme",
       "licenseFiles": [
@@ -1617,9 +1586,9 @@
     },
     {
       "name": "@expo/require-utils",
-      "version": "56.1.7",
+      "version": "57.0.5",
       "license": "MIT",
-      "integrity": "sha512-7Huw3V4VVThWZglueHpHX4gxdYvjhKOO5DzC/1NBuaDY4IPf/iPhqE+diFA6J/ZF0nC+tcC4YmUidXhnr7cmzQ==",
+      "integrity": "sha512-kTAXj9lDFEIPMsbAOGCGbjBbMF0oi7CqkYM79KOX0DDD9wSwXmlKL1z2h8OwsrBf7mbOo2DjlRvZu4BEjrIxGw==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/require-utils#readme",
       "licenseFiles": [
@@ -1631,10 +1600,11 @@
     },
     {
       "name": "@expo/router-server",
-      "version": "56.0.18",
+      "version": "57.0.9",
       "license": "MIT",
-      "integrity": "sha512-3Ko9M9yIu9pcWcNik55JT3DYrODumIFkrRN6xbL+HtUFgiQp6N02gt6LngPRu0r7YKWYvHU12rsM3MDtucs63Q==",
+      "integrity": "sha512-/PxRQozFesIyCJZOAtrQE8XcmcojNiL5ctPMQnbE4ojC2EJPu0zc7c0Y4PuXsoRxrZxm8Usw76/lCVrXcfTZ2w==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/routing/introduction/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1644,10 +1614,11 @@
     },
     {
       "name": "@expo/schema-utils",
-      "version": "56.0.2",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-WcOH1E6rwxRqNwBzPOVhd5GBbMlS04+5n+ZMdhdwKOg/Kt3suV+F8F6An+z8mUJ8eSuMM3HD9Sj09t7vc/Xjkw==",
+      "integrity": "sha512-fMu/jyN0l1Wzv7XkeWR4IYCx1M8ryui3FdBNGrWwbRgJ7EhxXxK8E2jxP2W3pbgUwUY0V3hG8+GyfCZwny+Lxw==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/@expo/schema-utils#readme",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -1695,14 +1666,15 @@
     },
     {
       "name": "@expo/ui",
-      "version": "56.0.26",
+      "version": "57.0.18",
       "license": "MIT",
-      "integrity": "sha512-FtGq/lDXcf2uo3x7pklvetnSYioriIFe85HMLAl72fsFfcUTkwYEPBDvq0iTI214peDTehuWXYiQi0oyuMsaIw==",
+      "integrity": "sha512-9RkA26v0FSyHlkQCyavZrT8EzsALfkNHIFO5uC+IsAxzWzItdOWdy6asjpg1yaCvBEGMYkP17FUZxluhVbeleA==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/ui/",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/expo/expo/39f9dc47fb5ddd099a2533dd0ff24be7126a1ed0/LICENSE",
-          "sha256": "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+          "source": "src/community/segmented-control/vendor/LICENSE",
+          "sha256": "22a28f29cff8f5ecf9f463301d9c03b8245a2952ebae0bcab633fd654c0792fb"
         }
       ]
     },
@@ -2850,169 +2822,156 @@
     },
     {
       "name": "@react-native/assets-registry",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-u9ZiYP23vA2IFtdFQFmetzSmk6SM0xgKIoiOsr1hXNHjHaLhOm+/Ph1ud57wX6+Dbwdzx8coJgnzSKL3W21PCg==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-TDhgCZA4wjJg84d5A9swiOQYPIWSKEEVdg9IwMFZDupQzW/F3QoLUrfAJOcalgqTDA9/buTB8awhE3Whwg6u9Q==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/babel-plugin-codegen",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-Wc94zGfeFG8Njf9SHMPfYZP04kjigkOps6F1TYTvd7ZVXuGxqseCDgxc50LWcOhOCLypI9n3oVVqz81C3p44ZA==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-O6Xza4JBGPIU8J7YbKTyBoYL4thpy8jMW/oaLDWdAyOwYHKIjK47pAL5HUEbOe2bWz2PEKjbYRF2ApkJv1ottQ==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/babel-preset",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-fD7fxEhkJB/aF57tWoXjaAWpklfrExYZS3k6aXPP3BQ77DZY7gvf/b7dbirwjID6NVnP1JDRJyTuPBGr0K/vlw==",
-      "repository": "git+ssh://git@github.com/facebook/react-native.git",
+      "integrity": "sha512-/eqs/Hy9RZRcjdcs4wj3Cqmxvtb3NM5g+Uuh1RIvsjynMO8PRsrVWWLWgBcZL/jYUo+ogXd2NFB0W8L5Bg89xw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/codegen",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-/JkS1lGLyzBWP1FbgDwaqEf7qShIC6pUC1M0a/YMAd/v4iqR24MRkQWe7jkYvcBQ2LpEhs5NGE9InhxSv21zCA==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-Ux4jHi0fh+bdtVEcL0gaPLbY56V+SvFUDl/8sRAE1jdb4k+o7fT/4Nc29yz4X+qfjstkSqObQTMBGhdzxH9JvA==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/community-cli-plugin",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-fs85dmbIqNmtzEixDb0g+q6R3Vt4H9eAt8/inIZdDKfjN76+sUJA2r1nxODQ76bU23MrIbz8sI7KFBPaWk/zQw==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-qSDL9LQc5mZSZPNczT95WU9YQuPzxBklgON9vLhhqfI0yWIwKInqFx88dQ/uiEXBtf0yossthaQIqA4Ml6bF6g==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/debugger-frontend",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "BSD-3-Clause",
-      "integrity": "sha512-uAu7rM5o/Np1zgp6fi5zM1sP1aB8DcS7DdOLcj/TkSutOAjkMqqd2lWt1/+3S7qXexRHVK5XcP+o3VXo4L/V0A==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-TQmeofQ0PcuylhhlleOeuzHYZfbrgm3gayXzowqUEzgRisTm1D40/J3ggqs7XkQi5HP5ZA3n8dHmKL9vIzPcsw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/debugger-shell",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-/jRAaT9boiCttIcEwS02WPwYkUihqsjSaK/TMtHz05vT6uMgac9PaQt5kzBQLIABv5aEIa5gtrMmKVz49MjkjQ==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-O4ds+J7xZfxkbih9T+cAGegBdvKSPKYJm/lDgC9CpEjFMkmzWTpVLU3Qsv9sqZuo58z+sGhIcJfPsCFFWHpqbQ==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/dev-middleware",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-JYzBiT4A8w+KQt+dOD5v+ti+tDrGoPnsSTuApq3Ls4RB5sfWbDlYMyz3dbc8qBIHz9tv0sQ5+eOu6Xwqzr5AQA==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-LiEPTqTg/63bYUnrPyHLfjTDCNhA/+CUqI1+DsA9tYyewtSbULd5awsva6SgE10I+2iMhgKXS3ymkhU/kSCrGA==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/gradle-plugin",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-39dY2j50Q1pntejzwt3XL7vwXtrj8jcIfHq6E+gyu3jzYxZJVvMkMutQ39vSg6zinIQOX36oQDhidXUbCXzgoA==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-lxmx0GqLEWRIpZfpYFXlYVIs3ENQwaW6Vmp6oi29l2GoQJ1wZfFZRdMimDWlGEk8LKfHar3QH3iaPMkTcK9lEQ==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/jest-preset",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-ALPSrM0q2fU+5AXcOXzDKx7rxVKPMvygAZfsTWLdrGRVWIqf/HEfM0R8euQqIKUqmEuQ1TxMWN+px3h6gc4vow==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-oMmBwXUpTgJvGlcXQQPuiQLykoM8jsWYp6RwdJ2NWyIWzJcGp1rmSr3XV7istoIcUt0wdOVLtQs0A0nDm9ND+A==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/js-polyfills",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-U2+aMshIXf1uFn77tpBb/xhHWB9vkVrMpt7kkucAugF8hJKYTDGB587X7WwelHduK2KBfhl4giSv0rzZGoef9A==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-eYIJ0es967+tePBFQDnl/gidVFxLns3fnbiK6rxscQrGodvuUO6hwxpQnfNynJ8MjbbndImXihXjcnJdc7SzJg==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/metro-babel-transformer",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-omuKq+r7jM4XvCMIlNMPP7Up3SyB8o5EAdZtF7YXniKyq7UOMBqhYHFqgsdOXr0lT+3ADf7VCJG3sb82jlBrrQ==",
-      "repository": "git+ssh://git@github.com/facebook/react-native.git",
+      "integrity": "sha512-0nlwVkG0uT9o72nrGTKUz/IqDnCkM4zE0ihe4r+OJcxH93yBdDm58AXJ3EXZeSjv3osHEFXU7ceajdZiS34mTw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/metro-config",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-sVo6HepUmCcpdfozEf91lA0FjpLNNZYu/Zi9FiYiAQTK8pzATXDVTqhvdxpFrQn435p5eUTSbllvbH/KN+bnyA==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-qdzDMepV2xdUhsO4XC7idnnbt8K6+Hd59AjeK9y4KS86fxSQq5oL0TAbqUuajDGR7beNQoYTuS6AowN/zP0oaQ==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -3032,26 +2991,24 @@
     },
     {
       "name": "@react-native/normalize-colors",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-hj0PScZEhIbcOvQV5yMKX3ha4XEIOy/SVE1Rrpp0beW0dpNLOgSC7KDxGewmDnIHK9YdQUXGY9eMEfShUMIaZw==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-Cv3CDkprb67GrzuaS9BGbBJC/6G4lIw3nyKOHRKTqTTum4bn37y5+R0Z04L8mcbQN85eEohNrRwb7IOM4j6uvg==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
     },
     {
       "name": "@react-native/virtualized-lists",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-dsCjI//OIPEUJMyNHp4l7zNLVjCx7bcaRUceOCkU+IB17hkbtbGWvi7HjGFSzy7FJGmS/MOlcfpb72xXiy1Oig==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-1j44NEyNn05Ut40vHAmoSWbsIcybFkMAOBTwQt1PrESyfSS+qBoyU1LGIogNva0VIa0rQyEC5PzbA7R4/7Nhyw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -3372,45 +3329,6 @@
       ]
     },
     {
-      "name": "@testing-library/dom",
-      "version": "10.4.1",
-      "license": "MIT",
-      "integrity": "sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==",
-      "repository": "https://github.com/testing-library/dom-testing-library",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "bf8fd38056b7606deccfcadb4d8ca1c210082d8ef5513426d2650daedc30bed3"
-        }
-      ]
-    },
-    {
-      "name": "@testing-library/jest-dom",
-      "version": "6.9.1",
-      "license": "MIT",
-      "integrity": "sha512-zIcONa+hVtVSSep9UT3jZ5rizo2BsxgyDYU7WFD5eICBE7no3881HGeb/QkGfsJs6JTkY1aQhT7rIPC7e+0nnA==",
-      "repository": "https://github.com/testing-library/jest-dom",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "bf8fd38056b7606deccfcadb4d8ca1c210082d8ef5513426d2650daedc30bed3"
-        }
-      ]
-    },
-    {
-      "name": "@testing-library/user-event",
-      "version": "14.6.1",
-      "license": "MIT",
-      "integrity": "sha512-vq7fv0rnt+QTXgPxr5Hjc210p6YKq2kmdziLgnsZGgLJ9e6VAShx1pACLuRjd/AS/sr7phAR58OIIpf0LlmQNw==",
-      "repository": "https://github.com/testing-library/user-event",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "b5a4028c49c48f820831421de69c8ea83d621a062914bf16739fd0703c7c9fba"
-        }
-      ]
-    },
-    {
       "name": "@tybys/wasm-util",
       "version": "0.10.2",
       "license": "MIT",
@@ -3420,19 +3338,6 @@
         {
           "source": "Published npm package @tybys/wasm-util@0.10.2: package.json, README.md; SPDX MIT standard terms",
           "sha256": "21301b0ca47285d407bf7a83a689076e22a24b17e911b79617ea9ceb027ade8a"
-        }
-      ]
-    },
-    {
-      "name": "@types/aria-query",
-      "version": "5.0.4",
-      "license": "MIT",
-      "integrity": "sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==",
-      "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
         }
       ]
     },
@@ -3782,10 +3687,11 @@
     },
     {
       "name": "agent-cli-detector",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "license": "MIT",
-      "integrity": "sha512-vKrPeEVN3upDF3GjWxsWBbwQgMtNJ8VB1cduPvK3svmmz4ENpS7yaPxbogsbe3w+xp9xp2Cu+0Ar41rjAR4+lA==",
+      "integrity": "sha512-d8OWDVdZMgjhLUT9ZPgSv/BdFFF9pVuscC0JdUSz3bjwE15gcp6u/o0/JooM2yyAWC49KThFhXlgTXRa9B7yng==",
       "repository": "git+https://github.com/expo/agent-cli-detector.git",
+      "homepage": "https://github.com/expo/agent-cli-detector#readme",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -3980,19 +3886,6 @@
       ]
     },
     {
-      "name": "aria-query",
-      "version": "5.3.0",
-      "license": "Apache-2.0",
-      "integrity": "sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==",
-      "repository": "git+https://github.com/A11yance/aria-query.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "c8df456c7ccba74b959087dff494d4ac2a12dfb0400c08b46b2494a08a000567"
-        }
-      ]
-    },
-    {
       "name": "asap",
       "version": "2.0.6",
       "license": "MIT",
@@ -4150,9 +4043,22 @@
     },
     {
       "name": "babel-plugin-syntax-hermes-parser",
-      "version": "0.33.3",
+      "version": "0.36.0",
       "license": "MIT",
-      "integrity": "sha512-/Z9xYdaJ1lC0pT9do6TqCqhOSLfZ5Ot8D5za1p+feEfWYupCOfGbhhEXN9r2ZgJtDNUNRw/Z+T2CvAGKBqtqWA==",
+      "integrity": "sha512-LhD0xdoedDw7ansQgXbB2DADLZIK/LRXuWNBPuVzMc5S2WK5GyT89tCM+cQzxFGO0mGyLK6D5TrVOJJzAoDy8Q==",
+      "repository": "git@github.com:facebook/hermes.git",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "babel-plugin-syntax-hermes-parser",
+      "version": "0.36.1",
+      "license": "MIT",
+      "integrity": "sha512-ycduwJbvdvIMmVvlAZqGggS+pm5Eu4Bk9pcV9Sm2Z4PJNRVsKkv0g7vHj+LeuC1gHTeF67sJXFOq61IlqCa2hA==",
       "repository": "git@github.com:facebook/hermes.git",
       "licenseFiles": [
         {
@@ -4189,9 +4095,9 @@
     },
     {
       "name": "babel-preset-expo",
-      "version": "56.0.20",
+      "version": "57.0.11",
       "license": "MIT",
-      "integrity": "sha512-NIP4Kbpbgqrnfq30F5H/tpN6l8Cs7NpPmMxa41xiXsgS/Vsd2KZ3AepXcKygGXklWZCNuq4Zr9vv3gpK+/orIg==",
+      "integrity": "sha512-R0NouDI3nzQUsjBh5TUJSDXLmuVzE2bp2YE0ywJkKxzrdWVjShpAlZMBuDeOQy6iKGB6ZCCvMqbQvpqgNMJ7iw==",
       "repository": "git+https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/babel-preset-expo#readme",
       "licenseFiles": [
@@ -5102,19 +5008,6 @@
       ]
     },
     {
-      "name": "css.escape",
-      "version": "1.5.1",
-      "license": "MIT",
-      "integrity": "sha512-YUifsXXuknHlUsmlgyY0PKzgPOr7/FjCePfHNt0jxm83wHZi44VDMQ7/fGNkjY3/jV1MC+1CmZbaHzugyeRtpg==",
-      "repository": "https://github.com/mathiasbynens/CSS.escape.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE-MIT.txt",
-          "sha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a"
-        }
-      ]
-    },
-    {
       "name": "csstype",
       "version": "3.2.3",
       "license": "MIT",
@@ -5271,19 +5164,6 @@
       ]
     },
     {
-      "name": "dequal",
-      "version": "2.0.3",
-      "license": "MIT",
-      "integrity": "sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==",
-      "repository": "lukeed/dequal",
-      "licenseFiles": [
-        {
-          "source": "license",
-          "sha256": "306fa513e39b23a6e8747520de761809d206b99800ef41907b530226574c59ae"
-        }
-      ]
-    },
-    {
       "name": "destroy",
       "version": "1.2.0",
       "license": "MIT",
@@ -5345,32 +5225,6 @@
         {
           "source": "LICENSE.md",
           "sha256": "479b48ab7acdf844b2f44d6a3ce806f932ad009d84d2c71651355b372a2ad0ad"
-        }
-      ]
-    },
-    {
-      "name": "dom-accessibility-api",
-      "version": "0.5.16",
-      "license": "MIT",
-      "integrity": "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==",
-      "repository": "https://github.com/eps1lon/dom-accessibility-api.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE.md",
-          "sha256": "0ffe67fe630169de46df2d29dc18f5857b4c98f0f95b0cd9e3c21fef51f9a9b8"
-        }
-      ]
-    },
-    {
-      "name": "dom-accessibility-api",
-      "version": "0.6.3",
-      "license": "MIT",
-      "integrity": "sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==",
-      "repository": "https://github.com/eps1lon/dom-accessibility-api.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE.md",
-          "sha256": "0ffe67fe630169de46df2d29dc18f5857b4c98f0f95b0cd9e3c21fef51f9a9b8"
         }
       ]
     },
@@ -5727,9 +5581,9 @@
     },
     {
       "name": "expo-asset",
-      "version": "56.0.24",
+      "version": "57.0.17",
       "license": "MIT",
-      "integrity": "sha512-Zy41rl0gtfyZmzV1bzxZype1iEAKz/FiTKOw3yTvA5I2biGnDSh0GbTAYQzkrqYbhnyJAqIe+sXe2eo4DfJ8KQ==",
+      "integrity": "sha512-qSdWZBSfEg06o3GJMwcj36tw0vXkB6eYjqkQistWmyJkHxhUOKnsKJnev6OraXxLdoI+KOd1+qgp/ENx8gcqYA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/asset/",
       "licenseFiles": [
@@ -5741,10 +5595,11 @@
     },
     {
       "name": "expo-audio",
-      "version": "56.0.13",
+      "version": "57.0.5",
       "license": "MIT",
-      "integrity": "sha512-pfBmT/8OYbhrb37ECk+fC1EstLBFxMTioF4uZrAEeOj3uCgjproj1qYmkpsQLJIoEOMPSIw1iSfBEMl10v1DDA==",
+      "integrity": "sha512-39fX5JC5zDvELB4/eDJPj2XAYRN0W9+K2DfDWm5N3aC5WZ7HRrhupWtT6hbH09NlfYpsRSqYOwEZnocFM42ynQ==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/audio/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5754,9 +5609,9 @@
     },
     {
       "name": "expo-background-task",
-      "version": "56.0.27",
+      "version": "57.0.17",
       "license": "MIT",
-      "integrity": "sha512-upKdYkLbT/xtQyc0u5Xf+yEzCr0VTkAOb9uaZZuEJLnM9MPssEoX7QUkVe6+CmD7mHRcsDtzrGvCZfIF0qZg9w==",
+      "integrity": "sha512-Yc9gjYybjbO1+bEXbYm+b0LlY0ZtlrsveqoWFbiPBm1G2+f1l3RBJEADg65F3P4D9DeJ+E6TulF+ux2q31CoFQ==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/background-task/",
       "licenseFiles": [
@@ -5768,10 +5623,11 @@
     },
     {
       "name": "expo-blur",
-      "version": "56.0.4",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-/rNpe2NDTmMbSktVJb5z7HoX6apYtq8KVKJNjWOQV7NG01+LvctWzFeMNxWSZVWfIKTndqdqABwqcpYmiCRxxg==",
+      "integrity": "sha512-uyBeJwxIuXzWXXNrnRub5pcF8VzQsiOz0VBTWDpMG2UztmaFyfAz6pI/GCwRtWpHhiOpLoJj79WLdg1GMB+9cg==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/blur-view/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5781,9 +5637,9 @@
     },
     {
       "name": "expo-build-properties",
-      "version": "56.0.27",
+      "version": "57.0.17",
       "license": "MIT",
-      "integrity": "sha512-m9rRYr1hqIrR/ggDKCkHHJ4rTcN3P4+Sve0cYmsWNgB0bRp3lMu4pSSMqr09BSoJBLOxB8ECcfW2r4VU3igR+g==",
+      "integrity": "sha512-+qA5we2h1Gpnd24RGCR1amfSx7Mtf8glZ0jA5bbe1Nfdw9NdAIl+HPUqU7xyOUDKD0JWsHh9ap6yJG/jTs0tvA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/build-properties",
       "licenseFiles": [
@@ -5795,10 +5651,11 @@
     },
     {
       "name": "expo-camera",
-      "version": "56.0.8",
+      "version": "57.0.5",
       "license": "MIT",
-      "integrity": "sha512-UDOpUUMisFRmCv1XQV1MJCKGAH2CsIC1Rs6P9Bbc6JLVmbxEKAd5dK68y6cScOdWURxVfJ0PRcjYnSuc8ayyIQ==",
+      "integrity": "sha512-0JaUXfDWMytmqm4pVKesZfLTSjAumfS2UGhnc1M4tqJ0qATCS0jxc7KjaoyKEzWJY+FEc8GlPCAGprS/7tNWZQ==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/camera/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5808,10 +5665,11 @@
     },
     {
       "name": "expo-clipboard",
-      "version": "56.0.4",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-qb4DYlkiowHYHaUYVT2FN9nk/nI1xShXOUYsI7J9dVpQCOHcGFjCBPX1VAvEW4Ye4/Aagd6IuhOVAq/+scBOiA==",
+      "integrity": "sha512-VB4Au8X/RbvJKUtJk+87vdtveWSNEa5RzY3ooeO6VNF7Rd49RbQXZOu3/TfEW9p7mU8TCfyTvjyCiAUwSoSJ4w==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/clipboard",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5821,9 +5679,9 @@
     },
     {
       "name": "expo-constants",
-      "version": "56.0.25",
+      "version": "57.0.18",
       "license": "MIT",
-      "integrity": "sha512-KlYOe6F/7lxyedsSrZJHhOjff7goDeJ+tp+e1rK0/ohmt+AxziB3vfyvwcqamC5lRhxJYAgz2CCLAU3Rbb7xUg==",
+      "integrity": "sha512-cLDwDOniPfuCZPHNY++cAY2ZkK97u5aobbBvilPK2LLmaWxR4ZpD31LWUIzUDLrwMPxLjmh1uURnbeYEf0Mivw==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/constants/",
       "licenseFiles": [
@@ -5835,9 +5693,9 @@
     },
     {
       "name": "expo-crypto",
-      "version": "56.0.5",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-H2gPvzWX+gt0BhWH7FaNHqO1RZ8fmbJP96d6z0/wHzEIiL5y+NV2i00qczZRW0Hu+Nu2LpNeBpArqzsRM8aWFA==",
+      "integrity": "sha512-SAWqEfF37nc8ot7bXsVmu9AFYwQdC2kGvH/eNAHiR3bmlcf1Vv8wu9AnGKT+a90r3T8YfwMpZP4QAYlo4vCn9w==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/crypto/",
       "licenseFiles": [
@@ -5849,10 +5707,11 @@
     },
     {
       "name": "expo-device",
-      "version": "56.0.4",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-ucVcGPkvBrl2QHuy7XcYex2Y6BETvJ6TREutZrwLGUDnlvbpKS8KfQoNZOpvkyo5Nmm9RrasYQ0CrXmBHho2mg==",
+      "integrity": "sha512-1A0/FICR3CgrH43FeiDQP3l5eHDmiMoh4EjXfhfoHHkMgdBQdyD0kwDWskiGZlQ3E0Nd0LHkCFH6vJ1ofm/jow==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/device/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5862,10 +5721,11 @@
     },
     {
       "name": "expo-document-picker",
-      "version": "56.0.4",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-75Apf74XNkYYohObIH19VZw42xpe0gmEnPccuzGXKVAzlvTYCfibSgW17F+6vt4paOfZEnAoZ1QFZM6dmaujRA==",
+      "integrity": "sha512-vVBbBNg0piMJUIxjB+DR6JaZZpcSl90ZUoywLA/EgNHTfRkZW+9axP97UxM2a0Zm0W6WfH3cLzzGAEfP9OKGwg==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/document-picker/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5875,9 +5735,9 @@
     },
     {
       "name": "expo-file-system",
-      "version": "56.0.11",
+      "version": "57.0.7",
       "license": "MIT",
-      "integrity": "sha512-0a0QQIUPxU8ds78hIVjSEFzs+vGCzwTVguCssmjhLJgUyUCEiC8en3xuRbBUCKw1YS+8HZVEZdMvF4qr9RzjXQ==",
+      "integrity": "sha512-1vkZRadOsIputFDBcclqBa1pO3iXOO6iIsdqJipQWw4V5TSnWgmRTuOF7ro8IzrVue+PHbum++KCG3Tawem4cg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/filesystem/",
       "licenseFiles": [
@@ -5889,10 +5749,11 @@
     },
     {
       "name": "expo-font",
-      "version": "56.0.7",
+      "version": "57.0.4",
       "license": "MIT",
-      "integrity": "sha512-hpU/vRwPzsby9lPGkA4blDqLIIXYzoWnCZHr6PxvcWbY/uPObAiyhh6q+e0WYsB65SthK+PLH95jEnVag7fwEg==",
+      "integrity": "sha512-7WOMC2oA6xCfOm8bbofqWn2bIqyWFm7YLEnpc/gA1MJH0Ll0TfT/3+CqRkoW2eNRWMS8sxrz5WukUmSvmNquHA==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/font/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5902,10 +5763,11 @@
     },
     {
       "name": "expo-glass-effect",
-      "version": "56.0.4",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-xI9rXtDwi7RW82uAlfyaXO6+k21ApWJ2tHAWYqPr/FjfmZbKsgNJ4Q0iZzGPCwboqjTGxaRZ61SZxBl8hDt5iA==",
+      "integrity": "sha512-aTh2J5eCxf+rSRMBJTnP8Ib5/k8DYFVDuEX1xqesN9F9aqTXocwMv/aQRVBNUs/iogDWhHIJz2pN97IsrrTcoA==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/glass-effect/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5915,10 +5777,11 @@
     },
     {
       "name": "expo-haptics",
-      "version": "56.0.3",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-ycoahZJnR9tWAVh/0mJYxbETtHRYaWjiWS8cHlP6aDGU6Q6Y8rZ5NKsuBwWw6HR2Pe30mfVFgbF2HrBR6gtYmw==",
+      "integrity": "sha512-qucUXtwtJdtECKSQK5D6TQBc/0SxKj7s5wQ4mrfSxhZsHrS9a4rcxINl/gbruMaY9spTXStco32ST4pV0vXmxw==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/haptics/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5928,10 +5791,11 @@
     },
     {
       "name": "expo-image-loader",
-      "version": "56.0.3",
+      "version": "57.0.1",
       "license": "MIT",
-      "integrity": "sha512-JgUo4fUeU1ZC+z8iBFj8v7yoGQnZrLbOVPyNE+DWVrld55F2F6R1ck+rmdm/8TNWLz1LhNQfD7c3XYP1ZikxXA==",
+      "integrity": "sha512-uhrZKLT/cTl2mXyR28kPpVkS5O+PK9N1QA/07IFM4f5T4g0lTW1JHT3NEWwEEsGFldPmVX4j7LwUVVZxE+woug==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/expo-image-loader",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5941,9 +5805,9 @@
     },
     {
       "name": "expo-image-manipulator",
-      "version": "56.0.26",
+      "version": "57.0.17",
       "license": "MIT",
-      "integrity": "sha512-63HyJ9OdBNQlJsHeNhdLgTA893oJzNf3yMYNqROJ5o/baW6bdviqy3LFBSsjF1+j+5tbfpH84DSQlCMbDysvGw==",
+      "integrity": "sha512-VpM8qAotTeSIobIAL8RAIDrZKL0jQBK/6O41NnwmdT96sd2wT263DlTbkvQ6RkcFrR9+NZiC5Um7FDBK+jFneg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/imagemanipulator/",
       "licenseFiles": [
@@ -5955,9 +5819,9 @@
     },
     {
       "name": "expo-image-picker",
-      "version": "56.0.25",
+      "version": "57.0.17",
       "license": "MIT",
-      "integrity": "sha512-RSQgyMqSvJnAdoXio7gHF9uDI1duNzkxycE7b86zH7Loq2JmOfSGZpamfwDJJJyKgpD0dwlngD+lHo5L1PRXiw==",
+      "integrity": "sha512-qPcCkGSoqDLpmdXCLiLe09Je01gzBrwEgLd4SBI03Od/5t531vDTkzUmGemjm7vcsCTG2iqZMh2VZXBscAPO3g==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/imagepicker/",
       "licenseFiles": [
@@ -5969,10 +5833,11 @@
     },
     {
       "name": "expo-image",
-      "version": "56.0.12",
+      "version": "57.0.5",
       "license": "MIT",
-      "integrity": "sha512-R1LDk/D/VazqcmT1OIEBV7+BDezyyJbi594ZstlklCR6aMUBNBcjQNxoEa8YaIxNdT3BsRS46/VDHpmHg4B23Q==",
+      "integrity": "sha512-jOm5lofaIKXhQ7i0Hz3I5JuNULw/aghmpIPZXddwQcEtw8+wUhlozq3M7LbsOrcsBEapcG4jFs85DsfuFoz1tQ==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/image/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5982,10 +5847,11 @@
     },
     {
       "name": "expo-keep-awake",
-      "version": "56.0.3",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-CLMJXtEiMKknD3Rpm8CRwE6ZJUzu2yCEmRk1sgfHAJ1zIbuEWY3dpPDubtsnuzWm+2k6Sru+yaFbYsvPWmTiBA==",
+      "integrity": "sha512-GqgH746wtJImmsbyHmCQoi7cOslKuWQBbJHXr53S35Bpf5UvxCAztvnitUEd7D0QvFN2rvkOhylbZpgZZfBLlQ==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/keep-awake/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -5995,10 +5861,11 @@
     },
     {
       "name": "expo-linking",
-      "version": "56.0.17",
+      "version": "57.0.10",
       "license": "MIT",
-      "integrity": "sha512-+i2VaJlD2eamBIBetpOAkfFGYPEn01kZfRF73bbjlNiI8AkTqWWClZuJqxqHy3/R8dCCbwTTq/dJqI5dskuDvQ==",
+      "integrity": "sha512-RzRi4l4pIYzjgoCJKnqkO+lUI+M2YX6qgcMIQkIbLAXdcWrykBoKYwHGlmAkdFHQm89GaYcq329yfxG+c1hv8w==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/linking",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6008,10 +5875,11 @@
     },
     {
       "name": "expo-local-authentication",
-      "version": "56.0.5",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-VZOt20da5wIzOU3WgCrbFPvCFICsQnI5fWuQnpDZ7xzY75nnrRxDIcPdfMc7ryqOnxQmjTZx+eRWDA8Y+gDpNA==",
+      "integrity": "sha512-1oQCBKz8JOpai+Zp+Z2RkBFIi2CHHWLSJk/pjvT9VEyf8nPFslo4kt1ZlQvtJ4rupbKNCmxqKfYr8Mlo8nJEug==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/local-authentication/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6021,10 +5889,11 @@
     },
     {
       "name": "expo-localization",
-      "version": "56.0.6",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-zzBVoUFHCVNBywcxGsspoZeIXebihOo/AnmQYE4jMv8gHCSKlLNFT+ft+0+mWcZCMs9necvUs8S8TDonAu/xBA==",
+      "integrity": "sha512-sIKYH3Ivddoge568WY6j+Kp2MAAZzWWqEnY2bokLkJFwX366tGL1mEnoY2WUi/qHatFFPop2yqDdurzbhnnimQ==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/localization/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6034,10 +5903,11 @@
     },
     {
       "name": "expo-media-library",
-      "version": "56.0.11",
+      "version": "57.0.5",
       "license": "MIT",
-      "integrity": "sha512-DBuEqTUwG6NNCusxvjb+gmrHI6ZqGhnFkryraViqQc8HmedtFGB45rybxjgr7zxb5lc+W8ifz3B66dasbDGXOw==",
+      "integrity": "sha512-amSLrLsS7Gl4nCqbc2PlVbHj5jK9kQLsSOQgJ2QasHCSHzYXw6Ui7aolxX5APg9P4TgYPE0yWn46ndifh52bRw==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/media-library/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6047,9 +5917,9 @@
     },
     {
       "name": "expo-modules-autolinking",
-      "version": "56.0.23",
+      "version": "57.0.13",
       "license": "MIT",
-      "integrity": "sha512-JGOJ5PznQeQJeKVoHDokIu9+q5L4urR48xSD1HlymssItsyg1NpqCic1znlywg4oPNJgrI1dJETgwzcBFZtpuQ==",
+      "integrity": "sha512-Hj5NjZRlfccazhKab+wK19leRVUr1Y/PUERaRvegIbUSkq4GVxKq6lU9QHlKQyC16MdD/VS4iwsiLivB4o7lvQ==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/expo-modules-autolinking#readme",
       "licenseFiles": [
@@ -6061,9 +5931,9 @@
     },
     {
       "name": "expo-modules-core",
-      "version": "56.0.25",
+      "version": "57.0.18",
       "license": "MIT",
-      "integrity": "sha512-bNqzl82QrxK7BEPT2H4zrel58GG1X6aHYdJXSkn/2riaKiNgstHmtyTI9oO4G6qCB3DYXZQ1572aCF14ZxCnFw==",
+      "integrity": "sha512-ovB7C+GVQTlKAOIsOIHJVVXN9Mn0ljf2SYBS+afrRaGqq+HZEn1D3o+HReIVeH1NjCn/xDBb7I4HjldHs6luZA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/expo-modules-core",
       "licenseFiles": [
@@ -6075,9 +5945,9 @@
     },
     {
       "name": "expo-modules-jsi",
-      "version": "56.0.13",
+      "version": "57.1.0",
       "license": "MIT",
-      "integrity": "sha512-If9W5Me4aSaBSgLD6MPUm6YDVB0KNsK2gIEaTeLEO9dnTqmRcJ3WM206S8iix+4GSvXMOyE8mLlmqE1cQMUuyQ==",
+      "integrity": "sha512-a5ckeHfnbYfonhcHGkM0EU/a0Keh+/OufXy/HyFS+spr5Ib0N4Oh1ZsSYFQhp5xdOUFkVofKRhfH+VmcccIIpA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/expo-modules-jsi",
       "licenseFiles": [
@@ -6089,10 +5959,11 @@
     },
     {
       "name": "expo-network",
-      "version": "56.0.5",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-zmuyO95jayDY9jyUfOAlNp9XXJrJaAOkBXXLy0TS/nh2kppj7CHirRPkQ/tf0rsxhIL3AEd9nsRTiPtNsGT9Lw==",
+      "integrity": "sha512-BfK1kdftZcM6o9o1FAG7/y0l6vWX0n8td0M5lwkvaMeRXZ9LkRwOi9CQXwvsMTQGQiPwtQXgwiAze13cqjt75g==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/network/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6102,9 +5973,9 @@
     },
     {
       "name": "expo-router",
-      "version": "56.2.20",
+      "version": "57.0.21",
       "license": "MIT",
-      "integrity": "sha512-NpYdiNOp3HsSbx+XXsKCb3YMmfSnLTV6RIX2XWDlFB2cNj4Yq7WnEfrZEuHtbJUUPN1Z2C0SF71gwxxi1952yA==",
+      "integrity": "sha512-r7UDLZU0gtVm8FW4nv2pxSl9TDhKlf2shcBbfp1T9STXJ3xYl9llLH701qQkICuXqqt3vGpOZ57GXC1ioVWg4g==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/routing/introduction/",
       "licenseFiles": [
@@ -6116,10 +5987,11 @@
     },
     {
       "name": "expo-secure-store",
-      "version": "56.0.4",
+      "version": "57.0.4",
       "license": "MIT",
-      "integrity": "sha512-hjEi/gmpdFFJ9lYbdp3k3p/WchV7Gi0Qt8jt/m/0WJadqQrskafHAlDxbZkII1cN3Yd7zp9Lvkeq3UfGhSwirQ==",
+      "integrity": "sha512-7zBA1RThURTXdP4w65kBzZNbcSsfArqVd+p+ETAnPRWXO8J296Qd0YaCVyRpJ0HSwlCnGdvOnqO+NgSreHsOhA==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/securestore/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6129,10 +6001,11 @@
     },
     {
       "name": "expo-server",
-      "version": "56.0.6",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-3749PixW3Fs42lFSvi8wYBbMNexb/lVtVyN50BhT0hzX37bT9HrJD4siokV5InThAkpFwdfxGQdWNuAECg9ZCg==",
+      "integrity": "sha512-aK+LdKzauHSGmsOStZtyxdzv0zWssCkxTw3m4QuOhfDSJsZaMRTd9O41d8ixU/QfELTbaJ0oRNcF7JFV/7O9YQ==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/expo-server#readme",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6142,9 +6015,9 @@
     },
     {
       "name": "expo-sharing",
-      "version": "56.0.26",
+      "version": "57.0.19",
       "license": "MIT",
-      "integrity": "sha512-wtgW8MOFSpfToiEvWIJ5g8cgPjWkIKnlEulrMrws80CYC7sEQb+IB6/6jjVFlP02JvvKeTvsflEPinacqhVZHw==",
+      "integrity": "sha512-lZ9chd/kxalZkMaJnPxW6dEpj7hnlrikesiEV9KLS99VKgkfLgH+/pFvIfk0YwGJ1b1/eLGcZ7OfJ2jjSgFpNA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/sharing/",
       "licenseFiles": [
@@ -6156,9 +6029,9 @@
     },
     {
       "name": "expo-splash-screen",
-      "version": "56.0.15",
+      "version": "57.0.9",
       "license": "MIT",
-      "integrity": "sha512-z2fmhPFx/ZYxWo7Roy8+uKr+Y+R6o11Ejd6zGgI4JWyXYN2A6P3+Hp3nKlGkip/hBT4TXiIw+54JCQNC3D3oKQ==",
+      "integrity": "sha512-7cKDn7uBwg0RkcmY015/5j9st4msWJ4zQiPmQdVZoppW3cFSbv05n7xhM6CjUU466Tx4VRTqDF21HuIHkmnEtA==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/splash-screen/",
       "licenseFiles": [
@@ -6170,9 +6043,9 @@
     },
     {
       "name": "expo-sqlite",
-      "version": "56.0.6",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-HWUWW+Y9MMYcp0iZFRHSeFaGq/bvXEkOsFUjUXI8W5Cjh8V0F2hx56OWjDk0F6MFdB2pKwJ/ckxT16MDBgGscQ==",
+      "integrity": "sha512-gbu9Nwm76DNpSK+MEhCjjjF3/EMyFE96IEDSlfO9jPiF4q48a7bef5EXnWVrwW8rvqCZKYAfSGqSpYNhhhpgIg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/sqlite/",
       "licenseFiles": [
@@ -6184,10 +6057,11 @@
     },
     {
       "name": "expo-status-bar",
-      "version": "56.0.4",
+      "version": "57.0.1",
       "license": "MIT",
-      "integrity": "sha512-IGs/fDfkHXofy2ZQrGiXayhFK04HB85FZXorhcEhDZEcqASKgSqpak+HwUtAaR0MeTJwWyHNF7I6VmVbbp8EcA==",
+      "integrity": "sha512-Xwaq1gAoVRWx5dPG5VhT5RSbnI9OilhZnO5qoPBnUaBAa5VzRzfdS8q0/bsPt0jR2DKLtGuP0bQ6efMJ4RIMDg==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/status-bar/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6197,10 +6071,11 @@
     },
     {
       "name": "expo-symbols",
-      "version": "56.0.7",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-OddQ8qWSHaTN8UvyVkcwZSGw0NEH/XRXsofA8pjX4aThyKH60Q3U0tcoberb0cCBCTbfd8SuyjYMbtwnQeYh3g==",
+      "integrity": "sha512-uuK5yHLVR7kExUCrO/ItBvp/kp1maQ9Nkb6KvNy5ZUQnN0NMKwuhJ4GvbfS9N3ACmvCjTT4gKvg4yH5UuKIYNA==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/symbols/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6210,10 +6085,11 @@
     },
     {
       "name": "expo-system-ui",
-      "version": "56.0.5",
+      "version": "57.0.4",
       "license": "MIT",
-      "integrity": "sha512-n1MmnUArV4cc3gVed9fGtluPme00PE9axKVx+NHbKxHFMam5l4GcOI7PxbYKFNx8o7WA1LRD7eLW33agmZrxGg==",
+      "integrity": "sha512-z//rxQJzhTNA1PcKrUtWmrd21jAS3nEDu1b0n8B/7LTTR933OcsZYP1HnbaZifuo2ZH/h7nce2Ow61WZ1Ig2bg==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/system-ui",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6223,9 +6099,9 @@
     },
     {
       "name": "expo-task-manager",
-      "version": "56.0.27",
+      "version": "57.0.17",
       "license": "MIT",
-      "integrity": "sha512-6zFKeL40NzbezFbgghNm3NRkX/1J+4/AdrptiaamYBmz+0DCbNoiqlXOkF18+uRSFGRLUO5GDn954LhNOra9Lg==",
+      "integrity": "sha512-pA6dQiGkbNk3dvDZtuALP63OHte8yfU0ZlPuT6M7DNKWEHjW1FlFR9nSBVM5ooXTUqONL3uEmLFqI+M5X6a2hg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://docs.expo.dev/versions/latest/sdk/task-manager/",
       "licenseFiles": [
@@ -6237,10 +6113,11 @@
     },
     {
       "name": "expo-video",
-      "version": "56.1.4",
+      "version": "57.0.4",
       "license": "MIT",
-      "integrity": "sha512-8mXZOnb7ZsWneDlcnRf0M2Ox9eb5dGnNiGiCkj9bwLPY+3jM2Pc1t5ymNUuhw8lSpT/rOnE0J0/81Y3+0k2Zcw==",
+      "integrity": "sha512-4YCWG1IJzUNpLX0xoussK0VOG524qgUiMbwJzrgpDuPUzOgR3ZqXSZxKsy3HlYLiuWdzIQzwfpbtSNim9F9D3Q==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/video/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6250,10 +6127,11 @@
     },
     {
       "name": "expo-web-browser",
-      "version": "56.0.6",
+      "version": "57.0.3",
       "license": "MIT",
-      "integrity": "sha512-+5Zg0JHETAB1+vNu0Bb4+WiUB50MViwcaJKt16sz5GJTrnutcJvwFeXr6oJ7Pw73sp+DjxkIDGSHDq8SAmFRSg==",
+      "integrity": "sha512-+ecvhyS/PdWkpv4ai6FF1Trd6Y/4kn/eQ3O86mie2ecU3w+I8bKZh13kppY/jw1uSL7yikt03L5W/iiHojrFwQ==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/webbrowser/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -6263,9 +6141,9 @@
     },
     {
       "name": "expo",
-      "version": "56.0.21",
+      "version": "57.0.22",
       "license": "MIT",
-      "integrity": "sha512-EbN+wFq/bzREf2/4RKjt9UQoYCpB+ohxPDHVLMxkWlepvidpLZgezGberWp7CMzqLdpff+66jdL0fmO3aMRq1g==",
+      "integrity": "sha512-YWUGqWtchsRQzcbU+Iqqt/1kFbZ9Pp3/eg+UenINahNt2RIaDElFJFFWLD1Yfex6WnBm6ESSE8h0/ja28hRqZg==",
       "repository": "https://github.com/expo/expo.git",
       "homepage": "https://github.com/expo/expo/tree/main/packages/expo",
       "licenseFiles": [
@@ -6737,26 +6615,12 @@
     },
     {
       "name": "hermes-compiler",
-      "version": "250829098.0.10",
+      "version": "250829098.0.17",
       "license": "MIT",
-      "integrity": "sha512-TcRlZ0/TlyfJqquRFAWoyElVNnkdYRi/sEp4/Qy8/GYxjg8j2cS9D4MjuaQ+qimkmLN7AmO+44IznRf06mAr0w==",
-      "repository": "git+ssh://git@github.com/facebook/hermes.git",
+      "integrity": "sha512-qG1PXzTEtriF6oQLZF3vyHhSMxOdW5h2TqqLri0rdpstPustd2fSvRZQMVAPdlhgFwBfYnj3OUZtiO6LjYsEFw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/hermes/becc964bd16002569bf74c4d8c190cfd2ad38985/LICENSE",
-          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
-        }
-      ]
-    },
-    {
-      "name": "hermes-estree",
-      "version": "0.33.3",
-      "license": "MIT",
-      "integrity": "sha512-6kzYZHCk8Fy1Uc+t3HGYyJn3OL4aeqKLTyina4UFtWl8I0kSL7OmKThaiX+Uh2f8nGw3mo4Ifxg0M5Zk3/Oeqg==",
-      "repository": "git@github.com:facebook/hermes.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -6775,10 +6639,23 @@
       ]
     },
     {
-      "name": "hermes-parser",
-      "version": "0.33.3",
+      "name": "hermes-estree",
+      "version": "0.36.0",
       "license": "MIT",
-      "integrity": "sha512-Yg3HgaG4CqgyowtYjX/FsnPAuZdHOqSMtnbpylbptsQ9nwwSKsy6uRWcGO5RK0EqiX12q8HvDWKgeAVajRO5DA==",
+      "integrity": "sha512-A1+8zn5oss2CFP7pKsOaxorQG6FNIz1WU1VDqruLPPZl3LVgeE2C5xfFg8Ow6/Ow4mSslLLtYP1J3n38eKyW9w==",
+      "repository": "git@github.com:facebook/hermes.git",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "hermes-estree",
+      "version": "0.36.1",
+      "license": "MIT",
+      "integrity": "sha512-guv1nQ6IJ7S83NRFPWc3SA7IBZrdNC9kapwOq6uXvF4wP+sDCgjzQbKPCoyYmoyZRzztF/n/c36l/rccCZSiCw==",
       "repository": "git@github.com:facebook/hermes.git",
       "licenseFiles": [
         {
@@ -6792,6 +6669,32 @@
       "version": "0.35.0",
       "license": "MIT",
       "integrity": "sha512-9JLjeHxBx8T4CAsydZR49PNZUaix+WpQJwu9p2010lu+7Kwl6D/7wYFFJxoz+aXkaaClp9Zfg6W6/zVlSJORaA==",
+      "repository": "git@github.com:facebook/hermes.git",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "hermes-parser",
+      "version": "0.36.0",
+      "license": "MIT",
+      "integrity": "sha512-GdpwMmH5x6IpC1cijvcvYnlPB60Mh6kTSF/NFdYV/j56gYdi+0RIakYs+eqOV+bbO0SW7mgVVGSsTJxyPQfo3w==",
+      "repository": "git@github.com:facebook/hermes.git",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "hermes-parser",
+      "version": "0.36.1",
+      "license": "MIT",
+      "integrity": "sha512-GApNk4zLHi2UWoWZZkx7LNCOSzLSc5lB55pZ/PhK7ycFeg7u5LcF88p/WbpIi1XUDtE0MpHE3uRR3u3KB7TjSQ==",
       "repository": "git@github.com:facebook/hermes.git",
       "licenseFiles": [
         {
@@ -6931,19 +6834,6 @@
       ]
     },
     {
-      "name": "image-size",
-      "version": "1.2.1",
-      "license": "MIT",
-      "integrity": "sha512-rH+46sQJ2dlwfjfhCyNx5thzrv+dtmBIhPHk0zgRUukHzZ/kRueTJXoYYsclBaKcSMBWuGbOFXtioLpzTb5euw==",
-      "repository": "git://github.com/image-size/image-size.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "3109783dad7527b490aabc49c3cb148573c19b41b843e70cf9388a93f3d7fccd"
-        }
-      ]
-    },
-    {
       "name": "imurmurhash",
       "version": "0.1.4",
       "license": "MIT",
@@ -6953,19 +6843,6 @@
         {
           "source": "README.md",
           "sha256": "4491517f7deb68d0b2a3bb590e785e276a60f12448447a9650d0bd50161a101c"
-        }
-      ]
-    },
-    {
-      "name": "indent-string",
-      "version": "4.0.0",
-      "license": "MIT",
-      "integrity": "sha512-EdDDZu4A2OyIK7Lr/2zG+w5jmbuk1DVBnEwREQvBzspBJkCEbRa8GxU1lghYcaGJCnRWibjDXlq779X1/y5xwg==",
-      "repository": "sindresorhus/indent-string",
-      "licenseFiles": [
-        {
-          "source": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
         }
       ]
     },
@@ -8278,19 +8155,6 @@
       ]
     },
     {
-      "name": "lz-string",
-      "version": "1.5.0",
-      "license": "MIT",
-      "integrity": "sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==",
-      "repository": "https://github.com/pieroxy/lz-string.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "433fc9dfe659dbfb1e91eed8351f13651e97bfa3ac6d03394c3d63f61d4bbc80"
-        }
-      ]
-    },
-    {
       "name": "magic-string",
       "version": "0.30.21",
       "license": "MIT",
@@ -8400,19 +8264,6 @@
     },
     {
       "name": "metro-babel-transformer",
-      "version": "0.84.4",
-      "license": "MIT",
-      "integrity": "sha512-rvCfz8snl9h20VcvpOHxZuHP1SlAkv4HXbzw7nyyVwu6Eqo5PRerbakQ9XmUCOsRy70spJ37O+G1TK8oMzo48g==",
-      "repository": "git+https://github.com/facebook/metro.git",
-      "licenseFiles": [
-        {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
-          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
-        }
-      ]
-    },
-    {
-      "name": "metro-babel-transformer",
       "version": "0.84.5",
       "license": "MIT",
       "integrity": "sha512-2WbHILKMiJUzfdjmGOQOqU1bWi9//gqiclc/tkk/AIsrrVw3efhZ1uhkOwMTxUEPOzqoo091H0olLmVZH5FHGQ==",
@@ -8425,14 +8276,13 @@
       ]
     },
     {
-      "name": "metro-cache-key",
-      "version": "0.84.4",
+      "name": "metro-babel-transformer",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-wVO79aGrkYImpnaVS4+d5RrRBRPX31QtvKB3wKGBuiNSznduZTQHzsrJZRroFJSwnygrzdsGUtDQPuqqFjFdvw==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-B1ozl6KxFHbQjXZ2U8WiTPWXylqiD3V4EXyV5r0fqETOrqIrJlBvbVTD82UxIN+B3Vpe4l8G1tb15ocd2RyOQA==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8451,14 +8301,13 @@
       ]
     },
     {
-      "name": "metro-cache",
-      "version": "0.84.4",
+      "name": "metro-cache-key",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-gpcFQdSLUwUCk71saKoE64jLFbx2nwTfVCcPSULMNT8QYq0p1eZZE29Jvd0HtT/UlhC3ZOutLxJME5xqD2JUZg==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-6tyXt1BZ/3U183XV48oif7Nm65TE+pTo0Vs31u4FxMgqiYQR/SiSr3RoXn3pmy4pd280ZmLmct0x3jZpu0pV4A==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8477,14 +8326,13 @@
       ]
     },
     {
-      "name": "metro-config",
-      "version": "0.84.4",
+      "name": "metro-cache",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-PMotGDjXcXLWo2TMRH+VR99phFNgYTwqh4OoieIKK3yTJa1Jmkl+fZJxDO0jfBvNF+WESHciHvpNuBtXaF3B0Q==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-KBJVpb02oKNO+jlWQ1Aax7cd11YP0MClDaMgx6C4MhyZ9g95J/dC1Bo6sCzXaU9L9h/w5cQfT5zDkGW5sOj99A==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8503,14 +8351,13 @@
       ]
     },
     {
-      "name": "metro-core",
-      "version": "0.84.4",
+      "name": "metro-config",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-HONpWC5LGXZn3ffkd4Hu6AIrfE7j4Z0g0wMo/goV24WOB3lhuFZ40KgvaDiSw8iyQHloMYay5N/wPX+z8oN/PQ==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-cD2mLEofcuV26kxSV4hfV1Pbuh6igdUhYQriO8ZVeJ7HyZfq4/wqHV0gSR7fEO8NUp9odr60/Kzm5YakmghWwQ==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8529,14 +8376,13 @@
       ]
     },
     {
-      "name": "metro-file-map",
-      "version": "0.84.4",
+      "name": "metro-core",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-KSVDi/u60hKPx++NLu3MTIvyjzNoJnFAF8PQFxaj1jiSka/wjw+Ua6sNuJ0TDHQv+7AAoFQxeMgaRAe8Yic5wQ==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-ZqYskM8+f3PFMosBDJd8DLqRvT1ltRGhWL/ZfTpBvf4SoadO30VVrdhAoHFVGz3G1CJpWa3fgZH7nnnX/ybllA==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8555,14 +8401,13 @@
       ]
     },
     {
-      "name": "metro-minify-terser",
-      "version": "0.84.4",
+      "name": "metro-file-map",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-5qpbaVOMC7CPitIpuewzVeGw7E+C3ykbv2mqTjQLl85Z3annSVGlSCTcsZjqXZzjupfK4Ztj3dDc4kc44NZwtQ==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-ov9VywWBsHPt54Zc7/DxWvqjTwxuZvhfeyHg8ZAMGKtf2PcH1wS3EnoBH7In53Rspk/eXVWAO5+avxunPn081w==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8581,14 +8426,13 @@
       ]
     },
     {
-      "name": "metro-resolver",
-      "version": "0.84.4",
+      "name": "metro-minify-terser",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-1qLgbxQ5ZGhhutuPot1Yp348ofDsATL2WkrHF65TobqTT9K3P9qJXw38bomk7ncp5B7OYMfWwtyBZo1lCV792A==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-SqhB/Kxrw0XfyW0k8mEscqX/CQopm6Fp3EpdSIPzvKfGgQp9bTMahg9PAdVsXUmIWwErbmFw1VqB+VFBOKksUw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8607,14 +8451,13 @@
       ]
     },
     {
-      "name": "metro-runtime",
-      "version": "0.84.4",
+      "name": "metro-resolver",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-Jibypds4g7AhzdRKY+kDoj51s5EXMwgyp5ddtlreDAsWefMdOx+agWqgm0H2XSZ/ueanHHVM89fnf5OJnlxa8Q==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-PplpGc/OCLxgKeLNsLQO/VHsYDIvkcGGr3zNT7UanHCGRqhxKv245o+naV8cRI4/pcLqyc+9j+J0AJbT3Kp5Sg==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8633,14 +8476,13 @@
       ]
     },
     {
-      "name": "metro-source-map",
-      "version": "0.84.4",
+      "name": "metro-runtime",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-jbWkPxIesVuo1IWkvezmMJld6iu8nD62GsrZiV6jP37AOdbo4OBq1FJ+qkOg8sV05wAHB//jAbziuW0SlJfW4g==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-47EYO/DOai0PA3GoAyDpyXOgHNMwbl/Z9dQlQineDLHkpD42xOwMrIx1crT0+n6F+aGoEyxZmeFwfMzaIqVqKQ==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8659,14 +8501,13 @@
       ]
     },
     {
-      "name": "metro-symbolicate",
-      "version": "0.84.4",
+      "name": "metro-source-map",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-OnfpacxUqGPZQ27t8qK9mFa7uqHIlVWeqRqkCbvMvreEBiamEeOn8krKtcwgP5M4cYDPwuSmCTopHMVthqG4zA==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-4p/EplRbgNxhdqA6kAj1AmIq9qqYXYSAjgxuZ73rYA+p037xDDrxK8CyDKNfbn1k6aMuVt8LV0fpt7NHUTKiZw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8685,14 +8526,13 @@
       ]
     },
     {
-      "name": "metro-transform-plugins",
-      "version": "0.84.4",
+      "name": "metro-symbolicate",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-kehr6HbAecqD0/a3xLXobELdPaAmRAl8bel0qagPF4vhZtux93nS8S4eq2kgKt6J2GnQpVjSoW1PXdst04mwow==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-wJFyyF5ysbVyoYVWGL6GwVMiNnGllwDU2gF096376fl0fc8IFUlADSyNlswj31K9og2sOilXe/FdyWFPczPUYg==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8711,14 +8551,13 @@
       ]
     },
     {
-      "name": "metro-transform-worker",
-      "version": "0.84.4",
+      "name": "metro-transform-plugins",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-W1IYMvvXTu4MxYr7d9h7CeG2vpIr3bmLLIavkPY4O1ilzDrvS8z/NEe6y+pC44Ff7raMXQgYSfdqDUwN/i39gg==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-pROPMFaj25Y9+3LlLqpBRz/7B/2YPnfEQz/z3juYxkh3FGQ+3c/Qh4E+khPSTdwTw0M6LitLYHMqaHMbQmuBJw==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8737,14 +8576,13 @@
       ]
     },
     {
-      "name": "metro",
-      "version": "0.84.4",
+      "name": "metro-transform-worker",
+      "version": "0.84.6",
       "license": "MIT",
-      "integrity": "sha512-8ETTubqfD6ornDy2zYDvRcKnVDOXdFJsjetYDBsY4oAsb6NJkiwFR+FaMESyGppFmQUyBQA4H4sFGxzcQSGtFA==",
-      "repository": "git+https://github.com/facebook/metro.git",
+      "integrity": "sha512-xLTVrOENaHR9DiuhnHS+zcle0rKsCy2CpXSIx7xD+zhJs+qVRNUyV7Z1zIt/0P/d0cSGVx846R+dIjHEudhcww==",
       "licenseFiles": [
         {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8758,6 +8596,18 @@
       "licenseFiles": [
         {
           "source": "https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242dcd129/LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "metro",
+      "version": "0.84.6",
+      "license": "MIT",
+      "integrity": "sha512-ty/tx/imE5Ph2gvPU788Ckim6RAC2tyZxLz2hWRgC9U7/fGKV7qY/slADy0qHPEw9cpUgc4BfmV3oUsYwm7oeg==",
+      "licenseFiles": [
+        {
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -8850,19 +8700,6 @@
         {
           "source": "license",
           "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
-        }
-      ]
-    },
-    {
-      "name": "min-indent",
-      "version": "1.0.1",
-      "license": "MIT",
-      "integrity": "sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==",
-      "repository": "https://github.com/thejameskyle/min-indent",
-      "licenseFiles": [
-        {
-          "source": "license",
-          "sha256": "9638fa87f845af6cecc56fab498c1f74f4a98522d3b53377bedcbdb44b5a8dcc"
         }
       ]
     },
@@ -9205,19 +9042,6 @@
     },
     {
       "name": "ob1",
-      "version": "0.84.4",
-      "license": "MIT",
-      "integrity": "sha512-eJXMpz4aQHXF/YBB9ddqZDIS+ooO91hObo9FoW/xBkr54/zCwYYCDqT/O54vNo8kOkWs5Ou/y28NgdrV0edQNA==",
-      "repository": "git+https://github.com/facebook/metro.git",
-      "licenseFiles": [
-        {
-          "source": "https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE",
-          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
-        }
-      ]
-    },
-    {
-      "name": "ob1",
       "version": "0.84.5",
       "license": "MIT",
       "integrity": "sha512-aH9RkoZc7w/90HBamFxTw8ZLFr05wXS+iOnvmrgo53Ep8Pyrm5FieQSaPIVROkfFVQISeD/zo92fes26TOwe+A==",
@@ -9225,6 +9049,18 @@
       "licenseFiles": [
         {
           "source": "https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242dcd129/LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+        }
+      ]
+    },
+    {
+      "name": "ob1",
+      "version": "0.84.6",
+      "license": "MIT",
+      "integrity": "sha512-+s+6zjd0X68hfAcn92NsEPXnSYOF3O7exw/Fj4UfRTB+UL+Tdjdkzu5/4WquXlzqgvNm8FWuuW6/0Yd8S2rYxw==",
+      "licenseFiles": [
+        {
+          "source": "Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt",
           "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
         }
       ]
@@ -9661,19 +9497,6 @@
     },
     {
       "name": "pretty-format",
-      "version": "27.5.1",
-      "license": "MIT",
-      "integrity": "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==",
-      "repository": "https://github.com/facebook/jest.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
-        }
-      ]
-    },
-    {
-      "name": "pretty-format",
       "version": "29.7.0",
       "license": "MIT",
       "integrity": "sha512-Pdlw/oPxN+aXdmM9R00JVC9WVFoCLTKJvDVLgmJ+qAffBMxsV85l/Lu7sNx4zSzPyoL2euImuEwHhOXdEgNFZQ==",
@@ -9854,19 +9677,6 @@
       ]
     },
     {
-      "name": "queue",
-      "version": "6.0.2",
-      "license": "MIT",
-      "integrity": "sha512-iHZWu+q3IdFZFX36ro/lKBkSvfkztY5Y7HMiPlOUjhupPcG2JMfst2KKEpu5XndviX/3UhFbRngUPNKtgvtZiA==",
-      "repository": "https://github.com/jessetane/queue.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "38d7c4d8410c68eeae9ce24a8b4ee2380199d6df4abb1d9c15dc70b135935fe8"
-        }
-      ]
-    },
-    {
       "name": "race-signal",
       "version": "2.0.2",
       "license": "Apache-2.0 OR MIT",
@@ -9989,19 +9799,6 @@
     },
     {
       "name": "react-is",
-      "version": "17.0.2",
-      "license": "MIT",
-      "integrity": "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==",
-      "repository": "https://github.com/facebook/react.git",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
-        }
-      ]
-    },
-    {
-      "name": "react-is",
       "version": "18.3.1",
       "license": "MIT",
       "integrity": "sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==",
@@ -10028,10 +9825,11 @@
     },
     {
       "name": "react-native-drawer-layout",
-      "version": "4.2.4",
+      "version": "4.2.10",
       "license": "MIT",
-      "integrity": "sha512-l1Le5HcVidobnJm8xqFZo46Rs8FDHdxbTZhkjxpNSRgU+QMoQXilOfzTHAeNjEGiKVGgIs9cW3ctXeHqgp5jJg==",
+      "integrity": "sha512-O6TQdZ5LSm3dqnuR4rX9KPtE+9dVg7jsezEYz1l01rkQTe4fQvYZIoPu2sZFl5X2N70uhRdjnPULySVR3sBUwA==",
       "repository": "https://github.com/react-navigation/react-navigation.git",
+      "homepage": "https://reactnavigation.org/docs/drawer-layout/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -10041,10 +9839,11 @@
     },
     {
       "name": "react-native-gesture-handler",
-      "version": "2.31.2",
+      "version": "2.32.0",
       "license": "MIT",
-      "integrity": "sha512-rw5q74i2AfS7YGYdbxQDhOU7xqgY6WRM1132/CCm3erqjblhECZDZFHIm0tteHoC9ih24wogVBVVzcTBQtZ+5A==",
+      "integrity": "sha512-uYIMOKlKENORq2SABE+jIjbPU+h5I/sQKcq2v16zRq848nwEp1fWRVwML4QWqijc8UcXJC25o54S8GQd4Mf2OA==",
       "repository": "git+https://github.com/software-mansion/react-native-gesture-handler.git",
+      "homepage": "https://docs.swmansion.com/react-native-gesture-handler/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -10080,10 +9879,11 @@
     },
     {
       "name": "react-native-keyboard-controller",
-      "version": "1.21.6",
+      "version": "1.21.9",
       "license": "MIT",
-      "integrity": "sha512-nAXCmar/W8Gn4iQV7O5fAVuTh57JszCsqTS+cfR95WFOLR/AfbwfPz/+sWyz/q2SOIe2VpyQzq6hzYiwErhqqw==",
+      "integrity": "sha512-+TkkFldht4+AXBQeDy1hLE7iqiW8/NkY/ekhcFsKIiRdI9qC5JDzx0TfAg1iYZB2IeOXppmURIy2jFCUjOcV1w==",
       "repository": "https://github.com/kirillzyusko/react-native-keyboard-controller",
+      "homepage": "https://kirillzyusko.github.io/react-native-keyboard-controller/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -10106,9 +9906,9 @@
     },
     {
       "name": "react-native-reanimated",
-      "version": "4.3.4",
+      "version": "4.5.1",
       "license": "MIT",
-      "integrity": "sha512-kQJMiDROed3eO+asdXfodDxgsDDIGM/ifnHFAiPsKWxmrcPu+Bz4vO0fg79eyuEmKCeQuDczmn4tkTb4RbSVYA==",
+      "integrity": "sha512-RnMvtDuR+68ig864gAvZCOdZehqhC5rFmMo0kn+ARfgVSTvFeF6IFLBVgMPUu0KwihaapEyW24WRi6nEyy1kSA==",
       "repository": "git+https://github.com/software-mansion/react-native-reanimated.git",
       "homepage": "https://docs.swmansion.com/react-native-reanimated",
       "licenseFiles": [
@@ -10185,10 +9985,11 @@
     },
     {
       "name": "react-native-worklets",
-      "version": "0.8.3",
+      "version": "0.10.1",
       "license": "MIT",
-      "integrity": "sha512-oCBJROyLU7yG/1R8s0INMflygTH71bx+5XcYkH0CM938TlhSoVbiunE1WVW5FZa51vwYqfLie/IXMX2s1Kh3eg==",
+      "integrity": "sha512-62mRM19bDpfpdI8HLkEErcdOsrAPDtE9lA/sw+5lLRpzBHNhxaoj9QyY2KjXqUmirelxkX4zuPGTC3VdA0feJA==",
       "repository": "git+https://github.com/software-mansion/react-native-reanimated.git",
+      "homepage": "https://docs.swmansion.com/react-native-worklets",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -10211,10 +10012,11 @@
     },
     {
       "name": "react-native",
-      "version": "0.85.3",
+      "version": "0.86.3",
       "license": "MIT",
-      "integrity": "sha512-HN/fGC+3nZVcDNcw7gfbM/DuqZAvI9Mz+/SxuhODaua4JY0BPzhfTzWXRyTR4mRgMHmShTPpH2PYMTxvZrsdZA==",
-      "repository": "git+https://github.com/facebook/react-native.git",
+      "integrity": "sha512-JR5s3bM9ezud+Mw24GlNXNfthqPIKwrQgPPJcam+L97t2sKjjEavhCzBn+fyqZZRcM5+XlhYxpTxVkK7e1n38Q==",
+      "repository": "git+https://github.com/react/react-native.git",
+      "homepage": "https://reactnative.dev/",
       "licenseFiles": [
         {
           "source": "LICENSE",
@@ -10323,19 +10125,6 @@
         {
           "source": "LICENSE",
           "sha256": "8cd23e2d76d2791765f7dd1025a9df99d81db91da9e2701f283987a1c0435aa3"
-        }
-      ]
-    },
-    {
-      "name": "redent",
-      "version": "3.0.0",
-      "license": "MIT",
-      "integrity": "sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==",
-      "repository": "sindresorhus/redent",
-      "licenseFiles": [
-        {
-          "source": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
         }
       ]
     },
@@ -11146,19 +10935,6 @@
       ]
     },
     {
-      "name": "strip-indent",
-      "version": "3.0.0",
-      "license": "MIT",
-      "integrity": "sha512-laJTa3Jb+VQpaC6DseHhF7dXVqHTfJPCRDaEbid/drOhgitgYku/letMUqOXFoWV0zIIUbjpdH2t+tYj4bQMRQ==",
-      "repository": "sindresorhus/strip-indent",
-      "licenseFiles": [
-        {
-          "source": "license",
-          "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
-        }
-      ]
-    },
-    {
       "name": "structured-headers",
       "version": "0.4.1",
       "license": "MIT",
@@ -11808,10 +11584,11 @@
     },
     {
       "name": "unimodules-app-loader",
-      "version": "56.0.1",
+      "version": "57.0.2",
       "license": "MIT",
-      "integrity": "sha512-Z801jeBOQMUF/ExklxT1BqhEV/oF2/Bii7PFYAj/8Sauxl7oKvZbf70peRzzAU0mG7UQ3yU/UO/EpD1JyJ2WcA==",
+      "integrity": "sha512-1Ja+r1VR556m1cTn4BBwAe0AQpX8mDobvN+6Kx12h0jqf0euHfvkPHg83ijuC7pWHff9vTOUc7qr5t8vnmnljg==",
       "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://github.com/expo/expo/tree/main/packages/unimodules-app-loader",
       "licenseFiles": [
         {
           "source": "LICENSE",

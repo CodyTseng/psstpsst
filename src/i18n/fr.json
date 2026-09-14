@@ -963,7 +963,11 @@
   },
   "error": {
     "migration_failed": "Impossible de préparer les données locales : {{error}}",
-    "bootstrap_failed": "Échec de la configuration : {{error}}"
+    "bootstrap_failed": "Échec de la configuration : {{error}}",
+    "unexpected_title": "Un problème est survenu",
+    "unexpected_message": "Vos données sont en sécurité. Réessayez ou revenez aux discussions.",
+    "return_to_chats": "Revenir aux discussions",
+    "export_diagnostics": "Exporter le diagnostic"
   },
   "licenses": {
     "intro": "Merci à la communauté open source.",

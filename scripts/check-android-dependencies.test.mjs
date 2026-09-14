@@ -29,7 +29,7 @@ test('the release dependency guard detects direct and transitive remote push and
       'com.google.mlkit:common:18.11.0',
       'androidx.camera:camera-mlkit-vision:1.6.0',
       'project :expo-notifications',
-      'host.exp.exponent:expo.modules.notifications:56.0.24',
+      'host.exp.exponent:expo.modules.notifications:57.0.0',
       'org.example:unresolved:1.0 FAILED',
     ]) {
       assert.equal(check(`releaseRuntimeClasspath\n|    +--- ${dependency}\n`), 1, dependency);

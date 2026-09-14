@@ -978,7 +978,11 @@
   },
   "error": {
     "migration_failed": "تعذر تجهيز البيانات المحلية: {{error}}",
-    "bootstrap_failed": "فشل الإعداد: {{error}}"
+    "bootstrap_failed": "فشل الإعداد: {{error}}",
+    "unexpected_title": "حدث خطأ ما",
+    "unexpected_message": "بياناتك آمنة. حاول مرة أخرى أو ارجع إلى الدردشات.",
+    "return_to_chats": "العودة إلى الدردشات",
+    "export_diagnostics": "تصدير معلومات التشخيص"
   },
   "licenses": {
     "intro": "شكرًا لمجتمع المصادر المفتوحة.",

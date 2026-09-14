@@ -2,11 +2,12 @@
   "LICENSE": "77e50e130c010eb515cec7048339ed05cf266ac17aeb285a62c6c8da0954917d",
   "licenses/third-party/catalog-supplements.json": "bd0f920c2d145536c897f2b32c5d080390a8cd100e4cd264b133872690bb3b72",
   "licenses/third-party/common/CC-BY-4.0.txt": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411",
-  "licenses/third-party/common/mobile-native.txt": "c6fcdf4ec79f7be86767d2d4c43f673e847e96789f512d9b12a20bc97d50b802",
-  "licenses/third-party/common/mobile-sources.json": "5b68a9db7e33feec226945f63745145ef6b6f617443f1001cee8008e68c05e58",
+  "licenses/third-party/common/mobile-native.txt": "e9d186e1fa5984a3f10d47427e891cf870faaf505498cf457a437d50a1f4d225",
+  "licenses/third-party/common/mobile-sources.json": "a45dc1140533b540629213c18d0967e9db7aae9f64a685dd5bbf309a3d54fa63",
   "licenses/third-party/common/noise-c.txt": "0bf0a1b906899da6dd7f42844c7afd8eb227fdd718466702e1f32219d3f26220",
-  "licenses/third-party/common/npm-inventory.json": "226757f24f32c5dfc265e5e3cfc9f85706291547b85596fc461740e320fe30f1",
-  "licenses/third-party/common/npm-notices.txt": "d5c344dae8d74134f7eed6dd69dccb5c8d2c573719b05a6d55bf3a7e4cea33b2",
+  "licenses/third-party/common/npm-inventory.json": "9705fc8602c8f51de15c67034f70c13ea92ca2113fe322f2b4cc9bdedd5ebef9",
+  "licenses/third-party/common/npm-notices.txt": "e41d1fdf2f8ee4102fa23591740a4ff558606c1a4ed6d01494aa2c72d7ac3ab6",
+  "licenses/third-party/common/react-native-MIT.txt": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
   "licenses/third-party/common/secp256k1.txt": "e8808b1cb5d557fd63f4c67e96ea5a27ec926c91613b93cf0e781bb329efff42",
   "licenses/third-party/common/solar-icons-attribution.txt": "055cc14f0eca227d9af49d408e3c5d3407fb688158e123b28f67177e1ec5f7d8",
   "licenses/third-party/common/solar-wrapper-MIT.txt": "79ca906d7d543e10e4630cddb239c3765678fa18d624a33b99b65bf19e51741a",
@@ -18,8 +19,8 @@
   "licenses/third-party/desktop/sharp-Apache-2.0.txt": "73ba74dfaa520b49a401b5d21459a8523a146f3b7518a833eea5efa85130bf68",
   "licenses/third-party/desktop/sharp-libvips-posix.txt": "4c39e39eef3a3b2de2dc0bf51e27dc9c40d09a7fb16c3b5f2783a3fa7bca3c4e",
   "licenses/third-party/desktop/sharp-libvips-windows.txt": "3ea076aad6e38fe7a591c482f238f4484f861a192698f7876f2c28ac62280e20",
-  "licenses/third-party/snapshots.json": "0862c7ad10ba6ed424901b95008b48a4a217597dae758fe44872d762e446b4c4",
+  "licenses/third-party/snapshots.json": "ff15f32264b3eaa1594f98070c9bca31e62654acf78d3ec0fc1636f90fb706a9",
   "licenses/zxing-cpp/LICENSE": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
   "licenses/zxing-cpp/NOTICE": "4d77d6803e97fbd30e85b8cae6423adf00bb2bcace8839ece265db2532178ce0",
-  "package-lock.json": "a4f81ce71a26134046f613c022a30a4ff696a553fc66522bb7c8cd336df10048"
+  "package-lock.json": "f2bed3c0abf53f8ad9831ab0997f25a077713dd36e21193ec155177bf58aa450"
 }

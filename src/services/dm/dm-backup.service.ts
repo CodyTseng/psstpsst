@@ -178,7 +178,13 @@ function mapItemProgress(
 }
 
 function nativePath(uri: string): string {
-  return uri.startsWith('file://') ? decodeURIComponent(uri.slice('file://'.length)) : uri;
+  if (!uri.startsWith('file://')) return uri;
+  const encodedPath = uri.slice('file://'.length);
+  try {
+    return decodeURIComponent(encodedPath);
+  } catch {
+    return encodedPath;
+  }
 }
 
 async function assertZipModuleAvailable(): Promise<void> {

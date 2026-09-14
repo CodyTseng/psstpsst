@@ -9,9 +9,11 @@ import { AppText } from '@/components/common/AppText';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SearchBar, SEARCH_BAR_SCREEN_GUTTER } from '@/components/search/SearchBar';
 import { SearchResultRow } from '@/components/search/SearchResultRow';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useFocusAfterTransition } from '@/hooks/use-focus-after-transition';
 import { type MessageSearchHit, useMessageSearch } from '@/hooks/use-message-search';
+import { parseConversationRouteParams } from '@/lib/navigation/route-params';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useThemeColors } from '@/theme';
 
@@ -26,13 +28,14 @@ export default function ChatSearch() {
   const { t } = useTranslation();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
-  const { key, transport, name } = useLocalSearchParams<{
-    key: string;
-    transport?: string;
-    name?: string;
+  const params = useLocalSearchParams<{
+    key: string | string[];
+    transport?: string | string[];
+    name?: string | string[];
   }>();
-  const conversationKey = key ?? '';
-  const isProximity = transport === 'proximity';
+  const route = parseConversationRouteParams(params);
+  const conversationKey = route?.key ?? '';
+  const isProximity = route?.transport === 'proximity';
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
   const [query, setQuery] = useState('');
   const searchRef = useFocusAfterTransition();
@@ -55,10 +58,12 @@ export default function ChatSearch() {
         key: conversationKey,
         focus: hit.id,
         focusOrderAt: String(hit.orderAt),
-        ...(isProximity ? { transport: 'proximity', name: name ?? '' } : {}),
+        ...(isProximity ? { transport: 'proximity', name: route?.name ?? '' } : {}),
       },
     });
   }
+
+  if (!route) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={[]}>
@@ -82,7 +87,7 @@ export default function ChatSearch() {
             <SearchResultRow
               counterpartyPubkey={counterparty}
               avatarPubkey={item.senderPubkey}
-              conversationName={isProximity ? name ?? null : null}
+              conversationName={isProximity ? route.name ?? null : null}
               identityKind={isProximity ? 'proximity' : 'relay'}
               subtitle={item.snippet}
               boldSnippet

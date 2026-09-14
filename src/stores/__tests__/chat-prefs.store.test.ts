@@ -52,3 +52,16 @@ it('keeps the existing preference on invalid input and lets blank input restore 
   expect(useChatPrefsStore.getState().nostrEventUrl).toBe(DEFAULT_NOSTR_EVENT_URL);
   expect(trySetDevicePreference).toHaveBeenLastCalledWith('chat.nostrEventUrl', DEFAULT_NOSTR_EVENT_URL);
 });
+
+it('keeps defaults without rejecting when preference storage is unavailable', async () => {
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  jest.mocked(getDevicePreference).mockRejectedValue(new Error('storage unavailable'));
+
+  await expect(useChatPrefsStore.getState().load()).resolves.toBeUndefined();
+
+  expect(useChatPrefsStore.getState()).toMatchObject({
+    enterToSend: false,
+    nostrEventUrl: DEFAULT_NOSTR_EVENT_URL,
+  });
+  jest.restoreAllMocks();
+});

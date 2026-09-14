@@ -29,14 +29,18 @@ export const useChatPrefsStore = create<State>((set) => ({
   enterToSend: false,
   nostrEventUrl: DEFAULT_NOSTR_EVENT_URL,
   load: async () => {
-    const [stored, storedUrl] = await Promise.all([
-      getDevicePreference(ENTER_TO_SEND_KEY, ENTER_TO_SEND_KEY),
-      getDevicePreference(NOSTR_EVENT_URL_PREFERENCE_KEY),
-    ]);
-    set({
-      enterToSend: stored === 'true',
-      nostrEventUrl: normalizeNostrEventUrl(storedUrl ?? '') ?? DEFAULT_NOSTR_EVENT_URL,
-    });
+    try {
+      const [stored, storedUrl] = await Promise.all([
+        getDevicePreference(ENTER_TO_SEND_KEY, ENTER_TO_SEND_KEY),
+        getDevicePreference(NOSTR_EVENT_URL_PREFERENCE_KEY),
+      ]);
+      set({
+        enterToSend: stored === 'true',
+        nostrEventUrl: normalizeNostrEventUrl(storedUrl ?? '') ?? DEFAULT_NOSTR_EVENT_URL,
+      });
+    } catch (error) {
+      console.warn('[chat-prefs] Failed to restore chat preferences.', error);
+    }
   },
   setEnterToSend: (value) => {
     // Optimistic: flip state immediately so the switch is instant, then persist.

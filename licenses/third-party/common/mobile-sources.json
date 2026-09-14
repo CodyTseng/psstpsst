@@ -2,16 +2,16 @@
   "components": "Native implementation sources and React Native build dependencies represented by mobile-native.txt.",
   "sources": [
     {
-      "component": "React Native 0.85.3",
-      "url": "https://codeload.github.com/facebook/react-native/tar.gz/refs/tags/v0.85.3",
-      "sha256": "769876166291a84867b8b15f70fe6e92d8dcfbb220ba1ef2e2fb2123e9755260",
-      "size": 18044226
+      "component": "React Native 0.86.3",
+      "url": "https://codeload.github.com/facebook/react-native/tar.gz/refs/tags/v0.86.3",
+      "sha256": "8df6e535d43260b376d73b546eebd9e1eeedeea83861264ca6befa0380ef4d49",
+      "size": 18647959
     },
     {
-      "component": "Hermes 250829098.0.10",
-      "url": "https://codeload.github.com/facebook/hermes/tar.gz/refs/tags/hermes-v250829098.0.10",
-      "sha256": "0e918d45c53bf8e21aa579122e291f429f4a0c84685ce5fcd2b926499f44b147",
-      "size": 22283625
+      "component": "Hermes 250829098.0.17",
+      "url": "https://codeload.github.com/facebook/hermes/tar.gz/refs/tags/hermes-v250829098.0.17",
+      "sha256": "37e91915c67ce0c457f69b2de00fcaf28fcf755ab7de6e4f33f1d6ee9efcffed",
+      "size": 22317198
     },
     {
       "component": "Fresco 3.6.0",

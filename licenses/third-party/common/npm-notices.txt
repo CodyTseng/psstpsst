@@ -5,13 +5,6 @@ Includes optional packages and build utilities; not an exact binary inventory.
 
 ========================================
 
-@adobe/css-tools@4.5.0
-License: MIT
-Source: https://github.com/adobe/css-tools.git
-LICENSE
-  Text: 326ff3850062286003ff4cbdaa8f61764e128f9a6532431bccf97e4e2bd75059
-========================================
-
 @babel/code-frame@7.29.7
 License: MIT
 Source: https://github.com/babel/babel.git
@@ -530,7 +523,7 @@ LICENSE
   Text: 117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76
 ========================================
 
-@babel/plugin-transform-regenerator@7.29.7
+@babel/plugin-transform-regenerator@7.29.8
 License: MIT
 Source: https://github.com/babel/babel.git
 LICENSE
@@ -630,7 +623,6 @@ LICENSE
 
 @chainsafe/netmask@2.0.0
 License: MIT
-Source: 
 LICENSE
   Text: 377ff97a3b308fee71ed32beb35fa189e48aa3f65681623c66d977b0814390f2
 ========================================
@@ -677,7 +669,7 @@ LICENSE
   Text: 2088f55c6731498410b20c95ebd345ed4a4a800bf74c0fba4d282fd2a021daaa
 ========================================
 
-@expo-google-fonts/material-symbols@0.4.44
+@expo-google-fonts/material-symbols@0.4.47
 License: MIT AND Apache-2.0
 Source: git+https://github.com/expo/google-fonts.git
 LICENSE
@@ -686,7 +678,7 @@ LICENSE_FONT
   Text: 58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd
 ========================================
 
-@expo/cli@56.1.25
+@expo/cli@57.0.24
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
@@ -700,21 +692,21 @@ LICENSE
   Text: 41f2eef190265a6ea435951170947e35461707f91631821b3a67421bea5b2a7c
 ========================================
 
-@expo/config-plugins@56.0.16
+@expo/config-plugins@57.0.9
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/config-types@56.0.7
+@expo/config-types@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 8dacb1e00ec1cf679e7987c87c9953ce6a4d96e7ef361dd04cd453643e9b3351
 ========================================
 
-@expo/config@56.0.14
+@expo/config@57.0.9
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
@@ -728,25 +720,18 @@ Published npm package @expo/devcert@1.2.1: package.json, README.md; SPDX MIT sta
   Text: 5f0a37e4943b373ba09be7e7e433bccba3374d038f5722cbfd9c67fc3f73849e
 ========================================
 
-@expo/devtools@56.0.2
+@expo/devtools@57.0.1
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/dom-webview@56.0.6
+@expo/dom-webview@57.0.1
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
-========================================
-
-@expo/env@2.3.1
-License: MIT
-Source: https://github.com/expo/expo.git
-LICENSE
-  Text: 9d9cf7980a46628abcbcf88577ecaed2968b69f9123d6aaba6f9496ed3648c1a
 ========================================
 
 @expo/env@2.4.3
@@ -756,39 +741,32 @@ LICENSE
   Text: 9d9cf7980a46628abcbcf88577ecaed2968b69f9123d6aaba6f9496ed3648c1a
 ========================================
 
-@expo/expo-modules-macros-plugin@0.2.2
+@expo/expo-modules-macros-plugin@0.6.1
 License: MIT
 Source: git+https://github.com/expo/expo-modules-macros-plugin.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-@expo/fingerprint@0.19.10
+@expo/fingerprint@0.20.13
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/image-utils@0.10.5
+@expo/image-utils@0.11.5
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-@expo/inline-modules@0.0.16
+@expo/inline-modules@0.1.7
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
-========================================
-
-@expo/json-file@10.2.0
-License: MIT
-Source: https://github.com/expo/expo.git
-LICENSE
-  Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
 @expo/json-file@11.0.1
@@ -798,35 +776,35 @@ LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/local-build-cache-provider@56.0.12
+@expo/local-build-cache-provider@57.0.8
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/log-box@56.0.14
+@expo/log-box@57.0.4
 License: MIT
-Source: 
+Source: https://github.com/expo/expo/tree/main/packages/@expo/log-box
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-@expo/metro-config@56.0.19
+@expo/metro-config@57.0.12
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/metro-file-map@56.0.4
+@expo/metro-file-map@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-@expo/metro-runtime@56.0.21
+@expo/metro-runtime@57.0.15
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
@@ -854,35 +832,35 @@ LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/plist@0.7.0
+@expo/plist@0.8.1
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-@expo/prebuild-config@56.0.23
+@expo/prebuild-config@57.0.16
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 16feb932ce2ba7bc7712657bb28afe409eaa4334f9f05d0e1b7a5f12bf6132f4
 ========================================
 
-@expo/require-utils@56.1.7
+@expo/require-utils@57.0.5
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: 49c5f9c7097c9a940ff663a54c27a4c60e379df6cc2b3052df0d37a09a85df93
 ========================================
 
-@expo/router-server@56.0.18
+@expo/router-server@57.0.9
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-@expo/schema-utils@56.0.2
+@expo/schema-utils@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
@@ -891,7 +869,6 @@ LICENSE
 
 @expo/sdk-runtime-versions@1.0.0
 License: MIT
-Source: 
 Published npm package @expo/sdk-runtime-versions@1.0.0: package.json, README.md; SPDX MIT standard terms
   Text: 847964db5fe21a5b0d5e21976f96492377278bfd007821906d5105ec9e7e59e8
 ========================================
@@ -910,23 +887,21 @@ LICENSE
   Text: 1c0d7e365e7c3dcfc1c30b6913d8a61a2741a4702b7ae727093c5610b47dbfa0
 ========================================
 
-@expo/ui@56.0.26
+@expo/ui@57.0.18
 License: MIT
 Source: https://github.com/expo/expo.git
-https://raw.githubusercontent.com/expo/expo/39f9dc47fb5ddd099a2533dd0ff24be7126a1ed0/LICENSE
-  Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
+src/community/segmented-control/vendor/LICENSE
+  Text: 22a28f29cff8f5ecf9f463301d9c03b8245a2952ebae0bcab633fd654c0792fb
 ========================================
 
 @expo/ws-tunnel@2.0.0
 License: MIT
-Source: 
 Published npm package @expo/ws-tunnel@2.0.0: package.json; SPDX MIT standard terms
   Text: 4197f69f2e81a99bcccabbb2aef59785ecf6c2528475498331c7b43a520a929d
 ========================================
 
 @expo/xcpretty@4.4.5
 License: BSD-3-Clause
-Source: 
 Reviewed distribution notices: licenses/third-party/common/xcpretty.txt
   Text: 25a6a103d0f984f8ed3547fba9f86c5fb19c7f9932b9a81eb48f036aaf968ad3
 ========================================
@@ -1523,94 +1498,81 @@ LICENSE
   Text: 22a28f29cff8f5ecf9f463301d9c03b8245a2952ebae0bcab633fd654c0792fb
 ========================================
 
-@react-native/assets-registry@0.85.3
+@react-native/assets-registry@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/babel-plugin-codegen@0.85.3
+@react-native/babel-plugin-codegen@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/babel-preset@0.85.3
+@react-native/babel-preset@0.86.3
 License: MIT
-Source: git+ssh://git@github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/codegen@0.85.3
+@react-native/codegen@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/community-cli-plugin@0.85.3
+@react-native/community-cli-plugin@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/debugger-frontend@0.85.3
+@react-native/debugger-frontend@0.86.3
 License: BSD-3-Clause
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/debugger-shell@0.85.3
+@react-native/debugger-shell@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/dev-middleware@0.85.3
+@react-native/dev-middleware@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/gradle-plugin@0.85.3
+@react-native/gradle-plugin@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/jest-preset@0.85.3
+@react-native/jest-preset@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/js-polyfills@0.85.3
+@react-native/js-polyfills@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/metro-babel-transformer@0.85.3
+@react-native/metro-babel-transformer@0.86.3
 License: MIT
-Source: git+ssh://git@github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/metro-config@0.85.3
+@react-native/metro-config@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -1621,17 +1583,15 @@ https://raw.githubusercontent.com/facebook/react-native/a2066d730d933126bbf7055f
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/normalize-colors@0.85.3
+@react-native/normalize-colors@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-@react-native/virtualized-lists@0.85.3
+@react-native/virtualized-lists@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
-https://raw.githubusercontent.com/facebook/react-native/22ea81b5e37b0cf23be1d8fb32bb7f55e1fcf3d8/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -1804,39 +1764,11 @@ LICENSE
   Text: 60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985
 ========================================
 
-@testing-library/dom@10.4.1
-License: MIT
-Source: https://github.com/testing-library/dom-testing-library
-LICENSE
-  Text: bf8fd38056b7606deccfcadb4d8ca1c210082d8ef5513426d2650daedc30bed3
-========================================
-
-@testing-library/jest-dom@6.9.1
-License: MIT
-Source: https://github.com/testing-library/jest-dom
-LICENSE
-  Text: bf8fd38056b7606deccfcadb4d8ca1c210082d8ef5513426d2650daedc30bed3
-========================================
-
-@testing-library/user-event@14.6.1
-License: MIT
-Source: https://github.com/testing-library/user-event
-LICENSE
-  Text: b5a4028c49c48f820831421de69c8ea83d621a062914bf16739fd0703c7c9fba
-========================================
-
 @tybys/wasm-util@0.10.2
 License: MIT
 Source: https://github.com/toyobayashi/wasm-util.git
 Published npm package @tybys/wasm-util@0.10.2: package.json, README.md; SPDX MIT standard terms
   Text: 21301b0ca47285d407bf7a83a689076e22a24b17e911b79617ea9ceb027ade8a
-========================================
-
-@types/aria-query@5.0.4
-License: MIT
-Source: https://github.com/DefinitelyTyped/DefinitelyTyped.git
-LICENSE
-  Text: c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383
 ========================================
 
 @types/babel__core@7.20.5
@@ -2023,7 +1955,7 @@ LICENSE
   Text: 8d8c55319c7729d57be811c747452636688d54f19701ee0752b6b15ad3771d9a
 ========================================
 
-agent-cli-detector@0.1.6
+agent-cli-detector@0.1.7
 License: MIT
 Source: git+https://github.com/expo/agent-cli-detector.git
 LICENSE
@@ -2130,13 +2062,6 @@ LICENSE
   Text: 30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9
 ========================================
 
-aria-query@5.3.0
-License: Apache-2.0
-Source: git+https://github.com/A11yance/aria-query.git
-LICENSE
-  Text: c8df456c7ccba74b959087dff494d4ac2a12dfb0400c08b46b2494a08a000567
-========================================
-
 asap@2.0.6
 License: MIT
 Source: https://github.com/kriskowal/asap.git
@@ -2221,7 +2146,14 @@ LICENSE
   Text: cc06054a391f6b5dbcf6f142d2bb9d637db897746b0e6c58ed913834b581cae4
 ========================================
 
-babel-plugin-syntax-hermes-parser@0.33.3
+babel-plugin-syntax-hermes-parser@0.36.0
+License: MIT
+Source: git@github.com:facebook/hermes.git
+LICENSE
+  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
+========================================
+
+babel-plugin-syntax-hermes-parser@0.36.1
 License: MIT
 Source: git@github.com:facebook/hermes.git
 LICENSE
@@ -2242,7 +2174,7 @@ LICENSE
   Text: dddddf170b975dc55422b4a7d852fb000b9088aea454730df07b36ebb40a8953
 ========================================
 
-babel-preset-expo@56.0.20
+babel-preset-expo@57.0.11
 License: MIT
 Source: git+https://github.com/expo/expo.git
 LICENSE
@@ -2526,7 +2458,6 @@ license
 
 client-only@0.0.1
 License: MIT
-Source: 
 Published npm package client-only@0.0.1: package.json; SPDX MIT standard terms
   Text: 3d9f8f440b456ecd6ebb59700adf3d52885720b50712e59cab6260b10e52557a
 ========================================
@@ -2734,13 +2665,6 @@ LICENSE
   Text: cb992345949ccd6e8394b2cd6c465f7b897c864f845937dbf64e8997f389e164
 ========================================
 
-css.escape@1.5.1
-License: MIT
-Source: https://github.com/mathiasbynens/CSS.escape.git
-LICENSE-MIT.txt
-  Text: 483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a
-========================================
-
 csstype@3.2.3
 License: MIT
 Source: https://github.com/frenic/csstype
@@ -2825,13 +2749,6 @@ LICENSE
   Text: bd134b41da59e452fb5a1d366b660886f741c87c2bf9428e93764c419fbc40f5
 ========================================
 
-dequal@2.0.3
-License: MIT
-Source: lukeed/dequal
-license
-  Text: 306fa513e39b23a6e8747520de761809d206b99800ef41907b530226574c59ae
-========================================
-
 destroy@1.2.0
 License: MIT
 Source: stream-utils/destroy
@@ -2865,20 +2782,6 @@ License: MIT
 Source: https://github.com/kitten/dnssd-advertise
 LICENSE.md
   Text: 479b48ab7acdf844b2f44d6a3ce806f932ad009d84d2c71651355b372a2ad0ad
-========================================
-
-dom-accessibility-api@0.5.16
-License: MIT
-Source: https://github.com/eps1lon/dom-accessibility-api.git
-LICENSE.md
-  Text: 0ffe67fe630169de46df2d29dc18f5857b4c98f0f95b0cd9e3c21fef51f9a9b8
-========================================
-
-dom-accessibility-api@0.6.3
-License: MIT
-Source: https://github.com/eps1lon/dom-accessibility-api.git
-LICENSE.md
-  Text: 0ffe67fe630169de46df2d29dc18f5857b4c98f0f95b0cd9e3c21fef51f9a9b8
 ========================================
 
 dom-serializer@2.0.0
@@ -3070,287 +2973,287 @@ LICENSE
   Text: 631987b7616a325a5b97566c232418481ddf7dbb5ecadefb991e791876cc2599
 ========================================
 
-expo-asset@56.0.24
+expo-asset@57.0.17
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-audio@56.0.13
+expo-audio@57.0.5
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-background-task@56.0.27
+expo-background-task@57.0.17
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-blur@56.0.4
+expo-blur@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-build-properties@56.0.27
+expo-build-properties@57.0.17
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-camera@56.0.8
+expo-camera@57.0.5
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-clipboard@56.0.4
+expo-clipboard@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-constants@56.0.25
+expo-constants@57.0.18
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-crypto@56.0.5
+expo-crypto@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-device@56.0.4
+expo-device@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-document-picker@56.0.4
+expo-document-picker@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-file-system@56.0.11
+expo-file-system@57.0.7
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-font@56.0.7
+expo-font@57.0.4
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-glass-effect@56.0.4
+expo-glass-effect@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-haptics@56.0.3
+expo-haptics@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-image-loader@56.0.3
+expo-image-loader@57.0.1
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-image-manipulator@56.0.26
+expo-image-manipulator@57.0.17
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-image-picker@56.0.25
+expo-image-picker@57.0.17
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-image@56.0.12
+expo-image@57.0.5
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-keep-awake@56.0.3
+expo-keep-awake@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-linking@56.0.17
+expo-linking@57.0.10
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-local-authentication@56.0.5
+expo-local-authentication@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-localization@56.0.6
+expo-localization@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-media-library@56.0.11
+expo-media-library@57.0.5
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-modules-autolinking@56.0.23
+expo-modules-autolinking@57.0.13
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-modules-core@56.0.25
+expo-modules-core@57.0.18
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-modules-jsi@56.0.13
+expo-modules-jsi@57.1.0
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-network@56.0.5
+expo-network@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-router@56.2.20
+expo-router@57.0.21
 License: MIT
 Source: https://github.com/expo/expo.git
 vendor/react-helmet-async/LICENSE
   Text: c358ea82eed53098b2ee0913e1de8243c69d45862e11c48614db47fd5889d947
 ========================================
 
-expo-secure-store@56.0.4
+expo-secure-store@57.0.4
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-server@56.0.6
+expo-server@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-sharing@56.0.26
+expo-sharing@57.0.19
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-splash-screen@56.0.15
+expo-splash-screen@57.0.9
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-sqlite@56.0.6
+expo-sqlite@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-status-bar@56.0.4
+expo-status-bar@57.0.1
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-symbols@56.0.7
+expo-symbols@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-system-ui@56.0.5
+expo-system-ui@57.0.4
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-task-manager@56.0.27
+expo-task-manager@57.0.17
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-video@56.1.4
+expo-video@57.0.4
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo-web-browser@56.0.6
+expo-web-browser@57.0.3
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
   Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
 ========================================
 
-expo@56.0.21
+expo@57.0.22
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
@@ -3604,17 +3507,9 @@ LICENSE
   Text: bf9b0d665be2a689851eea667ca9f42066ea1d903b38349c51e6a44b2577680a
 ========================================
 
-hermes-compiler@250829098.0.10
+hermes-compiler@250829098.0.17
 License: MIT
-Source: git+ssh://git@github.com/facebook/hermes.git
-https://raw.githubusercontent.com/facebook/hermes/becc964bd16002569bf74c4d8c190cfd2ad38985/LICENSE
-  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
-========================================
-
-hermes-estree@0.33.3
-License: MIT
-Source: git@github.com:facebook/hermes.git
-LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -3625,7 +3520,14 @@ LICENSE
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-hermes-parser@0.33.3
+hermes-estree@0.36.0
+License: MIT
+Source: git@github.com:facebook/hermes.git
+LICENSE
+  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
+========================================
+
+hermes-estree@0.36.1
 License: MIT
 Source: git@github.com:facebook/hermes.git
 LICENSE
@@ -3633,6 +3535,20 @@ LICENSE
 ========================================
 
 hermes-parser@0.35.0
+License: MIT
+Source: git@github.com:facebook/hermes.git
+LICENSE
+  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
+========================================
+
+hermes-parser@0.36.0
+License: MIT
+Source: git@github.com:facebook/hermes.git
+LICENSE
+  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
+========================================
+
+hermes-parser@0.36.1
 License: MIT
 Source: git@github.com:facebook/hermes.git
 LICENSE
@@ -3709,25 +3625,11 @@ LICENSE-MIT
   Text: 9c94db23dc4b1e9aaee5d195668b916afc71efed54af226b66cf0ccc4389c1c0
 ========================================
 
-image-size@1.2.1
-License: MIT
-Source: git://github.com/image-size/image-size.git
-LICENSE
-  Text: 3109783dad7527b490aabc49c3cb148573c19b41b843e70cf9388a93f3d7fccd
-========================================
-
 imurmurhash@0.1.4
 License: MIT
 Source: https://github.com/jensyt/imurmurhash-js
 README.md
   Text: 4491517f7deb68d0b2a3bb590e785e276a60f12448447a9650d0bd50161a101c
-========================================
-
-indent-string@4.0.0
-License: MIT
-Source: sindresorhus/indent-string
-license
-  Text: 48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0
 ========================================
 
 inflight@1.0.6
@@ -4106,7 +4008,6 @@ license
 
 lighthouse-logger@1.4.2
 License: Apache-2.0
-Source: 
 LICENSE
   Text: 7ec9661a8afafab1eee3523d6f1a193eff76314a5ab10b4ce96aefd87621b0c3
 ========================================
@@ -4433,13 +4334,6 @@ LICENSE
   Text: b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57
 ========================================
 
-lz-string@1.5.0
-License: MIT
-Source: https://github.com/pieroxy/lz-string.git
-LICENSE
-  Text: 433fc9dfe659dbfb1e91eed8351f13651e97bfa3ac6d03394c3d63f61d4bbc80
-========================================
-
 magic-string@0.30.21
 License: MIT
 Source: git+https://github.com/Rich-Harris/magic-string.git
@@ -4498,13 +4392,6 @@ LICENSE
   Text: 2cee71bf4612fc2efe1c6261e3f2b21f3c7259ef8a4f3593b095ae7a7bd65ad9
 ========================================
 
-metro-babel-transformer@0.84.4
-License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
-  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
-========================================
-
 metro-babel-transformer@0.84.5
 License: MIT
 Source: git+https://github.com/react/metro.git
@@ -4512,10 +4399,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-cache-key@0.84.4
+metro-babel-transformer@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4526,10 +4412,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-cache@0.84.4
+metro-cache-key@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4540,10 +4425,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-config@0.84.4
+metro-cache@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4554,10 +4438,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-core@0.84.4
+metro-config@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4568,10 +4451,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-file-map@0.84.4
+metro-core@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4582,10 +4464,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-minify-terser@0.84.4
+metro-file-map@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4596,10 +4477,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-resolver@0.84.4
+metro-minify-terser@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4610,10 +4490,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-runtime@0.84.4
+metro-resolver@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4624,10 +4503,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-source-map@0.84.4
+metro-runtime@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4638,10 +4516,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-symbolicate@0.84.4
+metro-source-map@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4652,10 +4529,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-transform-plugins@0.84.4
+metro-symbolicate@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4666,10 +4542,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro-transform-worker@0.84.4
+metro-transform-plugins@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4680,10 +4555,9 @@ https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-metro@0.84.4
+metro-transform-worker@0.84.6
 License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4691,6 +4565,12 @@ metro@0.84.5
 License: MIT
 Source: git+https://github.com/react/metro.git
 https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242dcd129/LICENSE
+  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
+========================================
+
+metro@0.84.6
+License: MIT
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -4741,13 +4621,6 @@ License: MIT
 Source: sindresorhus/mimic-fn
 license
   Text: 48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0
-========================================
-
-min-indent@1.0.1
-License: MIT
-Source: https://github.com/thejameskyle/min-indent
-license
-  Text: 9638fa87f845af6cecc56fab498c1f74f4a98522d3b53377bedcbdb44b5a8dcc
 ========================================
 
 minimatch@10.2.5
@@ -4906,7 +4779,6 @@ LICENSE
 
 nostr-wasm@0.1.0
 License: MIT
-Source: 
 Published npm package nostr-wasm@0.1.0: package.json, README.md; SPDX MIT standard terms
   Text: 4a30d5ac64271289b67940cf345bdfd33bb645453f28d2dd21a6db4ca9352b30
 ========================================
@@ -4932,17 +4804,16 @@ LICENSE
   Text: dd5f97aa25431e25fea6654f12f4ce167dc19b3148ab515cc271aa8efe6eb0be
 ========================================
 
-ob1@0.84.4
-License: MIT
-Source: git+https://github.com/facebook/metro.git
-https://raw.githubusercontent.com/facebook/metro/f15550573c17e0ef19774547458baa185d11b56a/LICENSE
-  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
-========================================
-
 ob1@0.84.5
 License: MIT
 Source: git+https://github.com/react/metro.git
 https://raw.githubusercontent.com/react/metro/b71015ef83904e7086342ddb72205b7242dcd129/LICENSE
+  Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
+========================================
+
+ob1@0.84.6
+License: MIT
+Reviewed distribution notices: licenses/third-party/common/react-native-MIT.txt
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
@@ -5177,13 +5048,6 @@ LICENSE
   Text: 5be1f3465bba68a626777f984878814aaf35e7ef8e9fd314d469bcf887050fb8
 ========================================
 
-pretty-format@27.5.1
-License: MIT
-Source: https://github.com/facebook/jest.git
-LICENSE
-  Text: 52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85
-========================================
-
 pretty-format@29.7.0
 License: MIT
 Source: https://github.com/jestjs/jest.git
@@ -5281,13 +5145,6 @@ license
   Text: 846c2349412e40c3c33095b2903f6a311ef4b30ccd26c214044a2cdc24fdc5cc
 ========================================
 
-queue@6.0.2
-License: MIT
-Source: https://github.com/jessetane/queue.git
-LICENSE
-  Text: 38d7c4d8410c68eeae9ce24a8b4ee2380199d6df4abb1d9c15dc70b135935fe8
-========================================
-
 race-signal@2.0.2
 License: Apache-2.0 OR MIT
 Source: git+https://github.com/achingbrain/race-signal.git
@@ -5353,13 +5210,6 @@ LICENSE
   Text: 52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85
 ========================================
 
-react-is@17.0.2
-License: MIT
-Source: https://github.com/facebook/react.git
-LICENSE
-  Text: 52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85
-========================================
-
 react-is@18.3.1
 License: MIT
 Source: https://github.com/facebook/react.git
@@ -5374,14 +5224,14 @@ LICENSE
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
 
-react-native-drawer-layout@4.2.4
+react-native-drawer-layout@4.2.10
 License: MIT
 Source: https://github.com/react-navigation/react-navigation.git
 LICENSE
   Text: 41f321b33afaa5cdaeb7c1aecd6fd5c21467ff910fb677aa47c941d05b5032c0
 ========================================
 
-react-native-gesture-handler@2.31.2
+react-native-gesture-handler@2.32.0
 License: MIT
 Source: git+https://github.com/software-mansion/react-native-gesture-handler.git
 LICENSE
@@ -5402,7 +5252,7 @@ LICENSE
   Text: 4efb635cc4fd67f738ce2af65f8b73514ee338d0d201b836ab3a823cfda771d1
 ========================================
 
-react-native-keyboard-controller@1.21.6
+react-native-keyboard-controller@1.21.9
 License: MIT
 Source: https://github.com/kirillzyusko/react-native-keyboard-controller
 LICENSE
@@ -5416,7 +5266,7 @@ LICENSE
   Text: 61f544abd29598a0db5403b6c9d5c9cfe505362a00dde783ea9e73773daae541
 ========================================
 
-react-native-reanimated@4.3.4
+react-native-reanimated@4.5.1
 License: MIT
 Source: git+https://github.com/software-mansion/react-native-reanimated.git
 LICENSE
@@ -5458,7 +5308,7 @@ LICENSE
   Text: f961d81b4027c179ccd9200e72fa141f8c0575c1f3c93593f36645dc72bf5216
 ========================================
 
-react-native-worklets@0.8.3
+react-native-worklets@0.10.1
 License: MIT
 Source: git+https://github.com/software-mansion/react-native-reanimated.git
 LICENSE
@@ -5472,9 +5322,9 @@ LICENSE
   Text: 8a04c01f3bf72d31f96b75f9b66418b2b1a38efa28d477ff62ce6221bfddc690
 ========================================
 
-react-native@0.85.3
+react-native@0.86.3
 License: MIT
-Source: git+https://github.com/facebook/react-native.git
+Source: git+https://github.com/react/react-native.git
 LICENSE
   Text: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93
 ========================================
@@ -5533,13 +5383,6 @@ License: Apache-2.0
 Source: git://github.com/Yqnn/node-readdir-glob.git
 LICENSE
   Text: 8cd23e2d76d2791765f7dd1025a9df99d81db91da9e2701f283987a1c0435aa3
-========================================
-
-redent@3.0.0
-License: MIT
-Source: sindresorhus/redent
-license
-  Text: 48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0
 ========================================
 
 regenerate-unicode-properties@10.2.2
@@ -5719,7 +5562,6 @@ LICENSE
 
 server-only@0.0.1
 License: MIT
-Source: 
 Published npm package server-only@0.0.1: package.json; SPDX MIT standard terms
   Text: 3f1b144267f6877b6edc722d16898205bff45c3661f073908a264edf44b8b82b
 ========================================
@@ -5972,13 +5814,6 @@ license
 strip-ansi@6.0.1
 License: MIT
 Source: chalk/strip-ansi
-license
-  Text: 48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0
-========================================
-
-strip-indent@3.0.0
-License: MIT
-Source: sindresorhus/strip-indent
 license
   Text: 48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0
 ========================================
@@ -6331,7 +6166,7 @@ LICENSE-MIT.txt
   Text: 483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a
 ========================================
 
-unimodules-app-loader@56.0.1
+unimodules-app-loader@57.0.2
 License: MIT
 Source: https://github.com/expo/expo.git
 LICENSE
@@ -6718,21 +6553,6 @@ License: MIT
 Source: git+https://github.com/Sec-ant/zxing-wasm.git
 LICENSE
   Text: fb506e4ade12d7a9efa67c9d76a9a28c8e15d347ca49a69e48e29b40b34ad2ab
-========================================
-
-TEXT 326ff3850062286003ff4cbdaa8f61764e128f9a6532431bccf97e4e2bd75059
-
-(The MIT License)
-
-Copyright (c) 2012 TJ Holowaychuk <tj@vision-media.ca>
-Copyright (c) 2022 Jean-Philippe Zolesio <holblin@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 ========================================
 
 TEXT 117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76
@@ -7883,6 +7703,32 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
+========================================
+
+TEXT 22a28f29cff8f5ecf9f463301d9c03b8245a2952ebae0bcab633fd654c0792fb
+
+MIT License
+
+Copyright (c) 2015-present, Facebook, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ========================================
 
@@ -21628,32 +21474,6 @@ SOFTWARE.
 
 ========================================
 
-TEXT 22a28f29cff8f5ecf9f463301d9c03b8245a2952ebae0bcab633fd654c0792fb
-
-MIT License
-
-Copyright (c) 2015-present, Facebook, Inc.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-========================================
-
 TEXT 3239e134eb6e6d64538ca76498c7fcb08a395249dd9d4af9927bf6d0169ee429
 
 The MIT License (MIT)
@@ -21871,56 +21691,6 @@ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
 LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
-========================================
-
-TEXT bf8fd38056b7606deccfcadb4d8ca1c210082d8ef5513426d2650daedc30bed3
-
-The MIT License (MIT)
-Copyright (c) 2017 Kent C. Dodds
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-========================================
-
-TEXT b5a4028c49c48f820831421de69c8ea83d621a062914bf16739fd0703c7c9fba
-
-The MIT License (MIT)
-Copyright (c) 2020 Giorgio Polvara
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
 ========================================
 
 TEXT 21301b0ca47285d407bf7a83a689076e22a24b17e911b79617ea9ceb027ade8a
@@ -22817,212 +22587,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-========================================
-
-TEXT c8df456c7ccba74b959087dff494d4ac2a12dfb0400c08b46b2494a08a000567
-
-Apache License
-Version 2.0, January 2004
-http://www.apache.org/licenses/
-
-TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-1. Definitions.
-
-"License" shall mean the terms and conditions for use, reproduction,
-and distribution as defined by Sections 1 through 9 of this document.
-
-"Licensor" shall mean the copyright owner or entity authorized by
-the copyright owner that is granting the License.
-
-"Legal Entity" shall mean the union of the acting entity and all
-other entities that control, are controlled by, or are under common
-control with that entity. For the purposes of this definition,
-"control" means (i) the power, direct or indirect, to cause the
-direction or management of such entity, whether by contract or
-otherwise, or (ii) ownership of fifty percent (50%) or more of the
-outstanding shares, or (iii) beneficial ownership of such entity.
-
-"You" (or "Your") shall mean an individual or Legal Entity
-exercising permissions granted by this License.
-
-"Source" form shall mean the preferred form for making modifications,
-including but not limited to software source code, documentation
-source, and configuration files.
-
-"Object" form shall mean any form resulting from mechanical
-transformation or translation of a Source form, including but
-not limited to compiled object code, generated documentation,
-and conversions to other media types.
-
-"Work" shall mean the work of authorship, whether in Source or
-Object form, made available under the License, as indicated by a
-copyright notice that is included in or attached to the work
-(an example is provided in the Appendix below).
-
-"Derivative Works" shall mean any work, whether in Source or Object
-form, that is based on (or derived from) the Work and for which the
-editorial revisions, annotations, elaborations, or other modifications
-represent, as a whole, an original work of authorship. For the purposes
-of this License, Derivative Works shall not include works that remain
-separable from, or merely link (or bind by name) to the interfaces of,
-the Work and Derivative Works thereof.
-
-"Contribution" shall mean any work of authorship, including
-the original version of the Work and any modifications or additions
-to that Work or Derivative Works thereof, that is intentionally
-submitted to Licensor for inclusion in the Work by the copyright owner
-or by an individual or Legal Entity authorized to submit on behalf of
-the copyright owner. For the purposes of this definition, "submitted"
-means any form of electronic, verbal, or written communication sent
-to the Licensor or its representatives, including but not limited to
-communication on electronic mailing lists, source code control systems,
-and issue tracking systems that are managed by, or on behalf of, the
-Licensor for the purpose of discussing and improving the Work, but
-excluding communication that is conspicuously marked or otherwise
-designated in writing by the copyright owner as "Not a Contribution."
-
-"Contributor" shall mean Licensor and any individual or Legal Entity
-on behalf of whom a Contribution has been received by Licensor and
-subsequently incorporated within the Work.
-
-2. Grant of Copyright License. Subject to the terms and conditions of
-this License, each Contributor hereby grants to You a perpetual,
-worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-copyright license to reproduce, prepare Derivative Works of,
-publicly display, publicly perform, sublicense, and distribute the
-Work and such Derivative Works in Source or Object form.
-
-3. Grant of Patent License. Subject to the terms and conditions of
-this License, each Contributor hereby grants to You a perpetual,
-worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-(except as stated in this section) patent license to make, have made,
-use, offer to sell, sell, import, and otherwise transfer the Work,
-where such license applies only to those patent claims licensable
-by such Contributor that are necessarily infringed by their
-Contribution(s) alone or by combination of their Contribution(s)
-with the Work to which such Contribution(s) was submitted. If You
-institute patent litigation against any entity (including a
-cross-claim or counterclaim in a lawsuit) alleging that the Work
-or a Contribution incorporated within the Work constitutes direct
-or contributory patent infringement, then any patent licenses
-granted to You under this License for that Work shall terminate
-as of the date such litigation is filed.
-
-4. Redistribution. You may reproduce and distribute copies of the
-Work or Derivative Works thereof in any medium, with or without
-modifications, and in Source or Object form, provided that You
-meet the following conditions:
-
-(a) You must give any other recipients of the Work or
-Derivative Works a copy of this License; and
-
-(b) You must cause any modified files to carry prominent notices
-stating that You changed the files; and
-
-(c) You must retain, in the Source form of any Derivative Works
-that You distribute, all copyright, patent, trademark, and
-attribution notices from the Source form of the Work,
-excluding those notices that do not pertain to any part of
-the Derivative Works; and
-
-(d) If the Work includes a "NOTICE" text file as part of its
-distribution, then any Derivative Works that You distribute must
-include a readable copy of the attribution notices contained
-within such NOTICE file, excluding those notices that do not
-pertain to any part of the Derivative Works, in at least one
-of the following places: within a NOTICE text file distributed
-as part of the Derivative Works; within the Source form or
-documentation, if provided along with the Derivative Works; or,
-within a display generated by the Derivative Works, if and
-wherever such third-party notices normally appear. The contents
-of the NOTICE file are for informational purposes only and
-do not modify the License. You may add Your own attribution
-notices within Derivative Works that You distribute, alongside
-or as an addendum to the NOTICE text from the Work, provided
-that such additional attribution notices cannot be construed
-as modifying the License.
-
-You may add Your own copyright statement to Your modifications and
-may provide additional or different license terms and conditions
-for use, reproduction, or distribution of Your modifications, or
-for any such Derivative Works as a whole, provided Your use,
-reproduction, and distribution of the Work otherwise complies with
-the conditions stated in this License.
-
-5. Submission of Contributions. Unless You explicitly state otherwise,
-any Contribution intentionally submitted for inclusion in the Work
-by You to the Licensor shall be under the terms and conditions of
-this License, without any additional terms or conditions.
-Notwithstanding the above, nothing herein shall supersede or modify
-the terms of any separate license agreement you may have executed
-with Licensor regarding such Contributions.
-
-6. Trademarks. This License does not grant permission to use the trade
-names, trademarks, service marks, or product names of the Licensor,
-except as required for reasonable and customary use in describing the
-origin of the Work and reproducing the content of the NOTICE file.
-
-7. Disclaimer of Warranty. Unless required by applicable law or
-agreed to in writing, Licensor provides the Work (and each
-Contributor provides its Contributions) on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-implied, including, without limitation, any warranties or conditions
-of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-PARTICULAR PURPOSE. You are solely responsible for determining the
-appropriateness of using or redistributing the Work and assume any
-risks associated with Your exercise of permissions under this License.
-
-8. Limitation of Liability. In no event and under no legal theory,
-whether in tort (including negligence), contract, or otherwise,
-unless required by applicable law (such as deliberate and grossly
-negligent acts) or agreed to in writing, shall any Contributor be
-liable to You for damages, including any direct, indirect, special,
-incidental, or consequential damages of any character arising as a
-result of this License or out of the use or inability to use the
-Work (including but not limited to damages for loss of goodwill,
-work stoppage, computer failure or malfunction, or any and all
-other commercial damages or losses), even if such Contributor
-has been advised of the possibility of such damages.
-
-9. Accepting Warranty or Additional Liability. While redistributing
-the Work or Derivative Works thereof, You may choose to offer,
-and charge a fee for, acceptance of support, warranty, indemnity,
-or other liability obligations and/or rights consistent with this
-License. However, in accepting such obligations, You may act only
-on Your own behalf and on Your sole responsibility, not on behalf
-of any other Contributor, and only if You agree to indemnify,
-defend, and hold each Contributor harmless for any liability
-incurred by, or claims asserted against, such Contributor by reason
-of your accepting any such warranty or additional liability.
-
-END OF TERMS AND CONDITIONS
-
-APPENDIX: How to apply the Apache License to your work.
-
-To apply the Apache License to your work, attach the following
-boilerplate notice, with the fields enclosed by brackets "{}"
-replaced with your own identifying information. (Don't include
-the brackets!)  The text should be enclosed in the appropriate
-comment syntax for the file format. We also recommend that a
-file or class name and description of purpose be included on the
-same "printed page" as the copyright notice for easier
-identification within third-party archives.
-
-Copyright 2020 A11yance
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 
 ========================================
 
@@ -25812,31 +25376,6 @@ THE SOFTWARE.
 
 ========================================
 
-TEXT 483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a
-
-Copyright Mathias Bynens <https://mathiasbynens.be/>
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-========================================
-
 TEXT 11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e
 
 Copyright (c) 2017-2018 Fredrik Nicol
@@ -26053,32 +25592,6 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-========================================
-
-TEXT 306fa513e39b23a6e8747520de761809d206b99800ef41907b530226574c59ae
-
-The MIT License (MIT)
-
-Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
 
 ========================================
 
@@ -26372,32 +25885,6 @@ MIT License
 
 Copyright (c) Phil Pluckthun,
 Copyright (c) 650 Industries, Inc. (aka Expo),
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-========================================
-
-TEXT 0ffe67fe630169de46df2d29dc18f5857b4c98f0f95b0cd9e3c21fef51f9a9b8
-
-MIT License
-
-Copyright (c) 2020 Sebastian Silbermann
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -32287,6 +31774,31 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ========================================
 
+TEXT 483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a
+
+Copyright Mathias Bynens <https://mathiasbynens.be/>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+========================================
+
 TEXT 7585ea7bba616ccbbe43cb54ecb67956688c3c5641bb84f3099a652a73193afe
 
 (The MIT License)
@@ -34394,20 +33906,6 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ========================================
 
-TEXT 3109783dad7527b490aabc49c3cb148573c19b41b843e70cf9388a93f3d7fccd
-
-The MIT License (MIT)
-
-Copyright © 2013-Present Aditya Yadav, http://netroy.in
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-========================================
-
 TEXT 4491517f7deb68d0b2a3bb590e785e276a60f12448447a9650d0bd50161a101c
 
 iMurmurHash.js
@@ -35095,6 +34593,32 @@ THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
 OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
  ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+========================================
+
+TEXT 306fa513e39b23a6e8747520de761809d206b99800ef41907b530226574c59ae
+
+The MIT License (MIT)
+
+Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
 ========================================
 
@@ -35851,32 +35375,6 @@ SOFTWARE.
 
 ========================================
 
-TEXT 433fc9dfe659dbfb1e91eed8351f13651e97bfa3ac6d03394c3d63f61d4bbc80
-
-MIT License
-
-Copyright (c) 2013 pieroxy
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-========================================
-
 TEXT 1cbe51b907662f6cb1492b16c359384a595180bf0e4d101603ed525e75c4e484
 
 Copyright 2018 Rich Harris
@@ -36341,33 +35839,6 @@ TEXT 8f2658c03422c408b2b2ce4d151decc3b1a6fd3d86e5ca9433777bccdcdf75a2
 The MIT License (MIT)
 
 Copyright (c) 2010 Benjamin Thomas, Robert Kieffer
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-========================================
-
-TEXT 9638fa87f845af6cecc56fab498c1f74f4a98522d3b53377bedcbdb44b5a8dcc
-
-
-The MIT License (MIT)
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com), James Kyle <me@thejameskyle.com> (thejameskyle.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -37831,19 +37302,6 @@ TEXT 846c2349412e40c3c33095b2903f6a311ef4b30ccd26c214044a2cdc24fdc5cc
 MIT License
 
 Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (http://sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-========================================
-
-TEXT 38d7c4d8410c68eeae9ce24a8b4ee2380199d6df4abb1d9c15dc70b135935fe8
-
-The MIT License (MIT)
-Copyright (c) 2014 Jesse Tane <jesse.tane@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

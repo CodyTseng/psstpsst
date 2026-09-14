@@ -11,11 +11,13 @@ import { AppText } from '@/components/common/AppText';
 import { Avatar } from '@/components/common/Avatar';
 import { ListRow, ROW_CONTENT_INSET } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { EmojiPackListRow, EmojiPackRowSkeleton } from '@/components/emoji/EmojiPackCard';
 import { useCustomEmojis } from '@/hooks/use-custom-emojis';
 import { useDisplayName } from '@/hooks/use-display-name';
 import { useScrolled } from '@/hooks/use-scrolled';
 import type { EmojiPack } from '@/lib/nostr/custom-emoji';
+import { routeHexIdParam } from '@/lib/navigation/route-params';
 import { platform } from '@/platform';
 import {
   addEmojiPack,
@@ -28,16 +30,13 @@ import { spacing, useThemeColors } from '@/theme';
 
 const PACK_PAGE_SIZE = 20;
 
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
-}
-
 export default function EmojiAuthorPacksScreen() {
   const { t } = useTranslation();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const params = useLocalSearchParams<{ pubkey: string | string[] }>();
-  const authorPubkey = firstParam(params.pubkey);
+  const parsedAuthorPubkey = routeHexIdParam(params.pubkey);
+  const authorPubkey = parsedAuthorPubkey ?? '';
   const { name, profile } = useDisplayName(authorPubkey);
   const accountPubkey = useActiveAccount((state) => state.activePubkey);
   const collection = useCustomEmojis(accountPubkey);
@@ -47,6 +46,7 @@ export default function EmojiAuthorPacksScreen() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!parsedAuthorPubkey) return;
     let active = true;
     setPacks([]);
     setVisiblePackCount(PACK_PAGE_SIZE);
@@ -66,7 +66,7 @@ export default function EmojiAuthorPacksScreen() {
     return () => {
       active = false;
     };
-  }, [authorPubkey]);
+  }, [authorPubkey, parsedAuthorPubkey]);
 
   const collectedCoordinates = useMemo(
     () => new Set(collection.packs.map((pack) => pack.coordinate)),
@@ -121,6 +121,8 @@ export default function EmojiAuthorPacksScreen() {
   function openProfile() {
     router.push({ pathname: '/profile/[pubkey]', params: { pubkey: authorPubkey } });
   }
+
+  if (!parsedAuthorPubkey) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={[]}>

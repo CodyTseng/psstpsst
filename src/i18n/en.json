@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "Couldn't prepare local data: {{error}}",
-    "bootstrap_failed": "Setup failed: {{error}}"
+    "bootstrap_failed": "Setup failed: {{error}}",
+    "unexpected_title": "Something went wrong",
+    "unexpected_message": "Your data is safe. Try again or return to Chats.",
+    "return_to_chats": "Return to Chats",
+    "export_diagnostics": "Export diagnostics"
   },
   "licenses": {
     "intro": "Thank you to the open-source community.",

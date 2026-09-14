@@ -39,15 +39,20 @@ export const useThemeStore = create<State>((set) => ({
   accent: 'blue',
   loaded: false,
   load: async () => {
-    const [storedPreference, storedAccent] = await Promise.all([
-      getDevicePreference(PREFERENCE_KEY, PREFERENCE_KEY),
-      getDevicePreference(ACCENT_KEY, ACCENT_KEY),
-    ]);
-    set({
-      preference: isPreference(storedPreference) ? storedPreference : 'system',
-      accent: isAccent(storedAccent) ? storedAccent : 'blue',
-      loaded: true,
-    });
+    try {
+      const [storedPreference, storedAccent] = await Promise.all([
+        getDevicePreference(PREFERENCE_KEY, PREFERENCE_KEY),
+        getDevicePreference(ACCENT_KEY, ACCENT_KEY),
+      ]);
+      set({
+        preference: isPreference(storedPreference) ? storedPreference : 'system',
+        accent: isAccent(storedAccent) ? storedAccent : 'blue',
+      });
+    } catch (error) {
+      console.warn('[theme] Failed to restore appearance preferences.', error);
+    } finally {
+      set({ loaded: true });
+    }
   },
   setPreference: (preference) => {
     // Optimistic: update state immediately so the switch is instant, then

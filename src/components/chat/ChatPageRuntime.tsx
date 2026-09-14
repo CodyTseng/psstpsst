@@ -89,6 +89,10 @@ import { setStringAsync } from '@/lib/clipboard';
 import { isAbortError } from '@/lib/async/abort';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
 import { IS_ELECTRON } from '@/lib/platform';
+import {
+  parseConversationRouteParams,
+  routeHexIdParam,
+} from '@/lib/navigation/route-params';
 import { getBottomChromeInset } from '@/lib/layout/bottom-chrome';
 import { shortCustomEmojiMessage } from '@/lib/emoji/custom-message';
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
@@ -265,13 +269,14 @@ function singleCustomEmojiFromMessage(message: MessageRow): CustomEmoji | null {
 
 export default function ChatPageRuntime() {
   const params = useLocalSearchParams<{
-    key: string;
-    transport?: string;
-    name?: string;
-    focus?: string;
-    from?: string;
+    key: string | string[];
+    transport?: string | string[];
+    name?: string | string[];
+    focus?: string | string[];
+    from?: string | string[];
   }>();
-  const conversationKey = decodeURIComponent(params.key ?? '');
+  const route = parseConversationRouteParams(params);
+  const conversationKey = route?.key ?? '';
   const accountPubkey = useActiveAccount((state) => state.activePubkey) ?? '';
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -323,7 +328,7 @@ export default function ChatPageRuntime() {
     },
     [conversationKey],
   );
-  const isProximity = params.transport === 'proximity';
+  const isProximity = route?.transport === 'proximity';
   const composerControllerRef = useRef<ChatComposerController | null>(null);
   const [composerModel, setComposerModel] = useState<ChatComposerModel>(() => ({
     mode: 'input',
@@ -421,7 +426,7 @@ export default function ChatPageRuntime() {
   // push, so they cannot compete with its frames. The two indexed Nearby
   // ownership reads are the exception: they start immediately but do not block
   // the optimistic composer. Anchored opens also enable live data immediately.
-  const [liveDataReady, setLiveDataReady] = useState(typeof params.focus === 'string');
+  const [liveDataReady, setLiveDataReady] = useState(routeHexIdParam(params.focus) !== null);
   const proximityConnectionStatus = useProximityStore(
     (state) => state.peers[conversationKey]?.connectionStatus ?? 'disconnected',
   );
@@ -710,7 +715,7 @@ export default function ChatPageRuntime() {
         ) : (
           <ChatHeader
             counterpartyPubkey={conversationKey || null}
-            fallbackName={typeof params.name === 'string' ? params.name : undefined}
+            fallbackName={route?.name}
             proximityConnectionStatus={
               isProximity ? proximityConnectionStatus : undefined
             }
@@ -774,15 +779,16 @@ function ChatPageContent({
     [t],
   );
   const params = useLocalSearchParams<{
-    key: string;
-    from?: string;
-    focus?: string;
-    focusOrderAt?: string;
-    focusAt?: string;
-    transport?: string;
-    name?: string;
+    key: string | string[];
+    from?: string | string[];
+    focus?: string | string[];
+    focusOrderAt?: string | string[];
+    focusAt?: string | string[];
+    transport?: string | string[];
+    name?: string | string[];
   }>();
-  const conversationKey = decodeURIComponent(params.key ?? '');
+  const route = parseConversationRouteParams(params);
+  const conversationKey = route?.key ?? '';
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const selfProfile = useProfile(accountPubkey, liveDataReady);
   const { wallets } = useWallets(accountPubkey, liveDataReady);
@@ -800,7 +806,7 @@ function ChatPageContent({
   // Quick reactions for the long-press pill — user-configurable (Me → Chats →
   // Quick reactions); the "⋯" still opens the full picker.
   const quickEmojis = useReactionPrefsStore((s) => s.quickEmojis);
-  const routeIsProximity = params.transport === 'proximity';
+  const routeIsProximity = route?.transport === 'proximity';
   const { conversation, loaded: conversationLoaded } = useConversation(
     accountPubkey ?? '',
     conversationKey,
@@ -821,7 +827,7 @@ function ChatPageContent({
     return types;
   }, []);
   const proximityPeerDisplayName = isProximity
-    ? (conversation?.name ?? (typeof params.name === 'string' ? params.name : null))
+    ? (conversation?.name ?? route?.name ?? null)
     : null;
   // Contact-card send: the shared share/forward confirmation, addressed to this
   // conversation, previewing the real outgoing bubble.
@@ -903,14 +909,14 @@ function ChatPageContent({
   // jump-open — letting it mount the list pointed at the target rather than at
   // the tail.
   const [focusMessageId, setFocusMessageId] = useState<string | undefined>(() =>
-    typeof params.focus === 'string' ? params.focus : undefined,
+    routeHexIdParam(params.focus) ?? undefined,
   );
   const focusAppliedRef = useRef<string | null>(null);
   useEffect(() => {
-    const id = typeof params.focus === 'string' ? params.focus : undefined;
-    const orderAt = params.focusOrderAt
+    const id = routeHexIdParam(params.focus) ?? undefined;
+    const orderAt = typeof params.focusOrderAt === 'string'
       ? Number(params.focusOrderAt)
-      : params.focusAt
+      : typeof params.focusAt === 'string'
         ? Number(params.focusAt) * 1000
         : undefined;
     if (id && orderAt && focusAppliedRef.current !== id) {

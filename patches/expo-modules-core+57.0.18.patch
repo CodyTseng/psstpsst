@@ -1,7 +1,8 @@
 diff --git a/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift b/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift
+index c1983bd..e0bfcf7 100644
 --- a/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift
 +++ b/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift
-@@ -13,7 +13,7 @@
+@@ -13,7 +13,7 @@ internal struct DynamicDataType: AnyDynamicType {
    }
  
    func equals(_ type: AnyDynamicType) -> Bool {

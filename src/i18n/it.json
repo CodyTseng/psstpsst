@@ -963,7 +963,11 @@
   },
   "error": {
     "migration_failed": "Impossibile preparare i dati locali: {{error}}",
-    "bootstrap_failed": "Configurazione non riuscita: {{error}}"
+    "bootstrap_failed": "Configurazione non riuscita: {{error}}",
+    "unexpected_title": "Qualcosa è andato storto",
+    "unexpected_message": "I tuoi dati sono al sicuro. Riprova o torna alle chat.",
+    "return_to_chats": "Torna alle chat",
+    "export_diagnostics": "Esporta diagnostica"
   },
   "licenses": {
     "intro": "Grazie alla comunità open source.",

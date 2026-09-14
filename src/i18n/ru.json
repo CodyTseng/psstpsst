@@ -968,7 +968,11 @@
   },
   "error": {
     "migration_failed": "Не удалось подготовить локальные данные: {{error}}",
-    "bootstrap_failed": "Ошибка настройки: {{error}}"
+    "bootstrap_failed": "Ошибка настройки: {{error}}",
+    "unexpected_title": "Что-то пошло не так",
+    "unexpected_message": "Ваши данные в безопасности. Повторите попытку или вернитесь к чатам.",
+    "return_to_chats": "Вернуться к чатам",
+    "export_diagnostics": "Экспортировать диагностику"
   },
   "licenses": {
     "intro": "Спасибо сообществу открытого ПО.",

@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "Nem sikerült előkészíteni a helyi adatokat: {{error}}",
-    "bootstrap_failed": "Sikertelen beállítás: {{error}}"
+    "bootstrap_failed": "Sikertelen beállítás: {{error}}",
+    "unexpected_title": "Hiba történt",
+    "unexpected_message": "Az adataid biztonságban vannak. Próbáld újra, vagy térj vissza a csevegésekhez.",
+    "return_to_chats": "Vissza a csevegésekhez",
+    "export_diagnostics": "Diagnosztika exportálása"
   },
   "licenses": {
     "intro": "Köszönjük a nyílt forráskódú közösség munkáját.",

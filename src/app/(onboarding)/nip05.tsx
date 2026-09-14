@@ -8,8 +8,10 @@ import { AppContentColumn } from '@/components/common/AppContentColumn';
 import { AppScreen } from '@/components/common/AppScreen';
 import { Nip05ClaimForm } from '@/components/nip05/Nip05ClaimForm';
 import { OnboardingFormLayout } from '@/components/onboarding/OnboardingFormLayout';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useFocusAfterTransition } from '@/hooks/use-focus-after-transition';
+import { routeHexIdParam } from '@/lib/navigation/route-params';
 import { buildSigner } from '@/services/account/account.service';
 import { saveProfile } from '@/services/profile/profile.service';
 import { loadAccountDmRelays } from '@/services/relay/relay-list.service';
@@ -26,7 +28,8 @@ import { spacing } from '@/theme';
 export default function OnboardingNip05() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
-  const { pubkey } = useLocalSearchParams<{ pubkey?: string }>();
+  const params = useLocalSearchParams<{ pubkey?: string | string[] }>();
+  const pubkey = params.pubkey === undefined ? undefined : routeHexIdParam(params.pubkey);
   const inputRef = useFocusAfterTransition();
   const setActive = useActiveAccount((s) => s.setActive);
   const [leaving, setLeaving] = useState(false);
@@ -64,6 +67,8 @@ export default function OnboardingNip05() {
     }
     await finish();
   }
+
+  if (pubkey === null) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={['bottom']}>

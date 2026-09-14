@@ -10,9 +10,11 @@ import Constants from 'expo-constants';
 import {
   DarkTheme,
   DefaultTheme,
+  type ErrorBoundaryProps,
   router,
   Stack,
   ThemeProvider,
+  useSegments,
 } from 'expo-router';
 import type { Theme } from 'expo-router/react-navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -30,6 +32,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AccountSwitchOverlay } from '@/components/account/AccountSwitchOverlay';
 import { AppBootScreen } from '@/components/common/AppBootScreen';
+import { AppErrorScreen } from '@/components/common/AppErrorScreen';
 import { AppUpdatePromptHost } from '@/components/common/AppUpdatePromptHost';
 import { ConfirmationDialogHost } from '@/components/common/ConfirmationDialogHost';
 import { DesktopWindowFrame } from '@/components/common/DesktopWindowFrame';
@@ -44,6 +47,10 @@ import { normalizeDesktopDeepLink } from '@/lib/navigation/desktop-deep-link';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform, type AppStateStatus } from '@/platform';
 import { notificationService } from '@/services/notifications/notification.service';
+import {
+  exportAppErrorDiagnostics,
+  recordAppError,
+} from '@/services/diagnostics/app-error-diagnostics.service';
 import { unreadCountService } from '@/services/conversation/unread-count.service';
 import { proximityService } from '@/services/proximity/proximity.service';
 import { cleanupInterruptedBackupArtifacts } from '@/services/dm/dm-backup-storage';
@@ -60,6 +67,87 @@ import {
   useEffectiveColorScheme,
   useThemeColors,
 } from '@/theme';
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const { t } = useTranslation();
+  const segments = useSegments();
+  const route = segments.join('/') || 'root';
+  const [repeated, setRepeated] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void recordAppError({
+      errorName: error.name || 'Error',
+      stack: error.stack,
+      route,
+      appVersion: Constants.expoConfig?.version ?? 'unknown',
+      build: String(
+        Platform.OS === 'ios'
+          ? (Constants.expoConfig?.ios?.buildNumber ?? 'unknown')
+          : (Constants.expoConfig?.android?.versionCode ?? 'unknown'),
+      ),
+      platform: Platform.OS,
+      platformVersion: String(Platform.Version),
+    }).then((count) => {
+      if (active) setRepeated(count > 1);
+    });
+    return () => {
+      active = false;
+    };
+  }, [error, route]);
+
+  async function run(action: () => Promise<void> | void) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await action();
+    } catch (actionError) {
+      console.warn('[error-boundary] Recovery action failed.', actionError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function retryRoute() {
+    void run(retry);
+  }
+
+  function returnHome() {
+    void run(async () => {
+      if (router.canDismiss()) router.dismissAll();
+      router.replace('/');
+      await retry();
+    });
+  }
+
+  function exportDiagnostics() {
+    void run(async () => {
+      const uri = await exportAppErrorDiagnostics();
+      if (!uri || !(await platform.sharing.isAvailable())) return;
+      await platform.sharing.share(uri);
+    });
+  }
+
+  return (
+    <SystemColorSchemeProvider>
+      <SafeAreaProvider>
+        <AppErrorScreen
+          title={t('error.unexpected_title')}
+          message={t('error.unexpected_message')}
+          retryLabel={t('common.try_again')}
+          homeLabel={t('error.return_to_chats')}
+          exportLabel={t('error.export_diagnostics')}
+          repeated={repeated}
+          busy={busy}
+          onRetry={retryRoute}
+          onHome={returnHome}
+          onExport={exportDiagnostics}
+        />
+      </SafeAreaProvider>
+    </SystemColorSchemeProvider>
+  );
+}
 
 export default function RootLayout() {
   const direction = useLanguageDirection();
@@ -182,8 +270,13 @@ function RootLayoutContent() {
       const route = normalizeDesktopDeepLink(value);
       if (route) router.navigate(route as never);
     };
-    const remove = platform.deepLink.addListener(() => void consume());
-    void consume();
+    const consumeSafely = () => {
+      void consume().catch((error) => {
+        console.warn('[deep-link] Failed to consume a pending URL.', error);
+      });
+    };
+    const remove = platform.deepLink.addListener(consumeSafely);
+    consumeSafely();
     return () => {
       active = false;
       remove();
@@ -215,7 +308,11 @@ function RootLayoutContent() {
       // Quick-reaction set — a plain device pref; read once so the long-press
       // pill shows the user's chosen emoji. Default set is correct until it lands.
       profileAsync(profile, 'reactionPrefs.load', () => useReactionPrefsStore.getState().load()),
-    ]).finally(() => profile?.end());
+    ])
+      .catch((error) => {
+        console.warn('[preferences] Failed to restore startup preferences.', error);
+      })
+      .finally(() => profile?.end());
   }, [migrationsApplied, secureStorageReady]);
 
   // Default the audio session to playback that ignores the hardware silent
@@ -231,8 +328,12 @@ function RootLayoutContent() {
   // its account-scoped view after migrations have created the backing tables.
   useEffect(() => {
     if (!migrationsApplied || !activePubkey) return;
-    void useDraftsStore.getState().load(activePubkey);
-    void usePendingAttachmentsStore.getState().load(activePubkey);
+    void useDraftsStore.getState().load(activePubkey).catch((error) => {
+      console.warn('[drafts] Failed to restore message drafts.', error);
+    });
+    void usePendingAttachmentsStore.getState().load(activePubkey).catch((error) => {
+      console.warn('[attachments] Failed to restore pending uploads.', error);
+    });
   }, [activePubkey, migrationsApplied]);
 
   // A previously initialized Nearby identity stays discoverable while the app
@@ -299,9 +400,11 @@ function RootLayoutContent() {
   useEffect(() => {
     if (migrationsApplied && secureStorageReady) {
       const profile = createPerfSpan('app.notificationInit');
-      void profileAsync(profile, 'notification.init', () => notificationService.init()).finally(() =>
-        profile?.end(),
-      );
+      void profileAsync(profile, 'notification.init', () => notificationService.init())
+        .catch((error) => {
+          console.warn('[notifications] Failed to initialize notifications.', error);
+        })
+        .finally(() => profile?.end());
     }
   }, [migrationsApplied, secureStorageReady]);
 

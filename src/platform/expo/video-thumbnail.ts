@@ -7,7 +7,7 @@ export const videoThumbnailAdapter: VideoThumbnailPort = {
   async generateThumbhash(uri) {
     const player = createVideoPlayer(null);
     try {
-      // SDK 56 documents replaceAsync as the non-blocking iOS loading path.
+      // SDK 57 documents replaceAsync as the non-blocking iOS loading path.
       await player.replaceAsync(uri);
       const [thumbnail] = await player.generateThumbnailsAsync(0);
       if (!thumbnail) return undefined;

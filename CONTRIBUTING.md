@@ -23,9 +23,9 @@ issue with technical details.
   needs a C/C++ toolchain and pkg-config. The helper builds its vendored D-Bus
   library; Nearby at runtime requires BlueZ and a compatible Bluetooth adapter.
 
-Use the [Expo SDK 56 documentation](https://docs.expo.dev/versions/v56.0.0/)
-when changing native configuration or Expo APIs. SDK 56 targets React Native
-0.85. Native development requires a development build because PsstPsst includes
+Use the [Expo SDK 57 documentation](https://docs.expo.dev/versions/v57.0.0/)
+when changing native configuration or Expo APIs. SDK 57 targets React Native
+0.86. Native development requires a development build because PsstPsst includes
 local native modules; Expo Go is not sufficient for the complete application.
 
 ### Install

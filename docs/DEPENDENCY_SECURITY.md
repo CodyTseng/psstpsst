@@ -1,6 +1,6 @@
 # Dependency security
 
-Reviewed against the installed dependency paths on 2026-09-12. Keep Expo SDK 56
+Reviewed against the installed dependency paths on 2026-09-14. Keep Expo SDK 57
 dependencies compatible; `npm audit fix --force` proposes unrelated downgrades
 of Expo, Expo Router, and Drizzle Kit and is not the remediation for these paths.
 
@@ -22,16 +22,6 @@ and time limits so a missing patch cannot hang the test runner.
   percent escapes, and long malformed inputs are covered by regression tests.
   Upstream 0.5.0 is ESM, so forcing that version into the existing CommonJS
   dependency is not a drop-in update.
-- `image-size@1.2.1`, used by Metro:
-  [ICNS advisory](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) and
-  [JXL/HEIF advisory](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq).
-  Validate ICNS entry headers and lengths before advancing. Require complete
-  box headers and positive effective lengths in the shared HEIF/JXL box reader;
-  a size-zero box consumes the remaining input as specified by the container
-  format. This also prevents the JXL partial-stream loop from returning to the
-  same box. Valid icons, HEIF dimensions, and JXL streams are covered alongside malformed
-  inputs. No patched `image-size` release is currently listed by the advisories.
-
 These patches mitigate the tested vulnerable paths without changing package
 versions. `npm audit` inspects version ranges, not patched source, and therefore
 continues to report these packages and their dependent chains. Do not suppress

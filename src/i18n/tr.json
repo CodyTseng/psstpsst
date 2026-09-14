@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "Yerel veriler hazırlanamadı: {{error}}",
-    "bootstrap_failed": "Kurulum başarısız: {{error}}"
+    "bootstrap_failed": "Kurulum başarısız: {{error}}",
+    "unexpected_title": "Bir sorun oluştu",
+    "unexpected_message": "Verileriniz güvende. Yeniden deneyin veya sohbetlere dönün.",
+    "return_to_chats": "Sohbetlere dön",
+    "export_diagnostics": "Tanılama bilgilerini dışa aktar"
   },
   "licenses": {
     "intro": "Açık kaynak topluluğuna teşekkürler.",

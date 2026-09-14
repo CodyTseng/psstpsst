@@ -159,7 +159,13 @@ export function createElectronAdapters(): PlatformAdapters {
     sharing: {
       isAvailable: () => Promise.resolve(true),
       async share(uri) {
-        const name = decodeURIComponent(uri.split('/').pop() ?? 'psstpsst-export');
+        const encodedName = uri.split('/').pop() ?? 'psstpsst-export';
+        let name = encodedName;
+        try {
+          name = decodeURIComponent(encodedName);
+        } catch {
+          // Keep malformed external filenames opaque instead of failing sharing.
+        }
         await bridge.dialogs.shareFile(uri, name);
       },
     },

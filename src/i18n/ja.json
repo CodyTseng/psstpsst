@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "ローカルデータを準備できませんでした: {{error}}",
-    "bootstrap_failed": "セットアップに失敗しました: {{error}}"
+    "bootstrap_failed": "セットアップに失敗しました: {{error}}",
+    "unexpected_title": "問題が発生しました",
+    "unexpected_message": "データは安全です。もう一度試すか、チャットに戻ってください。",
+    "return_to_chats": "チャットに戻る",
+    "export_diagnostics": "診断情報をエクスポート"
   },
   "licenses": {
     "intro": "オープンソースコミュニティに感謝します。",

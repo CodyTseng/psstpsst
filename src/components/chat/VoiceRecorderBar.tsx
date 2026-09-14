@@ -158,35 +158,48 @@ export function VoiceRecorderBar({ onSendVoice, onCancel }: Props) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const perm = await requestRecordingPermissionsAsync();
-      if (cancelled) return;
-      if (!perm.granted) {
+      try {
+        const perm = await requestRecordingPermissionsAsync();
+        if (cancelled) return;
+        if (!perm.granted) {
+          void platform.confirmationDialog.notify({
+            title: t("voice.permission"),
+            okLabel: t("common.ok"),
+          });
+          onCancel();
+          return;
+        }
+        await setAudioModeAsync(RECORDING_AUDIO_MODE);
+        if (cancelled) return;
+        await recorder.prepareToRecordAsync();
+        if (cancelled) return;
+        recorder.record();
+        startRef.current = Date.now();
+        setReady(true);
+        tickRef.current = setInterval(() => {
+          const secs = (Date.now() - startRef.current) / 1000;
+          setElapsed(secs);
+          const m = recorder.getStatus().metering;
+          samplesRef.current.push(
+            meteringToAmplitude(typeof m === "number" ? m : -60),
+          );
+          const strip = buildLiveStrip(samplesRef.current, LIVE_BARS);
+          setLiveBars(strip.bars);
+          setLiveProgress(strip.progress);
+          if (secs >= MAX_SECONDS) void finishRecording();
+        }, TICK_MS);
+      } catch (error) {
+        stopTick();
+        await recorder.stop().catch(() => {});
+        await setAudioModeAsync(PLAYBACK_AUDIO_MODE).catch(() => {});
+        if (cancelled) return;
+        console.warn('[voice] Failed to start recording.', error);
         void platform.confirmationDialog.notify({
-          title: t("voice.permission"),
-          okLabel: t("common.ok"),
+          title: t('error.unexpected_title'),
+          okLabel: t('common.ok'),
         });
         onCancel();
-        return;
       }
-      await setAudioModeAsync(RECORDING_AUDIO_MODE);
-      if (cancelled) return;
-      await recorder.prepareToRecordAsync();
-      if (cancelled) return;
-      recorder.record();
-      startRef.current = Date.now();
-      setReady(true);
-      tickRef.current = setInterval(() => {
-        const secs = (Date.now() - startRef.current) / 1000;
-        setElapsed(secs);
-        const m = recorder.getStatus().metering;
-        samplesRef.current.push(
-          meteringToAmplitude(typeof m === "number" ? m : -60),
-        );
-        const strip = buildLiveStrip(samplesRef.current, LIVE_BARS);
-        setLiveBars(strip.bars);
-        setLiveProgress(strip.progress);
-        if (secs >= MAX_SECONDS) void finishRecording();
-      }, TICK_MS);
     })();
     return () => {
       cancelled = true;

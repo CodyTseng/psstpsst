@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "本地数据准备失败：{{error}}",
-    "bootstrap_failed": "初始化失败：{{error}}"
+    "bootstrap_failed": "初始化失败：{{error}}",
+    "unexpected_title": "出现问题",
+    "unexpected_message": "你的数据是安全的。请重试或返回聊天。",
+    "return_to_chats": "返回聊天",
+    "export_diagnostics": "导出诊断信息"
   },
   "licenses": {
     "intro": "感谢开源社区的贡献。",

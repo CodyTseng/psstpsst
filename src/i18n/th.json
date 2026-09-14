@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "เตรียมข้อมูลในเครื่องไม่ได้: {{error}}",
-    "bootstrap_failed": "ตั้งค่าไม่สำเร็จ: {{error}}"
+    "bootstrap_failed": "ตั้งค่าไม่สำเร็จ: {{error}}",
+    "unexpected_title": "เกิดข้อผิดพลาด",
+    "unexpected_message": "ข้อมูลของคุณยังปลอดภัย ลองอีกครั้งหรือกลับไปที่แชท",
+    "return_to_chats": "กลับไปที่แชท",
+    "export_diagnostics": "ส่งออกข้อมูลวินิจฉัย"
   },
   "licenses": {
     "intro": "ขอบคุณชุมชนโอเพนซอร์ส",

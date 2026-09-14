@@ -35,10 +35,16 @@ export const useLanguageStore = create<State>((set) => ({
   preference: 'system',
   loaded: false,
   load: async () => {
-    const stored = await getDevicePreference(PREFERENCE_KEY, PREFERENCE_KEY);
-    const preference = isPreference(stored) ? stored : 'system';
-    await i18n.changeLanguage(resolve(preference));
-    set({ preference, loaded: true });
+    try {
+      const stored = await getDevicePreference(PREFERENCE_KEY, PREFERENCE_KEY);
+      const preference = isPreference(stored) ? stored : 'system';
+      await i18n.changeLanguage(resolve(preference));
+      set({ preference });
+    } catch (error) {
+      console.warn('[language] Failed to restore the language preference.', error);
+    } finally {
+      set({ loaded: true });
+    }
   },
   setPreference: async (preference) => {
     // Paint the selected row immediately, but persist before changing i18next.

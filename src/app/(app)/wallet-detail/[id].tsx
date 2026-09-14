@@ -10,15 +10,19 @@ import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { WalletNameRow } from '@/components/wallet/WalletNameRow';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { useReceivingWallet } from '@/hooks/use-receiving-wallet';
 import { useScrolled } from '@/hooks/use-scrolled';
+import { routeOpaqueIdParam } from '@/lib/navigation/route-params';
 import { useWallets } from '@/hooks/use-wallets';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 
 export default function WalletDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string | string[] }>();
+  const parsedId = routeOpaqueIdParam(params.id);
+  const id = parsedId ?? '';
   const { t } = useTranslation();
   const c = useThemeColors();
   const topClearance = useScreenHeaderClearance();
@@ -29,6 +33,8 @@ export default function WalletDetailScreen() {
   const { receivingAddress, settingReceivingWalletId, showReceivingWalletConfirmation } =
     useReceivingWallet(accountPubkey);
   const isReceivingWallet = Boolean(wallet?.lud16) && wallet?.lud16 === receivingAddress;
+
+  if (!parsedId) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={['bottom']}>

@@ -1,12 +1,12 @@
 # Android QR scanning
 
 PsstPsst uses ZXing-C++ 3.0.2 through a versioned `patch-package` patch for
-`expo-camera` 56.0.8. The official Maven Android reader is Apache-2.0 and has
+`expo-camera` 57.0.5. The official Maven Android reader is Apache-2.0 and has
 barcode writers disabled. Version 3.0.2 uses Kotlin 2.2 metadata accepted by the
 current Kotlin compiler; 3.1.1 requires a newer Kotlin toolchain.
 
 `package.json` forces only Android's `expo-camera` to build from source. Without
-this override, Expo SDK 56 can select a prebuilt AAR containing ML Kit and ignore
+this override, Expo SDK 57 can select a prebuilt AAR containing ML Kit and ignore
 the patch. iOS and Electron continue to use their existing Expo implementations.
 
 The patch keeps `CameraView.onBarcodeScanned` and `scanFromURLAsync`, so the

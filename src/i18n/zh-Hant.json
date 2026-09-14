@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "無法準備本機資料：{{error}}",
-    "bootstrap_failed": "設定失敗：{{error}}"
+    "bootstrap_failed": "設定失敗：{{error}}",
+    "unexpected_title": "發生問題",
+    "unexpected_message": "你的資料是安全的。請重試或返回聊天。",
+    "return_to_chats": "返回聊天",
+    "export_diagnostics": "匯出診斷資訊"
   },
   "licenses": {
     "intro": "感謝開源社群的貢獻。",

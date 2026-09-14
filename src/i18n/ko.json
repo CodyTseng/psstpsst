@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "로컬 데이터를 준비할 수 없습니다: {{error}}",
-    "bootstrap_failed": "설정 실패: {{error}}"
+    "bootstrap_failed": "설정 실패: {{error}}",
+    "unexpected_title": "문제가 발생했습니다",
+    "unexpected_message": "데이터는 안전합니다. 다시 시도하거나 채팅으로 돌아가세요.",
+    "return_to_chats": "채팅으로 돌아가기",
+    "export_diagnostics": "진단 정보 내보내기"
   },
   "licenses": {
     "intro": "오픈 소스 커뮤니티에 감사드립니다.",

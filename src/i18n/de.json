@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "Lokale Daten konnten nicht vorbereitet werden: {{error}}",
-    "bootstrap_failed": "Einrichtung fehlgeschlagen: {{error}}"
+    "bootstrap_failed": "Einrichtung fehlgeschlagen: {{error}}",
+    "unexpected_title": "Etwas ist schiefgelaufen",
+    "unexpected_message": "Deine Daten sind sicher. Versuche es erneut oder kehre zu Chats zurück.",
+    "return_to_chats": "Zurück zu Chats",
+    "export_diagnostics": "Diagnosedaten exportieren"
   },
   "licenses": {
     "intro": "Vielen Dank an die Open-Source-Community.",

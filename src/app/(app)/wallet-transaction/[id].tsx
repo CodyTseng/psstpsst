@@ -11,10 +11,12 @@ import { AppText } from '@/components/common/AppText';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { WalletAmountDisplay } from '@/components/wallet/WalletAmountDisplay';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWalletTransaction } from '@/hooks/use-wallets';
 import { setStringAsync } from '@/lib/clipboard';
+import { routeOpaqueIdParam } from '@/lib/navigation/route-params';
 import { walletDescriptionText } from '@/lib/wallet/description';
 import { formatSats } from '@/services/wallet/bolt11';
 import { iconStrokeWidth } from '@/theme/icons';
@@ -25,7 +27,9 @@ export default function WalletTransactionDetailScreen() {
   const { t } = useTranslation();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string | string[] }>();
+  const parsedId = routeOpaqueIdParam(params.id);
+  const id = parsedId ?? '';
   const { transaction: tx, loaded } = useWalletTransaction(id);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -52,6 +56,8 @@ export default function WalletTransactionDetailScreen() {
     setCopiedField(field);
     setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1800);
   }
+
+  if (!parsedId) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={[]}>

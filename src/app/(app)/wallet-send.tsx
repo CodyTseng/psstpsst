@@ -28,6 +28,7 @@ import { WalletPinSheet } from '@/components/wallet/WalletPinSheet';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWallets } from '@/hooks/use-wallets';
 import { getStringAsync } from '@/lib/clipboard';
+import { routeStringParam, type RouteParam } from '@/lib/navigation/route-params';
 import { resolveName } from '@/lib/nostr/display-name';
 import { abbreviateNpub } from '@/lib/nostr/format';
 import { parseNostrProfileInput, pubkeyToNpub, type ParsedNostrProfileInput } from '@/lib/nostr/keys';
@@ -70,7 +71,7 @@ export default function WalletSendScreen() {
   const insets = useSafeAreaInsets();
   const titleClearance = useScreenHeaderClearance();
   const params = useLocalSearchParams<{ input?: string | string[] }>();
-  const initialInput = firstParam(params.input);
+  const initialInput = firstParam(params.input, 8_192);
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { wallets } = useWallets(accountPubkey);
   const wallet = wallets.find((candidate) => candidate.isDefault) ?? wallets[0] ?? null;
@@ -705,8 +706,8 @@ export default function WalletSendScreen() {
   );
 }
 
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+function firstParam(value: RouteParam, maxLength: number): string {
+  return routeStringParam(value, maxLength) ?? '';
 }
 
 function KeypadRow({ digits, onPress }: { digits: string[]; onPress: (digit: string) => void }) {

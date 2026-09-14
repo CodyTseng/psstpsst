@@ -15,6 +15,7 @@ import { AppButton } from '@/components/common/AppButton';
 import { AppInput } from '@/components/common/AppInput';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import Plus from 'lucide-react-native/icons/plus';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import {
@@ -24,6 +25,7 @@ import {
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useCustomEmojis } from '@/hooks/use-custom-emojis';
 import { isAnimatedGifImage } from '@/lib/image/animated-image';
+import { optionalRouteTextParam } from '@/lib/navigation/route-params';
 import { IS_ELECTRON } from '@/lib/platform';
 import {
   isValidEmojiShortcode,
@@ -43,12 +45,6 @@ import { useActiveAccount } from '@/stores/active-account.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, useThemeColors } from '@/theme';
 
-type RouteParam = string | string[] | undefined;
-
-function scalarParam(value: RouteParam): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 export default function AddCustomEmojiScreen() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
@@ -63,15 +59,28 @@ export default function AddCustomEmojiScreen() {
     fileName?: string | string[];
     draftRequestId?: string | string[];
   }>();
-  const sourceUri = scalarParam(params.uri);
-  const sourceMime = scalarParam(params.mime);
-  const sourceFileName = scalarParam(params.fileName);
-  const draftRequestId = scalarParam(params.draftRequestId);
+  const sourceUriParam = optionalRouteTextParam(params.uri, 8_192);
+  const sourceMimeParam = optionalRouteTextParam(params.mime, 128);
+  const sourceFileNameParam = optionalRouteTextParam(params.fileName, 256);
+  const draftRequestIdParam = optionalRouteTextParam(params.draftRequestId, 128);
+  const widthParam = optionalRouteTextParam(params.width, 32);
+  const heightParam = optionalRouteTextParam(params.height, 32);
+  const invalidRoute =
+    sourceUriParam === null ||
+    sourceMimeParam === null ||
+    sourceFileNameParam === null ||
+    draftRequestIdParam === null ||
+    widthParam === null ||
+    heightParam === null;
+  const sourceUri = sourceUriParam ?? undefined;
+  const sourceMime = sourceMimeParam ?? undefined;
+  const sourceFileName = sourceFileNameParam ?? undefined;
+  const draftRequestId = draftRequestIdParam ?? undefined;
   const accountPubkey = useActiveAccount((state) => state.activePubkey);
   const cropperRef = useRef<SquareImageCropperHandle>(null);
   const collection = useCustomEmojis(draftRequestId ? null : accountPubkey);
-  const width = Number(scalarParam(params.width));
-  const height = Number(scalarParam(params.height));
+  const width = Number(widthParam);
+  const height = Number(heightParam);
   const sourceValid =
     !!sourceUri &&
     Number.isFinite(width) &&
@@ -198,6 +207,8 @@ export default function AddCustomEmojiScreen() {
         });
     }, 0);
   }
+
+  if (invalidRoute) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={[]}>

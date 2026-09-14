@@ -180,7 +180,7 @@ messaging encryption keys from identity keys, with
 [NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md).
 Nearby uses authenticated Noise sessions over BLE.
 
-TypeScript, React Native, Expo SDK 56, SQLite, and Electron share a core behind
+TypeScript, React Native, Expo SDK 57, SQLite, and Electron share a core behind
 platform interfaces. UI, services, storage, and OS adapters have explicit
 boundaries; conversation history is read in bounded windows. See the
 [architecture guide](docs/ARCHITECTURE.md) for the full design.

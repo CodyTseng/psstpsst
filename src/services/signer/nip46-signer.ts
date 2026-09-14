@@ -13,7 +13,9 @@ import { Nip46TimeoutError, withNip46Timeout } from './nip46-timeout';
  * web/app surface; the original request then completes once approved.
  */
 function openAuthUrl(url: string): void {
-  void platform.urlOpener.openExternalUrl(url);
+  void platform.urlOpener.openExternalUrl(url).catch((error) => {
+    console.warn('[nip46] Failed to open the authorization URL.', error);
+  });
 }
 
 /**

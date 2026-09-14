@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "लोकल डेटा तैयार नहीं हो सका: {{error}}",
-    "bootstrap_failed": "सेटअप विफल रहा: {{error}}"
+    "bootstrap_failed": "सेटअप विफल रहा: {{error}}",
+    "unexpected_title": "कुछ गड़बड़ हुई",
+    "unexpected_message": "आपका डेटा सुरक्षित है। फिर से कोशिश करें या चैट पर लौटें।",
+    "return_to_chats": "चैट पर लौटें",
+    "export_diagnostics": "डायग्नोस्टिक जानकारी निर्यात करें"
   },
   "licenses": {
     "intro": "ओपन सोर्स समुदाय का धन्यवाद।",

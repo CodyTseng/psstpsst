@@ -27,13 +27,14 @@ type State = {
 export const useReactionPrefsStore = create<State>((set) => ({
   quickEmojis: DEFAULT_QUICK_EMOJIS,
   load: async () => {
-    const stored = await getDevicePreference(QUICK_REACTIONS_KEY, QUICK_REACTIONS_KEY);
-    if (!stored) return;
     try {
+      const stored = await getDevicePreference(QUICK_REACTIONS_KEY, QUICK_REACTIONS_KEY);
+      if (!stored) return;
       const parsed = normalizeStoredQuickReactions(JSON.parse(stored));
       if (parsed) set({ quickEmojis: parsed });
-    } catch {
-      // Corrupt value — keep the default.
+    } catch (error) {
+      // Corrupt or unavailable storage leaves the in-memory default intact.
+      console.warn('[reactions] Failed to restore quick reactions.', error);
     }
   },
   setQuickEmojis: (emojis) => {

@@ -958,7 +958,11 @@
   },
   "error": {
     "migration_failed": "داده‌های محلی آماده نشدند: {{error}}",
-    "bootstrap_failed": "راه‌اندازی ناموفق بود: {{error}}"
+    "bootstrap_failed": "راه‌اندازی ناموفق بود: {{error}}",
+    "unexpected_title": "مشکلی پیش آمد",
+    "unexpected_message": "داده‌های شما امن هستند. دوباره تلاش کنید یا به گفت‌وگوها برگردید.",
+    "return_to_chats": "بازگشت به گفت‌وگوها",
+    "export_diagnostics": "خروجی گرفتن از اطلاعات عیب‌یابی"
   },
   "licenses": {
     "intro": "از جامعهٔ متن‌باز سپاسگزاریم.",

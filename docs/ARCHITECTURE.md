@@ -425,7 +425,10 @@ and `paddingEnd` aliases are not translated along that update path.
 
 Message lists, composers, and account services remain mounted only when their
 state is still relevant. Route parameters carry identifiers, never large
-message, attachment, or browser-file payloads.
+message, attachment, or browser-file payloads. Dynamic route parameters are
+already decoded by Expo Router and are treated as untrusted at the route
+boundary: accept one bounded scalar of the expected format, or leave the route
+before starting queries, media work, or cryptography.
 
 Native gesture, keyboard, and safe-area providers live above account gates so
 screen replacement does not interrupt their event subscriptions.
@@ -447,6 +450,14 @@ atomically replaced encrypted vault. Secrets never fall back to plaintext.
 Mobile adapters use Expo modules behind the platform ports. Native modules load
 lazily so tests and runtimes without a capability can import the adapter set
 without side effects.
+
+Render failures terminate at the root route error boundary instead of replacing
+the application with an unrecoverable blank surface. A bounded on-device journal
+stores only the error type, sanitized stack frames, route template, and runtime
+version metadata. It never stores message content, identity values, secrets,
+wallet data, or URLs, and it leaves the device only through an explicit user
+export. Repeated failures favor a safe return to the Chats route over retrying
+the same broken route again.
 
 Wallet connections are non-custodial. NWC secrets stay in secure storage, and a
 payment requires system authentication or the account's wallet PIN immediately

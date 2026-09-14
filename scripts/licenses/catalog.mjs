@@ -78,10 +78,15 @@ export function validateInventory(lock, inventory, texts) {
 
 export function serializeNotices(packages, texts) {
   const separator = '\n========================================\n\n';
-  const descriptions = packages.map((pkg) => [
-    packageKey(pkg), `License: ${pkg.license}`, `Source: ${pkg.repository ?? pkg.homepage ?? ''}`,
-    ...pkg.licenseFiles.map((file) => `${file.source}\n  Text: ${file.sha256}`),
-  ].join('\n'));
+  const descriptions = packages.map((pkg) => {
+    const source = pkg.repository ?? pkg.homepage;
+    return [
+      packageKey(pkg),
+      `License: ${pkg.license}`,
+      ...(source ? [`Source: ${source}`] : []),
+      ...pkg.licenseFiles.map((file) => `${file.source}\n  Text: ${file.sha256}`),
+    ].join('\n');
+  });
   const used = [...new Set(packages.flatMap((pkg) => pkg.licenseFiles.map((file) => file.sha256)))];
   return 'PsstPsst dependency license notices\n\n' +
     'Cross-platform non-development npm dependency closure, plus the shipped Electron runtime.\n' +

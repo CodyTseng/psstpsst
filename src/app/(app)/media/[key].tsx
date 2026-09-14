@@ -9,9 +9,14 @@ import { ChromeBackdrop } from '@/components/common/ChromeBackdrop';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { MediaThumbnail } from '@/components/media/MediaThumbnail';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { useIsContact } from '@/hooks/use-contacts';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { type ConversationMediaItem, useConversationMedia } from '@/hooks/use-conversation-media';
+import {
+  optionalRouteTextParam,
+  routeHexIdParam,
+} from '@/lib/navigation/route-params';
 import { formatMonthLabel, monthKey } from '@/lib/time';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { spacing, typography } from '@/theme';
@@ -43,28 +48,39 @@ export default function ConversationMediaGallery() {
   const { scrolled, scrollProps, measurementProps } = useScrolled({ inverted: true });
   const { t } = useTranslation();
   const params = useLocalSearchParams<{
-    key: string;
-    focus?: string;
-    focusOrderAt?: string;
-    focusAt?: string;
-    focusUrl?: string;
+    key: string | string[];
+    focus?: string | string[];
+    focusOrderAt?: string | string[];
+    focusAt?: string | string[];
+    focusUrl?: string | string[];
   }>();
-  const conversationKey = decodeURIComponent(params.key ?? '');
+  const parsedConversationKey = routeHexIdParam(params.key);
+  const conversationKey = parsedConversationKey ?? '';
+  const focus = params.focus === undefined ? undefined : routeHexIdParam(params.focus);
+  const focusOrderAt = optionalRouteTextParam(params.focusOrderAt, 32);
+  const focusAt = optionalRouteTextParam(params.focusAt, 32);
+  const focusUrl = optionalRouteTextParam(params.focusUrl, 2_048);
+  const invalidRoute =
+    !parsedConversationKey ||
+    focus === null ||
+    focusOrderAt === null ||
+    focusAt === null ||
+    focusUrl === null;
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const isContact = useIsContact(accountPubkey ?? '', conversationKey);
   const [galleryWidth, setGalleryWidth] = useState(0);
   const titleClearance = useScreenHeaderClearance();
 
   const anchor = useMemo(() => {
-    const orderAt = params.focusOrderAt
-      ? Number(params.focusOrderAt)
-      : params.focusAt
-        ? Number(params.focusAt) * 1000
+    const orderAt = focusOrderAt
+      ? Number(focusOrderAt)
+      : focusAt
+        ? Number(focusAt) * 1000
         : undefined;
-    return params.focus && params.focusUrl && orderAt
-      ? { orderAt, messageId: params.focus, url: params.focusUrl }
+    return focus && focusUrl && orderAt && Number.isSafeInteger(orderAt) && orderAt > 0
+      ? { orderAt, messageId: focus, url: focusUrl }
       : null;
-  }, [params.focus, params.focusOrderAt, params.focusAt, params.focusUrl]);
+  }, [focus, focusAt, focusOrderAt, focusUrl]);
 
   const { items, loadOlder, loadNewer, hasMore, hasMoreNewer, anchored, loaded } =
     useConversationMedia(accountPubkey ?? '', conversationKey, anchor);
@@ -169,6 +185,8 @@ export default function ConversationMediaGallery() {
     if (top) setFloatingMonth(top.monthLabel);
   }, []);
   const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 10 }), []);
+
+  if (invalidRoute) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={[]}>

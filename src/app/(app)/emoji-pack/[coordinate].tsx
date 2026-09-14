@@ -10,6 +10,7 @@ import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { IconButton } from '@/components/common/IconButton';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { CustomEmojiGrid } from '@/components/emoji/custom-emoji-grid';
 import { EmojiPackAuthorRow } from '@/components/emoji/EmojiPackAuthorRow';
 import { EmojiPackSkeleton } from '@/components/emoji/EmojiPackCard';
@@ -24,6 +25,7 @@ import {
   removeEmojiPack,
 } from '@/services/emoji/custom-emoji.service';
 import { KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
+import { routeEmojiCoordinateParam } from '@/lib/navigation/route-params';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
 import { radius, shadow, spacing, uiDensity, useThemeColors } from '@/theme';
@@ -34,7 +36,9 @@ export default function EmojiPackDetailScreen() {
   const insets = useSafeAreaInsets();
   const titleClearance = useScreenHeaderClearance();
   const { scrolled, scrollProps } = useScrolled();
-  const { coordinate } = useLocalSearchParams<{ coordinate: string }>();
+  const params = useLocalSearchParams<{ coordinate: string | string[] }>();
+  const parsedCoordinate = routeEmojiCoordinateParam(params.coordinate);
+  const coordinate = parsedCoordinate ?? '';
   const accountPubkey = useActiveAccount((state) => state.activePubkey);
   const startForwardDraft = useForwardDraftStore((state) => state.start);
   const collection = useCustomEmojis(accountPubkey);
@@ -43,6 +47,7 @@ export default function EmojiPackDetailScreen() {
   const floatingActionBottom = Math.max(insets.bottom, spacing.lg);
 
   useEffect(() => {
+    if (!parsedCoordinate) return;
     let active = true;
     void getEmojiPack(coordinate)
       .then((value) => {
@@ -56,7 +61,7 @@ export default function EmojiPackDetailScreen() {
     return () => {
       active = false;
     };
-  }, [coordinate]);
+  }, [coordinate, parsedCoordinate]);
 
   const collected = useMemo(
     () => collection.packs.some((item) => item.coordinate === coordinate),
@@ -107,6 +112,8 @@ export default function EmojiPackDetailScreen() {
     });
     router.push('/forward');
   }
+
+  if (!parsedCoordinate) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={[]}>

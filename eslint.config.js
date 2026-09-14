@@ -197,6 +197,13 @@ module.exports = defineConfig([
     rules: { 'no-restricted-syntax': ['error', ...TRANSACTION_SYNTAX_RULES] },
   },
   {
+    // These public @libp2p/noise subpath exports resolve through package.json
+    // for TypeScript, Jest, and the application bundlers. eslint-plugin-import's
+    // legacy resolver does not understand this ESM export map.
+    files: ['src/services/proximity/test-support/noise-test-port.ts'],
+    rules: { 'import/no-unresolved': 'off' },
+  },
+  {
     ignores: ["dist/*"],
   }
 ]);

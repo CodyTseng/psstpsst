@@ -968,7 +968,11 @@
   },
   "error": {
     "migration_failed": "Nie udało się przygotować danych lokalnych: {{error}}",
-    "bootstrap_failed": "Konfiguracja nie powiodła się: {{error}}"
+    "bootstrap_failed": "Konfiguracja nie powiodła się: {{error}}",
+    "unexpected_title": "Coś poszło nie tak",
+    "unexpected_message": "Twoje dane są bezpieczne. Spróbuj ponownie lub wróć do czatów.",
+    "return_to_chats": "Wróć do czatów",
+    "export_diagnostics": "Eksportuj diagnostykę"
   },
   "licenses": {
     "intro": "Dziękujemy społeczności open source.",

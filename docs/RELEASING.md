@@ -469,7 +469,7 @@ verification are intentionally manual.
 
 ## iOS: compile, archive, and distribute
 
-Use a Mac with Xcode 26.4 or newer compatible with Expo SDK 56, the iOS SDK and
+Use a Mac with Xcode 26.4 or newer compatible with Expo SDK 57, the iOS SDK and
 simulator runtime, CocoaPods, and Node.js 22. Select the full Xcode installation:
 
 ```bash
@@ -480,7 +480,7 @@ npm ci
 ```
 
 Complete Xcode's first-launch setup and license prompts before building. See the
-[Expo SDK 56 requirements](https://docs.expo.dev/versions/v56.0.0/).
+[Expo SDK 57 requirements](https://docs.expo.dev/versions/v57.0.0/).
 
 After changing native dependencies or their patches, run
 `node --test scripts/ios-dependency-fixes.test.mjs` on macOS. These native probes

@@ -24,7 +24,12 @@ async function collectArchive(pkg, directory) {
   try {
     const files = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).split('\n');
     const read = (name) => execFileSync('tar', ['-xOzf', archive, '--', name], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
-    const metadata = JSON.parse(read('package/package.json'));
+    let metadata;
+    try {
+      metadata = JSON.parse(read('package/package.json'));
+    } catch (error) {
+      throw new Error(`Cannot read package metadata from ${packageKey(pkg)}.`, { cause: error });
+    }
     if (metadata.name !== pkg.name || metadata.version !== pkg.version) throw new Error(`Archive identity mismatch: ${packageKey(pkg)}`);
     const notices = files.filter((file) => !file.endsWith('/') &&
       /^(?:licen[cs]e|copying|notice|copyright|authors|patents)(?:[._-]|$)/i.test(path.posix.basename(file)));
@@ -51,7 +56,8 @@ export async function refreshInventory(root, lock, oldInventory, texts) {
           packages.push(await reviewedLibvipsNotice(root, pkg, snapshots, texts));
           continue;
         }
-        const override = snapshots.npmOverrides?.[pkg.name];
+        const override =
+          snapshots.npmOverrides?.[packageKey(pkg)] ?? snapshots.npmOverrides?.[pkg.name];
         if (override) {
           if (pkg.version !== override.version || pkg.integrity !== override.integrity) {
             throw new Error(`Review ${packageKey(pkg)} notices and update its npm override in snapshots.json.`);

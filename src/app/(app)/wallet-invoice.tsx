@@ -20,6 +20,7 @@ import { useScrolled } from '@/hooks/use-scrolled';
 import { useInvoiceTransaction } from '@/hooks/use-invoice-transaction';
 import { useWallets } from '@/hooks/use-wallets';
 import { setStringAsync } from '@/lib/clipboard';
+import { routeStringParam, type RouteParam } from '@/lib/navigation/route-params';
 import { walletDescriptionText } from '@/lib/wallet/description';
 import { invoiceStatus, type InvoiceStatus } from '@/lib/wallet/invoice-status';
 import { platform } from '@/platform';
@@ -46,9 +47,9 @@ export default function WalletInvoiceScreen() {
     role?: string | string[];
     description?: string | string[];
   }>();
-  const invoiceInput = firstParam(params.invoice);
-  const role = firstParam(params.role);
-  const messageDescription = firstParam(params.description);
+  const invoiceInput = firstParam(params.invoice, 8_192);
+  const role = firstParam(params.role, 16);
+  const messageDescription = firstParam(params.description, 2_048);
   const isSender = role === 'sent';
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { wallets, loaded: walletLoaded } = useWallets(accountPubkey);
@@ -306,8 +307,8 @@ export default function WalletInvoiceScreen() {
   );
 }
 
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+function firstParam(value: RouteParam, maxLength: number): string {
+  return routeStringParam(value, maxLength) ?? '';
 }
 
 function parseInvoiceParam(value: string): ParsedInvoice | null {

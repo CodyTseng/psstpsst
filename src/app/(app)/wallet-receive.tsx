@@ -17,6 +17,7 @@ import { IconButton } from '@/components/common/IconButton';
 import { InputDialog } from '@/components/common/InputDialog';
 import { QrCode } from '@/components/common/QrCode';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { WalletAmountDisplay } from '@/components/wallet/WalletAmountDisplay';
 import { WalletReceiveMethodSelector } from '@/components/wallet/WalletReceiveMethodSelector';
 import { WalletSuccessState } from '@/components/wallet/WalletSuccessState';
@@ -24,6 +25,10 @@ import { useAmountKeypadKeyboard } from '@/hooks/use-amount-keypad-keyboard';
 import { useProfile } from '@/hooks/use-profile';
 import { useWallets } from '@/hooks/use-wallets';
 import { setStringAsync } from '@/lib/clipboard';
+import {
+  parseConversationRouteParams,
+  routeHexIdParam,
+} from '@/lib/navigation/route-params';
 import { invoiceMessageTags } from '@/lib/wallet/invoice-message';
 import type { ConversationDeliveryKind } from '@/lib/conversation/capabilities';
 import { IS_ELECTRON } from '@/lib/platform';
@@ -62,10 +67,25 @@ export default function WalletReceiveScreen() {
     sendTo?: string | string[];
     transport?: string | string[];
   }>();
-  const chatRecipientPubkey = firstParam(params.sendTo);
-  const chatConversationKey = firstParam(params.conversationKey);
+  const chatRoute = params.conversationKey === undefined
+    ? null
+    : parseConversationRouteParams({
+        key: params.conversationKey,
+        transport: params.transport,
+      });
+  const parsedRecipientPubkey = params.sendTo === undefined
+    ? null
+    : routeHexIdParam(params.sendTo);
+  const invalidChatRoute =
+    params.conversationKey !== undefined ||
+    params.sendTo !== undefined ||
+    params.transport !== undefined
+      ? !chatRoute || !parsedRecipientPubkey
+      : false;
+  const chatRecipientPubkey = parsedRecipientPubkey ?? '';
+  const chatConversationKey = chatRoute?.key ?? '';
   const chatDeliveryKind: ConversationDeliveryKind =
-    firstParam(params.transport) === 'proximity' ? 'proximity' : 'relay';
+    chatRoute?.transport === 'proximity' ? 'proximity' : 'relay';
   const sendToChat = !!chatRecipientPubkey && !!chatConversationKey;
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { wallets } = useWallets(accountPubkey);
@@ -292,6 +312,8 @@ export default function WalletReceiveScreen() {
     </View>
   );
 
+  if (invalidChatRoute) return <InvalidRouteRedirect />;
+
   return (
     <AppScreen edges={[]}>
       {!invoice ? (
@@ -473,10 +495,6 @@ export default function WalletReceiveScreen() {
       )}
     </AppScreen>
   );
-}
-
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
 }
 
 function KeypadRow({ digits, onPress }: { digits: string[]; onPress: (digit: string) => void }) {

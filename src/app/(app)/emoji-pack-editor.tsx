@@ -9,11 +9,16 @@ import { AppInput } from '@/components/common/AppInput';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
+import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { EmojiPackSkeleton } from '@/components/emoji/EmojiPackCard';
 import { StandaloneEmojiGrid } from '@/components/emoji/standalone-emoji-grid';
 import { useAddCustomEmoji } from '@/hooks/use-add-custom-emoji';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '@/lib/platform';
+import {
+  optionalRouteTextParam,
+  routeEmojiCoordinateParam,
+} from '@/lib/navigation/route-params';
 import {
   isValidEmojiShortcode,
   isValidEmojiUrl,
@@ -120,13 +125,19 @@ export default function EmojiPackEditorScreen() {
   const insets = useSafeAreaInsets();
   const titleClearance = useScreenHeaderClearance();
   const { scrolled, scrollProps } = useScrolled();
-  const { coordinate, emojiShortcode, emojiUrl } = useLocalSearchParams<{
-    coordinate?: string;
-    emojiShortcode?: string;
-    emojiUrl?: string;
+  const params = useLocalSearchParams<{
+    coordinate?: string | string[];
+    emojiShortcode?: string | string[];
+    emojiUrl?: string | string[];
   }>();
+  const coordinate = params.coordinate === undefined
+    ? undefined
+    : routeEmojiCoordinateParam(params.coordinate);
+  const emojiShortcode = optionalRouteTextParam(params.emojiShortcode, 64);
+  const emojiUrl = optionalRouteTextParam(params.emojiUrl, 2_048);
+  const invalidRoute = coordinate === null || emojiShortcode === null || emojiUrl === null;
   const receivedEmoji = useMemo(
-    () => incomingDraft(emojiShortcode, emojiUrl),
+    () => incomingDraft(emojiShortcode ?? undefined, emojiUrl ?? undefined),
     [emojiShortcode, emojiUrl],
   );
   const accountPubkey = useActiveAccount((state) => state.activePubkey);
@@ -334,6 +345,8 @@ export default function EmojiPackEditorScreen() {
       setSaving(false);
     }
   }
+
+  if (invalidRoute) return <InvalidRouteRedirect />;
 
   return (
     <AppScreen edges={[]}>

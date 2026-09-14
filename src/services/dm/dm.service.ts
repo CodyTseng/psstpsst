@@ -1391,7 +1391,13 @@ class DmService {
     try {
       while (this.giftWrapQueue.length > 0) {
         const e = this.giftWrapQueue.shift()!;
-        await this.processGiftWrap(e);
+        try {
+          await this.processGiftWrap(e);
+        } catch (error) {
+          // A transient database or adapter failure must not reject the detached
+          // drain promise or prevent later envelopes from being processed.
+          console.warn('[dm] Failed to process an incoming envelope.', error);
+        }
         // One gift wrap can already include sync SQLite + crypto; yield after
         // every message so a replay burst cannot monopolize the JS thread.
         await yieldToUi();

@@ -42,7 +42,7 @@ export const backgroundTaskAdapter: BackgroundTaskPort = (() => {
               controller.abort(new Error('Background task execution expired'));
             });
           } catch {
-            // Older native builds may not expose the SDK 56 expiration event.
+            // Older native builds may not expose the expiration event.
           }
         }
         try {
