@@ -1,5 +1,6 @@
 import { imageCacheAdapter } from './image-cache';
 import type { FileSystemPort } from '../ports/file-system';
+import type { FileSaverPort } from '../ports/file-saver';
 import type { CryptoAcceleratorPort } from '../ports/crypto-accelerator';
 import type { PlatformAdapters } from '../ports';
 import type { ProximityTransportPort } from '../ports/proximity-transport';
@@ -117,6 +118,21 @@ function lazyFileSystemAdapter(): FileSystemPort {
   };
 }
 
+/** The native destination picker is loaded only when the user chooses Save. */
+function lazyFileSaverAdapter(): FileSaverPort {
+  let real: FileSaverPort | null = null;
+  const load = (): FileSaverPort => {
+    if (!real) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      real = (require('./file-saver') as typeof import('./file-saver')).fileSaverAdapter;
+    }
+    return real;
+  };
+  return {
+    save: (uri, options) => load().save(uri, options),
+  };
+}
+
 function lazyCryptoAcceleratorAdapter(): CryptoAcceleratorPort {
   let real: CryptoAcceleratorPort | null = null;
   const load = (): CryptoAcceleratorPort => {
@@ -193,6 +209,7 @@ export function createExpoAdapters(): PlatformAdapters {
     imageCache: imageCacheAdapter,
     fileSystem: lazyFileSystemAdapter(),
     fileDrop: fileDropAdapter,
+    fileSaver: lazyFileSaverAdapter(),
     proximityTransport: lazyProximityTransportAdapter(),
     cryptoAccelerator: lazyCryptoAcceleratorAdapter(),
     deviceCrypto: deviceCryptoAdapter,

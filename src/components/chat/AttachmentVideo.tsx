@@ -16,6 +16,7 @@ import { AppText } from '@/components/common/AppText';
 import { isAbortError } from '@/lib/async/abort';
 import { revealOrRetry } from '@/lib/attachments/failure';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
+import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import {
   type AttachmentErrorKind,
@@ -238,8 +239,24 @@ export function AttachmentVideo({
           justifyContent: 'center',
         }}
       >
-        {playbackFailed ? (
-          // Decode failed — offer "open in another app" instead of a broken player.
+        {playbackFailed && IS_ELECTRON ? (
+          <View
+            style={{
+              width: '100%',
+              height: '100%',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: spacing.md,
+              gap: spacing.sm,
+            }}
+          >
+            <Film size={ATTACHMENT_MEDIA_ICON_SIZE} color={c.textMuted} />
+            <AppText variant="caption" tone="subtle" align="center">
+              {t('attach.video_unsupported_desktop')}
+            </AppText>
+          </View>
+        ) : playbackFailed ? (
+          // Mobile can still hand an unsupported format to another installed app.
           <Pressable
             hoverFeedback={false}
             onPress={() => void openExternally()}

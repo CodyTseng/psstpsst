@@ -361,6 +361,7 @@
     "tap_to_open": "Toque para abrir",
     "tap_to_load": "Toque para carregar",
     "video_unsupported": "Não é possível reproduzir este vídeo aqui",
+    "video_unsupported_desktop": "A aplicação para computador não pode reproduzir este vídeo.",
     "open_external": "Toque para abrir noutra aplicação",
     "save": "Guardar",
     "saved": "Guardado nas suas fotografias.",

@@ -15,6 +15,7 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 
 import { AppText } from '@/components/common/AppText';
 import type { EmbeddedMedia } from '@/lib/nostr/embedded-media';
+import { IS_ELECTRON } from '@/lib/platform';
 import { ensureEmbeddedMediaIndexed } from '@/services/files/media-index.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { mediaViewer } from '@/stores/media-viewer.store';
@@ -393,7 +394,24 @@ function EmbeddedContainerPlayer({
         overflow: 'hidden',
       }}
     >
-      {status === 'error' ? (
+      {status === 'error' && IS_ELECTRON ? (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: spacing.md,
+              gap: spacing.sm,
+            },
+          ]}
+        >
+          <Film size={22} color={c.textMuted} />
+          <AppText variant="caption" tone="subtle" align="center">
+            {t('attach.video_unsupported_desktop')}
+          </AppText>
+        </View>
+      ) : status === 'error' ? (
         <Pressable
           hoverFeedback={false}
           onPress={() => openUrl(media.url)}

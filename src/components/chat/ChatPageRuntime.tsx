@@ -1,7 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import * as Sharing from 'expo-sharing';
 import { router, useIsFocused, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Reply } from '@solar-icons/react-native/category/arrows-action/Linear/Reply';
 import { DownloadMinimalistic as Download } from '@solar-icons/react-native/category/arrows-action/Linear/DownloadMinimalistic';
@@ -112,13 +111,16 @@ import {
   customEmojisFromMessageTags,
   type CustomEmoji,
 } from '@/lib/nostr/custom-emoji';
-import { copyForShare } from '@/services/files/file-attachment.service';
 import { nearbyFileUploadService } from '@/services/files/nearby-file-upload.service';
 import {
   attachmentTransferKey,
   attachmentTransferStore,
 } from '@/services/files/attachment-transfer-state';
-import { saveAttachmentToLibrary, saveUriToLibrary } from '@/services/files/media-save.service';
+import {
+  saveAttachment,
+  saveLocalAttachment,
+  type SaveResult,
+} from '@/services/files/media-save.service';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import type { ForwardMessage } from '@/lib/share/forward';
 import { shareContactContent } from '@/lib/share/contact-card';
@@ -1798,10 +1800,7 @@ function ChatPageContent({
     removeOnePending(tempId);
   }
 
-  /** Save an image/video attachment to the device photo library. Resolves the
-   * local file (downloading + decrypting it if needed), then reports the result. */
-  async function handleSaveMedia(meta: FileAttachmentMeta) {
-    const result = await saveAttachmentToLibrary(meta, { accountPubkey });
+  async function reportSaveResult(result: SaveResult, savesToLibrary: boolean) {
     if (result === 'denied') {
       await platform.confirmationDialog.notify({
         title: t('attach.save_permission'),
@@ -1812,7 +1811,7 @@ function ChatPageContent({
         title: t('attach.save_failed'),
         okLabel: t('common.ok'),
       });
-    } else {
+    } else if (result === 'saved' && savesToLibrary && !IS_ELECTRON) {
       await platform.confirmationDialog.notify({
         title: t('attach.saved'),
         okLabel: t('common.ok'),
@@ -1820,37 +1819,24 @@ function ChatPageContent({
     }
   }
 
+  /** Resolve and save an attachment to the platform-appropriate destination. */
+  async function handleSaveAttachment(meta: FileAttachmentMeta) {
+    const savesToLibrary =
+      !!meta.mime &&
+      (meta.mime.startsWith('image/') || meta.mime.startsWith('video/'));
+    const result = await saveAttachment(meta, { accountPubkey });
+    await reportSaveResult(result, savesToLibrary);
+  }
+
   async function handleSavePendingUpload(pending: PendingAttachment) {
-    if (pending.mime.startsWith('image/') || pending.mime.startsWith('video/')) {
-      const result = await saveUriToLibrary(pending.localUri);
-      if (result === 'denied') {
-        await platform.confirmationDialog.notify({
-          title: t('attach.save_permission'),
-          okLabel: t('common.ok'),
-        });
-      } else if (result === 'failed') {
-        await platform.confirmationDialog.notify({
-          title: t('attach.save_failed'),
-          okLabel: t('common.ok'),
-        });
-      } else {
-        await platform.confirmationDialog.notify({
-          title: t('attach.saved'),
-          okLabel: t('common.ok'),
-        });
-      }
-      return;
-    }
-    try {
-      if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing unavailable');
-      const uri = await copyForShare(pending.localUri, pending.name);
-      await Sharing.shareAsync(uri, { mimeType: pending.mime });
-    } catch {
-      await platform.confirmationDialog.notify({
-        title: t('attach.save_failed'),
-        okLabel: t('common.ok'),
-      });
-    }
+    const savesToLibrary =
+      pending.mime.startsWith('image/') || pending.mime.startsWith('video/');
+    const result = await saveLocalAttachment({
+      uri: pending.localUri,
+      name: pending.name,
+      mime: pending.mime,
+    });
+    await reportSaveResult(result, savesToLibrary);
   }
 
   function openMeasuredMenu(rect: BubbleRect, bubble: LiftedBubble) {
@@ -2097,19 +2083,14 @@ function ChatPageContent({
         })
     : '';
 
-  // An image/video attachment behind the long-pressed bubble, if any — the only
-  // kinds that can be saved to the photo library.
-  const targetMedia =
+  // The attachment behind the long-pressed bubble, if any. Every attachment is
+  // saveable; its MIME type determines photo library versus file destination.
+  const targetAttachment =
     menuTarget?.kind === 15 ? findFileMeta(menuTarget.content, menuTarget.tags) : null;
-  const saveableMedia =
-    targetMedia?.mime &&
-    (targetMedia.mime.startsWith('image/') || targetMedia.mime.startsWith('video/'))
-      ? targetMedia
-      : null;
   const menuSingleCustomEmoji = menuTarget ? singleCustomEmojiFromMessage(menuTarget) : null;
 
   // Action-menu rows for the long-pressed message. Reply is unavailable for
-  // read-only Nearby history. Copy is text-only, Save is image/video-only, and
+  // read-only Nearby history. Copy is text-only, Save is attachment-only, and
   // Info is available for every message.
   const menuActions: MessageMenuAction[] = pendingMenuTarget
     ? [
@@ -2156,7 +2137,7 @@ function ChatPageContent({
                 } as MessageMenuAction,
               ]
             : []),
-          ...(saveableMedia
+          ...(targetAttachment
             ? [
                 {
                   key: 'save',
@@ -2164,7 +2145,7 @@ function ChatPageContent({
                   icon: <Download size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
                   onPress: () => {
                     closeMenu();
-                    void handleSaveMedia(saveableMedia);
+                    void handleSaveAttachment(targetAttachment);
                   },
                 } as MessageMenuAction,
               ]

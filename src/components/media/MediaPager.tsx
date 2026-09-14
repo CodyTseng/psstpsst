@@ -150,7 +150,7 @@ export function MediaPager({
         title: t('attach.save_failed'),
         okLabel: t('common.ok'),
       });
-    else
+    else if (result === 'saved' && !IS_ELECTRON)
       void platform.confirmationDialog.notify({
         title: t('attach.saved'),
         okLabel: t('common.ok'),

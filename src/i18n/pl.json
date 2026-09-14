@@ -364,6 +364,7 @@
     "tap_to_open": "Dotknij, aby otworzyć",
     "tap_to_load": "Dotknij, aby wczytać",
     "video_unsupported": "Nie można tutaj odtworzyć tego filmu",
+    "video_unsupported_desktop": "Aplikacja komputerowa nie może odtworzyć tego filmu.",
     "open_external": "Dotknij, aby otworzyć w innej aplikacji",
     "save": "Zapisz",
     "saved": "Zapisano w zdjęciach.",

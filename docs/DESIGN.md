@@ -488,6 +488,12 @@ only the fallback when poster extraction is unavailable. Message metadata is
 hidden while the inline video player is active so native playback controls stay
 unobstructed.
 
+Every attachment context menu includes Save. Images and videos save to the
+photo library on mobile and a user-selected location on Electron; audio and
+other files use the system file destination picker. Unsupported video on
+Electron is an inert status, not a link to another application. A completed
+Electron Save As needs no follow-up success dialog.
+
 Audio playback clocks use monospaced, fixed-width digits so advancing time never
 changes the waveform geometry. Hour-long media keeps an hour field throughout.
 Audio waveform bars share a bottom baseline. Audio message clocks sit below the

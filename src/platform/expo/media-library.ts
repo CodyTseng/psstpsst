@@ -14,5 +14,8 @@ export const mediaLibraryAdapter: MediaLibraryPort = {
     return permission.granted;
   },
 
-  saveToLibrary: (uri) => MediaLibrary.saveToLibraryAsync(uri),
+  async saveToLibrary(uri) {
+    await MediaLibrary.saveToLibraryAsync(uri);
+    return true;
+  },
 };

@@ -358,6 +358,7 @@
     "tap_to_open": "Koppints a megnyitáshoz",
     "tap_to_load": "Koppints a betöltéshez",
     "video_unsupported": "Ez a videó itt nem játszható le",
+    "video_unsupported_desktop": "Az asztali alkalmazás nem tudja lejátszani ezt a videót.",
     "open_external": "Koppints egy másik alkalmazásban való megnyitáshoz",
     "save": "Mentés",
     "saved": "Mentve a fényképek közé.",

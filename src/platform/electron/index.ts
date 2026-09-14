@@ -6,6 +6,7 @@ import type { PlatformAdapters } from '../ports';
 import { getElectronBridge } from './bridge';
 import { electronDatabaseAdapter } from './database';
 import { electronFileSystemAdapter } from './file-system';
+import { electronFileSaverAdapter } from './file-saver';
 import { electronVideoThumbnailAdapter } from './video-thumbnail';
 
 export { installElectronScrollbarVisibility } from './scrollbar-visibility';
@@ -47,6 +48,7 @@ export function createElectronAdapters(): PlatformAdapters {
     fileDrop: {
       registerTarget: () => ({ remove() {} }),
     },
+    fileSaver: electronFileSaverAdapter,
     videoThumbnail: electronVideoThumbnailAdapter,
     deviceCrypto: bridge.deviceCrypto,
     noise: bridge.noise,
@@ -152,9 +154,7 @@ export function createElectronAdapters(): PlatformAdapters {
     },
     mediaLibrary: {
       requestWritePermission: () => Promise.resolve(true),
-      async saveToLibrary(uri) {
-        if (!(await bridge.dialogs.saveMedia(uri))) throw new Error('Save canceled');
-      },
+      saveToLibrary: (uri) => bridge.dialogs.saveMedia(uri),
     },
     sharing: {
       isAvailable: () => Promise.resolve(true),

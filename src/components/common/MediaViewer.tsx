@@ -7,6 +7,7 @@ import { ZoomableImage, type ZoomableImageHandle } from './ZoomableImage';
 import { MediaPager } from '@/components/media/MediaPager';
 import { MediaViewerTopBar } from '@/components/media/MediaViewerTopBar';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
+import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { saveUriToLibrary } from '@/services/files/media-save.service';
 import { useMediaViewerStore } from '@/stores/media-viewer.store';
@@ -76,7 +77,7 @@ export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: ()
         title: t('attach.save_failed'),
         okLabel: t('common.ok'),
       });
-    else
+    else if (result === 'saved' && !IS_ELECTRON)
       void platform.confirmationDialog.notify({
         title: t('attach.saved'),
         okLabel: t('common.ok'),

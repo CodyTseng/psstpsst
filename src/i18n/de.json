@@ -358,6 +358,7 @@
     "tap_to_open": "Zum Öffnen tippen",
     "tap_to_load": "Zum Laden tippen",
     "video_unsupported": "Dieses Video kann hier nicht abgespielt werden",
+    "video_unsupported_desktop": "Die Desktop-App kann dieses Video nicht wiedergeben.",
     "open_external": "Tippe, um die Datei in einer anderen App zu öffnen",
     "save": "Speichern",
     "saved": "In deinen Fotos gespeichert.",

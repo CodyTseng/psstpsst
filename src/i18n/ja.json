@@ -358,6 +358,7 @@
     "tap_to_open": "タップして開く",
     "tap_to_load": "タップして読み込む",
     "video_unsupported": "この動画はここでは再生できません",
+    "video_unsupported_desktop": "デスクトップ版ではこの動画を再生できません。",
     "open_external": "タップして別のアプリで開く",
     "save": "保存",
     "saved": "写真に保存しました。",

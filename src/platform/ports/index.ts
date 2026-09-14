@@ -13,6 +13,7 @@ import type { DeepLinkPort } from './deep-link';
 import type { DocumentPickerPort } from './document-picker';
 import type { FileSystemPort } from './file-system';
 import type { FileDropPort } from './file-drop';
+import type { FileSaverPort } from './file-saver';
 import type { ImageManipulatorPort } from './image-manipulator';
 import type { LocalAuthPort } from './local-auth';
 import type { LocalizationPort } from './localization';
@@ -72,6 +73,7 @@ export type {
   FileDropTargetSubscription,
   NativeDroppedFile,
 } from './file-drop';
+export type { FileSaverPort } from './file-saver';
 export type {
   ImageEncodeFormat,
   ImageManipulatorPort,
@@ -117,6 +119,7 @@ export interface PlatformAdapters {
   fileSystem: FileSystemPort;
   imageCache: ImageCachePort;
   fileDrop: FileDropPort;
+  fileSaver: FileSaverPort;
   proximityTransport: ProximityTransportPort;
   cryptoAccelerator: CryptoAcceleratorPort;
   deviceCrypto: DeviceCryptoPort;

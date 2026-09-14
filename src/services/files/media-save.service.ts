@@ -6,7 +6,7 @@ import { mimeToExt } from './attachment-store';
 import { fetchAndDecryptAttachment, getCachedAttachmentUri } from './file-attachment.service';
 
 /** Outcome of a save-to-library attempt, so the UI can pick the right message. */
-export type SaveResult = 'saved' | 'denied' | 'failed';
+export type SaveResult = 'saved' | 'cancelled' | 'denied' | 'failed';
 
 const MEDIA_SAVE_DIR_NAME = 'psstpsst-media-save';
 let stagedCaptureSequence = 0;
@@ -52,8 +52,8 @@ export async function saveUriToLibrary(uri: string): Promise<SaveResult> {
     if (uri.startsWith('data:')) {
       stagedUri = await stageDataUri(uri);
     }
-    await platform.mediaLibrary.saveToLibrary(stagedUri ?? uri);
-    return 'saved';
+    const saved = await platform.mediaLibrary.saveToLibrary(stagedUri ?? uri);
+    return saved ? 'saved' : 'cancelled';
   } catch {
     return 'failed';
   } finally {
@@ -83,6 +83,52 @@ export async function saveAttachmentToLibrary(
     return 'failed';
   }
   return saveUriToLibrary(uri);
+}
+
+/**
+ * Save any attachment using the destination appropriate to its content.
+ * Images and videos go to the photo library; every other file is exported to a
+ * location chosen by the user.
+ */
+export async function saveAttachment(
+  meta: FileAttachmentMeta,
+  opts?: { accountPubkey?: string | null },
+): Promise<SaveResult> {
+  if (meta.mime?.startsWith('image/') || meta.mime?.startsWith('video/')) {
+    return saveAttachmentToLibrary(meta, opts);
+  }
+
+  let uri: string;
+  try {
+    uri = (await getCachedAttachmentUri(meta)) ?? (await fetchAndDecryptAttachment(meta, opts));
+    const saved = await platform.fileSaver.save(uri, {
+      suggestedName: meta.name || 'psstpsst-file',
+      mimeType: meta.mime,
+    });
+    return saved ? 'saved' : 'cancelled';
+  } catch {
+    return 'failed';
+  }
+}
+
+/** Save a local pending attachment using the same content-based destination. */
+export async function saveLocalAttachment(input: {
+  uri: string;
+  name?: string;
+  mime?: string;
+}): Promise<SaveResult> {
+  if (input.mime?.startsWith('image/') || input.mime?.startsWith('video/')) {
+    return saveUriToLibrary(input.uri);
+  }
+  try {
+    const saved = await platform.fileSaver.save(input.uri, {
+      suggestedName: input.name || 'psstpsst-file',
+      mimeType: input.mime,
+    });
+    return saved ? 'saved' : 'cancelled';
+  } catch {
+    return 'failed';
+  }
 }
 
 /** Explicitly save a direct URL to the system photo library. Ordinary media is

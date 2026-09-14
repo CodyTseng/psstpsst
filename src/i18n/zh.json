@@ -358,6 +358,7 @@
     "tap_to_open": "点击打开",
     "tap_to_load": "点击加载",
     "video_unsupported": "无法在此播放此视频",
+    "video_unsupported_desktop": "桌面端暂不支持播放此视频。",
     "open_external": "点击用其他应用打开",
     "save": "保存",
     "saved": "已保存到相册。",

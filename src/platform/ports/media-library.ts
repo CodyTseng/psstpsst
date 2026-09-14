@@ -10,6 +10,6 @@ export interface MediaLibraryPort {
    * Resolves to the final granted state.
    */
   requestWritePermission(): Promise<boolean>;
-  /** Save a local image/video file into the library. Rejects on failure. */
-  saveToLibrary(uri: string): Promise<void>;
+  /** Save a local image/video file. False means a desktop Save As was cancelled. */
+  saveToLibrary(uri: string): Promise<boolean>;
 }

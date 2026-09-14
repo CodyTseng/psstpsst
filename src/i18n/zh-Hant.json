@@ -358,6 +358,7 @@
     "tap_to_open": "點一下以開啟",
     "tap_to_load": "點一下以載入",
     "video_unsupported": "無法在這裡播放此影片",
+    "video_unsupported_desktop": "桌面版目前不支援播放此影片。",
     "open_external": "點一下以在其他應用程式中開啟",
     "save": "儲存",
     "saved": "已儲存至照片。",

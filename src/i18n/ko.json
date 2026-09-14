@@ -358,6 +358,7 @@
     "tap_to_open": "탭하여 열기",
     "tap_to_load": "탭하여 불러오기",
     "video_unsupported": "이 동영상은 여기에서 재생할 수 없습니다",
+    "video_unsupported_desktop": "데스크톱 앱에서는 이 동영상을 재생할 수 없습니다.",
     "open_external": "탭하여 다른 앱에서 열기",
     "save": "저장",
     "saved": "사진에 저장했습니다.",

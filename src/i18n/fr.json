@@ -361,6 +361,7 @@
     "tap_to_open": "Toucher pour ouvrir",
     "tap_to_load": "Toucher pour charger",
     "video_unsupported": "Impossible de lire cette vidéo ici",
+    "video_unsupported_desktop": "L’application de bureau ne peut pas lire cette vidéo.",
     "open_external": "Touchez pour ouvrir dans une autre application",
     "save": "Enregistrer",
     "saved": "Enregistré dans vos photos.",

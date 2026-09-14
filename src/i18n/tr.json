@@ -358,6 +358,7 @@
     "tap_to_open": "Açmak için dokun",
     "tap_to_load": "Yüklemek için dokun",
     "video_unsupported": "Bu video burada oynatılamıyor",
+    "video_unsupported_desktop": "Masaüstü uygulaması bu videoyu oynatamıyor.",
     "open_external": "Başka bir uygulamada açmak için dokun",
     "save": "Kaydet",
     "saved": "Fotoğraflarına kaydedildi.",

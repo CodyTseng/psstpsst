@@ -1,15 +1,20 @@
 const mockRequestWritePermission = jest.fn<Promise<boolean>, []>();
-const mockSaveToLibrary = jest.fn<Promise<void>, [string]>();
+const mockSaveToLibrary = jest.fn<Promise<boolean>, [string]>();
 const mockCacheDirectoryUri = jest.fn<Promise<string | null>, []>();
 const mockMakeDirectory = jest.fn<Promise<void>, [string, object?]>();
 const mockWriteBytes = jest.fn<Promise<void>, [string, Uint8Array]>();
 const mockDelete = jest.fn<Promise<void>, [string, object?]>();
+const mockSaveFile = jest.fn<Promise<boolean>, [string, { suggestedName: string; mimeType?: string }]>();
 
 jest.mock('@/platform', () => ({
   platform: {
     mediaLibrary: {
       requestWritePermission: () => mockRequestWritePermission(),
       saveToLibrary: (uri: string) => mockSaveToLibrary(uri),
+    },
+    fileSaver: {
+      save: (uri: string, options: { suggestedName: string; mimeType?: string }) =>
+        mockSaveFile(uri, options),
     },
     fileSystem: {
       cacheDirectoryUri: () => mockCacheDirectoryUri(),
@@ -26,7 +31,7 @@ jest.mock('../file-attachment.service', () => ({
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- mocks must install first
-const { saveUriToLibrary } = require('../media-save.service') as typeof import('../media-save.service');
+const { saveLocalAttachment, saveUriToLibrary } = require('../media-save.service') as typeof import('../media-save.service');
 
 describe('media library saves', () => {
   const originalFetch = global.fetch;
@@ -34,11 +39,12 @@ describe('media library saves', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRequestWritePermission.mockResolvedValue(true);
-    mockSaveToLibrary.mockResolvedValue(undefined);
+    mockSaveToLibrary.mockResolvedValue(true);
     mockCacheDirectoryUri.mockResolvedValue('psstpsst-file://cache/');
     mockMakeDirectory.mockResolvedValue(undefined);
     mockWriteBytes.mockResolvedValue(undefined);
     mockDelete.mockResolvedValue(undefined);
+    mockSaveFile.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -99,5 +105,44 @@ describe('media library saves', () => {
 
     const stagedUri = mockWriteBytes.mock.calls[0][0];
     expect(mockDelete).toHaveBeenCalledWith(stagedUri, { idempotent: true });
+  });
+
+  it('treats a cancelled desktop media destination as cancellation', async () => {
+    mockSaveToLibrary.mockResolvedValue(false);
+
+    await expect(saveUriToLibrary('psstpsst-file://cache/photo.png')).resolves.toBe(
+      'cancelled',
+    );
+  });
+
+  it('exports non-media files with their original name and MIME type', async () => {
+    await expect(
+      saveLocalAttachment({
+        uri: 'psstpsst-file://attachments/hash.bin',
+        name: 'report.pdf',
+        mime: 'application/pdf',
+      }),
+    ).resolves.toBe('saved');
+
+    expect(mockSaveFile).toHaveBeenCalledWith('psstpsst-file://attachments/hash.bin', {
+      suggestedName: 'report.pdf',
+      mimeType: 'application/pdf',
+    });
+    expect(mockSaveToLibrary).not.toHaveBeenCalled();
+  });
+
+  it('saves pending images to the media library', async () => {
+    await expect(
+      saveLocalAttachment({
+        uri: 'psstpsst-file://attachments/photo.jpg',
+        name: 'photo.jpg',
+        mime: 'image/jpeg',
+      }),
+    ).resolves.toBe('saved');
+
+    expect(mockSaveToLibrary).toHaveBeenCalledWith(
+      'psstpsst-file://attachments/photo.jpg',
+    );
+    expect(mockSaveFile).not.toHaveBeenCalled();
   });
 });
