@@ -1,4 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { BackHandler } from 'react-native';
 import { withTiming } from 'react-native-reanimated';
 
 import { MediaViewer, SingleImageLightbox } from '@/components/common/MediaViewer';
@@ -85,6 +86,29 @@ it('finishes dismissal before releasing the viewer and navigating, exactly once'
   expect(order).toEqual([]);
   act(() => { finish(true); finish(true); });
   expect(order).toEqual(['closed', 'navigate']);
+});
+
+it('consumes Android back and closes through the viewer transition', () => {
+  let backPress: Parameters<typeof BackHandler.addEventListener>[1] = () => false;
+  const remove = jest.fn();
+  jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+    backPress = handler;
+    return { remove };
+  });
+
+  act(() => { renderer = create(<Harness onClosed={onClosed} />); });
+  flushFrame();
+  act(() =>
+    expect(backPress({ type: 'hardwareBackPress', timeStamp: 0 })).toBe(true),
+  );
+  expect(transition().isClosing).toBe(true);
+  expect(onClosed).not.toHaveBeenCalled();
+
+  act(() => { lastExit()(true); });
+  expect(onClosed).toHaveBeenCalledTimes(1);
+  act(() => { renderer!.unmount(); });
+  renderer = undefined;
+  expect(remove).toHaveBeenCalledTimes(1);
 });
 
 it('does not restart entrance when closed before the first frame', () => {

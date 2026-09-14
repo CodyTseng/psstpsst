@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { BackHandler } from 'react-native';
 import {
   cancelAnimation,
   runOnJS,
@@ -34,6 +35,7 @@ export function useMediaViewerTransition(onClosed: () => void, dragOpacity?: Sha
       if (finished) runOnJS(finish)();
     });
   }
+  const closeFromBack = useEffectEvent(() => requestClose());
 
   useEffect(() => {
     mounted.current = true;
@@ -53,6 +55,14 @@ export function useMediaViewerTransition(onClosed: () => void, dragOpacity?: Sha
       cancelAnimation(visibility);
     };
   }, [visibility]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeFromBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: visibility.value * (dragOpacity?.value ?? 1),
