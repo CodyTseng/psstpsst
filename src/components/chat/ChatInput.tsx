@@ -44,6 +44,7 @@ import Plus from "lucide-react-native/icons/plus";
 import { CustomEmojiImage } from "@/components/emoji/CustomEmojiImage";
 import { useCustomEmojis } from "@/hooks/use-custom-emojis";
 import { useDirectionalIconStyle, useIsRTL } from "@/i18n/direction";
+import { classifyMessageSendFailure } from '@/lib/chat/message-send-error';
 import { impact } from "@/lib/haptics";
 import { getBottomChromeInset } from "@/lib/layout/bottom-chrome";
 import { normalizeBareNostrUris } from "@/lib/nostr/normalize-content";
@@ -64,6 +65,7 @@ import {
 import { useActiveAccount } from "@/stores/active-account.store";
 import { useChatPrefsStore } from "@/stores/chat-prefs.store";
 import { useDraftsStore } from "@/stores/drafts.store";
+import { showToast } from '@/stores/toast.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import {
   bottomBarHeight,
@@ -856,11 +858,19 @@ export function ChatInput({
     setSending(true);
     try {
       await onSend(text, usedCustomEmojis);
-    } catch {
+    } catch (error) {
       // A pre-send gate can fail before publish work is scheduled. Restore the
       // draft in that case; failures after optimistic storage remain bubble state.
       setValue(text);
       if (draftKey) setDraft(draftKey, text);
+      const failure = classifyMessageSendFailure(error);
+      showToast(
+        failure.kind === 'not_ready'
+          ? t('composer.send_not_ready')
+          : failure.kind === 'reason'
+            ? failure.reason
+            : t('composer.send_failed'),
+      );
     } finally {
       setSending(false);
     }

@@ -56,6 +56,9 @@ export type MessageDelivery = {
   rumorId: string;
   phase: DeliveryPhase;
   transport?: 'relay' | 'proximity';
+  /** Whole-attempt failure before relay copies exist (for example signer or
+   * recipient metadata rejection). Per-relay failures stay on their rows. */
+  error?: string;
   /** Empty during 'signing', then one entry per copy (recipients + self). */
   copies: DeliveryCopy[];
 };
@@ -75,7 +78,7 @@ export type DeliveryStatusState = {
     status: 'ok' | 'failed',
     error?: string,
   ) => void;
-  finish: (rumorId: string, phase: 'sent' | 'failed') => void;
+  finish: (rumorId: string, phase: 'sent' | 'failed', error?: string) => void;
   setProximityPhase: (
     rumorId: string,
     phase: 'queued' | 'sending' | 'awaiting_ack' | 'sent' | 'failed',
@@ -102,6 +105,7 @@ export const deliveryStatusStore = createStore<DeliveryStatusState>()((set) => (
         [rumorId]: {
           rumorId,
           phase: 'sending',
+          error: undefined,
           copies: copies.map((c) => ({
             recipient: c.recipient,
             self: c.self,
@@ -133,11 +137,16 @@ export const deliveryStatusStore = createStore<DeliveryStatusState>()((set) => (
         },
       };
     }),
-  finish: (rumorId, phase) =>
+  finish: (rumorId, phase, error) =>
     set((s) => {
       const entry = s.byId[rumorId];
       if (!entry) return s;
-      return { byId: { ...s.byId, [rumorId]: { ...entry, phase } } };
+      return {
+        byId: {
+          ...s.byId,
+          [rumorId]: { ...entry, phase, error: phase === 'failed' ? error : undefined },
+        },
+      };
     }),
   setProximityPhase: (rumorId, phase) =>
     set((s) => ({
@@ -153,6 +162,7 @@ export const deliveryStatusStore = createStore<DeliveryStatusState>()((set) => (
         [rumorId]: {
           rumorId,
           phase: 'sending',
+          error: undefined,
           copies: copies.map((cp) => ({
             ...cp,
             relays: cp.relays.map((r) =>
@@ -181,6 +191,17 @@ export function surfacedCopies<T extends { self: boolean }>(copies: T[]): T[] {
 /** Relays of the surfaced copies — see {@link surfacedCopies}. */
 export function surfacedRelays(d: MessageDelivery): RelayDelivery[] {
   return surfacedCopies(d.copies).flatMap((c) => c.relays);
+}
+
+/** Failed relay URLs to retry, or an empty list when the whole attempt must be
+ * rebuilt because it failed before any relay copies existed. Null means the
+ * delivery is not currently retryable. */
+export function failedRelayRetryUrls(d: MessageDelivery): string[] | null {
+  if (d.phase !== 'failed') return null;
+  const relays = surfacedRelays(d);
+  const failed = relays.filter((relay) => relay.status === 'failed').map((relay) => relay.url);
+  if (failed.length > 0) return failed;
+  return relays.length === 0 ? [] : null;
 }
 
 /** succeeded / total recipient relay attempts for the headline `n/m`. */

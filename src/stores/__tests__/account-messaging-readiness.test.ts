@@ -6,6 +6,7 @@ import { resolveMessagingMetadata, type MessagingMetadata } from '@/services/dm/
 import { initializeGeneratedAccount } from '@/services/account/generated-account-setup';
 import { getAccount } from '@/services/account/account.service';
 import { loadEncryptionKeys } from '@/services/dm/encryption-key.service';
+import { waitForMessagingSendReadiness } from '@/services/dm/messaging-send-readiness';
 
 jest.mock('@/services/account/generated-account-setup', () => ({ initializeGeneratedAccount: jest.fn() }));
 jest.mock('@/services/relay/configuration-publish.service', () => ({ configurationPublisher: { start: jest.fn(), stop: jest.fn() } }));
@@ -110,10 +111,15 @@ it('shows a newly generated account after local persistence while messaging star
   preparing.resolve(metadata());
   await signingIn;
   expect(useActiveAccount.getState()).toMatchObject({ status: 'ready', activePubkey: 'account' });
+  let sendReady = false;
+  const readiness = waitForMessagingSendReadiness('account').then(() => { sendReady = true; });
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(dmService.init).toHaveBeenCalledWith(expect.objectContaining({ metadata: metadata(), skipInitialHistory: true }));
   expect(resolveMetadata).not.toHaveBeenCalled();
+  expect(sendReady).toBe(false);
   messaging.resolve();
+  await readiness;
+  expect(sendReady).toBe(true);
 });
 
 it('resumes marked local setup before taking the existing-key fast path', async () => {

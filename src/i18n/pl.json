@@ -509,7 +509,9 @@
     },
     "check_relays": "Przekaźniki wiadomości",
     "check_key": "Publiczny klucz szyfrowania",
-    "recheck": "Sprawdź ponownie"
+    "recheck": "Sprawdź ponownie",
+    "send_not_ready": "Usługa wiadomości jest jeszcze przygotowywana. Spróbuj ponownie za chwilę.",
+    "send_failed": "Nie udało się wysłać wiadomości. Spróbuj ponownie."
   },
   "blocked": {
     "title": "Zablokowani użytkownicy",

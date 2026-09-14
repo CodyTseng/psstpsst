@@ -503,7 +503,9 @@
     },
     "check_relays": "Message relays",
     "check_key": "Encryption public key",
-    "recheck": "Recheck"
+    "recheck": "Recheck",
+    "send_not_ready": "Messaging is still getting ready. Try again in a moment.",
+    "send_failed": "Couldn't send the message. Try again."
   },
   "blocked": {
     "title": "Blocked users",

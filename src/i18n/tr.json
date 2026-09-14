@@ -503,7 +503,9 @@
     },
     "check_relays": "Mesaj relay'leri",
     "check_key": "Şifreleme açık anahtarı",
-    "recheck": "Yeniden kontrol et"
+    "recheck": "Yeniden kontrol et",
+    "send_not_ready": "Mesajlaşma hizmeti hâlâ hazırlanıyor. Biraz sonra tekrar deneyin.",
+    "send_failed": "Mesaj gönderilemedi. Tekrar deneyin."
   },
   "blocked": {
     "title": "Engellenen kullanıcılar",

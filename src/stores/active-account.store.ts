@@ -13,6 +13,12 @@ import {
 } from '@/services/account/account.service';
 import { dmService } from '@/services/dm/dm.service';
 import {
+  beginMessagingSendPreparation,
+  cancelMessagingSendPreparation,
+  completeMessagingSendPreparation,
+  failMessagingSendPreparation,
+} from '@/services/dm/messaging-send-readiness';
+import {
   rotateEncryptionKey,
   rotateEncryptionKeyIfDue,
 } from '@/services/dm/encryption-key-rotation.service';
@@ -234,6 +240,7 @@ async function holdAtLeast(startedAt: number, minMs: number): Promise<void> {
  */
 async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
   const signal = beginBootstrap();
+  beginMessagingSendPreparation(pubkey);
   configurationPublisher.start(pubkey);
   const profile = createPerfSpan('boot.comeOnline', { minHoldMs });
   let outcome = 'unknown';
@@ -279,6 +286,10 @@ async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
     await profileAsync(profile, 'holdAtLeast', () => holdAtLeast(startedAt, minHoldMs));
     checkBootstrap(signal);
     if (result.kind === 'need_sync') {
+      failMessagingSendPreparation(
+        pubkey,
+        new Error('The current messaging encryption key must be synchronized before sending messages.'),
+      );
       useActiveAccount.setState({
         activePubkey: null,
         status: 'need_sync',
@@ -289,6 +300,7 @@ async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
       });
       outcome = 'need-sync';
     } else {
+      completeMessagingSendPreparation(pubkey);
       useActiveAccount.setState({
         activePubkey: pubkey,
         status: 'ready',
@@ -301,7 +313,10 @@ async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
     }
   } catch (error) {
     // A cancelled local setup must not replace a newer session/sign-out with an error.
-    if (!signal.aborted) throw error;
+    if (!signal.aborted) {
+      failMessagingSendPreparation(pubkey, error);
+      throw error;
+    }
   } finally {
     profile?.end({ result: outcome });
   }
@@ -321,11 +336,16 @@ async function backgroundSync(pubkey: string, signal: AbortSignal, localMetadata
         accountPubkey: pubkey, dmRelays: localMetadata.dmRelays, metadata: localMetadata,
         abort: signal, skipInitialHistory: true,
       });
+      if (isCurrent()) completeMessagingSendPreparation(pubkey);
       return;
     }
     const result = await bootstrapAccount(pubkey, () => {}, signal);
     if (!isCurrent()) return;
     if (result.kind === 'need_sync') {
+      failMessagingSendPreparation(
+        pubkey,
+        new Error('The current messaging encryption key must be synchronized before sending messages.'),
+      );
       useActiveAccount.setState({
         activePubkey: null,
         status: 'need_sync',
@@ -334,8 +354,10 @@ async function backgroundSync(pubkey: string, signal: AbortSignal, localMetadata
       });
       return;
     }
+    completeMessagingSendPreparation(pubkey);
     const account = await getAccount(pubkey);
-    if (!account || !isCurrent()) return;
+    if (!isCurrent()) return;
+    if (!account) throw new Error('Account not found');
     const signer = await createSigner({
       accountPubkey: pubkey,
       signerType: account.signerType,
@@ -346,14 +368,22 @@ async function backgroundSync(pubkey: string, signal: AbortSignal, localMetadata
       loadAccountDmRelays(pubkey),
       ownKeyAnnouncementRelays(pubkey),
     ]);
-    if (!keys[0] || !isCurrent()) return;
+    if (!isCurrent()) return;
+    if (!keys[0]) throw new Error('No messaging encryption key is available.');
     await rotateEncryptionKeyIfDue({
       accountPubkey: pubkey, signer, dmRelays, announcementRelays, currentKey: keys[0],
     });
   } catch (error) {
     // Metadata unavailability retries inside preparation. Other failures keep
     // local conversations usable without starting intake from stale keys.
-    if (isCurrent()) console.warn('[boot] Messaging preparation failed.', error);
+    if (isCurrent()) {
+      if (dmService.getAccountPubkey() === pubkey) {
+        completeMessagingSendPreparation(pubkey);
+      } else {
+        failMessagingSendPreparation(pubkey, error);
+      }
+      console.warn('[boot] Messaging preparation failed.', error);
+    }
   }
 }
 
@@ -416,6 +446,7 @@ export const useActiveAccount = create<State>((set, get) => ({
     // switcher. (Read keys before the teardown below — it doesn't touch relays.)
     const established = isSwitch && (await loadEncryptionKeys(pubkey)).length > 0;
     bootstrapAbort?.abort();
+    cancelMessagingSendPreparation();
     configurationPublisher.stop();
     dmService.destroy();
     relayPool.destroy();
@@ -445,6 +476,7 @@ export const useActiveAccount = create<State>((set, get) => ({
     // the next launch. Account rows and key material remain intact.
     await clearActiveAccountPubkey();
     bootstrapAbort?.abort();
+    cancelMessagingSendPreparation();
     configurationPublisher.stop();
     dmService.destroy();
     relayPool.destroy();
@@ -466,6 +498,7 @@ export const useActiveAccount = create<State>((set, get) => ({
       // invalidation is immediate; the wait covers only writes that had already
       // crossed an async boundary when the user confirmed removal.
       bootstrapAbort?.abort();
+      cancelMessagingSendPreparation();
       const writesStopped = dmService.destroyAndWaitForWrites();
       relayPool.destroy();
       await writesStopped;
@@ -486,17 +519,26 @@ export const useActiveAccount = create<State>((set, get) => ({
     // Re-running bootstrap with a key now present: the boot screen shows the
     // generic "preparing" step (root-layout fallback) until bootstrap reports.
     set({ status: 'loading', bootPhase: null, error: null });
+    beginMessagingSendPreparation(pk);
     const signal = beginBootstrap();
     try {
       const result = await bootstrapAccount(pk, reportPhase, signal);
       checkBootstrap(signal);
       if (result.kind === 'need_sync') {
+        failMessagingSendPreparation(
+          pk,
+          new Error('The current messaging encryption key must be synchronized before sending messages.'),
+        );
         set({ status: 'need_sync', bootPhase: null });
         return;
       }
+      completeMessagingSendPreparation(pk);
       set({ activePubkey: pk, status: 'ready', bootPhase: null, syncTargetPubkey: null });
     } catch (e) {
-      if (!signal.aborted) set({ status: 'error', bootPhase: null, error: (e as Error).message });
+      if (!signal.aborted) {
+        failMessagingSendPreparation(pk, e);
+        set({ status: 'error', bootPhase: null, error: (e as Error).message });
+      }
     }
   },
 
@@ -504,6 +546,10 @@ export const useActiveAccount = create<State>((set, get) => ({
     const pk = get().activePubkey;
     if (!pk) return;
     bootstrapAbort?.abort();
+    failMessagingSendPreparation(
+      pk,
+      new Error('The current messaging encryption key must be synchronized before sending messages.'),
+    );
     dmService.destroy();
     // Keep all local keys — they're still needed to decrypt history, and the
     // single key list never drops them. We just record the newer announced key

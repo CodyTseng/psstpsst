@@ -503,7 +503,9 @@
     },
     "check_relays": "Nachrichten-Relays",
     "check_key": "Öffentlicher Verschlüsselungsschlüssel",
-    "recheck": "Erneut prüfen"
+    "recheck": "Erneut prüfen",
+    "send_not_ready": "Der Nachrichtendienst wird noch vorbereitet. Versuche es gleich noch einmal.",
+    "send_failed": "Die Nachricht konnte nicht gesendet werden. Versuche es erneut."
   },
   "blocked": {
     "title": "Blockierte Nutzer",

@@ -506,7 +506,9 @@
     },
     "check_relays": "Relays de mensagens",
     "check_key": "Chave pública de criptografia",
-    "recheck": "Verificar novamente"
+    "recheck": "Verificar novamente",
+    "send_not_ready": "O serviço de mensagens ainda está sendo preparado. Tente novamente em instantes.",
+    "send_failed": "Não foi possível enviar a mensagem. Tente novamente."
   },
   "blocked": {
     "title": "Usuários bloqueados",

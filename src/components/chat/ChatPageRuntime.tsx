@@ -127,6 +127,7 @@ import { shareContactContent } from '@/lib/share/contact-card';
 import type { ShareTarget } from '@/lib/share/share-target';
 import { conversationRemoteContentMode } from '@/components/chat/remote-content-policy';
 import { resolvePeerRelationship, type PeerRelationship } from '@/lib/chat/peer-relationship';
+import { PendingComposerSends } from '@/lib/chat/pending-composer-sends';
 import { platform } from '@/platform';
 import { buildSigner } from '@/services/account/account.service';
 import { conversationSendService } from '@/services/conversation/conversation-send.service';
@@ -213,6 +214,8 @@ type ChatComposerBindingProps = {
   controllerRef: MutableRefObject<ChatComposerController | null>;
   model: ChatComposerModel;
   onModelChange: (model: ChatComposerModel) => void;
+  onControllerAttach: (controller: ChatComposerController) => void;
+  onControllerDetach: (controller: ChatComposerController) => void;
 };
 
 function ChatComposerBinding({
@@ -220,14 +223,18 @@ function ChatComposerBinding({
   controllerRef,
   model,
   onModelChange,
+  onControllerAttach,
+  onControllerDetach,
 }: ChatComposerBindingProps) {
   useLayoutEffect(() => {
     controllerRef.current = controller;
+    onControllerAttach(controller);
     onModelChange(model);
     return () => {
       if (controllerRef.current === controller) controllerRef.current = null;
+      onControllerDetach(controller);
     };
-  }, [controller, controllerRef, model, onModelChange]);
+  }, [controller, controllerRef, model, onControllerAttach, onControllerDetach, onModelChange]);
   return null;
 }
 
@@ -338,6 +345,10 @@ export default function ChatPageRuntime() {
   );
   const isProximity = route?.transport === 'proximity';
   const composerControllerRef = useRef<ChatComposerController | null>(null);
+  const pendingComposerSends = useMemo(
+    () => new PendingComposerSends(`${accountPubkey}:${conversationKey}`),
+    [accountPubkey, conversationKey],
+  );
   const [composerModel, setComposerModel] = useState<ChatComposerModel>(() => ({
     mode: 'input',
     disabled: false,
@@ -377,10 +388,21 @@ export default function ChatPageRuntime() {
     });
   }, []);
   const sendFromComposer = useCallback((text: string, customEmojis: CustomEmoji[]) => {
-    const controller = composerControllerRef.current;
-    if (!controller) return Promise.reject(new Error('Chat runtime is not ready'));
-    return controller.send(text, customEmojis);
-  }, []);
+    // Sending is stronger intent than the one-task transition deferral. Mount
+    // the message viewport in this event's render so the queued controller can
+    // create its optimistic row before the cleared composer frame is painted.
+    setMessageRuntimeReady(true);
+    return pendingComposerSends.send(text, customEmojis);
+  }, [pendingComposerSends]);
+  const attachComposerController = useCallback((controller: ChatComposerController) => {
+    pendingComposerSends.attach(controller.send);
+  }, [pendingComposerSends]);
+  const detachComposerController = useCallback((controller: ChatComposerController) => {
+    pendingComposerSends.detach(controller.send);
+  }, [pendingComposerSends]);
+  useEffect(() => () => {
+    pendingComposerSends.cancel(new Error('The chat closed before the message could be sent.'));
+  }, [pendingComposerSends]);
   const pickFromComposer = useCallback((source: AttachmentSource) => {
     composerControllerRef.current?.pickAttachment(source);
   }, []);
@@ -689,6 +711,8 @@ export default function ChatPageRuntime() {
                   manualReconnectPending={manualReconnectPending}
                   composerControllerRef={composerControllerRef}
                   onComposerModelChange={handleComposerModelChange}
+                  onComposerControllerAttach={attachComposerController}
+                  onComposerControllerDetach={detachComposerController}
                 />
               </Reanimated.View>
             ) : null}
@@ -762,6 +786,8 @@ type ChatPageContentProps = {
   manualReconnectPending: boolean;
   composerControllerRef: MutableRefObject<ChatComposerController | null>;
   onComposerModelChange: (model: ChatComposerModel) => void;
+  onComposerControllerAttach: (controller: ChatComposerController) => void;
+  onComposerControllerDetach: (controller: ChatComposerController) => void;
 };
 
 function ChatPageContent({
@@ -780,6 +806,8 @@ function ChatPageContent({
   manualReconnectPending,
   composerControllerRef,
   onComposerModelChange,
+  onComposerControllerAttach,
+  onComposerControllerDetach,
 }: ChatPageContentProps) {
   const insets = useSafeAreaInsets();
   const composerClearance = bottomBarHeight + getBottomChromeInset(insets.bottom);
@@ -2243,6 +2271,8 @@ function ChatPageContent({
       <ChatComposerBinding
         controllerRef={composerControllerRef}
         onModelChange={onComposerModelChange}
+        onControllerAttach={onComposerControllerAttach}
+        onControllerDetach={onComposerControllerDetach}
         controller={{
           send: handleSend,
           pickAttachment: launchPicker,
@@ -2468,10 +2498,17 @@ function ChatPageContent({
                 ? undefined
                 : (relayUrls) => {
                     if (detailRumorId) {
-                      void dmService.resendToRelays({
-                        rumorId: detailRumorId,
-                        relayUrls,
-                      });
+                      if (relayUrls.length > 0) {
+                        void dmService.resendToRelays({
+                          rumorId: detailRumorId,
+                          relayUrls,
+                        });
+                      } else {
+                        void dmService.retryMessage({
+                          accountPubkey,
+                          rumorId: detailRumorId,
+                        });
+                      }
                     }
                   }
             }

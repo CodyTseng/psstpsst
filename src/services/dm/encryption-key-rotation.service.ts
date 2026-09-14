@@ -6,6 +6,11 @@ import {
   publishEncryptionKeyAnnouncement,
 } from '@/services/dm/encryption-key.service';
 import type { Signer } from '@/services/signer/signer.interface';
+import {
+  beginMessagingSendPreparation,
+  completeMessagingSendPreparation,
+  failMessagingSendPreparation,
+} from '@/services/dm/messaging-send-readiness';
 
 import { getKeyRotationIntervalDays } from './encryption-key-rotation-prefs';
 
@@ -31,6 +36,7 @@ async function performRotation({
   announcementRelays,
 }: RotationContext): Promise<EncryptionKeypair> {
   const shouldRestoreLiveStream = dmService.getAccountPubkey() === accountPubkey;
+  if (shouldRestoreLiveStream) beginMessagingSendPreparation(accountPubkey);
   dmService.destroy();
 
   let keypair: EncryptionKeypair | null = null;
@@ -48,7 +54,13 @@ async function performRotation({
     // without being held. Even if publication fails, restore the stream with
     // that new current key; startup reconciliation will retry the announcement.
     if (shouldRestoreLiveStream) {
-      await dmService.init({ accountPubkey, dmRelays });
+      try {
+        await dmService.init({ accountPubkey, dmRelays });
+        completeMessagingSendPreparation(accountPubkey);
+      } catch (error) {
+        failMessagingSendPreparation(accountPubkey, error);
+        throw error;
+      }
     }
   }
 }

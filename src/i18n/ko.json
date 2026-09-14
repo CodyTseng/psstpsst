@@ -503,7 +503,9 @@
     },
     "check_relays": "메시지 릴레이",
     "check_key": "암호화 공개 키",
-    "recheck": "다시 확인"
+    "recheck": "다시 확인",
+    "send_not_ready": "메시지 서비스를 준비하고 있습니다. 잠시 후 다시 시도하세요.",
+    "send_failed": "메시지를 보내지 못했습니다. 다시 시도하세요."
   },
   "blocked": {
     "title": "차단된 사용자",

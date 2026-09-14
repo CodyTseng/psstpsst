@@ -503,7 +503,9 @@
     },
     "check_relays": "Üzenet-relayek",
     "check_key": "Titkosítási nyilvános kulcs",
-    "recheck": "Újraellenőrzés"
+    "recheck": "Újraellenőrzés",
+    "send_not_ready": "Az üzenetküldés még előkészítés alatt áll. Próbáld újra egy pillanat múlva.",
+    "send_failed": "Az üzenetet nem sikerült elküldeni. Próbáld újra."
   },
   "blocked": {
     "title": "Letiltott felhasználók",

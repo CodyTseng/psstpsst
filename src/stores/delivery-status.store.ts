@@ -11,6 +11,7 @@ import type { MessageDelivery } from '@/services/dm/delivery-status';
  */
 export {
   deliveryCounts,
+  failedRelayRetryUrls,
   surfacedCopies,
   surfacedRelays,
 } from '@/services/dm/delivery-status';

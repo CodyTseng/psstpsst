@@ -84,6 +84,7 @@ import {
 import { isActiveConversationVisible } from './active-conversation';
 import { receiveSessionStore } from './receive-session';
 import { pollRecentGiftWraps } from './notification-poll';
+import { waitForMessagingSendReadiness } from './messaging-send-readiness';
 import {
   isNewerAnnouncement,
   MessagingKeySyncRequiredError,
@@ -293,6 +294,18 @@ class DmService {
   private liveStatus: 'connecting' | 'degraded' | 'connected' | null = null;
   private notificationPolls = new Set<AbortController>();
   private latestKeyAnnouncement: Event | null = null;
+
+  /** Startup exposes local conversations before network messaging is ready.
+   * Keep an optimistic send pending across that short window, then re-check the
+   * live session after the account-level preparation signal resolves. */
+  private waitUntilSendReady(accountPubkey: string): Promise<void> | null {
+    if (this.accountPubkey === accountPubkey && this.encryptionKeypair && this.signSeal) return null;
+    return waitForMessagingSendReadiness(accountPubkey).then(() => {
+      if (this.accountPubkey !== accountPubkey || !this.encryptionKeypair || !this.signSeal) {
+        throw new Error('DM service not initialized for this account');
+      }
+    });
+  }
 
   async init(opts: {
     accountPubkey: string;
@@ -859,10 +872,6 @@ class DmService {
    * but with kind 7 and an `e` tag pointing at the target rumor id.
    */
   async sendReaction(opts: SendReactionOpts): Promise<{ rumorId: string }> {
-    if (this.accountPubkey !== opts.accountPubkey || !this.encryptionKeypair) {
-      throw new Error('DM service not initialized for this account');
-    }
-
     const timestamp = nextRumorTimestamp();
     const customEmoji = typeof opts.emoji === 'string' ? null : opts.emoji;
     const content =
@@ -882,6 +891,10 @@ class DmService {
     };
     const rumor = buildRumor(rumorTemplate, opts.accountPubkey);
 
+    // Seed live delivery before the durable row can reach the message query.
+    // Otherwise the optimistic bubble hands off to a DB-backed bubble with no
+    // delivery record yet, whose legacy fallback looks like a sent checkmark.
+    deliveryStatusStore.getState().begin(rumor.id!);
     await this.storeRumor(rumor, opts.accountPubkey);
     const now = Math.floor(Date.now() / 1000);
     await db
@@ -907,10 +920,6 @@ class DmService {
   }
 
   async sendMessage(opts: SendMessageOpts): Promise<{ rumorId: string }> {
-    if (this.accountPubkey !== opts.accountPubkey || !this.encryptionKeypair) {
-      throw new Error('DM service not initialized for this account');
-    }
-
     // 1. Build rumor (kind 14 chat)
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
     const content = normalizeBareNostrUris(opts.content);
@@ -929,6 +938,9 @@ class DmService {
     };
     const rumor = buildRumor(rumorTemplate, opts.accountPubkey);
 
+    // Seed live delivery before the durable row can reach the message query.
+    // This keeps the optimistic-to-persisted handoff in the signing phase.
+    deliveryStatusStore.getState().begin(rumor.id!);
     // 2. Optimistic write — bubble appears now
     await this.storeRumor(rumor, opts.accountPubkey);
     const now = Math.floor(Date.now() / 1000);
@@ -965,10 +977,6 @@ class DmService {
     contentTags: string[][];
     timestamp?: RumorTimestamp;
   }): Promise<{ rumorId: string }> {
-    if (this.accountPubkey !== opts.accountPubkey || !this.encryptionKeypair) {
-      throw new Error('DM service not initialized for this account');
-    }
-
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
     const tags = withMessageOrderTag([
       ...opts.recipientPubkeys.map((r) => ['p', r]),
@@ -982,6 +990,8 @@ class DmService {
     };
     const rumor = buildRumor(rumorTemplate, opts.accountPubkey);
 
+    // Seed live delivery before the durable row can reach the message query.
+    deliveryStatusStore.getState().begin(rumor.id!);
     await this.storeRumor(rumor, opts.accountPubkey);
     const now = Math.floor(Date.now() / 1000);
     await db
@@ -1128,21 +1138,55 @@ class DmService {
     await this.persistDelivery(opts.rumorId, msgRow.conversationKey, copyRecords);
   }
 
+  /** Retry an attempt that failed before it had relay copies to target. The
+   * original stored rumor keeps its id and timestamp; only its wrapping and
+   * delivery attempt are restarted. */
+  async retryMessage(opts: { accountPubkey: string; rumorId: string }): Promise<void> {
+    const [msgRow] = await db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.accountPubkey, opts.accountPubkey),
+          eq(messages.id, opts.rumorId),
+        ),
+      )
+      .limit(1);
+    if (!msgRow?.rumor) throw new Error('Message not found');
+
+    const rumor = msgRow.rumor as Rumor;
+    deliveryStatusStore.getState().begin(rumor.id!);
+    await db
+      .update(outbox)
+      .set({
+        status: 'sending',
+        attempts: sql`${outbox.attempts} + 1`,
+        lastError: null,
+        updatedAt: Math.floor(Date.now() / 1000),
+      })
+      .where(eq(outbox.messageId, rumor.id!));
+
+    const rumorTemplate: EventTemplate = {
+      kind: rumor.kind,
+      content: rumor.content,
+      tags: rumor.tags,
+      created_at: rumor.created_at,
+    };
+    void this.publishRumorInBackground(rumor, rumorTemplate, {
+      accountPubkey: opts.accountPubkey,
+      recipientPubkeys: getPTags(rumor.tags),
+      content: rumor.content,
+    });
+  }
+
   private async publishRumorInBackground(
     rumor: Rumor,
     rumorTemplate: EventTemplate,
     opts: SendMessageOpts,
   ): Promise<void> {
-    if (!this.encryptionKeypair || !this.signSeal) return;
-    // Local consts so the identity signer / encryption key survive the awaits
-    // below without TS losing the non-null narrowing.
-    const signSeal = this.signSeal;
-    const encryptionKeypair = this.encryptionKeypair;
-
+    // Callers seed phase 'signing' before persisting the rumor, so the DB-backed
+    // bubble can never render between optimistic state and live delivery state.
     const delivery = deliveryStatusStore.getState();
-    // Phase 'signing': resolving recipient keys + signing gift wraps. The bubble
-    // shows a signing icon until we know the relay set.
-    delivery.begin(rumor.id!);
 
     // Conversation key for the persisted delivery row (same derivation as
     // storeRumor); computed here so it's available in the catch block too.
@@ -1155,6 +1199,14 @@ class DmService {
     const persists = rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE;
 
     try {
+      // Persist the authored rumor first, then hold only its publication while
+      // startup prepares the account session. This keeps the bubble durable and
+      // visible instead of returning its text to the composer.
+      const readiness = this.waitUntilSendReady(opts.accountPubkey);
+      if (readiness) await readiness;
+      const signSeal = this.signSeal!;
+      const encryptionKeypair = this.encryptionKeypair!;
+
       // Resolve each recipient's encryption pubkey AND inbox relays up front —
       // both are hard preconditions for delivery. A recipient that publishes no
       // DM relays cannot be reached (they don't read ours), so this is treated
@@ -1342,13 +1394,14 @@ class DmService {
           .where(eq(outbox.messageId, rumor.id!));
       }
     } catch (err) {
-      delivery.finish(rumor.id!, 'failed');
+      const reason = err instanceof Error ? err.message : String(err);
+      delivery.finish(rumor.id!, 'failed', reason);
       if (persists) await this.persistDelivery(rumor.id!, convKey, []);
       await db
         .update(outbox)
         .set({
           status: 'failed',
-          lastError: (err as Error).message ?? String(err),
+          lastError: reason,
           updatedAt: Math.floor(Date.now() / 1000),
         })
         .where(eq(outbox.messageId, rumor.id!));

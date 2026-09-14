@@ -23,6 +23,7 @@ import { findFileMeta } from '@/lib/nostr/file-tags';
 import { formatDetailTimestamp } from '@/lib/time';
 import {
   deliveryCounts,
+  failedRelayRetryUrls,
   surfacedRelays,
   useDelivery,
   type MessageDelivery,
@@ -182,7 +183,9 @@ export function MessageDetailSheet({
   // The surfaced (recipient, non-self) relays — what "delivered to" shows.
   const rows = delivery ? surfacedRelays(delivery) : [];
   const signing = delivery?.phase === 'signing';
-  const failedUrls = rows.filter((r) => r.status === 'failed').map((r) => r.url);
+  const failed = delivery?.phase === 'failed';
+  const retryUrls = delivery ? failedRelayRetryUrls(delivery) : null;
+  const canResend = !!onResend && retryUrls !== null;
 
   // Which failed relays have their reason expanded (tap the row to toggle).
   const [openReasons, setOpenReasons] = useState<Set<string>>(new Set());
@@ -289,9 +292,9 @@ export function MessageDetailSheet({
                     ? t('delivery.summary', { ok: counts.ok, total: counts.total })
                     : t('message_detail.delivered_to')}
             </AppText>
-            {onResend && failedUrls.length > 0 ? (
+            {canResend ? (
               <Pressable
-                onPress={() => onResend(failedUrls)}
+                onPress={() => onResend?.(retryUrls ?? [])}
                 hitSlop={8}
                 style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
               >
@@ -321,6 +324,12 @@ export function MessageDetailSheet({
             <DeliveryStatusRow
               icon={<Signature size={18} color={c.textMuted} />}
               label={t('delivery.signing')}
+            />
+          ) : failed && rows.length === 0 ? (
+            <DeliveryStatusRow
+              icon={<CircleAlert size={18} color={c.danger} />}
+              label={delivery.error || t('delivery.failed')}
+              tone="danger"
             />
           ) : rows.length > 0 ? (
             <View

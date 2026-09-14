@@ -503,7 +503,9 @@
     },
     "check_relays": "訊息中繼站",
     "check_key": "加密公開金鑰",
-    "recheck": "重新檢查"
+    "recheck": "重新檢查",
+    "send_not_ready": "訊息服務仍在準備中，請稍後再試。",
+    "send_failed": "訊息傳送失敗，請再試一次。"
   },
   "blocked": {
     "title": "已封鎖的使用者",

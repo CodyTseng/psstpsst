@@ -52,13 +52,23 @@ export function useMessageDeliveries(
       };
     }
     for (const row of pending ?? []) {
-      if (row.deliveryKind !== 'proximity') continue;
-      map[row.messageId] = {
-        rumorId: row.messageId,
-        phase: row.status,
-        transport: 'proximity',
-        copies: [],
-      };
+      const existing = map[row.messageId];
+      if (existing) {
+        map[row.messageId] = {
+          ...existing,
+          phase: row.status,
+          transport: row.deliveryKind,
+          error: row.lastError ?? existing.error,
+        };
+      } else {
+        map[row.messageId] = {
+          rumorId: row.messageId,
+          phase: row.status,
+          transport: row.deliveryKind,
+          copies: [],
+          error: row.lastError ?? undefined,
+        };
+      }
     }
     return map;
   }, [data, pending]);
