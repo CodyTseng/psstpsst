@@ -2,7 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
-import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { router, useIsFocused, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Reply } from '@solar-icons/react-native/category/arrows-action/Linear/Reply';
 import { DownloadMinimalistic as Download } from '@solar-icons/react-native/category/arrows-action/Linear/DownloadMinimalistic';
 import { Forward } from '@solar-icons/react-native/category/arrows-action/Linear/Forward';
@@ -24,7 +24,7 @@ import {
   type SetStateAction,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import Reanimated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
 
@@ -45,6 +45,7 @@ import { ChatBlockedNotice } from '@/components/chat/ChatBlockedNotice';
 import { ChatContactPrompt } from '@/components/chat/ChatContactPrompt';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { IncomingMessageBanner } from '@/components/chat/IncomingMessageBanner';
 import { NearbyReconnectNotice } from '@/components/chat/NearbyReconnectNotice';
 import {
   ChatComposerPanelBackHandler,
@@ -95,6 +96,7 @@ import {
   routeHexIdParam,
 } from '@/lib/navigation/route-params';
 import { getBottomChromeInset } from '@/lib/layout/bottom-chrome';
+import { isWideLayoutSize } from '@/lib/layout/wide-layout';
 import { shortCustomEmojiMessage } from '@/lib/emoji/custom-message';
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
 import { quickReactionKey, type QuickReaction } from '@/lib/nostr/quick-reaction';
@@ -280,6 +282,9 @@ export default function ChatPageRuntime() {
   const conversationKey = route?.key ?? '';
   const accountPubkey = useActiveAccount((state) => state.activePubkey) ?? '';
   const navigation = useNavigation();
+  const focused = useIsFocused();
+  const { width, height } = useWindowDimensions();
+  const wide = isWideLayoutSize(width, height);
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const [selectionMode, setSelectionMode] = useState(false);
@@ -727,6 +732,13 @@ export default function ChatPageRuntime() {
             liveDataEnabled={liveDataReady}
           />
         )}
+        {liveDataReady && focused && !wide && !selectionMode ? (
+          <IncomingMessageBanner
+            key={conversationKey}
+            accountPubkey={accountPubkey}
+            activeConversationKey={conversationKey}
+          />
+        ) : null}
       </ChatFileDropZone>
     </AppScreen>
   );

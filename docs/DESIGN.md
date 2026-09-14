@@ -330,6 +330,12 @@ Electron renderer implementation detail.
 
 ## 10. Overlays and focus
 
+While a compact-layout chat is open, a new incoming message from another
+unmuted conversation uses one small floating notice directly below the title
+bar. It fits the avatar, single-line name, and single-line message preview in
+one row; tapping it switches chats. Wide split layouts rely on the visible
+conversation list instead of duplicating this notice.
+
 Use the shared, state-driven `BottomSheet` for task flows. Do not use
 `@gorhom/bottom-sheet` or introduce another overlay system.
 
