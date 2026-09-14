@@ -51,6 +51,7 @@ import type { EmojiPickerPopoverAnchor } from './EmojiPickerSheet';
 import {
   placeDesktopMessageActionMenu,
   placeTouchMessageActionMenu,
+  resolveMessageOverlayWindowGeometry,
 } from './message-action-menu-placement';
 import type { BubbleRect, MessageBubbleReplyPreview } from './MessageBubble';
 import { ReactionsRow } from './ReactionsRow';
@@ -333,29 +334,19 @@ export function MessageActionMenu({
   if (!mounted || !dataRef.current) return null;
 
   const view = dataRef.current;
-  // With a translucent status bar, Android reports measureInWindow's y from
-  // the app content origin while this Modal lays out from the physical screen
-  // origin. Normalise that one inset so the lifted copy covers the real bubble.
-  const windowOriginOffset = Platform.OS === 'android' ? insets.top : 0;
-  const vRect =
-    windowOriginOffset > 0
-      ? { ...view.rect, y: view.rect.y + windowOriginOffset }
-      : view.rect;
-  const vBodyRect = view.rect.body
-    ? {
-        x: vRect.x + view.rect.body.offsetX,
-        y: vRect.y + view.rect.body.offsetY,
-        width: view.rect.body.width,
-        height: view.rect.body.height,
-      }
-    : vRect;
-  // The chat viewport is measured through the same measureInWindow API as the
-  // bubble. Keep both in the Modal's physical-screen coordinate space; shifting
-  // only the bubble falsely clips the last row by one status-bar height.
-  const contentViewportTop =
-    view.contentTop == null ? undefined : view.contentTop + windowOriginOffset;
-  const contentViewportBottom =
-    view.contentBottom == null ? undefined : view.contentBottom + windowOriginOffset;
+  // Expo 57 / RN 0.86 edge-to-edge Android includes the viewport offset in
+  // measureInWindow. The translucent Modal uses that same window coordinate
+  // space, so applying the status-bar inset again would move every lifted copy.
+  const {
+    rect: vRect,
+    bodyRect: vBodyRect,
+    contentTop: contentViewportTop,
+    contentBottom: contentViewportBottom,
+  } = resolveMessageOverlayWindowGeometry({
+    rect: view.rect,
+    contentTop: view.contentTop,
+    contentBottom: view.contentBottom,
+  });
   const vBubble = view.bubble;
   const vActions = view.actions;
   const menuItems: ActionMenuItem[] = vActions.map((action) => ({

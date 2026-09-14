@@ -2,7 +2,38 @@ import {
   placeDesktopMessageActionMenu,
   placeTouchMessageActionMenu,
   resolveMessageContentViewport,
+  resolveMessageOverlayWindowGeometry,
 } from '../message-action-menu-placement';
+
+describe('resolveMessageOverlayWindowGeometry', () => {
+  it('preserves measureInWindow coordinates for a translucent Modal', () => {
+    const rect = {
+      x: 24,
+      y: 92,
+      width: 180,
+      height: 72,
+      body: {
+        offsetX: 0,
+        offsetY: 4,
+        width: 180,
+        height: 52,
+      },
+    };
+    const geometry = resolveMessageOverlayWindowGeometry({
+      rect,
+      contentTop: 59,
+      contentBottom: 754,
+    });
+
+    expect(geometry.rect).toBe(rect);
+    expect(geometry).toEqual({
+      rect,
+      bodyRect: { x: 24, y: 96, width: 180, height: 52 },
+      contentTop: 59,
+      contentBottom: 754,
+    });
+  });
+});
 
 describe('resolveMessageContentViewport', () => {
   it('applies the header inset when the list container starts at the screen top', () => {

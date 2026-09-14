@@ -1,5 +1,52 @@
 export type PointerAnchor = { x: number; y: number };
 
+type WindowRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type MeasuredBubbleRect = WindowRect & {
+  body?: {
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+  };
+  pointer?: PointerAnchor;
+};
+
+/** Keep all geometry measured by measureInWindow in the Modal's window space. */
+export function resolveMessageOverlayWindowGeometry({
+  rect,
+  contentTop,
+  contentBottom,
+}: {
+  rect: MeasuredBubbleRect;
+  contentTop?: number;
+  contentBottom?: number;
+}): {
+  rect: MeasuredBubbleRect;
+  bodyRect: WindowRect;
+  contentTop?: number;
+  contentBottom?: number;
+} {
+  return {
+    rect,
+    bodyRect: rect.body
+      ? {
+          x: rect.x + rect.body.offsetX,
+          y: rect.y + rect.body.offsetY,
+          width: rect.body.width,
+          height: rect.body.height,
+        }
+      : rect,
+    contentTop,
+    contentBottom,
+  };
+}
+
 type ContentViewportInput = {
   containerTop: number;
   containerHeight: number;
