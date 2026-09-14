@@ -5,8 +5,8 @@
   "licenses/third-party/common/mobile-native.txt": "c6fcdf4ec79f7be86767d2d4c43f673e847e96789f512d9b12a20bc97d50b802",
   "licenses/third-party/common/mobile-sources.json": "5b68a9db7e33feec226945f63745145ef6b6f617443f1001cee8008e68c05e58",
   "licenses/third-party/common/noise-c.txt": "0bf0a1b906899da6dd7f42844c7afd8eb227fdd718466702e1f32219d3f26220",
-  "licenses/third-party/common/npm-inventory.json": "9cb7b5c44d77b1d7e986237abfa9043c054ba9826cdbcfdb57402eabf34d8de8",
-  "licenses/third-party/common/npm-notices.txt": "788085002095689e18261f023bd8afa3151719c01875adfa08cb62c3ef7475e3",
+  "licenses/third-party/common/npm-inventory.json": "226757f24f32c5dfc265e5e3cfc9f85706291547b85596fc461740e320fe30f1",
+  "licenses/third-party/common/npm-notices.txt": "d5c344dae8d74134f7eed6dd69dccb5c8d2c573719b05a6d55bf3a7e4cea33b2",
   "licenses/third-party/common/secp256k1.txt": "e8808b1cb5d557fd63f4c67e96ea5a27ec926c91613b93cf0e781bb329efff42",
   "licenses/third-party/common/solar-icons-attribution.txt": "055cc14f0eca227d9af49d408e3c5d3407fb688158e123b28f67177e1ec5f7d8",
   "licenses/third-party/common/solar-wrapper-MIT.txt": "79ca906d7d543e10e4630cddb239c3765678fa18d624a33b99b65bf19e51741a",
@@ -21,5 +21,5 @@
   "licenses/third-party/snapshots.json": "0862c7ad10ba6ed424901b95008b48a4a217597dae758fe44872d762e446b4c4",
   "licenses/zxing-cpp/LICENSE": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
   "licenses/zxing-cpp/NOTICE": "4d77d6803e97fbd30e85b8cae6423adf00bb2bcace8839ece265db2532178ce0",
-  "package-lock.json": "ed9d6b5bebfae3107dcc82345cb51522b38ad08f293f9af98dcffd417081c080"
+  "package-lock.json": "a4f81ce71a26134046f613c022a30a4ff696a553fc66522bb7c8cd336df10048"
 }

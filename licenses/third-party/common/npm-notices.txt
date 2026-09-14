@@ -5416,7 +5416,7 @@ LICENSE
   Text: 61f544abd29598a0db5403b6c9d5c9cfe505362a00dde783ea9e73773daae541
 ========================================
 
-react-native-reanimated@4.3.1
+react-native-reanimated@4.3.4
 License: MIT
 Source: git+https://github.com/software-mansion/react-native-reanimated.git
 LICENSE

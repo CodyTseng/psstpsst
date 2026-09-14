@@ -1,6 +1,6 @@
 {
-  "reviewed": "2026-09-12",
-  "lockfileSha256": "1557bd68336853cdf231818019176f70166a5ce1c11c2aa1793f7fa0686c1ea5",
+  "reviewed": "2026-09-14",
+  "lockfileSha256": "a4f81ce71a26134046f613c022a30a4ff696a553fc66522bb7c8cd336df10048",
   "scope": "All locked non-development npm packages on all platforms, plus the shipped Electron runtime. Includes build utilities; not an exact binary inventory.",
   "packages": [
     {
@@ -10106,10 +10106,11 @@
     },
     {
       "name": "react-native-reanimated",
-      "version": "4.3.1",
+      "version": "4.3.4",
       "license": "MIT",
-      "integrity": "sha512-KhGsS0YkCA+gusgyzlf9hnqzVPIR398KTpqXyqq/+yYJJPAvyEEPKcxlB0xtOOXSMrR2A9uRKVARVQhZwrOh+Q==",
+      "integrity": "sha512-kQJMiDROed3eO+asdXfodDxgsDDIGM/ifnHFAiPsKWxmrcPu+Bz4vO0fg79eyuEmKCeQuDczmn4tkTb4RbSVYA==",
       "repository": "git+https://github.com/software-mansion/react-native-reanimated.git",
+      "homepage": "https://docs.swmansion.com/react-native-reanimated",
       "licenseFiles": [
         {
           "source": "LICENSE",
