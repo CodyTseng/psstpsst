@@ -47,7 +47,7 @@ export function SelectionHeader({ count, onCancel }: Props) {
         </AppText>
       </View>
       <View style={{ flexDirection: 'row', paddingHorizontal: 8 }}>
-        <AppButton variant="ghost" label={t('common.cancel')} onPress={onCancel} />
+        <AppButton variant="text" label={t('common.cancel')} onPress={onCancel} />
       </View>
     </View>
   );
