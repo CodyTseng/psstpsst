@@ -484,7 +484,9 @@ requires an explicit tap; missing size metadata preserves automatic loading.
 
 Video attachments use a local first-frame poster while sending and carry a
 compact poster placeholder for the received bubble. The generic video glyph is
-only the fallback when poster extraction is unavailable.
+only the fallback when poster extraction is unavailable. Message metadata is
+hidden while the inline video player is active so native playback controls stay
+unobstructed.
 
 Audio playback clocks use monospaced, fixed-width digits so advancing time never
 changes the waveform geometry. Hour-long media keeps an hour field throughout.

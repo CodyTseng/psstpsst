@@ -222,7 +222,10 @@ export function AttachmentVideo({
       failure={failKind}
       action="play"
       onRetry={(allow) => void load(allow)}
-      overlay={overlay}
+      // Native playback controls share the video's bottom edge with message
+      // metadata. Keep the timestamp on the poster, then remove it for the
+      // lifetime of the inline player so those controls remain unobstructed.
+      overlay={started && !playbackFailed ? undefined : overlay}
     >
       <View
         style={{

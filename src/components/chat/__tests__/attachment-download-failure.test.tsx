@@ -208,3 +208,22 @@ describe.each(['audio', 'file', 'video'] as const)('%s download failure', (mediu
     }));
   });
 });
+
+describe('video message metadata', () => {
+  it('hides the timestamp overlay once the inline player starts', async () => {
+    jest.mocked(fetchAndDecryptAttachment).mockResolvedValueOnce('file:///attachment');
+    const MessageTime = () => null;
+    const overlay = <MessageTime />;
+
+    await act(async () => {
+      renderer = create(<AttachmentVideo meta={META} overlay={overlay} />);
+    });
+    expect(renderer.root.findAllByType(MessageTime)).toHaveLength(1);
+
+    await act(async () => {
+      renderer.root.findByType(InteractivePressable).props.onPress();
+    });
+
+    expect(renderer.root.findAllByType(MessageTime)).toHaveLength(0);
+  });
+});
