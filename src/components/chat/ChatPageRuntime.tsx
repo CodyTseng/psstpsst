@@ -47,6 +47,7 @@ import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { NearbyReconnectNotice } from '@/components/chat/NearbyReconnectNotice';
 import {
+  ChatComposerPanelBackHandler,
   ChatComposerPanelDismissOverlay,
   ChatComposerPanelProvider,
 } from '@/components/chat/chat-composer-panel-context';
@@ -627,6 +628,7 @@ export default function ChatPageRuntime() {
         onDropFiles={setComposerFiles}
       >
         <ChatComposerPanelProvider>
+          <ChatComposerPanelBackHandler />
           {liveDataReady && isRelationshipEligible ? (
             <ChatRelationshipLiveSync
               key={relationshipKey}

@@ -6,7 +6,8 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { StyleSheet } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { BackHandler, StyleSheet } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
@@ -45,4 +46,23 @@ export function ChatComposerPanelDismissOverlay() {
 
   if (!open) return null;
   return <Pressable style={StyleSheet.absoluteFill} onPress={close} />;
+}
+
+/** Lets Android back dismiss an open keyboard-replacement panel before the route. */
+export function ChatComposerPanelBackHandler() {
+  const { open, setOpen } = useChatComposerPanel();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!open) return;
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        setOpen(false);
+        return true;
+      });
+      return () => subscription.remove();
+    }, [open, setOpen]),
+  );
+
+  return null;
 }
