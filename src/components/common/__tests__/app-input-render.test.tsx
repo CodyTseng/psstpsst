@@ -70,4 +70,45 @@ describe('AppInput field chrome', () => {
     expect(renderer!.root.findByProps({ testID: 'field-action' })).toBeTruthy();
     expect(renderer!.root.findByType(TextInput)).toBeTruthy();
   });
+
+  it('ellipsizes single-line placeholders by default', () => {
+    act(() => {
+      renderer = create(<AppInput placeholder="A long placeholder" />);
+    });
+
+    const input = renderer!.root.findByType(TextInput);
+    const placeholder = renderer!.root.findByType(AppText);
+
+    expect(input.props).toMatchObject({
+      multiline: false,
+      numberOfLines: 1,
+      accessibilityLabel: 'A long placeholder',
+    });
+    expect(input.props.placeholder).toBeUndefined();
+    expect(placeholder.props).toMatchObject({
+      children: 'A long placeholder',
+      numberOfLines: 1,
+      ellipsizeMode: 'tail',
+    });
+
+    act(() => {
+      input.props.onChangeText('value');
+    });
+
+    expect(renderer!.root.findAllByType(AppText)).toHaveLength(0);
+  });
+
+  it('preserves the requested line count for multiline fields', () => {
+    act(() => {
+      renderer = create(
+        <AppInput multiline numberOfLines={4} placeholder="A multiline placeholder" />,
+      );
+    });
+
+    expect(renderer!.root.findByType(TextInput).props).toMatchObject({
+      multiline: true,
+      numberOfLines: 4,
+      placeholder: 'A multiline placeholder',
+    });
+  });
 });

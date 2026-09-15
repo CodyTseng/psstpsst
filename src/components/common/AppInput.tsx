@@ -27,18 +27,25 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
     style,
     onFocus,
     onBlur,
+    onChangeText,
     accessibilityLabel,
+    placeholder,
+    value,
+    defaultValue,
     ...rest
   },
   ref,
 ) {
   const c = useThemeColors();
   const [focused, setFocused] = useState(false);
+  const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue ?? '');
 
   const hasError = invalid === true || error != null;
   const supportingText = error ?? description;
   const borderColor = hasError ? c.danger : focused ? c.accent : c.border;
   const multiline = rest.multiline ?? false;
+  const currentValue = value ?? uncontrolledValue;
+  const showTruncatedPlaceholder = !multiline && placeholder != null && currentValue.length === 0;
 
   const input = (
     <View
@@ -54,11 +61,36 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
         justifyContent: multiline ? 'flex-start' : 'center',
       }}
     >
+      {showTruncatedPlaceholder ? (
+        <View
+          pointerEvents="none"
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            position: 'absolute',
+            insetBlock: 0,
+            insetInline: uiDensity.inputHorizontalPadding,
+            justifyContent: 'center',
+          }}
+        >
+          <AppText variant="body" tone="muted" numberOfLines={1} ellipsizeMode="tail">
+            {placeholder}
+          </AppText>
+        </View>
+      ) : null}
       <TextInput
         ref={ref}
         placeholderTextColor={c.textMuted}
         {...rest}
-        accessibilityLabel={accessibilityLabel ?? label}
+        value={value}
+        defaultValue={defaultValue}
+        placeholder={multiline ? placeholder : undefined}
+        multiline={multiline}
+        numberOfLines={multiline ? rest.numberOfLines : 1}
+        accessibilityLabel={accessibilityLabel ?? label ?? placeholder}
+        onChangeText={(nextValue) => {
+          setUncontrolledValue(nextValue);
+          onChangeText?.(nextValue);
+        }}
         onFocus={(e) => {
           setFocused(true);
           onFocus?.(e);
