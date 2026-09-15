@@ -51,6 +51,7 @@ import {
   ChatComposerPanelDismissOverlay,
   ChatComposerPanelProvider,
 } from '@/components/chat/chat-composer-panel-context';
+import { ChatSelectionCancelHandler } from '@/components/chat/chat-selection-cancel-handler';
 import { ForwardActionBar } from '@/components/chat/ForwardActionBar';
 import { SelectionHeader } from '@/components/chat/SelectionHeader';
 import type { VoicePayload } from '@/components/chat/VoiceRecorderBar';
@@ -298,6 +299,10 @@ export default function ChatPageRuntime() {
   const { t } = useTranslation();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const exitSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
   const matchingFileHandoff = useComposerFileHandoffStore((state) => {
     const handoff = state.handoff;
     return handoff?.accountPubkey === accountPubkey && handoff.conversationKey === conversationKey
@@ -645,11 +650,6 @@ export default function ChatPageRuntime() {
     }
   }, [accountPubkey, conversationKey, isProximity, manualReconnectPending, t]);
 
-  const exitSelection = () => {
-    setSelectionMode(false);
-    setSelectedIds(new Set());
-  };
-
   return (
     <AppScreen edges={[]}>
       <ChatFileDropZone
@@ -658,6 +658,7 @@ export default function ChatPageRuntime() {
       >
         <ChatComposerPanelProvider>
           <ChatComposerPanelBackHandler />
+          <ChatSelectionCancelHandler active={selectionMode} onCancel={exitSelection} />
           {liveDataReady && isRelationshipEligible ? (
             <ChatRelationshipLiveSync
               key={relationshipKey}

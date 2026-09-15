@@ -201,6 +201,8 @@ Interactive wallet amounts use opacity-only hover and press feedback, with no
 background fill.
 On Electron, receipt amount keypads also accept physical number and deletion
 keys while active; text entry and modal tasks retain their own keyboard input.
+Transient multi-selection modes consume Android back and desktop Escape to
+cancel before normal navigation.
 
 ## 7. Icons
 
