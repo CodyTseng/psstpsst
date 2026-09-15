@@ -1,7 +1,9 @@
 import {
+  isNearMessageHistoryEdge,
   isNearMessageTail,
+  messageTailScrollMode,
+  MESSAGE_HISTORY_PREFETCH_VIEWPORTS,
   MESSAGE_TAIL_FOLLOW_THRESHOLD,
-  shouldRequestMessageTailScroll,
 } from '../message-tail-follow';
 
 describe('message tail following', () => {
@@ -15,21 +17,59 @@ describe('message tail following', () => {
     expect(isNearMessageTail(MESSAGE_TAIL_FOLLOW_THRESHOLD + 1)).toBe(false);
   });
 
-  it('lets MVCP settle an arrival that is already pinned at the bottom', () => {
+  it('retries older pagination when a settled fling reaches the history edge', () => {
+    const viewportHeight = 800;
+    const contentHeight = 4000;
+    const threshold = viewportHeight * MESSAGE_HISTORY_PREFETCH_VIEWPORTS;
+
     expect(
-      shouldRequestMessageTailScroll({ fromSelf: true, nearTail: true, atBottom: true }),
+      isNearMessageHistoryEdge({
+        offsetY: contentHeight - viewportHeight - threshold,
+        contentHeight,
+        viewportHeight,
+      }),
+    ).toBe(true);
+    expect(
+      isNearMessageHistoryEdge({
+        offsetY: contentHeight - viewportHeight - threshold - 1,
+        contentHeight,
+        viewportHeight,
+      }),
     ).toBe(false);
   });
 
-  it('requests one corrective scroll only when the released message is off the bottom', () => {
+  it('treats fast-fling overshoot and short histories as being at the history edge', () => {
     expect(
-      shouldRequestMessageTailScroll({ fromSelf: true, nearTail: false, atBottom: false }),
+      isNearMessageHistoryEdge({
+        offsetY: 3400,
+        contentHeight: 4000,
+        viewportHeight: 800,
+      }),
     ).toBe(true);
     expect(
-      shouldRequestMessageTailScroll({ fromSelf: false, nearTail: true, atBottom: false }),
+      isNearMessageHistoryEdge({
+        offsetY: 0,
+        contentHeight: 600,
+        viewportHeight: 800,
+      }),
     ).toBe(true);
+  });
+
+  it('corrects an arrival instantly when already pinned at the bottom', () => {
     expect(
-      shouldRequestMessageTailScroll({ fromSelf: false, nearTail: false, atBottom: false }),
-    ).toBe(false);
+      messageTailScrollMode({ fromSelf: true, nearTail: true, atBottom: true }),
+    ).toBe('instant');
+  });
+
+  it('animates released messages near the tail without moving a history reader', () => {
+    expect(
+      messageTailScrollMode({ fromSelf: true, nearTail: false, atBottom: false }),
+    ).toBe('animated');
+    expect(
+      messageTailScrollMode({ fromSelf: false, nearTail: true, atBottom: false }),
+    ).toBe('animated');
+    expect(
+      messageTailScrollMode({ fromSelf: false, nearTail: false, atBottom: false }),
+    ).toBeNull();
   });
 });

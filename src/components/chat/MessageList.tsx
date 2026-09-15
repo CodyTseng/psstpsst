@@ -6,6 +6,8 @@ import {
   ActivityIndicator,
   FlatList,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ViewToken,
 } from 'react-native';
 import Animated, {
@@ -30,8 +32,11 @@ import { MESSAGES_PAGE_SIZE } from '@/hooks/use-messages';
 import { markChatMessageListMounted } from '@/lib/perf/chat-open';
 import { useProfilesMap } from '@/hooks/use-profile';
 import {
+  isNearMessageHistoryEdge,
   isNearMessageTail,
-  shouldRequestMessageTailScroll,
+  messageTailScrollMode,
+  MESSAGE_HISTORY_PREFETCH_VIEWPORTS,
+  type MessageTailScrollMode,
 } from '@/lib/chat/message-tail-follow';
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
 import { attachmentLabel } from '@/lib/nostr/attachment-label';
@@ -252,6 +257,13 @@ export function MessageList({
   const c = useThemeColors();
   const reducedMotion = useReducedMotion();
   const listRef = useRef<FlatList<ListItem>>(null);
+  // Native content updates must not start a tail correction while the reader's
+  // drag or momentum scroll is still in progress.
+  const userScrollInProgressRef = useRef(false);
+  // Whether the list is currently pinned at the bottom (offset ≈ 0). A ref so
+  // pending-row layout corrections can read it without re-subscribing on every
+  // scroll.
+  const atBottomRef = useRef(true);
   useLayoutEffect(() => {
     markChatMessageListMounted(conversationKey);
   }, [conversationKey]);
@@ -326,17 +338,25 @@ export function MessageList({
 
   function handleContentSizeChange() {
     if (!pendingInitialPosition.ready && tailMode) {
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
-      if (pendingInitialPositionRafRef.current != null) {
-        cancelAnimationFrame(pendingInitialPositionRafRef.current);
-      }
-      pendingInitialPositionRafRef.current = requestAnimationFrame(() => {
-        listRef.current?.scrollToOffset({ offset: 0, animated: false });
-        pendingInitialPositionRafRef.current = null;
+      if (userScrollInProgressRef.current || !atBottomRef.current) {
         setPendingInitialPosition((current) =>
           current.ready ? current : { ...current, ready: true },
         );
-      });
+      } else {
+        listRef.current?.scrollToOffset({ offset: 0, animated: false });
+        if (pendingInitialPositionRafRef.current != null) {
+          cancelAnimationFrame(pendingInitialPositionRafRef.current);
+        }
+        pendingInitialPositionRafRef.current = requestAnimationFrame(() => {
+          if (!userScrollInProgressRef.current && atBottomRef.current) {
+            listRef.current?.scrollToOffset({ offset: 0, animated: false });
+          }
+          pendingInitialPositionRafRef.current = null;
+          setPendingInitialPosition((current) =>
+            current.ready ? current : { ...current, ready: true },
+          );
+        });
+      }
     }
 
     // The released row is now in the native list. Issue the tail correction
@@ -344,12 +364,18 @@ export function MessageList({
     // animated scroll restarts iOS momentum and visibly stalls halfway through.
     if (
       pendingInitialPosition.ready &&
-      pendingTailScrollAfterReleaseRef.current &&
+      pendingTailScrollAfterReleaseRef.current != null &&
       !anchored &&
       stagedCount === 0
     ) {
-      pendingTailScrollAfterReleaseRef.current = false;
-      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      const scrollMode = pendingTailScrollAfterReleaseRef.current;
+      pendingTailScrollAfterReleaseRef.current = null;
+      if (!userScrollInProgressRef.current) {
+        listRef.current?.scrollToOffset({
+          offset: 0,
+          animated: scrollMode === 'animated',
+        });
+      }
     }
 
     // Removing index 0 from an inverted list can make MVCP preserve the next
@@ -357,12 +383,18 @@ export function MessageList({
     // the user discarded from the tail, reset that compensation only after the
     // new content size is committed, so no empty cell-height gap remains.
     if (!pinTailAfterPendingRemovalRef.current) return;
+    if (userScrollInProgressRef.current || !atBottomRef.current) {
+      pinTailAfterPendingRemovalRef.current = false;
+      return;
+    }
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
     if (pendingRemovalPinRafRef.current != null) {
       cancelAnimationFrame(pendingRemovalPinRafRef.current);
     }
     pendingRemovalPinRafRef.current = requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      if (!userScrollInProgressRef.current && atBottomRef.current) {
+        listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      }
       pendingRemovalPinRafRef.current = null;
       pinTailAfterPendingRemovalRef.current = false;
     });
@@ -426,10 +458,6 @@ export function MessageList({
   // returns to the bottom (scroll or button). null = release everything (the
   // common at-bottom case).
   const [releasedNewestId, setReleasedNewestId] = useState<string | null>(null);
-  // Whether the list is currently pinned at the bottom (offset ≈ 0). A ref so
-  // pending-row layout corrections can read it without re-subscribing on every
-  // scroll.
-  const atBottomRef = useRef(true);
   // Whether the reader is close enough to the bottom that new messages should
   // join the visible tail immediately. This matches the scroll-down control's
   // appearance threshold, so an absent control never flashes in for one arrival.
@@ -437,7 +465,48 @@ export function MessageList({
   // The newest tail message we've already accounted for, so we can tell a real
   // new arrival from an older page being prepended.
   const prevNewestRef = useRef<{ id: string; orderAt: number } | null>(null);
-  const pendingTailScrollAfterReleaseRef = useRef(false);
+  const pendingTailScrollAfterReleaseRef = useRef<MessageTailScrollMode>(null);
+
+  function handleScrollBeginDrag() {
+    userScrollInProgressRef.current = true;
+    // Treat a deliberate gesture as leaving the tail until its final offset is
+    // known. This prevents an async row commit from racing the first scroll tick.
+    atBottomRef.current = false;
+    nearTailRef.current = false;
+  }
+
+  function handleMomentumScrollBegin() {
+    userScrollInProgressRef.current = true;
+  }
+
+  function handleScrollSettled(
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ) {
+    userScrollInProgressRef.current = false;
+    const {
+      contentOffset,
+      contentSize,
+      layoutMeasurement,
+    } = event.nativeEvent;
+    nearTailRef.current = isNearMessageTail(contentOffset.y);
+    atBottomRef.current = contentOffset.y < 24;
+
+    // VirtualizedList only fires onEndReached after its final cell has rendered.
+    // A fast fling can reach the physical edge before that happens and leave no
+    // further scroll event to retry it, so settled gestures perform one guarded
+    // edge check. useMessages deduplicates repeated requests for the same page.
+    if (
+      ready &&
+      hasMore &&
+      isNearMessageHistoryEdge({
+        offsetY: contentOffset.y,
+        contentHeight: contentSize.height,
+        viewportHeight: layoutMeasurement.height,
+      })
+    ) {
+      onLoadOlder();
+    }
+  }
 
   // Index (into ascending `messages`) of the released boundary. Everything up
   // to and including it is rendered; anything newer is staged (held back).
@@ -528,7 +597,7 @@ export function MessageList({
       return;
     }
     if (stagedCount > 0) {
-      pendingTailScrollAfterReleaseRef.current = true;
+      pendingTailScrollAfterReleaseRef.current = 'animated';
       releaseStaged();
       return;
     }
@@ -732,17 +801,14 @@ export function MessageList({
 
     const fromSelf = isMessageFromSelf(newest, selfPubkey, proximity);
     if (fromSelf || nearTailRef.current) {
-      // At the exact tail, MVCP's autoscroll threshold already keeps offset 0;
-      // starting another animation there only interrupts the native insertion.
-      // Farther away, arm one correction that onContentSizeChange runs after the
-      // released row has actually joined the native list.
-      pendingTailScrollAfterReleaseRef.current = shouldRequestMessageTailScroll(
-        {
-          fromSelf,
-          nearTail: nearTailRef.current,
-          atBottom: atBottomRef.current,
-        },
-      );
+      // MVCP preserves the visible row but no longer owns auto-following. Arm an
+      // instant correction at the exact tail, or an animated one within the
+      // near-tail band, after the released row joins the native list.
+      pendingTailScrollAfterReleaseRef.current = messageTailScrollMode({
+        fromSelf,
+        nearTail: nearTailRef.current,
+        atBottom: atBottomRef.current,
+      });
       setReleasedNewestId(newest.id);
     }
     // else: scrolled up + incoming → leave staged (boundary frozen).
@@ -1219,7 +1285,7 @@ export function MessageList({
           inverted
           maintainVisibleContentPosition={
             pendingInitialPosition.ready
-              ? { minIndexForVisible: 1, autoscrollToTopThreshold: 24 }
+              ? { minIndexForVisible: 1 }
               : undefined
           }
           // Normal open: ~2 screens on the first frame (default is 10). Jump-open:
@@ -1235,6 +1301,10 @@ export function MessageList({
           // bubble pop-in without increasing history size.
           maxToRenderPerBatch={activeFocusId != null ? 60 : MESSAGES_PAGE_SIZE}
           updateCellsBatchingPeriod={0}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollSettled}
+          onMomentumScrollBegin={handleMomentumScrollBegin}
+          onMomentumScrollEnd={handleScrollSettled}
           onScroll={(e) => {
             // Inverted: offset 0 is the bottom (newest).
             const y = e.nativeEvent.contentOffset.y;
@@ -1243,7 +1313,7 @@ export function MessageList({
             setShowScrollDown((prev) => (prev === show ? prev : show));
             nearTailRef.current = nearTail;
             const atBottom = y < 24;
-            atBottomRef.current = atBottom;
+            atBottomRef.current = !userScrollInProgressRef.current && atBottom;
             // Floating date header: reveal while scrolled up, then fade out once the
             // list settles (the hide timer is reset on every scroll tick) or hits the
             // bottom (where the newest/"today" needs no banner).
@@ -1486,7 +1556,7 @@ export function MessageList({
             if (!ready) return;
             if (hasMore) onLoadOlder();
           }}
-          onEndReachedThreshold={2}
+          onEndReachedThreshold={MESSAGE_HISTORY_PREFETCH_VIEWPORTS}
           // List start = newest (the bottom) → in an anchored window page forward
           // toward the present (prepend at index 0, absorbed by MVCP); in tail mode
           // reveal whatever was staged while the user read up. Also gated on `ready`:
