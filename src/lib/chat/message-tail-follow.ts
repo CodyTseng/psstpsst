@@ -27,6 +27,19 @@ export function isNearMessageHistoryEdge({
   return distanceFromEdge <= viewportHeight * MESSAGE_HISTORY_PREFETCH_VIEWPORTS;
 }
 
+/** Native position anchoring is only needed when an anchored window prepends
+ * newer rows. In tail mode, arrivals are staged while the reader is away from
+ * the bottom, and older pages append beyond the visible history edge. */
+export function shouldMaintainVisibleMessagePosition({
+  anchored,
+  initialPositionReady,
+}: {
+  anchored: boolean;
+  initialPositionReady: boolean;
+}): boolean {
+  return anchored && initialPositionReady;
+}
+
 export type MessageTailScrollMode = 'instant' | 'animated' | null;
 
 export function messageTailScrollMode({

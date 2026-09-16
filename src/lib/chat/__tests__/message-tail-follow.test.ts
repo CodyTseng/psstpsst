@@ -4,6 +4,7 @@ import {
   messageTailScrollMode,
   MESSAGE_HISTORY_PREFETCH_VIEWPORTS,
   MESSAGE_TAIL_FOLLOW_THRESHOLD,
+  shouldMaintainVisibleMessagePosition,
 } from '../message-tail-follow';
 
 describe('message tail following', () => {
@@ -51,6 +52,27 @@ describe('message tail following', () => {
         offsetY: 0,
         contentHeight: 600,
         viewportHeight: 800,
+      }),
+    ).toBe(true);
+  });
+
+  it('anchors only a ready bidirectional message window', () => {
+    expect(
+      shouldMaintainVisibleMessagePosition({
+        anchored: false,
+        initialPositionReady: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldMaintainVisibleMessagePosition({
+        anchored: true,
+        initialPositionReady: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldMaintainVisibleMessagePosition({
+        anchored: true,
+        initialPositionReady: true,
       }),
     ).toBe(true);
   });

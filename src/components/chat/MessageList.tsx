@@ -36,6 +36,7 @@ import {
   isNearMessageTail,
   messageTailScrollMode,
   MESSAGE_HISTORY_PREFETCH_VIEWPORTS,
+  shouldMaintainVisibleMessagePosition,
   type MessageTailScrollMode,
 } from '@/lib/chat/message-tail-follow';
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
@@ -207,6 +208,8 @@ const MAX_SEEK_PAGES = 3;
  * never takes more than a page. Skipped when there's no older left (top of
  * history). */
 const SEEK_MARGIN = 8;
+
+const ANCHORED_VISIBLE_POSITION = { minIndexForVisible: 1 } as const;
 
 export function MessageList({
   messages,
@@ -1279,13 +1282,18 @@ export function MessageList({
           // chat layout. It opens pinned to the bottom on the very first frame with no
           // measuring and no scroll-to-end. Older pages append at the end (the top) and
           // never shift the viewport; newer pages (forward paging in an anchored
-          // window) prepend at index 0, and `maintainVisibleContentPosition` absorbs
-          // their height so the reader's place holds — no manual compensation, which is
-          // what made the old inverted attempt jank.
+          // window) prepend at index 0, so only that mode enables native position
+          // anchoring. Tail mode stages incoming messages while the reader is away
+          // from the bottom and handles explicit sends itself. Leaving MVCP enabled
+          // there lets delayed cell measurement or older-page commits choose a new
+          // native anchor after a fast fling, visibly moving an otherwise idle list.
           inverted
           maintainVisibleContentPosition={
-            pendingInitialPosition.ready
-              ? { minIndexForVisible: 1 }
+            shouldMaintainVisibleMessagePosition({
+              anchored,
+              initialPositionReady: pendingInitialPosition.ready,
+            })
+              ? ANCHORED_VISIBLE_POSITION
               : undefined
           }
           // Normal open: ~2 screens on the first frame (default is 10). Jump-open:
