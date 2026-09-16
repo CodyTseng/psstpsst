@@ -2,7 +2,10 @@ import { Keyboard as KeyboardIcon } from '@solar-icons/react-native/category/dev
 import { Plain3 as Send } from '@solar-icons/react-native/category/messages/Linear/Plain3';
 import { Microphone as Mic } from '@solar-icons/react-native/category/video/Linear/Microphone';
 import { SmileCircle as Smile } from '@solar-icons/react-native/category/faces/Linear/SmileCircle';
-import { useKeyboardHandler } from "react-native-keyboard-controller";
+import {
+  KeyboardController,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
 import {
   lazy,
   Suspense,
@@ -115,6 +118,8 @@ type Props = {
    * button); null when not replying. */
   replyTo?: { senderName: string; contentPreview: string } | null;
   onCancelReply?: () => void;
+  /** Changes whenever an explicit reply action should restore input focus. */
+  focusRequestVersion?: number;
   disabled?: boolean;
   /** Conversation key this composer drafts for. The unsent text is persisted
    * under it (so the conversation list shows a "Draft" preview and it survives
@@ -187,6 +192,7 @@ export function ChatInput({
   onSendVoice,
   replyTo,
   onCancelReply,
+  focusRequestVersion,
   disabled,
   draftKey,
   liveDataEnabled = true,
@@ -323,11 +329,19 @@ export function ChatInput({
     if (!IS_ELECTRON || disabled) return;
     inputRef.current?.focus();
   }, [disabled, draftKey]);
-  // Triggering a reply (swipe or the action menu) focuses the field so the
-  // keyboard rises together with the quote — the user means to type now.
+  // Triggering a reply focuses the field so the keyboard rises together with
+  // the quote. The request version also handles choosing the same reply again.
   useEffect(() => {
-    if (replyTo) inputRef.current?.focus();
-  }, [replyTo]);
+    if (!replyTo) return;
+    inputRef.current?.focus();
+    if (IS_ELECTRON || KeyboardController.isVisible()) return;
+
+    // A native action-menu Modal may release its first responder after React
+    // has already committed the reply. Restore it on the next task, once the
+    // Modal teardown has reached the platform, so the software keyboard opens.
+    const timer = setTimeout(() => KeyboardController.setFocusTo("current"), 0);
+    return () => clearTimeout(timer);
+  }, [focusRequestVersion, replyTo]);
   // When on, the return key sends (`submitBehavior="submit"` →
   // onSubmitEditing). Touch inserts a line break by long-pressing Send;
   // Electron keeps the browser-native Shift+Enter newline.

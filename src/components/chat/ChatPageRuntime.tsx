@@ -90,7 +90,7 @@ import { useWallets } from '@/hooks/use-wallets';
 import { setStringAsync } from '@/lib/clipboard';
 import { isAbortError } from '@/lib/async/abort';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
-import { IS_ELECTRON } from '@/lib/platform';
+import { IS_ANDROID, IS_ELECTRON } from '@/lib/platform';
 import {
   parseConversationRouteParams,
   routeHexIdParam,
@@ -199,6 +199,7 @@ type ChatComposerModel = {
   attachmentSources: readonly AttachmentSource[];
   supportsVoice: boolean;
   replyTo: { senderName: string; contentPreview: string } | null;
+  focusRequestVersion: number;
   gateStatus: 'checking' | 'unsupported' | 'proximity_identity_changed' | null;
 };
 
@@ -360,6 +361,7 @@ export default function ChatPageRuntime() {
     attachmentSources: BASE_ATTACHMENT_SOURCES,
     supportsVoice: conversationSupportsContent('audio'),
     replyTo: null,
+    focusRequestVersion: 0,
     gateStatus: null,
   }));
   const [messageRuntimeReady, setMessageRuntimeReady] = useState(false);
@@ -385,6 +387,7 @@ export default function ChatPageRuntime() {
       return current.mode === next.mode &&
         current.disabled === next.disabled &&
         current.supportsVoice === next.supportsVoice &&
+        current.focusRequestVersion === next.focusRequestVersion &&
         current.gateStatus === next.gateStatus &&
         sameReply &&
         sameSources
@@ -732,6 +735,7 @@ export default function ChatPageRuntime() {
                 attachmentSources={composerModel.attachmentSources}
                 onSendVoice={composerModel.supportsVoice ? sendVoiceFromComposer : undefined}
                 replyTo={composerModel.replyTo}
+                focusRequestVersion={composerModel.focusRequestVersion}
                 onCancelReply={cancelComposerReply}
               />
             ) : composerModel.gateStatus ? (
@@ -1053,6 +1057,8 @@ function ChatPageContent({
   );
 
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
+  const [replyFocusRequestVersion, setReplyFocusRequestVersion] = useState(0);
+  const [pendingReplyTarget, setPendingReplyTarget] = useState<MessageRow | null>(null);
   // Long-press action-menu target: the message, its measured rect, and a
   // ready-to-render lifted copy. Cleared on dismiss.
   const [menuTarget, setMenuTarget] = useState<MessageRow | null>(null);
@@ -1906,6 +1912,7 @@ function ChatPageContent({
   }
 
   function handleLongPress(message: MessageRow, rect: BubbleRect, bubble: LiftedBubble) {
+    setPendingReplyTarget(null);
     setPendingMenuTarget(null);
     setMenuTarget(message);
     openMeasuredMenu(rect, bubble);
@@ -1916,6 +1923,7 @@ function ChatPageContent({
     rect: BubbleRect,
     bubble: LiftedBubble,
   ) {
+    setPendingReplyTarget(null);
     setMenuTarget(null);
     setPendingMenuTarget(pending);
     openMeasuredMenu(rect, bubble);
@@ -1925,6 +1933,11 @@ function ChatPageContent({
     setMenuTarget(null);
     setPendingMenuTarget(null);
     setMenuAnchor(null);
+  }
+
+  function startReply(message: MessageRow) {
+    setReplyingTo(message);
+    setReplyFocusRequestVersion((version) => version + 1);
   }
 
   function toggleSelect(id: string) {
@@ -2013,6 +2026,11 @@ function ChatPageContent({
    * the row (react) or present another modal (picker) without the lifted copy
    * still on screen. */
   function handleMenuClosed() {
+    if (pendingReplyTarget) {
+      const target = pendingReplyTarget;
+      setPendingReplyTarget(null);
+      startReply(target);
+    }
     if (pendingReaction) {
       const { target, emoji } = pendingReaction;
       setPendingReaction(null);
@@ -2144,8 +2162,11 @@ function ChatPageContent({
                   icon: <Reply size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
                   onPress: () => {
                     const target = menuTarget;
+                    if (target) {
+                      if (IS_ANDROID) startReply(target);
+                      else setPendingReplyTarget(target);
+                    }
                     closeMenu();
-                    if (target) setReplyingTo(target);
                   },
                 } as MessageMenuAction,
               ]
@@ -2287,6 +2308,7 @@ function ChatPageContent({
           attachmentSources,
           supportsVoice,
           replyTo: composerReplyTo,
+          focusRequestVersion: replyFocusRequestVersion,
           gateStatus: composerGateStatus,
         }}
       />
@@ -2327,7 +2349,7 @@ function ChatPageContent({
           firstUnreadOrderAt={unreadBoundary?.firstUnreadOrderAt ?? null}
           firstUnreadId={unreadBoundary?.firstUnreadId ?? null}
           unreadCount={unreadBoundary?.count ?? 0}
-          onSwipeReply={proximityHistoryReadOnly ? undefined : (msg) => setReplyingTo(msg)}
+          onSwipeReply={proximityHistoryReadOnly ? undefined : startReply}
           onLongPress={handleLongPress}
           onLongPressPending={handlePendingLongPress}
           onTapReaction={proximityHistoryReadOnly ? () => {} : handleTapReaction}

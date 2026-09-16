@@ -711,11 +711,12 @@ export function MessageActionMenu({
     </>
   );
 
-  // A native Modal resigns the composer's first responder. When the software
-  // keyboard was already open, use the keyboard controller's overlay host: the
-  // input stays focused, the keyboard remains in place under the backdrop, and
-  // the menu may use the full safe area, including the keyboard's screen region.
-  if (!IS_ELECTRON && view.preserveKeyboard) {
+  // A native Modal resigns the composer's first responder. Android implements
+  // it as a separate Dialog window, whose teardown can leave the Activity
+  // without window focus when Reply tries to reopen the IME. Its overlay host
+  // is non-focusable, so keep every Android menu in the Activity window. On
+  // iOS the overlay is only needed when an already-visible keyboard is kept.
+  if (!IS_ELECTRON && (Platform.OS === 'android' || view.preserveKeyboard)) {
     return (
       <OverKeyboardView visible>
         <View style={{ flex: 1 }}>{overlayContent}</View>
