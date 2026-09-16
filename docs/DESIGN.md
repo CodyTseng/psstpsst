@@ -166,6 +166,10 @@ media.
 
 Motion is short, restrained, interruptible, and tied to a state transition.
 
+Message bubbles accept swipe-to-reply in either horizontal direction. The
+reply affordance appears at the edge exposed by the drag, with the same trigger
+distance and feedback in both directions.
+
 - Press feedback is immediate.
 - Ordinary transitions use the shared duration and easing tokens.
 - Avoid decorative bounce, looping motion, and layout jumps.

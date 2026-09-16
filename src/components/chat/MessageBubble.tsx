@@ -12,7 +12,6 @@ import Reanimated, {
   ReduceMotion,
   interpolate,
   interpolateColor,
-  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -20,6 +19,7 @@ import Reanimated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { SelectionDot } from '@/components/common/SelectionDot';
 import { useDirectionalIconStyle, useIsRTL } from '@/i18n/direction';
@@ -38,6 +38,7 @@ import type { MessageDelivery } from '@/stores/delivery-status.store';
 import { useThemeColors } from '@/theme';
 
 import { BubbleBody, type RemoteContentMode } from './BubbleBody';
+import { ATTACHMENT_FAILURE_TARGET_SIZE } from './attachment-layout';
 import {
   BUBBLE_GAP,
   BUBBLE_GROUP_GAP,
@@ -45,6 +46,14 @@ import {
   BUBBLE_ROW_PADDING_HORIZONTAL,
 } from './bubble-layout';
 import { ReactionsRow } from './ReactionsRow';
+import {
+  constrainSwipeReplyOffset,
+  SWIPE_REPLY_ACTIVATION,
+  SWIPE_REPLY_ARMED_FROM,
+  SWIPE_REPLY_TRIGGER,
+  swipeReplyDistance,
+  swipeReplyEdgeInset,
+} from './swipe-reply';
 
 const MESSAGE_HIGHLIGHT_HOLD_MS = 500;
 const MESSAGE_HIGHLIGHT_FADE_MS = 1700;
@@ -243,19 +252,13 @@ function MessageBubbleBase({
     emitLongPress(false, desktopContextMenuPoint(event));
   }
 
-  // Signal-style touch swipe-to-reply: drag the bubble rightward and a round reply
-  // arrow — parked directly beneath the bubble's leading edge — fades in as the
-  // bubble slides off. Past the trigger distance, releasing commits the reply
-  // and the bubble springs back.
+  // Signal-style touch swipe-to-reply: drag the bubble in either direction and a
+  // round reply arrow fades in beneath the edge the bubble exposes. Past the
+  // trigger distance, releasing commits the reply and the bubble springs back.
   const tx = useSharedValue(0);
   // Whether the drag is currently past the trigger — gates the one-shot arming
   // haptic so it ticks once per crossing, not every frame past the threshold.
   const armed = useSharedValue(false);
-  const SWIPE_MAX = 44; // furthest the bubble travels (rubber-banded past it)
-  const SWIPE_TRIGGER = 32; // drag distance that commits to a reply on release
-  const SWIPE_ACTIVATION = 12;
-  const ARMED_FROM = SWIPE_TRIGGER - 4;
-
   const gesture = (() => {
     if (!interactive) return Gesture.Tap().enabled(false);
     const swipe = Gesture.Pan()
@@ -268,32 +271,40 @@ function MessageBubbleBase({
       .hitSlop(
         isRTL ? { right: -BACK_SWIPE_GUARD } : { left: -BACK_SWIPE_GUARD },
       )
-      .activeOffsetX(isRTL ? -SWIPE_ACTIVATION : SWIPE_ACTIVATION)
+      .activeOffsetX([-SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ACTIVATION])
       .failOffsetY([-14, 14]) // … and yield to the list's vertical scroll
       .onUpdate((e) => {
-        const x = e.translationX * (isRTL ? -1 : 1);
-        // Logical-start to logical-end only; add resistance past the resting maximum.
-        tx.value =
-          x <= 0 ? 0 : x <= SWIPE_MAX ? x : SWIPE_MAX + (x - SWIPE_MAX) * 0.15;
+        const logicalX = e.translationX * (isRTL ? -1 : 1);
+        tx.set(constrainSwipeReplyOffset(logicalX));
+        const distance = swipeReplyDistance(tx.get());
         // Tick the instant the drag arms (crosses the trigger), like iOS Messages;
         // re-arm when it falls back below so a re-cross ticks again.
-        if (tx.value >= SWIPE_TRIGGER) {
-          if (!armed.value) {
-            armed.value = true;
-            runOnJS(impact)('light');
+        if (distance >= SWIPE_REPLY_TRIGGER) {
+          if (!armed.get()) {
+            armed.set(true);
+            scheduleOnRN(impact, 'light');
           }
-        } else if (armed.value) {
-          armed.value = false;
+        } else if (armed.get()) {
+          armed.set(false);
         }
       })
-      .onEnd(() => {
-        if (tx.value >= SWIPE_TRIGGER && onSwipeReply) runOnJS(onSwipeReply)();
-        tx.value = withSpring(0, {
-          damping: 22,
-          stiffness: 240,
-          overshootClamping: true,
-        });
-        armed.value = false;
+      .onEnd((e) => {
+        if (
+          swipeReplyDistance(tx.get()) >= SWIPE_REPLY_TRIGGER &&
+          onSwipeReply
+        ) {
+          scheduleOnRN(onSwipeReply);
+        }
+        tx.set(
+          withSpring(0, {
+            duration: 400,
+            dampingRatio: 0.8,
+            velocity: e.velocityX * (isRTL ? -1 : 1),
+            overshootClamping: true,
+            reduceMotion: ReduceMotion.System,
+          }),
+        );
+        armed.set(false);
       });
 
     // Touch long-press opens the action menu. It lives in the same RNGH system
@@ -304,35 +315,42 @@ function MessageBubbleBase({
       // The callback runs on recognition, never during render.
       // eslint-disable-next-line react-hooks/refs
       .onStart(() => {
-        runOnJS(emitLongPress)(true);
+        scheduleOnRN(emitLongPress, true);
       });
     return Gesture.Simultaneous(swipe, longPress);
   })();
 
   const bubbleSlide = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value * (isRTL ? -1 : 1) }],
+    transform: [{ translateX: tx.get() * (isRTL ? -1 : 1) }],
   }));
-  const replyReveal = useAnimatedStyle(() => ({
+  const replyRevealStart = useAnimatedStyle(() => ({
     opacity: interpolate(
-      tx.value,
-      [SWIPE_ACTIVATION, ARMED_FROM],
+      tx.get(),
+      [SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ARMED_FROM],
       [0, 1],
       Extrapolation.CLAMP,
     ),
   }));
-  // Grey while below the trigger, accent-blue once the swipe will commit a
-  // reply — the chip fill and the (overlaid) blue arrow cross in together.
+  const replyRevealEnd = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      -tx.get(),
+      [SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ARMED_FROM],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  // Muted while below the trigger, accented once the swipe will commit a reply.
   const replyChipFill = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
-      tx.value,
-      [ARMED_FROM, SWIPE_TRIGGER],
+      swipeReplyDistance(tx.get()),
+      [SWIPE_REPLY_ARMED_FROM, SWIPE_REPLY_TRIGGER],
       [c.surfaceMuted, c.accentSoft],
     ),
   }));
   const replyArmedArrow = useAnimatedStyle(() => ({
     opacity: interpolate(
-      tx.value,
-      [ARMED_FROM, SWIPE_TRIGGER],
+      swipeReplyDistance(tx.get()),
+      [SWIPE_REPLY_ARMED_FROM, SWIPE_REPLY_TRIGGER],
       [0, 1],
       Extrapolation.CLAMP,
     ),
@@ -392,66 +410,85 @@ function MessageBubbleBase({
               minWidth: 0,
             }}
           >
-            {/* Reply arrow parked directly under the bubble's leading edge; the
-              bubble slides right and uncovers it (Signal-style). pointerEvents
-              none so it never intercepts taps on the bubble. */}
-            {interactive ? (
-              <View
-                style={{
-                  position: 'absolute',
-                  // Parked under the bubble's leading edge. It is also transparent
-                  // at rest because transparent PNG/custom-emoji content cannot
-                  // visually occlude an always-painted control.
-                  start: 0,
-                  top: 0,
-                  bottom: 0,
-                  justifyContent: 'center',
-                  pointerEvents: 'none',
-                }}
-              >
-                <Reanimated.View
-                  style={[
-                    {
-                      width: 28,
-                      height: 28,
-                      borderRadius: 14,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    },
-                    replyReveal,
-                    replyChipFill,
-                  ]}
-                >
-                  {/* Grey arrow (below trigger) with the accent-blue arrow overlaid
-                  on top, faded in once the swipe will commit the reply. */}
-                  <CornerUpLeft
-                    size={15}
-                    color={c.textMuted}
-                    style={directionalIconStyle}
-                  />
-                  <Reanimated.View
+            {/* A reply arrow sits beneath each logical edge. Only the edge exposed
+                by the current drag fades in; neither intercepts bubble taps. */}
+            {interactive
+              ? (['start', 'end'] as const).map((edge) => (
+                  <View
+                    key={edge}
                     style={[
                       {
                         position: 'absolute',
                         top: 0,
-                        left: 0,
-                        right: 0,
                         bottom: 0,
-                        alignItems: 'center',
                         justifyContent: 'center',
+                        pointerEvents: 'none',
                       },
-                      replyArmedArrow,
+                      edge === 'start'
+                        ? {
+                            start: swipeReplyEdgeInset(
+                              !!attachment,
+                              isSelf,
+                              edge,
+                              ATTACHMENT_FAILURE_TARGET_SIZE,
+                            ),
+                          }
+                        : {
+                            end: swipeReplyEdgeInset(
+                              !!attachment,
+                              isSelf,
+                              edge,
+                              ATTACHMENT_FAILURE_TARGET_SIZE,
+                            ),
+                          },
                     ]}
                   >
-                    <CornerUpLeft
-                      size={15}
-                      color={c.accent}
-                      style={directionalIconStyle}
-                    />
-                  </Reanimated.View>
-                </Reanimated.View>
-              </View>
-            ) : null}
+                    <Reanimated.View
+                      style={[
+                        {
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        },
+                        edge === 'start'
+                          ? replyRevealStart
+                          : replyRevealEnd,
+                        replyChipFill,
+                      ]}
+                    >
+                      {/* The accent arrow crossfades over the muted arrow once the
+                          drag will commit the reply. */}
+                      <CornerUpLeft
+                        size={15}
+                        color={c.textMuted}
+                        style={directionalIconStyle}
+                      />
+                      <Reanimated.View
+                        style={[
+                          {
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          },
+                          replyArmedArrow,
+                        ]}
+                      >
+                        <CornerUpLeft
+                          size={15}
+                          color={c.accent}
+                          style={directionalIconStyle}
+                        />
+                      </Reanimated.View>
+                    </Reanimated.View>
+                  </View>
+                ))
+              : null}
 
             <Reanimated.View style={bubbleSlide}>
               <View ref={bubbleRef} collapsable={false}>

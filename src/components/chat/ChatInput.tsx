@@ -1141,6 +1141,9 @@ export function ChatInput({
                 value.length === 0 ? INPUT_LINE_HEIGHT : INPUT_MAX_HEIGHT,
               paddingTop: 0,
               paddingBottom: 0,
+              // Android TextInput supplies a native leading inset. Clear it so
+              // the empty caret shares the quoted reply strip's logical edge.
+              paddingStart: 0,
               // Shorten the input itself instead of padding its content, so its
               // scroll indicator ends before the emoji action on every platform.
               paddingEnd: 0,
