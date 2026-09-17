@@ -31,12 +31,15 @@ export function formatDetailTimestamp(ts: number): string {
 /**
  * Compact timestamp for the conversation list (Telegram/Signal-style):
  *   now → `{n}m` → HH:mm (today) → Yesterday → weekday (this week) → date.
- * Formatted on render — it isn't live-updating, but the list re-renders often
- * enough (new messages, focus) that a stale "now" is short-lived.
+ * The conversation list advances a foreground-only minute clock so memoized
+ * visible rows re-render when this relative label can change.
  */
-export function formatListTime(ts: number): string {
+export function formatListTime(
+  ts: number,
+  nowTs = Math.floor(Date.now() / 1000),
+): string {
   const m = dayjs.unix(ts);
-  const now = dayjs();
+  const now = dayjs.unix(nowTs);
   const diffMin = now.diff(m, 'minute');
   if (diffMin < 1) return i18n.t('time.now');
   if (diffMin < 60) return i18n.t('time.minutes_short', { n: diffMin });

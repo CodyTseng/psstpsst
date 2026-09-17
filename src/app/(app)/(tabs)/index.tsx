@@ -29,6 +29,7 @@ import { loadChatPageRuntime } from '@/components/chat/chat-page-runtime-loader'
 import { SearchBar, SEARCH_BAR_SCREEN_GUTTER } from '@/components/search/SearchBar';
 import { SEARCH_ACTIVATION_SHORTCUT_LABEL } from '@/components/search/search-shortcut';
 import { useMainInboxConversations, type ConversationWithLast } from '@/hooks/use-conversations';
+import { useMinuteClock } from '@/hooks/use-minute-clock';
 import { scheduleMessageTailWarm } from '@/services/conversation/message-tail-cache';
 import { useProfile } from '@/hooks/use-profile';
 import { useScrolled } from '@/hooks/use-scrolled';
@@ -145,6 +146,11 @@ function RealConversations() {
   // the next unread; it resets to the first whenever the tab regains focus.
   const unreadCursor = useRef(0);
   const focused = useIsFocused();
+  const currentMinute = useMinuteClock(focused);
+  const listExtraData = useMemo(
+    () => ({ activeConversationKey, currentMinute }),
+    [activeConversationKey, currentMinute],
+  );
   const navigation = useNavigation();
 
   // Native production bundles already contain the route bytecode, but module
@@ -407,7 +413,7 @@ function RealConversations() {
             <FlatList
               ref={listRef}
               data={items}
-              extraData={activeConversationKey}
+              extraData={listExtraData}
               // Fixed-height rows (+ a hairline separator) after the search
               // header, so we hand FlatList the geometry directly: no per-row
               // measurement, and scrollToIndex (jump-to-unread) lands exactly.
@@ -510,6 +516,7 @@ function RealConversations() {
                         : item.lastMessageSenderPubkey === accountPubkey
                     }
                     lastMessageAt={conv.lastMessageAt}
+                    currentMinute={currentMinute}
                     unreadCount={conv.unreadCount}
                     muted={conv.muted}
                     identityKind={conv.deliveryKind}

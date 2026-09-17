@@ -70,6 +70,8 @@ type Props = {
   lastMessageTags?: string[][] | null;
   lastMessageFromSelf?: boolean;
   lastMessageAt: number;
+  /** Current unix-minute bucket, used to refresh and calculate relative time. */
+  currentMinute?: number;
   unreadCount: number;
   muted: boolean;
   identityKind?: 'relay' | 'proximity';
@@ -257,6 +259,7 @@ function ConversationListItemBase({
   lastMessageTags,
   lastMessageFromSelf,
   lastMessageAt,
+  currentMinute,
   unreadCount,
   muted,
   identityKind = 'relay',
@@ -651,7 +654,10 @@ function ConversationListItemBase({
                     numberOfLines={1}
                     style={{ flexShrink: 0 }}
                   >
-                    {formatListTime(lastMessageAt)}
+                    {formatListTime(
+                      lastMessageAt,
+                      currentMinute === undefined ? undefined : currentMinute * 60,
+                    )}
                   </AppText>
                 </View>
                 {/* Bottom line: the message preview takes the full width, with the
