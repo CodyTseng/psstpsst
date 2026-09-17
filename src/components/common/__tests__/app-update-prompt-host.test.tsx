@@ -101,6 +101,7 @@ describe('AppUpdatePromptHost', () => {
       expect.objectContaining({
         title: 'app_update.ready_title',
         confirmLabel: 'app_update.restart_and_install',
+        actionLayout: 'vertical',
       }),
     );
     expect(mockInstall).not.toHaveBeenCalled();
