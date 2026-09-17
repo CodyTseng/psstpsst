@@ -15,6 +15,7 @@ export {
   contentWidth,
   density,
   desktopChrome,
+  mediaGrid,
   wideLayout,
 } from './layout';
 export { fontWeight, typography } from './typography';

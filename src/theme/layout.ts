@@ -27,6 +27,11 @@ export const contentWidth = {
   dialog: 320,
 } as const;
 
+/** Responsive conversation-media gallery geometry shared across runtimes. */
+export const mediaGrid = {
+  minColumns: 3,
+} as const;
+
 /** Bottom chrome geometry outside the fixed 56px control row. */
 export const bottomChrome = {
   mobileFallbackInset: 12,
@@ -76,6 +81,7 @@ export const density = {
     settingsIdentityGap: 14,
     detailRowHorizontalPadding: 14,
     detailRowVerticalPadding: 11,
+    mediaGridMinCellSize: 144,
     accentSwatchSize: 44,
     accentSwatchDotSize: 34,
     selectedRecipientAvatarSize: 48,
@@ -127,6 +133,7 @@ export const density = {
     settingsIdentityGap: 12,
     detailRowHorizontalPadding: 12,
     detailRowVerticalPadding: 8,
+    mediaGridMinCellSize: 128,
     accentSwatchSize: 36,
     accentSwatchDotSize: 28,
     selectedRecipientAvatarSize: 40,
