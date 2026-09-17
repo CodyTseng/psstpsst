@@ -46,6 +46,7 @@ import { InteractivePressable as Pressable } from "@/components/common/Interacti
 import Plus from "lucide-react-native/icons/plus";
 import { CustomEmojiImage } from "@/components/emoji/CustomEmojiImage";
 import { useCustomEmojis } from "@/hooks/use-custom-emojis";
+import { useElectronComposerTypingFocus } from '@/hooks/use-electron-composer-typing-focus';
 import { useDirectionalIconStyle, useIsRTL } from "@/i18n/direction";
 import { classifyMessageSendFailure } from '@/lib/chat/message-send-error';
 import { impact } from "@/lib/haptics";
@@ -889,6 +890,11 @@ export function ChatInput({
       setSending(false);
     }
   }
+
+  useElectronComposerTypingFocus({
+    enabled: !disabled && !recording,
+    inputRef,
+  });
 
   if (recording && onSendVoice) {
     return (

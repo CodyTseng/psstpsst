@@ -386,8 +386,10 @@ input step. Browsing and picker steps do not summon the keyboard preemptively.
 On pushed screens, focus inputs with `useFocusAfterTransition` so the keyboard
 does not animate with the navigation transition. Modal-owned inputs may focus
 from the modal's supported presentation callback.
-Opening a conversation on Electron focuses its composer immediately; mobile
-conversation entry does not raise the software keyboard.
+Opening a conversation on Electron focuses its composer immediately; printable
+typing elsewhere in the conversation restores composer focus unless a shortcut,
+modal, or another text editor owns the event. Mobile conversation entry does not
+raise the software keyboard.
 
 Focused inputs stay visible above the software keyboard with breathing room.
 Full-page forms use `AppFormScrollView` to scroll the active field into view;
