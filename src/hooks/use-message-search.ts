@@ -118,9 +118,9 @@ async function runSearch(
   const scope = conversationKey ? 'AND message_fts.conversation_key = ?' : '';
   // Page boundary: rows strictly older than the `(order_at, id)` cursor.
   const keyset = cursor
-    ? `AND (message_fts.order_at < ? OR (message_fts.order_at = ? AND message_fts.id < ?))`
+    ? `AND (message_fts.order_at < ? OR (message_fts.order_at = ? AND message_fts.id > ?))`
     : '';
-  const tail = `ORDER BY message_fts.order_at DESC, message_fts.id DESC LIMIT ${PAGE_SIZE}`;
+  const tail = `ORDER BY message_fts.order_at DESC, message_fts.id ASC LIMIT ${PAGE_SIZE}`;
 
   if (query.length >= 3) {
     // Indexed trigram MATCH + native snippet().

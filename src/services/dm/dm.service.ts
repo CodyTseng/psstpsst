@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -18,7 +18,11 @@ import type { Rumor } from '@/db/schema/types';
 import { platform } from '@/platform';
 import { deriveConversationKey } from '@/lib/nostr/conversation-key';
 import { buildEmojiTag, type CustomEmoji } from '@/lib/nostr/custom-emoji';
-import { messageOrderAt, withMessageOrderTag } from '@/lib/nostr/message-order';
+import {
+  isMessageOrderNewer,
+  messageOrderAt,
+  withMessageOrderTag,
+} from '@/lib/nostr/message-order';
 import { normalizeBareNostrUris } from '@/lib/nostr/normalize-content';
 import {
   createPerfSpan,
@@ -137,12 +141,15 @@ function isDelivered(okCount: number, total: number): boolean {
  * list uses. Legacy messages share a second-floor `order_at` and tie on id. */
 type ReadCursor = { orderAt: number; id: string };
 
-/** The larger of two cursors by `(at, id)`, or whichever is non-null. */
+/** The newer of two cursors, or whichever is non-null. */
 function maxCursor(a: ReadCursor | null, b: ReadCursor | null): ReadCursor | null {
   if (!a) return b;
   if (!b) return a;
-  if (a.orderAt !== b.orderAt) return a.orderAt > b.orderAt ? a : b;
-  return a.id >= b.id ? a : b;
+  // An empty id is a legacy timestamp-only watermark and never wins a tie
+  // against a concrete event cursor.
+  if (!a.id) return b;
+  if (!b.id) return a;
+  return isMessageOrderNewer(a, b) ? a : b;
 }
 
 /** SQL predicate: a message is strictly after the `(order_at, id)` cursor. */
@@ -150,7 +157,7 @@ function unreadAfterCursor(c: ReadCursor) {
   if (!c.id) return gt(messages.orderAt, c.orderAt);
   return or(
     gt(messages.orderAt, c.orderAt),
-    and(eq(messages.orderAt, c.orderAt), gt(messages.id, c.id)),
+    and(eq(messages.orderAt, c.orderAt), lt(messages.id, c.id)),
   );
 }
 
@@ -705,7 +712,7 @@ class DmService {
           inArray(messages.kind, [14, 15]),
         ),
       )
-      .orderBy(desc(messages.orderAt), desc(messages.id))
+      .orderBy(desc(messages.orderAt), asc(messages.id))
       .limit(1);
     await db
       .update(conversations)
@@ -781,7 +788,7 @@ class DmService {
             .select({ orderAt: messages.orderAt, id: messages.id })
             .from(messages)
             .where(unreadWhere(accountPubkey, conversationKey, watermark))
-            .orderBy(asc(messages.orderAt), asc(messages.id))
+            .orderBy(asc(messages.orderAt), desc(messages.id))
             .limit(1)
         : Promise.resolve([]),
     ]);
@@ -2187,8 +2194,11 @@ class DmService {
           // resurrects a soft-deleted row; an out-of-order older one still counts
           // toward unread (tying that to "is newest" was the under-count bug).
           const isNewest =
-            orderAt > conv.lastMessageOrderAt ||
-            (orderAt === conv.lastMessageOrderAt && rumor.id! > (conv.lastMessageId ?? ''));
+            !conv.lastMessageId ||
+            isMessageOrderNewer(
+              { orderAt, id: rumor.id! },
+              { orderAt: conv.lastMessageOrderAt, id: conv.lastMessageId },
+            );
           // Advance the read cursor **forward only**. A self/active message that
           // arrives out of order — older than the cursor, which is the norm during
           // history backfill (it pages newest→oldest) — must not drag the cursor

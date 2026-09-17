@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import { useLiveQuery } from '@/db/use-live-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -154,7 +154,7 @@ export function useMessages(
       .select()
       .from(messages)
       .where(base)
-      .orderBy(desc(messages.orderAt), desc(messages.id))
+      .orderBy(desc(messages.orderAt), asc(messages.id))
       .limit(anchor ? 0 : limit),
     [accountPubkey, conversationKey, anchor ? 0 : limit, tailLiveEnabled],
     { enabled: tailLiveEnabled },
@@ -164,7 +164,7 @@ export function useMessages(
   const olderCond = anchor
     ? or(
         lt(messages.orderAt, anchor.orderAt),
-        and(eq(messages.orderAt, anchor.orderAt), lte(messages.id, anchor.id)),
+        and(eq(messages.orderAt, anchor.orderAt), gte(messages.id, anchor.id)),
       )
     : sql`0`;
   const older = useLiveQuery(
@@ -172,7 +172,7 @@ export function useMessages(
       .select()
       .from(messages)
       .where(and(base, olderCond))
-      .orderBy(desc(messages.orderAt), desc(messages.id))
+      .orderBy(desc(messages.orderAt), asc(messages.id))
       .limit(anchor ? olderCount : 0),
     [
       accountPubkey,
@@ -189,7 +189,7 @@ export function useMessages(
   const newerCond = anchor
     ? or(
         gt(messages.orderAt, anchor.orderAt),
-        and(eq(messages.orderAt, anchor.orderAt), gt(messages.id, anchor.id)),
+        and(eq(messages.orderAt, anchor.orderAt), lt(messages.id, anchor.id)),
       )
     : sql`0`;
   const newer = useLiveQuery(
@@ -197,7 +197,7 @@ export function useMessages(
       .select()
       .from(messages)
       .where(and(base, newerCond))
-      .orderBy(asc(messages.orderAt), asc(messages.id))
+      .orderBy(asc(messages.orderAt), desc(messages.id))
       .limit(anchor ? newerCount : 0),
     [
       accountPubkey,

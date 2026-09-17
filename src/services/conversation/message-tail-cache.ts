@@ -4,6 +4,7 @@ import {
   type PreparedMessagePresentation,
 } from '@/lib/chat/message-presentation';
 import { MESSAGES_PAGE_SIZE } from '@/lib/message-window';
+import { isMessageOrderNewer } from '@/lib/nostr/message-order';
 import {
   aggregateReactionsByTarget,
   type ReactionAggregate,
@@ -303,7 +304,7 @@ export async function warmMessageTail(
                 created_at, order_at, reply_to_id, subject, tags, rumor, source_relays
            FROM messages
           WHERE account_pubkey = ? AND conversation_key = ? AND kind IN (14, 15, 7)
-          ORDER BY order_at DESC, id DESC
+          ORDER BY order_at DESC, id ASC
           LIMIT ?`,
         [accountPubkey, conversationKey, MESSAGES_PAGE_SIZE],
       );
@@ -368,9 +369,9 @@ export function mergeStoredMessageIntoTail(accountPubkey: string, row: MessageRo
   const rows = entry.prepared.rowsNewestFirst;
   if (rows.some((existing) => existing.id === row.id)) return;
 
-  // Window order matches the SQLite query: order_at DESC, id DESC.
+  // Window order matches the SQLite query: order_at DESC, id ASC.
   const comesBefore = (a: MessageRow, b: MessageRow): boolean =>
-    a.orderAt !== b.orderAt ? a.orderAt > b.orderAt : a.id > b.id;
+    isMessageOrderNewer(a, b);
 
   // A row older than the whole window cannot enter it — the common case once a
   // history backfill moves past the cached newest page.

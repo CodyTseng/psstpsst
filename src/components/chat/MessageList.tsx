@@ -1034,7 +1034,9 @@ export function MessageList({
       const message = messages[i];
       const unread =
         message.orderAt > unreadBoundaryOrderAt ||
-        (message.orderAt === unreadBoundaryOrderAt && message.id > boundaryId);
+        (boundaryId !== '' &&
+          message.orderAt === unreadBoundaryOrderAt &&
+          message.id < boundaryId);
       if (!unread) break;
       count += 1;
     }

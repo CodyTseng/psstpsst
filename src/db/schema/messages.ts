@@ -18,7 +18,8 @@ export const messages = sqliteTable(
     kind: integer('kind').notNull(),
     content: text('content').notNull(),
     createdAt: integer('created_at').notNull(),
-    /** Normalized authenticated `ms` tag, or the legacy second floor. */
+    /** Normalized authenticated `ms` tag, or the legacy second floor. Equal
+     * values use the smaller event ID as the newer message. */
     orderAt: integer('order_at').notNull(),
     replyToId: text('reply_to_id'),
     subject: text('subject'),

@@ -212,6 +212,11 @@ refresh timestamps creates and persists a replacement intentionally.
 5. Successful inserts update the conversation read model and invalidate only
    relevant live queries.
 
+Message chronology uses the authenticated `(order_at, id)` cursor. A larger
+`order_at` is newer; equal timestamps follow the Nostr replaceable-event rule,
+where the lexicographically smaller event ID is newer. Pagination, unread
+watermarks, conversation heads, notifications, and media views share this rule.
+
 Mobile local notifications and badges use the project-owned native notification
 module behind the platform ports; no remote push SDK is linked. Notification
 cleanup must preserve Android's foreground-service notification.

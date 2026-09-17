@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, like } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, like } from 'drizzle-orm';
 import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -22,7 +22,11 @@ import {
 import { normalizeBareNostrUris } from '@/lib/nostr/normalize-content';
 import { findFileMeta } from '@/lib/nostr/file-tags';
 import { getPTags, getReplyToId, getSubject } from '@/lib/nostr/tags';
-import { messageOrderAt, withMessageOrderTag } from '@/lib/nostr/message-order';
+import {
+  isMessageOrderNewer,
+  messageOrderAt,
+  withMessageOrderTag,
+} from '@/lib/nostr/message-order';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { platform } from '@/platform';
 import type { ProximityTransportPort, ProximityTransportSubscription } from '@/platform';
@@ -3367,8 +3371,11 @@ class ProximityService {
         });
       } else {
         const newest =
-          orderAt > existing.lastMessageOrderAt ||
-          (orderAt === existing.lastMessageOrderAt && rumor.id! > (existing.lastMessageId ?? ''));
+          !existing.lastMessageId ||
+          isMessageOrderNewer(
+            { orderAt, id: rumor.id! },
+            { orderAt: existing.lastMessageOrderAt, id: existing.lastMessageId },
+          );
         await tx
           .update(conversations)
           .set({
@@ -3446,7 +3453,7 @@ class ProximityService {
             inArray(outbox.status, ['queued', 'sending', 'awaiting_ack']),
           ),
         )
-        .orderBy(asc(messages.orderAt), asc(messages.id));
+        .orderBy(asc(messages.orderAt), desc(messages.id));
       const conversationsSeen = new Set<string>();
       for (const { entry: row } of rows) {
         if (conversationsSeen.has(row.conversationKey)) continue;

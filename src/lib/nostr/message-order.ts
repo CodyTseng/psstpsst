@@ -5,6 +5,22 @@ import { pickTagValue } from './tags';
 /** PsstPsst's authenticated, non-indexed millisecond ordering tag for private rumors. */
 export const MESSAGE_ORDER_TAG = 'ms';
 
+export type MessageOrderKey = { orderAt: number; id: string };
+
+/**
+ * Compare two message cursors by Nostr's replaceable-event freshness rule:
+ * later timestamps win, and the lexicographically smaller event id wins ties.
+ */
+export function isMessageOrderNewer(
+  candidate: MessageOrderKey,
+  current: MessageOrderKey,
+): boolean {
+  return (
+    candidate.orderAt > current.orderAt ||
+    (candidate.orderAt === current.orderAt && candidate.id < current.id)
+  );
+}
+
 /** Add a fresh `0..999` ordering tag, replacing any stale copy. */
 export function withMessageOrderTag(tags: string[][], millisecond: number): string[][] {
   return [

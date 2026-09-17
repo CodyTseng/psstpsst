@@ -123,6 +123,23 @@ describe('message tail cache', () => {
     ]);
   });
 
+  it('puts the smaller id first in a newest-first timestamp tie', async () => {
+    const conversationKey = 'merge-tie';
+    mockRawQuery.mockResolvedValueOnce([
+      rawMessage('id-m', conversationKey),
+      rawMessage('id-z', conversationKey),
+    ]);
+    await warmMessageTail('account', conversationKey);
+
+    mergeStoredMessageIntoTail('account', messageRow('id-a', conversationKey));
+
+    expect(getWarmedMessageTail('account', conversationKey)?.map((row) => row.id)).toEqual([
+      'id-a',
+      'id-m',
+      'id-z',
+    ]);
+  });
+
   it('skips rows older than a full window and trims inserts to the page size', async () => {
     const conversationKey = 'merge-window';
     mockRawQuery.mockResolvedValueOnce(
