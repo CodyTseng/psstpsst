@@ -1,0 +1,9 @@
+PsstPsst 0.2.2
+
+- Swipe either way on a message to reply.
+- On desktop, start typing to jump straight into the message box.
+- Choose whether unread message counts appear in Settings.
+- Enjoy a media gallery that adapts better to the available space.
+- Stay in place more reliably while scrolling quickly or replying in long chats.
+- See conversation times update while the app remains open.
+- Fixed occasional message ordering issues when messages share the same timestamp.
