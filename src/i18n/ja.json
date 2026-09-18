@@ -524,6 +524,8 @@
   "notifications": {
     "title": "通知",
     "enable_label": "通知を許可",
+    "unread_indicators_label": "新着メッセージの印を表示",
+    "unread_indicators_note": "未読件数とドットを表示し、会話を既読または未読にできます。",
     "show_sender": "送信者名とアバターを表示",
     "show_message_content": "メッセージ内容を表示",
     "channel_name": "メッセージ",

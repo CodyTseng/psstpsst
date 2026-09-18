@@ -530,6 +530,8 @@
   "notifications": {
     "title": "Powiadomienia",
     "enable_label": "Zezwól na powiadomienia",
+    "unread_indicators_label": "Pokazuj wskaźniki nowych wiadomości",
+    "unread_indicators_note": "Pokazuje liczniki i kropki nieprzeczytanych wiadomości oraz pozwala oznaczać rozmowy jako przeczytane lub nieprzeczytane.",
     "show_sender": "Pokaż nazwę i awatar nadawcy",
     "show_message_content": "Pokaż treść wiadomości",
     "channel_name": "Wiadomości",

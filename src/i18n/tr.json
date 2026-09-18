@@ -524,6 +524,8 @@
   "notifications": {
     "title": "Bildirimler",
     "enable_label": "Bildirimlere izin ver",
+    "unread_indicators_label": "Yeni mesaj göstergelerini göster",
+    "unread_indicators_note": "Okunmamış mesaj sayılarını ve noktalarını gösterir, konuşmaları okundu veya okunmadı olarak işaretlemenizi sağlar.",
     "show_sender": "Gönderenin adını ve avatarını göster",
     "show_message_content": "Mesaj içeriğini göster",
     "channel_name": "Mesajlar",

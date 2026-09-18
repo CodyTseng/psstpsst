@@ -408,6 +408,8 @@ where permission can be queried. Otherwise, keep visible guidance to enable
 notifications in system settings and explain that system permission cannot be checked.
 When the OS denies permission, explain how to enable it in system settings and
 refresh the control when the user returns.
+Disabling new-message indicators hides unread counts, dots, dividers, arrival
+banners, and manual read/unread actions without disabling system notifications.
 
 Electron application updates require separate download and install
 confirmations. Declining either action must not start it implicitly later.

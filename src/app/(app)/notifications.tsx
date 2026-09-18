@@ -1,4 +1,5 @@
 import { Bell } from '@solar-icons/react-native/category/notifications/Linear/Bell';
+import { ChatRoundUnread } from '@solar-icons/react-native/category/messages/Linear/ChatRoundUnread';
 import { MoonSleep } from '@solar-icons/react-native/category/weather/Linear/MoonSleep';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,7 @@ import { Toggle } from '@/components/common/Toggle';
 import { DESKTOP_OS, IS_ANDROID, IS_ELECTRON, IS_IOS } from '@/lib/platform';
 import { useNotificationStatus } from '@/hooks/use-notification-status';
 import { platform } from '@/platform';
+import { unreadCountService } from '@/services/conversation/unread-count.service';
 import { notificationService } from '@/services/notifications/notification.service';
 import {
   DEFAULT_DND_WINDOW,
@@ -22,6 +24,7 @@ import {
   type NotificationContentPreferences,
 } from '@/services/notifications/notification-prefs';
 import { useScrolled } from '@/hooks/use-scrolled';
+import { useUnreadIndicatorPreference } from '@/stores/unread-count.store';
 import { spacing, useThemeColors } from '@/theme';
 
 const DELIVERY_NOTE_KEY = IS_IOS
@@ -40,6 +43,8 @@ export default function NotificationsSettings() {
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const { enabled, busy, toggle, openSettings } = useNotificationStatus();
+  const unreadIndicators = useUnreadIndicatorPreference();
+  const [savingUnreadIndicators, setSavingUnreadIndicators] = useState(false);
   const [contentPreferences, setContentPreferences] =
     useState<NotificationContentPreferences | null>(null);
   const [savingContentPreference, setSavingContentPreference] = useState<
@@ -117,6 +122,18 @@ export default function NotificationsSettings() {
       setContentPreferences(previous);
     } finally {
       setSavingContentPreference(null);
+    }
+  }
+
+  async function onUnreadIndicatorsToggle(next: boolean) {
+    if (savingUnreadIndicators || !unreadIndicators.resolved) return;
+    setSavingUnreadIndicators(true);
+    try {
+      await unreadCountService.setIndicatorsEnabled(next);
+    } catch (error) {
+      console.warn('[notifications] Unable to change unread indicators.', error);
+    } finally {
+      setSavingUnreadIndicators(false);
     }
   }
 
@@ -255,6 +272,27 @@ export default function NotificationsSettings() {
           </ListGroup>
           <AppText variant="caption" tone="muted" style={{ paddingHorizontal: spacing.xs }}>
             {t('notifications.dnd_note')}
+          </AppText>
+        </View>
+        <View style={{ gap: spacing.sm }}>
+          <ListGroup>
+            <ListRow
+              icon={<ChatRoundUnread size={22} color={c.text} />}
+              title={t('notifications.unread_indicators_label')}
+              loading={!unreadIndicators.resolved}
+              trailing={
+                unreadIndicators.resolved ? (
+                  <Toggle
+                    value={unreadIndicators.enabled}
+                    onValueChange={onUnreadIndicatorsToggle}
+                    disabled={savingUnreadIndicators}
+                  />
+                ) : undefined
+              }
+            />
+          </ListGroup>
+          <AppText variant="caption" tone="muted" style={{ paddingHorizontal: spacing.xs }}>
+            {t('notifications.unread_indicators_note')}
           </AppText>
         </View>
       </ScrollView>

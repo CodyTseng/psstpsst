@@ -524,6 +524,8 @@
   "notifications": {
     "title": "通知",
     "enable_label": "允許通知",
+    "unread_indicators_label": "顯示新訊息標記",
+    "unread_indicators_note": "顯示未讀計數和提示點，並允許將對話標記為已讀或未讀。",
     "show_sender": "顯示使用者名稱和頭像",
     "show_message_content": "顯示訊息內容",
     "channel_name": "訊息",

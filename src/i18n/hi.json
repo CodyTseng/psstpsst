@@ -524,6 +524,8 @@
   "notifications": {
     "title": "नोटिफ़िकेशन",
     "enable_label": "नोटिफ़िकेशन की अनुमति दें",
+    "unread_indicators_label": "नए संदेश के संकेत दिखाएँ",
+    "unread_indicators_note": "अपठित संदेशों की गिनती और बिंदु दिखाता है और बातचीत को पढ़ा या अपठित चिह्नित करने देता है।",
     "show_sender": "भेजने वाले का नाम और अवतार दिखाएँ",
     "show_message_content": "संदेश की सामग्री दिखाएँ",
     "channel_name": "संदेश",

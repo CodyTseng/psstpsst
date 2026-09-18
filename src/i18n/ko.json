@@ -524,6 +524,8 @@
   "notifications": {
     "title": "알림",
     "enable_label": "알림 허용",
+    "unread_indicators_label": "새 메시지 표시 보기",
+    "unread_indicators_note": "읽지 않은 메시지 수와 점을 표시하고 대화를 읽음 또는 읽지 않음으로 표시할 수 있습니다.",
     "show_sender": "보낸 사람 이름과 아바타 표시",
     "show_message_content": "메시지 내용 표시",
     "channel_name": "메시지",

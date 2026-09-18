@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { db } from '@/db/client';
 import { conversations, messages } from '@/db/schema';
-import { useUnreadCount } from '@/stores/unread-count.store';
+import { useUnreadCount, useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
 
 export type ConversationWithLast = {
   conversation: typeof conversations.$inferSelect;
@@ -240,6 +240,7 @@ export function useRequestCount(accountPubkey: string): number {
  * replied to stays in the Requests list, but no longer pings the badge.
  */
 export function useUnreadRequestCount(accountPubkey: string): number {
+  const indicatorsEnabled = useUnreadIndicatorsEnabled();
   const { data } = useLiveQuery(
     db
       .select({ n: count() })
@@ -254,7 +255,7 @@ export function useUnreadRequestCount(accountPubkey: string): number {
       ),
     [accountPubkey],
   );
-  return data?.[0]?.n ?? 0;
+  return indicatorsEnabled ? (data?.[0]?.n ?? 0) : 0;
 }
 
 export function useConversation(

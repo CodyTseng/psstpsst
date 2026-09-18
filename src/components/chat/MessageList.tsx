@@ -154,6 +154,8 @@ type Props = {
   firstUnreadId?: string | null;
   /** Frozen unread count: gates the divider and bounds background preloading. */
   unreadCount?: number;
+  /** Hide unread and newly-arrived markers while retaining ordinary scrolling. */
+  showNewMessageIndicators?: boolean;
   onSwipeReply?: (message: MessageRow) => void;
   /** Long-press a bubble: hands up the message, its measured screen rect, and a
    * ready-to-render lifted copy (reply/attachment already resolved here). */
@@ -241,6 +243,7 @@ export function MessageList({
   firstUnreadOrderAt,
   firstUnreadId: firstUnreadMessageId,
   unreadCount = 0,
+  showNewMessageIndicators = true,
   onSwipeReply,
   onLongPress,
   onLongPressPending,
@@ -298,7 +301,7 @@ export function MessageList({
   // A small unread tail already fits in the first page, so marking its boundary
   // adds visual noise and can perturb the inverted list after first paint. Only
   // keep the divider affordance when the unread tail fills at least one page.
-  const showUnreadDivider = unreadCount >= MESSAGES_PAGE_SIZE;
+  const showUnreadDivider = showNewMessageIndicators && unreadCount >= MESSAGES_PAGE_SIZE;
   const pendingIdsSignature = pendingAttachments
     .map((pending) => pending.tempId)
     .join('|');
@@ -1697,7 +1700,7 @@ export function MessageList({
                 style={{ zIndex: 1 }}
               />
             </View>
-            {stagedCount > 0 ? (
+            {showNewMessageIndicators && stagedCount > 0 ? (
               <View
                 style={{
                   position: 'absolute',

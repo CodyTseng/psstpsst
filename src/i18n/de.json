@@ -524,6 +524,8 @@
   "notifications": {
     "title": "Benachrichtigungen",
     "enable_label": "Benachrichtigungen erlauben",
+    "unread_indicators_label": "Hinweise auf neue Nachrichten anzeigen",
+    "unread_indicators_note": "Zeigt Zähler und Punkte für ungelesene Nachrichten und erlaubt, Chats als gelesen oder ungelesen zu markieren.",
     "show_sender": "Absendername und Profilbild anzeigen",
     "show_message_content": "Nachrichteninhalt anzeigen",
     "channel_name": "Nachrichten",

@@ -310,6 +310,8 @@
   "notifications": {
     "title": "الإشعارات",
     "enable_label": "السماح بالإشعارات",
+    "unread_indicators_label": "إظهار مؤشرات الرسائل الجديدة",
+    "unread_indicators_note": "يعرض أعداد الرسائل غير المقروءة والنقاط، ويتيح لك تحديد المحادثات كمقروءة أو غير مقروءة.",
     "show_sender": "إظهار اسم المرسل وصورته الشخصية",
     "show_message_content": "إظهار محتوى الرسالة",
     "channel_name": "الرسائل",

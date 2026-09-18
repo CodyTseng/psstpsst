@@ -524,6 +524,8 @@
   "notifications": {
     "title": "Notifications",
     "enable_label": "Allow notifications",
+    "unread_indicators_label": "Show new message indicators",
+    "unread_indicators_note": "Shows unread counts and dots, and lets you mark conversations as read or unread.",
     "show_sender": "Show sender name and avatar",
     "show_message_content": "Show message content",
     "channel_name": "Messages",

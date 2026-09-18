@@ -510,8 +510,18 @@ function ConversationListItemBase({
     );
   }
 
+  const swipeActionsKey = [
+    isRTL ? 'rtl' : 'ltr',
+    onToggleUnread ? 'unread' : 'no-unread',
+    onTogglePin ? 'pin' : 'no-pin',
+  ].join(':');
+
   return (
     <Swipeable
+      // Legacy Swipeable caches measured action widths. Recreate only its
+      // subtree when the available actions change so toggling unread indicators
+      // remeasures one Pin cell or the full Read/Unread + Pin pair correctly.
+      key={swipeActionsKey}
       ref={swipeableRef}
       // RN Web has no native animated module; run the swipe on the JS
       // driver there so Animated stops warning about `useNativeDriver`.
@@ -521,6 +531,11 @@ function ConversationListItemBase({
       leftThreshold={40}
       rightThreshold={40}
       friction={2}
+      // Stop at the rendered action width. This matters when unread actions are
+      // disabled and the leading side contains only Pin: overdrag would expose
+      // an empty second-cell-sized gap beside it.
+      overshootLeft={false}
+      overshootRight={false}
       // Keep a left-edge strip free for the OS back-swipe: the leading (read /
       // pin) swipe is left→right like the navigator's pop gesture, so without
       // this guard a row would swallow the back-swipe. Negative `hitSlop`

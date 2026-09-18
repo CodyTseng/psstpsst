@@ -8,16 +8,24 @@ import {
   isActiveConversationVisible,
   type ActiveConversation,
 } from '@/services/dm/active-conversation';
+import {
+  getUnreadIndicatorsEnabled,
+  setUnreadIndicatorsEnabled,
+} from '@/services/notifications/notification-prefs';
 import { syncUnreadIndicator } from '@/services/unread-indicator.service';
 
 type UnreadCountState = {
   accountPubkey: string | null;
   count: number;
+  indicatorsEnabled: boolean;
+  indicatorsResolved: boolean;
 };
 
 export const unreadCountStore = createStore<UnreadCountState>()(() => ({
   accountPubkey: null,
   count: 0,
+  indicatorsEnabled: true,
+  indicatorsResolved: false,
 }));
 
 /** Read the same main-inbox total used by the Chats tab badge. */
@@ -55,6 +63,9 @@ class UnreadCountService {
   private refreshScheduled = false;
   private refreshInFlight = false;
   private refreshPending = false;
+  private indicatorsEnabled = true;
+  private indicatorsResolved = false;
+  private indicatorsLoad: Promise<boolean> | null = null;
   /** The conversation currently on screen. While the user is present it is
    * excluded from the aggregate — opening it marks it read, and incoming
    * messages for it never bump unread — so publishing the pre-read total
@@ -93,9 +104,12 @@ class UnreadCountService {
     const tracksActiveAccount = this.configured;
     if (tracksActiveAccount && accountPubkey !== this.accountPubkey) return;
 
-    const count = accountPubkey
-      ? await getMainInboxUnreadCount(accountPubkey, this.excludedConversationKey(accountPubkey))
-      : 0;
+    const [count] = await Promise.all([
+      accountPubkey
+        ? getMainInboxUnreadCount(accountPubkey, this.excludedConversationKey(accountPubkey))
+        : Promise.resolve(0),
+      this.getIndicatorsEnabled(),
+    ]);
     if (
       tracksActiveAccount &&
       (generation !== this.generation || accountPubkey !== this.accountPubkey)
@@ -109,7 +123,29 @@ class UnreadCountService {
         unreadCountStore.setState({ accountPubkey, count });
       }
     }
-    await syncUnreadIndicator(count);
+    await syncUnreadIndicator(this.indicatorsEnabled ? count : 0);
+  }
+
+  async getIndicatorsEnabled(): Promise<boolean> {
+    if (this.indicatorsResolved) return this.indicatorsEnabled;
+    if (!this.indicatorsLoad) {
+      this.indicatorsLoad = getUnreadIndicatorsEnabled().then((enabled) => {
+        this.indicatorsEnabled = enabled;
+        this.indicatorsResolved = true;
+        unreadCountStore.setState({ indicatorsEnabled: enabled, indicatorsResolved: true });
+        return enabled;
+      });
+    }
+    return this.indicatorsLoad;
+  }
+
+  async setIndicatorsEnabled(enabled: boolean): Promise<void> {
+    await this.getIndicatorsEnabled();
+    await setUnreadIndicatorsEnabled(enabled);
+    this.indicatorsEnabled = enabled;
+    this.indicatorsResolved = true;
+    unreadCountStore.setState({ indicatorsEnabled: enabled, indicatorsResolved: true });
+    await syncUnreadIndicator(enabled ? unreadCountStore.getState().count : 0);
   }
 
   /**

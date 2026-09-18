@@ -8,6 +8,7 @@ import type { Rumor } from '@/db/schema/types';
  */
 
 let mockEnabledPref = true;
+let mockUnreadIndicatorsEnabled = true;
 let mockPermission = true;
 let mockShouldNotify = true;
 let mockFilterAllows = true;
@@ -143,6 +144,7 @@ jest.mock('../notification-prefs', () => ({
   getBatteryOptimizationPrompted: jest.fn(async () => mockBatteryOptimizationPrompted),
   getNotificationContentPreferences: jest.fn(async () => mockContentPreferences),
   getNotificationsEnabled: jest.fn(async () => mockEnabledPref),
+  getUnreadIndicatorsEnabled: jest.fn(async () => mockUnreadIndicatorsEnabled),
   setBatteryOptimizationPrompted: jest.fn(async () => {
     mockBatteryOptimizationPrompted = true;
   }),
@@ -227,6 +229,7 @@ describe('notificationService funnel', () => {
     jest.resetModules();
 
     mockEnabledPref = true;
+    mockUnreadIndicatorsEnabled = true;
     mockPermission = true;
     mockShouldNotify = true;
     mockFilterAllows = true;
@@ -274,6 +277,16 @@ describe('notificationService funnel', () => {
         badgeCount: 7,
       },
     ]);
+  });
+
+  it('delivers notifications without an app badge when unread indicators are off', async () => {
+    mockUnreadIndicatorsEnabled = false;
+    await initService();
+
+    mockDmListener!.onNewMessage!(rumor('r1'));
+    await flushAggregation();
+
+    expect(mockPresentedBadgeCounts).toEqual([0]);
   });
 
   it('applies the sender and message-content choices independently', async () => {

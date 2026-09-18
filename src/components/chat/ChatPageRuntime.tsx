@@ -160,6 +160,7 @@ import {
 } from '@/services/proximity/proximity-identity.service';
 import { useProximityStore, type NearbyConnectionFailure } from '@/stores/proximity.store';
 import { showToast } from '@/stores/toast.store';
+import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
 import {
   conversationAttachmentSources,
   conversationSupportsContent,
@@ -298,6 +299,7 @@ export default function ChatPageRuntime() {
   const wide = isWideLayoutSize(width, height);
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const unreadIndicatorsEnabled = useUnreadIndicatorsEnabled();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const exitSelection = useCallback(() => {
@@ -712,6 +714,7 @@ export default function ChatPageRuntime() {
                   topInset={contentTopInset}
                   topOccluderRef={topNoticeRef}
                   liveDataReady={liveDataReady}
+                  unreadIndicatorsEnabled={unreadIndicatorsEnabled}
                   manualReconnectPending={manualReconnectPending}
                   composerControllerRef={composerControllerRef}
                   onComposerModelChange={handleComposerModelChange}
@@ -763,7 +766,7 @@ export default function ChatPageRuntime() {
             liveDataEnabled={liveDataReady}
           />
         )}
-        {liveDataReady && focused && !wide && !selectionMode ? (
+        {unreadIndicatorsEnabled && liveDataReady && focused && !wide && !selectionMode ? (
           <IncomingMessageBanner
             key={conversationKey}
             accountPubkey={accountPubkey}
@@ -788,6 +791,7 @@ type ChatPageContentProps = {
   topInset: number;
   topOccluderRef: MutableRefObject<View | null>;
   liveDataReady: boolean;
+  unreadIndicatorsEnabled: boolean;
   manualReconnectPending: boolean;
   composerControllerRef: MutableRefObject<ChatComposerController | null>;
   onComposerModelChange: (model: ChatComposerModel) => void;
@@ -808,6 +812,7 @@ function ChatPageContent({
   topInset,
   topOccluderRef,
   liveDataReady,
+  unreadIndicatorsEnabled,
   manualReconnectPending,
   composerControllerRef,
   onComposerModelChange,
@@ -2349,6 +2354,7 @@ function ChatPageContent({
           firstUnreadOrderAt={unreadBoundary?.firstUnreadOrderAt ?? null}
           firstUnreadId={unreadBoundary?.firstUnreadId ?? null}
           unreadCount={unreadBoundary?.count ?? 0}
+          showNewMessageIndicators={unreadIndicatorsEnabled}
           onSwipeReply={proximityHistoryReadOnly ? undefined : startReply}
           onLongPress={handleLongPress}
           onLongPressPending={handlePendingLongPress}

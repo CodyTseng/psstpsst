@@ -524,6 +524,8 @@
   "notifications": {
     "title": "Értesítések",
     "enable_label": "Értesítések engedélyezése",
+    "unread_indicators_label": "Új üzenetek jelzéseinek megjelenítése",
+    "unread_indicators_note": "Megjeleníti az olvasatlan számlálókat és pontokat, és lehetővé teszi a beszélgetések olvasottnak vagy olvasatlannak jelölését.",
     "show_sender": "Feladó nevének és profilképének mutatása",
     "show_message_content": "Üzenet tartalmának mutatása",
     "channel_name": "Üzenetek",

@@ -53,6 +53,7 @@ import { useComposerFileHandoffStore } from '@/stores/composer-file-handoff.stor
 import { useProximityStore } from '@/stores/proximity.store';
 import { useSyncPhase } from '@/stores/sync-status.store';
 import { useScreenshotPreviewStore } from '@/stores/screenshot-preview.store';
+import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { bottomBarHeight, headerHeight, spacing, uiDensity, useThemeColors } from '@/theme';
 
@@ -86,6 +87,7 @@ function RealConversations() {
     (state) => (accountPubkey != null && state.featureEnabledByAccount[accountPubkey]) === true,
   );
   const { conversations: items, loaded } = useMainInboxConversations(accountPubkey ?? '');
+  const unreadIndicatorsEnabled = useUnreadIndicatorsEnabled();
   const { conversationKey: activeConversationKey } = useWidePaneSelection();
   const { open: openInDetailPane, wide } = usePrimaryPaneNavigation();
   const startComposerFileHandoff = useComposerFileHandoffStore((state) => state.start);
@@ -148,8 +150,8 @@ function RealConversations() {
   const focused = useIsFocused();
   const currentMinute = useMinuteClock(focused);
   const listExtraData = useMemo(
-    () => ({ activeConversationKey, currentMinute }),
-    [activeConversationKey, currentMinute],
+    () => ({ activeConversationKey, currentMinute, unreadIndicatorsEnabled }),
+    [activeConversationKey, currentMinute, unreadIndicatorsEnabled],
   );
   const navigation = useNavigation();
 
@@ -268,10 +270,12 @@ function RealConversations() {
         return;
       }
       // Global indices of unread (non-muted) conversations, in list order.
-      const unreadIdxs = items.reduce<number[]>((acc, it, i) => {
-        if (it.conversation.unreadCount > 0 && !it.conversation.muted) acc.push(i);
-        return acc;
-      }, []);
+      const unreadIdxs = unreadIndicatorsEnabled
+        ? items.reduce<number[]>((acc, it, i) => {
+            if (it.conversation.unreadCount > 0 && !it.conversation.muted) acc.push(i);
+            return acc;
+          }, [])
+        : [];
       if (unreadIdxs.length === 0) {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });
         return;
@@ -302,7 +306,7 @@ function RealConversations() {
       onTabPress();
       onFocus();
     };
-  }, [navigation, items, searchActive, closeSearch, topClearance]);
+  }, [navigation, items, unreadIndicatorsEnabled, searchActive, closeSearch, topClearance]);
 
   useEffect(
     () => () => {
@@ -517,7 +521,7 @@ function RealConversations() {
                     }
                     lastMessageAt={conv.lastMessageAt}
                     currentMinute={currentMinute}
-                    unreadCount={conv.unreadCount}
+                    unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}
                     muted={conv.muted}
                     identityKind={conv.deliveryKind}
                     pinned={conv.pinned}
@@ -529,7 +533,7 @@ function RealConversations() {
                     onDropFiles={dropFilesIntoConversation}
                     onToggleMute={toggleConversationMute}
                     onTogglePin={toggleConversationPin}
-                    onToggleUnread={toggleConversationUnread}
+                    onToggleUnread={unreadIndicatorsEnabled ? toggleConversationUnread : undefined}
                     onDelete={deleteConversation}
                   />
                 );

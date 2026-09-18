@@ -19,6 +19,7 @@ import {
   getDndWindow,
   getNotificationContentPreferences,
   getNotificationsEnabled,
+  getUnreadIndicatorsEnabled,
   isDndActiveNow,
   setBatteryOptimizationPrompted,
   setDndWindow,
@@ -422,7 +423,7 @@ class NotificationService {
     if (IS_DEVELOPMENT_BUILD && process.env.NODE_ENV !== 'test') {
       console.info(`[notifications] Presenting aggregate; count = ${count}`);
     }
-    const badgeCount = accountPubkey
+    const badgeCount = accountPubkey && (await getUnreadIndicatorsEnabled())
       ? await getMainInboxUnreadCount(accountPubkey)
       : 0;
     if (epoch !== this.notificationEpoch || this.isReceiveBlocked(accountPubkey)) return;

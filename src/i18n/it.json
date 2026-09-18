@@ -527,6 +527,8 @@
   "notifications": {
     "title": "Notifiche",
     "enable_label": "Consenti notifiche",
+    "unread_indicators_label": "Mostra indicatori dei nuovi messaggi",
+    "unread_indicators_note": "Mostra conteggi e punti dei messaggi non letti e consente di contrassegnare le conversazioni come lette o non lette.",
     "show_sender": "Mostra nome e avatar del mittente",
     "show_message_content": "Mostra contenuto del messaggio",
     "channel_name": "Messaggi",
