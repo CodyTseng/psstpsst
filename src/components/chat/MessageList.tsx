@@ -1,6 +1,12 @@
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -29,6 +35,7 @@ import { FrostedBackdrop } from '@/components/common/FrostedBackdrop';
 import { IconButton } from '@/components/common/IconButton';
 import { getSessionCachedContact, useContacts } from '@/hooks/use-contacts';
 import { MESSAGES_PAGE_SIZE } from '@/hooks/use-messages';
+import { useElectronHistoryPagination } from '@/hooks/use-electron-history-pagination';
 import { markChatMessageListMounted } from '@/lib/perf/chat-open';
 import { useProfilesMap } from '@/hooks/use-profile';
 import {
@@ -263,6 +270,11 @@ export function MessageList({
   const c = useThemeColors();
   const reducedMotion = useReducedMotion();
   const listRef = useRef<FlatList<ListItem>>(null);
+  // Permit one automatic first-page prefetch. Every subsequent edge page must
+  // be armed by a real drag; programmatic offset compensation must never feed
+  // back into onEndReached and recursively page through history.
+  const initialOlderPrefetchAvailableRef = useRef(true);
+  const userOlderPageRequestAvailableRef = useRef(false);
   // Native content updates must not start a tail correction while the reader's
   // drag or momentum scroll is still in progress.
   const userScrollInProgressRef = useRef(false);
@@ -272,6 +284,8 @@ export function MessageList({
   const atBottomRef = useRef(true);
   useLayoutEffect(() => {
     markChatMessageListMounted(conversationKey);
+    initialOlderPrefetchAvailableRef.current = true;
+    userOlderPageRequestAvailableRef.current = false;
   }, [conversationKey]);
   const attachmentLabels = useMemo(
     () => ({
@@ -475,6 +489,7 @@ export function MessageList({
 
   function handleScrollBeginDrag() {
     userScrollInProgressRef.current = true;
+    userOlderPageRequestAvailableRef.current = true;
     // Treat a deliberate gesture as leaving the tail until its final offset is
     // known. This prevents an async row commit from racing the first scroll tick.
     atBottomRef.current = false;
@@ -483,6 +498,21 @@ export function MessageList({
 
   function handleMomentumScrollBegin() {
     userScrollInProgressRef.current = true;
+    userOlderPageRequestAvailableRef.current = true;
+  }
+
+  function requestOlderFromScroll() {
+    if (!ready || !hasMore) return;
+    if (
+      !initialOlderPrefetchAvailableRef.current &&
+      !userOlderPageRequestAvailableRef.current
+    ) {
+      return;
+    }
+
+    initialOlderPrefetchAvailableRef.current = false;
+    userOlderPageRequestAvailableRef.current = false;
+    onLoadOlder();
   }
 
   function handleScrollSettled(
@@ -502,16 +532,17 @@ export function MessageList({
     // further scroll event to retry it, so settled gestures perform one guarded
     // edge check. useMessages deduplicates repeated requests for the same page.
     if (
-      ready &&
-      hasMore &&
       isNearMessageHistoryEdge({
         offsetY: contentOffset.y,
         contentHeight: contentSize.height,
         viewportHeight: layoutMeasurement.height,
       })
     ) {
-      onLoadOlder();
+      requestOlderFromScroll();
     }
+    // A page request belongs only to the gesture that reached the edge. If its
+    // result arrives later, content/layout callbacks cannot reuse stale intent.
+    userOlderPageRequestAvailableRef.current = false;
   }
 
   // Index (into ascending `messages`) of the released boundary. Everything up
@@ -982,6 +1013,16 @@ export function MessageList({
     activeFocusId != null &&
     (focusIndex == null || !windowLoaded) &&
     !focusExpired;
+
+  useElectronHistoryPagination({
+    listRef,
+    mounted: !waitingForFocus,
+    onHistoryEdge: () => {
+      if (!ready || !hasMore) return;
+      initialOlderPrefetchAvailableRef.current = false;
+      onLoadOlder();
+    },
+  });
 
   // Latest index map for the delayed re-snaps below (the window can keep growing
   // for a beat after a jump fires).
@@ -1566,8 +1607,7 @@ export function MessageList({
           // and snaps to the target under the cover; letting a page load mid-snap would
           // grow the window and shift the target out from under the scroll.
           onEndReached={() => {
-            if (!ready) return;
-            if (hasMore) onLoadOlder();
+            requestOlderFromScroll();
           }}
           onEndReachedThreshold={MESSAGE_HISTORY_PREFETCH_VIEWPORTS}
           // List start = newest (the bottom) → in an anchored window page forward

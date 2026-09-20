@@ -193,7 +193,13 @@ function storeSnapshot(
   accountPubkey: string,
   rows: MessageRow[],
 ): void {
-  const prepared = prepareTail(accountPubkey, rows);
+  // The cache is the navigation-time tail, never the screen's expanded paging
+  // window. Keeping this invariant here protects every current and future writer.
+  const boundedRows =
+    rows.length > MESSAGES_PAGE_SIZE
+      ? rows.slice(0, MESSAGES_PAGE_SIZE)
+      : rows;
+  const prepared = prepareTail(accountPubkey, boundedRows);
   cache.delete(key);
   cache.set(key, {
     accountPubkey,
@@ -261,7 +267,7 @@ export function getWarmedMessageTailPresentation(
   };
 }
 
-/** Replace the whole cached window with an authoritative live-query result. */
+/** Refresh the bounded cached tail from an authoritative live-query result. */
 export function replaceWarmedMessageTail(
   accountPubkey: string,
   conversationKey: string,

@@ -5,6 +5,7 @@ import {
   getWarmedMessageTail,
   getWarmedMessageTailPresentation,
   mergeStoredMessageIntoTail,
+  replaceWarmedMessageTail,
   warmMessageTail,
 } from '../message-tail-cache';
 
@@ -167,6 +168,22 @@ describe('message tail cache', () => {
     expect(ids?.[0]).toBe('fresh');
     expect(ids).toHaveLength(15);
     expect(ids).not.toContain('m14');
+  });
+
+  it('keeps only one tail page when a paginated live result refreshes the cache', () => {
+    const conversationKey = 'replace-window';
+    const rows = Array.from({ length: 30 }, (_, index) =>
+      messageRow(`m${index}`, conversationKey, { orderAt: 100 - index }),
+    );
+
+    replaceWarmedMessageTail('account', conversationKey, rows);
+
+    expect(getWarmedMessageTail('account', conversationKey)?.map((row) => row.id)).toEqual(
+      rows.slice(0, 15).map((row) => row.id),
+    );
+    expect(
+      getWarmedMessageTailPresentation('account', conversationKey)?.rowsNewestFirst,
+    ).toHaveLength(15);
   });
 
   it('ignores a message already in the window', async () => {
