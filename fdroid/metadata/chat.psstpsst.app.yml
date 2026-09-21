@@ -19,16 +19,15 @@ AllowedAPKSigningKeys:
   - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'
 
 Builds:
-  - versionName: 0.2.2
-    versionCode: 4
-    disable: v0.2.2 upstream APK differs from the compliant source-module rebuild
-    # Published v0.2.2; upstream build: actions/runs/35362574131.
-    commit: 06bcb7204216e100aae7a5bd704a6057150d0041
+  - versionName: 0.2.3
+    versionCode: 5
+    disable: Pending release commit and reproducibility verification
+    # Replace with the full commit hash of the published v0.2.3 tag.
+    commit: v0.2.3
     output: android/app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 27.1.12297006
-    # Upstream used Node 22.23.2/npm 10.9.8 and Temurin 17.0.20+1.
-    # Node 24.15.0/npm 11.12.1 match the maintainer's local development environment.
-    # Verify reproducibility against the existing release with this toolchain change.
+    # Node 24.15.0/npm 11.12.1 match the upstream release environment.
+    # Verify reproducibility against the release candidate before enabling.
     # Start with Debian OpenJDK 17; verify any JDK-related APK differences.
     sudo:
       # The Trixie build image provides JDK 21; JDK 17 comes from Bookworm.
@@ -89,5 +88,5 @@ Builds:
 AutoUpdateMode: None
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
 UpdateCheckData: 'app.json|"versionCode":\s*(\d+)|.|"version":\s*"([^"]+)"'
-CurrentVersion: 0.2.2
-CurrentVersionCode: 4
+CurrentVersion: 0.2.3
+CurrentVersionCode: 5

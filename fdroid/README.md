@@ -5,9 +5,10 @@ F-Droid repository. It is not a self-hosted repository configuration or proof
 that the application meets F-Droid's inclusion requirements. Copy the completed
 file into a fork of https://gitlab.com/fdroid/fdroiddata for validation and review.
 
-## Verified release inputs
+## Previous release inputs
 
-The draft targets the public `v0.2.2` release (version code `4`), commit
+The signing key and reproducibility investigation are based on the public
+`v0.2.2` release (version code `4`), commit
 `06bcb7204216e100aae7a5bd704a6057150d0041`. Its `AllowedAPKSigningKeys` matches
 the certificate reported by `apksigner verify --print-certs` on the published
 `PsstPsst-0.2.2-android.apk`.
@@ -84,7 +85,7 @@ its source build; that produces a separate signing lineage.
    packagers. Existing FCM/ML Kit checks remain only a subset of this review.
 6. Remove `disable` in the validation copy, then run `fdroid readmeta`,
    `fdroid lint chat.psstpsst.app`, `fdroid rewritemeta chat.psstpsst.app`, and
-   `fdroid build --server chat.psstpsst.app:4` in the configured fdroiddata
+   `fdroid build --server chat.psstpsst.app:5` in the configured fdroiddata
    checkout. Compare the rebuilt APK with the published APK using F-Droid's
    reproducible-build verification. Investigate native build paths, generated
    files, and tool versions if they differ.

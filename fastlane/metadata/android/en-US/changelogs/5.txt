@@ -1,0 +1,3 @@
+PsstPsst 0.2.3
+
+- Improved message list scrolling performance.
