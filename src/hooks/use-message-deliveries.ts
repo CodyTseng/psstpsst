@@ -1,6 +1,6 @@
 import { inArray } from 'drizzle-orm';
 import { useLiveQuery } from '@/db/use-live-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { db } from '@/db/client';
 import { messageDeliveries, outbox } from '@/db/schema';
@@ -16,11 +16,19 @@ import type { MessageDelivery } from '@/stores/delivery-status.store';
 export function useMessageDeliveries(
   messageIds: string[],
   liveDataEnabled = true,
+  sessionKey = '',
 ): Record<string, MessageDelivery> {
+  const [cacheState, setCacheState] = useState(() => ({
+    sessionKey,
+    deliveries: {} as Record<string, MessageDelivery>,
+  }));
+  if (cacheState.sessionKey !== sessionKey) {
+    setCacheState({ sessionKey, deliveries: {} });
+  }
   // inArray([]) is unsafe; use a never-matching sentinel when empty.
   const safeIds = messageIds.length > 0 ? messageIds : [' '];
   const queryEnabled = liveDataEnabled && messageIds.length > 0;
-  const { data } = useLiveQuery(
+  const { data, isResolved: deliveriesResolved } = useLiveQuery(
     db
       .select()
       .from(messageDeliveries)
@@ -28,13 +36,14 @@ export function useMessageDeliveries(
     [safeIds.join(','), queryEnabled],
     { enabled: queryEnabled },
   );
-  const { data: pending } = useLiveQuery(
+  const { data: pending, isResolved: outboxResolved } = useLiveQuery(
     db.select().from(outbox).where(inArray(outbox.messageId, safeIds)),
     [safeIds.join(','), 'outbox', queryEnabled],
     { enabled: queryEnabled },
   );
 
-  return useMemo(() => {
+  const currentDeliveries = useMemo(() => {
+    if (!deliveriesResolved || !outboxResolved) return null;
     const map: Record<string, MessageDelivery> = {};
     for (const row of data ?? []) {
       map[row.messageId] = {
@@ -71,5 +80,24 @@ export function useMessageDeliveries(
       }
     }
     return map;
-  }, [data, pending]);
+  }, [data, deliveriesResolved, outboxResolved, pending]);
+  const mergedDeliveries = useMemo(() => {
+    if (!currentDeliveries) return cacheState.deliveries;
+    const merged = { ...cacheState.deliveries };
+    for (const id of messageIds) delete merged[id];
+    return Object.assign(merged, currentDeliveries);
+  }, [cacheState.deliveries, currentDeliveries, messageIds]);
+  useEffect(() => {
+    if (!currentDeliveries) return;
+    // Mirror resolved visible rows into the mounted conversation's session cache.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCacheState((current) => {
+      if (current.sessionKey !== sessionKey) return current;
+      const deliveries = { ...current.deliveries };
+      for (const id of messageIds) delete deliveries[id];
+      Object.assign(deliveries, currentDeliveries);
+      return { ...current, deliveries };
+    });
+  }, [currentDeliveries, messageIds, sessionKey]);
+  return mergedDeliveries;
 }

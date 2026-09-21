@@ -1,6 +1,7 @@
 import { Reply as CornerUpLeft } from '@solar-icons/react-native/category/arrows-action/Linear/Reply';
 import type { ComponentProps, ComponentType } from 'react';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { trackMountedChatBubble } from '@/lib/perf/chat-close';
 import { StyleSheet, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
@@ -8,7 +9,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   Easing,
   Extrapolation,
-  FadeIn,
   ReduceMotion,
   interpolate,
   interpolateColor,
@@ -18,6 +18,7 @@ import Reanimated, {
   withDelay,
   withSpring,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
@@ -44,6 +45,7 @@ import {
   BUBBLE_GROUP_GAP,
   BUBBLE_MAX_WIDTH,
   BUBBLE_ROW_PADDING_HORIZONTAL,
+  BUBBLE_SELECTION_OFFSET,
 } from './bubble-layout';
 import { ReactionsRow } from './ReactionsRow';
 import {
@@ -137,13 +139,11 @@ type Props = {
    * this message; the selected row is tinted. Long-press/swipe are disabled by
    * the parent (their callbacks come through undefined) while selecting. */
   selectionMode?: boolean;
+  /** One list-owned animation shared by all received rows. */
+  selectionShiftStyle?: ComponentProps<typeof Reanimated.View>['style'];
   selected?: boolean;
   onToggleSelect?: () => void;
 };
-
-// Selection-mode checkbox column width (the 22px dot + ~10px gap to the bubble);
-// the peer bubble shifts right by this so the dot never overlaps it.
-const SELECT_COL = 32;
 
 type DesktopViewProps = ComponentProps<typeof View> & {
   onContextMenu?: (event: DesktopContextMenuEvent) => void;
@@ -178,47 +178,20 @@ function MessageBubbleBase({
   separatorAbove,
   onTapReaction,
   selectionMode,
+  selectionShiftStyle,
   selected,
   onToggleSelect,
 }: Props) {
+  useLayoutEffect(trackMountedChatBubble, []);
   const c = useThemeColors();
   const isRTL = useIsRTL();
-  const directionalIconStyle = useDirectionalIconStyle();
-
-  // Flash overlay when this row is jumped to (e.g. from a reply preview). A
-  // foreground-colour wash (not the accent) at a low peak opacity, fading out.
-  // Keyed on `highlightTick` too, so re-tapping the same reply re-fires it.
-  const highlight = useSharedValue(0);
-  const reducedMotion = useReducedMotion();
-  const highlightStyle = useAnimatedStyle(() => ({ opacity: highlight.get() }));
-  useEffect(() => {
-    if (!highlighted) {
-      highlight.set(0);
-      return;
-    }
-    highlight.set(0.2);
-    // Reduced motion keeps the state indication static until `highlighted`
-    // clears; collapsing both the delay and fade would make it invisible.
-    if (reducedMotion) return;
-    highlight.set(
-      withDelay(
-        MESSAGE_HIGHLIGHT_HOLD_MS,
-        withTiming(0, {
-          duration: MESSAGE_HIGHLIGHT_FADE_MS,
-          easing: MESSAGE_HIGHLIGHT_EASE_OUT,
-          reduceMotion: ReduceMotion.Never,
-        }),
-        ReduceMotion.Never,
-      ),
-    );
-  }, [highlighted, highlightTick, highlight, reducedMotion]);
 
   // Measure the complete visual cluster (bubble + reactions) and the bubble body
   // within it. Touch lifts that complete cluster; Electron retains the cluster
   // only as its source hover target and anchors the menu to the pointer.
   const messageVisualRef = useRef<View>(null);
   const bubbleRef = useRef<View>(null);
-  function emitLongPress(withImpact: boolean, pointer?: DesktopPointerPoint) {
+  const emitLongPress = useCallback((withImpact: boolean, pointer?: DesktopPointerPoint) => {
     const visualNode = messageVisualRef.current;
     const bodyNode = bubbleRef.current;
     if (!visualNode || !onLongPress) return;
@@ -244,7 +217,7 @@ function MessageBubbleBase({
         }),
       );
     });
-  }
+  }, [onLongPress]);
 
   function handleContextMenu(event: DesktopContextMenuEvent) {
     event.preventDefault?.();
@@ -256,10 +229,8 @@ function MessageBubbleBase({
   // round reply arrow fades in beneath the edge the bubble exposes. Past the
   // trigger distance, releasing commits the reply and the bubble springs back.
   const tx = useSharedValue(0);
-  // Whether the drag is currently past the trigger — gates the one-shot arming
-  // haptic so it ticks once per crossing, not every frame past the threshold.
-  const armed = useSharedValue(false);
-  const gesture = (() => {
+  const [swipeDecorationsMounted, setSwipeDecorationsMounted] = useState(false);
+  const gesture = useMemo(() => {
     if (!interactive) return Gesture.Tap().enabled(false);
     const swipe = Gesture.Pan()
       // Electron reserves mouse dragging for native text selection. Reply remains
@@ -273,19 +244,19 @@ function MessageBubbleBase({
       )
       .activeOffsetX([-SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ACTIVATION])
       .failOffsetY([-14, 14]) // … and yield to the list's vertical scroll
+      .onStart(() => {
+        scheduleOnRN(setSwipeDecorationsMounted, true);
+      })
       .onUpdate((e) => {
         const logicalX = e.translationX * (isRTL ? -1 : 1);
-        tx.set(constrainSwipeReplyOffset(logicalX));
-        const distance = swipeReplyDistance(tx.get());
+        const previousDistance = swipeReplyDistance(tx.get());
+        const nextOffset = constrainSwipeReplyOffset(logicalX);
+        tx.set(nextOffset);
+        const distance = swipeReplyDistance(nextOffset);
         // Tick the instant the drag arms (crosses the trigger), like iOS Messages;
         // re-arm when it falls back below so a re-cross ticks again.
-        if (distance >= SWIPE_REPLY_TRIGGER) {
-          if (!armed.get()) {
-            armed.set(true);
-            scheduleOnRN(impact, 'light');
-          }
-        } else if (armed.get()) {
-          armed.set(false);
+        if (distance >= SWIPE_REPLY_TRIGGER && previousDistance < SWIPE_REPLY_TRIGGER) {
+          scheduleOnRN(impact, 'light');
         }
       })
       .onEnd((e) => {
@@ -302,9 +273,16 @@ function MessageBubbleBase({
             velocity: e.velocityX * (isRTL ? -1 : 1),
             overshootClamping: true,
             reduceMotion: ReduceMotion.System,
+          }, (finished) => {
+            if (finished) scheduleOnRN(setSwipeDecorationsMounted, false);
           }),
         );
-        armed.set(false);
+      })
+      .onFinalize((_event, success) => {
+        if (!success) {
+          tx.set(0);
+          scheduleOnRN(setSwipeDecorationsMounted, false);
+        }
       });
 
     // Touch long-press opens the action menu. It lives in the same RNGH system
@@ -318,57 +296,10 @@ function MessageBubbleBase({
         scheduleOnRN(emitLongPress, true);
       });
     return Gesture.Simultaneous(swipe, longPress);
-  })();
+  }, [interactive, isRTL, onSwipeReply, onLongPress, emitLongPress, tx]);
 
   const bubbleSlide = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.get() * (isRTL ? -1 : 1) }],
-  }));
-  const replyRevealStart = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      tx.get(),
-      [SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ARMED_FROM],
-      [0, 1],
-      Extrapolation.CLAMP,
-    ),
-  }));
-  const replyRevealEnd = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      -tx.get(),
-      [SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ARMED_FROM],
-      [0, 1],
-      Extrapolation.CLAMP,
-    ),
-  }));
-  // Muted while below the trigger, accented once the swipe will commit a reply.
-  const replyChipFill = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      swipeReplyDistance(tx.get()),
-      [SWIPE_REPLY_ARMED_FROM, SWIPE_REPLY_TRIGGER],
-      [c.surfaceMuted, c.accentSoft],
-    ),
-  }));
-  const replyArmedArrow = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      swipeReplyDistance(tx.get()),
-      [SWIPE_REPLY_ARMED_FROM, SWIPE_REPLY_TRIGGER],
-      [0, 1],
-      Extrapolation.CLAMP,
-    ),
-  }));
-  // Selection mode: slide the peer bubble right to clear the checkbox column,
-  // animated so entering/leaving selection doesn't jump. A transform (not a
-  // margin), so it never reflows or shrinks the bubble's max width.
-  const selectShift = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX: withTiming(
-          selectionMode && !isSelf ? SELECT_COL * (isRTL ? -1 : 1) : 0,
-          {
-            duration: 200,
-          },
-        ),
-      },
-    ],
   }));
 
   return (
@@ -397,7 +328,9 @@ function MessageBubbleBase({
               maxWidth: attachment ? '100%' : BUBBLE_MAX_WIDTH,
               minWidth: 0,
             },
-            selectShift,
+            !isSelf ? selectionShiftStyle ?? {
+              transform: [{ translateX: selectionMode ? BUBBLE_SELECTION_OFFSET * (isRTL ? -1 : 1) : 0 }],
+            } : undefined,
           ]}
         >
           {/* The bubble + its swipe-reply chip, sized to the bubble. Kept
@@ -412,83 +345,9 @@ function MessageBubbleBase({
           >
             {/* A reply arrow sits beneath each logical edge. Only the edge exposed
                 by the current drag fades in; neither intercepts bubble taps. */}
-            {interactive
-              ? (['start', 'end'] as const).map((edge) => (
-                  <View
-                    key={edge}
-                    style={[
-                      {
-                        position: 'absolute',
-                        top: 0,
-                        bottom: 0,
-                        justifyContent: 'center',
-                        pointerEvents: 'none',
-                      },
-                      edge === 'start'
-                        ? {
-                            start: swipeReplyEdgeInset(
-                              !!attachment,
-                              isSelf,
-                              edge,
-                              ATTACHMENT_FAILURE_TARGET_SIZE,
-                            ),
-                          }
-                        : {
-                            end: swipeReplyEdgeInset(
-                              !!attachment,
-                              isSelf,
-                              edge,
-                              ATTACHMENT_FAILURE_TARGET_SIZE,
-                            ),
-                          },
-                    ]}
-                  >
-                    <Reanimated.View
-                      style={[
-                        {
-                          width: 28,
-                          height: 28,
-                          borderRadius: 14,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        },
-                        edge === 'start'
-                          ? replyRevealStart
-                          : replyRevealEnd,
-                        replyChipFill,
-                      ]}
-                    >
-                      {/* The accent arrow crossfades over the muted arrow once the
-                          drag will commit the reply. */}
-                      <CornerUpLeft
-                        size={15}
-                        color={c.textMuted}
-                        style={directionalIconStyle}
-                      />
-                      <Reanimated.View
-                        style={[
-                          {
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          },
-                          replyArmedArrow,
-                        ]}
-                      >
-                        <CornerUpLeft
-                          size={15}
-                          color={c.accent}
-                          style={directionalIconStyle}
-                        />
-                      </Reanimated.View>
-                    </Reanimated.View>
-                  </View>
-                ))
-              : null}
+            {swipeDecorationsMounted ? (
+              <SwipeReplyDecorations tx={tx} isSelf={isSelf} hasAttachment={!!attachment} />
+            ) : null}
 
             <Reanimated.View style={bubbleSlide}>
               <View ref={bubbleRef} collapsable={false}>
@@ -524,10 +383,9 @@ function MessageBubbleBase({
 
         {/* Checkbox column — absolutely positioned at the row's start so it never
             eats into the bubble's width; the peer bubble slides right
-            (`selectShift`, above) to clear it. */}
+            (the shared selection transform above) to clear it. */}
         {selectionMode ? (
-          <Reanimated.View
-            entering={FadeIn.duration(160)}
+          <View
             style={{
               position: 'absolute',
               start: 16,
@@ -538,7 +396,7 @@ function MessageBubbleBase({
             }}
           >
             <SelectionDot selected={!!selected} />
-          </Reanimated.View>
+          </View>
         ) : null}
 
         {/* Selected (forwarding): a steady foreground wash across the whole row —
@@ -562,20 +420,7 @@ function MessageBubbleBase({
         {/* Jump-to flash: a foreground wash across the **whole row**, painted on
             top of everything (the bubble included — not hidden behind it), so even
             an accent self-bubble or an image clearly pulses. Fades out. */}
-        <Reanimated.View
-          style={[
-            {
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: c.text,
-              pointerEvents: 'none',
-            },
-            highlightStyle,
-          ]}
-        />
+        {highlighted ? <MessageHighlight key={highlightTick} /> : null}
 
         {/* Selection mode: a full-row tap target on top of everything (even an
             image/file/link with its own press handler) — a tap toggles this
@@ -588,6 +433,175 @@ function MessageBubbleBase({
         ) : null}
       </DesktopView>
     </GestureDetector>
+  );
+}
+
+/** Allocate highlight animation resources only for the highlighted row. */
+function MessageHighlight() {
+  const c = useThemeColors();
+  // Flash overlay when this row is jumped to (e.g. from a reply preview). A
+  // foreground-colour wash (not the accent) at a low peak opacity, fading out.
+  // Keyed on `highlightTick` too, so re-tapping the same reply re-fires it.
+  const highlight = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
+  const highlightStyle = useAnimatedStyle(() => ({ opacity: highlight.get() }));
+  useEffect(() => {
+    highlight.set(0.2);
+    // Reduced motion keeps the state indication static until `highlighted`
+    // clears; collapsing both the delay and fade would make it invisible.
+    if (reducedMotion) return;
+    highlight.set(
+      withDelay(
+        MESSAGE_HIGHLIGHT_HOLD_MS,
+        withTiming(0, {
+          duration: MESSAGE_HIGHLIGHT_FADE_MS,
+          easing: MESSAGE_HIGHLIGHT_EASE_OUT,
+          reduceMotion: ReduceMotion.Never,
+        }),
+        ReduceMotion.Never,
+      ),
+    );
+  }, [highlight, reducedMotion]);
+
+  return (
+    <Reanimated.View
+      style={[
+        {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: c.text,
+          pointerEvents: 'none',
+        },
+        highlightStyle,
+      ]}
+    />
+  );
+}
+
+/** Hidden reply SVGs and their mappers are only needed during an actual swipe.
+ * Keeping them out of buffered rows avoids hundreds of idle native resources. */
+function SwipeReplyDecorations({ tx, isSelf, hasAttachment }: {
+  tx: SharedValue<number>;
+  isSelf: boolean;
+  hasAttachment: boolean;
+}) {
+  const c = useThemeColors();
+  const directionalIconStyle = useDirectionalIconStyle();
+  const replyRevealStart = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      tx.get(),
+      [SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ARMED_FROM],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  const replyRevealEnd = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      -tx.get(),
+      [SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ARMED_FROM],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  // Muted while below the trigger, accented once the swipe will commit a reply.
+  const replyChipFill = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      swipeReplyDistance(tx.get()),
+      [SWIPE_REPLY_ARMED_FROM, SWIPE_REPLY_TRIGGER],
+      [c.surfaceMuted, c.accentSoft],
+    ),
+  }));
+  const replyArmedArrow = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      swipeReplyDistance(tx.get()),
+      [SWIPE_REPLY_ARMED_FROM, SWIPE_REPLY_TRIGGER],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
+  return (
+    <>
+      {(['start', 'end'] as const).map((edge) => (
+            <View
+              key={edge}
+              style={[
+                {
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                },
+                edge === 'start'
+                  ? {
+                      start: swipeReplyEdgeInset(
+                        hasAttachment,
+                        isSelf,
+                        edge,
+                        ATTACHMENT_FAILURE_TARGET_SIZE,
+                      ),
+                    }
+                  : {
+                      end: swipeReplyEdgeInset(
+                        hasAttachment,
+                        isSelf,
+                        edge,
+                        ATTACHMENT_FAILURE_TARGET_SIZE,
+                      ),
+                    },
+              ]}
+            >
+              <Reanimated.View
+                style={[
+                  {
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                  edge === 'start'
+                    ? replyRevealStart
+                    : replyRevealEnd,
+                  replyChipFill,
+                ]}
+              >
+                {/* The accent arrow crossfades over the muted arrow once the
+                    drag will commit the reply. */}
+                <CornerUpLeft
+                  size={15}
+                  color={c.textMuted}
+                  style={directionalIconStyle}
+                />
+                <Reanimated.View
+                  style={[
+                    {
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    },
+                    replyArmedArrow,
+                  ]}
+                >
+                  <CornerUpLeft
+                    size={15}
+                    color={c.accent}
+                    style={directionalIconStyle}
+                  />
+                </Reanimated.View>
+              </Reanimated.View>
+            </View>
+          ))}
+
+    </>
   );
 }
 
@@ -615,6 +629,7 @@ function areEqual(a: Props, b: Props): boolean {
     a.groupStart !== b.groupStart ||
     a.separatorAbove !== b.separatorAbove ||
     a.selectionMode !== b.selectionMode ||
+    a.selectionShiftStyle !== b.selectionShiftStyle ||
     a.selected !== b.selected
   ) {
     return false;

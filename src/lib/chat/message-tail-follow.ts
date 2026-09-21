@@ -9,6 +9,28 @@ export const MESSAGE_TAIL_FOLLOW_THRESHOLD = 300;
  * scroll events use the same distance as a low-cost fallback. */
 export const MESSAGE_HISTORY_PREFETCH_VIEWPORTS = 2;
 
+export function messageHistoryPageRequest({
+  ready,
+  hasMore,
+  loading,
+  continuous,
+  initialAvailable,
+}: {
+  ready: boolean;
+  hasMore: boolean;
+  loading: boolean;
+  continuous: boolean;
+  initialAvailable: boolean;
+}): { request: boolean; consumeInitial: boolean } {
+  if (!ready || !hasMore || loading) {
+    return { request: false, consumeInitial: false };
+  }
+  if (continuous) return { request: true, consumeInitial: false };
+  return initialAvailable
+    ? { request: true, consumeInitial: true }
+    : { request: false, consumeInitial: false };
+}
+
 export function isNearMessageTail(offsetY: number): boolean {
   return offsetY <= MESSAGE_TAIL_FOLLOW_THRESHOLD;
 }

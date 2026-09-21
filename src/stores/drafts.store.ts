@@ -148,6 +148,9 @@ export const useDraftsStore = create<State>((set, get) => ({
   flush: (conversationKey) => {
     const account = get().account;
     if (!account) return;
-    flushWrite(account, conversationKey, get().drafts[conversationKey] ?? '');
+    // Keystrokes already enqueue the latest value. If its debounce completed,
+    // there is nothing left to persist; avoid an unconditional write on every
+    // chat unmount, including untouched empty composers.
+    flushPending(`${account}\n${conversationKey}`);
   },
 }));

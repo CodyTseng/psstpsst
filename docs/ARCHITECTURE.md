@@ -287,9 +287,21 @@ headless background work, and development inspection tolerate brief connection
 overlap. Detached resumable work must consume and log failures with their native
 cause; cursor progress remains unchanged so the next session can retry safely.
 
-- Message lists load a bounded newest window and page older rows incrementally.
+- Message history reads use indexed chronology cursors. Each database read
+  prefetches one bounded batch and commits it to FlatList before the reader
+  reaches the edge; FlatList still mounts native cells in smaller frame-sized
+  render batches. Exposed data is append-only during ordinary history browsing,
+  while native virtualization bounds mounted rows. Scrolling toward newer rows
+  never removes list data or re-queries SQLite. Tail and anchored windows retain
+  their loaded pages across in-screen mode switches and release them only with
+  the conversation screen session. Anchored windows own independent older and
+  newer cursors; neither direction grows a query from the anchor.
+- Delivery and reply-target reads follow a page-aligned visible buffer;
+  retaining message history must not turn these secondary reads into
+  whole-history `IN` queries.
 - Search returns identifiers and opens a small window around the target.
-- Reactions and reply targets are resolved only for the active window.
+- Reactions stay attached to retained message pages; database-only reply targets
+  resolve for the visible buffer and remain cached for the screen session.
 - Incoming messages are staged while the user reads older history and merged at
   the live tail.
 - List rows subscribe only to their own changing state.

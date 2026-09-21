@@ -16,6 +16,8 @@ import { useTotalUnread } from '@/hooks/use-conversations';
 import { useProfile } from '@/hooks/use-profile';
 import { useDirectionalIconStyle } from '@/i18n/direction';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
+import { beginChatCloseTrace } from '@/lib/perf/chat-close';
+import { chatPerformanceNow, logChatPerformance } from '@/lib/perf/chat-performance';
 import { useActiveAccount } from '@/stores/active-account.store';
 import type { NearbyConnectionStatus } from '@/stores/proximity.store';
 import { useTranslation } from 'react-i18next';
@@ -207,7 +209,15 @@ export function ChatHeader({
             fullWidth={false}
             corner="full"
             compact
-            onPress={() => router.back()}
+            onPressIn={() => logChatPerformance('close.pressIn', {})}
+            onPress={() => {
+              beginChatCloseTrace();
+              const started = chatPerformanceNow();
+              router.back();
+              logChatPerformance('close.routerReturned', {
+                elapsedMs: Math.round(chatPerformanceNow() - started),
+              });
+            }}
             accessibilityLabel="Back"
             iconLeft={
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
