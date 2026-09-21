@@ -30,7 +30,7 @@ describe('Electron history pagination', () => {
     clientHeight: number;
   };
   let callback: jest.Mock;
-  let listRef: { current: { getScrollableNode: () => typeof node } };
+  let listRef: { current: { getScrollableNode: () => typeof node } | null };
 
   function Harness({ mounted = true }: { mounted?: boolean }) {
     useElectronHistoryPagination({ listRef, mounted, onHistoryEdge: callback });
@@ -59,6 +59,20 @@ describe('Electron history pagination', () => {
       });
     }
     expect(callback).toHaveBeenCalledTimes(3);
+  });
+
+  it('binds after the FlatList scroll node becomes available', () => {
+    act(() => renderer.unmount());
+    listRef.current = null;
+    act(() => { renderer = create(<Harness />); });
+    listRef.current = { getScrollableNode: () => node };
+    act(() => { jest.runOnlyPendingTimers(); });
+
+    act(() => {
+      node.emit('wheel', { deltaY: -100 });
+      jest.runOnlyPendingTimers();
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
   });
 
   it('ignores programmatic scroll and content changes after a consumed input', () => {

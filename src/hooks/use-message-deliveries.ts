@@ -1,75 +1,64 @@
-import { inArray } from 'drizzle-orm';
-import { useLiveQuery } from '@/db/use-live-query';
+import { eq } from 'drizzle-orm';
 import { useMemo } from 'react';
 
 import { db } from '@/db/client';
 import { messageDeliveries, outbox } from '@/db/schema';
+import { useLiveQuery } from '@/db/use-live-query';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
 
 /**
- * Persisted delivery status for a specific set of messages (the loaded window),
- * keyed by message id. Survives app restarts (the in-memory
- * `delivery-status.store` only covers the live send within a session). A bubble
- * prefers its live entry and falls back to this. Scoped by message id so it
- * scales with what's on screen, not the whole history.
+ * Full persisted delivery detail for one opened message. Chat rows read their
+ * coarse status directly from `messages`; the heavier per-copy/per-relay data
+ * stays dormant until the detail sheet is visible.
  */
-export function useMessageDeliveries(
-  messageIds: string[],
+export function useMessageDelivery(
+  messageId: string | null,
   liveDataEnabled = true,
-): Record<string, MessageDelivery> {
-  // inArray([]) is unsafe; use a never-matching sentinel when empty.
-  const safeIds = messageIds.length > 0 ? messageIds : [' '];
-  const queryEnabled = liveDataEnabled && messageIds.length > 0;
-  const { data } = useLiveQuery(
+): MessageDelivery | null {
+  const safeId = messageId ?? ' ';
+  const queryEnabled = liveDataEnabled && messageId != null;
+  const { data, isResolved: deliveriesResolved } = useLiveQuery(
     db
       .select()
       .from(messageDeliveries)
-      .where(inArray(messageDeliveries.messageId, safeIds)),
-    [safeIds.join(','), queryEnabled],
+      .where(eq(messageDeliveries.messageId, safeId))
+      .limit(1),
+    [safeId, queryEnabled],
     { enabled: queryEnabled },
   );
-  const { data: pending } = useLiveQuery(
-    db.select().from(outbox).where(inArray(outbox.messageId, safeIds)),
-    [safeIds.join(','), 'outbox', queryEnabled],
+  const { data: pending, isResolved: outboxResolved } = useLiveQuery(
+    db.select().from(outbox).where(eq(outbox.messageId, safeId)).limit(1),
+    [safeId, 'outbox', queryEnabled],
     { enabled: queryEnabled },
   );
 
   return useMemo(() => {
-    const map: Record<string, MessageDelivery> = {};
-    for (const row of data ?? []) {
-      map[row.messageId] = {
-        rumorId: row.messageId,
-        phase: row.status, // 'sent' | 'failed'
-        copies: (row.copies ?? []).map((cp) => ({
-          recipient: cp.recipient,
-          self: cp.self,
-          relays: cp.relays.map((r) => ({
-            url: r.url,
-            status: r.status,
-            error: r.error,
-          })),
-        })),
-      };
-    }
-    for (const row of pending ?? []) {
-      const existing = map[row.messageId];
-      if (existing) {
-        map[row.messageId] = {
-          ...existing,
-          phase: row.status,
-          transport: row.deliveryKind,
-          error: row.lastError ?? existing.error,
-        };
-      } else {
-        map[row.messageId] = {
+    if (!deliveriesResolved || !outboxResolved) return null;
+    const row = data?.[0];
+    const pendingRow = pending?.[0];
+    let delivery: MessageDelivery | null = row
+      ? {
           rumorId: row.messageId,
           phase: row.status,
-          transport: row.deliveryKind,
-          copies: [],
-          error: row.lastError ?? undefined,
-        };
-      }
+          copies: (row.copies ?? []).map((copy) => ({
+            recipient: copy.recipient,
+            self: copy.self,
+            relays: copy.relays.map((relay) => ({
+              url: relay.url,
+              status: relay.status,
+              error: relay.error,
+            })),
+          })),
+        }
+      : null;
+    if (pendingRow) {
+      delivery = {
+        ...(delivery ?? { rumorId: pendingRow.messageId, copies: [] }),
+        phase: pendingRow.status,
+        transport: pendingRow.deliveryKind,
+        error: pendingRow.lastError ?? delivery?.error,
+      };
     }
-    return map;
-  }, [data, pending]);
+    return delivery;
+  }, [data, deliveriesResolved, outboxResolved, pending]);
 }

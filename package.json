@@ -7,7 +7,7 @@
     "autolinking": {
       "android": {
         "buildFromSource": [
-          "expo-camera"
+          ".*"
         ]
       }
     }

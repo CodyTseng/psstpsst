@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24.15.0
           package-manager-cache: false
       - name: Verify third-party notices
         run: |
@@ -114,7 +114,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24.15.0
           cache: npm
 
       - name: Use stable Rust
@@ -180,7 +180,7 @@ jobs:
     name: Android APK
     needs: validate-version
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 180
     env:
       CI: '1'
       NODE_ENV: production
@@ -190,8 +190,8 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
-          cache: npm
+          node-version: 24.15.0
+          package-manager-cache: false
 
       - uses: actions/setup-java@v6
         with:
@@ -203,25 +203,11 @@ jobs:
       - name: Install APK signing tools
         run: sdkmanager "build-tools;36.0.0"
 
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Install dependencies
-        run: npm ci --include=dev
-
-      - name: Generate Android project
-        run: npm run android:prebuild
-
-      - name: Check Android dependencies
+      - name: Build Android APK in the F-Droid environment
         shell: bash
-        run: |
-          (cd android && ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
-          node scripts/check-android-dependencies.mjs android-dependencies.txt
-
-      - name: Build release APK
-        run: npm run android:build
-
-      - name: Verify APK scanner dependencies
-        run: python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release.apk
+        env:
+          ANDROID_RELEASE_UNSIGNED: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '1' || '0' }}
+        run: bash scripts/build-android-reproducible.sh release/fdroid-build
 
       - name: Sign and verify APK
         shell: bash
@@ -233,7 +219,7 @@ jobs:
         run: |
           version="$(node -p "require('./app.json').expo.version")"
           node scripts/release-signing.mjs sign-android \
-            android/app/build/outputs/apk/release/app-release.apk \
+            release/fdroid-build/app-release.apk \
             "release/PsstPsst-${version}-android.apk"
 
       - name: Upload APK

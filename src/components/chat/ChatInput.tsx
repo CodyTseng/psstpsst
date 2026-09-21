@@ -413,16 +413,10 @@ export function ChatInput({
   // The provider keeps this volatile state below the chat's data component, so
   // opening composer chrome never re-runs message queries or list derivations.
   const { open: trayOpen, setOpen: setTrayOpen } = useChatComposerPanel();
-  // Prepare the custom-emoji body just after the route transition releases live
-  // data. This avoids competing with navigation without leaving a fixed 400ms
-  // cold window in which a user's first tap has to build the grid.
-  useEffect(() => {
-    if (IS_ELECTRON || emojiMounted || trayOpen || !liveDataEnabled) return;
-    return scheduleComposerPanelWorkAfterPaint(() => setEmojiMounted(true));
-  }, [emojiMounted, liveDataEnabled, trayOpen]);
-  // Load the large Unicode catalog only after the default sticker panel has
-  // pre-mounted. This keeps both chat entry and the first picker animation off
-  // the catalog's module-evaluation path while making the later tab switch warm.
+  // Keep the heavy picker absent until its first real presentation. Its module
+  // is preloaded by the chat shell; mounting the complete hidden tree in every
+  // conversation adds entry and exit work even when the user never opens it.
+  // Load the large Unicode catalog after the first custom-picker presentation.
   useEffect(() => {
     if (IS_ELECTRON || !emojiMounted || trayOpen || !liveDataEnabled) return;
     return scheduleComposerPanelWorkAfterPaint(() => {
@@ -527,6 +521,8 @@ export function ChatInput({
         customPanelHeight.value = withTiming(SAFE, {
           duration: 320,
           easing: COMPOSER_PANEL_EASE,
+        }, (finished) => {
+          if (finished && mode === 'emoji') runOnJS(setEmojiMounted)(false);
         });
       }
     },

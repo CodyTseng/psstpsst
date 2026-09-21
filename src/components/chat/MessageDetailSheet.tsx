@@ -15,6 +15,7 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 import { AppText } from '@/components/common/AppText';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { InteractionOverlay } from '@/components/common/InteractionOverlay';
+import { useMessageDelivery } from '@/hooks/use-message-deliveries';
 import { useLanguageDirection } from '@/i18n/direction';
 import { formatClock } from '@/lib/audio/voice';
 import { setStringAsync } from '@/lib/clipboard';
@@ -41,8 +42,6 @@ type Props = {
   isSelf: boolean;
   /** Relays this (incoming) message was received from. */
   sourceRelays?: string[] | null;
-  /** Persisted delivery (DB) — fallback when there's no live entry (self only). */
-  persistedDelivery?: MessageDelivery | null;
   /** The chat transport. Nearby messages never show relay-derived details. */
   transport?: 'relay' | 'proximity';
   /** Resend the message to the relays it failed on (self only). */
@@ -136,7 +135,6 @@ export function MessageDetailSheet({
   rumor,
   isSelf,
   sourceRelays,
-  persistedDelivery,
   transport,
   onResend,
   onClose,
@@ -145,6 +143,7 @@ export function MessageDetailSheet({
   const c = useThemeColors();
   const direction = useLanguageDirection();
   const visible = rumorId != null;
+  const persistedDelivery = useMessageDelivery(rumorId, visible && isSelf);
 
   // Retain the last shown data so the *exit* animation keeps painting the real
   // content. BottomSheet stays mounted while it slides out, but by then the

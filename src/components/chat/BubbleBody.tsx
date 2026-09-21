@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import Check from 'lucide-react-native/icons/check';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -114,7 +114,7 @@ type InlineMessageSegment = Exclude<MessageSegment, { type: 'event' }>;
  * (the lifted copy floated over the blurred backdrop), so the lifted bubble is
  * pixel-identical to the one in the list — including live delivery status.
  */
-export function BubbleBody({
+function BubbleBodyBase({
   content,
   tags,
   isSelf,
@@ -774,3 +774,33 @@ export function BubbleBody({
     squareBottom,
   });
 }
+
+function areBubbleBodyPropsEqual(a: Props, b: Props): boolean {
+  const aReply = a.replyTo;
+  const bReply = b.replyTo;
+  return (
+    a.content === b.content &&
+    a.tags === b.tags &&
+    a.isSelf === b.isSelf &&
+    a.createdAt === b.createdAt &&
+    a.orderAt === b.orderAt &&
+    a.rumorId === b.rumorId &&
+    a.persistedDelivery === b.persistedDelivery &&
+    a.attachment === b.attachment &&
+    a.hideMeta === b.hideMeta &&
+    a.squareTop === b.squareTop &&
+    a.squareBottom === b.squareBottom &&
+    a.conversationKey === b.conversationKey &&
+    a.proximity === b.proximity &&
+    a.remoteContentMode === b.remoteContentMode &&
+    a.liftedCopy === b.liftedCopy &&
+    a.presentation === b.presentation &&
+    aReply?.senderPubkey === bReply?.senderPubkey &&
+    aReply?.senderDisplayName === bReply?.senderDisplayName &&
+    aReply?.contentPreview === bReply?.contentPreview
+  );
+}
+
+/** Selection-mode chrome can update every mounted row without rebuilding the
+ * expensive attachment/text subtree. Callback identity is deliberately ignored. */
+export const BubbleBody = memo(BubbleBodyBase, areBubbleBodyPropsEqual);

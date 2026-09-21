@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { useLiveQuery } from '@/db/use-live-query';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -60,6 +60,53 @@ export function useContacts(accountPubkey: string, liveDataEnabled = true) {
     { enabled: liveDataEnabled },
   );
   return { contacts: data ?? [], loaded: updatedAt !== undefined };
+}
+
+/** Resolve only the contacts referenced by the current UI window. This avoids
+ * loading an account's complete address book just to label a few reply previews. */
+export function useContactsMap(
+  accountPubkey: string,
+  pubkeys: string[],
+  liveDataEnabled = true,
+): Record<string, ContactRow> {
+  const uniqueKey = useMemo(
+    () => Array.from(new Set(pubkeys)).sort().join(','),
+    [pubkeys],
+  );
+  const uniquePubkeys = useMemo(
+    () => (uniqueKey ? uniqueKey.split(',') : []),
+    [uniqueKey],
+  );
+  const queryEnabled = liveDataEnabled && !!accountPubkey && uniquePubkeys.length > 0;
+  const safePubkeys = uniquePubkeys.length > 0 ? uniquePubkeys : [' '];
+  const { data } = useLiveQuery(
+    db
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.accountPubkey, accountPubkey),
+          inArray(contacts.pubkey, safePubkeys),
+        ),
+      ),
+    [accountPubkey, uniqueKey, queryEnabled],
+    { enabled: queryEnabled },
+  );
+
+  return useMemo(() => {
+    const map: Record<string, ContactRow> = {};
+    for (const pubkey of uniquePubkeys) {
+      const cached = contactCache.get(contactCacheKey(accountPubkey, pubkey));
+      if (cached) map[pubkey] = cached;
+    }
+    for (const row of data ?? []) {
+      map[row.pubkey] = row;
+      contactCache.set(contactCacheKey(accountPubkey, row.pubkey), row);
+    }
+    return map;
+    // `uniquePubkeys` is represented by the stable, sorted key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountPubkey, data, uniqueKey]);
 }
 
 /** Live single contact row (petname + saved state), or null when not saved. */

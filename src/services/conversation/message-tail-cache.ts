@@ -27,6 +27,7 @@ type RawMessageRow = {
   subject: string | null;
   tags: string;
   rumor: string;
+  delivery_status: MessageRow['deliveryStatus'];
   source_relays: string | null;
 };
 
@@ -111,6 +112,7 @@ function decodeRow(row: RawMessageRow): MessageRow {
     subject: row.subject,
     tags: JSON.parse(row.tags) as MessageRow['tags'],
     rumor: JSON.parse(row.rumor) as MessageRow['rumor'],
+    deliveryStatus: row.delivery_status,
     sourceRelays: row.source_relays
       ? (JSON.parse(row.source_relays) as MessageRow['sourceRelays'])
       : null,
@@ -307,7 +309,8 @@ export async function warmMessageTail(
     try {
       const rows = await platform.database.rawQuery<RawMessageRow>(
         `SELECT account_pubkey, id, conversation_key, sender_pubkey, kind, content,
-                created_at, order_at, reply_to_id, subject, tags, rumor, source_relays
+                created_at, order_at, reply_to_id, subject, tags, rumor,
+                delivery_status, source_relays
            FROM messages
           WHERE account_pubkey = ? AND conversation_key = ? AND kind IN (14, 15, 7)
           ORDER BY order_at DESC, id ASC

@@ -14,29 +14,76 @@ AutoName: PsstPsst
 RepoType: git
 Repo: https://github.com/codytseng/psstpsst.git
 Binaries: https://github.com/codytseng/psstpsst/releases/download/v%v/PsstPsst-%v-android.apk
-# Add AllowedAPKSigningKeys with the verified release certificate SHA-256
-# fingerprint (64 lowercase hexadecimal characters, without colons).
+# Verified against the published v0.2.2 APK with apksigner.
+AllowedAPKSigningKeys:
+  - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'
 
 Builds:
   - versionName: 0.2.2
     versionCode: 4
-    disable: Pending release commit, signing fingerprint, toolchain provisioning, and reproducibility verification
-    # Replace with the full commit hash of the published v0.2.2 tag.
-    commit: v0.2.2
+    disable: v0.2.2 upstream APK differs from the compliant source-module rebuild
+    # Published v0.2.2; upstream build: actions/runs/35362574131.
+    commit: 06bcb7204216e100aae7a5bd704a6057150d0041
     output: android/app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 27.1.12297006
-    # Node.js 22, npm, JDK 17, and Android build tools must be provisioned
-    # and pinned against the upstream release environment before enabling.
+    # Upstream used Node 22.23.2/npm 10.9.8 and Temurin 17.0.20+1.
+    # Node 24.15.0/npm 11.12.1 match the maintainer's local development environment.
+    # Verify reproducibility against the existing release with this toolchain change.
+    # Start with Debian OpenJDK 17; verify any JDK-related APK differences.
+    sudo:
+      # The Trixie build image provides JDK 21; JDK 17 comes from Bookworm.
+      - echo 'deb https://deb.debian.org/debian bookworm main' > /etc/apt/sources.list.d/psstpsst-bookworm.list
+      - echo 'deb https://security.debian.org/debian-security bookworm-security main' >> /etc/apt/sources.list.d/psstpsst-bookworm.list
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless ca-certificates curl xz-utils
+      - curl --fail --location --retry 3 https://nodejs.org/dist/v24.15.0/node-v24.15.0-linux-x64.tar.xz -o /tmp/psstpsst-node.tar.xz
+      - echo '472655581fb851559730c48763e0c9d3bc25975c59d518003fc0849d3e4ba0f6  /tmp/psstpsst-node.tar.xz' | sha256sum -c -
+      - mkdir -p /opt/psstpsst-node
+      - tar -xJf /tmp/psstpsst-node.tar.xz --strip-components=1 -C /opt/psstpsst-node
+      - rm /tmp/psstpsst-node.tar.xz
     init:
-      - node -e 'if (process.versions.node.split(".")[0] !== "22") process.exit(1)'
-      - CI=1 NODE_ENV=production ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --include=dev
-      - CI=1 NODE_ENV=production npm run android:prebuild
+      - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - export PATH=/opt/psstpsst-node/bin:$JAVA_HOME/bin:$PATH
+      - test "$(node --version)" = v24.15.0
+      - test "$(npm --version)" = 11.12.1
+      - sdkmanager --sdk_root="$$SDK$$" 'platforms;android-36' 'build-tools;36.0.0' 'cmake;3.22.1' 'ndk;27.0.12077973'
+      # Skip desktop native-addon install hooks; apply the required source patches explicitly.
+      - CI=1 NODE_ENV=production ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --include=dev --ignore-scripts
+      - CI=1 NODE_ENV=production npm run postinstall
+      # F-Droid builds all Expo Android modules from their bundled source.
+      - node -e 'const fs=require("fs");const p=require("./package.json");p.expo.autolinking.android.buildFromSource=[".*"];fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
+      - find node_modules -type d -name local-maven-repo -prune -exec rm -rf {} +
+      # Use the template bundled in the lockfile-pinned Expo package, never a moving npm tag.
+      - echo 'b5796fa7a2de78499e81ec2b2b7aa2ad25f3702d61daaed2ddb7c23757e98b49  node_modules/expo/template.tgz' | sha256sum -c -
+      - CI=1 NODE_ENV=production npm run android:prebuild -- --template ./node_modules/expo/template.tgz
       - sed -i '/signingConfig signingConfigs.debug/d' android/app/build.gradle
       - rm android/app/debug.keystore
+    scanignore:
+      # Hermes is an explicitly permitted prebuilt tool in F-Droid policy.
+      - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
+      # These files contain local Maven repository declarations that the scanner
+      # cannot resolve statically; they do not add proprietary remote repositories.
+      - node_modules/react-native/ReactAndroid/publish.gradle
+      - node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - node_modules/@react-native-masked-view/masked-view/android/build.gradle
+      - node_modules/react-native-get-random-values/android/build.gradle
+      - node_modules/react-native-keyboard-controller/android/build.gradle
+      - node_modules/react-native-safe-area-context/android/build.gradle
+      - node_modules/react-native-screens/android/build.gradle
+      - node_modules/react-native-svg/android/build.gradle
+      - node_modules/react-native-view-shot/android/build.gradle
+    # Delete scanner findings under dependencies after prebuild. Required Expo
+    # Android code remains available as source and is linked by the generated project.
+    scandelete:
+      - node_modules
     build:
-      - (cd android && EXPO_PUBLIC_APP_ENV=production ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
+      # init and build run in separate shells.
+      - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - export PATH=/opt/psstpsst-node/bin:$JAVA_HOME/bin:$PATH
+      # F-Droid removes gradle-wrapper.jar during scanning; use its Gradle launcher.
+      - (cd android && EXPO_PUBLIC_APP_ENV=production gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
       - node scripts/check-android-dependencies.mjs android-dependencies.txt
-      - CI=1 NODE_ENV=production npm run android:build
+      - (cd android && CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle :app:assembleRelease --no-daemon --max-workers=2)
       - python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release-unsigned.apk
 
 AutoUpdateMode: None

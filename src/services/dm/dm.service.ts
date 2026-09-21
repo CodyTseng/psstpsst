@@ -951,16 +951,27 @@ class DmService {
     // 2. Optimistic write — bubble appears now
     await this.storeRumor(rumor, opts.accountPubkey);
     const now = Math.floor(Date.now() / 1000);
-    await db
-      .insert(outbox)
-      .values({
-        messageId: rumor.id!,
-        accountPubkey: opts.accountPubkey,
-        status: 'sending',
-        attempts: 1,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(outbox)
+        .values({
+          messageId: rumor.id!,
+          accountPubkey: opts.accountPubkey,
+          status: 'sending',
+          attempts: 1,
+          updatedAt: now,
+        })
+        .onConflictDoNothing();
+      await tx
+        .update(messages)
+        .set({ deliveryStatus: 'queued' })
+        .where(
+          and(
+            eq(messages.accountPubkey, opts.accountPubkey),
+            eq(messages.id, rumor.id!),
+          ),
+        );
+    });
 
     // 3. Background publish (do NOT await — let the UI proceed)
     void this.publishRumorInBackground(rumor, rumorTemplate, { ...opts, content });
@@ -1001,16 +1012,27 @@ class DmService {
     deliveryStatusStore.getState().begin(rumor.id!);
     await this.storeRumor(rumor, opts.accountPubkey);
     const now = Math.floor(Date.now() / 1000);
-    await db
-      .insert(outbox)
-      .values({
-        messageId: rumor.id!,
-        accountPubkey: opts.accountPubkey,
-        status: 'sending',
-        attempts: 1,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(outbox)
+        .values({
+          messageId: rumor.id!,
+          accountPubkey: opts.accountPubkey,
+          status: 'sending',
+          attempts: 1,
+          updatedAt: now,
+        })
+        .onConflictDoNothing();
+      await tx
+        .update(messages)
+        .set({ deliveryStatus: 'queued' })
+        .where(
+          and(
+            eq(messages.accountPubkey, opts.accountPubkey),
+            eq(messages.id, rumor.id!),
+          ),
+        );
+    });
 
     void this.publishRumorInBackground(rumor, rumorTemplate, {
       accountPubkey: opts.accountPubkey,
@@ -1142,7 +1164,7 @@ class DmService {
       opts.rumorId,
       isDelivered(okCount, recipientRelays.length) ? 'sent' : 'failed',
     );
-    await this.persistDelivery(opts.rumorId, msgRow.conversationKey, copyRecords);
+    await this.persistDelivery(acct, opts.rumorId, msgRow.conversationKey, copyRecords);
   }
 
   /** Retry an attempt that failed before it had relay copies to target. The
@@ -1163,15 +1185,26 @@ class DmService {
 
     const rumor = msgRow.rumor as Rumor;
     deliveryStatusStore.getState().begin(rumor.id!);
-    await db
-      .update(outbox)
-      .set({
-        status: 'sending',
-        attempts: sql`${outbox.attempts} + 1`,
-        lastError: null,
-        updatedAt: Math.floor(Date.now() / 1000),
-      })
-      .where(eq(outbox.messageId, rumor.id!));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(outbox)
+        .set({
+          status: 'sending',
+          attempts: sql`${outbox.attempts} + 1`,
+          lastError: null,
+          updatedAt: Math.floor(Date.now() / 1000),
+        })
+        .where(eq(outbox.messageId, rumor.id!));
+      await tx
+        .update(messages)
+        .set({ deliveryStatus: 'queued' })
+        .where(
+          and(
+            eq(messages.accountPubkey, opts.accountPubkey),
+            eq(messages.id, rumor.id!),
+          ),
+        );
+    });
 
     const rumorTemplate: EventTemplate = {
       kind: rumor.kind,
@@ -1370,7 +1403,9 @@ class DmService {
       const delivered = isDelivered(okCount, recipientRelayRecords.length);
 
       delivery.finish(rumor.id!, delivered ? 'sent' : 'failed');
-      if (persists) await this.persistDelivery(rumor.id!, convKey, copyRecords);
+      if (persists) {
+        await this.persistDelivery(opts.accountPubkey, rumor.id!, convKey, copyRecords);
+      }
 
       // Outbox retry bookkeeping: a stored copy anywhere (incl. self) counts.
       const anySucceeded = copyRecords.some((c) => c.relays.some((r) => r.status === 'ok'));
@@ -1403,7 +1438,9 @@ class DmService {
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       delivery.finish(rumor.id!, 'failed', reason);
-      if (persists) await this.persistDelivery(rumor.id!, convKey, []);
+      if (persists) {
+        await this.persistDelivery(opts.accountPubkey, rumor.id!, convKey, []);
+      }
       await db
         .update(outbox)
         .set({
@@ -1417,6 +1454,7 @@ class DmService {
 
   /** Upsert the persisted (restart-surviving) delivery summary for a message. */
   private async persistDelivery(
+    accountPubkey: string,
     messageId: string,
     conversationKey: string,
     copies: DeliveryCopyRecord[],
@@ -1428,13 +1466,24 @@ class DmService {
     const okCount = recipientRelays.filter((r) => r.status === 'ok').length;
     const status = isDelivered(okCount, recipientRelays.length) ? 'sent' : 'failed';
     const now = Math.floor(Date.now() / 1000);
-    await db
-      .insert(messageDeliveries)
-      .values({ messageId, conversationKey, copies, status, updatedAt: now })
-      .onConflictDoUpdate({
-        target: messageDeliveries.messageId,
-        set: { copies, status, updatedAt: now },
-      });
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(messageDeliveries)
+        .values({ messageId, conversationKey, copies, status, updatedAt: now })
+        .onConflictDoUpdate({
+          target: messageDeliveries.messageId,
+          set: { copies, status, updatedAt: now },
+        });
+      await tx
+        .update(messages)
+        .set({ deliveryStatus: status })
+        .where(
+          and(
+            eq(messages.accountPubkey, accountPubkey),
+            eq(messages.id, messageId),
+          ),
+        );
+    });
   }
 
   /** Queue an incoming gift wrap for batched, yielding processing. */
@@ -2274,6 +2323,7 @@ class DmService {
         subject,
         tags: rumor.tags,
         rumor,
+        deliveryStatus: null,
         sourceRelays: sourceRelays && sourceRelays.length > 0 ? sourceRelays : null,
       });
     }

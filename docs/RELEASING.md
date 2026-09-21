@@ -97,6 +97,14 @@ runs only in `codytseng/psstpsst`, waits for all six builds, and requires all
 installers and desktop update metadata. Publish the draft manually after testing.
 Re-runs may replace draft assets but refuse to modify a published release.
 
+Android release builds run in the pinned F-Droid buildserver image through
+`scripts/build-android-reproducible.sh`. The script copies the checkout to
+`/home/vagrant/build/chat.psstpsst.app`, fixes Node.js/npm and the Android native
+toolchain, sets `SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
+Android module from source. Tagged and credentialed runs produce an unsigned APK
+inside the container and apply the developer signature on the GitHub runner.
+Manual runs without Android credentials retain the generated debug signature.
+
 The preflight checks credential presence; invalid passwords, certificates, or
 Apple account permissions still fail at signing or notarization. A manual run
 on a tag requires signatures too, but does not create a release.
@@ -394,9 +402,13 @@ must reproduce it and specify the upstream binary URL and allowed signing
 certificate fingerprint (`Binaries`/`binary` and `AllowedAPKSigningKeys`). F-Droid
 can then verify the APK without receiving the private key.
 
-This project has not yet passed that reproducibility check. Pin and verify the
-Expo template, Node/npm, JDK, Gradle/AGP, Android SDK/NDK, and native dependencies
-in the build recipe; a lockfile and successful CI build alone are insufficient.
+The `v0.2.2` APK did not pass that reproducibility check because it used Expo
+prebuilt modules while the F-Droid-compliant rebuild compiled them from source.
+Starting with the next release, GitHub uses the same pinned F-Droid container,
+source directory, source-built Expo modules, Node/npm, JDK, Gradle, SDK, NDK,
+CMake, and commit timestamp as the F-Droid recipe. A successful GitHub build is
+still not sufficient: compare the signed release candidate with an independent
+F-Droid recipe build before enabling a new build block.
 Mobile notifications use the project's local native module. CI rejects FCM and
 the removed notification SDK in Android's release runtime dependency tree.
 Android barcode scanning uses ZXing-C++ through the patched Expo Camera module.
@@ -583,7 +595,9 @@ and Expo's [local release guide](https://docs.expo.dev/guides/local-app-producti
    run. Windows signing remains separately configured through `WIN_CSC_LINK`
    and `WIN_CSC_KEY_PASSWORD`.
 4. Run `Build Apps` manually on the reviewed branch. Check signature fingerprints,
-   macOS notarization, installation, and upgrades from the prior release.
+   macOS notarization, installation, and upgrades from the prior release. For an
+   F-Droid candidate, independently rebuild the Android APK from its final commit
+   and verify the signed candidate with F-Droid's signature-copy comparison.
 5. Push the matching version tag when ready. Review the resulting draft Release
    and publish it only when its installers and update metadata are complete.
 6. Publish the release to Zapstore and follow up on the F-Droid build recipe and

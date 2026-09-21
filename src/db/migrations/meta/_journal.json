@@ -337,6 +337,13 @@
       "when": 1789655763285,
       "tag": "0047_message-order-tiebreak",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1789999887674,
+      "tag": "0048_message_delivery_status",
+      "breakpoints": true
     }
   ]
 }

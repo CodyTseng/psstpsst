@@ -2964,14 +2964,25 @@ class ProximityService {
       ) {
         await this.defer(rumorId, row.attempts, `Nearby error ${ack.errorCode}`);
       } else {
-        await db
-          .update(outbox)
-          .set({
-            status: 'failed',
-            lastError: `Nearby error ${ack.errorCode}`,
-            updatedAt: Math.floor(Date.now() / 1000),
-          })
-          .where(eq(outbox.messageId, rumorId));
+        await db.transaction(async (tx) => {
+          await tx
+            .update(outbox)
+            .set({
+              status: 'failed',
+              lastError: `Nearby error ${ack.errorCode}`,
+              updatedAt: Math.floor(Date.now() / 1000),
+            })
+            .where(eq(outbox.messageId, rumorId));
+          await tx
+            .update(messages)
+            .set({ deliveryStatus: 'failed' })
+            .where(
+              and(
+                eq(messages.accountPubkey, this.accountPubkey!),
+                eq(messages.id, rumorId),
+              ),
+            );
+        });
         deliveryStatusStore.getState().setProximityPhase(rumorId, 'failed');
       }
       return;
@@ -2991,6 +3002,15 @@ class ProximityService {
           target: messageDeliveries.messageId,
           set: { status: 'sent', updatedAt },
         });
+      await tx
+        .update(messages)
+        .set({ deliveryStatus: 'sent' })
+        .where(
+          and(
+            eq(messages.accountPubkey, this.accountPubkey!),
+            eq(messages.id, rumorId),
+          ),
+        );
       await tx.delete(outbox).where(eq(outbox.messageId, rumorId));
     });
     deliveryStatusStore.getState().setProximityPhase(rumorId, 'sent');
@@ -3256,20 +3276,31 @@ class ProximityService {
       rumor,
     };
     const now = Math.floor(Date.now() / 1000);
-    await db
-      .insert(outbox)
-      .values({
-        messageId: rumor.id!,
-        accountPubkey,
-        conversationKey: peerPubkey,
-        deliveryKind: 'proximity',
-        status: 'queued',
-        attempts: 0,
-        nextAttemptAt: now,
-        pendingPayload,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(outbox)
+        .values({
+          messageId: rumor.id!,
+          accountPubkey,
+          conversationKey: peerPubkey,
+          deliveryKind: 'proximity',
+          status: 'queued',
+          attempts: 0,
+          nextAttemptAt: now,
+          pendingPayload,
+          updatedAt: now,
+        })
+        .onConflictDoNothing();
+      await tx
+        .update(messages)
+        .set({ deliveryStatus: 'queued' })
+        .where(
+          and(
+            eq(messages.accountPubkey, accountPubkey),
+            eq(messages.id, rumor.id!),
+          ),
+        );
+    });
     deliveryStatusStore.getState().setProximityPhase(rumor.id!, 'queued');
     void this.drain();
     return rumor;
@@ -3421,6 +3452,7 @@ class ProximityService {
         subject,
         tags: rumor.tags,
         rumor,
+        deliveryStatus: null,
         sourceRelays: null,
       });
     }
@@ -3471,14 +3503,25 @@ class ProximityService {
         }
         const payload = row.pendingPayload;
         if (!payload || payload.deliveryKind !== 'proximity') {
-          await db
-            .update(outbox)
-            .set({
-              status: 'failed',
-              lastError: 'Missing proximity rumor',
-              updatedAt: now,
-            })
-            .where(eq(outbox.messageId, row.messageId));
+          await db.transaction(async (tx) => {
+            await tx
+              .update(outbox)
+              .set({
+                status: 'failed',
+                lastError: 'Missing proximity rumor',
+                updatedAt: now,
+              })
+              .where(eq(outbox.messageId, row.messageId));
+            await tx
+              .update(messages)
+              .set({ deliveryStatus: 'failed' })
+              .where(
+                and(
+                  eq(messages.accountPubkey, accountPubkey),
+                  eq(messages.id, row.messageId),
+                ),
+              );
+          });
           continue;
         }
         await db

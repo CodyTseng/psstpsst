@@ -26,6 +26,7 @@ type RawMessage = {
   subject: string | null;
   tags: string;
   rumor: string;
+  delivery_status: MessageRow['deliveryStatus'];
   source_relays: string | null;
 };
 
@@ -51,6 +52,7 @@ function rawMessageBase(id: string, conversationKey: string): RawMessage {
     subject: null,
     tags: '[]',
     rumor: '{}',
+    delivery_status: null,
     source_relays: null,
   };
 }
@@ -73,6 +75,7 @@ function messageRow(
     subject: null,
     tags: [],
     rumor: {} as MessageRow['rumor'],
+    deliveryStatus: null,
     sourceRelays: null,
     ...overrides,
   };

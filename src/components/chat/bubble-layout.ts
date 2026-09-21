@@ -6,3 +6,5 @@ export const BUBBLE_PADDING_HORIZONTAL = 10;
 export const BUBBLE_MAX_WIDTH = '85%' as const;
 export const BUBBLE_GAP = 2;
 export const BUBBLE_GROUP_GAP = 12;
+/** Space reserved for the selection checkbox beside received messages. */
+export const BUBBLE_SELECTION_OFFSET = 32;
