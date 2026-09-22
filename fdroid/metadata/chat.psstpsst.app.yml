@@ -2,6 +2,7 @@
 # Complete fdroid/README.md before enabling or submitting this build.
 Categories:
   - Internet
+  - Messaging
 License: MIT
 AuthorName: Cody Tseng
 WebSite: https://psstpsst.chat
@@ -14,16 +15,15 @@ AutoName: PsstPsst
 RepoType: git
 Repo: https://github.com/codytseng/psstpsst.git
 Binaries: https://github.com/codytseng/psstpsst/releases/download/v%v/PsstPsst-%v-android.apk
-# Verified against the published v0.2.2 APK with apksigner.
+# Verified against the published v0.2.3 APK with apksigner.
 AllowedAPKSigningKeys:
   - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'
 
 Builds:
   - versionName: 0.2.3
     versionCode: 5
-    disable: Pending release commit and reproducibility verification
-    # Replace with the full commit hash of the published v0.2.3 tag.
-    commit: v0.2.3
+    disable: Published v0.2.3 APK does not reproduce from source
+    commit: 2f4621ec9bff1e02c19ebfda58add32ab9169ab4
     output: android/app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 27.1.12297006
     # Node 24.15.0/npm 11.12.1 match the upstream release environment.
@@ -80,9 +80,9 @@ Builds:
       - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
       - export PATH=/opt/psstpsst-node/bin:$JAVA_HOME/bin:$PATH
       # F-Droid removes gradle-wrapper.jar during scanning; use its Gradle launcher.
-      - (cd android && EXPO_PUBLIC_APP_ENV=production gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
+      - (cd android && EXPO_PUBLIC_APP_ENV=production gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain -PreactNativeDevServerIp=127.0.0.1) > android-dependencies.txt
       - node scripts/check-android-dependencies.mjs android-dependencies.txt
-      - (cd android && CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle :app:assembleRelease --no-daemon --max-workers=2)
+      - (cd android && CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle :app:assembleRelease --no-daemon --max-workers=2 -PreactNativeDevServerIp=127.0.0.1)
       - python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release-unsigned.apk
 
 AutoUpdateMode: None

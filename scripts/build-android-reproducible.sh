@@ -93,9 +93,9 @@ if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
 fi
 
 find . -name gradle-wrapper.jar -type f -delete
-(cd android && gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
+(cd android && gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain -PreactNativeDevServerIp=127.0.0.1) > android-dependencies.txt
 node scripts/check-android-dependencies.mjs android-dependencies.txt
-(cd android && gradle :app:assembleRelease --no-daemon --max-workers=2)
+(cd android && gradle :app:assembleRelease --no-daemon --max-workers=2 -PreactNativeDevServerIp=127.0.0.1)
 
 if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
   artifact="android/app/build/outputs/apk/release/app-release-unsigned.apk"
