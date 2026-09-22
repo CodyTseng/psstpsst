@@ -402,6 +402,9 @@ the page themselves.
 ## 11. States, copy, and accessibility
 
 Loading, empty, error, and disabled are distinct states.
+Profile avatars with a remote picture keep a quiet surface while loading and
+show their pubkey-derived gradient only if the picture fails. Without a picture,
+they show the gradient immediately.
 
 Notification controls show the effective app preference and OS permission together
 where permission can be queried. Otherwise, keep visible guidance to enable
