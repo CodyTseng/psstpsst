@@ -111,6 +111,8 @@ type Props = {
 };
 
 const ACTION_WIDTH = SWIPE_ACTION_WIDTH;
+const SWIPE_ACTIVATION_DISTANCE = 24;
+const SWIPE_VERTICAL_FAILURE_DISTANCE = 12;
 
 type DesktopPressableProps = ComponentProps<typeof Pressable> & {
   onContextMenu?: (event: DesktopContextMenuEvent) => void;
@@ -528,6 +530,11 @@ function ConversationListItemBase({
       useNativeAnimations={Platform.OS !== 'web'}
       renderLeftActions={isRTL ? renderRightActions : renderLeftActions}
       renderRightActions={isRTL ? renderLeftActions : renderRightActions}
+      // Let the vertical list claim ordinary diagonal drags before a row can
+      // activate. The default 10pt offset is too easy to cross while scrolling.
+      dragOffsetFromLeftEdge={SWIPE_ACTIVATION_DISTANCE}
+      dragOffsetFromRightEdge={SWIPE_ACTIVATION_DISTANCE}
+      failOffsetY={[-SWIPE_VERTICAL_FAILURE_DISTANCE, SWIPE_VERTICAL_FAILURE_DISTANCE]}
       leftThreshold={40}
       rightThreshold={40}
       friction={2}
