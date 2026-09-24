@@ -379,6 +379,8 @@ delays guessed at call sites.
 
 Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
+With no menu open, Electron Escape cancels an active message reply before page
+handling.
 
 On Electron, short decisions use the shared confirmation dialog and small value
 entries use `InputDialog`; larger pickers and task flows remain sheets or pages.
