@@ -93,6 +93,10 @@ type Props = {
   presentation?: PreparedMessagePresentation;
 };
 
+type BubbleBodyBaseProps = Props & {
+  liveDelivery: MessageDelivery | null;
+};
+
 // Spacer characters (written as escapes so an editor can't silently turn the
 // wide figure-space into a narrow ASCII space — see blockMetaSpacer below).
 const ZWSP = '\u200b'; // zero-width space — lets the line break before the spacer
@@ -134,13 +138,13 @@ function BubbleBodyBase({
   onShowDelivery,
   liftedCopy = false,
   presentation: preparedPresentation,
-}: Props) {
+  liveDelivery,
+}: BubbleBodyBaseProps) {
   const c = useThemeColors();
   const isRTL = useIsRTL();
 
   // Live delivery (this session) wins; else the persisted (DB) status survives
   // restarts. null for incoming messages or ones that were never tracked.
-  const liveDelivery = useDelivery(rumorId ?? '');
   const delivery = liveDelivery ?? persistedDelivery ?? null;
   // Our own messages always reserve the status slot (even before a delivery
   // record loads), so the bubble width never shifts when the glyph appears.
@@ -269,7 +273,6 @@ function BubbleBodyBase({
   function renderTextBubble(
     bodySegments: InlineMessageSegment[],
     options: {
-      key?: string;
       showReply: boolean;
       showMeta: boolean;
       squareTop?: boolean;
@@ -278,7 +281,6 @@ function BubbleBodyBase({
   ) {
     return (
       <View
-        key={options.key}
         style={{
           backgroundColor: bubbleBg,
           paddingVertical: BUBBLE_PADDING_VERTICAL,
@@ -321,7 +323,7 @@ function BubbleBodyBase({
         ? -StyleSheet.hairlineWidth / (blockMetaSpacer.length - 1)
         : undefined;
 
-    const containsCustomEmoji = bodySegments.some(
+    const containsCustomEmoji = customEmojiMap.size > 0 && bodySegments.some(
       (segment) =>
         segment.type === 'text' &&
         splitCustomEmojiText(segment.value, customEmojiMap).some((part) => part.type === 'emoji'),
@@ -801,6 +803,19 @@ function areBubbleBodyPropsEqual(a: Props, b: Props): boolean {
   );
 }
 
+function OwnBubbleBody(props: Props) {
+  const liveDelivery = useDelivery(props.rumorId ?? '');
+  return <BubbleBodyBase {...props} liveDelivery={liveDelivery} />;
+}
+
+function BubbleBodyWithScopedDelivery(props: Props) {
+  return props.isSelf ? (
+    <OwnBubbleBody {...props} />
+  ) : (
+    <BubbleBodyBase {...props} liveDelivery={null} />
+  );
+}
+
 /** Selection-mode chrome can update every mounted row without rebuilding the
  * expensive attachment/text subtree. Callback identity is deliberately ignored. */
-export const BubbleBody = memo(BubbleBodyBase, areBubbleBodyPropsEqual);
+export const BubbleBody = memo(BubbleBodyWithScopedDelivery, areBubbleBodyPropsEqual);

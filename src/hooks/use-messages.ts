@@ -748,30 +748,28 @@ export function useMessages(
     [],
   );
 
-  const ascending = useMemo(() => {
-    if (!anchor) {
-      return tailWindow.prepared?.rowsNewestFirst === tailRows && tailHistory.length === 0
+  const ascending = useMemo(
+    () => !anchor
+      ? tailWindow.prepared?.rowsNewestFirst === tailRows && tailHistory.length === 0
         ? tailWindow.prepared.rowsAscending
-        : [...tailNewestFirst].reverse();
-    }
-    return [...olderRows].reverse().concat(newerRows);
-  }, [anchor, tailHistory.length, tailNewestFirst, tailRows, tailWindow.prepared, olderRows, newerRows]);
+        : [...tailNewestFirst].reverse()
+      : [...olderRows].reverse().concat(newerRows),
+    [anchor, tailHistory.length, tailNewestFirst, tailRows, tailWindow.prepared, olderRows, newerRows],
+  );
   const bubbleMessages = useMemo(
-    () =>
-      !anchor && tailWindow.prepared?.rowsAscending === ascending
-        ? tailWindow.prepared.messagesAscending
-        : ascending.filter((row) => row.kind !== 7),
+    () => !anchor && tailWindow.prepared?.rowsAscending === ascending
+      ? tailWindow.prepared.messagesAscending
+      : ascending.filter((row) => row.kind !== 7),
     [anchor, ascending, tailWindow.prepared],
   );
   const reactionsByMessageId = useMemo(
-    () =>
-      !anchor && tailWindow.prepared?.rowsAscending === ascending
-        ? tailWindow.prepared.reactionsByMessageId
-        : aggregateReactionsByTarget(ascending, selfPubkey, proximity),
+    () => !anchor && tailWindow.prepared?.rowsAscending === ascending
+      ? tailWindow.prepared.reactionsByMessageId
+      : aggregateReactionsByTarget(ascending, selfPubkey, proximity),
     [anchor, ascending, proximity, selfPubkey, tailWindow.prepared],
   );
   // Only the navigation-warmed tail is prepared eagerly. Historical batches
-  // stay raw until FlatList actually mounts a cell; `prepareMessagePresentation`
+  // stay raw until FlatList actually renders a cell; `prepareMessagePresentation`
   // owns a bounded id cache, so revisiting a mounted row remains cheap without
   // parsing all 60 newly inserted messages in the insertion commit.
   const presentationsByMessageId =
@@ -863,9 +861,12 @@ export function useMessages(
         side === 'older' ? asc(messages.id) : desc(messages.id),
       )
       .limit(MESSAGE_HISTORY_FETCH_SIZE + 1)
-      .then(async (result) => {
+      .then((result) => {
         const page = result.slice(0, MESSAGE_HISTORY_FETCH_SIZE);
-        await hydrateReplyTargets(page);
+        // Reply previews may hydrate independently. Holding the history page
+        // behind this second SQLite read can exhaust the prefetched row buffer
+        // during a fast fling even though the page itself is already available.
+        void hydrateReplyTargets(page);
         const latest = anchorWindowsRef.current.get(anchorKey);
         if (!latest) return;
         const currentPrefetch = latest[prefetchKey];
@@ -877,7 +878,7 @@ export function useMessages(
             ).reverse();
         const shouldReveal = latest[revealKey];
         const revealed = shouldReveal
-          ? expanded.slice(0, MESSAGE_HISTORY_APPEND_SIZE)
+          ? expanded.slice(0, MESSAGES_PAGE_SIZE)
           : [];
         const prefetched = shouldReveal
           ? expanded.slice(revealed.length)
@@ -963,10 +964,13 @@ export function useMessages(
       .where(and(base, cursorCondition))
       .orderBy(desc(messages.orderAt), asc(messages.id))
       .limit(MESSAGE_HISTORY_FETCH_SIZE + 1)
-      .then(async (rows) => {
+      .then((rows) => {
         if (tailLoadGenerationRef.current !== generation) return;
         const page = rows.slice(0, MESSAGE_HISTORY_FETCH_SIZE);
-        await hydrateReplyTargets(page);
+        // Keep the cursor page available independently from reply-preview
+        // hydration. The 30-row prefetch threshold normally gives the latter
+        // ample time to finish before those bubbles become visible.
+        void hydrateReplyTargets(page);
         if (tailLoadGenerationRef.current !== generation) return;
         const expanded = mergeNewestFirstRows(tailOlderPrefetchRef.current, page);
         const shouldReveal = tailRevealAfterPrefetchRef.current;
@@ -1022,7 +1026,7 @@ export function useMessages(
       const window = anchorWindowsRef.current.get(anchorKey);
       if (!window?.loaded) return;
       if (window.olderPrefetch.length > 0) {
-        const revealed = window.olderPrefetch.slice(0, MESSAGE_HISTORY_APPEND_SIZE);
+        const revealed = window.olderPrefetch.slice(0, MESSAGES_PAGE_SIZE);
         updateAnchorWindow(anchorKey, (current) => ({
           ...current!,
           olderRows: mergeNewestFirstRows(current!.olderRows, revealed),
@@ -1055,7 +1059,7 @@ export function useMessages(
       const window = anchorWindowsRef.current.get(anchorKey);
       if (!window?.loaded) return;
       if (window.newerPrefetch.length > 0) {
-        const revealed = window.newerPrefetch.slice(0, MESSAGE_HISTORY_APPEND_SIZE);
+        const revealed = window.newerPrefetch.slice(0, MESSAGES_PAGE_SIZE);
         updateAnchorWindow(anchorKey, (current) => ({
           ...current!,
           newerRows: mergeNewestFirstRows(

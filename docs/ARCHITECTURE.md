@@ -288,9 +288,9 @@ overlap. Detached resumable work must consume and log failures with their native
 cause; cursor progress remains unchanged so the next session can retry safely.
 
 - Message history reads use indexed chronology cursors. Each database read
-  prefetches one bounded batch and commits it to FlatList before the reader
-  reaches the edge; FlatList still mounts native cells in smaller frame-sized
-  render batches. Exposed data is append-only during ordinary history browsing,
+  prefetches one bounded batch, then releases UI-sized slices to FlatList before
+  the reader reaches the edge. FlatList mounts variable-height rows in small
+  frame-spaced batches. Exposed data is append-only during ordinary history browsing,
   while native virtualization bounds mounted rows. Scrolling toward newer rows
   never removes list data or re-queries SQLite. Tail and anchored windows retain
   their loaded pages across in-screen mode switches and release them only with

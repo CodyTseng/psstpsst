@@ -78,6 +78,7 @@ import {
 } from './encryption-key.service';
 import {
   getSyncCursor,
+  getProcessedGiftWrapIds,
   isGiftWrapProcessed,
   isSyncRequestProcessed,
   markGiftWrapProcessed,
@@ -1966,8 +1967,12 @@ class DmService {
 
       // Keep only the newest PAGE and advance to *its* oldest (see above).
       const page = unique.slice(0, BACKFILL_PAGE);
+      // Relay overlap commonly returns a full page that is already stored. Check
+      // the page at once instead of issuing one SQLite query per duplicate.
+      const processedIds = await getProcessedGiftWrapIds(page.map((event) => event.id));
       for (const e of page) {
         if (this.syncEpoch !== epoch) return 'aborted';
+        if (processedIds.has(e.id)) continue;
         await this.processGiftWrap(e);
         // Yield after every message; a single unwrap/store is the largest unit
         // of synchronous work left on this path.

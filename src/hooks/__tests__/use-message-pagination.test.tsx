@@ -73,27 +73,27 @@ describe('chat cursor pagination', () => {
   afterEach(() => act(() => renderer.unmount()));
   afterAll(() => sqlite.close());
 
-  it('prefetches and commits one stable database batch per history step', async () => {
+  it('releases prefetched cursor pages in UI-sized slices without rereading them', async () => {
     expect(result!.oldestBoundary).toEqual({ createdAt: 1000, senderPubkey: 'peer' });
     const latestIds = result!.bubbleMessages.map((row) => row.id);
     queries.length = 0;
 
     await act(async () => { result.loadOlder(); });
-    expect(result!.messages).toHaveLength(60);
+    expect(result!.messages).toHaveLength(30);
     expect(Object.keys(result!.presentationsByMessageId)).toHaveLength(15);
     expect(Object.keys(result!.bubbleRenderItemsById)).toHaveLength(15);
     const databaseReads = queries.filter((query) => query.includes('"rumor"')).length;
     expect(databaseReads).toBe(1);
 
     await act(async () => { result.loadOlder(); });
-    expect(result!.messages).toHaveLength(120);
+    expect(result!.messages).toHaveLength(45);
     expect(result!.hasMoreNewer).toBe(false);
     expect(result!.anchored).toBe(false);
     expect(result!.tailJumpVersion).toBe(0);
     expect(result!.oldestBoundary?.senderPubkey).toBe('peer');
     expect(new Set(result!.messages.map((row) => row.id)).size).toBe(result!.messages.length);
     expect(result!.bubbleMessages.slice(-latestIds.length).map((row) => row.id)).toEqual(latestIds);
-    expect(queries.filter((query) => query.includes('"rumor"'))).toHaveLength(databaseReads + 1);
+    expect(queries.filter((query) => query.includes('"rumor"'))).toHaveLength(databaseReads);
   });
 
   it('coalesces repeated requests and does not requery the live tail for every page', async () => {
@@ -103,7 +103,7 @@ describe('chat cursor pagination', () => {
       result.loadOlder();
       result.loadOlder();
     });
-    expect(result!.messages).toHaveLength(60);
+    expect(result!.messages).toHaveLength(30);
     expect(queries.filter((query) => query.includes('"rumor"'))).toHaveLength(1);
     expect(result!.loadingOlder).toBe(false);
   });
@@ -154,7 +154,7 @@ describe('chat cursor pagination', () => {
     expect(result!.tailJumpVersion).toBe(0);
     await act(async () => result.jumpToTail());
     expect(result!.tailJumpVersion).toBe(1);
-    expect(result!.messages).toHaveLength(60);
+    expect(result!.messages).toHaveLength(30);
   });
 
   it('uses retained cursor pages in both anchor directions', async () => {
@@ -166,13 +166,13 @@ describe('chat cursor pagination', () => {
 
     await act(async () => result.loadOlder());
     await act(async () => result.loadNewer());
-    expect(result!.messages).toHaveLength(120);
-    expect(queries.filter((query) => query.includes('"rumor"'))).toHaveLength(2);
+    expect(result!.messages).toHaveLength(50);
+    expect(queries.filter((query) => query.includes('"rumor"'))).toHaveLength(0);
 
     await act(async () => result.jumpToTail());
     queries.length = 0;
     await act(async () => result.focusAnchor({ id: '210', orderAt: 210 }));
-    expect(result!.messages).toHaveLength(120);
+    expect(result!.messages).toHaveLength(50);
     expect(queries.filter((query) => query.includes('"rumor"'))).toHaveLength(0);
   });
 

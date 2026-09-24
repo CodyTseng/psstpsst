@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '@/db/client';
 import { processedGiftWraps, processedSyncRequests, syncCursors } from '@/db/schema';
@@ -67,6 +67,20 @@ export async function isGiftWrapProcessed(id: string): Promise<boolean> {
     .where(eq(processedGiftWraps.id, id))
     .limit(1);
   return !!row;
+}
+
+/** Return the processed subset of a relay page in bounded SQLite queries. */
+export async function getProcessedGiftWrapIds(ids: string[]): Promise<Set<string>> {
+  const processed = new Set<string>();
+  const querySize = 400;
+  for (let start = 0; start < ids.length; start += querySize) {
+    const rows = await db
+      .select({ id: processedGiftWraps.id })
+      .from(processedGiftWraps)
+      .where(inArray(processedGiftWraps.id, ids.slice(start, start + querySize)));
+    for (const row of rows) processed.add(row.id);
+  }
+  return processed;
 }
 
 export async function markGiftWrapProcessed(

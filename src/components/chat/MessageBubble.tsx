@@ -181,7 +181,6 @@ function MessageBubbleBase({
   selected,
   onToggleSelect,
 }: Props) {
-  const c = useThemeColors();
   const isRTL = useIsRTL();
 
   // Measure the complete visual cluster (bubble + reactions) and the bubble body
@@ -299,6 +298,25 @@ function MessageBubbleBase({
   const bubbleSlide = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.get() * (isRTL ? -1 : 1) }],
   }));
+  const body = (
+    <BubbleBody
+      content={content}
+      tags={tags}
+      isSelf={isSelf}
+      createdAt={createdAt}
+      orderAt={orderAt}
+      rumorId={rumorId}
+      persistedDelivery={persistedDelivery}
+      replyTo={replyTo}
+      attachment={attachment}
+      conversationKey={conversationKey}
+      proximity={proximity}
+      remoteContentMode={remoteContentMode}
+      presentation={presentation}
+      onPressReply={onPressReply}
+      onShowDelivery={onShowDelivery}
+    />
+  );
 
   return (
     <GestureDetector gesture={gesture}>
@@ -349,34 +367,20 @@ function MessageBubbleBase({
 
             <Reanimated.View style={bubbleSlide}>
               <View ref={bubbleRef} collapsable={false}>
-                <BubbleBody
-                  content={content}
-                  tags={tags}
-                  isSelf={isSelf}
-                  createdAt={createdAt}
-                  orderAt={orderAt}
-                  rumorId={rumorId}
-                  persistedDelivery={persistedDelivery}
-                  replyTo={replyTo}
-                  attachment={attachment}
-                  conversationKey={conversationKey}
-                  proximity={proximity}
-                  remoteContentMode={remoteContentMode}
-                  presentation={presentation}
-                  onPressReply={onPressReply}
-                  onShowDelivery={onShowDelivery}
-                />
+                {body}
               </View>
             </Reanimated.View>
           </View>
 
           {/* Reactions share the bubble's logical edge in a separate row. */}
-          <ReactionsRow
-            reactions={reactions}
-            isSelfBubble={isSelf}
-            loadRemote={remoteContentMode === 'auto'}
-            onTapReaction={onTapReaction}
-          />
+          {reactions.length > 0 ? (
+            <ReactionsRow
+              reactions={reactions}
+              isSelfBubble={isSelf}
+              loadRemote={remoteContentMode === 'auto'}
+              onTapReaction={onTapReaction}
+            />
+          ) : null}
         </Reanimated.View>
 
         {/* Checkbox column — absolutely positioned at the row's start so it never
@@ -400,25 +404,12 @@ function MessageBubbleBase({
         {/* Selected (forwarding): a steady foreground wash across the whole row —
             the same colour family as the jump-to flash below, just persistent and
             fainter — rather than an accent fill. */}
-        {selected ? (
-          <View
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: c.text,
-              opacity: 0.1,
-              pointerEvents: 'none',
-            }}
-          />
-        ) : null}
+        {selected ? <SelectedMessageOverlay /> : null}
 
         {/* Jump-to flash: a foreground wash across the **whole row**, painted on
             top of everything (the bubble included — not hidden behind it), so even
             an accent self-bubble or an image clearly pulses. Fades out. */}
-        {highlighted ? <MessageHighlight key={highlightTick} /> : null}
+        {highlighted ? <MessageHighlight tick={highlightTick ?? 0} /> : null}
 
         {/* Selection mode: a full-row tap target on top of everything (even an
             image/file/link with its own press handler) — a tap toggles this
@@ -434,8 +425,27 @@ function MessageBubbleBase({
   );
 }
 
+/** Subscribe to theme state only while the selection overlay is visible. */
+function SelectedMessageOverlay() {
+  const c = useThemeColors();
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: c.text,
+        opacity: 0.1,
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}
+
 /** Allocate highlight animation resources only for the highlighted row. */
-function MessageHighlight() {
+function MessageHighlight({ tick }: { tick: number }) {
   const c = useThemeColors();
   // Flash overlay when this row is jumped to (e.g. from a reply preview). A
   // foreground-colour wash (not the accent) at a low peak opacity, fading out.
@@ -459,7 +469,7 @@ function MessageHighlight() {
         ReduceMotion.Never,
       ),
     );
-  }, [highlight, reducedMotion]);
+  }, [highlight, reducedMotion, tick]);
 
   return (
     <Reanimated.View

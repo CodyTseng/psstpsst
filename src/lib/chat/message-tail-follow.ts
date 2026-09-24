@@ -4,9 +4,9 @@
  */
 export const MESSAGE_TAIL_FOLLOW_THRESHOLD = 300;
 
-/** Match MessageList's onEndReached prefetch distance. FlatList can miss its
- * edge callback when a fast fling outruns the rendered window, so the settled
- * scroll events use the same distance as a low-cost fallback. */
+/** Start fetching history before FlatList reaches its rendered edge. FlatList
+ * can miss its edge callback when a fast fling outruns the rendered window, so
+ * scroll and settled events use this wider distance as a low-cost fallback. */
 export const MESSAGE_HISTORY_PREFETCH_VIEWPORTS = 2;
 
 export function messageHistoryPageRequest({

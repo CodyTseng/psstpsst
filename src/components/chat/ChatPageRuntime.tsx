@@ -553,17 +553,6 @@ export default function ChatPageRuntime() {
   }, [liveDataReady]);
 
   useEffect(() => {
-    if (!secondaryDataReady) return;
-    const idleHandle = requestIdleCallback(
-      () => {
-        void import('@/components/chat/EmojiPickerSheet');
-      },
-      { timeout: 1000 },
-    );
-    return () => cancelIdleCallback(idleHandle);
-  }, [secondaryDataReady]);
-
-  useEffect(() => {
     graduatedHereRef.current = false;
   }, [conversationKey]);
 

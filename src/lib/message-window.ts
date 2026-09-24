@@ -9,9 +9,8 @@ export const MESSAGES_PAGE_SIZE = 15;
 /** One bounded cursor batch per database trip. */
 export const MESSAGE_HISTORY_FETCH_SIZE = 60;
 
-/** Commit one prefetched database batch to FlatList at a time. FlatList still
- * mounts native cells in smaller render batches. */
-export const MESSAGE_HISTORY_APPEND_SIZE = MESSAGE_HISTORY_FETCH_SIZE;
+/** Release one UI-sized slice from the prefetched cursor batch at a time. */
+export const MESSAGE_HISTORY_APPEND_SIZE = MESSAGES_PAGE_SIZE;
 
 /** Refill the in-memory history buffer while two UI pages are still available. */
 export const MESSAGE_HISTORY_PREFETCH_THRESHOLD = MESSAGES_PAGE_SIZE * 2;
