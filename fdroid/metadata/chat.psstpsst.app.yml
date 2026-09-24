@@ -14,7 +14,7 @@ AutoName: PsstPsst
 
 RepoType: git
 Repo: https://github.com/codytseng/psstpsst.git
-Binaries: https://github.com/codytseng/psstpsst/releases/download/v%v/PsstPsst-%v-android.apk
+Binaries: https://github.com/codytseng/psstpsst/releases/download/v%v/PsstPsst-android.apk
 # Verified against the published v0.2.3 APK with apksigner.
 AllowedAPKSigningKeys:
   - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'

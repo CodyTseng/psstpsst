@@ -239,7 +239,7 @@ npm run electron:package:signed -- --mac --arm64 --config.mac.notarize=false
 
 Signing alone does not provide Apple's notarization ticket for distribution.
 Both commands disable GitHub publishing. The output is
-`release/PsstPsst-<version>-mac-arm64.dmg` and `.zip`, with the application at
+`release/PsstPsst-mac-arm64.dmg` and `.zip`, with the application at
 `release/mac-arm64/PsstPsst.app`.
 
 **4. Verify the result.** Verify the signature for either build:
@@ -306,7 +306,7 @@ All four values must be nonempty. CI installs Android Build Tools 36.0.0,
 generates the native project from the checked-in Expo configuration, and runs
 Gradle's `:app:assembleRelease`. It then replaces the template's debug signature
 using `apksigner`, verifies the resulting APK, and uploads
-`PsstPsst-<version>-android.apk`. The decoded keystore exists only in a temporary
+`PsstPsst-android.apk`. The decoded keystore exists only in a temporary
 directory during signing and is removed afterward. Passwords are read from
 environment variables, not passed as literal command arguments.
 
@@ -385,6 +385,10 @@ Complete the toolchain, release-commit, signing-fingerprint, and reproducibility
 steps in [`fdroid/README.md`](../fdroid/README.md) before submitting it. Local
 YAML validation does not establish F-Droid build or inclusion readiness.
 
+The APK asset has a stable basename, while F-Droid's `Binaries` URL remains
+versioned by the `v%v` release-tag path. This gives each reproducibility check a
+version-specific URL without putting the version in the APK filename.
+
 For Zapstore, publish the signed APK as a public GitHub Release asset first.
 Install the official `zsp` publisher, then use `zsp publish --wizard`, selecting
 `https://github.com/codytseng/psstpsst` as the release source. Review the generated
@@ -441,6 +445,17 @@ Electron Builder writes artifacts to `release/`:
 - macOS: DMG and ZIP; local packaging disables certificate signing and notarization
 - Windows: x64/arm64 NSIS
 - Linux: x64/arm64 AppImage and DEB
+
+Public release asset basenames intentionally omit the application version. The
+Git tag identifies the release, while Electron update metadata retains the
+version and checksum. Keep these basenames stable so public download links can
+use GitHub's `/releases/latest/download/<asset>` form without changing for each
+release.
+
+Do not switch a public `latest/download` link until the latest published release
+contains the stable basename. Before rolling `latest` back to an older release,
+ensure that release also contains stable-name assets or the public links will
+return `404`.
 
 Linux x64 artifacts use the target's architecture spelling: `linux-x86_64.AppImage`
 and `linux-amd64.deb`. ARM64 artifacts use `linux-arm64` for both targets. Keep

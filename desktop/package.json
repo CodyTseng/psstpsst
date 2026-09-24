@@ -24,7 +24,7 @@
     "directories": {
       "output": "../release"
     },
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "artifactName": "${productName}-${os}-${arch}.${ext}",
     "files": [
       "dist/**/*"
     ],

@@ -217,10 +217,9 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          version="$(node -p "require('./app.json').expo.version")"
           node scripts/release-signing.mjs sign-android \
             release/fdroid-build/app-release.apk \
-            "release/PsstPsst-${version}-android.apk"
+            release/PsstPsst-android.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
@@ -254,37 +253,7 @@ jobs:
           path: release-assets
 
       - name: Validate release assets
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          required_assets=(
-            "PsstPsst-${version}-android.apk"
-            "latest-mac.yml"
-            "latest-x64.yml"
-            "latest-arm64.yml"
-            "latest-linux.yml"
-            "latest-linux-arm64.yml"
-            "PsstPsst-${version}-mac-arm64.dmg"
-            "PsstPsst-${version}-mac-arm64.zip"
-            "PsstPsst-${version}-win-x64.exe"
-            "PsstPsst-${version}-win-arm64.exe"
-            "PsstPsst-${version}-linux-x86_64.AppImage"
-            "PsstPsst-${version}-linux-amd64.deb"
-            "PsstPsst-${version}-linux-arm64.AppImage"
-            "PsstPsst-${version}-linux-arm64.deb"
-          )
-
-          missing_assets=0
-          for asset in "${required_assets[@]}"; do
-            if [[ ! -f "release-assets/$asset" ]]; then
-              echo "::error file=release-assets/$asset::Required release asset is missing."
-              missing_assets=1
-            fi
-          done
-
-          if (( missing_assets != 0 )); then
-            exit 1
-          fi
+        run: node scripts/release-assets.mjs release-assets
 
       - name: Create or update draft release
         shell: bash
