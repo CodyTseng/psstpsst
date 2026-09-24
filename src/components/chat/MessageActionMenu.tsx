@@ -18,6 +18,7 @@ import { OverKeyboardView } from 'react-native-keyboard-controller';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { AppText } from '@/components/common/AppText';
+import { useFocusedOverlayDismiss } from '@/components/common/use-focused-overlay-dismiss';
 import {
   ACTION_MENU_ICON_SIZE,
   ACTION_MENU_METRICS,
@@ -239,6 +240,7 @@ export function MessageActionMenu({
   const scheme = useEffectiveColorScheme();
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
+  useFocusedOverlayDismiss(visible, onClose);
 
   // Retain the last valid render data so the *exit* animation can keep painting
   // the menu after the parent clears rect/bubble on close.

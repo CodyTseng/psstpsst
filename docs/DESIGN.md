@@ -377,6 +377,9 @@ Only one native modal may be presented at a time. Close the current modal and
 start the next action from `onClosed`. Do not coordinate modal sequencing with
 delays guessed at call sites.
 
+Menus consume Android Back and Electron Escape while open, closing before
+route or page handling.
+
 On Electron, short decisions use the shared confirmation dialog and small value
 entries use `InputDialog`; larger pickers and task flows remain sheets or pages.
 

@@ -12,6 +12,7 @@ import {
   type ActionMenuDensity,
   type ActionMenuItem,
 } from './ActionMenuPanel';
+import { useFocusedOverlayDismiss } from './use-focused-overlay-dismiss';
 
 export type ContextMenuAnchor = {
   x: number;
@@ -38,6 +39,7 @@ export function ContextMenu({
   align = 'start',
   density = 'pointer',
 }: Props) {
+  useFocusedOverlayDismiss(true, onClose);
   const { width, height } = useWindowDimensions();
   const metrics = ACTION_MENU_METRICS[density];
   const menuHeight = actionMenuHeight(items, density);
