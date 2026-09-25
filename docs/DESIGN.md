@@ -324,12 +324,17 @@ Reduce Motion is respected.
 At the responsive split threshold, tablets and Electron present a persistent
 primary pane and a detail pane using the same navigation state. Narrow windows
 show the normal single-stack presentation. An unselected detail pane shows only
-a quiet, centered prompt to select a chat, without branding. Resizing must not reset navigation,
-selection, drafts, or scroll state. Electron primary panes support pointer and
-keyboard resizing at the divider, bounded to keep both panes usable. The chosen
-width survives navigation, temporary switches to a narrow window, and app
-restarts. Electron restores window bounds and maximization on launch, keeping
-the window reachable when the available displays change.
+a quiet, centered prompt to select a chat, without branding. Resizing must not
+reset navigation, selection, drafts, or scroll state. Tablet primary panes
+support direct touch resizing at a thin divider with a compact centred grip and
+a 48-point touch target. Electron primary panes support pointer and keyboard
+resizing there. Double-tapping the divider restores its default position on
+both platforms; on tablets it also resumes responsive default sizing until the
+user adjusts the divider again. Both stay bounded to keep each pane usable.
+Each platform's preferred width survives navigation, temporary switches to a
+narrow window, and app restarts. Electron restores window bounds and
+maximization on launch, keeping the window reachable when the available
+displays change.
 Screenshot preview starts the Electron content canvas at 960x720, remains
 resizable, and restores the prior window geometry and resize behaviour on exit.
 
