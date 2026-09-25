@@ -160,9 +160,9 @@ const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * 5;
 // Extra room the box needs when the reply quote sits above the text field
 // (two caption lines + the quote↔field gap).
 const REPLY_BLOCK_HEIGHT = 48;
-const COMPOSER_PANEL_MIN_HEIGHT = 380;
-const COMPOSER_PANEL_MAX_HEIGHT = 440;
-const COMPOSER_PANEL_SCREEN_RATIO = 0.48;
+const COMPOSER_PANEL_MIN_HEIGHT = 290;
+const COMPOSER_PANEL_MAX_HEIGHT = 350;
+const COMPOSER_PANEL_SCREEN_RATIO = 0.385;
 const COMPOSER_ACTION_SIZE = uiDensity.composerActionSize;
 const INPUT_ACTION_SIZE = spacing['2xl'];
 const INPUT_ACTION_INSET = spacing.xs;
@@ -429,13 +429,22 @@ export function ChatInput({
     insets.bottom,
     attachmentSources.length,
   );
-  const emojiHeight = Math.min(
+  const fallbackEmojiHeight = Math.min(
     COMPOSER_PANEL_MAX_HEIGHT,
     Math.max(
       COMPOSER_PANEL_MIN_HEIGHT,
       Math.round(screenHeight * COMPOSER_PANEL_SCREEN_RATIO),
     ),
   );
+  const [emojiPanelSize, setEmojiPanelSize] = useState(() => ({
+    height: fallbackEmojiHeight,
+    screenHeight,
+    screenWidth,
+  }));
+  const emojiHeight =
+    emojiPanelSize.screenHeight === screenHeight && emojiPanelSize.screenWidth === screenWidth
+      ? emojiPanelSize.height
+      : fallbackEmojiHeight;
   const SAFE = getBottomChromeInset(insets.bottom);
   const attachmentOpen = trayOpen && panelMode === 'attachments';
   const emojiOpen = trayOpen && panelMode === 'emoji';
@@ -678,9 +687,17 @@ export function ChatInput({
       return;
     }
     if (draftKey) markChatPanelRequest(draftKey);
+    const visibleKeyboardHeight = keyboardHeight.get();
+    const nextEmojiHeight =
+      visibleKeyboardHeight > SAFE ? visibleKeyboardHeight : fallbackEmojiHeight;
     // The UI-thread transition starts immediately. If idle prewarming has not
     // finished, its completion mounts the heavy picker after the motion settles.
-    animatePanelTransition(true, 'emoji', emojiHeight);
+    setEmojiPanelSize({
+      height: nextEmojiHeight,
+      screenHeight,
+      screenWidth,
+    });
+    animatePanelTransition(true, 'emoji', nextEmojiHeight);
     setPanelMode('emoji');
     Keyboard.dismiss();
     setTrayOpen(true);
