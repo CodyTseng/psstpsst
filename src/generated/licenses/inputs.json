@@ -22,5 +22,5 @@
   "licenses/third-party/snapshots.json": "ff15f32264b3eaa1594f98070c9bca31e62654acf78d3ec0fc1636f90fb706a9",
   "licenses/zxing-cpp/LICENSE": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
   "licenses/zxing-cpp/NOTICE": "4d77d6803e97fbd30e85b8cae6423adf00bb2bcace8839ece265db2532178ce0",
-  "package-lock.json": "eb56c8ce23e710e12b6d77d59fda5a044d9b6fd526dd2f5169aa96f60fda7cfe"
+  "package-lock.json": "643a023cbf601f7cf7eec67a3c6fa0f9247279331291708ffc7318e64cdab3a4"
 }
