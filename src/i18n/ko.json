@@ -89,6 +89,22 @@
     "qr_save_failed": "저장할 수 없습니다. 다시 시도하세요.",
     "qr_save_permission": "카드를 저장하려면 PsstPsst에 사진 접근 권한이 필요합니다."
   },
+  "report": {
+    "title": "사용자 신고",
+    "description": "가장 적절한 이유를 선택하세요. 신고는 공개되며 누구나 볼 수 있습니다.",
+    "submit": "신고 제출",
+    "success": "신고를 보냈습니다",
+    "failed": "신고를 보내지 못했습니다. 다시 시도하세요.",
+    "types": {
+      "nudity": "노출 또는 성적인 콘텐츠",
+      "malware": "악성 소프트웨어",
+      "profanity": "혐오 또는 모욕적인 콘텐츠",
+      "illegal": "불법 콘텐츠",
+      "spam": "스팸",
+      "impersonation": "사칭",
+      "other": "기타"
+    }
+  },
   "profile_edit": {
     "title": "프로필 편집",
     "username": "사용자 이름",

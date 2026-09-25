@@ -248,6 +248,7 @@ this table records when to choose each primitive.
 | Content container | `AppCard` |
 | Navigation title bar | `ScreenHeader` |
 | Settings/value row | `ListRow` inside `ListGroup` |
+| Single-choice indicator | `RadioIndicator` inside a radio `ListRow` |
 | Contact or conversation row | `ContactListItem` / `ConversationListItem` |
 | Section heading | `SectionLabel` |
 | Summoned task, picker, or form | `BottomSheet` |
@@ -255,6 +256,8 @@ this table records when to choose each primitive.
 | Small Electron value entry | `InputDialog` |
 | Time-of-day entry | `TimeOfDayPicker` (native `@expo/ui` wheel/clock on touch, `InputDialog` on Electron) |
 | Brief success acknowledgement | `Toast` |
+
+Transient toasts remain visible above an active sheet or modal.
 
 `AppButton` and `IconButton` are the only button primitives. A specialist
 interactive surface may use `InteractivePressable`, but it must not recreate a
@@ -273,6 +276,10 @@ overlay.
 
 Value rows that open a name editor use a trailing directional chevron, not a
 pencil icon, matching other editable settings rows.
+
+Single-choice lists use a trailing `RadioIndicator` on every row and expose
+radio-group, radio, and checked semantics. A checkmark communicates completion,
+not mutually exclusive choice.
 
 Quiet destructive icon actions use a soft danger fill with a danger-coloured
 glyph; solid danger fills remain reserved for prominent destructive actions.

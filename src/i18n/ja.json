@@ -89,6 +89,22 @@
     "qr_save_failed": "保存できませんでした。もう一度お試しください。",
     "qr_save_permission": "カードを保存するには PsstPsst に写真へのアクセスが必要です。"
   },
+  "report": {
+    "title": "ユーザーを通報",
+    "description": "最も適切な理由を選んでください。通報は公開され、誰でも見ることができます。",
+    "submit": "通報を送信",
+    "success": "通報を送信しました",
+    "failed": "通報を送信できませんでした。もう一度お試しください。",
+    "types": {
+      "nudity": "ヌードまたは性的なコンテンツ",
+      "malware": "マルウェア",
+      "profanity": "差別的または侮辱的なコンテンツ",
+      "illegal": "違法なコンテンツ",
+      "spam": "スパム",
+      "impersonation": "なりすまし",
+      "other": "その他"
+    }
+  },
   "profile_edit": {
     "title": "プロフィールを編集",
     "username": "ユーザー名",

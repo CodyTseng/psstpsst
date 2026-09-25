@@ -89,6 +89,22 @@
     "qr_save_failed": "Nem sikerült menteni. Próbáld újra.",
     "qr_save_permission": "A PsstPsstnek fénykép-hozzáférésre van szüksége a kártya mentéséhez."
   },
+  "report": {
+    "title": "Felhasználó jelentése",
+    "description": "Válaszd ki a legmegfelelőbb okot. A jelentések nyilvánosak, és bárki láthatja őket.",
+    "submit": "Jelentés elküldése",
+    "success": "Jelentés elküldve",
+    "failed": "Nem sikerült elküldeni a jelentést. Próbáld újra.",
+    "types": {
+      "nudity": "Meztelenség vagy szexuális tartalom",
+      "malware": "Kártevő",
+      "profanity": "Gyűlöletkeltő vagy sértő tartalom",
+      "illegal": "Illegális tartalom",
+      "spam": "Spam",
+      "impersonation": "Személyazonossággal való visszaélés",
+      "other": "Egyéb"
+    }
+  },
   "profile_edit": {
     "title": "Profil szerkesztése",
     "username": "Felhasználónév",

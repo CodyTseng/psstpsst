@@ -89,6 +89,22 @@
     "qr_save_failed": "Impossible d'enregistrer. Réessayez.",
     "qr_save_permission": "PsstPsst doit accéder à vos photos pour enregistrer la carte."
   },
+  "report": {
+    "title": "Signaler l’utilisateur",
+    "description": "Choisissez le motif le plus adapté. Les signalements sont publics et visibles par tous.",
+    "submit": "Envoyer le signalement",
+    "success": "Signalement envoyé",
+    "failed": "Impossible d’envoyer le signalement. Réessayez.",
+    "types": {
+      "nudity": "Nudité ou contenu sexuel",
+      "malware": "Logiciel malveillant",
+      "profanity": "Contenu haineux ou injurieux",
+      "illegal": "Contenu illégal",
+      "spam": "Spam",
+      "impersonation": "Usurpation d’identité",
+      "other": "Autre"
+    }
+  },
   "profile_edit": {
     "title": "Modifier le profil",
     "username": "Nom d'utilisateur",

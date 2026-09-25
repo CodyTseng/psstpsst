@@ -89,6 +89,22 @@
     "qr_save_failed": "Speichern fehlgeschlagen. Versuche es erneut.",
     "qr_save_permission": "PsstPsst benötigt Fotozugriff, um die Karte zu speichern."
   },
+  "report": {
+    "title": "Nutzer melden",
+    "description": "Wähle den passendsten Grund. Meldungen sind öffentlich und für alle sichtbar.",
+    "submit": "Meldung senden",
+    "success": "Meldung gesendet",
+    "failed": "Die Meldung konnte nicht gesendet werden. Versuche es erneut.",
+    "types": {
+      "nudity": "Nacktheit oder sexuelle Inhalte",
+      "malware": "Schadsoftware",
+      "profanity": "Hasserfüllte oder beleidigende Inhalte",
+      "illegal": "Illegale Inhalte",
+      "spam": "Spam",
+      "impersonation": "Identitätsvortäuschung",
+      "other": "Sonstiges"
+    }
+  },
   "profile_edit": {
     "title": "Profil bearbeiten",
     "username": "Benutzername",

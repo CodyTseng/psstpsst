@@ -22,6 +22,12 @@ const ENTER_MS = 180;
 const EXIT_MS = 220;
 const ENTER_OFFSET = spacing.sm;
 
+type Props = {
+  /** Keep false for a mirror rendered inside a native modal. The root Toast
+   * remains responsible for clearing the shared message. */
+  managesLifetime?: boolean;
+};
+
 function hideToastIfCurrent(id: number) {
   const toast = useToastStore.getState();
   if (toast.id === id) toast.hide();
@@ -32,7 +38,7 @@ function hideToastIfCurrent(id: number) {
  * capsule near the bottom that fades + lifts in, holds briefly, then fades out.
  * Driven by `toast.store`; `pointerEvents="none"` so it never blocks taps.
  */
-export function Toast() {
+export function Toast({ managesLifetime = true }: Props = {}) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const message = useToastStore((s) => s.message);
@@ -76,7 +82,7 @@ export function Toast() {
           reduceMotion: ReduceMotion.System,
         },
         (finished) => {
-          if (finished) scheduleOnRN(hideToastIfCurrent, id);
+          if (finished && managesLifetime) scheduleOnRN(hideToastIfCurrent, id);
         },
       );
     }, VISIBLE_MS);
@@ -84,7 +90,7 @@ export function Toast() {
       clearTimeout(timer);
       cancelAnimation(visibility);
     };
-  }, [id, message, visibility]);
+  }, [id, managesLifetime, message, visibility]);
 
   if (!message) return null;
 
@@ -97,6 +103,7 @@ export function Toast() {
           left: 0,
           right: 0,
           bottom: insets.bottom + 80,
+          zIndex: 1,
           alignItems: 'center',
           paddingHorizontal: 24,
         },

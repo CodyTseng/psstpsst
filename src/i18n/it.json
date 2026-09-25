@@ -89,6 +89,22 @@
     "qr_save_failed": "Impossibile salvare. Riprova.",
     "qr_save_permission": "PsstPsst deve accedere alle foto per salvare la scheda."
   },
+  "report": {
+    "title": "Segnala utente",
+    "description": "Scegli il motivo più adatto. Le segnalazioni sono pubbliche e visibili a chiunque.",
+    "submit": "Invia segnalazione",
+    "success": "Segnalazione inviata",
+    "failed": "Impossibile inviare la segnalazione. Riprova.",
+    "types": {
+      "nudity": "Nudità o contenuti sessuali",
+      "malware": "Malware",
+      "profanity": "Contenuti offensivi o di odio",
+      "illegal": "Contenuti illegali",
+      "spam": "Spam",
+      "impersonation": "Furto d’identità",
+      "other": "Altro"
+    }
+  },
   "profile_edit": {
     "title": "Modifica profilo",
     "username": "Nome utente",

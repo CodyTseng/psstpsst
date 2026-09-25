@@ -89,6 +89,22 @@
     "qr_save_failed": "Não foi possível guardar. Tente novamente.",
     "qr_save_permission": "O PsstPsst precisa de acesso às fotografias para guardar o cartão."
   },
+  "report": {
+    "title": "Denunciar utilizador",
+    "description": "Escolha o motivo mais adequado. As denúncias são públicas e podem ser vistas por qualquer pessoa.",
+    "submit": "Enviar denúncia",
+    "success": "Denúncia enviada",
+    "failed": "Não foi possível enviar a denúncia. Tente novamente.",
+    "types": {
+      "nudity": "Nudez ou conteúdo sexual",
+      "malware": "Software malicioso",
+      "profanity": "Conteúdo de ódio ou ofensivo",
+      "illegal": "Conteúdo ilegal",
+      "spam": "Spam",
+      "impersonation": "Usurpação de identidade",
+      "other": "Outro"
+    }
+  },
   "profile_edit": {
     "title": "Editar perfil",
     "username": "Nome de utilizador",

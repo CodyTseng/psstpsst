@@ -89,6 +89,22 @@
     "qr_save_failed": "Nie udało się zapisać. Spróbuj ponownie.",
     "qr_save_permission": "PsstPsst potrzebuje dostępu do zdjęć, aby zapisać wizytówkę."
   },
+  "report": {
+    "title": "Zgłoś użytkownika",
+    "description": "Wybierz najlepiej pasujący powód. Zgłoszenia są publiczne i każdy może je zobaczyć.",
+    "submit": "Wyślij zgłoszenie",
+    "success": "Zgłoszenie wysłane",
+    "failed": "Nie udało się wysłać zgłoszenia. Spróbuj ponownie.",
+    "types": {
+      "nudity": "Nagość lub treści seksualne",
+      "malware": "Złośliwe oprogramowanie",
+      "profanity": "Treści szerzące nienawiść lub obraźliwe",
+      "illegal": "Nielegalne treści",
+      "spam": "Spam",
+      "impersonation": "Podszywanie się pod inną osobę",
+      "other": "Inne"
+    }
+  },
   "profile_edit": {
     "title": "Edytuj profil",
     "username": "Nazwa użytkownika",

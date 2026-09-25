@@ -89,6 +89,22 @@
     "qr_save_failed": "無法儲存，請再試一次。",
     "qr_save_permission": "PsstPsst 需要照片存取權才能儲存名片。"
   },
+  "report": {
+    "title": "檢舉使用者",
+    "description": "請選擇最合適的原因。檢舉是公開的，任何人都可以看到。",
+    "submit": "提交檢舉",
+    "success": "檢舉已傳送",
+    "failed": "無法傳送檢舉，請再試一次。",
+    "types": {
+      "nudity": "裸露或色情內容",
+      "malware": "惡意軟體",
+      "profanity": "仇恨或侮辱性內容",
+      "illegal": "違法內容",
+      "spam": "垃圾訊息",
+      "impersonation": "冒充他人",
+      "other": "其他"
+    }
+  },
   "profile_edit": {
     "title": "編輯個人檔案",
     "username": "使用者名稱",

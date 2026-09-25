@@ -89,6 +89,22 @@
     "qr_save_failed": "Couldn't save. Try again.",
     "qr_save_permission": "PsstPsst needs photo access to save the card."
   },
+  "report": {
+    "title": "Report user",
+    "description": "Choose the best reason. Reports are public and can be seen by anyone.",
+    "submit": "Submit report",
+    "success": "Report sent",
+    "failed": "Couldn't send the report. Try again.",
+    "types": {
+      "nudity": "Nudity or sexual content",
+      "malware": "Malware",
+      "profanity": "Hateful or profane content",
+      "illegal": "Illegal content",
+      "spam": "Spam",
+      "impersonation": "Impersonation",
+      "other": "Other"
+    }
+  },
   "profile_edit": {
     "title": "Edit profile",
     "username": "Username",

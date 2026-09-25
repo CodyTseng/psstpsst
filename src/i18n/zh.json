@@ -89,6 +89,22 @@
     "qr_save_failed": "保存失败，请重试。",
     "qr_save_permission": "需要相册权限才能保存名片。"
   },
+  "report": {
+    "title": "举报用户",
+    "description": "请选择最合适的原因。举报是公开的，任何人都可以看到。",
+    "submit": "提交举报",
+    "success": "举报已发送",
+    "failed": "无法发送举报，请重试。",
+    "types": {
+      "nudity": "裸露或色情内容",
+      "malware": "恶意软件",
+      "profanity": "仇恨或侮辱性内容",
+      "illegal": "违法内容",
+      "spam": "垃圾信息",
+      "impersonation": "冒充他人",
+      "other": "其他"
+    }
+  },
   "profile_edit": {
     "title": "编辑资料",
     "username": "用户名",

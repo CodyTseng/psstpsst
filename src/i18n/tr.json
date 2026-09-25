@@ -89,6 +89,22 @@
     "qr_save_failed": "Kaydedilemedi. Tekrar dene.",
     "qr_save_permission": "PsstPsst'in kartı kaydetmek için fotoğraflara erişmesi gerekiyor."
   },
+  "report": {
+    "title": "Kullanıcıyı bildir",
+    "description": "En uygun nedeni seçin. Bildirimler herkese açıktır ve herkes tarafından görülebilir.",
+    "submit": "Bildirimi gönder",
+    "success": "Bildirim gönderildi",
+    "failed": "Bildirim gönderilemedi. Tekrar deneyin.",
+    "types": {
+      "nudity": "Çıplaklık veya cinsel içerik",
+      "malware": "Kötü amaçlı yazılım",
+      "profanity": "Nefret dolu veya hakaret içeren içerik",
+      "illegal": "Yasa dışı içerik",
+      "spam": "Spam",
+      "impersonation": "Başkasının kimliğine bürünme",
+      "other": "Diğer"
+    }
+  },
   "profile_edit": {
     "title": "Profili düzenle",
     "username": "Kullanıcı adı",
