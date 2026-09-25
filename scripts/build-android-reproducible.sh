@@ -2,12 +2,17 @@
 
 set -euo pipefail
 
-readonly IMAGE="registry.gitlab.com/fdroid/fdroidserver@sha256:f81172f142454bccb6e198739d40bf3a98a393f09805140c1aa8b49807d0e3b7"
+readonly IMAGE="registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie@sha256:9cb68105642ca4e7b295f0ceab10f069f5b3247dc18fa7c36046e9d81aa469a8"
 readonly PROJECT_DIR="/home/vagrant/build/chat.psstpsst.app"
 readonly NODE_VERSION="24.15.0"
 readonly NODE_ARCHIVE="node-v${NODE_VERSION}-linux-x64.tar.xz"
 readonly NODE_SHA256="472655581fb851559730c48763e0c9d3bc25975c59d518003fc0849d3e4ba0f6"
 readonly TEMPLATE_SHA256="b5796fa7a2de78499e81ec2b2b7aa2ad25f3702d61daaed2ddb7c23757e98b49"
+
+if [[ "${1:-}" == "--check-image" ]]; then
+  docker manifest inspect "$IMAGE" > /dev/null
+  exit
+fi
 
 if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
