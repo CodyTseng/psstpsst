@@ -98,6 +98,12 @@ build paths and uses the reproducible Glide KSP `5.0.9` processor through
 produced the same unsigned APK SHA-256. A new release is still required for
 F-Droid's comparison with a published APK.
 
+The `v0.2.4` release build pins the official amd64 `buildserver-trixie` image at
+digest `sha256:9cb68105642ca4e7b295f0ceab10f069f5b3247dc18fa7c36046e9d81aa469a8`,
+which identifies fdroidserver commit `8f52ae3ce287bc28964db544b970b88dce9c38bf`.
+This replaces the unavailable historical digest above; the registry no longer
+serves that manifest.
+
 ## Before enabling the recipe
 
 1. Publish a release containing both deterministic build fixes. Do not replace

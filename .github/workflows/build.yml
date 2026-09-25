@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+      - name: Verify Android build image
+        run: bash scripts/build-android-reproducible.sh --check-image
       - uses: actions/setup-node@v6
         with:
           node-version: 24.15.0

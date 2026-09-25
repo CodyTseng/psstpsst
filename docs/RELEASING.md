@@ -105,9 +105,10 @@ Android module from source. Tagged and credentialed runs produce an unsigned APK
 inside the container and apply the developer signature on the GitHub runner.
 Manual runs without Android credentials retain the generated debug signature.
 
-The preflight checks credential presence; invalid passwords, certificates, or
-Apple account permissions still fail at signing or notarization. A manual run
-on a tag requires signatures too, but does not create a release.
+The preflight checks that the pinned Android build image is still available and
+checks credential presence. Invalid passwords, certificates, or Apple account
+permissions still fail at signing or notarization. A manual run on a tag
+requires signatures too, but does not create a release.
 
 To check changes to the signing helper, run
 `node --test scripts/release-signing.test.mjs`. With `ANDROID_HOME` pointing to
