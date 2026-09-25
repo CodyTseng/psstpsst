@@ -124,7 +124,7 @@ F-Droid's comparison with a published APK.
    Android project is generated rather than committed.
 
 For the initial fdroiddata merge request, include only the latest verified
-build; do not submit the disabled `v0.2.3` entry. The Android Fastlane folder
+build; do not submit a disabled build entry. The Android Fastlane folder
 already contains English title, descriptions, icon, screenshots, and changelog.
 Its screenshots currently show an iPhone frame; review Android captures before
 submission. The universal APK contains four ABIs and is about 147 MB, so review

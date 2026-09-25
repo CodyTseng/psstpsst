@@ -20,10 +20,11 @@ AllowedAPKSigningKeys:
   - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'
 
 Builds:
-  - versionName: 0.2.3
-    versionCode: 5
-    disable: Published v0.2.3 APK does not reproduce from source
-    commit: 2f4621ec9bff1e02c19ebfda58add32ab9169ab4
+  - versionName: 0.2.4
+    versionCode: 6
+    disable: Pending release commit and reproducibility verification
+    # Replace with the full commit hash of the published v0.2.4 tag.
+    commit: v0.2.4
     output: android/app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 27.1.12297006
     # Node 24.15.0/npm 11.12.1 match the upstream release environment.
@@ -88,5 +89,5 @@ Builds:
 AutoUpdateMode: None
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
 UpdateCheckData: 'app.json|"versionCode":\s*(\d+)|.|"version":\s*"([^"]+)"'
-CurrentVersion: 0.2.3
-CurrentVersionCode: 5
+CurrentVersion: 0.2.4
+CurrentVersionCode: 6
