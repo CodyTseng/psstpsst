@@ -52,12 +52,10 @@ export function resolveCustomEmojiGridLayout(
     // extend into that gutter so its padded artwork still aligns with adjacent
     // page/header content.
     horizontalPadding: Math.max(0, horizontalPadding - cellPadding),
-    isElectron: IS_ELECTRON,
-    touchColumns: 4,
-    desktopMinColumns: 5,
-    desktopMinCellSize: emojiSize.packImage + cellPadding * 2,
-    desktopMaxCellSize: emojiSize.composerPickerImage + cellPadding * 2,
-    desktopPreferredGap: spacing.sm,
+    minimumColumns: IS_ELECTRON ? 5 : 4,
+    minimumCellSize: emojiSize.packImage + cellPadding * 2,
+    maximumCellSize: emojiSize.composerPickerImage + cellPadding * 2,
+    preferredGap: spacing.sm,
     cellPadding,
     imageLabelGap: spacing.xs,
     captionLineHeight: typography.caption.lineHeight,

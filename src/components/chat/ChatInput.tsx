@@ -160,7 +160,7 @@ const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * 5;
 // Extra room the box needs when the reply quote sits above the text field
 // (two caption lines + the quote↔field gap).
 const REPLY_BLOCK_HEIGHT = 48;
-const COMPOSER_PANEL_MIN_HEIGHT = 290;
+const COMPOSER_PANEL_MIN_HEIGHT = 330;
 const COMPOSER_PANEL_MAX_HEIGHT = 350;
 const COMPOSER_PANEL_SCREEN_RATIO = 0.385;
 const COMPOSER_ACTION_SIZE = uiDensity.composerActionSize;

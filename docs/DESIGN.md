@@ -314,6 +314,8 @@ Embedded media previews fit the available message width and keep artwork
 bounded on wide conversation panes.
 Conversation media galleries keep compact square thumbnails and derive their
 column count from the available pane width instead of using a fixed grid.
+Custom-emoji grids keep artwork bounded and derive their column count from the
+available container width on both touch devices and Electron.
 Image framing and full-screen image viewing on Electron provide explicit zoom
 controls, pointer dragging while zoomed, and trackpad two-finger zooming and
 panning; essential actions must not depend on multi-touch gestures.

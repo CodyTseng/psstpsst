@@ -10,12 +10,10 @@ export type CustomEmojiGridLayout = {
 type Input = {
   containerWidth: number;
   horizontalPadding: number;
-  isElectron: boolean;
-  touchColumns: number;
-  desktopMinColumns: number;
-  desktopMinCellSize: number;
-  desktopMaxCellSize: number;
-  desktopPreferredGap: number;
+  minimumColumns: number;
+  minimumCellSize: number;
+  maximumCellSize: number;
+  preferredGap: number;
   cellPadding: number;
   imageLabelGap: number;
   captionLineHeight: number;
@@ -25,39 +23,30 @@ type Input = {
 export function calculateCustomEmojiGridLayout({
   containerWidth,
   horizontalPadding,
-  isElectron,
-  touchColumns,
-  desktopMinColumns,
-  desktopMinCellSize,
-  desktopMaxCellSize,
-  desktopPreferredGap,
+  minimumColumns,
+  minimumCellSize,
+  maximumCellSize,
+  preferredGap,
   cellPadding,
   imageLabelGap,
   captionLineHeight,
   verticalPadding,
 }: Input): CustomEmojiGridLayout {
   const availableWidth = Math.max(0, containerWidth - horizontalPadding * 2);
-  const columns = isElectron
-    ? Math.max(
-        desktopMinColumns,
-        Math.floor(
-          (availableWidth + desktopPreferredGap) /
-            (desktopMaxCellSize + desktopPreferredGap),
-        ),
-      )
-    : touchColumns;
-  const availableCellSize = Math.floor(
-    (availableWidth - desktopPreferredGap * (columns - 1)) / columns,
+  const columns = Math.max(
+    minimumColumns,
+    Math.floor((availableWidth + preferredGap) / (maximumCellSize + preferredGap)),
   );
-  const cellSize = isElectron
-    ? Math.min(
-        desktopMaxCellSize,
-        Math.max(
-          Math.min(desktopMinCellSize, availableWidth / columns),
-          availableCellSize,
-        ),
-      )
-    : desktopMaxCellSize;
+  const availableCellSize = Math.floor(
+    (availableWidth - preferredGap * (columns - 1)) / columns,
+  );
+  const cellSize = Math.min(
+    maximumCellSize,
+    Math.max(
+      Math.min(minimumCellSize, availableWidth / columns),
+      availableCellSize,
+    ),
+  );
   const rowHeight =
     cellSize +
     imageLabelGap +
