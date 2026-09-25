@@ -289,7 +289,7 @@ export const emojiSize = {
   /** Custom-emoji artwork in the composer's floating shortcode suggestion strip. */
   composerSuggestionImage: IS_ELECTRON ? 48 : 64,
   /** Custom-emoji image in touch picker and pack grids. */
-  composerPickerImage: 64,
+  composerPickerImage: 68,
   /** Custom-emoji thumbnail in a pack row, matching a conversation avatar. */
   listImage: 44,
   /** Bubble-free custom-emoji message image. */

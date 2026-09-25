@@ -14,7 +14,6 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type StyleProp,
-  useWindowDimensions,
   View,
   type ViewStyle,
 } from 'react-native';
@@ -37,9 +36,7 @@ import { CustomEmojiImage } from './CustomEmojiImage';
 
 export type { CustomEmojiGridLayout } from './custom-emoji-grid-layout';
 
-// Registered optical exception (DESIGN §8): halfway between the 4px and
-// 8px spacing tokens. It leaves a visible hover frame without crowding artwork.
-export const CUSTOM_EMOJI_CELL_PADDING = spacing.md / 2;
+export const CUSTOM_EMOJI_CELL_PADDING = spacing.xs;
 
 export function resolveCustomEmojiGridLayout(
   containerWidth: number,
@@ -55,7 +52,7 @@ export function resolveCustomEmojiGridLayout(
     minimumColumns: IS_ELECTRON ? 5 : 4,
     minimumCellSize: emojiSize.packImage + cellPadding * 2,
     maximumCellSize: emojiSize.composerPickerImage + cellPadding * 2,
-    preferredGap: spacing.sm,
+    preferredGap: spacing.xs,
     cellPadding,
     imageLabelGap: spacing.xs,
     captionLineHeight: typography.caption.lineHeight,
@@ -144,22 +141,22 @@ export const CustomEmojiGrid = memo(function CustomEmojiGrid({
   embedded = false,
   onLayoutResolved,
 }: Props) {
-  const { width: windowWidth } = useWindowDimensions();
   const direction = useLanguageDirection();
-  const [containerWidth, setContainerWidth] = useState(windowWidth);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const measured = containerWidth > 0;
   const layout = useMemo(
     () => resolveCustomEmojiGridLayout(containerWidth, horizontalPadding),
     [containerWidth, horizontalPadding],
   );
   const hasLeadingAction = leadingAction !== undefined;
   const rows = useMemo(
-    () => chunkRows(emojis, layout.columns, hasLeadingAction),
-    [emojis, layout.columns, hasLeadingAction],
+    () => (measured ? chunkRows(emojis, layout.columns, hasLeadingAction) : []),
+    [emojis, layout.columns, hasLeadingAction, measured],
   );
 
   useEffect(() => {
-    onLayoutResolved?.(layout);
-  }, [layout, onLayoutResolved]);
+    if (measured) onLayoutResolved?.(layout);
+  }, [layout, measured, onLayoutResolved]);
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     const nextWidth = event.nativeEvent.layout.width;
@@ -210,7 +207,7 @@ export const CustomEmojiGrid = memo(function CustomEmojiGrid({
       keyExtractor={(row, index) => `${row.emojiStartIndex}:${index}`}
       renderItem={renderRow}
       ListHeaderComponent={listHeader}
-      ListEmptyComponent={emptyComponent}
+      ListEmptyComponent={measured ? emptyComponent : null}
       onLayout={handleLayout}
       getItemLayout={
         listHeader
@@ -282,29 +279,38 @@ const CustomEmojiGridRow = memo(function CustomEmojiGridRow({
                 gap: spacing.xs,
               }}
             >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={leadingAction.label}
-                onPress={leadingAction.onPress}
-                style={({ pressed }) => ({
-                  width: artworkSize,
-                  height: artworkSize,
+              <View
+                style={{
+                  width: cellSize,
+                  height: cellSize,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderWidth: 1,
-                  borderStyle: leadingAction.icon === 'done' ? 'solid' : 'dashed',
-                  borderColor: leadingAction.icon === 'done' ? c.accent : c.border,
-                  borderRadius: radius.sm,
-                  borderCurve: 'continuous',
-                  backgroundColor: pressed ? c.interactionOverlay : 'transparent',
-                })}
+                }}
               >
-                {leadingAction.icon === 'done' ? (
-                  <Check strokeWidth={iconStrokeWidth.default} size={26} color={c.accent} />
-                ) : (
-                  <Plus strokeWidth={iconStrokeWidth.default} size={26} color={c.textMuted} />
-                )}
-              </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={leadingAction.label}
+                  onPress={leadingAction.onPress}
+                  style={({ pressed }) => ({
+                    width: artworkSize,
+                    height: artworkSize,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderStyle: leadingAction.icon === 'done' ? 'solid' : 'dashed',
+                    borderColor: leadingAction.icon === 'done' ? c.accent : c.border,
+                    borderRadius: radius.sm,
+                    borderCurve: 'continuous',
+                    backgroundColor: pressed ? c.interactionOverlay : 'transparent',
+                  })}
+                >
+                  {leadingAction.icon === 'done' ? (
+                    <Check strokeWidth={iconStrokeWidth.default} size={26} color={c.accent} />
+                  ) : (
+                    <Plus strokeWidth={iconStrokeWidth.default} size={26} color={c.textMuted} />
+                  )}
+                </Pressable>
+              </View>
               <AppText
                 variant="caption"
                 tone={leadingAction.icon === 'done' ? 'accent' : 'muted'}
@@ -333,7 +339,11 @@ const CustomEmojiGridRow = memo(function CustomEmojiGridRow({
             variant="caption"
             tone="muted"
             numberOfLines={1}
-            style={{ maxWidth: cellSize, pointerEvents: 'none' }}
+            style={{
+              maxWidth: cellSize,
+              paddingHorizontal: CUSTOM_EMOJI_CELL_PADDING,
+              pointerEvents: 'none',
+            }}
           >
             {emoji.shortcode}
           </AppText>
