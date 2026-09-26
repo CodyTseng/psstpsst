@@ -76,6 +76,7 @@ function messageRow(
     tags: [],
     rumor: {} as MessageRow['rumor'],
     deliveryStatus: null,
+    deliveryError: null,
     sourceRelays: null,
     ...overrides,
   };

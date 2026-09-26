@@ -805,7 +805,12 @@ function areBubbleBodyPropsEqual(a: Props, b: Props): boolean {
 
 function OwnBubbleBody(props: Props) {
   const liveDelivery = useDelivery(props.rumorId ?? '');
-  return <BubbleBodyBase {...props} liveDelivery={liveDelivery} />;
+  return (
+    <BubbleBodyBase
+      {...props}
+      liveDelivery={props.proximity ? liveDelivery : null}
+    />
+  );
 }
 
 function BubbleBodyWithScopedDelivery(props: Props) {

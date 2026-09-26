@@ -143,7 +143,6 @@ import {
   nextRumorTimestamp,
   rumorTimestampFromOrderAt,
 } from '@/services/dm/rumor-clock';
-import { loadEncryptionKeypair } from '@/services/dm/encryption-key.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useComposerFileHandoffStore } from '@/stores/composer-file-handoff.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
@@ -1497,6 +1496,7 @@ function ChatPageContent({
       tags,
       rumor: optimisticRumor,
       deliveryStatus: null,
+      deliveryError: null,
       sourceRelays: null, // our own outgoing message — no inbound source
     };
     setOptimistic((prev) => [...prev, optimisticRow]);
@@ -2011,12 +2011,9 @@ function ChatPageContent({
     // the inbox gate (storeRumor sets hasReplied for the outgoing kind-7), so
     // backing out should land on the Chats home, not the Requests list.
     onGraduate();
-    const encKp = isProximity ? undefined : await loadEncryptionKeypair(accountPubkey);
-    if (!isProximity && !encKp) return;
     await conversationSendService.sendReaction({
       accountPubkey,
       target: { deliveryKind, conversationKey },
-      encryptionKeypair: encKp ?? undefined,
       targetMessageId: targetMessage.id,
       emoji,
     });
@@ -2528,6 +2525,7 @@ function ChatPageContent({
             />
           ) : null}
           <MessageDetailSheet
+            accountPubkey={accountPubkey}
             rumorId={detailRumorId}
             rumor={detailMessage?.rumor ?? null}
             isSelf={

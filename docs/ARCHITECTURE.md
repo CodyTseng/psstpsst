@@ -168,11 +168,18 @@ resume pending work independently of messaging readiness. See
 ### Sending
 
 1. The UI inserts the outgoing message optimistically.
-2. CPU-bound encryption/signing and synchronous native work are deferred to a
-   later macrotask so the optimistic frame can paint.
-3. The service creates the immutable rumor and any delivery-specific envelope
-   required by the selected transport.
-4. The rumor and durable outbox work are stored before network delivery.
+2. The service creates the immutable rumor and stores it with a durable,
+   account-scoped FIFO outbox job in one transaction. A job row means unfinished
+   work; completion deletes it.
+3. CPU-bound encryption/signing and synchronous native work are deferred to a
+   later macrotask so the optimistic frame can paint. One signed gift wrap per
+   recipient/job is persisted and reused across that job's relay targets and
+   crash recovery.
+4. Active job targets are normalized recipient/relay rows. Settling a target
+   updates its compact long-lived recipient copy and removes the target in the
+   same transaction. Explicit failures wait for a user retry; interrupted
+   pending jobs resume for the active account after startup, foreground, or
+   network recovery.
 5. Delivery status is derived from acknowledgements, not merely from a socket
    write succeeding.
 
@@ -182,8 +189,13 @@ acknowledgement required. Failed relays remain individually retryable even after
 the message is considered sent, and retries do not target relays that already
 acknowledged it.
 
-Retries reuse settled payloads where the protocol permits. A resend that must
-refresh timestamps creates and persists a replacement intentionally.
+The message-level verdict is derived from all durable recipient relay targets,
+never from one job's subset. Successful relay results are terminal. A manual
+retry creates a fresh gift wrap; recovery of the same interrupted job reuses its
+persisted wrap. Self/sync copies are retained but excluded from ordinary
+delivery counts, except for note-to-self messages.
+See [relay message delivery](protocols/relay-message-delivery.md) for the queue
+and state-machine details.
 
 ### Receiving
 
@@ -302,9 +314,10 @@ cause; cursor progress remains unchanged so the next session can retry safely.
   their loaded pages across in-screen mode switches and release them only with
   the conversation screen session. Anchored windows own independent older and
   newer cursors; neither direction grows a query from the anchor.
-- Message rows carry only a coarse persisted delivery status. Full per-copy and
-  per-relay delivery detail is queried by message ID only while its detail sheet
-  is open; schema migration backfills the coarse status for legacy rows.
+- Message rows carry only a coarse persisted delivery status. Compact,
+  account-scoped recipient copies hold the bounded per-relay detail and are
+  queried only while the message detail sheet is open. The UI does not infer
+  message state from outbox rows or session memory.
   Reply targets outside a loaded window are batch-read by indexed ID with their
   source history page and cached for the screen session. Scrolling must not
   drive reply-target queries or React state updates.

@@ -4,7 +4,6 @@ import type { ConversationDeliveryKind } from '@/lib/conversation/capabilities';
 import { throwIfAborted } from '@/lib/async/abort';
 
 import { dmService } from '../dm/dm.service';
-import type { EncryptionKeypair } from '../dm/encryption-key.service';
 import type { RumorTimestamp } from '../dm/rumor-clock';
 import { markDownloaded } from '../files/attachment-index.service';
 import { stageNearbyAttachment, uploadAttachment } from '../files/file-attachment.service';
@@ -37,7 +36,6 @@ type SendReactionOptions = {
   target: ConversationSendTarget;
   targetMessageId: string;
   emoji: string | CustomEmoji;
-  encryptionKeypair?: EncryptionKeypair;
 };
 
 type ForwardMessageOptions = {
@@ -119,10 +117,8 @@ class ConversationSendService {
       });
       return { rumorId: rumor.id! };
     }
-    if (!opts.encryptionKeypair) throw new Error('Encryption keypair not found');
     return dmService.sendReaction({
       accountPubkey: opts.accountPubkey,
-      encryptionKeypair: opts.encryptionKeypair,
       recipientPubkeys: [opts.target.conversationKey],
       targetMessageId: opts.targetMessageId,
       emoji: opts.emoji,

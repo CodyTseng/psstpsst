@@ -11,7 +11,7 @@ jest.mock('@/db/client', () => {
     account_pubkey TEXT, id TEXT, conversation_key TEXT, sender_pubkey TEXT,
     kind INTEGER, content TEXT, created_at INTEGER, order_at INTEGER,
     reply_to_id TEXT, subject TEXT, tags TEXT, rumor TEXT,
-    delivery_status TEXT, source_relays TEXT
+    delivery_status TEXT, delivery_error TEXT, source_relays TEXT
   )`);
   const queries: string[] = [];
   return {
@@ -61,7 +61,7 @@ describe('chat cursor pagination', () => {
   }
   beforeEach(async () => {
     sqlite.exec('DELETE FROM messages');
-    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL)');
+    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL)');
     for (let i = 1; i <= 420; i++) {
       insert.run('account', String(i), 'conversation', 'peer', 14, 'hello', 1000, i, '[]', '{}');
     }
@@ -179,7 +179,7 @@ describe('chat cursor pagination', () => {
   it('retains the reading window across a burst larger than the live tail', async () => {
     await act(async () => result.loadOlder());
     const retainedIds = new Set(result!.messages.map((message) => message.id));
-    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL)');
+    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL)');
     for (let i = 421; i <= 500; i++) {
       insert.run('account', String(i), 'conversation', 'peer', 14, 'new', 1001, i, '[]', '{}');
     }

@@ -10,6 +10,7 @@ import {
   conversations,
   mediaServerLists,
   messageDrafts,
+  messageDeliveryCopies,
   messageMedia,
   messages,
   outbox,
@@ -18,6 +19,7 @@ import {
   processedGiftWraps,
   processedSyncRequests,
   proximityPeers,
+  relayOutboxJobs,
   relayLists,
   syncCursors,
 } from '@/db/schema';
@@ -220,8 +222,7 @@ export async function setAccountEncryptionPubkey(
  * attachments/participants, conversations, drafts, contacts, blocks, relay and
  * media-server lists, sync cursors, and dedup logs. All data is keyed by
  * `account_pubkey` (see migration 0017), so a removed account leaves nothing
- * behind for a later re-add to surface. Global tables (profiles) and
- * message-keyed delivery rows are intentionally left alone.
+ * behind for a later re-add to surface. Global profile rows remain shared.
  */
 async function deleteAccountData(pubkey: string): Promise<void> {
   const pendingFiles = await db
@@ -231,6 +232,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
   await Promise.all(pendingFiles.map((row) => deletePendingAttachmentFile(row.localName)));
   const scoped = [
     messages,
+    messageDeliveryCopies,
     messageMedia,
     conversations,
     messageDrafts,
@@ -243,6 +245,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
     processedSyncRequests,
     proximityPeers,
     outbox,
+    relayOutboxJobs,
     configurationOutbox,
     pendingAttachments,
   ];

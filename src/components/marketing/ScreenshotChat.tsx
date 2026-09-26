@@ -70,6 +70,7 @@ function buildMessages(
       tags: [],
       rumor,
       deliveryStatus: message.own ? 'sent' : null,
+      deliveryError: null,
       sourceRelays: message.own ? null : [],
     };
   });

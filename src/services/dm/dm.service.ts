@@ -5,15 +5,10 @@ import { db } from '@/db/client';
 import {
   contacts,
   conversations,
-  messageDeliveries,
   messages,
-  outbox,
   peerDmInfo,
+  relayOutboxJobs,
 } from '@/db/schema';
-import type {
-  DeliveryCopyRecord,
-  DeliveryRelayRecord,
-} from '@/db/schema/message-deliveries';
 import type { Rumor } from '@/db/schema/types';
 import { platform } from '@/platform';
 import { deriveConversationKey } from '@/lib/nostr/conversation-key';
@@ -34,7 +29,6 @@ import { getPTags, getReplyToId, getSubject } from '@/lib/nostr/tags';
 
 import {
   buildRumor,
-  createGiftWrappedMessage,
   KIND_CHAT,
   KIND_FILE,
   KIND_GIFT_WRAP,
@@ -60,13 +54,7 @@ import {
 } from '../relay/relay-list.service';
 import { RelayQueryError } from '../relay/relay-query-error';
 import { relayPool } from '../relay/relay-pool';
-import { capDeliveryRelays } from '../relay/relay-router';
 import { selfEventStream } from '../self-events/self-event-stream.service';
-import {
-  deliveryStatusStore,
-  relayDeliveryVerdict,
-  surfacedCopies,
-} from './delivery-status';
 import { syncStatusStore } from './sync-status';
 import type { Signer } from '../signer/signer.interface';
 import { isBlocked, loadBlockedIntoCache } from './block.service';
@@ -93,17 +81,13 @@ import {
 import { isActiveConversationVisible } from './active-conversation';
 import { receiveSessionStore } from './receive-session';
 import { pollRecentGiftWraps } from './notification-poll';
-import { waitForMessagingSendReadiness } from './messaging-send-readiness';
 import {
   isNewerAnnouncement,
   MessagingKeySyncRequiredError,
   resolveMessagingMetadata,
   type MessagingMetadata,
 } from './messaging-metadata';
-
-const OUTBOX_SENT_CLEANUP_MS = 3000;
-/** Per-relay publish timeout for outgoing messages (jumble uses the same). */
-const PUBLISH_TIMEOUT_MS = 10_000;
+import { relayMessageOutbox } from './relay-message-outbox';
 
 /** The live tail opens at `now - this`, so a new gift wrap whose `created_at` was
  * randomized up to 2 days into the past (NIP-59) is still caught live. The
@@ -195,10 +179,6 @@ async function countUnreadCapped(
 
 export type SendMessageOpts = {
   accountPubkey: string;
-  /** Unused by the text path — the service uses its own initialized
-   * `encryptionKeypair`. Optional so callers needn't read it from SecureStore
-   * on every send (that read added latency before the optimistic bubble). */
-  encryptionKeypair?: EncryptionKeypair;
   recipientPubkeys: string[];
   content: string;
   extraTags?: string[][];
@@ -209,7 +189,6 @@ export type SendMessageOpts = {
 
 export type SendReactionOpts = {
   accountPubkey: string;
-  encryptionKeypair: EncryptionKeypair;
   recipientPubkeys: string[];
   targetMessageId: string;
   emoji: string | CustomEmoji;
@@ -297,18 +276,6 @@ class DmService {
   private liveStatus: 'connecting' | 'degraded' | 'connected' | null = null;
   private notificationPolls = new Set<AbortController>();
   private latestKeyAnnouncement: Event | null = null;
-
-  /** Startup exposes local conversations before network messaging is ready.
-   * Keep an optimistic send pending across that short window, then re-check the
-   * live session after the account-level preparation signal resolves. */
-  private waitUntilSendReady(accountPubkey: string): Promise<void> | null {
-    if (this.accountPubkey === accountPubkey && this.encryptionKeypair && this.signSeal) return null;
-    return waitForMessagingSendReadiness(accountPubkey).then(() => {
-      if (this.accountPubkey !== accountPubkey || !this.encryptionKeypair || !this.signSeal) {
-        throw new Error('DM service not initialized for this account');
-      }
-    });
-  }
 
   async init(opts: {
     accountPubkey: string;
@@ -456,7 +423,10 @@ class DmService {
       this.removeHistoryAppStateListener = platform.appState.addChangeListener((state) => {
         const enteredForeground = state === 'active' && previousState !== 'active';
         previousState = state;
-        if (enteredForeground && this.syncEpoch === epoch) this.startHistoryBackfill();
+        if (enteredForeground && this.syncEpoch === epoch) {
+          this.startHistoryBackfill();
+          relayMessageOutbox.wake(opts.accountPubkey);
+        }
       });
       this.removeUserReturnedListener = platform.notifications.addUserReturnedListener(() => {
         if (this.syncEpoch !== epoch) return;
@@ -468,6 +438,12 @@ class DmService {
         }
       });
       if (!opts.skipInitialHistory) this.startHistoryBackfill();
+      relayMessageOutbox.activate({
+        accountPubkey: opts.accountPubkey,
+        encryptionKeypair: keys[0]!,
+        dmRelays: this.dmRelays,
+        signSeal: signWithIdentity,
+      });
       receiveSessionStore.setState({ status: 'ready', accountPubkey: opts.accountPubkey }, true);
     } catch (error) {
       if (this.syncEpoch === epoch) this.destroy();
@@ -480,6 +456,7 @@ class DmService {
   }
 
   destroy(): void {
+    relayMessageOutbox.deactivate();
     if (receiveSessionStore.getState().status !== 'key-required') {
       receiveSessionStore.setState({ status: 'stopped', accountPubkey: null }, true);
     }
@@ -526,9 +503,14 @@ class DmService {
    * ordinary account switches remain synchronous and rely on epoch guards. */
   async destroyAndWaitForWrites(): Promise<void> {
     this.destroy();
-    while (this.inFlightGiftWrapTasks.size > 0) {
-      await Promise.allSettled(Array.from(this.inFlightGiftWrapTasks));
-    }
+    await Promise.all([
+      relayMessageOutbox.waitForIdle(),
+      (async () => {
+        while (this.inFlightGiftWrapTasks.size > 0) {
+          await Promise.allSettled(Array.from(this.inFlightGiftWrapTasks));
+        }
+      })(),
+    ]);
   }
 
   /** Register a listener for incoming Key Transfer requests (kind 4454 from
@@ -861,128 +843,56 @@ class DmService {
     );
   }
 
-  /**
-   * Send a message **optimistically**:
-   *   1. Build the rumor (deterministic id, no relay calls).
-   *   2. Write the rumor + outbox row locally → UI shows the bubble immediately.
-   *   3. Resolve recipient encryption keys, wrap, publish — all in the background.
-   *      Errors land in `outbox.status = 'failed'`.
-   *
-   * The returned promise resolves as soon as step 2 finishes (typically <50ms).
-   */
-  /**
-   * Send a kind 7 reaction to a message. Same gift-wrap pipeline as sendMessage,
-   * but with kind 7 and an `e` tag pointing at the target rumor id.
-   */
+  /** Queue a kind-7 reaction through the durable relay outbox. */
   async sendReaction(opts: SendReactionOpts): Promise<{ rumorId: string }> {
     const timestamp = nextRumorTimestamp();
     const customEmoji = typeof opts.emoji === 'string' ? null : opts.emoji;
     const content =
       typeof opts.emoji === 'string' ? opts.emoji : `:${opts.emoji.shortcode}:`;
-    const tags = withMessageOrderTag([
-      ...opts.recipientPubkeys.map((r): string[] => ['p', r]),
-      ['e', opts.targetMessageId],
-      ...(customEmoji
-        ? [buildEmojiTag({ shortcode: customEmoji.shortcode, url: customEmoji.url })]
-        : []),
-    ], timestamp.millisecond);
-    const rumorTemplate: EventTemplate = {
-      kind: KIND_REACTION,
-      content,
-      tags,
-      created_at: timestamp.createdAt,
-    };
-    const rumor = buildRumor(rumorTemplate, opts.accountPubkey);
+    const tags = withMessageOrderTag(
+      [
+        ...opts.recipientPubkeys.map((recipient): string[] => ['p', recipient]),
+        ['e', opts.targetMessageId],
+        ...(customEmoji
+          ? [buildEmojiTag({ shortcode: customEmoji.shortcode, url: customEmoji.url })]
+          : []),
+      ],
+      timestamp.millisecond,
+    );
+    const rumor = buildRumor(
+      { kind: KIND_REACTION, content, tags, created_at: timestamp.createdAt },
+      opts.accountPubkey,
+    );
 
-    // Seed live delivery before the durable row can reach the message query.
-    // Otherwise the optimistic bubble hands off to a DB-backed bubble with no
-    // delivery record yet, whose legacy fallback looks like a sent checkmark.
-    deliveryStatusStore.getState().begin(rumor.id!);
-    await this.storeRumor(rumor, opts.accountPubkey);
-    const now = Math.floor(Date.now() / 1000);
-    await db
-      .insert(outbox)
-      .values({
-        messageId: rumor.id!,
-        accountPubkey: opts.accountPubkey,
-        status: 'sending',
-        attempts: 1,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
-
-    void this.publishRumorInBackground(rumor, rumorTemplate, {
-      accountPubkey: opts.accountPubkey,
-      encryptionKeypair: opts.encryptionKeypair,
-      recipientPubkeys: opts.recipientPubkeys,
-      content,
-      replyToId: undefined,
+    await this.storeRumor(rumor, opts.accountPubkey, undefined, undefined, {
+      enqueueRelay: true,
     });
-
+    relayMessageOutbox.wake(opts.accountPubkey);
     return { rumorId: rumor.id! };
   }
 
+  /** Store the optimistic message and its FIFO job in one transaction. */
   async sendMessage(opts: SendMessageOpts): Promise<{ rumorId: string }> {
-    // 1. Build rumor (kind 14 chat)
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
     const content = normalizeBareNostrUris(opts.content);
-    let tags: string[][] = opts.recipientPubkeys.map((r) => ['p', r]);
+    let tags: string[][] = opts.recipientPubkeys.map((recipient) => ['p', recipient]);
     if (opts.extraTags) tags.push(...opts.extraTags);
-    if (opts.replyToId) tags.push(['e', opts.replyToId]);    if (opts.subject) tags.push(['subject', opts.subject]);
+    if (opts.replyToId) tags.push(['e', opts.replyToId]);
+    if (opts.subject) tags.push(['subject', opts.subject]);
     tags = withMessageOrderTag(tags, timestamp.millisecond);
+    const rumor = buildRumor(
+      { kind: KIND_CHAT, content, tags, created_at: timestamp.createdAt },
+      opts.accountPubkey,
+    );
 
-    // The UI captures this timestamp at tap time so the optimistic bubble and
-    // stored rumor share the same authenticated ordering value.
-    const rumorTemplate: EventTemplate = {
-      kind: KIND_CHAT,
-      content,
-      tags,
-      created_at: timestamp.createdAt,
-    };
-    const rumor = buildRumor(rumorTemplate, opts.accountPubkey);
-
-    // Seed live delivery before the durable row can reach the message query.
-    // This keeps the optimistic-to-persisted handoff in the signing phase.
-    deliveryStatusStore.getState().begin(rumor.id!);
-    // 2. Optimistic write — bubble appears now
-    await this.storeRumor(rumor, opts.accountPubkey);
-    const now = Math.floor(Date.now() / 1000);
-    await db.transaction(async (tx) => {
-      await tx
-        .insert(outbox)
-        .values({
-          messageId: rumor.id!,
-          accountPubkey: opts.accountPubkey,
-          status: 'sending',
-          attempts: 1,
-          updatedAt: now,
-        })
-        .onConflictDoNothing();
-      await tx
-        .update(messages)
-        .set({ deliveryStatus: 'queued' })
-        .where(
-          and(
-            eq(messages.accountPubkey, opts.accountPubkey),
-            eq(messages.id, rumor.id!),
-          ),
-        );
+    await this.storeRumor(rumor, opts.accountPubkey, undefined, undefined, {
+      enqueueRelay: true,
     });
-
-    // 3. Background publish (do NOT await — let the UI proceed)
-    void this.publishRumorInBackground(rumor, rumorTemplate, { ...opts, content });
-
+    relayMessageOutbox.wake(opts.accountPubkey);
     return { rumorId: rumor.id! };
   }
 
-  /**
-   * Forward a message to one conversation: re-send the original rumor's `kind` +
-   * `content` + content tags (`forwardableTags` — file metadata etc.) under new
-   * recipient `p` tags, through the same store + gift-wrap + publish path. Works
-   * for text (kind 14) and attachments (kind 15) alike — the file's decryption
-   * key/imeta ride in the tags, so the recipient decrypts the same blob; no
-   * re-upload. Caller forwards to many chats by calling once per conversation.
-   */
+  /** Forward using the same durable queue as a newly-authored message. */
   async forwardMessage(opts: {
     accountPubkey: string;
     recipientPubkeys: string[];
@@ -992,503 +902,43 @@ class DmService {
     timestamp?: RumorTimestamp;
   }): Promise<{ rumorId: string }> {
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
-    const tags = withMessageOrderTag([
-      ...opts.recipientPubkeys.map((r) => ['p', r]),
-      ...opts.contentTags,
-    ], timestamp.millisecond);
-    const rumorTemplate: EventTemplate = {
-      kind: opts.kind,
-      content: opts.content,
-      tags,
-      created_at: timestamp.createdAt,
-    };
-    const rumor = buildRumor(rumorTemplate, opts.accountPubkey);
+    const tags = withMessageOrderTag(
+      [
+        ...opts.recipientPubkeys.map((recipient) => ['p', recipient]),
+        ...opts.contentTags,
+      ],
+      timestamp.millisecond,
+    );
+    const rumor = buildRumor(
+      { kind: opts.kind, content: opts.content, tags, created_at: timestamp.createdAt },
+      opts.accountPubkey,
+    );
 
-    // Seed live delivery before the durable row can reach the message query.
-    deliveryStatusStore.getState().begin(rumor.id!);
-    await this.storeRumor(rumor, opts.accountPubkey);
-    const now = Math.floor(Date.now() / 1000);
-    await db.transaction(async (tx) => {
-      await tx
-        .insert(outbox)
-        .values({
-          messageId: rumor.id!,
-          accountPubkey: opts.accountPubkey,
-          status: 'sending',
-          attempts: 1,
-          updatedAt: now,
-        })
-        .onConflictDoNothing();
-      await tx
-        .update(messages)
-        .set({ deliveryStatus: 'queued' })
-        .where(
-          and(
-            eq(messages.accountPubkey, opts.accountPubkey),
-            eq(messages.id, rumor.id!),
-          ),
-        );
+    await this.storeRumor(rumor, opts.accountPubkey, undefined, undefined, {
+      enqueueRelay: true,
     });
-
-    void this.publishRumorInBackground(rumor, rumorTemplate, {
-      accountPubkey: opts.accountPubkey,
-      recipientPubkeys: opts.recipientPubkeys,
-      content: opts.content,
-    });
-
+    relayMessageOutbox.wake(opts.accountPubkey);
     return { rumorId: rumor.id! };
   }
 
-  /**
-   * Resend a message to a chosen subset of relays (typically the ones that
-   * failed). Re-signs a **fresh seal + gift wrap** for each recipient (new
-   * ephemeral key) and publishes only to `relayUrls`, then re-evaluates and
-   * persists that message's delivery status.
-   */
+  /** Queue a fresh gift wrap for the selected failed recipient relay targets. */
   async resendToRelays(opts: {
     rumorId: string;
     relayUrls: string[];
   }): Promise<void> {
-    if (!this.accountPubkey || !this.encryptionKeypair) {
-      throw new Error('DM service not initialized');
-    }
-    if (opts.relayUrls.length === 0) return;
-    const acct = this.accountPubkey;
-    const encKp = this.encryptionKeypair;
-
-    // Flip the chosen relays to pending immediately for instant feedback. A
-    // previously successful message keeps its sent verdict while those failed
-    // mirrors retry. Use the live entry when available; otherwise seed it from
-    // the persisted row below.
-    const delivery = deliveryStatusStore.getState();
-    const live = delivery.byId[opts.rumorId];
-    if (live) delivery.beginResend(opts.rumorId, live.copies, opts.relayUrls);
-
-    const [msgRow] = await db
-      .select()
-      .from(messages)
-      .where(and(eq(messages.accountPubkey, acct), eq(messages.id, opts.rumorId)))
-      .limit(1);
-    if (!msgRow?.rumor) return;
-    const rumor = msgRow.rumor as Rumor;
-
-    if (!live) {
-      const [delRow] = await db
-        .select()
-        .from(messageDeliveries)
-        .where(eq(messageDeliveries.messageId, opts.rumorId))
-        .limit(1);
-      delivery.beginResend(
-        opts.rumorId,
-        delRow?.copies ?? [],
-        opts.relayUrls,
-        delRow?.status,
-      );
-    }
-
-    const rumorTemplate: EventTemplate = {
-      kind: rumor.kind,
-      content: rumor.content,
-      tags: rumor.tags,
-      created_at: rumor.created_at,
-    };
-    const recipients = getPTags(rumor.tags).filter((p) => p !== acct);
-
-    // Lazy identity signer — answers NIP-42 auth AND signs the seals (kind 13).
-    let signerPromise: Promise<Signer> | null = null;
-    const signWithIdentity: SignSeal = async (template) => {
-      if (!signerPromise) signerPromise = buildSigner(acct);
-      return (await signerPromise).signEvent(template);
-    };
-
-    // Re-wrap (fresh seal + gift wrap) per recipient — same rumor id, new outer.
-    // Resend only targets the recipient copies; the self copy isn't re-sent.
-    const reWraps: { recipient: string; event: Event }[] = [];
-    for (const r of recipients) {
-      const encKey = await encryptionKeyWatcher.resolve(r);
-      if (!encKey) continue;
-      const { giftWrap } = await createGiftWrappedMessage({
-        rumorTemplate,
-        senderIdentityPubkey: acct,
-        senderEncPrivkey: encKp.privkey,
-        senderEncPubkey: encKp.pubkey,
-        recipientIdentityPubkey: r,
-        recipientEncPubkey: encKey,
-        signSeal: signWithIdentity,
-      });
-      reWraps.push({ recipient: r, event: giftWrap });
-    }
-
-    if (reWraps.length === 0) {
-      for (const r of recipients) {
-        for (const url of opts.relayUrls) {
-          delivery.markRelay(opts.rumorId, r, false, url, 'failed', 'No recipient key');
-        }
-      }
-    } else {
-      await Promise.all(
-        reWraps.map(({ recipient, event }) =>
-          relayPool.publishEvent({
-            relays: opts.relayUrls,
-            event,
-            signAuth: signWithIdentity,
-            timeoutMs: PUBLISH_TIMEOUT_MS,
-            onRelay: (url, outcome) =>
-              delivery.markRelay(
-                opts.rumorId,
-                recipient,
-                false,
-                url,
-                outcome.ok ? 'ok' : 'failed',
-                outcome.ok ? undefined : outcome.reason,
-              ),
-          }),
-        ),
-      );
-    }
-
-    // Re-evaluate the verdict over the recipient copies and persist all copies.
-    const updated = deliveryStatusStore.getState().byId[opts.rumorId];
-    const copyRecords: DeliveryCopyRecord[] = (updated?.copies ?? []).map((cp) => ({
-      recipient: cp.recipient,
-      self: cp.self,
-      relays: cp.relays.map(
-        (r): DeliveryRelayRecord => ({
-          url: r.url,
-          status: r.status === 'ok' ? 'ok' : 'failed',
-          error: r.status === 'ok' ? undefined : r.error,
-        }),
-      ),
-    }));
-    const recipientRelays = surfacedCopies(copyRecords).flatMap((c) => c.relays);
-    const okCount = recipientRelays.filter((r) => r.status === 'ok').length;
-    delivery.finish(
+    if (!this.accountPubkey) throw new Error('DM service not initialized');
+    await relayMessageOutbox.enqueueRetryTargets(
+      this.accountPubkey,
       opts.rumorId,
-      relayDeliveryVerdict(okCount, recipientRelays.length),
+      opts.relayUrls,
     );
-    await this.persistDelivery(acct, opts.rumorId, msgRow.conversationKey, copyRecords);
   }
 
-  /** Retry an attempt that failed before it had relay copies to target. The
-   * original stored rumor keeps its id and timestamp; only its wrapping and
-   * delivery attempt are restarted. */
+  /** Rebuild a delivery that failed before any relay targets were available. */
   async retryMessage(opts: { accountPubkey: string; rumorId: string }): Promise<void> {
-    const [msgRow] = await db
-      .select()
-      .from(messages)
-      .where(
-        and(
-          eq(messages.accountPubkey, opts.accountPubkey),
-          eq(messages.id, opts.rumorId),
-        ),
-      )
-      .limit(1);
-    if (!msgRow?.rumor) throw new Error('Message not found');
-
-    const rumor = msgRow.rumor as Rumor;
-    deliveryStatusStore.getState().begin(rumor.id!);
-    await db.transaction(async (tx) => {
-      await tx
-        .update(outbox)
-        .set({
-          status: 'sending',
-          attempts: sql`${outbox.attempts} + 1`,
-          lastError: null,
-          updatedAt: Math.floor(Date.now() / 1000),
-        })
-        .where(eq(outbox.messageId, rumor.id!));
-      await tx
-        .update(messages)
-        .set({ deliveryStatus: 'queued' })
-        .where(
-          and(
-            eq(messages.accountPubkey, opts.accountPubkey),
-            eq(messages.id, rumor.id!),
-          ),
-        );
-    });
-
-    const rumorTemplate: EventTemplate = {
-      kind: rumor.kind,
-      content: rumor.content,
-      tags: rumor.tags,
-      created_at: rumor.created_at,
-    };
-    void this.publishRumorInBackground(rumor, rumorTemplate, {
-      accountPubkey: opts.accountPubkey,
-      recipientPubkeys: getPTags(rumor.tags),
-      content: rumor.content,
-    });
+    await relayMessageOutbox.enqueueRetryAll(opts.accountPubkey, opts.rumorId);
   }
 
-  private async publishRumorInBackground(
-    rumor: Rumor,
-    rumorTemplate: EventTemplate,
-    opts: SendMessageOpts,
-  ): Promise<void> {
-    // Callers seed phase 'signing' before persisting the rumor, so the DB-backed
-    // bubble can never render between optimistic state and live delivery state.
-    const delivery = deliveryStatusStore.getState();
-
-    // Conversation key for the persisted delivery row (same derivation as
-    // storeRumor); computed here so it's available in the catch block too.
-    const pTags = getPTags(rumor.tags);
-    // Outgoing is always 1:1 / note-to-self, so this never returns null; fall
-    // back to our own pubkey defensively rather than crash a send.
-    const convKey =
-      deriveConversationKey(rumor.pubkey, pTags, opts.accountPubkey) ?? opts.accountPubkey;
-    // Only real chat / file bubbles get a persisted status (not reactions).
-    const persists = rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE;
-
-    try {
-      // Persist the authored rumor first, then hold only its publication while
-      // startup prepares the account session. This keeps the bubble durable and
-      // visible instead of returning its text to the composer.
-      const readiness = this.waitUntilSendReady(opts.accountPubkey);
-      if (readiness) await readiness;
-      const signSeal = this.signSeal!;
-      const encryptionKeypair = this.encryptionKeypair!;
-
-      // Resolve each recipient's encryption pubkey AND inbox relays up front —
-      // both are hard preconditions for delivery. A recipient that publishes no
-      // DM relays cannot be reached (they don't read ours), so this is treated
-      // the same as a missing encryption key: fail fast, *before* the CPU-heavy
-      // wrap signing below, instead of silently falling back to our own relays.
-      // Both lookups are cache-first (encryption key kept warm via `watch()` and
-      // preloaded by init(); DM relays cached with a TTL), so an established
-      // conversation resolves instantly rather than blocking on a relay round-trip.
-      const ownRelays = this.dmRelays;
-      // Everyone who needs a copy: each recipient PLUS ourselves (so our other
-      // devices pick up the send). Deduped — a note-to-self (recipient == us)
-      // collapses to a single participant, so we never wrap the same message to
-      // our own inbox twice. Self is just one participant among the rest.
-      const participants = Array.from(new Set([...opts.recipientPubkeys, opts.accountPubkey]));
-      const encMap: Record<string, string> = {};
-      const relaysMap: Record<string, string[]> = {};
-      for (const p of participants) {
-        if (p === opts.accountPubkey) {
-          // Our own encryption key + inbox relays are known locally — no relay
-          // lookup needed, and this can never fail the send.
-          encMap[p] = encryptionKeypair.pubkey;
-          relaysMap[p] = ownRelays;
-          continue;
-        }
-        const encKey = await encryptionKeyWatcher.resolve(p);
-        if (!encKey) {
-          throw new Error(
-            `Recipient ${p.slice(0, 8)}… has no published NIP-17 encryption key`,
-          );
-        }
-        const recipientRelays = await fetchDmRelays({ pubkey: p });
-        if (recipientRelays.length === 0) {
-          throw new Error(`Recipient ${p.slice(0, 8)}… has no published DM relays`);
-        }
-        encMap[p] = encKey;
-        // Cap delivery fan-out to the peer's first few inbox relays: a peer
-        // advertising many DM relays shouldn't explode our publish set. Their
-        // private inbox has no public substitute, so we cap — never discard.
-        relaysMap[p] = capDeliveryRelays(recipientRelays);
-      }
-
-      // Yield to the event loop before the CPU-heavy gift-wrap signing
-      // (NIP-44 + schnorr, synchronous). This lets the just-stored bubble paint
-      // and the scroll-to-bottom animation run before the thread is hogged, so
-      // sending feels responsive even though the crypto itself is blocking.
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-      // One gift wrap per participant — recipients (to their own inbox relays,
-      // which alone decide whether the other party receives it) and the self copy
-      // (to our relays, for multi-device sync), built uniformly. Each call
-      // rebuilds the rumor from the same template, so every wrap carries the
-      // identical rumor id we stored above. Tracked per copy (with a `self` flag)
-      // so two participants sharing a relay stay distinct and the
-      // delivered-to-the-other-party verdict can exclude self.
-      const copies: { recipient: string; self: boolean; relays: string[]; event: Event }[] = [];
-      for (const p of participants) {
-        const { giftWrap } = await createGiftWrappedMessage({
-          rumorTemplate,
-          senderIdentityPubkey: opts.accountPubkey,
-          senderEncPrivkey: encryptionKeypair.privkey,
-          senderEncPubkey: encryptionKeypair.pubkey,
-          recipientIdentityPubkey: p,
-          recipientEncPubkey: encMap[p],
-          signSeal,
-        });
-        copies.push({
-          recipient: p,
-          self: p === opts.accountPubkey,
-          relays: relaysMap[p],
-          event: giftWrap,
-        });
-      }
-
-      // Persist the exact encrypted copies before touching the network. The
-      // generic outbox can now resume either relay or proximity delivery after
-      // a restart without rebuilding a gift wrap (and without changing its id).
-      await db
-        .update(outbox)
-        .set({
-          conversationKey: convKey,
-          deliveryKind: 'relay',
-          pendingPayload: {
-            version: 1,
-            deliveryKind: 'relay',
-            copies: copies.map((copy) => ({
-              recipientPubkey: copy.recipient,
-              self: copy.self,
-              giftWrap: copy.event,
-              relayUrls: copy.relays,
-            })),
-          },
-          updatedAt: Math.floor(Date.now() / 1000),
-        })
-        .where(eq(outbox.messageId, rumor.id!));
-
-      // Lazy identity signer for NIP-42 auth — built only if a relay actually
-      // answers `auth-required`, so the common (no-auth) path stays cheap.
-      let signerPromise: Promise<Signer> | null = null;
-      const signAuth = async (authEvt: EventTemplate): Promise<Event> => {
-        if (!signerPromise) signerPromise = buildSigner(opts.accountPubkey);
-        return (await signerPromise).signEvent(authEvt);
-      };
-
-      // Phase 'sending': every copy goes through the shared `publishEvent`,
-      // streaming each relay's outcome into the delivery store via a
-      // copy-scoped `onRelay` so the bubble's n/m updates live.
-      delivery.startSending(
-        rumor.id!,
-        copies.map((c) => ({ recipient: c.recipient, self: c.self, urls: c.relays })),
-      );
-      const makeOnRelay =
-        (recipient: string, self: boolean) =>
-        (url: string, outcome: { ok: boolean; reason?: string }) =>
-          delivery.markRelay(
-            rumor.id!,
-            recipient,
-            self,
-            url,
-            outcome.ok ? 'ok' : 'failed',
-            outcome.ok ? undefined : outcome.reason,
-          );
-
-      const settled = await Promise.all(
-        copies.map((c) =>
-          relayPool
-            .publishEvent({
-              relays: c.relays,
-              event: c.event,
-              signAuth,
-              timeoutMs: PUBLISH_TIMEOUT_MS,
-              onRelay: makeOnRelay(c.recipient, c.self),
-            })
-            .then((results) => ({ copy: c, results })),
-        ),
-      );
-
-      const copyRecords: DeliveryCopyRecord[] = settled.map(({ copy, results }) => ({
-        recipient: copy.recipient,
-        self: copy.self,
-        relays: results.map(
-          (r): DeliveryRelayRecord => ({
-            url: r.url,
-            status: r.outcome.ok ? 'ok' : 'failed',
-            error: r.outcome.ok ? undefined : r.outcome.reason,
-          }),
-        ),
-      }));
-
-      // Verdict over the surfaced copies — the recipient (non-self) copies, i.e.
-      // did the other party get it; or, for a note-to-self with no other party,
-      // the self copy itself (see surfacedCopies).
-      const recipientRelayRecords = surfacedCopies(copyRecords).flatMap((c) => c.relays);
-      const okCount = recipientRelayRecords.filter((r) => r.status === 'ok').length;
-      const verdict = relayDeliveryVerdict(okCount, recipientRelayRecords.length);
-
-      delivery.finish(rumor.id!, verdict);
-      if (persists) {
-        await this.persistDelivery(opts.accountPubkey, rumor.id!, convKey, copyRecords);
-      }
-
-      // Outbox retry bookkeeping: a stored copy anywhere (incl. self) counts.
-      const anySucceeded = copyRecords.some((c) => c.relays.some((r) => r.status === 'ok'));
-
-      const now = Math.floor(Date.now() / 1000);
-      if (anySucceeded) {
-        await db
-          .update(outbox)
-          .set({ status: 'sent', updatedAt: now })
-          .where(eq(outbox.messageId, rumor.id!));
-        setTimeout(() => {
-          void db
-            .delete(outbox)
-            .where(eq(outbox.messageId, rumor.id!))
-            .run()
-            .catch((error) => {
-              console.warn('[dm] Failed to remove a delivered outbox entry.', error);
-            });
-        }, OUTBOX_SENT_CLEANUP_MS);
-      } else {
-        await db
-          .update(outbox)
-          .set({
-            status: 'failed',
-            lastError: 'All relays rejected',
-            updatedAt: now,
-          })
-          .where(eq(outbox.messageId, rumor.id!));
-      }
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      delivery.finish(rumor.id!, 'failed', reason);
-      if (persists) {
-        await this.persistDelivery(opts.accountPubkey, rumor.id!, convKey, []);
-      }
-      await db
-        .update(outbox)
-        .set({
-          status: 'failed',
-          lastError: reason,
-          updatedAt: Math.floor(Date.now() / 1000),
-        })
-        .where(eq(outbox.messageId, rumor.id!));
-    }
-  }
-
-  /** Upsert the persisted (restart-surviving) delivery summary for a message. */
-  private async persistDelivery(
-    accountPubkey: string,
-    messageId: string,
-    conversationKey: string,
-    copies: DeliveryCopyRecord[],
-  ): Promise<void> {
-    // Verdict over the surfaced copies — the recipient (non-self) copies; or, for
-    // a note-to-self, the self copy (see surfacedCopies). For a normal message the
-    // self copy is stored but never counted toward the status.
-    const recipientRelays = surfacedCopies(copies).flatMap((c) => c.relays);
-    const okCount = recipientRelays.filter((r) => r.status === 'ok').length;
-    const status = relayDeliveryVerdict(okCount, recipientRelays.length);
-    const now = Math.floor(Date.now() / 1000);
-    await db.transaction(async (tx) => {
-      await tx
-        .insert(messageDeliveries)
-        .values({ messageId, conversationKey, copies, status, updatedAt: now })
-        .onConflictDoUpdate({
-          target: messageDeliveries.messageId,
-          set: { copies, status, updatedAt: now },
-        });
-      await tx
-        .update(messages)
-        .set({ deliveryStatus: status })
-        .where(
-          and(
-            eq(messages.accountPubkey, accountPubkey),
-            eq(messages.id, messageId),
-          ),
-        );
-    });
-  }
-
-  /** Queue an incoming gift wrap for batched, yielding processing. */
   private enqueueGiftWrap(giftWrap: Event): void {
     this.giftWrapQueue.push(giftWrap);
     if (!this.drainingGiftWraps) void this.drainGiftWrapQueue();
@@ -2114,6 +1564,7 @@ class DmService {
     accountPubkey: string,
     sourceRelays?: string[],
     profile?: PerfSpan | null,
+    options?: { enqueueRelay?: boolean },
   ): Promise<boolean | null> {
     const pTags = getPTags(rumor.tags);
     const conversationKey = profileSync(profile, 'store.deriveConversation', () =>
@@ -2144,6 +1595,10 @@ class DmService {
               subject,
               tags: rumor.tags,
               rumor,
+              deliveryStatus:
+                options?.enqueueRelay && (rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE)
+                  ? 'queued'
+                  : null,
               sourceRelays: sourceRelays && sourceRelays.length > 0 ? sourceRelays : null,
             })
             .onConflictDoNothing()
@@ -2151,6 +1606,15 @@ class DmService {
             .all(),
         );
         if (inserted.length === 0) return false;
+
+        if (options?.enqueueRelay) {
+          await tx.insert(relayOutboxJobs).values({
+            accountPubkey,
+            messageId: rumor.id!,
+            scope: 'all_recipient_relays',
+            createdAt: Math.floor(Date.now() / 1000),
+          });
+        }
 
         // Index every media URL at the persistence choke point. Kind-15 has one
         // encrypted attachment; kind-14 may contain several direct media URLs.
@@ -2329,7 +1793,11 @@ class DmService {
         subject,
         tags: rumor.tags,
         rumor,
-        deliveryStatus: null,
+        deliveryStatus:
+          options?.enqueueRelay && (rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE)
+            ? 'queued'
+            : null,
+        deliveryError: null,
         sourceRelays: sourceRelays && sourceRelays.length > 0 ? sourceRelays : null,
       });
     }

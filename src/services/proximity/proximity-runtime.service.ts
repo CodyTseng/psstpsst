@@ -4,7 +4,6 @@ import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
 import { db } from '@/db/client';
 import {
   conversations,
-  messageDeliveries,
   messages,
   outbox,
   proximityPeers,
@@ -2988,20 +2987,6 @@ class ProximityService {
       return;
     }
     await db.transaction(async (tx) => {
-      const updatedAt = Math.floor(Date.now() / 1000);
-      await tx
-        .insert(messageDeliveries)
-        .values({
-          messageId: rumorId,
-          conversationKey: context.peerPubkey!,
-          copies: [{ recipient: context.peerPubkey!, self: false, relays: [] }],
-          status: 'sent',
-          updatedAt,
-        })
-        .onConflictDoUpdate({
-          target: messageDeliveries.messageId,
-          set: { status: 'sent', updatedAt },
-        });
       await tx
         .update(messages)
         .set({ deliveryStatus: 'sent' })
@@ -3453,6 +3438,7 @@ class ProximityService {
         tags: rumor.tags,
         rumor,
         deliveryStatus: null,
+        deliveryError: null,
         sourceRelays: null,
       });
     }

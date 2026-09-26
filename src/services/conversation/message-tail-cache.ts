@@ -113,6 +113,8 @@ function decodeRow(row: RawMessageRow): MessageRow {
     tags: JSON.parse(row.tags) as MessageRow['tags'],
     rumor: JSON.parse(row.rumor) as MessageRow['rumor'],
     deliveryStatus: row.delivery_status,
+    // Whole-message errors are loaded only by the detail sheet.
+    deliveryError: null,
     sourceRelays: row.source_relays
       ? (JSON.parse(row.source_relays) as MessageRow['sourceRelays'])
       : null,

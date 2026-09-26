@@ -1,31 +1,5 @@
 import { createStore } from 'zustand/vanilla';
 
-/**
- * Live per-message delivery status, keyed by rumor id.
- *
- * A sent message is published as **multiple** gift-wrapped copies — one per
- * recipient, plus one to the sender's own account (multi-device sync). Each copy
- * goes to that target's own relays and settles independently, so we track them
- * **per copy** (`recipient` + `self`), not as one merged relay list — two
- * recipients sharing a relay no longer collide, and a group send can show who
- * received it. The self copy is recorded too, but it's never *surfaced*: whether
- * the message reached the other party (the recipient copies) is all a user sees.
- *
- * Intentionally **session-scoped, in-memory only**: delivery is a "right now"
- * concern. The persisted `message_deliveries` row (and the DB `outbox` row for
- * retry bookkeeping) survive a restart; this store powers the live send UI.
- *
- * Owned by the **service layer**: the send pipeline (`dm.service`,
- * `proximity.service`) drives this vanilla store as its working state machine;
- * the React binding for components lives in `stores/delivery-status.store.ts`,
- * keeping the dependency direction UI → services, never the reverse.
- *
- * Lifecycle per rumor:
- *   begin → phase 'signing'  (resolving keys + signing gift wraps; no relays yet)
- *   startSending → phase 'sending', each copy's relays initialised as 'pending'
- *   markRelay(...) … live updates as each relay settles
- *   finish → phase 'sent' (recipient majority ok) | 'failed'
- */
 export type RelayDeliveryStatus = 'pending' | 'ok' | 'failed';
 
 export type RelayDelivery = {
@@ -34,12 +8,8 @@ export type RelayDelivery = {
   error?: string;
 };
 
-/** One gift-wrapped copy of a message and its per-relay outcome. */
 export type DeliveryCopy = {
-  /** Pubkey this copy was addressed to (a recipient, or our own for `self`). */
   recipient: string;
-  /** The self/sync copy — recorded, but never surfaced as "delivered to the
-   * other party". */
   self: boolean;
   relays: RelayDelivery[];
 };
@@ -56,156 +26,51 @@ export type MessageDelivery = {
   rumorId: string;
   phase: DeliveryPhase;
   transport?: 'relay' | 'proximity';
-  /** Whole-attempt failure before relay copies exist (for example signer or
-   * recipient metadata rejection). Per-relay failures stay on their rows. */
   error?: string;
-  /** Empty during 'signing', then one entry per copy (recipients + self). */
   copies: DeliveryCopy[];
 };
 
-/** Seed for a copy entering the sending phase. */
-export type CopyInit = { recipient: string; self: boolean; urls: string[] };
-
-export type DeliveryStatusState = {
+type DeliveryStatusState = {
+  /** Nearby transfer phases are session-only. Relay delivery lives in SQLite. */
   byId: Record<string, MessageDelivery>;
-  begin: (rumorId: string) => void;
-  startSending: (rumorId: string, copies: CopyInit[]) => void;
-  markRelay: (
-    rumorId: string,
-    recipient: string,
-    self: boolean,
-    url: string,
-    status: 'ok' | 'failed',
-    error?: string,
-  ) => void;
-  finish: (rumorId: string, phase: 'sent' | 'failed', error?: string) => void;
   setProximityPhase: (
     rumorId: string,
     phase: 'queued' | 'sending' | 'awaiting_ack' | 'sent' | 'failed',
-  ) => void;
-  /** Seed/replace the entry for a resend: keep the known copies, flip the
-   * selected relays back to 'pending'. A previously successful verdict stays
-   * successful while failed mirrors are retried. */
-  beginResend: (
-    rumorId: string,
-    copies: DeliveryCopy[],
-    retryUrls: string[],
-    settledPhase?: 'sent' | 'failed',
   ) => void;
 };
 
 export const deliveryStatusStore = createStore<DeliveryStatusState>()((set) => ({
   byId: {},
-  begin: (rumorId) =>
-    set((s) => ({
-      byId: { ...s.byId, [rumorId]: { rumorId, phase: 'signing', copies: [] } },
-    })),
-  startSending: (rumorId, copies) =>
-    set((s) => ({
-      byId: {
-        ...s.byId,
-        [rumorId]: {
-          rumorId,
-          phase: 'sending',
-          error: undefined,
-          copies: copies.map((c) => ({
-            recipient: c.recipient,
-            self: c.self,
-            relays: c.urls.map((url) => ({ url, status: 'pending' as const })),
-          })),
-        },
-      },
-    })),
-  markRelay: (rumorId, recipient, self, url, status, error) =>
-    set((s) => {
-      const entry = s.byId[rumorId];
-      if (!entry) return s;
-      return {
-        byId: {
-          ...s.byId,
-          [rumorId]: {
-            ...entry,
-            copies: entry.copies.map((cp) =>
-              cp.recipient === recipient && cp.self === self
-                ? {
-                    ...cp,
-                    relays: cp.relays.map((r) =>
-                      r.url === url ? { ...r, status, error } : r,
-                    ),
-                  }
-                : cp,
-            ),
-          },
-        },
-      };
-    }),
-  finish: (rumorId, phase, error) =>
-    set((s) => {
-      const entry = s.byId[rumorId];
-      if (!entry) return s;
-      return {
-        byId: {
-          ...s.byId,
-          [rumorId]: { ...entry, phase, error: phase === 'failed' ? error : undefined },
-        },
-      };
-    }),
   setProximityPhase: (rumorId, phase) =>
-    set((s) => ({
+    set((state) => ({
       byId: {
-        ...s.byId,
+        ...state.byId,
         [rumorId]: { rumorId, phase, transport: 'proximity', copies: [] },
       },
     })),
-  beginResend: (rumorId, copies, retryUrls, settledPhase) =>
-    set((s) => {
-      const previousPhase = s.byId[rumorId]?.phase ?? settledPhase;
-      return {
-        byId: {
-          ...s.byId,
-          [rumorId]: {
-            rumorId,
-            phase: previousPhase === 'sent' ? 'sent' : 'sending',
-            error: undefined,
-            copies: copies.map((cp) => ({
-              ...cp,
-              relays: cp.relays.map((r) =>
-                retryUrls.includes(r.url)
-                  ? { ...r, status: 'pending' as const, error: undefined }
-                  : r,
-              ),
-            })),
-          },
-        },
-      };
-    }),
 }));
 
 /**
- * The copies whose delivery a user should see. Normally that's the **recipient
- * (non-self)** copies — "did the other party get it" — and the self/sync copy is
- * hidden. But a **note-to-self** has no other party: its only copy IS the self
- * copy, so fall back to showing it (otherwise the message would read as failed /
- * undelivered). Generic over the live (`DeliveryCopy`) and persisted
- * (`DeliveryCopyRecord`) shapes — both carry `self`. */
+ * Hide self/sync copies from ordinary delivery detail. A note-to-self has no
+ * recipient copy, so its self copy remains the visible fallback.
+ */
 export function surfacedCopies<T extends { self: boolean }>(copies: T[]): T[] {
-  const others = copies.filter((c) => !c.self);
-  return others.length > 0 ? others : copies;
+  const recipients = copies.filter((copy) => !copy.self);
+  return recipients.length > 0 ? recipients : copies;
 }
 
-/** Relays of the surfaced copies — see {@link surfacedCopies}. */
-export function surfacedRelays(d: MessageDelivery): RelayDelivery[] {
-  return surfacedCopies(d.copies).flatMap((c) => c.relays);
+export function surfacedRelays(delivery: MessageDelivery): RelayDelivery[] {
+  return surfacedCopies(delivery.copies).flatMap((copy) => copy.relays);
 }
 
-/** Failed relay URLs to retry after a settled attempt. This is deliberately
- * independent from the message verdict: a majority-successful message is
- * `sent`, but its failed mirrors remain retryable. An empty list means a failed
- * attempt must be rebuilt because it never reached the relay phase. Null means
- * the delivery is still active or has no failed work. */
-export function retryableRelayUrls(d: MessageDelivery): string[] | null {
-  if (d.phase !== 'sent' && d.phase !== 'failed') return null;
-  const relays = surfacedRelays(d);
+/**
+ * Failed relay URLs remain retryable even after the message-level majority has
+ * reached `sent`. Pending work suppresses another retry until it settles.
+ */
+export function retryableRelayUrls(delivery: MessageDelivery): string[] | null {
+  if (delivery.phase !== 'sent' && delivery.phase !== 'failed') return null;
+  const recipientCopies = delivery.copies.filter((copy) => !copy.self);
+  const relays = recipientCopies.flatMap((copy) => copy.relays);
   if (relays.some((relay) => relay.status === 'pending')) return null;
   const failed = Array.from(
     new Set(
@@ -215,20 +80,49 @@ export function retryableRelayUrls(d: MessageDelivery): string[] | null {
     ),
   );
   if (failed.length > 0) return failed;
-  return d.phase === 'failed' && relays.length === 0 ? [] : null;
+  if (delivery.copies.length > 0) return null;
+  return delivery.phase === 'failed' ? [] : null;
 }
 
-/** succeeded / total recipient relay attempts for the headline `n/m`. */
-export function deliveryCounts(d: MessageDelivery): { ok: number; total: number } {
-  const relays = surfacedRelays(d);
+export function deliveryCounts(delivery: MessageDelivery): { ok: number; total: number } {
+  const relays = surfacedRelays(delivery);
   return {
-    ok: relays.filter((r) => r.status === 'ok').length,
+    ok: relays.filter((relay) => relay.status === 'ok').length,
     total: relays.length,
   };
 }
 
-/** Settle a relay attempt from recipient acknowledgements. The overall verdict
- * does not erase per-relay failures, which may still be retried afterward. */
+/** At least one acknowledgement and at least half of all surfaced targets. */
 export function relayDeliveryVerdict(okCount: number, total: number): 'sent' | 'failed' {
   return okCount > 0 && okCount * 2 >= total ? 'sent' : 'failed';
+}
+
+/** Start selected targets while preserving acknowledgements as terminal. */
+export function beginRelayTargets(
+  previous: RelayDelivery[],
+  targetUrls: string[],
+): RelayDelivery[] {
+  const byUrl = new Map(previous.map((relay) => [relay.url, relay]));
+  for (const url of targetUrls) {
+    if (byUrl.get(url)?.status !== 'ok') byUrl.set(url, { url, status: 'pending' });
+  }
+  return Array.from(byUrl.values());
+}
+
+/** Settle from the relay protocol's boolean OK field; an OK never regresses. */
+export function settleRelayTarget(
+  previous: RelayDelivery[],
+  url: string,
+  ok: boolean,
+  error?: string,
+): RelayDelivery[] {
+  let found = false;
+  const next = previous.map((relay): RelayDelivery => {
+    if (relay.url !== url) return relay;
+    found = true;
+    if (relay.status === 'ok') return relay;
+    return ok ? { url, status: 'ok' } : { url, status: 'failed', error };
+  });
+  if (!found) next.push(ok ? { url, status: 'ok' } : { url, status: 'failed', error });
+  return next;
 }

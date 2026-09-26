@@ -25,13 +25,15 @@ export const messages = sqliteTable(
     subject: text('subject'),
     tags: text('tags', { mode: 'json' }).$type<string[][]>().notNull(),
     rumor: text('rumor', { mode: 'json' }).$type<Rumor>().notNull(),
-    /** Coarse, list-facing delivery projection for locally-authored messages.
-     * Live per-relay progress stays in the service-owned in-memory store, while
-     * the full settled breakdown remains in `message_deliveries` and is read
-     * only when message details are opened. */
+    /** Coarse, list-facing delivery result for locally-authored messages. Relay
+     * jobs update it from acknowledgements; UI progress never overrides it from
+     * a separate in-memory delivery copy. */
     deliveryStatus: text('delivery_status', {
       enum: ['queued', 'sent', 'failed'],
     }),
+    /** Whole-message failure before relay copies could be created. Per-relay
+     * failures stay on `message_delivery_copies.relays`. */
+    deliveryError: text('delivery_error'),
     /**
      * Relays the incoming gift wrap was seen on (best-effort, captured at
      * receive time and persisted so the message-info drawer can show it after a

@@ -6,18 +6,19 @@ import type { MessageDelivery } from '@/services/dm/delivery-status';
 
 /**
  * React binding over the service-owned delivery state
- * (`services/dm/delivery-status.ts`) — the send pipeline drives the vanilla
- * store; components subscribe through here.
+ * (`services/dm/delivery-status.ts`). Only nearby transport needs session-only
+ * progress; relay delivery is read from SQLite.
  */
 export {
   deliveryCounts,
+  beginRelayTargets,
   relayDeliveryVerdict,
   retryableRelayUrls,
   surfacedCopies,
   surfacedRelays,
+  settleRelayTarget,
 } from '@/services/dm/delivery-status';
 export type {
-  CopyInit,
   DeliveryCopy,
   DeliveryPhase,
   MessageDelivery,
