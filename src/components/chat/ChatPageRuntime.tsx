@@ -90,7 +90,7 @@ import { useWallets } from '@/hooks/use-wallets';
 import { setStringAsync } from '@/lib/clipboard';
 import { isAbortError } from '@/lib/async/abort';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
-import { IS_ANDROID, IS_ELECTRON } from '@/lib/platform';
+import { IS_ELECTRON } from '@/lib/platform';
 import {
   parseConversationRouteParams,
   routeHexIdParam,
@@ -1087,7 +1087,6 @@ function ChatPageContent({
     bubble: LiftedBubble;
     contentTop?: number;
     contentBottom?: number;
-    preserveKeyboard: boolean;
   } | null>(null);
   // The message-list viewport (between the header and the input). Measured on
   // long-press so the action menu clips its lifted copy to where the bubble is
@@ -1139,6 +1138,7 @@ function ChatPageContent({
     emoji: CustomEmoji;
     coordinate?: string;
   } | null>(null);
+  const restoreKeyboardAfterMenuRef = useRef(false);
 
   const messageIds = loadedMessageIds;
 
@@ -1893,10 +1893,13 @@ function ChatPageContent({
   }
 
   function openMeasuredMenu(rect: BubbleRect, bubble: LiftedBubble) {
-    const preserveKeyboard = KeyboardController.isVisible();
+    // Modal temporarily owns window focus. Remember the user's keyboard state
+    // so a plain dismiss/action can restore it after the native window closes.
+    restoreKeyboardAfterMenuRef.current =
+      KeyboardController.isVisible() && !IS_ELECTRON;
     const node = contentRef.current;
     if (!node) {
-      setMenuAnchor({ rect, bubble, preserveKeyboard });
+      setMenuAnchor({ rect, bubble });
       return;
     }
 
@@ -1912,7 +1915,6 @@ function ChatPageContent({
         setMenuAnchor({
           rect,
           bubble,
-          preserveKeyboard,
           ...viewport,
         });
       };
@@ -2044,6 +2046,16 @@ function ChatPageContent({
    * the row (react) or present another modal (picker) without the lifted copy
    * still on screen. */
   function handleMenuClosed() {
+    const restoreKeyboard =
+      restoreKeyboardAfterMenuRef.current &&
+      !pendingReplyTarget &&
+      !pendingPicker &&
+      !pendingDetailId &&
+      !pendingSelectId &&
+      !pendingForwardMessages &&
+      !pendingPackPickerEmoji &&
+      !pendingSaveUpload;
+    restoreKeyboardAfterMenuRef.current = false;
     if (pendingReplyTarget) {
       const target = pendingReplyTarget;
       setPendingReplyTarget(null);
@@ -2090,6 +2102,9 @@ function ChatPageContent({
       const upload = pendingSaveUpload;
       setPendingSaveUpload(null);
       void handleSavePendingUpload(upload);
+    }
+    if (restoreKeyboard) {
+      setTimeout(() => KeyboardController.setFocusTo('current'), 0);
     }
   }
 
@@ -2182,10 +2197,7 @@ function ChatPageContent({
                   icon: <Reply size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
                   onPress: () => {
                     const target = menuTarget;
-                    if (target) {
-                      if (IS_ANDROID) startReply(target);
-                      else setPendingReplyTarget(target);
-                    }
+                    if (target) setPendingReplyTarget(target);
                     closeMenu();
                   },
                 } as MessageMenuAction,
@@ -2462,7 +2474,6 @@ function ChatPageContent({
             bubble={menuAnchor?.bubble ?? null}
             contentTop={menuAnchor?.contentTop}
             contentBottom={menuAnchor?.contentBottom}
-            preserveKeyboard={menuAnchor?.preserveKeyboard}
             quickEmojis={menuQuickEmojis}
             reactedReactionKeys={reactedReactionKeys}
             onReact={handleReactFromMenu}

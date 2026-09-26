@@ -14,7 +14,6 @@ import {
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { OverKeyboardView } from 'react-native-keyboard-controller';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { AppText } from '@/components/common/AppText';
@@ -96,8 +95,6 @@ type Props = {
    * over the blurred header/input.) */
   contentTop?: number;
   contentBottom?: number;
-  /** Whether the software keyboard was visible when the menu opened. */
-  preserveKeyboard?: boolean;
   /** Unicode or custom quick reactions shown above the bubble. */
   quickEmojis: QuickReaction[];
   /** Quick-reaction identities already used by the active account. */
@@ -226,7 +223,6 @@ export function MessageActionMenu({
   bubble,
   contentTop,
   contentBottom,
-  preserveKeyboard = false,
   quickEmojis,
   reactedReactionKeys = [],
   onReact,
@@ -250,7 +246,6 @@ export function MessageActionMenu({
     actions: MessageMenuAction[];
     contentTop?: number;
     contentBottom?: number;
-    preserveKeyboard: boolean;
   } | null>(null);
   if (visible && rect && bubble) {
     dataRef.current = {
@@ -259,7 +254,6 @@ export function MessageActionMenu({
       actions,
       contentTop,
       contentBottom,
-      preserveKeyboard,
     };
   }
 
@@ -713,19 +707,9 @@ export function MessageActionMenu({
     </>
   );
 
-  // A native Modal resigns the composer's first responder. Android implements
-  // it as a separate Dialog window, whose teardown can leave the Activity
-  // without window focus when Reply tries to reopen the IME. Its overlay host
-  // is non-focusable, so keep every Android menu in the Activity window. On
-  // iOS the overlay is only needed when an already-visible keyboard is kept.
-  if (!IS_ELECTRON && (Platform.OS === 'android' || view.preserveKeyboard)) {
-    return (
-      <OverKeyboardView visible>
-        <View style={{ flex: 1 }}>{overlayContent}</View>
-      </OverKeyboardView>
-    );
-  }
-
+  // A single native window keeps painting and hit-testing in the same coordinate
+  // space, including when this screen is the offset detail pane in split view.
+  // The parent restores any previously visible keyboard after Modal teardown.
   return (
     <Modal visible transparent statusBarTranslucent onRequestClose={onClose}>
       {overlayContent}
