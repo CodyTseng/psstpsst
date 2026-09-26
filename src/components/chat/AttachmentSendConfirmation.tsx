@@ -7,15 +7,23 @@ import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
 import { VideoFramePlayHorizontal } from '@solar-icons/react-native/category/video/Linear/VideoFramePlayHorizontal';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
+import {
+  type NativeSyntheticEvent,
+  ScrollView,
+  TextInput,
+  type TextInputKeyPressEventData,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { AppText } from '@/components/common/AppText';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { DialogSurface } from '@/components/common/DialogSurface';
 import { IconButton } from '@/components/common/IconButton';
 import { ListRow } from '@/components/common/ListRow';
+import { useElectronComposerTypingFocus } from '@/hooks/use-electron-composer-typing-focus';
 import X from 'lucide-react-native/icons/x';
 import {
   composerMediaKind,
@@ -27,7 +35,8 @@ import {
   type ImageSendQuality,
 } from '@/lib/attachments/image-quality';
 import { formatFileSize } from '@/lib/nostr/file-tags';
-import { IS_ELECTRON } from '@/lib/platform';
+import { DESKTOP_OS, IS_ELECTRON } from '@/lib/platform';
+import { useChatPrefsStore } from '@/stores/chat-prefs.store';
 import { useDirectionalIconStyle } from '@/i18n/direction';
 import { iconStrokeWidth } from '@/theme/icons';
 import {
@@ -38,6 +47,11 @@ import {
   uiDensity,
   useThemeColors,
 } from '@/theme';
+
+import {
+  type DesktopTextInputKeyEvent,
+  shouldSendOnDesktopKeyPress,
+} from './desktop-send-shortcut';
 
 export type PickedAttachment = {
   uri: string;
@@ -365,11 +379,48 @@ export function AttachmentSendConfirmContent({
   const { t } = useTranslation();
   const c = useThemeColors();
   const directionalIconStyle = useDirectionalIconStyle();
+  const enterToSend = useChatPrefsStore((state) => state.enterToSend);
+  const inputRef = useRef<TextInput>(null);
+  useElectronComposerTypingFocus({ enabled: true, inputRef });
   const allMedia = useMemo(
     () => files.length > 0 && files.every((file) => composerMediaKind(file) != null),
     [files],
   );
   const hasImage = files.some((file) => composerMediaKind(file) === 'image');
+
+  function handleSubmitEditing() {
+    if (enterToSend) onSubmit();
+  }
+
+  function handleMessageKeyPress(
+    event: NativeSyntheticEvent<TextInputKeyPressEventData>,
+  ) {
+    if (!IS_ELECTRON) return;
+    const desktopEvent = event as DesktopTextInputKeyEvent;
+    const nativeEvent = desktopEvent.nativeEvent;
+    const isComposing =
+      desktopEvent.isComposing ??
+      nativeEvent.isComposing ??
+      (desktopEvent.keyCode === 229 || nativeEvent.keyCode === 229);
+
+    if (
+      !shouldSendOnDesktopKeyPress({
+        key: desktopEvent.key ?? nativeEvent.key,
+        metaKey: desktopEvent.metaKey ?? nativeEvent.metaKey,
+        ctrlKey: desktopEvent.ctrlKey ?? nativeEvent.ctrlKey,
+        shiftKey: desktopEvent.shiftKey ?? nativeEvent.shiftKey,
+        altKey: desktopEvent.altKey ?? nativeEvent.altKey,
+        isComposing,
+        repeat: desktopEvent.repeat ?? nativeEvent.repeat,
+        platform: DESKTOP_OS,
+        enterToSend,
+      })
+    ) {
+      return;
+    }
+    event.preventDefault();
+    onSubmit();
+  }
 
   return (
     <View style={{ gap: spacing.lg }}>
@@ -415,18 +466,28 @@ export function AttachmentSendConfirmContent({
           }}
         >
           <TextInput
+            key={enterToSend ? 'enter-send' : 'enter-newline'}
+            ref={inputRef}
+            // A pasted file opens this desktop dialog while the conversation
+            // composer still owns focus. Retake it so Enter cannot activate
+            // the dialog backdrop or the obscured composer instead.
+            autoFocus={IS_ELECTRON}
             value={message}
             onChangeText={onMessageChange}
-            onSubmitEditing={onSubmit}
+            multiline
+            submitBehavior={enterToSend ? 'submit' : 'newline'}
+            onSubmitEditing={handleSubmitEditing}
+            onKeyPress={IS_ELECTRON ? handleMessageKeyPress : undefined}
             placeholder={t('attach.add_message')}
             placeholderTextColor={c.textMuted}
-            returnKeyType="send"
+            returnKeyType={enterToSend ? 'send' : 'default'}
             maxLength={4096}
             style={{
               color: c.text,
               fontSize: typography.body.fontSize,
               lineHeight: IS_ELECTRON ? typography.body.lineHeight : undefined,
               fontFamily: typography.body.fontFamily,
+              maxHeight: typography.body.lineHeight * 5,
               paddingVertical: 0,
             }}
           />

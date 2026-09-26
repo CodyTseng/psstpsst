@@ -32,7 +32,14 @@ export function useElectronComposerTypingFocus({ enabled, inputRef }: Options) {
 
       const target = event.target as HTMLElement | null;
       if (target?.closest?.(EDITABLE_TARGET_SELECTOR)) return;
-      if (document.querySelector('[aria-modal="true"]')) return;
+      const activeModal = document.querySelector('[aria-modal="true"]');
+      if (
+        activeModal &&
+        (!inputRef.current ||
+          !activeModal.contains(inputRef.current as unknown as Node))
+      ) {
+        return;
+      }
 
       // Do not prevent the event: Chromium delivers the ensuing text input to
       // the newly focused field, preserving the first character the user typed.

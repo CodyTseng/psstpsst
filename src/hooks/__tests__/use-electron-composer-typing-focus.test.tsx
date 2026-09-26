@@ -79,17 +79,31 @@ describe('Electron composer typing focus', () => {
     expect(focus).not.toHaveBeenCalled();
   });
 
-  it('does not steal input from another editor or a modal task', () => {
+  it('does not steal input from another editor or an unrelated modal task', () => {
     act(() => {
       renderer = create(<Harness />);
     });
 
     const target = { closest: jest.fn(() => ({})) } as unknown as EventTarget;
     keyDown('a', { target });
-    querySelector.mockReturnValue({});
+    querySelector.mockReturnValue({ contains: () => false });
     keyDown('b');
 
     expect(focus).not.toHaveBeenCalled();
+  });
+
+  it('focuses a composer that belongs to the active modal', () => {
+    act(() => {
+      renderer = create(<Harness />);
+    });
+
+    querySelector.mockReturnValue({
+      contains: (node: unknown) => node === inputRef.current,
+    });
+    const event = keyDown('a');
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
   it('listens only while the composer can accept typing', () => {

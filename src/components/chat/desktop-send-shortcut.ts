@@ -10,6 +10,22 @@ type Input = {
   enterToSend?: boolean;
 };
 
+type DesktopKeyData = {
+  key?: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  isComposing?: boolean;
+  repeat?: boolean;
+  keyCode?: number;
+};
+
+/** Keyboard fields React Native Web may place on either event level. */
+export type DesktopTextInputKeyEvent = DesktopKeyData & {
+  nativeEvent: DesktopKeyData;
+};
+
 /** Resolve desktop Enter behavior without interfering with native newlines. */
 export function shouldSendOnDesktopKeyPress({
   key,

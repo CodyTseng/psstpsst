@@ -412,8 +412,10 @@ does not animate with the navigation transition. Modal-owned inputs may focus
 from the modal's supported presentation callback.
 Opening a conversation on Electron focuses its composer immediately; printable
 typing elsewhere in the conversation restores composer focus unless a shortcut,
-modal, or another text editor owns the event. Mobile conversation entry does not
-raise the software keyboard.
+modal, or another text editor owns the event. Pasting files anywhere in the
+active conversation opens the attachment preview under the same ownership
+rules; ordinary text paste stays with the focused editor. Mobile conversation
+entry does not raise the software keyboard.
 
 Focused inputs stay visible above the software keyboard with breathing room.
 Full-page forms use `AppFormScrollView` to scroll the active field into view;
