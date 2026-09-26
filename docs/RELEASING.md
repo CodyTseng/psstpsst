@@ -618,10 +618,15 @@ and Expo's [local release guide](https://docs.expo.dev/guides/local-app-producti
 
 ## Version and release checklist
 
+Release versions use `YY.M.PATCH` calendar versioning: the two-digit year, the
+calendar month without a leading zero, and the release sequence within that
+month starting at 1. For example, the first release in September 2026 is
+`26.9.1` and its tag is `v26.9.1`.
+
 1. Set the root and desktop `package.json` versions and `app.json`'s
    `expo.version` to the same release version. Update the root and desktop
    workspace versions in the lockfile too. The tag must match exactly, for
-   example `v1.2.3`. Even a version-only lockfile edit changes the license input
+   example `v26.9.1`. Even a version-only lockfile edit changes the license input
    hash: run `npm run licenses:generate`, `npm run licenses:check`, and
    `npm run licenses:test`, then commit the generated changes before tagging.
 2. Increase `app.json`'s `expo.android.versionCode` for each Android update and

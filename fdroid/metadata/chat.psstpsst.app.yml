@@ -20,10 +20,10 @@ AllowedAPKSigningKeys:
   - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'
 
 Builds:
-  - versionName: 0.2.4
-    versionCode: 6
-    disable: Published APK signature cannot be copied onto the rebuild
-    commit: e19b07d2ebbd5a434fcedacd6596bb86729fa41b
+  - versionName: 26.9.1
+    versionCode: 7
+    disable: Pending release commit and reproducibility verification
+    commit: v26.9.1
     output: android/app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 27.1.12297006
     # Node 24.15.0/npm 11.12.1 match the upstream release environment.
@@ -88,5 +88,5 @@ Builds:
 AutoUpdateMode: None
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
 UpdateCheckData: 'app.json|"versionCode":\s*(\d+)|.|"version":\s*"([^"]+)"'
-CurrentVersion: 0.2.4
-CurrentVersionCode: 6
+CurrentVersion: 26.9.1
+CurrentVersionCode: 7

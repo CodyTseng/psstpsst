@@ -1,6 +1,6 @@
 {
   "name": "psstpsst-desktop",
-  "version": "0.2.4",
+  "version": "26.9.1",
   "license": "MIT",
   "description": "Electron runtime for the PsstPsst encrypted messenger",
   "author": {
