@@ -453,6 +453,9 @@ a previously declined update.
 
 Recent wallet activity includes pending transactions until they expire.
 Completed payments remain visible after their invoice expiry.
+Lightning payment flows always preserve access to the raw request, its QR code,
+and external-wallet handoff. A connected wallet may be the primary action but
+never removes these alternatives; connecting a wallet remains optional.
 
 User-facing copy is concise and ordinary. Avoid protocol jargon in `src/i18n/`.
 Say “public key”, “private key”, “message relay”, and “media server” rather than

@@ -1,16 +1,23 @@
 import { parseNostrInput } from '@/lib/nostr/keys';
 import { normalizeNip05Identifier, queryNip05Profile } from '@/lib/nostr/nip05';
+import { parseNwcConnectionString } from '@/lib/wallet/nwc';
 import { parseBolt11Invoice } from '@/services/wallet/bolt11';
 import { isLikelyLnurlPayTarget, normalizeLightningInput } from '@/services/wallet/lnurl';
 
 export type ChatQrScanResult =
   | { kind: 'chat'; pubkey: string }
   | { kind: 'payment'; input: string }
+  | { kind: 'wallet'; connectionString: string }
   | { kind: 'invalid' };
 
 export async function resolveChatQrScan(input: string): Promise<ChatQrScanResult> {
   const raw = input.trim();
   if (!raw) return { kind: 'invalid' };
+
+  try {
+    parseNwcConnectionString(raw);
+    return { kind: 'wallet', connectionString: raw };
+  } catch {}
 
   try {
     return { kind: 'chat', pubkey: parseNostrInput(raw) };

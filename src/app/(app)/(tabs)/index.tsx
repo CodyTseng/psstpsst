@@ -47,13 +47,13 @@ import {
 import { dmService } from '@/services/dm/dm.service';
 import { getProximityEnabled } from '@/services/proximity/proximity-preferences';
 import { syncPersonalConfigs } from '@/services/relay/personal-configs.service';
-import { getDefaultWallet } from '@/services/wallet/wallet.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useComposerFileHandoffStore } from '@/stores/composer-file-handoff.store';
 import { useProximityStore } from '@/stores/proximity.store';
 import { useSyncPhase } from '@/stores/sync-status.store';
 import { useScreenshotPreviewStore } from '@/stores/screenshot-preview.store';
 import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
+import { useWalletConnectionHandoffStore } from '@/stores/wallet-connection-handoff.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { bottomBarHeight, headerHeight, spacing, uiDensity, useThemeColors } from '@/theme';
 
@@ -326,15 +326,21 @@ function RealConversations() {
     }
 
     setSearchActive(false);
+    if (result.kind === 'wallet') {
+      if (!accountPubkey) return;
+      const handoffId = useWalletConnectionHandoffStore.getState().start({
+        accountPubkey,
+        connectionString: result.connectionString,
+      });
+      openInDetailPane(`/wallet-add?handoff=${handoffId}`);
+      return;
+    }
+
     if (result.kind === 'chat') {
       openInDetailPane(`/profile/${encodeURIComponent(result.pubkey)}`);
       return;
     }
 
-    if (!accountPubkey || !(await getDefaultWallet(accountPubkey))) {
-      openInDetailPane('/wallet');
-      return;
-    }
     openInDetailPane(`/wallet-send?input=${encodeURIComponent(result.input)}`);
   }
 

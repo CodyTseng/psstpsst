@@ -21,6 +21,7 @@ import { BottomSheet } from '@/components/common/BottomSheet';
 import { RoundOverlayAction } from '@/components/common/RoundOverlayAction';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { ScannerCloseButton } from '@/components/common/scanner-close-button';
+import { ExternalInvoicePayment } from '@/components/wallet/external-invoice-payment';
 import { WalletAmountDisplay } from '@/components/wallet/WalletAmountDisplay';
 import { WalletPaymentConfirmSheet } from '@/components/wallet/WalletPaymentConfirmSheet';
 import { WalletPaymentStatus, type WalletPaymentStatusValue } from '@/components/wallet/WalletPaymentStatus';
@@ -73,7 +74,7 @@ export default function WalletSendScreen() {
   const params = useLocalSearchParams<{ input?: string | string[] }>();
   const initialInput = firstParam(params.input, 8_192);
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
-  const { wallets } = useWallets(accountPubkey);
+  const { wallets, loaded: walletsLoaded } = useWallets(accountPubkey);
   const wallet = wallets.find((candidate) => candidate.isDefault) ?? wallets[0] ?? null;
   const [paymentInput, setPaymentInput] = useState(initialInput);
   const [amount, setAmount] = useState('');
@@ -101,6 +102,7 @@ export default function WalletSendScreen() {
   const paymentWalletRef = useRef<WalletRow | null>(null);
   const paymentPinAuthorizationRef = useRef<string | null>(null);
   const paymentPinApprovedRef = useRef(false);
+  const preparingExternalInvoiceRef = useRef(false);
 
   useEffect(() => {
     if (step !== 'review') return;
@@ -330,6 +332,38 @@ export default function WalletSendScreen() {
     }
   }
 
+  function openExternalPaymentOptions(invoice: ParsedInvoice, invoiceDescription?: string | null) {
+    router.push({
+      pathname: '/wallet-invoice',
+      params: {
+        invoice: invoice.invoice,
+        role: 'received',
+        external: '1',
+        ...(invoiceDescription ? { description: invoiceDescription } : {}),
+      },
+    });
+  }
+
+  async function prepareExternalInvoice(openInSecondaryPage = false) {
+    if (!lnurlRequest || !amountSats || paying || preparingExternalInvoiceRef.current) return;
+    preparingExternalInvoiceRef.current = true;
+    setPaying(true);
+    try {
+      const invoice = await requestLnurlPayInvoice(lnurlRequest, amountSats, description);
+      if (openInSecondaryPage) {
+        openExternalPaymentOptions(invoice, description);
+        return;
+      }
+      setReviewInvoice(invoice);
+      setStep('review');
+    } catch (err) {
+      void platform.confirmationDialog.notify({ title: lnurlErrorMessage(t, err), okLabel: t('common.ok') });
+    } finally {
+      preparingExternalInvoiceRef.current = false;
+      setPaying(false);
+    }
+  }
+
   async function pasteInvoice() {
     const text = await getStringAsync();
     if (text.trim()) {
@@ -521,13 +555,31 @@ export default function WalletSendScreen() {
               </View>
             </View>
 
-            <AppButton
-              label={t('wallet.continue')}
-              variant="primary"
-              size="lg"
-              disabled={!amountValid || !wallet}
-              onPress={() => openPaymentConfirmation('lnurl')}
-            />
+            {walletsLoaded && wallet ? (
+              <ActionRow
+                layout="vertical"
+                confirm={{
+                  label: t('wallet.continue'),
+                  disabled: !amountValid || paying,
+                  onPress: () => openPaymentConfirmation('lnurl'),
+                }}
+                dismiss={{
+                  label: t('wallet.other_payment_options'),
+                  disabled: !amountValid,
+                  loading: paying,
+                  onPress: () => void prepareExternalInvoice(true),
+                }}
+              />
+            ) : (
+              <AppButton
+                label={t('wallet.continue')}
+                variant="primary"
+                size="lg"
+                disabled={!amountValid || !walletsLoaded}
+                loading={paying}
+                onPress={() => void prepareExternalInvoice()}
+              />
+            )}
           </View>
         </View>
       ) : step === 'payment' ? (
@@ -549,9 +601,10 @@ export default function WalletSendScreen() {
           />
         </View>
       ) : step === 'review' && reviewInvoice ? (
-        <View
-          style={{
-            flex: 1,
+        <ScrollView
+          {...scrollProps}
+          contentContainerStyle={{
+            flexGrow: 1,
             padding: spacing.lg,
             paddingTop: titleClearance + spacing.lg,
             paddingBottom: Math.max(insets.bottom + spacing.lg, spacing['2xl']),
@@ -577,20 +630,30 @@ export default function WalletSendScreen() {
               </View>
             </View>
 
-            <View style={{ gap: spacing.md }}>
-              <AppText variant="caption" tone="muted" align="center">
-                {t('wallet.local_auth_hint')}
-              </AppText>
-              <AppButton
-                label={t('wallet.continue')}
-                variant="primary"
-                size="lg"
-                disabled={!wallet}
-                onPress={() => openPaymentConfirmation('invoice')}
-              />
-            </View>
+            {walletsLoaded ? (
+              wallet ? (
+                <View style={{ gap: spacing.md }}>
+                  <AppText variant="caption" tone="muted" align="center">
+                    {t('wallet.local_auth_hint')}
+                  </AppText>
+                  <ActionRow
+                    layout="vertical"
+                    confirm={{
+                      label: t('wallet.continue'),
+                      onPress: () => openPaymentConfirmation('invoice'),
+                    }}
+                    dismiss={{
+                      label: t('wallet.other_payment_options'),
+                      onPress: () => openExternalPaymentOptions(reviewInvoice, reviewInvoice.description),
+                    }}
+                  />
+                </View>
+              ) : (
+                <ExternalInvoicePayment invoice={reviewInvoice.invoice} />
+              )
+            ) : null}
           </View>
-        </View>
+        </ScrollView>
       ) : (
         <View style={{ flex: 1 }}>
           {resolving ? (
@@ -661,7 +724,7 @@ export default function WalletSendScreen() {
       {step === 'scan' ? (
         <ScannerCloseButton onClose={() => router.back()} />
       ) : (
-        <ScreenHeader bordered={step === 'manual' && scrolled} title={t('wallet.send')} />
+        <ScreenHeader bordered={(step === 'manual' || step === 'review') && scrolled} title={t('wallet.send')} />
       )}
       <BottomSheet
         visible={descriptionOpen}

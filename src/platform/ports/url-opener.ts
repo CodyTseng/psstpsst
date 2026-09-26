@@ -3,10 +3,10 @@
  * the NIP-46 signer flows (`services/signer/`) to surface `auth_url` approval
  * pages.
  *
- * Best-effort by contract: opening an external URL is fire-and-forget UX, so
- * implementations never reject.
+ * Best-effort by contract: implementations never reject, but report whether
+ * the operating system accepted the URL so action-local UI can show feedback.
  */
 export interface UrlOpenerPort {
-  /** Open a URL in the system handler. Never rejects. */
-  openExternalUrl(url: string): Promise<void>;
+  /** Open a URL in the system handler. Resolves false instead of rejecting. */
+  openExternalUrl(url: string): Promise<boolean>;
 }

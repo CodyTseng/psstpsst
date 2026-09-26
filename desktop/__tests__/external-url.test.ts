@@ -21,6 +21,32 @@ it.each(['https://example.com/', 'http://example.com/', 'nostrconnect://signer',
 );
 
 it.each([
+  'lightning:lnbc1u1qpzry9x8gf2tvdw0s3jn54khce6mua7l',
+  'LIGHTNING:LNTB20N1QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L',
+])(
+  'opens a valid Lightning payment request without querying preferences: %s',
+  async (value) => {
+    await openExternalUrl(value, dependencies);
+    expect(open).toHaveBeenCalledWith(value.toLowerCase());
+    expect(readNostrEventUrl).not.toHaveBeenCalled();
+  },
+);
+
+it.each([
+  'lightning:javascript:alert(1)',
+  'lightning:lnbc1u1qpzry?amount=100',
+  'lightning:lnbc1u1qpzry\n',
+  'lightning:lnBc1u1qpzry9x8gf2tvdw0s3jn54khce6mua7l',
+  `lightning:lnbc1${'q'.repeat(8 * 1024)}`,
+])('rejects an invalid Lightning payment request: %s', async (value) => {
+  await expect(openExternalUrl(value, dependencies)).rejects.toThrow(
+    'Invalid Lightning payment request',
+  );
+  expect(open).not.toHaveBeenCalled();
+  expect(readNostrEventUrl).not.toHaveBeenCalled();
+});
+
+it.each([
   'nostr:{id}',
   'myapp://{id}',
   'myapp://note/{id}',

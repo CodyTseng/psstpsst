@@ -498,9 +498,10 @@ wallet data, or URLs, and it leaves the device only through an explicit user
 export. Repeated failures favor a safe return to the Chats route over retrying
 the same broken route again.
 
-Wallet connections are non-custodial. NWC secrets stay in secure storage, and a
-payment requires system authentication or the account's wallet PIN immediately
-before the request is sent.
+Wallet connections are non-custodial. NWC connection strings pass between
+routes only through ephemeral memory, never URL parameters. Their secrets stay
+in secure storage, and a payment requires system authentication or the
+account's wallet PIN immediately before the request is sent.
 
 ## 13. Change rules
 
