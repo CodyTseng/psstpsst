@@ -7,7 +7,7 @@ import { AppText } from '@/components/common/AppText';
 import { InteractionOverlay } from '@/components/common/InteractionOverlay';
 import { CustomEmojiImage } from '@/components/emoji/CustomEmojiImage';
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
-import { emojiSize, radius, spacing, useThemeColors } from '@/theme';
+import { emojiSize, messageLayout, radius, spacing, useThemeColors } from '@/theme';
 
 type Props = {
   reactions: ReactionAggregate[];
@@ -63,7 +63,7 @@ function ReactionsRowBase({
         flexWrap: expanded ? 'wrap' : 'nowrap',
         gap: spacing.xs,
         justifyContent: isSelfBubble ? 'flex-end' : 'flex-start',
-        marginBottom: spacing.xs,
+        marginTop: messageLayout.reactionGap,
         alignSelf: isSelfBubble ? 'flex-end' : 'flex-start',
       }}
     >

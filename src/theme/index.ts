@@ -196,6 +196,11 @@ export const spacing = {
   '3xl': 48,
 } as const;
 
+/** Optical chat spacing that is intentionally tighter than the global scale. */
+export const messageLayout = {
+  reactionGap: spacing.xs / 2,
+} as const;
+
 /** Shared outer alignment for every mode inside the full emoji picker. */
 export const emojiPickerLayout = {
   horizontalGutter: IS_ELECTRON ? spacing.sm : spacing.lg,

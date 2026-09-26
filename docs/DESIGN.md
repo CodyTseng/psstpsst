@@ -117,7 +117,8 @@ their text direction follows that language independently of the app locale.
 
 Spacing comes from the closed, multiples-of-four scale in `src/theme/index.ts`:
 `xs`, `sm`, `md`, `lg`, `xl`, `2xl`, and `3xl`. Do not use arbitrary margins,
-padding, or gaps.
+padding, or gaps. The sole optical exception is the tighter semantic gap
+between a message bubble and its reaction row.
 
 - The default page and sheet gutter is `spacing.lg` (16px).
 - Sections normally use `spacing.xl` separation.
@@ -142,10 +143,12 @@ padding, or gaps.
   status marks, timestamps, and actions retain their space, including in selection mode.
 
 Message reactions sit in a compact, separate row directly below the bubble,
-without added top spacing, overlap, or a canvas-coloured cutout. Separation
-below the reactions keeps them visually grouped with their message. They share
-the message's logical edge: start for received messages, end for sent messages.
-Own reactions retain an accent outline.
+with the dedicated `messageLayout.reactionGap` and without overlap or a
+canvas-coloured cutout.
+The reaction row adds no bottom margin; the following message row owns the
+inter-message separation. Reactions share the message's logical edge: start for
+received messages, end for sent messages. Own reactions retain an accent
+outline.
 
 ## 5. Shape and elevation
 
