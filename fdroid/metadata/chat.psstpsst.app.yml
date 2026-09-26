@@ -15,27 +15,26 @@ AutoName: PsstPsst
 RepoType: git
 Repo: https://github.com/codytseng/psstpsst.git
 Binaries: https://github.com/codytseng/psstpsst/releases/download/v%v/PsstPsst-android.apk
-# Verified against the published v0.2.3 APK with apksigner.
+# Verified against the published v0.2.4 APK with apksigner.
 AllowedAPKSigningKeys:
   - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'
 
 Builds:
   - versionName: 0.2.4
     versionCode: 6
-    disable: Pending release commit and reproducibility verification
-    # Replace with the full commit hash of the published v0.2.4 tag.
-    commit: v0.2.4
+    disable: Published APK signature cannot be copied onto the rebuild
+    commit: e19b07d2ebbd5a434fcedacd6596bb86729fa41b
     output: android/app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 27.1.12297006
     # Node 24.15.0/npm 11.12.1 match the upstream release environment.
-    # Verify reproducibility against the release candidate before enabling.
-    # Start with Debian OpenJDK 17; verify any JDK-related APK differences.
+    # The Debian JDK patch version is checked to prevent silent toolchain drift.
     sudo:
       # The Trixie build image provides JDK 21; JDK 17 comes from Bookworm.
       - echo 'deb https://deb.debian.org/debian bookworm main' > /etc/apt/sources.list.d/psstpsst-bookworm.list
       - echo 'deb https://security.debian.org/debian-security bookworm-security main' >> /etc/apt/sources.list.d/psstpsst-bookworm.list
       - apt-get update
       - apt-get install -y openjdk-17-jdk-headless ca-certificates curl xz-utils
+      - test "$(dpkg-query -W -f='${Version}' openjdk-17-jdk-headless)" = '17.0.20.1+1-1~deb12u1'
       - curl --fail --location --retry 3 https://nodejs.org/dist/v24.15.0/node-v24.15.0-linux-x64.tar.xz -o /tmp/psstpsst-node.tar.xz
       - echo '472655581fb851559730c48763e0c9d3bc25975c59d518003fc0849d3e4ba0f6  /tmp/psstpsst-node.tar.xz' | sha256sum -c -
       - mkdir -p /opt/psstpsst-node
@@ -46,7 +45,7 @@ Builds:
       - export PATH=/opt/psstpsst-node/bin:$JAVA_HOME/bin:$PATH
       - test "$(node --version)" = v24.15.0
       - test "$(npm --version)" = 11.12.1
-      - sdkmanager --sdk_root="$$SDK$$" 'platforms;android-36' 'build-tools;36.0.0' 'cmake;3.22.1' 'ndk;27.0.12077973'
+      - sdkmanager --sdk_root="$$SDK$$" 'platforms;android-36' 'build-tools;35.0.0' 'build-tools;36.0.0' 'cmake;3.22.1' 'ndk;27.0.12077973'
       # Skip desktop native-addon install hooks; apply the required source patches explicitly.
       - CI=1 NODE_ENV=production ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --include=dev --ignore-scripts
       - CI=1 NODE_ENV=production npm run postinstall

@@ -33,6 +33,19 @@ test('public release assets use stable version-independent names', () => {
   assert.doesNotMatch(fdroid, /PsstPsst-%v-android\.apk/);
 });
 
+test('F-Droid auditing cannot block the normal APK release', () => {
+  const workflow = readFileSync(new URL('.github/workflows/build.yml', root), 'utf8');
+  const uploadIndex = workflow.indexOf('      - name: Upload APK');
+  const auditIndex = workflow.indexOf('      - name: Audit F-Droid signature compatibility (non-blocking)');
+  const reportIndex = workflow.indexOf('      - name: Report F-Droid audit failure');
+  assert.ok(uploadIndex >= 0 && auditIndex > uploadIndex && reportIndex > auditIndex);
+
+  const audit = workflow.slice(auditIndex, reportIndex);
+  assert.match(audit, /^        continue-on-error: true$/m);
+  assert.match(audit, /^        timeout-minutes: 5$/m);
+  assert.match(workflow.slice(reportIndex), /the APK was already uploaded and the release will continue/);
+});
+
 test('release validation reports only missing assets', () => {
   const directory = mkdtempSync(join(tmpdir(), 'psstpsst-release-assets-'));
   try {

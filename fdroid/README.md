@@ -26,7 +26,8 @@ checksum-verified `expo/template.tgz` from the release lockfile's Expo
 
 The JDK is Debian OpenJDK 17 from Bookworm and its security repository because
 the Trixie build image provides JDK 21. This is not an exact reproduction of the
-upstream Temurin installation. Its patch version is not pinned. Dependency
+upstream Temurin installation. The recipe checks the exact Debian package
+version and fails instead of silently accepting a toolchain update. Dependency
 scanning and APK reproducibility must pass before enabling this build. No broad
 scanner exclusions are configured.
 
@@ -104,11 +105,45 @@ which identifies fdroidserver commit `8f52ae3ce287bc28964db544b970b88dce9c38bf`.
 This replaces the unavailable historical digest above; the registry no longer
 serves that manifest.
 
+## v0.2.4 validation status (2026-09-26)
+
+The published `v0.2.4` tag resolves to commit
+`e19b07d2ebbd5a434fcedacd6596bb86729fa41b` (version code `6`). Its Android APK
+has SHA-256
+`6ef224247948ef2fcb1f22cb0c5f8b00ac63f9569bd5e978f82a1acffc6145a4` and the
+certificate listed in `AllowedAPKSigningKeys`.
+
+Two independent clean builds in fresh pinned containers produced byte-identical
+unsigned APKs of 147,046,827 bytes with SHA-256
+`8ec19695a3911e69fadef6cc496bda4fe9cd5a5dbc1bf8ffead05a5973bdc1fd`. The exact
+recipe passed `fdroid readmeta`, `fdroid lint`, the fdroidserver source scan with
+zero findings, the dependency policy check, the four-ABI APK check, and Android
+16 KiB ZIP alignment verification. One intervening build failed while fetching
+an Android dependency from Google Maven; an unchanged fresh retry succeeded.
+
+The rebuilt and published APKs have the same 2,332 non-signature paths and
+byte-identical extracted payloads. F-Droid's official signature-copy comparison
+still rejects the published APK: Build Tools 36 `apksigner` rewrote 662 local ZIP
+headers with Android alignment extra fields while signing, so the copied v2/v3
+signature no longer authenticates the independently built APK. Signing a
+disposable copy with preserved alignment and without the legacy v1 scheme made
+the same official comparison pass.
+
+The release helper now preserves alignment and disables the legacy v1 signature,
+which is unnecessary at the app's minimum SDK 24 and otherwise introduces ZIP
+entry timestamps that cannot be reconstructed byte-for-byte. CI copies every
+generated v2/v3 release signature onto the container-built APK with
+checksum-pinned `apksigcopier` and verifies the result with `apksigner` in a
+non-blocking post-upload audit. An F-Droid-specific failure is reported without
+blocking the normal APK or draft release. The published `v0.2.4` asset must not
+be replaced, so this recipe remains disabled. A new release using the corrected
+signing path must be built and verified before submission.
+
 ## Before enabling the recipe
 
-1. Publish a release containing both deterministic build fixes. Do not replace
-   a published release asset to make a later rebuild match. Record the new
-   tag's full commit hash in the build entry.
+1. Publish a release containing the signature-copy-compatible signing fix. Do
+   not replace a published release asset to make a later rebuild match. Record
+   the new tag's full commit hash in the build entry.
 2. Verify the new APK's certificate with `apksigner verify --print-certs` and
    compare its SHA-256 fingerprint with `AllowedAPKSigningKeys`. Never provide
    the keystore to F-Droid.

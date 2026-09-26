@@ -46,3 +46,7 @@ jobs:
         run: node --test scripts/release-assets.test.mjs
       - name: Electron signing regressions
         run: node --test scripts/electron-signing.test.mjs
+      - name: Android release signing regressions
+        run: |
+          node --test scripts/release-signing.test.mjs
+          node --test scripts/verify-fdroid-reproducibility.test.mjs

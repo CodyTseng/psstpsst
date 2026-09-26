@@ -187,6 +187,7 @@ jobs:
       CI: '1'
       NODE_ENV: production
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -209,7 +210,16 @@ jobs:
         shell: bash
         env:
           ANDROID_RELEASE_UNSIGNED: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '1' || '0' }}
-        run: bash scripts/build-android-reproducible.sh release/fdroid-build
+        run: |
+          for attempt in 1 2; do
+            if bash scripts/build-android-reproducible.sh release/fdroid-build; then
+              exit 0
+            fi
+            if (( attempt == 2 )); then
+              exit 1
+            fi
+            echo "::warning::The isolated Android build failed; retrying once with a fresh container."
+          done
 
       - name: Sign and verify APK
         shell: bash
@@ -230,6 +240,31 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: release/*.apk
+
+      - name: Audit F-Droid signature compatibility (non-blocking)
+        id: fdroid_audit
+        if: env.HAS_ANDROID_SIGNING == 'true'
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          PYTHON: ${{ runner.temp }}/fdroid-verifier/bin/python
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fdroid-verifier"
+          "$PYTHON" -m pip install \
+            --disable-pip-version-check \
+            --no-deps \
+            --only-binary=:all: \
+            --require-hashes \
+            --retries 2 \
+            --timeout 20 \
+            --requirement scripts/fdroid-reproducibility-requirements.txt
+          node scripts/verify-fdroid-reproducibility.mjs \
+            release/fdroid-build/app-release.apk \
+            release/PsstPsst-android.apk
+
+      - name: Report F-Droid audit failure
+        if: always() && steps.fdroid_audit.outcome == 'failure'
+        run: echo "::warning::F-Droid signature audit failed; the APK was already uploaded and the release will continue."
 
   publish-draft:
     name: Publish draft release

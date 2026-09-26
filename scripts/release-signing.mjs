@@ -27,6 +27,15 @@ function run(command, args, env) {
   if (result.status !== 0) throw new Error(`${command} failed (exit ${result.status}).`);
 }
 
+export function androidSigningArguments(keyPath, output, input, env = process.env) {
+  return [
+    'sign', '--ks', keyPath, '--ks-key-alias', env.ANDROID_KEY_ALIAS,
+    '--ks-pass', 'env:ANDROID_KEYSTORE_PASSWORD', '--key-pass', 'env:ANDROID_KEY_PASSWORD',
+    '--v1-signing-enabled', 'false', '--v4-signing-enabled', 'false',
+    '--alignment-preserved', '--out', output, input,
+  ];
+}
+
 export function signAndroid(input, output, env = process.env) {
   const mode = signingMode('android', env);
   if (!input || !output || resolve(input) === resolve(output)) {
@@ -50,12 +59,8 @@ export function signAndroid(input, output, env = process.env) {
       try {
         const keyPath = join(temporary, 'release.keystore');
         writeFileSync(keyPath, keystore, { mode: 0o600 });
-        // apksigner replaces the template's debug signature without changing the app payload.
-        run(apksigner, [
-          'sign', '--ks', keyPath, '--ks-key-alias', env.ANDROID_KEY_ALIAS,
-          '--ks-pass', 'env:ANDROID_KEYSTORE_PASSWORD', '--key-pass', 'env:ANDROID_KEY_PASSWORD',
-          '--v4-signing-enabled', 'false', '--out', output, input,
-        ], env);
+        // Min SDK 24 supports v2; preserving alignment makes that signature transplantable by F-Droid.
+        run(apksigner, androidSigningArguments(keyPath, output, input, env), env);
       } finally {
         rmSync(temporary, { recursive: true, force: true });
       }

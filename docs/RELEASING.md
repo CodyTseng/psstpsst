@@ -103,18 +103,40 @@ Android release builds run in the pinned F-Droid buildserver image through
 toolchain, sets `SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
 Android module from source. Tagged and credentialed runs produce an unsigned APK
 inside the container and apply the developer signature on the GitHub runner.
-Manual runs without Android credentials retain the generated debug signature.
+The signer preserves the unsigned APK's ZIP alignment metadata and disables the
+legacy v1 scheme, which is unnecessary at minimum SDK 24, so F-Droid can copy
+the v2/v3 signature onto an independent rebuild. After uploading the normal APK
+artifact, CI performs that exact copy with checksum-pinned `apksigcopier` and
+verifies the result with `apksigner` as a non-blocking audit. An audit failure is
+reported as a warning but does not prevent the draft release. Manual runs
+without Android credentials retain the generated debug signature. The isolated
+Android build is retried once in a fresh container to tolerate a transient
+dependency-repository failure; both attempts use the same pinned inputs.
 
 The preflight checks that the pinned Android build image is still available and
 checks credential presence. Invalid passwords, certificates, or Apple account
 permissions still fail at signing or notarization. A manual run on a tag
 requires signatures too, but does not create a release.
 
-To check changes to the signing helper, run
-`node --test scripts/release-signing.test.mjs`. With `ANDROID_HOME` pointing to
-an SDK containing platform 36 and Build Tools 36.0.0, the tests also create a
-temporary APK and disposable keys to exercise real signature replacement and
-verification. Without that SDK, the integration test is skipped.
+To check changes to the signing and F-Droid verification helpers, run:
+
+```sh
+node --test scripts/release-signing.test.mjs
+node --test scripts/verify-fdroid-reproducibility.test.mjs
+```
+
+With `ANDROID_HOME` pointing to an SDK containing platform 36 and Build Tools
+36.0.0, the signing tests also create a temporary APK and disposable keys to
+exercise real signature replacement and verification. Without that SDK, the
+integration test is skipped. To reproduce the release audit locally, install the
+checksum-pinned verifier dependency and compare the unsigned and signed APKs:
+
+```sh
+python3 -m pip install --no-deps --only-binary=:all: --require-hashes \
+  --requirement scripts/fdroid-reproducibility-requirements.txt
+node scripts/verify-fdroid-reproducibility.mjs \
+  release/fdroid-build/app-release.apk release/PsstPsst-android.apk
+```
 
 ## Add GitHub configuration
 
