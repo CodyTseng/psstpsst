@@ -176,6 +176,12 @@ resume pending work independently of messaging readiness. See
 5. Delivery status is derived from acknowledgements, not merely from a socket
    write succeeding.
 
+Recipient relay attempts settle independently under a hard deadline. At least
+half of the recipient relays must acknowledge the message, with at least one
+acknowledgement required. Failed relays remain individually retryable even after
+the message is considered sent, and retries do not target relays that already
+acknowledged it.
+
 Retries reuse settled payloads where the protocol permits. A resend that must
 refresh timestamps creates and persists a replacement intentionally.
 

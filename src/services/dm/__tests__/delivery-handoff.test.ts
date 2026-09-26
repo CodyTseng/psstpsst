@@ -1,4 +1,8 @@
-import { deliveryStatusStore, failedRelayRetryUrls } from '../delivery-status';
+import {
+  deliveryStatusStore,
+  relayDeliveryVerdict,
+  retryableRelayUrls,
+} from '../delivery-status';
 import { dmService } from '../dm.service';
 import {
   beginMessagingSendPreparation,
@@ -77,7 +81,83 @@ it('retains a whole-attempt failure reason for message details', () => {
     phase: 'failed',
     error: 'Signer rejected the request.',
   });
-  expect(failedRelayRetryUrls(deliveryStatusStore.getState().byId.rumor!)).toEqual([]);
+  expect(retryableRelayUrls(deliveryStatusStore.getState().byId.rumor!)).toEqual([]);
+});
+
+it('keeps failed relays retryable after a majority-successful delivery', () => {
+  const delivery = deliveryStatusStore.getState();
+  delivery.begin('rumor');
+  delivery.startSending('rumor', [
+    {
+      recipient: recipientPubkey,
+      self: false,
+      urls: ['wss://one.example', 'wss://two.example', 'wss://three.example'],
+    },
+  ]);
+  delivery.markRelay('rumor', recipientPubkey, false, 'wss://one.example', 'ok');
+  delivery.markRelay('rumor', recipientPubkey, false, 'wss://two.example', 'ok');
+  delivery.markRelay('rumor', recipientPubkey, false, 'wss://three.example', 'failed');
+  delivery.finish('rumor', relayDeliveryVerdict(2, 3));
+
+  expect(deliveryStatusStore.getState().byId.rumor.phase).toBe('sent');
+  expect(retryableRelayUrls(deliveryStatusStore.getState().byId.rumor)).toEqual([
+    'wss://three.example',
+  ]);
+
+  delivery.beginResend(
+    'rumor',
+    deliveryStatusStore.getState().byId.rumor.copies,
+    ['wss://three.example'],
+  );
+  expect(deliveryStatusStore.getState().byId.rumor).toMatchObject({
+    phase: 'sent',
+    copies: [
+      {
+        relays: [
+          { url: 'wss://one.example', status: 'ok' },
+          { url: 'wss://two.example', status: 'ok' },
+          { url: 'wss://three.example', status: 'pending' },
+        ],
+      },
+    ],
+  });
+  expect(retryableRelayUrls(deliveryStatusStore.getState().byId.rumor)).toBeNull();
+});
+
+it('does not offer a concurrent retry while relay delivery is active', () => {
+  const delivery = deliveryStatusStore.getState();
+  delivery.begin('rumor');
+  delivery.startSending('rumor', [
+    {
+      recipient: recipientPubkey,
+      self: false,
+      urls: ['wss://one.example'],
+    },
+  ]);
+
+  expect(retryableRelayUrls(deliveryStatusStore.getState().byId.rumor)).toBeNull();
+});
+
+it('preserves a persisted sent verdict while retrying a failed mirror', () => {
+  const delivery = deliveryStatusStore.getState();
+  delivery.beginResend(
+    'rumor',
+    [
+      {
+        recipient: recipientPubkey,
+        self: false,
+        relays: [
+          { url: 'wss://one.example', status: 'ok' },
+          { url: 'wss://two.example', status: 'failed' },
+        ],
+      },
+    ],
+    ['wss://two.example'],
+    'sent',
+  );
+
+  expect(deliveryStatusStore.getState().byId.rumor.phase).toBe('sent');
+  expect(retryableRelayUrls(deliveryStatusStore.getState().byId.rumor)).toBeNull();
 });
 
 it('seeds signing status before the stored message can replace its optimistic row', () => {

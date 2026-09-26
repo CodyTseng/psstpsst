@@ -24,7 +24,7 @@ import { findFileMeta } from '@/lib/nostr/file-tags';
 import { formatDetailTimestamp } from '@/lib/time';
 import {
   deliveryCounts,
-  failedRelayRetryUrls,
+  retryableRelayUrls,
   surfacedRelays,
   useDelivery,
   type MessageDelivery,
@@ -183,7 +183,7 @@ export function MessageDetailSheet({
   const rows = delivery ? surfacedRelays(delivery) : [];
   const signing = delivery?.phase === 'signing';
   const failed = delivery?.phase === 'failed';
-  const retryUrls = delivery ? failedRelayRetryUrls(delivery) : null;
+  const retryUrls = delivery ? retryableRelayUrls(delivery) : null;
   const canResend = !!onResend && retryUrls !== null;
 
   // Which failed relays have their reason expanded (tap the row to toggle).

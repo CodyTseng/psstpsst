@@ -62,7 +62,11 @@ import { RelayQueryError } from '../relay/relay-query-error';
 import { relayPool } from '../relay/relay-pool';
 import { capDeliveryRelays } from '../relay/relay-router';
 import { selfEventStream } from '../self-events/self-event-stream.service';
-import { deliveryStatusStore, surfacedCopies } from './delivery-status';
+import {
+  deliveryStatusStore,
+  relayDeliveryVerdict,
+  surfacedCopies,
+} from './delivery-status';
 import { syncStatusStore } from './sync-status';
 import type { Signer } from '../signer/signer.interface';
 import { isBlocked, loadBlockedIntoCache } from './block.service';
@@ -128,15 +132,6 @@ const GIFT_WRAP_SEEN_LIMIT = 2000;
  * vs. the seconds-long window in which a peer's relays redeliver a live wrap, so
  * the union for a still-fresh message is never dropped mid-collection. */
 const GIFT_WRAP_SEEN_MAX_AGE_MS = 60_000;
-
-/**
- * A message counts as delivered by **majority**: at least half the recipient
- * relays accepted it (and at least one did). We deliberately don't require every
- * relay — a single unreachable relay shouldn't flag an otherwise-fine send.
- */
-function isDelivered(okCount: number, total: number): boolean {
-  return okCount > 0 && okCount * 2 >= total;
-}
 
 /** The read watermark as an `(order_at, id)` cursor — the same key the message
  * list uses. Legacy messages share a second-floor `order_at` and tie on id. */
@@ -1061,9 +1056,10 @@ class DmService {
     const acct = this.accountPubkey;
     const encKp = this.encryptionKeypair;
 
-    // Flip the chosen relays to 'sending' immediately for instant feedback —
-    // from the in-memory entry if present (no DB wait); otherwise we seed it
-    // from the persisted row below.
+    // Flip the chosen relays to pending immediately for instant feedback. A
+    // previously successful message keeps its sent verdict while those failed
+    // mirrors retry. Use the live entry when available; otherwise seed it from
+    // the persisted row below.
     const delivery = deliveryStatusStore.getState();
     const live = delivery.byId[opts.rumorId];
     if (live) delivery.beginResend(opts.rumorId, live.copies, opts.relayUrls);
@@ -1082,7 +1078,12 @@ class DmService {
         .from(messageDeliveries)
         .where(eq(messageDeliveries.messageId, opts.rumorId))
         .limit(1);
-      delivery.beginResend(opts.rumorId, delRow?.copies ?? [], opts.relayUrls);
+      delivery.beginResend(
+        opts.rumorId,
+        delRow?.copies ?? [],
+        opts.relayUrls,
+        delRow?.status,
+      );
     }
 
     const rumorTemplate: EventTemplate = {
@@ -1163,7 +1164,7 @@ class DmService {
     const okCount = recipientRelays.filter((r) => r.status === 'ok').length;
     delivery.finish(
       opts.rumorId,
-      isDelivered(okCount, recipientRelays.length) ? 'sent' : 'failed',
+      relayDeliveryVerdict(okCount, recipientRelays.length),
     );
     await this.persistDelivery(acct, opts.rumorId, msgRow.conversationKey, copyRecords);
   }
@@ -1401,9 +1402,9 @@ class DmService {
       // the self copy itself (see surfacedCopies).
       const recipientRelayRecords = surfacedCopies(copyRecords).flatMap((c) => c.relays);
       const okCount = recipientRelayRecords.filter((r) => r.status === 'ok').length;
-      const delivered = isDelivered(okCount, recipientRelayRecords.length);
+      const verdict = relayDeliveryVerdict(okCount, recipientRelayRecords.length);
 
-      delivery.finish(rumor.id!, delivered ? 'sent' : 'failed');
+      delivery.finish(rumor.id!, verdict);
       if (persists) {
         await this.persistDelivery(opts.accountPubkey, rumor.id!, convKey, copyRecords);
       }
@@ -1465,7 +1466,7 @@ class DmService {
     // self copy is stored but never counted toward the status.
     const recipientRelays = surfacedCopies(copies).flatMap((c) => c.relays);
     const okCount = recipientRelays.filter((r) => r.status === 'ok').length;
-    const status = isDelivered(okCount, recipientRelays.length) ? 'sent' : 'failed';
+    const status = relayDeliveryVerdict(okCount, recipientRelays.length);
     const now = Math.floor(Date.now() / 1000);
     await db.transaction(async (tx) => {
       await tx

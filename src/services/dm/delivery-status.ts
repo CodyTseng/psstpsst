@@ -84,11 +84,13 @@ export type DeliveryStatusState = {
     phase: 'queued' | 'sending' | 'awaiting_ack' | 'sent' | 'failed',
   ) => void;
   /** Seed/replace the entry for a resend: keep the known copies, flip the
-   * selected relays back to 'pending', and re-enter the 'sending' phase. */
+   * selected relays back to 'pending'. A previously successful verdict stays
+   * successful while failed mirrors are retried. */
   beginResend: (
     rumorId: string,
     copies: DeliveryCopy[],
     retryUrls: string[],
+    settledPhase?: 'sent' | 'failed',
   ) => void;
 };
 
@@ -155,25 +157,28 @@ export const deliveryStatusStore = createStore<DeliveryStatusState>()((set) => (
         [rumorId]: { rumorId, phase, transport: 'proximity', copies: [] },
       },
     })),
-  beginResend: (rumorId, copies, retryUrls) =>
-    set((s) => ({
-      byId: {
-        ...s.byId,
-        [rumorId]: {
-          rumorId,
-          phase: 'sending',
-          error: undefined,
-          copies: copies.map((cp) => ({
-            ...cp,
-            relays: cp.relays.map((r) =>
-              retryUrls.includes(r.url)
-                ? { ...r, status: 'pending' as const, error: undefined }
-                : r,
-            ),
-          })),
+  beginResend: (rumorId, copies, retryUrls, settledPhase) =>
+    set((s) => {
+      const previousPhase = s.byId[rumorId]?.phase ?? settledPhase;
+      return {
+        byId: {
+          ...s.byId,
+          [rumorId]: {
+            rumorId,
+            phase: previousPhase === 'sent' ? 'sent' : 'sending',
+            error: undefined,
+            copies: copies.map((cp) => ({
+              ...cp,
+              relays: cp.relays.map((r) =>
+                retryUrls.includes(r.url)
+                  ? { ...r, status: 'pending' as const, error: undefined }
+                  : r,
+              ),
+            })),
+          },
         },
-      },
-    })),
+      };
+    }),
 }));
 
 /**
@@ -193,15 +198,24 @@ export function surfacedRelays(d: MessageDelivery): RelayDelivery[] {
   return surfacedCopies(d.copies).flatMap((c) => c.relays);
 }
 
-/** Failed relay URLs to retry, or an empty list when the whole attempt must be
- * rebuilt because it failed before any relay copies existed. Null means the
- * delivery is not currently retryable. */
-export function failedRelayRetryUrls(d: MessageDelivery): string[] | null {
-  if (d.phase !== 'failed') return null;
+/** Failed relay URLs to retry after a settled attempt. This is deliberately
+ * independent from the message verdict: a majority-successful message is
+ * `sent`, but its failed mirrors remain retryable. An empty list means a failed
+ * attempt must be rebuilt because it never reached the relay phase. Null means
+ * the delivery is still active or has no failed work. */
+export function retryableRelayUrls(d: MessageDelivery): string[] | null {
+  if (d.phase !== 'sent' && d.phase !== 'failed') return null;
   const relays = surfacedRelays(d);
-  const failed = relays.filter((relay) => relay.status === 'failed').map((relay) => relay.url);
+  if (relays.some((relay) => relay.status === 'pending')) return null;
+  const failed = Array.from(
+    new Set(
+      relays
+        .filter((relay) => relay.status === 'failed')
+        .map((relay) => relay.url),
+    ),
+  );
   if (failed.length > 0) return failed;
-  return relays.length === 0 ? [] : null;
+  return d.phase === 'failed' && relays.length === 0 ? [] : null;
 }
 
 /** succeeded / total recipient relay attempts for the headline `n/m`. */
@@ -211,4 +225,10 @@ export function deliveryCounts(d: MessageDelivery): { ok: number; total: number 
     ok: relays.filter((r) => r.status === 'ok').length,
     total: relays.length,
   };
+}
+
+/** Settle a relay attempt from recipient acknowledgements. The overall verdict
+ * does not erase per-relay failures, which may still be retried afterward. */
+export function relayDeliveryVerdict(okCount: number, total: number): 'sent' | 'failed' {
+  return okCount > 0 && okCount * 2 >= total ? 'sent' : 'failed';
 }
