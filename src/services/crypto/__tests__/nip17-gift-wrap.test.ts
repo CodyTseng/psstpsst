@@ -39,7 +39,7 @@ describe('NIP-17 gift wraps', () => {
     expect(result?.senderEncryptionPubkey).toBe(senderPubkey);
   });
 
-  test('keeps the relay split-key seal format compatible', async () => {
+  test('routes a split-key gift wrap by recipient identity only', async () => {
     const identitySecret = generateSecretKey();
     const encryptionSecret = generateSecretKey();
     const recipientIdentity = generateSecretKey();
@@ -65,6 +65,7 @@ describe('NIP-17 gift wraps', () => {
     });
 
     expect(wrapped.seal.tags).toContainEqual(['n', encryptionPubkey]);
+    expect(wrapped.giftWrap.tags).toEqual([['p', recipientIdentityPubkey]]);
     const result = await unwrapGiftWrap(wrapped.giftWrap, recipientEncryption);
     expect(result?.rumor.pubkey).toBe(identityPubkey);
     expect(result?.senderEncryptionPubkey).toBe(encryptionPubkey);

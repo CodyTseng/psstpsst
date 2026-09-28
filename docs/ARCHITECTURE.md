@@ -124,6 +124,8 @@ inside the authenticated seal. A verified seal without it is unsupported and
 marked processed without decrypting its content. Envelopes that fail decryption
 with all available messaging keys are also marked processed; later key changes
 do not retry them. Results from an invalidated receive session are discarded.
+The event-format extensions are specified in
+[PsstPsst NIP-17 Extensions](protocols/nip17-extensions.md).
 
 All signing goes through the `Signer` interface. Local private keys, remote
 NIP-46 signers, encryption-key rotation, and device key transfer remain behind

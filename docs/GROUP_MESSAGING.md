@@ -2,9 +2,9 @@
 
 > Status: **implemented**.
 >
-> This is an implementation plan, not a protocol specification. Group messaging
-> deliberately extends NIP-17 room semantics and therefore lives outside
-> `docs/protocols/`.
+> This document records the implementation plan and detailed product behavior.
+> The event-format extensions are specified in
+> [PsstPsst NIP-17 Extensions](protocols/nip17-extensions.md).
 
 ## 1. Scope and trust model
 
