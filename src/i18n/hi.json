@@ -1017,7 +1017,10 @@
     "left": "{{actor}} ने समूह छोड़ा",
     "renamed": "{{actor}} ने समूह का नाम {{name}} रखा",
     "cleared_name": "{{actor}} ने समूह का नाम हटा दिया",
-    "common_groups": "साझा समूह"
+    "common_groups": "साझा समूह",
+    "list_title": "ग्रुप चैट",
+    "list_empty_title": "अभी कोई ग्रुप चैट नहीं",
+    "list_empty_hint": "आप जिन ग्रुप में शामिल होंगे, वे यहाँ दिखाई देंगे।"
   },
   "licenses": {
     "intro": "ओपन सोर्स समुदाय का धन्यवाद।",

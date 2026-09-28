@@ -1017,7 +1017,10 @@
     "left": "{{actor}} 退出了群聊",
     "renamed": "{{actor}} 将群名改为 {{name}}",
     "cleared_name": "{{actor}} 清除了群名",
-    "common_groups": "共同群聊"
+    "common_groups": "共同群聊",
+    "list_title": "群聊",
+    "list_empty_title": "还没有群聊",
+    "list_empty_hint": "你加入的群聊会显示在这里。"
   },
   "licenses": {
     "intro": "感谢开源社区的贡献。",

@@ -20,6 +20,10 @@ describe('wide pane selection', () => {
     expect(getWidePaneSelection('/profile/alice').profilePubkey).toBe('alice');
   });
 
+  it('maps the group list to the contacts entry', () => {
+    expect(getWidePaneSelection('/groups').contactsItem).toBe('groups');
+  });
+
   it.each([
     ['/account', 'account'],
     ['/encryption-key', 'account'],
@@ -38,6 +42,7 @@ describe('wide pane selection', () => {
       conversationKey: null,
       profilePubkey: null,
       settingsItem: null,
+      contactsItem: null,
     });
   });
 });

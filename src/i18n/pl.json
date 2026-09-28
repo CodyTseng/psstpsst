@@ -1027,7 +1027,10 @@
     "left": "{{actor}} opuścił(a) grupę",
     "renamed": "{{actor}} zmienił(a) nazwę grupy na {{name}}",
     "cleared_name": "{{actor}} usunął/usunęła nazwę grupy",
-    "common_groups": "Wspólne grupy"
+    "common_groups": "Wspólne grupy",
+    "list_title": "Czaty grupowe",
+    "list_empty_title": "Nie masz jeszcze czatów grupowych",
+    "list_empty_hint": "Grupy, do których dołączysz, pojawią się tutaj."
   },
   "licenses": {
     "intro": "Dziękujemy społeczności open source.",

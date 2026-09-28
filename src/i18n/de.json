@@ -1017,7 +1017,10 @@
     "left": "{{actor}} hat die Gruppe verlassen",
     "renamed": "{{actor}} hat die Gruppe in {{name}} umbenannt",
     "cleared_name": "{{actor}} hat den Gruppennamen gelöscht",
-    "common_groups": "Gemeinsame Gruppen"
+    "common_groups": "Gemeinsame Gruppen",
+    "list_title": "Gruppenchats",
+    "list_empty_title": "Noch keine Gruppenchats",
+    "list_empty_hint": "Gruppen, denen du beitrittst, erscheinen hier."
   },
   "licenses": {
     "intro": "Vielen Dank an die Open-Source-Community.",

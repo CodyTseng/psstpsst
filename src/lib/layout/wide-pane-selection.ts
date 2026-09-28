@@ -11,10 +11,13 @@ export type SettingsSelection =
   | 'data'
   | 'about';
 
+export type ContactsSelection = 'groups';
+
 export type WidePaneSelection = {
   conversationKey: string | null;
   profilePubkey: string | null;
   settingsItem: SettingsSelection | null;
+  contactsItem: ContactsSelection | null;
 };
 
 const SETTINGS_ITEM_BY_ROUTE: Readonly<Record<string, SettingsSelection>> = {
@@ -82,5 +85,6 @@ export function getWidePaneSelection(
       (profileOpenedFromChat ? profilePubkey : null),
     profilePubkey,
     settingsItem: SETTINGS_ITEM_BY_ROUTE[rootRoute] ?? null,
+    contactsItem: rootRoute === 'groups' ? 'groups' : null,
   };
 }

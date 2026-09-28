@@ -1017,7 +1017,10 @@
     "left": "{{actor}} gruptan ayrıldı",
     "renamed": "{{actor}} grubun adını {{name}} olarak değiştirdi",
     "cleared_name": "{{actor}} grup adını temizledi",
-    "common_groups": "Ortak gruplar"
+    "common_groups": "Ortak gruplar",
+    "list_title": "Grup sohbetleri",
+    "list_empty_title": "Henüz grup sohbeti yok",
+    "list_empty_hint": "Katıldığınız gruplar burada görünür."
   },
   "licenses": {
     "intro": "Açık kaynak topluluğuna teşekkürler.",

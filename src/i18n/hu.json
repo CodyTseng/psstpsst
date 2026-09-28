@@ -1017,7 +1017,10 @@
     "left": "{{actor}} kilépett a csoportból",
     "renamed": "{{actor}} átnevezte a csoportot erre: {{name}}",
     "cleared_name": "{{actor}} törölte a csoport nevét",
-    "common_groups": "Közös csoportok"
+    "common_groups": "Közös csoportok",
+    "list_title": "Csoportos csevegések",
+    "list_empty_title": "Még nincsenek csoportos csevegések",
+    "list_empty_hint": "Azok a csoportok, amelyekhez csatlakozol, itt jelennek meg."
   },
   "licenses": {
     "intro": "Köszönjük a nyílt forráskódú közösség munkáját.",

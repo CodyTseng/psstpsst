@@ -1017,7 +1017,10 @@
     "left": "{{actor}}님이 그룹을 나갔습니다",
     "renamed": "{{actor}}님이 그룹 이름을 {{name}}(으)로 변경했습니다",
     "cleared_name": "{{actor}}님이 그룹 이름을 지웠습니다",
-    "common_groups": "공통 그룹"
+    "common_groups": "공통 그룹",
+    "list_title": "그룹 채팅",
+    "list_empty_title": "아직 그룹 채팅이 없습니다",
+    "list_empty_hint": "참여한 그룹이 여기에 표시됩니다."
   },
   "licenses": {
     "intro": "오픈 소스 커뮤니티에 감사드립니다.",

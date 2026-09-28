@@ -1017,7 +1017,10 @@
     "left": "{{actor}} left the group",
     "renamed": "{{actor}} renamed the group to {{name}}",
     "cleared_name": "{{actor}} cleared the group name",
-    "common_groups": "Groups in common"
+    "common_groups": "Groups in common",
+    "list_title": "Group chats",
+    "list_empty_title": "No group chats yet",
+    "list_empty_hint": "Groups you join will appear here."
   },
   "licenses": {
     "intro": "Thank you to the open-source community.",

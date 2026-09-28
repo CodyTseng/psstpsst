@@ -1022,7 +1022,10 @@
     "left": "{{actor}} salió del grupo",
     "renamed": "{{actor}} cambió el nombre del grupo a {{name}}",
     "cleared_name": "{{actor}} borró el nombre del grupo",
-    "common_groups": "Grupos en común"
+    "common_groups": "Grupos en común",
+    "list_title": "Chats grupales",
+    "list_empty_title": "Aún no hay chats grupales",
+    "list_empty_hint": "Los grupos a los que te unas aparecerán aquí."
   },
   "licenses": {
     "intro": "Gracias a la comunidad de código abierto.",

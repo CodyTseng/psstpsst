@@ -1022,7 +1022,10 @@
     "left": "{{actor}} a quitté le groupe",
     "renamed": "{{actor}} a renommé le groupe {{name}}",
     "cleared_name": "{{actor}} a effacé le nom du groupe",
-    "common_groups": "Groupes en commun"
+    "common_groups": "Groupes en commun",
+    "list_title": "Discussions de groupe",
+    "list_empty_title": "Aucune discussion de groupe",
+    "list_empty_hint": "Les groupes que vous rejoignez apparaîtront ici."
   },
   "licenses": {
     "intro": "Merci à la communauté open source.",

@@ -1017,7 +1017,10 @@
     "left": "{{actor}}がグループを退出しました",
     "renamed": "{{actor}}がグループ名を{{name}}に変更しました",
     "cleared_name": "{{actor}}がグループ名を削除しました",
-    "common_groups": "共通のグループ"
+    "common_groups": "共通のグループ",
+    "list_title": "グループチャット",
+    "list_empty_title": "グループチャットはまだありません",
+    "list_empty_hint": "参加したグループがここに表示されます。"
   },
   "licenses": {
     "intro": "オープンソースコミュニティに感謝します。",

@@ -1,5 +1,6 @@
 import { useIsFocused, useNavigation } from 'expo-router';
 import { UserPlus } from '@solar-icons/react-native/category/users/Linear/UserPlus';
+import { UsersGroupRounded as UsersGroup } from '@solar-icons/react-native/category/users/Linear/UsersGroupRounded';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Keyboard, View } from 'react-native';
@@ -8,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { IconButton } from '@/components/common/IconButton';
+import { ListRow } from '@/components/common/ListRow';
 import { NotificationDot } from '@/components/common/NotificationDot';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { usePrimaryPaneNavigation } from '@/components/navigation/primary-pane-navigation';
@@ -38,7 +40,7 @@ export default function Contacts() {
   const focused = useIsFocused();
   const navigation = useNavigation();
   const groupedListRef = useRef<ContactSectionListHandle>(null);
-  const { open: openInDetailPane } = usePrimaryPaneNavigation();
+  const { open: openInDetailPane, selection } = usePrimaryPaneNavigation();
 
   // Pull the personal config batch on mount so contacts added on other devices
   // appear here (TTL-gated, so a fresh cache costs zero network). Best-effort —
@@ -166,21 +168,41 @@ export default function Contacts() {
             // Inactive search affordance at the top of the list (visible at rest);
             // tapping it opens the real (autofocused) search.
             ListHeaderComponent={
-              <View
-                style={{
-                  paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER,
-                  paddingTop: topClearance,
-                  paddingBottom: spacing.sm,
-                }}
-              >
-                <SearchBar
-                  value=""
-                  onChangeText={() => {}}
-                  placeholder={t('search.contacts_placeholder')}
-                  shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL}
-                  onPress={openSearch}
-                />
-              </View>
+              <>
+                <View
+                  style={{
+                    paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER,
+                    paddingTop: topClearance,
+                    paddingBottom: spacing.sm,
+                  }}
+                >
+                  <SearchBar
+                    value=""
+                    onChangeText={() => {}}
+                    placeholder={t('search.contacts_placeholder')}
+                    shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL}
+                    onPress={openSearch}
+                  />
+                </View>
+                <View
+                  style={{
+                    paddingBottom: spacing.sm,
+                  }}
+                >
+                  <ListRow
+                    icon={(
+                      <UsersGroup
+                        size={uiDensity.headerActionIconSize}
+                        color={c.text}
+                      />
+                    )}
+                    title={t('group.list_title')}
+                    onPress={() => openInDetailPane('/groups')}
+                    active={selection.contactsItem === 'groups'}
+                    variant="list"
+                  />
+                </View>
+              </>
             }
             contentBottomInset={bottomClearance}
           />

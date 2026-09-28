@@ -1017,7 +1017,10 @@
     "left": "{{actor}} ออกจากกลุ่ม",
     "renamed": "{{actor}} เปลี่ยนชื่อกลุ่มเป็น {{name}}",
     "cleared_name": "{{actor}} ล้างชื่อกลุ่ม",
-    "common_groups": "กลุ่มที่มีร่วมกัน"
+    "common_groups": "กลุ่มที่มีร่วมกัน",
+    "list_title": "แชทกลุ่ม",
+    "list_empty_title": "ยังไม่มีแชทกลุ่ม",
+    "list_empty_hint": "กลุ่มที่คุณเข้าร่วมจะแสดงที่นี่"
   },
   "licenses": {
     "intro": "ขอบคุณชุมชนโอเพนซอร์ส",
