@@ -168,6 +168,7 @@
     "confirm_delete": "Törlés megerősítése",
     "blocked": "Letiltva",
     "draft": "Piszkozat",
+    "sender_preview": "{{name}}: ",
     "attachment_file_preview": "[Fájl]",
     "attachment_image_preview": "[Kép]",
     "attachment_video_preview": "[Videó]",

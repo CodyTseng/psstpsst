@@ -168,6 +168,7 @@
     "confirm_delete": "Confirmer la suppression",
     "blocked": "Bloqué",
     "draft": "Brouillon",
+    "sender_preview": "{{name}} : ",
     "attachment_file_preview": "[Fichier]",
     "attachment_image_preview": "[Image]",
     "attachment_video_preview": "[Vidéo]",

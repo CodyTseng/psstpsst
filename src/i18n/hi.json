@@ -168,6 +168,7 @@
     "confirm_delete": "डिलीट करने की पुष्टि करें",
     "blocked": "ब्लॉक किया गया",
     "draft": "ड्राफ़्ट",
+    "sender_preview": "{{name}}: ",
     "attachment_file_preview": "[फ़ाइल]",
     "attachment_image_preview": "[इमेज]",
     "attachment_video_preview": "[वीडियो]",

@@ -168,6 +168,7 @@
     "confirm_delete": "삭제 확인",
     "blocked": "차단됨",
     "draft": "초안",
+    "sender_preview": "{{name}}: ",
     "attachment_file_preview": "[파일]",
     "attachment_image_preview": "[이미지]",
     "attachment_video_preview": "[동영상]",

@@ -332,17 +332,25 @@ function ConversationListItemBase({
     actionTargetPubkey,
     liveDataEnabled && isGroup,
   );
+  const resolvedGroupSenderName =
+    isGroup && lastMessageSenderPubkey
+      ? resolveDisplayName(lastMessageSenderPubkey, {
+          petname: actionSenderContact?.petname,
+          displayName: actionSenderProfile?.displayName,
+          name: actionSenderProfile?.name,
+        })
+      : null;
+  const groupPreviewSenderName =
+    resolvedGroupSenderName && lastMessageSenderPubkey === accountPubkey
+      ? t('common.you')
+      : resolvedGroupSenderName;
   const actionPreview = (() => {
     if (
       parsedGroupAction.status !== 'valid' ||
       parsedGroupAction.action.type === 'create' ||
       !lastMessageSenderPubkey
     ) return null;
-    const actor = resolveDisplayName(lastMessageSenderPubkey, {
-      petname: actionSenderContact?.petname,
-      displayName: actionSenderProfile?.displayName,
-      name: actionSenderProfile?.name,
-    });
+    const actor = resolvedGroupSenderName ?? resolveDisplayName(lastMessageSenderPubkey);
     const member = actionTargetPubkey
       ? resolveDisplayName(actionTargetPubkey, {
           petname: actionTargetContact?.petname,
@@ -799,6 +807,7 @@ function ConversationListItemBase({
                         content={lastMessagePreview ?? ''}
                         tags={lastMessageTags}
                         invoiceRole={lastMessageFromSelf ? 'sent' : 'received'}
+                        senderName={isGroup ? groupPreviewSenderName : undefined}
                       />
                     )
                   )}

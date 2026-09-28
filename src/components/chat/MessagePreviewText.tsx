@@ -40,10 +40,12 @@ export function MessagePreviewText({
   content,
   tags,
   invoiceRole = 'received',
+  senderName,
 }: {
   content: string;
   tags?: string[][] | null;
   invoiceRole?: 'sent' | 'received';
+  senderName?: string | null;
 }) {
   const { t } = useTranslation();
   const customEmojiMap = useMemo(() => {
@@ -137,7 +139,14 @@ export function MessagePreviewText({
 
   return (
     <AppText variant="body" tone="muted" numberOfLines={1} style={{ flex: 1 }}>
-      {preview}
+      {senderName ? (
+        <>
+          <AppText variant="body" tone="muted" weight="medium">
+            {t('conversations.sender_preview', { name: senderName })}
+          </AppText>
+          {preview}
+        </>
+      ) : preview}
     </AppText>
   );
 }

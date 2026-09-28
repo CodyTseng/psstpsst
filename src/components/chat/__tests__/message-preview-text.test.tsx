@@ -4,11 +4,12 @@ import { MessagePreviewText } from '../MessagePreviewText';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { shortcodes?: string }) => {
+    t: (key: string, options?: { name?: string; shortcodes?: string }) => {
       if (key === 'conversations.sticker_preview') {
         return `[Sticker] ${options?.shortcodes ?? ''}`;
       }
       if (key === 'conversations.sticker_preview_separator') return ', ';
+      if (key === 'conversations.sender_preview') return `${options?.name}: `;
       return key;
     },
   }),
@@ -58,5 +59,18 @@ describe('MessagePreviewText', () => {
     const renderer = renderPreview(':party:');
 
     expect(renderer.root.findByType('Text' as never).props.children).toBe(':party:');
+  });
+
+  it('prefixes a group preview with its sender inside the same truncated line', () => {
+    let renderer: ReactTestRenderer | undefined;
+    act(() => {
+      renderer = create(
+        <MessagePreviewText content="Hello" senderName="Alice" />,
+      );
+    });
+
+    const serialized = JSON.stringify(renderer!.toJSON());
+    expect(serialized).toContain('Alice: ');
+    expect(serialized).toContain('Hello');
   });
 });

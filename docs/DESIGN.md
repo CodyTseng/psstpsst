@@ -149,6 +149,8 @@ between a message bubble and its reaction row.
   in its active primary row. Composer keystrokes stay local; leaving the
   conversation reveals the latest draft once, while clearing or sending removes
   the frozen preview immediately.
+- Ordinary group-conversation previews prefix the resolved sender name on the
+  same truncated line. Drafts and group system actions keep their own labels.
 
 Message reactions sit in a compact, separate row directly below the bubble,
 with the dedicated `messageLayout.reactionGap` and without overlap or a
