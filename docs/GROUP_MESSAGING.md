@@ -66,8 +66,10 @@ identical.
 
 ## 3. One event ordering rule
 
-Before group messaging, consolidate all message and cursor comparisons behind
-one shared event-order helper.
+Current `master` already provides the shared `message-order` helper, updates
+message pagination, notification ordering, warm-tail merging, and last-message
+selection, and installs the mixed-direction message indexes in migration 0047.
+Group state must reuse that helper rather than introduce another comparator.
 
 `orderAt` remains the normalized authenticated message timestamp:
 
@@ -95,21 +97,16 @@ Newest-to-oldest queries use the inverse mixed direction:
 ORDER BY order_at DESC, id ASC
 ```
 
-This rule must be shared by message pagination, last-message cursors, read
-cursors, unread queries, notification recovery, warm-tail merging, imports, and
-group-state comparison. The supporting SQLite index must use the corresponding
-mixed directions.
+This rule remains authoritative for read cursors, unread queries, imports, and
+all new group-state comparison.
 
-The migration must repair existing materialized cursors, not only replace the
-comparator and index:
+Migration 0047 already repaired last-message cursors and indexes. Add one
+follow-up migration for the state it did not repair:
 
-- rebuild each conversation's last-message cursor as the maximum `orderAt` and,
-  within it, the minimum event id;
 - for an existing read cursor, advance it to the minimum event id at its current
   `orderAt`, treating every message in that same millisecond as read rather than
   manufacturing unread messages during upgrade;
-- recompute unread counts from the repaired cursor;
-- replace message-list and search indexes with the matching mixed directions.
+- recompute unread counts from the repaired cursor.
 
 Run this as set-based, indexed SQL. Do not load or sort complete conversation
 histories in JavaScript; histories may contain millions of messages.
@@ -307,7 +304,7 @@ Invite, remove, and rename:
 - cannot be selected, copied, replied to, quoted, reacted to, or forwarded.
 
 An own authored invite, remove/leave, or rename system capsule reserves the same
-fixed-size delivery-status slot used by message metadata and shows pending,
+fixed-size delivery-status slot used by message metadata and shows queued,
 sent, partial, or failed with the existing glyphs. Tapping the capsule opens the
 same frozen-recipient delivery detail and retry flow as an ordinary message.
 Incoming action capsules have no delivery slot; tapping one opens group info.
@@ -592,125 +589,111 @@ flag. Replay considers both that log and unpromoted action candidates in
 
 ### Messages
 
-The `messages` table remains unchanged. Its stored tags and rumor JSON contain
-`h`, `p`, `subject`, and `action`. A `create` tag on the first text or file
-message retains bubble presentation. Invite, remove, and rename appear as system
-lines. Once an invite or remove has applied at least once, its system line stays
-visible even when later replay makes its current roster effect inactive. A
-never-applied candidate lives only in `pending_group_rumors` until replay first
-validates it.
+Group rumor persistence needs no new message columns: stored tags and rumor JSON
+already contain `h`, `p`, `subject`, and `action`. Delivery work separately
+extends the existing `messages.delivery_status` enum with `partial`. A `create`
+tag on the first text or file message retains bubble presentation. Invite,
+remove, and rename appear as system lines. Once an invite or remove has applied
+at least once, its system line stays visible even when later replay makes its
+current roster effect inactive. A never-applied candidate lives only in
+`pending_group_rumors` until replay first validates it.
 
-### Per-recipient outbox
+### Durable relay delivery
 
-Keep one existing message-keyed `outbox` row and evolve its relay
-`pending_payload` to version 2. Direct messaging uses the same format with one
-non-self recipient; a group simply has more copy entries:
+Extend the existing normalized relay-delivery pipeline documented in
+`docs/protocols/relay-message-delivery.md`; do not restore relay use of the
+legacy `outbox.pending_payload` JSON.
+
+The current durable model already has the required fan-out dimensions:
 
 ```text
-pending_payload (version 2, relay)
-- copies[]
-  - recipient_pubkey
-  - self
-  - status
-  - attempts
-  - next_attempt_at
-  - last_error
-  - gift_wrap (nullable until wrapping succeeds)
-  - relay_urls
-  - updated_at
+relay_outbox_jobs
+- one initial-send or retry job
+
+relay_outbox_job_targets
+- one unfinished recipient_pubkey × relay_url target
+
+relay_outbox_payloads
+- one durable gift wrap per job × recipient_pubkey
+
+message_delivery_copies
+- one long-lived recipient copy with its bounded relay-result array
+
+messages.delivery_status / delivery_error
+- coarse bubble and conversation-list state
 ```
 
-Persist copy status as `queued`, `sending`, `retrying`, `delivered`, or
-`failed`. `queued` may have no gift wrap and is rebuilt on resume; `sending` has
-a durable gift wrap and is safe to republish after a crash; `retrying` marks an
-optional retry for a copy already delivered in the settled snapshot and must not
-demote its UI aggregate; `delivered` and `failed` are settled. `partial` remains
-an aggregate message status, never a copy status.
+Direct messaging and groups use this same pipeline. A direct message normally
+has its peer and self copies; a group has every frozen `p` recipient plus self.
+The rumor's immutable `p` tags freeze the audience when the message and unsigned
+FIFO job commit in one transaction. Preparing relay targets later never rereads
+the current group roster.
 
-The single-recipient direct-message path must use the same abstraction; it is
-the one-recipient case of the group pipeline, not a separate implementation.
-Relay delivery retains the current manual-retry behavior rather than adding a
-new automatic retry policy.
+A target row means unfinished work. Preparation persists the fixed target set;
+wrapping persists one gift wrap per recipient and job before publication. The
+same wrap is reused across that recipient's relay targets and after process
+recovery. Settling a target updates `message_delivery_copies` and removes the
+target atomically. When one recipient has no targets left, delete that job's
+payload for the recipient; when the job has no targets left, delete the job.
+There is no timer-based sent cleanup and no per-attempt history.
 
-After freezing the rumor's `p` audience, insert the message, aggregate outbox
-row, and a version-2 payload containing one `queued` entry for every recipient
-plus the self copy in one transaction. Only then start metadata resolution and
-wrapping. Each copy advances independently and stores its gift wrap before
-publication. Missing keys or relay lists become explicit failed entries. On
-restart, a queued entry with no gift wrap is known unfinished and can rebuild
-from the immutable stored rumor; an entry with a durable gift wrap can resume
-its in-flight publication.
+Change the current all-or-nothing `prepareAllTargets` behavior for group fan-out.
+Resolve each frozen copy's encryption key and relay list independently with
+bounded parallelism, collect every success/failure, then commit the complete
+preparation result in one transaction. Successful copies write relay
+results/targets; a copy missing a key or relay list writes its nullable
+copy-level error with no targets and does not abort other copies. This atomic
+commit preserves the existing rule that any non-empty target set means
+preparation is complete, so a crash before it simply repeats preparation rather
+than mistaking a partial set for final. Derive the message aggregate only after
+all copy outcomes are durable; if no targets remain, delete the job afterward.
 
-Because the payload is one JSON value, serialize all persistence mutations for
-one message. Bounded-parallel metadata and wrapping work may finish out of
-order, but each completion must merge into the latest in-memory payload through
-one service-owned write queue; never let concurrent whole-JSON writes overwrite
-another recipient's progress. Persist after each copy or completed wrapping
-chunk. A crash can lose work from the current unflushed chunk, but the preseeded
-queued entries preserve the complete audience and safely rebuild that work.
-This whole-message JSON is an intentional small-group tradeoff: it reuses the
-direct-message model and avoids a child table. Reconsider normalization only if
-real group sizes make measured JSON rewrite cost material.
+Apply the same isolation during payload generation. Generate and persist each
+recipient gift wrap independently in small yielded chunks. A recipient-specific
+wrapping or signing failure records that copy's error, removes only that copy's
+job targets, and continues other recipients. A session invalidation, account
+change, or network cancellation pauses the job with unfinished targets intact
+instead of converting them to copy failures.
 
-Extend the persisted `outbox.status` enum and the in-memory delivery phase with
-`partial`. It is a settled attempt with at least one delivered copy and at least
-one failed copy. Keep the aggregate outbox row and the
-failed copies' durable payloads available for manual retry; successful copies
-remain immutable and are never resent. When every failed copy later succeeds,
-advance the aggregate to `sent` and apply the existing sent-outbox cleanup.
+Every user retry creates a new FIFO job and therefore a fresh gift wrap for each
+selected copy. Before publishing, the job skips recipient/relay targets whose
+durable result is already `ok`. Successful relay results are terminal and never
+regress; explicit failures retry only through a user-created job. Account
+switches and cancellation preserve unfinished rows, while account deletion uses
+the existing generation guard and waits for started database writes before its
+account-scoped wipe.
 
-Do not rewrite historical `message_deliveries.status` rows merely because the
-new aggregate includes self. Legacy rows retain their stored verdict. New sends
-use the new all-copy rule, and a legacy message moves to that rule only when a
-user-initiated retry produces a newly settled snapshot.
+Extend `relay_outbox_jobs.scope` with `selected_copy` and add a nullable
+`recipient_pubkey` selector used only by that scope. Change the retry API to
+accept the selected recipient pubkey, including self. When failed relay rows
+exist, create targets only for that copy and those URLs. When the copy has only
+a pre-relay error, create a target-less `selected_copy` job whose preparation
+re-resolves that recipient's key and relay list. Keep whole-message retry for a
+failure that occurred before any copy state could be materialized. No separate
+job-selector table is needed because the UI retries one copy at a time. Clear a
+copy's pre-relay error atomically when retry preparation materializes its new
+targets; a repeated preparation failure replaces it with the latest error.
 
-Retry continues to use the same message-keyed aggregate outbox row. If sent
-cleanup already removed it, upsert that row again; update its status and the
-selected copy entry in place, persist the fresh gift wrap before
-publication, and resume it after a crash. A retry of failed relay rows on an
-already-delivered copy may put the outbox back into `sending`, while the bubble
-and recipient retain their delivered presentation from `message_deliveries`.
-On settlement, merge the latest retried relay outcomes into the delivery
-snapshot and move the outbox back to its derived aggregate state.
+Extend `messages.delivery_status` with `partial`. Extend
+`message_delivery_copies` with a nullable copy-level error for failures before
+relay targets exist, such as a missing recipient encryption key or relay list.
+Per-relay `pending`/`ok`/`failed` results remain in the existing bounded JSON
+array on each copy. UI rows read coarse state directly from `messages` and load
+copy detail only while the delivery sheet is open.
 
-Replace the current unconditional three-second sent delete with one idempotent
-cleanup routine. Delete the row only when it is still `sent`, its settled
-delivery snapshot is durable, and no payload copy is queued, wrapping,
-publishing, or otherwise unsettled. `partial` and `failed` rows are never cleaned
-by this path. Starting a retry updates the same row away from `sent`, so an older
-scheduled cleanup becomes a no-op. If the retry settles back to `sent` before
-that cleanup runs, deletion is safe because the new snapshot is already durable.
-Startup performs the same conditional cleanup for sent rows left behind when an
-in-process timer did not run.
+Replace relay use of the current `surfacedCopies` aggregate. Run the existing
+at-least-one-and-at-least-half relay verdict independently for every durable
+copy, including self, then derive the message status from those copy verdicts.
+All delivered is `sent`, a mixture of delivered and failed is `partial`, none
+delivered is `failed`, and unfinished work remains `queued`. `sent` stays
+terminal because every copy is already delivered; retrying a failed relay inside
+an already-delivered copy never demotes that copy or message. Direct-message
+detail and aggregation adopt the same all-copy behavior.
 
-Extend each persisted `message_deliveries.copies` item with a copy-level status
-and error. This must represent failures before wrapping, such as a missing
-encryption key or DM relay, as well as per-relay publish results.
-
-Keep the existing direct-message split of responsibilities. During an active
-attempt, the in-memory delivery store owns live per-relay animation.
-The outbox payload persists every copy's durable payload, target relay URLs, and
-coarse queued/delivered/failed retry lifecycle; it does not duplicate settled
-per-relay results. `message_deliveries.copies` is the settled per-relay detail
-and supplies failed URLs for the detail sheet and later manual retry. When an
-attempt settles, update the version-2 payload, aggregate outbox status, and the
-delivery snapshot in one transaction. Keep `partial` and `failed` outbox state
-for retry. After `sent` cleanup removes the outbox row, the delivery snapshot
-remains the long-term read-only record. A crash during an unsettled publish may
-republish the same durable gift wrap to its stored relay URLs; relay/event
-deduplication makes that safe.
-
-Read legacy version-1 relay payloads during rollout and upgrade them in place to
-version 2. Merge any settled per-copy state from `message_deliveries`; otherwise
-retain each existing gift wrap and relay list as resumable built work. Do not
-clear or replace the version-1 payload until the version-2 value is durably
-written. A failed upgrade leaves the original payload intact for the next
-startup.
-
-Keep `message_deliveries` keyed by `message_id`. A rumor id commits its author,
-and delivery state exists only for the author's outgoing copy, so two distinct
-local account identities cannot legitimately own the same delivery row. Avoid
-adding redundant account scope to this table.
+Do not rewrite historical delivery verdicts merely because new aggregation
+includes self. Legacy rows retain their stored verdict. New sends use the new
+all-copy rule, and a legacy message moves to that rule only when a user retry
+produces newly settled state.
 
 Evaluate relay delivery separately for each copy using the existing
 direct-message rule: a settled copy is delivered when at least one target relay
@@ -720,28 +703,27 @@ that threshold is failed. Unsettled relay attempts keep the copy pending.
 
 Relay-level retry remains available whenever a copy has failed relay results,
 even when that copy already meets its delivery threshold. Such an optional
-retry never demotes a delivered copy or its message aggregate to pending or
+retry never demotes a delivered copy or its message aggregate to queued or
 failed: successful relay outcomes remain credited, retried relay rows show their
 own live state, and another failure leaves the copy delivered. A failure before
 any relay results exist instead reruns that recipient's metadata resolution and
 full copy attempt.
 
-Match direct-message result retention: each relay URL stores only its latest
-settled outcome and error, while the copy-level `attempts` counter records how
-many attempts occurred. Do not append per-attempt relay history or allow the
-delivery JSON to grow with every retry.
+Match the current relay-delivery retention rule: each relay URL stores only its
+latest settled outcome and error. FIFO jobs are ephemeral work, and neither jobs
+nor durable copies retain attempt counts or per-attempt history.
 
 Message aggregate status is derived from every frozen copy, including self:
 
-- while any copy that has not already met its delivery threshold is
-  queued, wrapping, publishing, or otherwise unsettled: `pending`;
+- while any copy that has not already met its delivery threshold is wrapping,
+  publishing, or otherwise unsettled: `queued`;
 - all copies delivered: `sent`;
 - some delivered: `partial`;
 - none delivered: `failed`.
 
 `sent`, `partial`, and `failed` are final aggregate results only after every
 copy has settled. Before copy resolution finishes, an empty or not-yet-created
-copy set remains `pending`. Self uses the same per-copy threshold, status,
+copy set remains `queued`. Self uses the same per-copy threshold, status,
 attempt, retry, persistence, aggregate, and detail rules as every other copy.
 Apply this behavior to direct messages as well as groups.
 
@@ -763,9 +745,9 @@ remove/leave, and rename. The UI mirrors this read-only state, but the service
 check remains authoritative. A newer valid `invite` restores sending.
 
 A send becomes admitted when the transaction storing its immutable rumor,
-frozen audience, and fully preseeded version-2 outbox payload commits. A remove
-processed after that point does not cancel wrapping, publication, crash
-recovery, or manual retry for the admitted send; it only blocks later send
+frozen `p` audience, and unsigned relay FIFO job commits. A remove processed
+after that point does not cancel target preparation, wrapping, publication,
+crash recovery, or manual retry for the admitted send; it only blocks later send
 attempts. Each receiver still applies its own event ordering and membership
 authorization.
 
@@ -791,8 +773,8 @@ Performance rules:
 - resolve recipient encryption keys and relay lists with bounded parallelism;
 - optimistically store and render the message before CPU-heavy wrapping;
 - generate gift wraps in small chunks and yield to a macrotask between chunks;
-- preseed every frozen-audience copy entry in the version-2 payload
-  transactionally, then persist each generated gift wrap before publishing it;
+- persist the independently prepared recipient/relay target set, then persist
+  each job/recipient gift wrap before publishing any of its targets;
 - never rebuild or resend any already successful copy during another copy's
   retry.
 
@@ -942,12 +924,12 @@ Read `docs/DESIGN.md`, especially section 12, before implementation.
 Do not put a numeric delivery fraction beside the bubble timestamp. The current
 fixed-width status slot prevents layout shifts and must stay fixed-width:
 
-- pending uses the existing pending glyph;
+- queued uses the existing pending glyph;
 - all copies delivered uses the success glyph;
 - partial delivery uses a fixed-size warning glyph;
 - all failed uses the danger glyph.
 
-Pending, success, partial, and failure all retain the same fixed-width status
+Queued, success, partial, and failure all retain the same fixed-width status
 slot beside the timestamp. Self participates in this aggregate exactly like
 every other copy.
 
@@ -965,6 +947,13 @@ target avatar and resolved name, with a shortened public key as the identity
 fallback. Mark the self row with localized copy equivalent to `Your other
 devices`; otherwise it behaves exactly like any recipient row. Direct-message
 detail adopts the same two-copy view instead of hiding self.
+
+This replaces the current flat-relay `deliveryCounts` and `surfacedRelays`
+presentation for relay messages. The headline numerator is the number of copies
+whose own relay threshold is delivered, and the denominator is the frozen copy
+count. Relay counts exist only inside an expanded copy row. Change the resend
+callback from a URL-only list to the selected target pubkey plus its failed URLs,
+so two copies sharing a relay can never be retried together accidentally.
 
 ### Notifications
 
@@ -1016,33 +1005,27 @@ always a peer pubkey. Audit and update every such call site, including:
 UI code continues to read through hooks and stores. Services own state changes,
 and core layers remain platform-free.
 
-Account removal must delete `message_deliveries` through a subquery selecting
-that account's outgoing message ids before deleting its messages. It must also
-delete account-scoped `group_member_actions`, `pending_group_rumors`, and
-the existing outbox rows. Clear parsed-roster, action-reducer, outbox, and
-delivery-status caches for the removed account as part of the same lifecycle. No
-raw group id, member pubkey, pending rumor, relay result, or retry payload may
-survive re-adding the account.
+The current account-removal flow already deletes account-scoped
+`message_delivery_copies`, relay FIFO jobs, and legacy proximity outbox rows.
+Add `group_member_actions` and `pending_group_rumors` to the same wipe. Clear
+parsed-roster and action-reducer caches for the removed account as part of that
+lifecycle. No raw group id, member pubkey, or pending rumor may survive
+re-adding the account.
 
-Use a lightweight account/send epoch guard around background wrapping and
-outbox JSON persistence. Account switch or removal invalidates the epoch and
-stops accepting later database writes from that send session; removal closes or
-awaits the short per-message persistence queues before its final database wipe.
-Do not build cross-platform cancellation machinery merely to stop relay work
-already in flight, and do not wait for or attempt to retract network events that
-may already have published.
+Reuse the current relay outbox generation guard, publish abort, per-message
+write serialization, and `waitForIdle()` account-removal boundary. Group fan-out
+must not add a second send-session lifecycle. Do not wait for or attempt to
+retract network events that may already have published.
 
 ## 13. Suggested implementation order
 
 Each phase should leave direct messaging working and have focused tests before
 the next phase begins.
 
-1. **Unified event ordering**
-   - shared comparator and cursor predicates;
-   - mixed-direction SQLite indexes;
-   - indexed migration repair for last-message, read, and unread state;
-   - message pagination, last/read cursors, unread, notification recovery, and
-     cache tests.
+1. **Ordering and timestamp follow-up**
+   - reuse the existing shared comparator and mixed-direction indexes;
+   - add the indexed read-cursor/unread repair omitted by migration 0047;
+   - add the ten-minute inner-rumor future check across every intake path.
 2. **Group identity and pure helpers**
    - first-`h` parsing;
    - hashed conversation keys;
@@ -1051,8 +1034,8 @@ the next phase begins.
 3. **Persistence migration**
    - conversation group fields and ordered membership-action history;
    - `pending_group_rumors`;
-   - version-2 per-copy relay outbox payload with version-1 compatibility;
-   - extended delivery-copy types.
+   - extend current message/copy delivery state for `partial` and pre-relay copy
+     errors;
 4. **Receive path**
    - create/invite bootstrap and pre-bootstrap quarantine;
    - current-member ordinary-message authorization;
@@ -1060,7 +1043,8 @@ the next phase begins.
    - quarantine revalidation and bounded eviction;
    - Requests, personal-block boundary, unread, and notifications.
 5. **Unified delivery refactor**
-   - direct messaging as the one-recipient copy pipeline;
+   - direct messaging as the one non-self recipient plus self case;
+   - extend the current normalized relay FIFO for multi-recipient preparation;
    - per-copy wrapping, persistence, publication, status, and manual retry;
    - partial aggregate status.
 6. **Group send path**
@@ -1075,6 +1059,8 @@ the next phase begins.
      notifications, delivery details, and large-group warnings.
 9. **Architecture and verification**
    - update `docs/ARCHITECTURE.md` after implementation;
+   - update `docs/protocols/relay-message-delivery.md` for multi-copy
+     preparation, self inclusion, selected-copy retry, and partial status;
    - run unit, integration, migration, i18n, and UI tests;
    - verify light/dark themes, RTL, dynamic text, and large histories.
 
@@ -1200,28 +1186,29 @@ At minimum, cover:
 - direct-message detail and aggregate include both recipient and self copies;
 - legacy delivery aggregates are not recomputed during migration; a later retry
   adopts the new all-copy rule when it settles;
-- delivery rows retain their message-id identity and are removed through the
-  account's outgoing messages before those messages are deleted;
+- existing account-scoped delivery copies and relay jobs remain covered by
+  account deletion alongside the new group-owned tables;
 - account switch/removal invalidates send epochs so late wrapping callbacks
   cannot recreate deleted local state;
-- a crash before or during wrapping leaves a complete frozen set of queued copy
-  entries and resumes without losing recipients;
+- a crash after target preparation resumes the fixed normalized target set, and
+  a crash before preparation re-derives it from the immutable rumor audience;
 - persisted and in-memory `partial` state survives restart, retains retryable
   failures, and advances to `sent` without resending successful copies;
-- outbox payload copies own durable payload and coarse retry lifecycle, while
-  settled per-relay results live in the delivery snapshot; settlement updates
-  both atomically;
+- relay jobs/targets/payloads own unfinished work, while account-scoped delivery
+  copies and message columns own settled detail and coarse UI state;
 - manual retry creates a fresh wrap with the selected target's current key,
   while crash recovery may resume the exact durable in-flight payload;
+- selected-copy retry scopes relay targets and pre-relay metadata recovery to
+  one recipient pubkey, including self;
 - each copy applies the existing at-least-one-and-at-least-half relay
   delivery threshold independently;
 - delivered and undelivered copies both allow retry of failed relay rows without
   demoting an already-delivered copy or aggregate;
-- post-cleanup retries upsert the same message-keyed outbox state, while guarded
-  sent cleanup cannot delete unsettled retry work and is resumed on startup;
-- relay rows retain only their latest outcome while copy attempts count retries;
-- aggregate delivery remains pending until every not-yet-delivered copy settles;
-- an unresolved empty copy set remains pending; self participates normally in
+- every manual retry creates a fresh normalized FIFO job, reuses terminal `ok`
+  results, and deletes itself when no targets remain;
+- relay rows retain only their latest outcome; no attempt history is retained;
+- aggregate delivery remains queued until every not-yet-delivered copy settles;
+- an unresolved empty copy set remains queued; self participates normally in
   every aggregate and detail sheet;
 - self-only success or failure retains the fixed-width timestamp status slot;
 - attachment upload-once behavior;
