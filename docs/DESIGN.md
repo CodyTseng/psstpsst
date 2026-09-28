@@ -147,6 +147,42 @@ below the reactions keeps them visually grouped with their message. They share
 the message's logical edge: start for received messages, end for sent messages.
 Own reactions retain an accent outline.
 
+Chat system events use the centered inline date-capsule visual family and stay
+anchored at their event position in the message timeline. They never join the
+floating sticky date indicator. A system event may own the inline date boundary
+or unread boundary at its position and always breaks bubble grouping across it.
+Group actions follow ordinary-message unread, badge, preview, activity, and
+notification behavior.
+Own authored system-event capsules reserve one fixed-size delivery-status slot
+and open the standard delivery detail when pressed. Incoming system events do
+not reserve that slot and open group information when pressed.
+System-event capsules remain single-line. Dynamic arguments such as member and
+group names truncate independently with end ellipses so localized action words
+remain visible; accessibility exposes the complete untruncated sentence.
+System-event capsules never enter message selection or content actions such as
+copy, reply, react, quote, and forward.
+
+Received group-message runs show the sender name once at the run start and the
+sender avatar beside the run's final bubble. The logical-start avatar column is
+reserved across the run. While a long run crosses the viewport, its avatar
+sticks to the viewport bottom within the run and releases at every sender,
+system-event, date, or unread boundary. Own-message runs show neither.
+
+Identity taps inside a group conversation, including the header and sender
+labels or avatars, open group information. Individual member profiles are
+reached from the member list on that screen. Add, remove, and leave controls
+remain on group information. The global profile screen may link to a read-only
+list of common groups, but never gains group-specific actions. Common-group rows
+open their chat histories.
+
+Automatically derived group titles resolve at most three member names in a
+stable order, followed by a localized remaining-member count. Full member
+rosters use virtualized lists.
+
+Multi-copy delivery details keep target rows, including self delivery to other
+devices, in stable identity order while statuses update; status changes never
+reorder the list.
+
 ## 5. Shape and elevation
 
 Radius values come from the theme scale. Ordinary controls use medium/large
@@ -438,6 +474,13 @@ uncertainty without an alarming warning treatment.
 
 Conversation-list draft previews appear only after the user leaves that
 conversation. An active split-pane row never mirrors live composer input.
+Conversation ordering follows its own activity time: accepted new messages and
+committed draft activity advance it, while debounced text persistence, live
+keystrokes, and historical replay do not.
+A conversation with neither messages nor a draft reserves the normal preview
+line height without showing placeholder copy.
+Read-only group conversations may retain a hidden local draft, but their list
+rows show the latest visible message or system event until membership returns.
 
 Image attachments default to optimized quality. After selection, the send
 preview shows the chosen images and exposes one quiet `Image quality` row;
