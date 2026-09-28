@@ -8,12 +8,15 @@ import { ServerSquare } from '@solar-icons/react-native/category/devices/Linear/
 import { Pen2 as Signature } from '@solar-icons/react-native/category/messages/Linear/Pen2';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { AppText } from '@/components/common/AppText';
+import { AppButton } from '@/components/common/AppButton';
+import { Avatar } from '@/components/common/Avatar';
 import { BottomSheet } from '@/components/common/BottomSheet';
+import { HorizontalFadeScrollView } from '@/components/common/HorizontalFadeScrollView';
 import { InteractionOverlay } from '@/components/common/InteractionOverlay';
 import { useMessageDelivery } from '@/hooks/use-message-deliveries';
 import { useLanguageDirection } from '@/i18n/direction';
@@ -23,15 +26,19 @@ import type { Rumor } from '@/db/schema/types';
 import { findFileMeta } from '@/lib/nostr/file-tags';
 import { formatDetailTimestamp } from '@/lib/time';
 import {
+  deliveryCopyVerdict,
   deliveryCounts,
   retryableRelayUrls,
-  surfacedRelays,
   useDelivery,
+  type DeliveryCopy,
   type MessageDelivery,
   type RelayDelivery,
 } from '@/stores/delivery-status.store';
 import { iconStrokeWidth } from '@/theme/icons';
-import { spacing, uiDensity, useThemeColors } from '@/theme';
+import { radius, spacing, typography, uiDensity, useThemeColors } from '@/theme';
+import { useProfile } from '@/hooks/use-profile';
+import { useContact } from '@/hooks/use-contacts';
+import { resolveDisplayName } from '@/lib/nostr/display-name';
 
 type Props = {
   accountPubkey: string;
@@ -45,8 +52,8 @@ type Props = {
   sourceRelays?: string[] | null;
   /** The chat transport. Nearby messages never show relay-derived details. */
   transport?: 'relay' | 'proximity';
-  /** Resend the message to the relays it failed on (self only). */
-  onResend?: (relayUrls: string[]) => void;
+  /** Retry every failed recipient relay copy (self only). */
+  onRetryAll?: () => void;
   onClose: () => void;
 };
 
@@ -62,12 +69,279 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function StatusIcon({ status }: { status: RelayDelivery['status'] }) {
+function StatusIcon({
+  status,
+  size = 18,
+  staticPending = false,
+}: {
+  status: RelayDelivery['status'];
+  size?: number;
+  staticPending?: boolean;
+}) {
   const c = useThemeColors();
-  if (status === 'ok') return <Check strokeWidth={iconStrokeWidth.default} size={18} color={c.success} />;
+  if (status === 'ok') return <Check strokeWidth={iconStrokeWidth.default} size={size} color={c.success} />;
   if (status === 'failed')
-    return <CircleAlert size={18} color={c.danger} />;
+    return <CircleAlert size={size} color={c.danger} />;
+  if (staticPending) return <Clock size={size} color={c.textMuted} />;
   return <ActivityIndicator size="small" color={c.textMuted} />;
+}
+
+function useDeliveryCopyIdentity(accountPubkey: string, copy: DeliveryCopy) {
+  const { t } = useTranslation();
+  const profile = useProfile(copy.recipient);
+  const contact = useContact(accountPubkey, copy.recipient);
+  const name = copy.self
+    ? t('delivery.self')
+    : resolveDisplayName(copy.recipient, {
+        petname: contact?.petname,
+        displayName: profile?.displayName,
+        name: profile?.name,
+      });
+  return { name, picture: profile?.picture };
+}
+
+export function orderDeliveryCopies(copies: DeliveryCopy[]): DeliveryCopy[] {
+  let selfSeen = false;
+  let needsReorder = false;
+  for (const copy of copies) {
+    if (copy.self) selfSeen = true;
+    else if (selfSeen) {
+      needsReorder = true;
+      break;
+    }
+  }
+  if (!needsReorder) return copies;
+
+  const recipients: DeliveryCopy[] = [];
+  const selfCopies: DeliveryCopy[] = [];
+  for (const copy of copies) {
+    (copy.self ? selfCopies : recipients).push(copy);
+  }
+  return recipients.concat(selfCopies);
+}
+
+export function DeliveryCopyTab({
+  accountPubkey,
+  copy,
+  selected,
+  onSelect,
+}: {
+  accountPubkey: string;
+  copy: DeliveryCopy;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const c = useThemeColors();
+  const { name, picture } = useDeliveryCopyIdentity(accountPubkey, copy);
+  const verdict = deliveryCopyVerdict(copy);
+  const status = verdict === 'delivered' ? 'ok' : verdict === 'pending' ? 'pending' : 'failed';
+  const badgeSize = uiDensity.countBadge.sm.size;
+  const avatarSize = uiDensity.contactAvatarSize;
+  const tabSize = avatarSize + spacing.sm * 2;
+  return (
+    <View
+      style={{
+        width: tabSize,
+        height: tabSize,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <AppButton
+        accessibilityRole="tab"
+        accessibilityLabel={name}
+        accessibilityState={{ selected }}
+        variant="ghost"
+        corner="lg"
+        compact
+        compactInset={spacing.sm}
+        fullWidth
+        selected={selected}
+        iconLeft={
+          <View>
+            <Avatar
+              pubkey={copy.recipient}
+              picture={picture}
+              name={name}
+              size={avatarSize}
+            />
+          </View>
+        }
+        onPress={onSelect}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          end: uiDensity.messageDeliveryStatusInset,
+          bottom: uiDensity.messageDeliveryStatusInset,
+          width: badgeSize,
+          height: badgeSize,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: radius.full,
+          backgroundColor: c.background,
+          pointerEvents: 'none',
+        }}
+      >
+        <StatusIcon
+          status={status}
+          size={badgeSize - spacing.xs}
+          staticPending
+        />
+      </View>
+    </View>
+  );
+}
+
+export function DeliveryCopyTabs({
+  accountPubkey,
+  copies,
+  selectedRecipient,
+  onSelect,
+}: {
+  accountPubkey: string;
+  copies: DeliveryCopy[];
+  selectedRecipient: string | undefined;
+  onSelect: (recipient: string) => void;
+}) {
+  const c = useThemeColors();
+
+  return (
+    <HorizontalFadeScrollView
+      fadeColor={c.sheetBackground}
+      containerStyle={{
+        marginHorizontal: -spacing.lg,
+      }}
+      accessibilityRole="tablist"
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{
+        alignItems: 'center',
+        gap: spacing.sm,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.xs,
+      }}
+    >
+      {copies.map((copy) => (
+        <DeliveryCopyTab
+          key={copy.recipient}
+          accountPubkey={accountPubkey}
+          copy={copy}
+          selected={copy.recipient === selectedRecipient}
+          onSelect={() => onSelect(copy.recipient)}
+        />
+      ))}
+    </HorizontalFadeScrollView>
+  );
+}
+
+export function DeliveryCopyDetail({
+  accountPubkey,
+  copy,
+}: {
+  accountPubkey: string;
+  copy: DeliveryCopy;
+}) {
+  const { t } = useTranslation();
+  const c = useThemeColors();
+  const direction = useLanguageDirection();
+  const { name } = useDeliveryCopyIdentity(accountPubkey, copy);
+  const [openReasons, setOpenReasons] = useState<Set<string>>(new Set());
+
+  function toggleReason(url: string) {
+    setOpenReasons((previous) => {
+      const next = new Set(previous);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
+
+  return (
+    <View style={{ gap: spacing.md }}>
+      <View
+        style={{
+          direction,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.md,
+        }}
+      >
+        <AppText variant="subtitle" numberOfLines={1} style={{ flex: 1 }}>
+          {name}
+        </AppText>
+      </View>
+      {copy.error ? (
+        <AppText variant="caption" tone="danger">{copy.error}</AppText>
+      ) : null}
+      {copy.relays.length > 0 ? (
+        <View
+          style={{
+            backgroundColor: c.surfaceMuted,
+            borderRadius: radius.lg,
+            overflow: 'hidden',
+          }}
+        >
+          {copy.relays.map((relay, index) => {
+            const failedRelay = relay.status === 'failed';
+            const reasonOpen = openReasons.has(relay.url);
+            const row = (
+              <View
+                style={{
+                  paddingHorizontal: uiDensity.detailRowHorizontalPadding,
+                  paddingVertical: uiDensity.detailRowVerticalPadding,
+                  borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                  borderTopColor: c.border,
+                }}
+              >
+                <View
+                  style={{
+                    direction,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.md,
+                  }}
+                >
+                  <ServerSquare size={18} color={c.textMuted} />
+                  <AppText variant="body" numberOfLines={1} style={{ flex: 1 }}>
+                    {serverName(relay.url)}
+                  </AppText>
+                  <StatusIcon status={relay.status} />
+                </View>
+                {failedRelay && reasonOpen ? (
+                  <AppText
+                    variant="caption"
+                    tone="danger"
+                    style={{ marginTop: spacing.xs }}
+                  >
+                    {relay.error || t('delivery.failed')}
+                  </AppText>
+                ) : null}
+              </View>
+            );
+            return failedRelay ? (
+              <Pressable
+                key={relay.url}
+                accessibilityRole="button"
+                accessibilityLabel={serverName(relay.url)}
+                accessibilityState={{ expanded: reasonOpen }}
+                fallbackHoverOpacity={false}
+                onPress={() => toggleReason(relay.url)}
+              >
+                {({ pressed }) => (
+                  <>
+                    {pressed ? <InteractionOverlay /> : null}
+                    {row}
+                  </>
+                )}
+              </Pressable>
+            ) : (
+              <View key={relay.url}>{row}</View>
+            );
+          })}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 function ProximityStatusIcon({ phase }: { phase: MessageDelivery['phase'] }) {
@@ -125,6 +399,40 @@ function SectionCaption({ children }: { children: string }) {
   );
 }
 
+export function DeliverySummaryRow({
+  label,
+  onRetry,
+}: {
+  label: string;
+  onRetry?: () => void;
+}) {
+  const { t } = useTranslation();
+  const direction = useLanguageDirection();
+  return (
+    <View
+      style={{
+        direction,
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: typography.body.lineHeight,
+      }}
+    >
+      <AppText variant="caption" tone="subtle" numberOfLines={1} style={{ flex: 1 }}>
+        {label}
+      </AppText>
+      {onRetry ? (
+        <AppButton
+          label={t('delivery.resend')}
+          labelNumberOfLines={1}
+          variant="accentText"
+          fullWidth={false}
+          onPress={onRetry}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 /**
  * Per-message detail drawer. For our own messages it shows the per-relay
  * delivery breakdown (with a resend for failed relays); for a peer's message it
@@ -138,7 +446,7 @@ export function MessageDetailSheet({
   isSelf,
   sourceRelays,
   transport,
-  onResend,
+  onRetryAll,
   onClose,
 }: Props) {
   const { t } = useTranslation();
@@ -184,41 +492,38 @@ export function MessageDetailSheet({
     (snap?.transport ?? delivery?.transport) === 'proximity';
 
   const counts = delivery ? deliveryCounts(delivery) : { ok: 0, total: 0 };
-  // The surfaced (recipient, non-self) relays — what "delivered to" shows.
-  const rows = delivery ? surfacedRelays(delivery) : [];
+  const retryUrls = delivery ? retryableRelayUrls(delivery) : null;
   const signing =
     delivery?.phase === 'signing' ||
     (delivery?.phase === 'queued' && delivery.copies.length === 0);
   const failed = delivery?.phase === 'failed';
-  const retryUrls = delivery ? retryableRelayUrls(delivery) : null;
-  const hasNonSelfRecipient =
-    shownRumor?.tags.some(
-      (tag) => tag[0] === 'p' && tag[1] != null && tag[1] !== accountPubkey,
-    ) ?? false;
-  const canResend = !!onResend && hasNonSelfRecipient && retryUrls !== null;
-
-  // Which failed relays have their reason expanded (tap the row to toggle).
-  const [openReasons, setOpenReasons] = useState<Set<string>>(new Set());
   const [jsonOpen, setJsonOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [deliverySelection, setDeliverySelection] = useState<{
+    rumorId: string;
+    recipient: string;
+  } | null>(null);
+  const deliveryCopies = orderDeliveryCopies(delivery?.copies ?? []);
+  const selectedByUser =
+    deliverySelection && deliverySelection.rumorId === snap?.rumorId
+      ? deliverySelection.recipient
+      : undefined;
+  const selectedRecipient =
+    selectedByUser &&
+    deliveryCopies.some((copy) => copy.recipient === selectedByUser)
+      ? selectedByUser
+      : deliveryCopies[0]?.recipient;
+  const selectedCopy = deliveryCopies.find(
+    (copy) => copy.recipient === selectedRecipient,
+  );
   // Reset transient UI only when opening a (different) message — not on close,
   // so the retained content stays put during the slide-out.
   useEffect(() => {
     if (rumorId) {
-      setOpenReasons(new Set());
       setJsonOpen(false);
       setCopied(false);
     }
   }, [rumorId]);
-
-  function toggleReason(url: string) {
-    setOpenReasons((prev) => {
-      const next = new Set(prev);
-      if (next.has(url)) next.delete(url);
-      else next.add(url);
-      return next;
-    });
-  }
 
   // File messages (kind 15): surface the human-meaningful attachment fields.
   // Deliberately NOT the decryption key / hashes (sensitive / jargon).
@@ -282,37 +587,23 @@ export function MessageDetailSheet({
       {/* Self: delivery status. */}
       {shownIsSelf ? (
         <View>
-          {/* Caption + Resend on one row. minHeight = body lineHeight so the row
-              is the same height whether or not Resend is shown. */}
-          <View
-            style={{
-              direction,
-              flexDirection: 'row',
-              alignItems: 'center',
-              minHeight: 22,
-              marginBottom: 6,
-            }}
-          >
-            <AppText variant="caption" tone="subtle" style={{ flex: 1 }}>
-              {isProximityDelivery
-                ? t('delivery.title')
-                : signing
-                  ? t('delivery.signing')
-                  : delivery
-                    ? t('delivery.summary', { ok: counts.ok, total: counts.total })
-                    : t('message_detail.delivered_to')}
-            </AppText>
-            {canResend ? (
-              <Pressable
-                onPress={() => onResend?.(retryUrls ?? [])}
-                hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-              >
-                <AppText variant="body" weight="semibold" style={{ color: c.accent }}>
-                  {t('delivery.resend')}
-                </AppText>
-              </Pressable>
-            ) : null}
+          <View style={{ marginBottom: spacing.xs }}>
+            <DeliverySummaryRow
+              label={
+                isProximityDelivery
+                  ? t('delivery.title')
+                  : signing
+                    ? t('delivery.signing')
+                    : delivery
+                      ? t('delivery.summary', { ok: counts.ok, total: counts.total })
+                      : t('message_detail.delivered_to')
+              }
+              onRetry={
+                !isProximityDelivery && retryUrls !== null && onRetryAll
+                  ? onRetryAll
+                  : undefined
+              }
+            />
           </View>
           {isProximityDelivery ? (
             <DeliveryStatusRow
@@ -335,66 +626,44 @@ export function MessageDetailSheet({
               icon={<Signature size={18} color={c.textMuted} />}
               label={t('delivery.signing')}
             />
-          ) : failed && rows.length === 0 ? (
-            <DeliveryStatusRow
-              icon={<CircleAlert size={18} color={c.danger} />}
-              label={delivery.error || t('delivery.failed')}
-              tone="danger"
-            />
-          ) : rows.length > 0 ? (
-            <View
-              style={{ backgroundColor: c.surfaceMuted, borderRadius: 12, overflow: 'hidden' }}
-            >
-              {rows.map((r, i) => {
-                const isFailed = r.status === 'failed';
-                const open = openReasons.has(r.url);
-                const row = (
-                  <View
-                    style={{
-                      paddingHorizontal: uiDensity.detailRowHorizontalPadding,
-                      paddingVertical: uiDensity.detailRowVerticalPadding,
-                      borderTopWidth: i === 0 ? 0 : 1,
-                      borderTopColor: c.border,
-                    }}
-                  >
-                    <View
-                      style={{
-                        direction,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 12,
-                      }}
-                    >
-                      <ServerSquare size={18} color={c.textMuted} />
-                      <AppText variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                        {serverName(r.url)}
-                      </AppText>
-                      <StatusIcon status={r.status} />
-                    </View>
-                    {isFailed && open ? (
-                      <AppText variant="caption" style={{ color: c.danger, marginTop: 4 }}>
-                        {r.error || t('delivery.failed')}
-                      </AppText>
-                    ) : null}
-                  </View>
-                );
-                return isFailed ? (
-                  <Pressable
-                    key={`${r.url}:${i}`}
-                    onPress={() => toggleReason(r.url)}
-                    fallbackHoverOpacity={false}
-                  >
-                    {({ pressed }) => (
-                      <>
-                        {pressed ? <InteractionOverlay /> : null}
-                        {row}
-                      </>
-                    )}
-                  </Pressable>
-                ) : (
-                  <View key={`${r.url}:${i}`}>{row}</View>
-                );
-              })}
+          ) : delivery && delivery.copies.length > 0 ? (
+            <View style={{ gap: spacing.xs }}>
+              <DeliveryCopyTabs
+                accountPubkey={accountPubkey}
+                copies={deliveryCopies}
+                selectedRecipient={selectedRecipient}
+                onSelect={(recipient) => {
+                  if (!snap?.rumorId) return;
+                  setDeliverySelection({
+                    rumorId: snap.rumorId,
+                    recipient,
+                  });
+                }}
+              />
+              {selectedCopy ? (
+                <DeliveryCopyDetail
+                  key={selectedCopy.recipient}
+                  accountPubkey={accountPubkey}
+                  copy={selectedCopy}
+                />
+              ) : null}
+            </View>
+          ) : failed ? (
+            <View style={{ gap: spacing.sm }}>
+              <DeliveryStatusRow
+                icon={<CircleAlert size={18} color={c.danger} />}
+                label={delivery?.error || t('delivery.failed')}
+                tone="danger"
+              />
+              {onRetryAll ? (
+                <AppButton
+                  label={t('delivery.resend')}
+                  variant="accentText"
+                  size="sm"
+                  fullWidth={false}
+                  onPress={onRetryAll}
+                />
+              ) : null}
             </View>
           ) : !delivery ? (
             // No local delivery record (e.g. imported history, or a message

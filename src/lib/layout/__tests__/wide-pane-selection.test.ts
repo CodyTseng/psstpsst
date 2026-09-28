@@ -5,6 +5,8 @@ describe('wide pane selection', () => {
     ['/chat/alice', 'alice'],
     ['/chat-search/alice', 'alice'],
     ['/media/alice', 'alice'],
+    ['/chat/group%3Aabc', 'group:abc'],
+    ['/group/group%3Aabc', 'group:abc'],
   ])('maps %s to conversation %s', (pathname, expected) => {
     expect(getWidePaneSelection(pathname).conversationKey).toBe(expected);
   });
@@ -16,6 +18,10 @@ describe('wide pane selection', () => {
 
   it('maps a profile route to its contact', () => {
     expect(getWidePaneSelection('/profile/alice').profilePubkey).toBe('alice');
+  });
+
+  it('maps the group list to the contacts entry', () => {
+    expect(getWidePaneSelection('/groups').contactsItem).toBe('groups');
   });
 
   it.each([
@@ -36,6 +42,7 @@ describe('wide pane selection', () => {
       conversationKey: null,
       profilePubkey: null,
       settingsItem: null,
+      contactsItem: null,
     });
   });
 });

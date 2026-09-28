@@ -28,13 +28,15 @@ import { capDeliveryRelays } from '../relay/relay-router';
 import type { Signer } from '../signer/signer.interface';
 import {
   beginRelayTargets,
-  relayDeliveryVerdict,
+  deliveryCopyVerdict,
+  messageDeliveryVerdict,
   settleRelayTarget,
 } from './delivery-status';
 import { encryptionKeyWatcher } from './encryption-key-watcher';
 import type { EncryptionKeypair } from './encryption-key.service';
 
 const PUBLISH_TIMEOUT_MS = 10_000;
+const RECIPIENT_PREPARATION_CONCURRENCY = 4;
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
@@ -80,6 +82,25 @@ function pendingRelays(
 
 function messageError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function mapBounded<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  work: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < values.length) {
+      const index = next++;
+      results[index] = await work(values[index]);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, () => worker()),
+  );
+  return results;
 }
 
 function isOffline(state: {
@@ -192,52 +213,56 @@ class RelayMessageOutbox {
   async enqueueRetryTargets(
     accountPubkey: string,
     messageId: string,
+    recipientPubkey: string,
     relayUrls: string[],
   ): Promise<void> {
     const requested = new Set(normalizeTargets(relayUrls));
-    if (requested.size === 0) return;
     await db.transaction(async (tx) => {
-      const copies = await tx
+      const copy = await tx
         .select()
         .from(messageDeliveryCopies)
         .where(
           and(
             eq(messageDeliveryCopies.accountPubkey, accountPubkey),
             eq(messageDeliveryCopies.messageId, messageId),
+            eq(messageDeliveryCopies.recipientPubkey, recipientPubkey),
           ),
         )
-        .all();
-      const nonSelf = copies.filter((copy) => copy.recipientPubkey !== accountPubkey);
-      const surfaced = nonSelf.length > 0 ? nonSelf : [];
-      const targets = surfaced.flatMap((copy) =>
-        copy.relays
-          .filter((relay) => relay.status === 'failed' && requested.has(relay.url))
-          .map((relay) => ({ recipientPubkey: copy.recipientPubkey, relayUrl: relay.url })),
-      );
-      if (targets.length === 0) return;
+        .get();
+      if (!copy) throw new Error('Delivery copy not found');
+      const targets = copy.relays
+        .filter((relay) => relay.status === 'failed' && requested.has(relay.url))
+        .map((relay) => ({ recipientPubkey, relayUrl: relay.url }));
+      if (targets.length === 0 && !copy.error) return;
 
       const [job] = await tx
         .insert(relayOutboxJobs)
         .values({
           accountPubkey,
           messageId,
-          scope: 'selected_targets',
+          scope: 'selected_copy',
+          recipientPubkey,
           createdAt: nowSeconds(),
         })
         .returning({ id: relayOutboxJobs.id })
         .all();
       if (!job) throw new Error('Failed to create relay retry job');
-      await tx
-        .insert(relayOutboxJobTargets)
-        .values(targets.map((target) => ({ jobId: job.id, ...target })))
-        .onConflictDoNothing();
+      if (targets.length > 0) {
+        await tx
+          .insert(relayOutboxJobTargets)
+          .values(targets.map((target) => ({ jobId: job.id, ...target })))
+          .onConflictDoNothing();
+      }
 
       const message = await tx
         .select({ deliveryStatus: messages.deliveryStatus })
         .from(messages)
         .where(and(eq(messages.accountPubkey, accountPubkey), eq(messages.id, messageId)))
         .get();
-      if (message?.deliveryStatus !== 'sent') {
+      if (
+        message?.deliveryStatus !== 'sent' &&
+        deliveryCopyVerdict({ relays: copy.relays, error: copy.error ?? undefined }) !== 'delivered'
+      ) {
         await tx
           .update(messages)
           .set({ deliveryStatus: 'queued', deliveryError: null })
@@ -304,9 +329,12 @@ class RelayMessageOutbox {
     const rumor = message.rumor as Rumor;
     const durable = isDurableDelivery(message.kind);
     let targets = await this.loadTargets(job.id);
-    if (targets.length === 0 && job.scope === 'all_recipient_relays') {
+    if (
+      targets.length === 0 &&
+      (job.scope === 'all_recipient_relays' || job.scope === 'selected_copy')
+    ) {
       try {
-        targets = await this.prepareAllTargets(job, rumor, durable, session);
+        targets = await this.prepareAllTargets(job, rumor, durable, session, generation);
       } catch (error) {
         if (!this.isCurrent(session, generation) || !this.online) return false;
         await this.failBeforePublish(job, durable, messageError(error));
@@ -323,13 +351,18 @@ class RelayMessageOutbox {
     if (targets.length === 0) return true;
 
     try {
-      await this.ensurePayloads(job, rumor, targets, session);
+      await this.ensurePayloads(job, rumor, targets, session, generation);
     } catch (error) {
       if (!this.isCurrent(session, generation) || !this.online) return false;
       await this.failBeforePublish(job, durable, messageError(error), true);
       return true;
     }
     if (!this.isCurrent(session, generation) || !this.online) return false;
+    targets = await this.loadTargets(job.id);
+    if (targets.length === 0) {
+      await this.finishEmptyJob(job, durable);
+      return true;
+    }
     if (durable) await this.markTargetsPending(job, targets);
 
     const payloadRows = await db
@@ -424,41 +457,67 @@ class RelayMessageOutbox {
     rumor: Rumor,
     durable: boolean,
     session: RelayOutboxSession,
+    generation: number,
   ): Promise<RelayTarget[]> {
-    const participants = Array.from(new Set([...getPTags(rumor.tags), job.accountPubkey]));
+    const frozenParticipants = Array.from(
+      new Set([...getPTags(rumor.tags), job.accountPubkey]),
+    ).sort();
+    const participants = job.scope === 'selected_copy'
+      ? frozenParticipants.filter((participant) => participant === job.recipientPubkey)
+      : frozenParticipants;
     if (participants.length === 0) throw new Error('Message has no recipients');
 
-    const recipientRelays = new Map<string, string[]>();
-    for (const participant of participants) {
-      if (participant === job.accountPubkey) {
-        const relays = normalizeTargets(capDeliveryRelays(session.dmRelays));
-        if (relays.length === 0) throw new Error('Account has no DM relays');
-        recipientRelays.set(participant, relays);
-        continue;
-      }
-      const encryptionKey = await encryptionKeyWatcher.resolve(participant);
-      if (!encryptionKey) {
-        throw new Error(
-          `Recipient ${participant.slice(0, 8)}… has no published NIP-17 encryption key`,
-        );
-      }
-      const relays = normalizeTargets(capDeliveryRelays(await fetchDmRelays({
-        pubkey: participant,
-        searchRelays: session.dmRelays,
-      })));
-      if (relays.length === 0) {
-        throw new Error(`Recipient ${participant.slice(0, 8)}… has no published DM relays`);
-      }
-      recipientRelays.set(participant, relays);
+    const outcomes = await mapBounded(
+      participants,
+      RECIPIENT_PREPARATION_CONCURRENCY,
+      async (participant): Promise<{
+        recipientPubkey: string;
+        relays: string[];
+        error: string | null;
+      }> => {
+        try {
+          if (participant === job.accountPubkey) {
+            const relays = normalizeTargets(capDeliveryRelays(session.dmRelays));
+            if (relays.length === 0) throw new Error('Account has no DM relays');
+            return { recipientPubkey: participant, relays, error: null };
+          }
+          const encryptionKey = await encryptionKeyWatcher.resolve(participant);
+          if (!encryptionKey) {
+            throw new Error(
+              `Recipient ${participant.slice(0, 8)}… has no published NIP-17 encryption key`,
+            );
+          }
+          const relays = normalizeTargets(
+            capDeliveryRelays(
+              await fetchDmRelays({
+                pubkey: participant,
+                searchRelays: session.dmRelays,
+              }),
+            ),
+          );
+          if (relays.length === 0) {
+            throw new Error(`Recipient ${participant.slice(0, 8)}… has no published DM relays`);
+          }
+          return { recipientPubkey: participant, relays, error: null };
+        } catch (error) {
+          return { recipientPubkey: participant, relays: [], error: messageError(error) };
+        }
+      },
+    );
+    if (!this.isCurrent(session, generation) || !this.online) {
+      throw new Error('Relay outbox session changed');
     }
 
     const now = nowSeconds();
     await db.transaction(async (tx) => {
-      for (const [recipientPubkey, relays] of recipientRelays) {
-        await tx
-          .insert(relayOutboxJobTargets)
-          .values(relays.map((relayUrl) => ({ jobId: job.id, recipientPubkey, relayUrl })))
-          .onConflictDoNothing();
+      for (const outcome of outcomes) {
+        const { recipientPubkey, relays, error } = outcome;
+        if (relays.length > 0) {
+          await tx
+            .insert(relayOutboxJobTargets)
+            .values(relays.map((relayUrl) => ({ jobId: job.id, recipientPubkey, relayUrl })))
+            .onConflictDoNothing();
+        }
         if (!durable) continue;
         const existing = await tx
           .select({ relays: messageDeliveryCopies.relays })
@@ -471,7 +530,9 @@ class RelayMessageOutbox {
             ),
           )
           .get();
-        const nextRelays = pendingRelays(existing?.relays, relays);
+        const nextRelays = relays.length > 0
+          ? pendingRelays(existing?.relays, relays)
+          : (existing?.relays ?? []);
         await tx
           .insert(messageDeliveryCopies)
           .values({
@@ -479,6 +540,7 @@ class RelayMessageOutbox {
             messageId: job.messageId,
             recipientPubkey,
             relays: nextRelays,
+            error,
             updatedAt: now,
           })
           .onConflictDoUpdate({
@@ -487,7 +549,7 @@ class RelayMessageOutbox {
               messageDeliveryCopies.messageId,
               messageDeliveryCopies.recipientPubkey,
             ],
-            set: { relays: nextRelays, updatedAt: now },
+            set: { relays: nextRelays, error, updatedAt: now },
           });
       }
       if (durable) {
@@ -500,6 +562,7 @@ class RelayMessageOutbox {
               eq(messages.id, job.messageId),
             ),
           );
+        await this.recomputeMessageStatus(tx, job);
       }
     });
     return this.loadTargets(job.id);
@@ -564,7 +627,11 @@ class RelayMessageOutbox {
           if (!copy) continue;
           await tx
             .update(messageDeliveryCopies)
-            .set({ relays: pendingRelays(copy.relays, urls), updatedAt: nowSeconds() })
+            .set({
+              relays: pendingRelays(copy.relays, urls),
+              error: null,
+              updatedAt: nowSeconds(),
+            })
             .where(
               and(
                 eq(messageDeliveryCopies.accountPubkey, job.accountPubkey),
@@ -582,6 +649,7 @@ class RelayMessageOutbox {
     rumor: Rumor,
     targets: RelayTarget[],
     session: RelayOutboxSession,
+    generation: number,
   ): Promise<void> {
     const existing = await db
       .select({ recipientPubkey: relayOutboxPayloads.recipientPubkey })
@@ -599,32 +667,119 @@ class RelayMessageOutbox {
 
     for (const recipientPubkey of recipients) {
       if (ready.has(recipientPubkey)) continue;
-      const recipientEncPubkey =
-        recipientPubkey === job.accountPubkey
-          ? session.encryptionKeypair.pubkey
-          : await encryptionKeyWatcher.resolve(recipientPubkey);
-      if (!recipientEncPubkey) {
-        throw new Error(
-          `Recipient ${recipientPubkey.slice(0, 8)}… has no published NIP-17 encryption key`,
+      if (!this.isCurrent(session, generation) || !this.online) {
+        throw new Error('Relay outbox session changed');
+      }
+      try {
+        const recipientEncPubkey =
+          recipientPubkey === job.accountPubkey
+            ? session.encryptionKeypair.pubkey
+            : await encryptionKeyWatcher.resolve(recipientPubkey);
+        if (!recipientEncPubkey) {
+          throw new Error(
+            `Recipient ${recipientPubkey.slice(0, 8)}… has no published NIP-17 encryption key`,
+          );
+        }
+        // Gift-wrap crypto contains synchronous work; let the queued bubble paint
+        // before each recipient is signed.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (!this.isCurrent(session, generation) || !this.online) {
+          throw new Error('Relay outbox session changed');
+        }
+        const { giftWrap } = await createGiftWrappedMessage({
+          rumorTemplate,
+          senderIdentityPubkey: job.accountPubkey,
+          senderEncPrivkey: session.encryptionKeypair.privkey,
+          senderEncPubkey: session.encryptionKeypair.pubkey,
+          recipientIdentityPubkey: recipientPubkey,
+          recipientEncPubkey,
+          signSeal: session.signSeal,
+        });
+        await db
+          .insert(relayOutboxPayloads)
+          .values({ jobId: job.id, recipientPubkey, giftWrap })
+          .onConflictDoNothing();
+      } catch (error) {
+        if (!this.isCurrent(session, generation) || !this.online) throw error;
+        await this.failRecipientBeforePublish(
+          job,
+          recipientPubkey,
+          messageError(error),
+          isDurableDelivery(rumor.kind),
         );
       }
-      // Gift-wrap crypto contains synchronous work; let the queued bubble paint
-      // before each recipient is signed.
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      const { giftWrap } = await createGiftWrappedMessage({
-        rumorTemplate,
-        senderIdentityPubkey: job.accountPubkey,
-        senderEncPrivkey: session.encryptionKeypair.privkey,
-        senderEncPubkey: session.encryptionKeypair.pubkey,
-        recipientIdentityPubkey: recipientPubkey,
-        recipientEncPubkey,
-        signSeal: session.signSeal,
-      });
-      await db
-        .insert(relayOutboxPayloads)
-        .values({ jobId: job.id, recipientPubkey, giftWrap })
-        .onConflictDoNothing();
     }
+  }
+
+  private failRecipientBeforePublish(
+    job: RelayJob,
+    recipientPubkey: string,
+    reason: string,
+    durable: boolean,
+  ): Promise<void> {
+    return this.serializeMessageWrite(job, () =>
+      db.transaction(async (tx) => {
+        if (durable) {
+          const [copy, targets] = await Promise.all([
+            tx
+              .select({ relays: messageDeliveryCopies.relays })
+              .from(messageDeliveryCopies)
+              .where(
+                and(
+                  eq(messageDeliveryCopies.accountPubkey, job.accountPubkey),
+                  eq(messageDeliveryCopies.messageId, job.messageId),
+                  eq(messageDeliveryCopies.recipientPubkey, recipientPubkey),
+                ),
+              )
+              .get(),
+            tx
+              .select({ relayUrl: relayOutboxJobTargets.relayUrl })
+              .from(relayOutboxJobTargets)
+              .where(
+                and(
+                  eq(relayOutboxJobTargets.jobId, job.id),
+                  eq(relayOutboxJobTargets.recipientPubkey, recipientPubkey),
+                ),
+              )
+              .all(),
+          ]);
+          const attemptedUrls = new Set(targets.map((target) => target.relayUrl));
+          await tx
+            .update(messageDeliveryCopies)
+            .set({
+              relays: (copy?.relays ?? []).filter(
+                (relay) => relay.status !== 'pending' || !attemptedUrls.has(relay.url),
+              ),
+              error: reason,
+              updatedAt: nowSeconds(),
+            })
+            .where(
+              and(
+                eq(messageDeliveryCopies.accountPubkey, job.accountPubkey),
+                eq(messageDeliveryCopies.messageId, job.messageId),
+                eq(messageDeliveryCopies.recipientPubkey, recipientPubkey),
+              ),
+            );
+        }
+        await tx
+          .delete(relayOutboxJobTargets)
+          .where(
+            and(
+              eq(relayOutboxJobTargets.jobId, job.id),
+              eq(relayOutboxJobTargets.recipientPubkey, recipientPubkey),
+            ),
+          );
+        await tx
+          .delete(relayOutboxPayloads)
+          .where(
+            and(
+              eq(relayOutboxPayloads.jobId, job.id),
+              eq(relayOutboxPayloads.recipientPubkey, recipientPubkey),
+            ),
+          );
+        if (durable) await this.recomputeMessageStatus(tx, job);
+      }),
+    );
   }
 
   private settleTarget(
@@ -887,11 +1042,6 @@ class RelayMessageOutbox {
         ),
       )
       .all();
-    const nonSelf = copies.filter((copy) => copy.recipientPubkey !== job.accountPubkey);
-    const surfaced = nonSelf.length > 0 ? nonSelf : copies;
-    const relays = surfaced.flatMap((copy) => copy.relays);
-    const ok = relays.filter((relay) => relay.status === 'ok').length;
-    const verdict = relayDeliveryVerdict(ok, relays.length);
     const remainingJob = await tx
       .select({ id: relayOutboxJobs.id })
       .from(relayOutboxJobs)
@@ -903,10 +1053,16 @@ class RelayMessageOutbox {
       )
       .limit(1)
       .get();
-    const deliveryStatus = verdict === 'sent' ? 'sent' : remainingJob ? 'queued' : 'failed';
+    const deliveryStatus = messageDeliveryVerdict(
+      copies.map((copy) => ({ relays: copy.relays, error: copy.error ?? undefined })),
+      !!remainingJob,
+    );
     await tx
       .update(messages)
-      .set({ deliveryStatus, deliveryError: deliveryStatus === 'sent' ? null : undefined })
+      .set({
+        deliveryStatus,
+        deliveryError: copies.length > 0 ? null : undefined,
+      })
       .where(
         and(
           eq(messages.accountPubkey, job.accountPubkey),

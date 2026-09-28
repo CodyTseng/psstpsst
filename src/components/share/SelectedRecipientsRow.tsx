@@ -1,15 +1,18 @@
 import X from 'lucide-react-native/icons/x';
 import { useEffect } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { AppText } from '@/components/common/AppText';
 import { Avatar } from '@/components/common/Avatar';
+import { GroupAvatar } from '@/components/common/GroupAvatar';
+import { HorizontalFadeScrollView } from '@/components/common/HorizontalFadeScrollView';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { useContact } from '@/hooks/use-contacts';
 import { useProfile } from '@/hooks/use-profile';
+import { useGroupPresentation } from '@/hooks/use-group-presentation';
 import { useLanguageDirection } from '@/i18n/direction';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { shareTargetId, type ShareTarget } from '@/lib/share/share-target';
@@ -23,37 +26,51 @@ const SUMMARY_AVATAR = uiDensity.shareRecipientSummaryAvatarSize;
 
 function useRecipientPresentation(target: ShareTarget) {
   const accountPubkey = useActiveAccount((state) => state.activePubkey) ?? '';
-  const relayPubkey = target.deliveryKind === 'relay' ? target.conversationKey : null;
+  const relayPubkey = target.deliveryKind === 'relay' && !target.group
+    ? target.conversationKey
+    : null;
   const profile = useProfile(relayPubkey);
   const contact = useContact(accountPubkey, relayPubkey ?? '');
-  const name =
-    target.name ||
-    resolveDisplayName(target.conversationKey, {
-      petname: contact?.petname,
-      displayName: profile?.displayName,
-      name: profile?.name,
-    });
+  const groupPresentation = useGroupPresentation(
+    accountPubkey,
+    target.name,
+    target.groupMemberPubkeys,
+    !!target.group,
+  );
+  const name = target.group
+    ? groupPresentation.title
+    : target.name ||
+      resolveDisplayName(target.conversationKey, {
+        petname: contact?.petname,
+        displayName: profile?.displayName,
+        name: profile?.name,
+      });
 
   return {
     name,
     picture: target.deliveryKind === 'relay' ? profile?.picture : null,
+    groupMembers: groupPresentation.avatarMembers,
   };
 }
 
 /** One chosen recipient — avatar + name with a remove badge; tap to deselect. */
 function RecipientChip({ target, onRemove }: { target: ShareTarget; onRemove: (id: string) => void }) {
   const c = useThemeColors();
-  const { name, picture } = useRecipientPresentation(target);
+  const { name, picture, groupMembers } = useRecipientPresentation(target);
   const id = shareTargetId(target);
   return (
     <Pressable onPress={() => onRemove(id)} style={{ width: CHIP_W, alignItems: 'center', gap: 4 }}>
       <View>
-        <Avatar
-          pubkey={target.conversationKey}
-          picture={picture}
-          name={name}
-          size={AVATAR}
-        />
+        {target.group ? (
+          <GroupAvatar members={groupMembers} size={AVATAR} />
+        ) : (
+          <Avatar
+            pubkey={target.conversationKey}
+            picture={picture}
+            name={name}
+            size={AVATAR}
+          />
+        )}
         {/* Remove badge — a dark dot with an × at the avatar's top-right. */}
         <View
           style={{
@@ -79,7 +96,7 @@ function RecipientChip({ target, onRemove }: { target: ShareTarget; onRemove: (i
 }
 
 function RecipientSummaryIdentity({ target }: { target: ShareTarget }) {
-  const { name, picture } = useRecipientPresentation(target);
+  const { name, picture, groupMembers } = useRecipientPresentation(target);
 
   return (
     <View
@@ -91,12 +108,16 @@ function RecipientSummaryIdentity({ target }: { target: ShareTarget }) {
         gap: spacing.sm,
       }}
     >
-      <Avatar
-        pubkey={target.conversationKey}
-        picture={picture}
-        name={name}
-        size={SUMMARY_AVATAR}
-      />
+      {target.group ? (
+        <GroupAvatar members={groupMembers} size={SUMMARY_AVATAR} />
+      ) : (
+        <Avatar
+          pubkey={target.conversationKey}
+          picture={picture}
+          name={name}
+          size={SUMMARY_AVATAR}
+        />
+      )}
       <AppText variant="body" weight="medium" numberOfLines={1}>
         {name}
       </AppText>
@@ -107,6 +128,7 @@ function RecipientSummaryIdentity({ target }: { target: ShareTarget }) {
 /** Persistent recipient identity shown above a share confirmation preview. */
 export function RecipientSummary({ label, targets }: { label: string; targets: ShareTarget[] }) {
   const direction = useLanguageDirection();
+  const c = useThemeColors();
 
   return (
     <View
@@ -118,16 +140,15 @@ export function RecipientSummary({ label, targets }: { label: string; targets: S
       }}
     >
       <SectionLabel>{label}</SectionLabel>
-      <ScrollView
-        horizontal
-        style={{ flex: 1 }}
-        showsHorizontalScrollIndicator={false}
+      <HorizontalFadeScrollView
+        fadeColor={c.sheetBackground}
+        containerStyle={{ flex: 1 }}
         contentContainerStyle={{ gap: spacing.lg }}
       >
         {targets.map((target) => (
           <RecipientSummaryIdentity key={shareTargetId(target)} target={target} />
         ))}
-      </ScrollView>
+      </HorizontalFadeScrollView>
     </View>
   );
 }
@@ -149,6 +170,7 @@ export function SelectedRecipientsRow({
   targets: ShareTarget[];
   onRemove: (id: string) => void;
 }) {
+  const c = useThemeColors();
   const shown = targets.length > 0;
   const progress = useSharedValue(0);
   // Last measured open height. Updated only while shown, so a collapse animates
@@ -176,16 +198,20 @@ export function SelectedRecipientsRow({
           if (shown) contentH.value = e.nativeEvent.layout.height;
         }}
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
+        <HorizontalFadeScrollView
+          fadeColor={c.background}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 16 }}
+          contentContainerStyle={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.sm,
+            paddingBottom: spacing.xs,
+            gap: spacing.lg,
+          }}
         >
           {targets.map((target) => (
             <RecipientChip key={shareTargetId(target)} target={target} onRemove={onRemove} />
           ))}
-        </ScrollView>
+        </HorizontalFadeScrollView>
       </View>
     </Reanimated.View>
   );

@@ -11,7 +11,7 @@ import { SelfBadge } from '@/components/common/SelfBadge';
 import { useIsBlocked } from '@/hooks/use-blocked';
 import { useIsRTL } from '@/i18n/direction';
 import { useActiveAccount } from '@/stores/active-account.store';
-import { uiDensity, useThemeColors } from '@/theme';
+import { spacing, uiDensity, useThemeColors } from '@/theme';
 
 // Leading checkbox column: the 22px dot + ~12px gap to the avatar. In multi-select
 // the row content slides right by this so the dot never overlaps it.
@@ -33,6 +33,9 @@ type Props = {
    * slide together on the toggle — and a row scrolled in *after* the toggle reads
    * the settled value (1) instead of replaying the slide from 0. */
   selectProgress?: SharedValue<number>;
+  showSelfBadge?: boolean;
+  /** Reserve logical-end space for a sibling action overlaid by the caller. */
+  trailingInset?: number;
 };
 
 /** Compact contact row — avatar + name, with a "Blocked" tag as a leading prefix
@@ -50,6 +53,8 @@ export function ContactListItem({
   onPress,
   selected,
   selectProgress,
+  showSelfBadge = true,
+  trailingInset = 0,
 }: Props) {
   const c = useThemeColors();
   const isRTL = useIsRTL();
@@ -78,7 +83,8 @@ export function ContactListItem({
       pressFeedback="delayed"
       style={({ pressed }) => ({
         height: uiDensity.contactRowHeight,
-        paddingHorizontal: 16,
+        paddingStart: spacing.lg,
+        paddingEnd: spacing.lg + trailingInset,
         justifyContent: 'center',
         backgroundColor: pressed ? c.interactionOverlay : 'transparent',
       })}
@@ -110,7 +116,7 @@ export function ContactListItem({
           {/* Name line, with the "Blocked" tag as a leading prefix (before the
               name) — left-aligned, so the floating A–Z index rail never covers it. */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {isSelf ? <SelfBadge /> : blocked ? <BlockedBadge /> : null}
+            {isSelf && showSelfBadge ? <SelfBadge /> : blocked ? <BlockedBadge /> : null}
             <AppText variant="subtitle" numberOfLines={1} style={{ flexShrink: 1 }}>
               {displayName}
             </AppText>

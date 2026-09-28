@@ -11,10 +11,13 @@ export type SettingsSelection =
   | 'data'
   | 'about';
 
+export type ContactsSelection = 'groups';
+
 export type WidePaneSelection = {
   conversationKey: string | null;
   profilePubkey: string | null;
   settingsItem: SettingsSelection | null;
+  contactsItem: ContactsSelection | null;
 };
 
 const SETTINGS_ITEM_BY_ROUTE: Readonly<Record<string, SettingsSelection>> = {
@@ -50,7 +53,12 @@ function routeValue(pathname: string, route: string): string | null {
   const prefix = `/${route}/`;
   if (!pathname.startsWith(prefix)) return null;
   const value = pathname.slice(prefix.length).split('/')[0];
-  return value || null;
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 /** Maps the globally selected detail route back to its persistent primary row. */
@@ -61,6 +69,10 @@ export function getWidePaneSelection(
   const chatKey = routeValue(pathname, 'chat');
   const chatSearchKey = routeValue(pathname, 'chat-search');
   const mediaConversationKey = routeValue(pathname, 'media');
+  const groupConversationKey =
+    routeValue(pathname, 'group') ??
+    routeValue(pathname, 'group-add') ??
+    routeValue(pathname, 'group-rename');
   const profilePubkey = routeValue(pathname, 'profile');
   const rootRoute = pathname.split('/').filter(Boolean)[0] ?? '';
 
@@ -69,8 +81,10 @@ export function getWidePaneSelection(
       chatKey ??
       chatSearchKey ??
       mediaConversationKey ??
+      groupConversationKey ??
       (profileOpenedFromChat ? profilePubkey : null),
     profilePubkey,
     settingsItem: SETTINGS_ITEM_BY_ROUTE[rootRoute] ?? null,
+    contactsItem: rootRoute === 'groups' ? 'groups' : null,
   };
 }

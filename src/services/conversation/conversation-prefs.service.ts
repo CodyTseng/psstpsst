@@ -1,4 +1,4 @@
-import { and, eq, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -10,13 +10,9 @@ import type { Signer } from '../signer/signer.interface';
 /**
  * Per-conversation preference flags on the `conversations` table.
  *
- * - **`muted`** is synced across the user's own devices as a **private NIP-51
- *   set** — the same shape as the contact list
- *   ({@link ../contact/contact.service}): a replaceable kind-30000 set whose
- *   member `p`-tags live NIP-44-encrypted in `.content`, so who you mute is
- *   never exposed and only your devices can read it. Every conversation is 1:1,
- *   and its `conversation_key` is exactly the counterparty pubkey carried in the
- *   `p`-tag.
+ * - **`muted`** is synced across the user's own devices as a private kind-30000
+ *   set. Its NIP-44-encrypted content uses `p` for direct counterparties and
+ *   `g` for hashed group conversation keys, so mute membership is never public.
  * - **`pinned`** is a **device-local** sort preference only — it floats the row
  *   to the top of *this* device's inbox. It is intentionally **not** synced:
  *   pinning is about how this inbox is arranged, not a property of the peer.
@@ -29,11 +25,15 @@ const KIND_FOLLOW_SET = 30000;
 export const MUTED_D = 'psstpsst-muted';
 const MUTED_TITLE = 'PsstPsst Muted';
 
-/** Counterparty pubkeys of every muted conversation. The conversation_key IS the
- * counterparty pubkey (our own, for a note-to-self), so this is a direct read. */
-async function collectMutedPubkeys(accountPubkey: string): Promise<string[]> {
+/** Stable keys and identity kind for every muted conversation. */
+async function collectMutedConversations(
+  accountPubkey: string,
+): Promise<{ conversationKey: string; group: boolean }[]> {
   const rows = await db
-    .select({ conversationKey: conversations.conversationKey })
+    .select({
+      conversationKey: conversations.conversationKey,
+      groupId: conversations.groupId,
+    })
     .from(conversations)
     .where(
       and(
@@ -41,7 +41,10 @@ async function collectMutedPubkeys(accountPubkey: string): Promise<string[]> {
         eq(conversations.muted, true),
       ),
     );
-  return rows.map((r) => r.conversationKey);
+  return rows.map((row) => ({
+    conversationKey: row.conversationKey,
+    group: row.groupId != null,
+  }));
 }
 
 /** Commit the current encrypted snapshot after the optimistic local write can
@@ -56,8 +59,8 @@ function persistMutedSet(accountPubkey: string, signer?: Signer): Promise<void> 
 /** Re-publish the private muted set from current local state (replaceable). */
 async function publishMutedSet(accountPubkey: string, signer: Signer): Promise<void> {
   if (!signer.nip44Encrypt) return; // remote signers without NIP-44 can't sync
-  const pubkeys = await collectMutedPubkeys(accountPubkey);
-  const privateTags = pubkeys.map((pk) => ['p', pk]);
+  const muted = await collectMutedConversations(accountPubkey);
+  const privateTags = muted.map((item) => [item.group ? 'g' : 'p', item.conversationKey]);
   const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(privateTags));
   await publishConfiguration(accountPubkey, signer, {
     kind: KIND_FOLLOW_SET,
@@ -78,12 +81,17 @@ export async function setConversationMuted(
   opts: { signer?: Signer } = {},
 ): Promise<void> {
   if (muted) {
+    const now = Math.floor(Date.now() / 1000);
     await db
       .insert(conversations)
       .values({
         accountPubkey,
         conversationKey,
-        lastMessageAt: 0,
+        createdAt: now,
+        createdOrderAt: now * 1000,
+        updatedAt: now,
+        updatedOrderAt: now * 1000,
+        lastMessageAt: null,
         deleted: true,
         muted: true,
       })
@@ -142,17 +150,20 @@ export async function applyMutedEvent(
 ): Promise<void> {
   if (!event || !signer.nip44Decrypt) return;
   if (!(await canApplyConfigurationEvent(accountPubkey, KIND_FOLLOW_SET, MUTED_D, event))) return;
-  let pubkeys: string[];
+  let directKeys: string[];
+  let groupKeys: string[];
   try {
     const json = await signer.nip44Decrypt(accountPubkey, event.content);
     const tags = JSON.parse(json) as string[][];
-    pubkeys = tags.filter((t) => t[0] === 'p' && t[1]).map((t) => t[1]);
+    directKeys = tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1]);
+    groupKeys = tags
+      .filter((tag) => tag[0] === 'g' && tag[1]?.startsWith('group:'))
+      .map((tag) => tag[1]);
   } catch {
     return; // undecryptable / malformed — leave local state untouched
   }
-  // conversation_key IS the counterparty pubkey, so the muted p-tags already
-  // are the conversation keys — no transform needed.
-  const keys = Array.from(new Set(pubkeys));
+  // Both private p/g values are already stable conversation keys.
+  const keys = Array.from(new Set([...directKeys, ...groupKeys]));
   await db.transaction(async (tx) => {
     if (!(await canApplyConfigurationEvent(accountPubkey, KIND_FOLLOW_SET, MUTED_D, event, tx))) return;
     // Clear mute on every row not in the remote set (an empty set clears all).
@@ -166,14 +177,19 @@ export async function applyMutedEvent(
         ),
       )
       .run();
-    if (keys.length > 0) {
+    if (directKeys.length > 0) {
+      const now = Math.floor(Date.now() / 1000);
       await tx
         .insert(conversations)
         .values(
-          keys.map((conversationKey) => ({
+          [...new Set(directKeys)].map((conversationKey) => ({
             accountPubkey,
             conversationKey,
-            lastMessageAt: 0,
+            createdAt: now,
+            createdOrderAt: now * 1000,
+            updatedAt: now,
+            updatedOrderAt: now * 1000,
+            lastMessageAt: null,
             deleted: true,
             muted: true,
           })),
@@ -182,6 +198,18 @@ export async function applyMutedEvent(
           target: [conversations.accountPubkey, conversations.conversationKey],
           set: { muted: true },
         })
+        .run();
+    }
+    if (groupKeys.length > 0) {
+      await tx
+        .update(conversations)
+        .set({ muted: true })
+        .where(
+          and(
+            eq(conversations.accountPubkey, accountPubkey),
+            inArray(conversations.conversationKey, [...new Set(groupKeys)]),
+          ),
+        )
         .run();
     }
   });

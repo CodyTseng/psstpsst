@@ -12,6 +12,7 @@ export type DeliveryCopy = {
   recipient: string;
   self: boolean;
   relays: RelayDelivery[];
+  error?: string;
 };
 
 export type DeliveryPhase =
@@ -20,6 +21,7 @@ export type DeliveryPhase =
   | 'sending'
   | 'awaiting_ack'
   | 'sent'
+  | 'partial'
   | 'failed';
 
 export type MessageDelivery = {
@@ -50,13 +52,8 @@ export const deliveryStatusStore = createStore<DeliveryStatusState>()((set) => (
     })),
 }));
 
-/**
- * Hide self/sync copies from ordinary delivery detail. A note-to-self has no
- * recipient copy, so its self copy remains the visible fallback.
- */
 export function surfacedCopies<T extends { self: boolean }>(copies: T[]): T[] {
-  const recipients = copies.filter((copy) => !copy.self);
-  return recipients.length > 0 ? recipients : copies;
+  return copies;
 }
 
 export function surfacedRelays(delivery: MessageDelivery): RelayDelivery[] {
@@ -68,33 +65,51 @@ export function surfacedRelays(delivery: MessageDelivery): RelayDelivery[] {
  * reached `sent`. Pending work suppresses another retry until it settles.
  */
 export function retryableRelayUrls(delivery: MessageDelivery): string[] | null {
-  if (delivery.phase !== 'sent' && delivery.phase !== 'failed') return null;
-  const recipientCopies = delivery.copies.filter((copy) => !copy.self);
-  const relays = recipientCopies.flatMap((copy) => copy.relays);
-  if (relays.some((relay) => relay.status === 'pending')) return null;
-  const failed = Array.from(
-    new Set(
-      relays
-        .filter((relay) => relay.status === 'failed')
-        .map((relay) => relay.url),
-    ),
-  );
-  if (failed.length > 0) return failed;
-  if (delivery.copies.length > 0) return null;
-  return delivery.phase === 'failed' ? [] : null;
+  const retryable = delivery.copies.flatMap((copy) => retryableCopyRelayUrls(copy) ?? []);
+  return retryable.length ? [...new Set(retryable)] : null;
+}
+
+export function retryableCopyRelayUrls(copy: DeliveryCopy): string[] | null {
+  if (copy.relays.some((relay) => relay.status === 'pending')) return null;
+  const failed = copy.relays
+    .filter((relay) => relay.status === 'failed')
+    .map((relay) => relay.url);
+  if (failed.length > 0) return [...new Set(failed)];
+  return copy.error ? [] : null;
 }
 
 export function deliveryCounts(delivery: MessageDelivery): { ok: number; total: number } {
-  const relays = surfacedRelays(delivery);
   return {
-    ok: relays.filter((relay) => relay.status === 'ok').length,
-    total: relays.length,
+    ok: delivery.copies.filter((copy) => deliveryCopyVerdict(copy) === 'delivered').length,
+    total: delivery.copies.length,
   };
 }
 
 /** At least one acknowledgement and at least half of all surfaced targets. */
 export function relayDeliveryVerdict(okCount: number, total: number): 'sent' | 'failed' {
   return okCount > 0 && okCount * 2 >= total ? 'sent' : 'failed';
+}
+
+export function deliveryCopyVerdict(
+  copy: Pick<DeliveryCopy, 'relays' | 'error'>,
+): 'delivered' | 'pending' | 'failed' {
+  const ok = copy.relays.filter((relay) => relay.status === 'ok').length;
+  if (relayDeliveryVerdict(ok, copy.relays.length) === 'sent') return 'delivered';
+  if (copy.relays.some((relay) => relay.status === 'pending')) return 'pending';
+  return 'failed';
+}
+
+export function messageDeliveryVerdict(
+  copies: readonly Pick<DeliveryCopy, 'relays' | 'error'>[],
+  hasUnfinishedJob: boolean,
+): 'queued' | 'sent' | 'partial' | 'failed' {
+  if (copies.length === 0) return hasUnfinishedJob ? 'queued' : 'failed';
+  const verdicts = copies.map(deliveryCopyVerdict);
+  if (verdicts.includes('pending')) return 'queued';
+  const delivered = verdicts.filter((verdict) => verdict === 'delivered').length;
+  if (delivered === verdicts.length) return 'sent';
+  if (delivered > 0) return 'partial';
+  return hasUnfinishedJob ? 'queued' : 'failed';
 }
 
 /** Start selected targets while preserving acknowledgements as terminal. */

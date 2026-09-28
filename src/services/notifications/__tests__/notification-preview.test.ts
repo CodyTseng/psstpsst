@@ -93,4 +93,42 @@ describe('getNotificationPreview', () => {
     });
     expect(mockLimit).not.toHaveBeenCalled();
   });
+
+  it('uses a group title and sender identity while keeping content-only actions anonymous', async () => {
+    mockRows = [{
+      name: 'Family',
+      memberPubkeys: null,
+      petname: 'Alice',
+      profileDisplayName: null,
+      profileName: null,
+      picture: 'https://example.com/alice.png',
+    }];
+    const action = rumor({
+      tags: [
+        ['p', 'account-pubkey'],
+        ['h', 'family'],
+        ['action', 'rename'],
+        ['subject', 'Home'],
+      ],
+      content: '',
+    });
+
+    await expect(getNotificationPreview(action, 'account-pubkey')).resolves.toEqual({
+      displayName: 'Family',
+      senderName: 'Alice',
+      messageContent: 'group.renamed',
+      avatarUrl: 'https://example.com/alice.png',
+      group: true,
+    });
+    mockRows = [];
+    await expect(
+      getNotificationPreview(action, 'account-pubkey', { includeIdentity: false }),
+    ).resolves.toEqual({
+      displayName: null,
+      senderName: null,
+      messageContent: 'group.name_changed',
+      avatarUrl: null,
+      group: true,
+    });
+  });
 });

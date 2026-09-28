@@ -4,6 +4,7 @@ import { db } from '@/db/client';
 import { conversations } from '@/db/schema';
 import type { Rumor } from '@/db/schema/types';
 import { deriveConversationKey } from '@/lib/nostr/conversation-key';
+import { firstGroupId, groupConversationKey } from '@/lib/nostr/group-messaging';
 import { getPTags } from '@/lib/nostr/tags';
 
 const KIND_REACTION = 7;
@@ -24,12 +25,10 @@ export async function filterNotifiableMessages(
     if (candidates.has(rumor.id)) continue;
     if (rumor.pubkey === accountPubkey || rumor.kind === KIND_REACTION) continue;
 
-    const conversationKey = deriveConversationKey(
-      rumor.pubkey,
-      getPTags(rumor.tags),
-      accountPubkey,
-    );
-    // Group / CC messages have no 1:1 conversation and never notify.
+    const groupId = firstGroupId(rumor.tags);
+    const conversationKey = groupId
+      ? groupConversationKey(groupId)
+      : deriveConversationKey(rumor.pubkey, getPTags(rumor.tags), accountPubkey);
     if (conversationKey !== null) candidates.set(rumor.id, { rumor, conversationKey });
   }
   if (candidates.size === 0) return [];

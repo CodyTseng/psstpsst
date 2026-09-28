@@ -29,9 +29,11 @@ export function useConversationSearch(
   // conversationKey → the (single, for a DM) counterparty pubkey.
   const counterpartyByKey = useMemo(() => {
     const m = new Map<string, string | null>();
-    // conversation_key IS the counterparty pubkey.
     for (const item of all) {
-      m.set(item.conversation.conversationKey, item.conversation.conversationKey);
+      m.set(
+        item.conversation.conversationKey,
+        item.conversation.groupId ? null : item.conversation.conversationKey,
+      );
     }
     return m;
   }, [all]);
@@ -56,6 +58,7 @@ export function useConversationSearch(
     return all
       .filter((item) => {
         const conv = item.conversation;
+        if (conv.groupId) return !!conv.name && conv.name.toLowerCase().includes(q);
         const cp = counterpartyByKey.get(conv.conversationKey);
         if (!cp) return false;
         const name = resolveName({
@@ -65,6 +68,10 @@ export function useConversationSearch(
         });
         return !!name && name.toLowerCase().includes(q);
       })
-      .sort((a, b) => b.conversation.lastMessageOrderAt - a.conversation.lastMessageOrderAt);
+      .sort(
+        (a, b) =>
+          b.conversation.updatedOrderAt - a.conversation.updatedOrderAt ||
+          b.conversation.conversationKey.localeCompare(a.conversation.conversationKey),
+      );
   }, [q, all, counterpartyByKey, profiles, petnameByPubkey]);
 }

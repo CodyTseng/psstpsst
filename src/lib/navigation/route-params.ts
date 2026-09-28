@@ -3,6 +3,7 @@ import { parseEmojiSetCoordinate } from '@/lib/nostr/custom-emoji';
 export type RouteParam = string | string[] | undefined;
 
 const HEX_ID = /^[0-9a-f]{64}$/i;
+const GROUP_CONVERSATION_KEY = /^group:([0-9a-f]{64})$/i;
 const OPAQUE_ID = /^[a-zA-Z0-9._:-]+$/;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 
@@ -20,6 +21,14 @@ export function routeStringParam(
 export function routeHexIdParam(value: RouteParam): string | null {
   const parsed = routeStringParam(value, 64);
   return parsed && HEX_ID.test(parsed) ? parsed.toLowerCase() : null;
+}
+
+export function routeConversationKeyParam(value: RouteParam): string | null {
+  const hex = routeHexIdParam(value);
+  if (hex) return hex;
+  const parsed = routeStringParam(value, 70);
+  const group = parsed?.match(GROUP_CONVERSATION_KEY);
+  return group ? `group:${group[1].toLowerCase()}` : null;
 }
 
 export function routeOpaqueIdParam(value: RouteParam, maxLength = 256): string | null {
@@ -51,7 +60,7 @@ export function parseConversationRouteParams(params: {
   transport?: RouteParam;
   name?: RouteParam;
 }): ConversationRouteParams | null {
-  const key = routeHexIdParam(params.key);
+  const key = routeConversationKeyParam(params.key);
   if (!key) return null;
   const transportValue = params.transport;
   if (

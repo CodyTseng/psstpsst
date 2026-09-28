@@ -52,7 +52,8 @@ export function findIncomingConversation(
 
     if (
       !newest ||
-      conversation.lastMessageOrderAt > newest.conversation.lastMessageOrderAt
+      (conversation.lastMessageOrderAt ?? Number.NEGATIVE_INFINITY) >
+        (newest.conversation.lastMessageOrderAt ?? Number.NEGATIVE_INFINITY)
     ) {
       newest = item;
     }

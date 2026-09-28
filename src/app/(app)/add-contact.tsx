@@ -208,8 +208,9 @@ export default function SearchUser() {
             return (
               <ConversationListItem
                 conversationKey={conv.conversationKey}
-                counterpartyPubkey={conv.conversationKey}
+                counterpartyPubkey={conv.groupId ? null : conv.conversationKey}
                 conversationName={conv.name}
+                groupMemberPubkeys={conv.groupId ? conv.memberPubkeys : undefined}
                 lastMessagePreview={
                   item.lastMessageKind === 15
                     ? attachmentLabel(item.lastMessageTags, attachmentLabels)
@@ -217,6 +218,7 @@ export default function SearchUser() {
                 }
                 lastMessageTags={item.lastMessageTags}
                 lastMessageFromSelf={item.lastMessageSenderPubkey === accountPubkey}
+                lastMessageSenderPubkey={item.lastMessageSenderPubkey}
                 lastMessageAt={conv.lastMessageAt}
                 unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}
                 muted={conv.muted}

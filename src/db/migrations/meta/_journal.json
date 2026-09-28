@@ -351,6 +351,13 @@
       "when": 1790409494205,
       "tag": "0049_relay_message_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1790575830101,
+      "tag": "0050_group_messaging",
+      "breakpoints": true
     }
   ]
 }

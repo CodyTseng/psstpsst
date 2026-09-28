@@ -26,6 +26,7 @@ jest.mock('@/services/dm/encryption-key.service', () => ({
 }));
 jest.mock('@/services/dm/sync-store', () => ({
   markSyncRequestProcessed: jest.fn(),
+  peekSyncCursor: jest.fn(() => undefined),
 }));
 jest.mock('@/services/relay/relay-list.service', () => ({
   ownKeyAnnouncementRelays: jest.fn(),

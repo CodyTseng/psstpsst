@@ -119,6 +119,7 @@ export function IconButton({
           borderRadius: shape === 'square' ? radius.lg : size / 2,
           borderWidth: bordered ? 1 : 0,
           borderColor: bordered ? c.border : undefined,
+          overflow: 'hidden',
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: bg(!disabled && pressed),
@@ -130,7 +131,7 @@ export function IconButton({
       {({ pressed }) => (
         <>
           {!disabled && pressed && variant !== 'overlay' ? (
-            <InteractionOverlay borderRadius={shape === 'square' ? radius.lg : size / 2} />
+            <InteractionOverlay />
           ) : null}
           {icon}
         </>

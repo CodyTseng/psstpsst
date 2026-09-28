@@ -150,4 +150,29 @@ describe('Electron scrollbar visibility', () => {
 
     jest.useRealTimers();
   });
+
+  it('keeps shared compact horizontal rails out of the overlay scrollbar system', () => {
+    jest.useFakeTimers();
+    const scroller = document.createElement('div');
+    scroller.dataset.psstpsstScrollbarHidden = 'true';
+    Object.defineProperties(scroller, {
+      clientHeight: { value: 40 },
+      clientWidth: { value: 100 },
+      scrollHeight: { value: 40 },
+      scrollWidth: { value: 400 },
+      scrollLeft: { value: 100 },
+    });
+    document.body.appendChild(scroller);
+
+    installElectronScrollbarVisibility();
+    scroller.dispatchEvent(new Event('wheel'));
+    scroller.dispatchEvent(new Event('scroll'));
+
+    const horizontal = document.querySelector<HTMLElement>(
+      '[data-psstpsst-scrollbar-thumb="horizontal"]',
+    );
+    expect(horizontal?.classList.contains('psstpsst-scroll-active')).not.toBe(true);
+
+    jest.useRealTimers();
+  });
 });

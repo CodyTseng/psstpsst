@@ -1,5 +1,6 @@
 import type { Rumor } from '@/db/schema/types';
 import { filterNotifiableMessages } from '../notification-filter';
+import { groupConversationKey } from '@/lib/nostr/group-messaging';
 
 let mockRows: { conversationKey: string; muted: boolean; hasReplied: boolean }[] = [];
 const mockWhere = jest.fn(async () => mockRows);
@@ -32,7 +33,7 @@ describe('filterNotifiableMessages', () => {
     mockWhere.mockClear();
   });
 
-  it('rejects self-copies, reactions, and group messages without querying SQLite', async () => {
+  it('rejects self-copies, reactions, and unsupported CC messages without querying SQLite', async () => {
     const result = await filterNotifiableMessages(
       [
         rumor('self', ACCOUNT),
@@ -44,6 +45,22 @@ describe('filterNotifiableMessages', () => {
 
     expect(result).toEqual([]);
     expect(mockWhere).not.toHaveBeenCalled();
+  });
+
+  it('allows an accepted unmuted group by its hashed h identity', async () => {
+    mockRows = [{
+      conversationKey: groupConversationKey('family'),
+      muted: false,
+      hasReplied: true,
+    }];
+    const group = rumor('group', 'sender-a', {
+      tags: [['p', ACCOUNT], ['p', 'sender-b'], ['h', 'family']],
+    });
+
+    const result = await filterNotifiableMessages([group], ACCOUNT);
+
+    expect(result).toEqual([group]);
+    expect(mockWhere).toHaveBeenCalledTimes(1);
   });
 
   it('allows only replied, unmuted conversations in one batch query', async () => {

@@ -14,7 +14,13 @@ import { platform } from '@/platform';
 import { deriveConversationKey } from '@/lib/nostr/conversation-key';
 import { buildEmojiTag, type CustomEmoji } from '@/lib/nostr/custom-emoji';
 import {
+  firstGroupId,
+  groupConversationKey,
+  isValidMemberPubkey,
+} from '@/lib/nostr/group-messaging';
+import {
   isMessageOrderNewer,
+  isRumorTooFarInFuture,
   messageOrderAt,
   withMessageOrderTag,
 } from '@/lib/nostr/message-order';
@@ -75,6 +81,7 @@ import {
   isSyncRequestProcessed,
   markGiftWrapProcessed,
   markSyncRequestProcessed as persistSyncRequestProcessed,
+  peekSyncCursor,
   setBackwardUntil,
   setForwardSince,
 } from './sync-store';
@@ -88,6 +95,8 @@ import {
   type MessagingMetadata,
 } from './messaging-metadata';
 import { relayMessageOutbox } from './relay-message-outbox';
+import { groupReceiveService } from '../group/group-receive.service';
+import { groupService } from '../group/group.service';
 
 /** The live tail opens at `now - this`, so a new gift wrap whose `created_at` was
  * randomized up to 2 days into the past (NIP-59) is still caught live. The
@@ -120,6 +129,7 @@ const GIFT_WRAP_SEEN_MAX_AGE_MS = 60_000;
 /** The read watermark as an `(order_at, id)` cursor — the same key the message
  * list uses. Legacy messages share a second-floor `order_at` and tie on id. */
 type ReadCursor = { orderAt: number; id: string };
+type RumorIntake = 'live' | 'recovery' | 'history' | 'archive' | 'local';
 
 /** The newer of two cursors, or whichever is non-null. */
 function maxCursor(a: ReadCursor | null, b: ReadCursor | null): ReadCursor | null {
@@ -187,6 +197,12 @@ export type SendMessageOpts = {
   timestamp?: RumorTimestamp;
 };
 
+type GroupSendBase = {
+  accountPubkey: string;
+  conversationKey: string;
+  timestamp?: RumorTimestamp;
+};
+
 export type SendReactionOpts = {
   accountPubkey: string;
   recipientPubkeys: string[];
@@ -237,12 +253,16 @@ class DmService {
    * would freeze the JS thread — taps queue up and then all fire at once. The
    * queue decrypts in small batches and yields between them so the UI stays
    * responsive during the replay burst. */
-  private giftWrapQueue: Event[] = [];
+  private giftWrapQueue: {
+    event: Event;
+    intake: RumorIntake;
+    syncCursor: ReturnType<typeof peekSyncCursor>;
+  }[] = [];
   private drainingGiftWraps = false;
   /** Gift-wrap jobs that have crossed an async boundary. Account removal waits
    * for this set after invalidating the session so no stale write can race the
    * deletion of that account's rows. */
-  private inFlightGiftWrapTasks = new Set<Promise<Rumor | null>>();
+  private inFlightGiftWrapTasks = new Set<Promise<Rumor[] | null>>();
   /** Which relays delivered each incoming gift wrap this session, keyed by the
    * **gift wrap** id (what `receivedEvent` reports — the wrap isn't decrypted
    * yet). Populated for every relay delivery (not just the first), so the source
@@ -392,7 +412,11 @@ class DmService {
           onEvent: (event, relayUrl) => {
             if (this.syncEpoch !== epoch) return;
             this.recordGiftWrapSeen(event.id, relayUrl);
-            this.enqueueGiftWrap(event);
+            this.enqueueGiftWrap(
+              event,
+              'live',
+              peekSyncCursor(opts.accountPubkey),
+            );
           },
           // The first gift-wrap delivery is recorded in onEvent. Later
           // cross-relay duplicates are deduped before onEvent, so use the
@@ -808,6 +832,23 @@ class DmService {
     accountPubkey: string,
     conversationKey: string,
   ): Promise<void> {
+    const [group] = await db
+      .select({
+        groupId: conversations.groupId,
+        bootstrapEventId: conversations.membersBootstrapEventId,
+      })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.accountPubkey, accountPubkey),
+          eq(conversations.conversationKey, conversationKey),
+        ),
+      )
+      .limit(1);
+    if (group?.groupId && !group.bootstrapEventId) {
+      await groupService.abandonLocalGroup(accountPubkey, conversationKey);
+      return;
+    }
     const deletedOrderAt = Date.now();
     await db
       .update(conversations)
@@ -866,9 +907,188 @@ class DmService {
 
     await this.storeRumor(rumor, opts.accountPubkey, undefined, undefined, {
       enqueueRelay: true,
+      intake: 'local',
     });
     relayMessageOutbox.wake(opts.accountPubkey);
     return { rumorId: rumor.id! };
+  }
+
+  async sendGroupMessage(opts: GroupSendBase & {
+    kind?: typeof KIND_CHAT | typeof KIND_FILE;
+    content: string;
+    contentTags?: string[][];
+    replyToId?: string;
+  }): Promise<{ rumorId: string }> {
+    const group = await this.loadWritableGroup(opts.accountPubkey, opts.conversationKey);
+    const timestamp = opts.timestamp ?? nextRumorTimestamp();
+    const kind = opts.kind ?? KIND_CHAT;
+    const create = !group.membersBootstrapEventId;
+    const content = kind === KIND_CHAT ? normalizeBareNostrUris(opts.content) : opts.content;
+    const routingTags = new Set(['p', 'e', 'h', 'subject', 'action', 'ms']);
+    const groupName = group.name;
+    const tags = withMessageOrderTag(
+      [
+        ...group.memberPubkeys
+          .filter((member) => member !== opts.accountPubkey)
+          .map((member): string[] => ['p', member]),
+        ['h', group.groupId],
+        ...(create ? [['action', 'create']] : []),
+        ...(create && groupName != null ? [['subject', groupName]] : []),
+        ...(opts.replyToId ? [['e', opts.replyToId]] : []),
+        ...(opts.contentTags ?? []).filter((tag) => !routingTags.has(tag[0])),
+      ],
+      timestamp.millisecond,
+    );
+    const rumor = buildRumor(
+      { kind, content, tags, created_at: timestamp.createdAt },
+      opts.accountPubkey,
+    );
+    const result = await groupReceiveService.receive({
+      accountPubkey: opts.accountPubkey,
+      rumor,
+      intake: 'local',
+      active: true,
+      senderBlocked: false,
+    });
+    if (!result.stored) throw new Error('Could not store group message');
+    relayMessageOutbox.wake(opts.accountPubkey);
+    return { rumorId: rumor.id! };
+  }
+
+  async sendGroupReaction(opts: GroupSendBase & {
+    targetMessageId: string;
+    emoji: string | CustomEmoji;
+  }): Promise<{ rumorId: string }> {
+    const group = await this.loadWritableGroup(opts.accountPubkey, opts.conversationKey);
+    if (!group.membersBootstrapEventId) {
+      throw new Error('Send a text or file message before reacting in a new group');
+    }
+    const timestamp = opts.timestamp ?? nextRumorTimestamp();
+    const customEmoji = typeof opts.emoji === 'string' ? null : opts.emoji;
+    const content = typeof opts.emoji === 'string' ? opts.emoji : `:${opts.emoji.shortcode}:`;
+    const rumor = buildRumor(
+      {
+        kind: KIND_REACTION,
+        content,
+        tags: withMessageOrderTag(
+          [
+            ...group.memberPubkeys
+              .filter((member) => member !== opts.accountPubkey)
+              .map((member): string[] => ['p', member]),
+            ['h', group.groupId],
+            ['e', opts.targetMessageId],
+            ...(customEmoji
+              ? [buildEmojiTag({ shortcode: customEmoji.shortcode, url: customEmoji.url })]
+              : []),
+          ],
+          timestamp.millisecond,
+        ),
+        created_at: timestamp.createdAt,
+      },
+      opts.accountPubkey,
+    );
+    const result = await groupReceiveService.receive({
+      accountPubkey: opts.accountPubkey,
+      rumor,
+      intake: 'local',
+      active: true,
+      senderBlocked: false,
+    });
+    if (!result.stored) throw new Error('Could not store group reaction');
+    relayMessageOutbox.wake(opts.accountPubkey);
+    return { rumorId: rumor.id! };
+  }
+
+  async sendGroupAction(opts: GroupSendBase & (
+    | { action: 'invite'; memberPubkey: string }
+    | { action: 'remove'; memberPubkey: string }
+    | { action: 'rename'; name: string | null }
+  )): Promise<{ rumorId: string }> {
+    const group = await this.loadWritableGroup(opts.accountPubkey, opts.conversationKey);
+    const groupName = group.name;
+    if (!group.membersBootstrapEventId) {
+      throw new Error('Local-only group changes must update the group draft');
+    }
+    const timestamp = opts.timestamp ?? nextRumorTimestamp();
+    let recipients = group.memberPubkeys.filter((member) => member !== opts.accountPubkey);
+    let actionTag: string[];
+    let subjectTags: string[][] = [];
+    if (opts.action === 'rename') {
+      const name = opts.name?.trim() ?? '';
+      if ([...name].length > 80) throw new Error('Group name is too long');
+      actionTag = ['action', 'rename'];
+      subjectTags = [['subject', name]];
+    } else {
+      if (!isValidMemberPubkey(opts.memberPubkey)) throw new Error('Invalid group member');
+      if (opts.action === 'invite') {
+        if (group.memberPubkeys.includes(opts.memberPubkey)) {
+          throw new Error('Member already belongs to the group');
+        }
+        recipients = [...new Set([...recipients, opts.memberPubkey])].sort();
+      } else if (!group.memberPubkeys.includes(opts.memberPubkey)) {
+        throw new Error('Member does not belong to the group');
+      }
+      actionTag = ['action', opts.action, opts.memberPubkey];
+    }
+    const rumor = buildRumor(
+      {
+        kind: KIND_CHAT,
+        content: '',
+        tags: withMessageOrderTag(
+          [
+            ...recipients.map((member): string[] => ['p', member]),
+            ['h', group.groupId],
+            actionTag,
+            ...subjectTags,
+            ...(opts.action === 'invite' && groupName != null
+              ? [['subject', groupName]]
+              : []),
+          ],
+          timestamp.millisecond,
+        ),
+        created_at: timestamp.createdAt,
+      },
+      opts.accountPubkey,
+    );
+    const result = await groupReceiveService.receive({
+      accountPubkey: opts.accountPubkey,
+      rumor,
+      intake: 'local',
+      active: true,
+      senderBlocked: false,
+    });
+    if (!result.stored) throw new Error('Could not store group action');
+    relayMessageOutbox.wake(opts.accountPubkey);
+    return { rumorId: rumor.id! };
+  }
+
+  private async loadWritableGroup(accountPubkey: string, conversationKey: string) {
+    const [group] = await db
+      .select({
+        groupId: conversations.groupId,
+        name: conversations.name,
+        memberPubkeys: conversations.memberPubkeys,
+        membersBootstrapEventId: conversations.membersBootstrapEventId,
+      })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.accountPubkey, accountPubkey),
+          eq(conversations.conversationKey, conversationKey),
+        ),
+      )
+      .limit(1);
+    if (!group?.groupId || !Array.isArray(group.memberPubkeys)) {
+      throw new Error('Group not found');
+    }
+    const memberPubkeys = group.memberPubkeys.filter(isValidMemberPubkey).sort();
+    if (!memberPubkeys.includes(accountPubkey)) throw new Error('Group is read-only');
+    return {
+      groupId: group.groupId,
+      name: group.name,
+      membersBootstrapEventId: group.membersBootstrapEventId,
+      memberPubkeys,
+    };
   }
 
   /** Store the optimistic message and its FIFO job in one transaction. */
@@ -887,6 +1107,7 @@ class DmService {
 
     await this.storeRumor(rumor, opts.accountPubkey, undefined, undefined, {
       enqueueRelay: true,
+      intake: 'local',
     });
     relayMessageOutbox.wake(opts.accountPubkey);
     return { rumorId: rumor.id! };
@@ -899,13 +1120,18 @@ class DmService {
     kind: number;
     content: string;
     contentTags: string[][];
+    replyToId?: string;
+    subject?: string;
     timestamp?: RumorTimestamp;
   }): Promise<{ rumorId: string }> {
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
+    const routingTags = new Set(['p', 'e', 'h', 'subject', 'action', 'ms']);
     const tags = withMessageOrderTag(
       [
         ...opts.recipientPubkeys.map((recipient) => ['p', recipient]),
-        ...opts.contentTags,
+        ...opts.contentTags.filter((tag) => !routingTags.has(tag[0])),
+        ...(opts.replyToId ? [['e', opts.replyToId]] : []),
+        ...(opts.subject ? [['subject', opts.subject]] : []),
       ],
       timestamp.millisecond,
     );
@@ -916,6 +1142,7 @@ class DmService {
 
     await this.storeRumor(rumor, opts.accountPubkey, undefined, undefined, {
       enqueueRelay: true,
+      intake: 'local',
     });
     relayMessageOutbox.wake(opts.accountPubkey);
     return { rumorId: rumor.id! };
@@ -924,12 +1151,14 @@ class DmService {
   /** Queue a fresh gift wrap for the selected failed recipient relay targets. */
   async resendToRelays(opts: {
     rumorId: string;
+    recipientPubkey: string;
     relayUrls: string[];
   }): Promise<void> {
     if (!this.accountPubkey) throw new Error('DM service not initialized');
     await relayMessageOutbox.enqueueRetryTargets(
       this.accountPubkey,
       opts.rumorId,
+      opts.recipientPubkey,
       opts.relayUrls,
     );
   }
@@ -939,8 +1168,12 @@ class DmService {
     await relayMessageOutbox.enqueueRetryAll(opts.accountPubkey, opts.rumorId);
   }
 
-  private enqueueGiftWrap(giftWrap: Event): void {
-    this.giftWrapQueue.push(giftWrap);
+  private enqueueGiftWrap(
+    giftWrap: Event,
+    intake: RumorIntake,
+    syncCursor: ReturnType<typeof peekSyncCursor>,
+  ): void {
+    this.giftWrapQueue.push({ event: giftWrap, intake, syncCursor });
     if (!this.drainingGiftWraps) void this.drainGiftWrapQueue();
   }
 
@@ -951,9 +1184,9 @@ class DmService {
     this.drainingGiftWraps = true;
     try {
       while (this.giftWrapQueue.length > 0) {
-        const e = this.giftWrapQueue.shift()!;
+        const { event, intake, syncCursor } = this.giftWrapQueue.shift()!;
         try {
-          await this.processGiftWrap(e);
+          await this.processGiftWrap(event, intake, syncCursor);
         } catch (error) {
           // A transient database or adapter failure must not reject the detached
           // drain promise or prevent later envelopes from being processed.
@@ -976,15 +1209,23 @@ class DmService {
    * processed without decrypting their content. Envelopes that fail with every
    * available key are also marked processed to avoid repeated replay work.
    */
-  private processGiftWrap(giftWrap: Event): Promise<Rumor | null> {
-    const task = this.processGiftWrapForCurrentSession(giftWrap);
+  private processGiftWrap(
+    giftWrap: Event,
+    intake: RumorIntake,
+    syncCursor?: ReturnType<typeof peekSyncCursor>,
+  ): Promise<Rumor[] | null> {
+    const task = this.processGiftWrapForCurrentSession(giftWrap, intake, syncCursor);
     this.inFlightGiftWrapTasks.add(task);
     const forget = () => this.inFlightGiftWrapTasks.delete(task);
     task.then(forget, forget);
     return task;
   }
 
-  private async processGiftWrapForCurrentSession(giftWrap: Event): Promise<Rumor | null> {
+  private async processGiftWrapForCurrentSession(
+    giftWrap: Event,
+    intake: RumorIntake,
+    syncCursor?: ReturnType<typeof peekSyncCursor>,
+  ): Promise<Rumor[] | null> {
     const profile = createPerfSpan('dm.processGiftWrap', { kind: giftWrap.kind });
     let outcome = 'unknown';
     try {
@@ -1024,14 +1265,63 @@ class DmService {
         return null;
       }
       const result = unwrap.value;
-      let stored: Rumor | null = null;
+      let stored: Rumor[] | null = null;
+      if (isRumorTooFarInFuture(result.rumor)) {
+        await profileAsync(profile, 'db.markProcessed', () =>
+          markGiftWrapProcessed(giftWrap.id, accountPubkey),
+        );
+        outcome = 'future-rumor';
+        return null;
+      }
+      // Capture which relays delivered this gift wrap before routing the inner
+      // rumor. Group and direct storage both persist this same source snapshot.
+      const entry = this.giftWrapSeenOn.get(giftWrap.id);
+      if (entry) {
+        entry.rumorId = result.rumor.id;
+        this.rumorToGiftWrap.set(result.rumor.id!, giftWrap.id);
+      }
+      const sourceRelays = entry ? Array.from(entry.relays) : [];
+      const blocked = profileSync(profile, 'block.isBlocked', () =>
+        isBlocked(accountPubkey, result.rumor.pubkey),
+      );
+      const groupId = firstGroupId(result.rumor.tags);
+      if (groupId) {
+        const conversationKey = groupConversationKey(groupId);
+        const groupResult = await groupReceiveService.receive({
+          accountPubkey,
+          rumor: result.rumor,
+          sourceRelays,
+          intake,
+          active: this.isConversationActive(accountPubkey, conversationKey),
+          senderBlocked: blocked,
+          syncCursor,
+        });
+        if (groupResult.handled) {
+          if (groupResult.stored && isCurrent()) {
+            const visibleRumors = Array.from(
+              new Map(
+                [result.rumor, ...groupResult.promoted].map((visible) => [visible.id!, visible]),
+              ).values(),
+            );
+            if (intake !== 'history' && intake !== 'archive') {
+              for (const visible of visibleRumors) {
+                for (const listener of this.listeners) listener.onNewMessage?.(visible);
+              }
+            }
+            stored = visibleRumors;
+          }
+          if (!isCurrent()) return null;
+          await profileAsync(profile, 'db.markProcessed', () =>
+            markGiftWrapProcessed(giftWrap.id, accountPubkey),
+          );
+          outcome = stored ? 'stored-group' : 'group-dropped-or-pending';
+          return stored;
+        }
+      }
       // Drop messages from blocked senders before they ever reach the store —
       // never saved, never surfaced. Our own self-copies carry our pubkey (never
       // blocked), so outgoing sync is unaffected. Marked processed so we don't
       // re-attempt decryption on every relay replay.
-      const blocked = profileSync(profile, 'block.isBlocked', () =>
-        isBlocked(accountPubkey, result.rumor.pubkey),
-      );
       if (blocked) {
         await profileAsync(profile, 'db.markProcessed', () =>
           markGiftWrapProcessed(giftWrap.id, accountPubkey),
@@ -1043,21 +1333,18 @@ class DmService {
       // can show "received from". Bridge the wrap id (what `receivedEvent` keys
       // by) to the rumor id (what the UI looks up) so relays that arrive *after*
       // this first store still union into the live "received from" set.
-      const entry = this.giftWrapSeenOn.get(giftWrap.id);
-      if (entry) {
-        entry.rumorId = result.rumor.id;
-        this.rumorToGiftWrap.set(result.rumor.id!, giftWrap.id);
-      }
-      const sourceRelays = entry ? Array.from(entry.relays) : [];
       const inserted = await this.storeRumor(
         result.rumor,
         accountPubkey,
         sourceRelays,
         profile,
+        { intake },
       );
       if (inserted && isCurrent()) {
-        for (const l of this.listeners) l.onNewMessage?.(result.rumor);
-        stored = result.rumor;
+        if (intake !== 'history' && intake !== 'archive') {
+          for (const l of this.listeners) l.onNewMessage?.(result.rumor);
+        }
+        stored = [result.rumor];
       }
       if (!isCurrent()) return null;
       await profileAsync(profile, 'db.markProcessed', () =>
@@ -1172,12 +1459,12 @@ class DmService {
         onReceived: (relayUrl, id) => receiver.recordGiftWrapSeen(id, relayUrl),
         onEvent: async (event) => {
           if (!isCurrent()) return;
-          const task = receiver.processGiftWrap(event);
+          const task = receiver.processGiftWrap(event, 'recovery');
           this.inFlightGiftWrapTasks.add(task);
-          let rumor: Rumor | null;
-          try { rumor = await task; } finally { this.inFlightGiftWrapTasks.delete(task); }
+          let rumors: Rumor[] | null;
+          try { rumors = await task; } finally { this.inFlightGiftWrapTasks.delete(task); }
           if (!isCurrent()) return;
-          if (rumor) stored.push(rumor);
+          if (rumors) stored.push(...rumors);
           await yieldToUi();
         },
       });
@@ -1349,6 +1636,9 @@ class DmService {
       }
       if (this.syncEpoch === epoch) {
         this.historyBackfillComplete = forward === 'drained' && backwardComplete;
+        if (this.historyBackfillComplete) {
+          await groupReceiveService.finalizeCoveredHistory(accountPubkey, through);
+        }
       }
     } finally {
       if (this.syncEpoch === epoch) syncStatusStore.getState().setBackfilling(false);
@@ -1424,7 +1714,7 @@ class DmService {
       for (const e of page) {
         if (this.syncEpoch !== epoch) return 'aborted';
         if (processedIds.has(e.id)) continue;
-        await this.processGiftWrap(e);
+        await this.processGiftWrap(e, 'history');
         // Yield after every message; a single unwrap/store is the largest unit
         // of synchronous work left on this path.
         await yieldToUi();
@@ -1540,13 +1830,35 @@ class DmService {
     rumors: Rumor[],
   ): Promise<{ inserted: number; existing: number; invalid: number }> {
     const valid = rumors
-      .filter((r) => r && typeof r.id === 'string' && typeof r.kind === 'number')
-      .sort((a, b) => a.created_at - b.created_at);
+      .filter(
+        (r) =>
+          r &&
+          typeof r.id === 'string' &&
+          typeof r.kind === 'number' &&
+          !isRumorTooFarInFuture(r),
+      )
+      .sort((a, b) => messageOrderAt(a) - messageOrderAt(b) || b.id.localeCompare(a.id));
     let inserted = 0;
     let existing = 0;
     let unsupported = 0;
     for (const rumor of valid) {
-      const result = await this.storeRumor(rumor, accountPubkey);
+      const groupId = firstGroupId(rumor.tags);
+      if (groupId) {
+        const result = await groupReceiveService.receive({
+          accountPubkey,
+          rumor,
+          intake: 'archive',
+          active: false,
+          senderBlocked: false,
+        });
+        if (result.stored) inserted += 1;
+        else if (result.handled) existing += 1;
+        else unsupported += 1;
+        continue;
+      }
+      const result = await this.storeRumor(rumor, accountPubkey, undefined, undefined, {
+        intake: 'archive',
+      });
       if (result === true) inserted += 1;
       else if (result === false) existing += 1;
       else unsupported += 1;
@@ -1564,7 +1876,7 @@ class DmService {
     accountPubkey: string,
     sourceRelays?: string[],
     profile?: PerfSpan | null,
-    options?: { enqueueRelay?: boolean },
+    options: { enqueueRelay?: boolean; intake: RumorIntake } = { intake: 'live' },
   ): Promise<boolean | null> {
     const pTags = getPTags(rumor.tags);
     const conversationKey = profileSync(profile, 'store.deriveConversation', () =>
@@ -1576,6 +1888,10 @@ class DmService {
     const subject = getSubject(rumor.tags) ?? null;
     const replyToId = getReplyToId(rumor.tags) ?? null;
     const orderAt = messageOrderAt(rumor);
+    const advancesActivity =
+      options.intake === 'live' || options.intake === 'recovery' || options.intake === 'local';
+    const activityOrderAt = advancesActivity ? Date.now() : orderAt;
+    const activityAt = advancesActivity ? Math.floor(activityOrderAt / 1000) : rumor.created_at;
 
     const stored = await profileAsync(profile, 'db.storeTransaction', () =>
       db.transaction(async (tx) => {
@@ -1688,6 +2004,10 @@ class DmService {
               accountPubkey,
               conversationKey,
               name: subject,
+              createdAt: rumor.created_at,
+              createdOrderAt: orderAt,
+              updatedAt: activityAt,
+              updatedOrderAt: activityOrderAt,
               lastMessageAt: rumor.created_at,
               lastMessageOrderAt: orderAt,
               lastMessageId: rumor.id!,
@@ -1714,6 +2034,7 @@ class DmService {
           // toward unread (tying that to "is newest" was the under-count bug).
           const isNewest =
             !conv.lastMessageId ||
+            conv.lastMessageOrderAt == null ||
             isMessageOrderNewer(
               { orderAt, id: rumor.id! },
               { orderAt: conv.lastMessageOrderAt, id: conv.lastMessageId },
@@ -1763,6 +2084,12 @@ class DmService {
                 hasReplied: repliedNow ? true : conv.hasReplied,
                 name: subject && !conv.name ? subject : conv.name,
                 deleted: isNewest ? false : conv.deleted,
+                ...(advancesActivity
+                  ? {
+                      updatedAt: sql`CASE WHEN ${conversations.updatedOrderAt} < ${activityOrderAt} THEN ${activityAt} ELSE ${conversations.updatedAt} END`,
+                      updatedOrderAt: sql`MAX(${conversations.updatedOrderAt}, ${activityOrderAt})`,
+                    }
+                  : {}),
               })
               .where(
                 and(

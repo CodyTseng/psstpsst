@@ -1,6 +1,7 @@
 import {
   optionalRouteTextParam,
   parseConversationRouteParams,
+  routeConversationKeyParam,
   routeEmojiCoordinateParam,
   routeHexIdParam,
   routeOpaqueIdParam,
@@ -50,5 +51,10 @@ describe('route parameter validation', () => {
     ).toEqual({ key: PUBKEY, transport: 'proximity', name: 'Nearby' });
     expect(parseConversationRouteParams({ key: PUBKEY, transport: 'unknown' })).toBeNull();
     expect(parseConversationRouteParams({ key: '%' })).toBeNull();
+    expect(routeConversationKeyParam(`group:${PUBKEY.toUpperCase()}`)).toBe(`group:${PUBKEY}`);
+    expect(parseConversationRouteParams({ key: `group:${PUBKEY}` })).toEqual({
+      key: `group:${PUBKEY}`,
+      transport: 'relay',
+    });
   });
 });

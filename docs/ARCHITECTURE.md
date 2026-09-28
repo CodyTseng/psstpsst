@@ -68,6 +68,10 @@ the renderer's perspective on every runtime.
 - Every account-owned row is keyed by `account_pubkey`.
 - Messages are immutable and deduplicated by event ID.
 - Conversations are read models derived from messages and relationship state.
+- Relay groups use `group:<sha256(h)>` conversation keys, retain the raw `h`
+  value only in the conversation and rumor, and materialize a sorted roster
+  from an ordered membership-action log. Unknown-group rumors wait in a bounded
+  account-scoped quarantine outside hot message queries.
 - Device preferences stay in SQLite; private keys and wallet secrets stay in
   secure storage. Electron boot-time metadata is the exception: the main
   process owns atomic local files for window geometry and update-check timing,
@@ -103,14 +107,25 @@ PsstPsst combines the
 The rumor is the canonical business message. Seals and gift wraps belong to
 relay delivery and ingestion boundaries; UI, conversation, archive, reply,
 reaction, and attachment logic operate on rumors rather than relay envelopes.
+Authored payloads such as payment requests are created independently of their
+destination, then sent through one conversation target carrying the delivery
+kind, conversation key, and group marker. UI flows never reconstruct a separate
+recipient model for content that is sent to the current conversation.
 
-Conversation keys identify the counterparty within one owning account. The
-current relay conversation model is one-to-one; group messages are not accepted
-by the ingest path. Relay intake requires the sender's encryption-key `n` tag
+Direct conversation keys identify the counterparty within one owning account.
+Group conversation keys hash the private rumor's stable `h` identity; explicit
+`create`, `invite`, `remove`, and `rename` tags drive bootstrap and presentation.
+Membership changes replay in shared message order, while ordinary messages
+authorize incrementally against the materialized roster. Once full account
+history is covered, its persisted forward cursor rejects newly discovered
+backdated actions in the finalized range. Relay intake requires the sender's
+encryption-key `n` tag
 inside the authenticated seal. A verified seal without it is unsupported and
 marked processed without decrypting its content. Envelopes that fail decryption
 with all available messaging keys are also marked processed; later key changes
 do not retry them. Results from an invalidated receive session are discarded.
+The event-format extensions are specified in
+[PsstPsst NIP-17 Extensions](protocols/nip17-extensions.md).
 
 All signing goes through the `Signer` interface. Local private keys, remote
 NIP-46 signers, encryption-key rotation, and device key transfer remain behind
@@ -189,11 +204,12 @@ acknowledgement required. Failed relays remain individually retryable even after
 the message is considered sent, and retries do not target relays that already
 acknowledged it.
 
-The message-level verdict is derived from all durable recipient relay targets,
-never from one job's subset. Successful relay results are terminal. A manual
-retry creates a fresh gift wrap; recovery of the same interrupted job reuses its
-persisted wrap. Self/sync copies are retained but excluded from ordinary
-delivery counts, except for note-to-self messages.
+Each frozen recipient copy resolves metadata, wraps, publishes, and settles
+independently. The message-level verdict is derived from every copy, including
+self: all delivered is `sent`, some delivered is `partial`, none delivered is
+`failed`, and unfinished non-delivered work is `queued`. Successful relay
+results are terminal. A selected-copy retry creates a fresh gift wrap; recovery
+of the same interrupted job reuses its persisted wrap.
 See [relay message delivery](protocols/relay-message-delivery.md) for the queue
 and state-machine details.
 
@@ -229,6 +245,9 @@ and state-machine details.
 4. Duplicate events are ignored without duplicating conversation state.
 5. Successful inserts update the conversation read model and invalidate only
    relevant live queries.
+6. Inner rumors more than ten minutes ahead of local time are dropped before
+   conversation routing. Group intake additionally checks addressing, current
+   membership, bootstrap quarantine, and action finality before visibility.
 
 Message chronology uses the authenticated `(order_at, id)` cursor. A larger
 `order_at` is newer; equal timestamps follow the Nostr replaceable-event rule,
@@ -318,6 +337,10 @@ cause; cursor progress remains unchanged so the next session can retry safely.
   account-scoped recipient copies hold the bounded per-relay detail and are
   queried only while the message detail sheet is open. The UI does not infer
   message state from outbox rows or session memory.
+- Resolved conversation lists seed an account-and-conversation-scoped session
+  snapshot cache. A pushed chat reads that snapshot synchronously for its first
+  title and avatar commit, while the delayed live query remains authoritative
+  after the navigation transition.
   Reply targets outside a loaded window are batch-read by indexed ID with their
   source history page and cached for the screen session. Scrolling must not
   drive reply-target queries or React state updates.
@@ -381,6 +404,9 @@ Contacts, conversations, requests, mute, and block are separate concepts:
 - Saving or removing a contact does not create or delete a conversation.
 - A first message from an unknown sender remains a request until accepted by
   product rules.
+- A group bootstrap from an unknown sender remains a request until local
+  activity accepts it; later remote messages and membership actions never
+  promote it into the main inbox.
 - Conversation acceptance is not media-download consent. Non-contact attachments
   and media bytes require per-resource intent; unresolved relationships hold those
   downloads. Profile cards and relay metadata resolve independently of sender trust.

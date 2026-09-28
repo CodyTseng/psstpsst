@@ -58,6 +58,7 @@ jest.mock('../encryption-key-watcher', () => ({ encryptionKeyWatcher: { init: je
 jest.mock('../block.service', () => ({ loadBlockedIntoCache: jest.fn(), isBlocked: () => false }));
 jest.mock('../sync-store', () => ({
   getSyncCursor: jest.fn(), isGiftWrapProcessed: async (id: string) => mockProcessedIds.has(id),
+  peekSyncCursor: jest.fn(() => undefined),
   getProcessedGiftWrapIds: jest.fn(async (ids: string[]) =>
     new Set(ids.filter((id) => mockProcessedIds.has(id)))),
   markGiftWrapProcessed: jest.fn(async (id: string) => { mockProcessedIds.add(id); }),

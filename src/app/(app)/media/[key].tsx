@@ -15,10 +15,12 @@ import {
 } from '@/components/media/media-grid-layout';
 import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { useIsContact } from '@/hooks/use-contacts';
+import { useConversation } from '@/hooks/use-conversations';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { type ConversationMediaItem, useConversationMedia } from '@/hooks/use-conversation-media';
 import {
   optionalRouteTextParam,
+  routeConversationKeyParam,
   routeHexIdParam,
 } from '@/lib/navigation/route-params';
 import { formatMonthLabel, monthKey } from '@/lib/time';
@@ -57,7 +59,7 @@ export default function ConversationMediaGallery() {
     focusAt?: string | string[];
     focusUrl?: string | string[];
   }>();
-  const parsedConversationKey = routeHexIdParam(params.key);
+  const parsedConversationKey = routeConversationKeyParam(params.key);
   const conversationKey = parsedConversationKey ?? '';
   const focus = params.focus === undefined ? undefined : routeHexIdParam(params.focus);
   const focusOrderAt = optionalRouteTextParam(params.focusOrderAt, 32);
@@ -71,6 +73,10 @@ export default function ConversationMediaGallery() {
     focusUrl === null;
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const isContact = useIsContact(accountPubkey ?? '', conversationKey);
+  const { conversation } = useConversation(accountPubkey ?? '', conversationKey);
+  const autoLoadRemote = conversation?.groupId
+    ? conversation.hasReplied
+    : isContact === true || conversationKey === accountPubkey;
   const [galleryWidth, setGalleryWidth] = useState(0);
   const titleClearance = useScreenHeaderClearance();
 
@@ -263,7 +269,7 @@ export default function ConversationMediaGallery() {
                 <View style={{ flexDirection: 'row', gap: GAP, marginBottom: GAP }}>
                   {item.items.map((media) => (
                     <MediaThumbnail
-                      autoLoad={isContact === true || conversationKey === accountPubkey}
+                      autoLoad={autoLoadRemote}
                       key={media.mediaKey}
                       item={media}
                       size={cellSize}

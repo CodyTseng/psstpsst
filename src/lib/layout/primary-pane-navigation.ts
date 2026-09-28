@@ -17,5 +17,16 @@ export function shouldResetPrimaryPaneDetail(
 /** Strip URL-only state so a pending href can bridge pathname propagation. */
 export function pathnameFromHref(href: string): string {
   const queryIndex = href.search(/[?#]/);
-  return queryIndex === -1 ? href : href.slice(0, queryIndex);
+  const pathname = queryIndex === -1 ? href : href.slice(0, queryIndex);
+  try {
+    // Expo's live pathname is decoded, while an href built for router.push may
+    // still contain encoded dynamic segments. Normalize the pending path so a
+    // wide-pane row stays selected during and after navigation.
+    return pathname
+      .split('/')
+      .map((segment) => decodeURIComponent(segment))
+      .join('/');
+  } catch {
+    return pathname;
+  }
 }

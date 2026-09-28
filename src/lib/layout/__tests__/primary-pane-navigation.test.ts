@@ -30,4 +30,8 @@ describe('primary pane navigation', () => {
   it('normalizes query and fragment state from pending hrefs', () => {
     expect(pathnameFromHref('/chat/alice?focus=event#message')).toBe('/chat/alice');
   });
+
+  it('normalizes encoded dynamic segments to Expo pathname form', () => {
+    expect(pathnameFromHref('/chat/group%3Aabc?focus=event')).toBe('/chat/group:abc');
+  });
 });

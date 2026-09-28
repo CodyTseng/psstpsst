@@ -84,6 +84,7 @@ import {
   useIsContact,
 } from '@/hooks/use-contacts';
 import { getSessionCachedProfile, useProfile } from '@/hooks/use-profile';
+import { getSessionCachedConversation } from '@/lib/conversation/conversation-snapshot-cache';
 import { useProximityIdentity, useProximityPeer } from '@/hooks/use-proximity';
 import { useCustomEmojis } from '@/hooks/use-custom-emojis';
 import { useWallets } from '@/hooks/use-wallets';
@@ -201,7 +202,7 @@ type ChatComposerModel = {
   supportsVoice: boolean;
   replyTo: { senderName: string; contentPreview: string } | null;
   focusRequestVersion: number;
-  gateStatus: 'checking' | 'unsupported' | 'proximity_identity_changed' | null;
+  gateStatus: 'checking' | 'unsupported' | 'proximity_identity_changed' | 'group_read_only' | null;
 };
 
 type ChatComposerController = {
@@ -431,7 +432,10 @@ export default function ChatPageRuntime() {
   const openComposerGateDetails = useCallback(() => {
     composerControllerRef.current?.openUnsupported();
   }, []);
-  const peerPubkey = !isProximity && conversationKey ? conversationKey : '';
+  const peerPubkey =
+    !isProximity && conversationKey && !conversationKey.startsWith('group:')
+      ? conversationKey
+      : '';
   const isRelationshipEligible = !!peerPubkey && peerPubkey !== accountPubkey;
   const relationshipKey = `${accountPubkey}:${peerPubkey}`;
   const cachedContact = isRelationshipEligible
@@ -474,6 +478,17 @@ export default function ChatPageRuntime() {
   // the optimistic composer. Anchored opens also enable live data immediately.
   const [liveDataReady, setLiveDataReady] = useState(routeHexIdParam(params.focus) !== null);
   const [secondaryDataReady, setSecondaryDataReady] = useState(false);
+  const cachedShellConversation = getSessionCachedConversation(
+    accountPubkey,
+    conversationKey,
+  );
+  const { conversation: liveShellConversation } = useConversation(
+    accountPubkey,
+    conversationKey,
+    secondaryDataReady && routeActive,
+  );
+  const shellConversation = liveShellConversation ?? cachedShellConversation;
+  const shellIsGroup = !!shellConversation?.groupId || conversationKey.startsWith('group:');
   const proximityConnectionStatus = useProximityStore(
     (state) => state.peers[conversationKey]?.connectionStatus ?? 'disconnected',
   );
@@ -762,8 +777,12 @@ export default function ChatPageRuntime() {
             <SelectionHeader count={selectedIds.size} onCancel={exitSelection} />
           ) : (
             <ChatHeader
-              counterpartyPubkey={conversationKey || null}
-              fallbackName={route?.name}
+              counterpartyPubkey={shellIsGroup ? null : conversationKey || null}
+              conversationKey={conversationKey}
+              groupMemberPubkeys={
+                shellIsGroup ? shellConversation?.memberPubkeys ?? [] : undefined
+              }
+              fallbackName={shellConversation?.name ?? route?.name}
               proximityConnectionStatus={
                 isProximity ? proximityConnectionStatus : undefined
               }
@@ -882,6 +901,18 @@ function ChatPageContent({
   );
   const isProximity =
     routeIsProximity || conversation?.deliveryKind === 'proximity';
+  const isGroup =
+    !isProximity &&
+    (conversationKey.startsWith('group:') || conversation?.groupId != null);
+  const groupMembers = useMemo(
+    () => conversation?.memberPubkeys ?? [],
+    [conversation?.memberPubkeys],
+  );
+  const groupMembershipPending = isGroup && !conversationLoaded;
+  const groupReadOnly =
+    isGroup &&
+    conversationLoaded &&
+    (!accountPubkey || !groupMembers.includes(accountPubkey));
   const deliveryKind = isProximity ? 'proximity' : 'relay';
   const attachmentSources = useMemo(
     () => conversationAttachmentSources(paymentRequestAvailable),
@@ -903,9 +934,11 @@ function ChatPageContent({
     () => ({
       conversationKey,
       deliveryKind,
+      group: isGroup,
+      groupMemberPubkeys: isGroup ? groupMembers : undefined,
       name: isProximity ? proximityPeerDisplayName : null,
     }),
-    [conversationKey, deliveryKind, isProximity, proximityPeerDisplayName],
+    [conversationKey, deliveryKind, groupMembers, isGroup, isProximity, proximityPeerDisplayName],
   );
   const cardPreviewMessages = useMemo<ForwardMessage[]>(
     () =>
@@ -944,7 +977,11 @@ function ChatPageContent({
   // need one. Neither should wait indefinitely for a relationship verdict.
   const remoteContentMode = conversationRemoteContentMode(
     conversationLoaded,
-    isProximity ? 'stranger' : conversationKey === accountPubkey ? 'contact' : relationship,
+    isProximity
+      ? 'stranger'
+      : isGroup
+        ? conversation?.hasReplied ? 'contact' : 'stranger'
+        : conversationKey === accountPubkey ? 'contact' : relationship,
   );
   // The window carries reactions (kind 7) in the same stream; split them out —
   // bubbles render as messages, reactions as chips on their target.
@@ -1070,6 +1107,15 @@ function ChatPageContent({
   const attachmentStagingRef = useRef(
     new Map<string, Promise<PendingAttachment | null>>(),
   );
+  useEffect(
+    () => () => {
+      for (const controller of attachmentAbortControllersRef.current.values()) {
+        controller.abort();
+      }
+      attachmentAbortControllersRef.current.clear();
+    },
+    [],
+  );
 
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
   const [replyFocusRequestVersion, setReplyFocusRequestVersion] = useState(0);
@@ -1163,7 +1209,13 @@ function ChatPageContent({
 
   // The conversation_key IS the counterparty pubkey (our own, for a note-to-self),
   // so the counterparty set is just it.
-  const counterparties = useMemo(() => [conversationKey], [conversationKey]);
+  const counterparties = useMemo(
+    () =>
+      isGroup
+        ? groupMembers.filter((member) => member !== accountPubkey)
+        : [conversationKey],
+    [accountPubkey, conversationKey, groupMembers, isGroup],
+  );
 
   // Can we actually deliver to this conversation's counterparties? Gates the
   // composer: until both their encryption key and DM relays are known we don't
@@ -1172,7 +1224,7 @@ function ChatPageContent({
   // Reachability is part of composer readiness, so resolve it immediately while
   // the rest of the live data waits for transitionEnd. The local state stays
   // visually identical to ready; a cached verdict therefore causes no flash.
-  const dmSupport = useDmSupport(isProximity ? [] : counterparties);
+  const dmSupport = useDmSupport(isProximity || isGroup ? [] : counterparties);
   const [showUnsupported, setShowUnsupported] = useState(false);
   const [cardSheetOpen, setCardSheetOpen] = useState(false);
   // Attachment-tray open state, lifted here so a tap on the messages can close
@@ -1200,9 +1252,6 @@ function ChatPageContent({
     [composerFiles],
   );
 
-  // The 1:1 peer also supplies the wallet invoice target. Relationship chrome
-  // lives in the stable parent shell so it is shared by preview and full modes.
-  const peerPubkey = counterparties.length === 1 ? counterparties[0] : null;
   // A recheck (or a live key/relay update) that makes the peer reachable closes
   // the reason sheet — the composer takes over and there's nothing left to show.
   useEffect(() => {
@@ -1215,7 +1264,9 @@ function ChatPageContent({
     pickedAttachments.length === 0 &&
     (isProximity
       ? !!proximitySelfPubkey && proximityOwnershipLoaded && !proximityHistoryReadOnly
-      : dmSupport.status === 'ready');
+      : isGroup
+        ? conversationLoaded && !groupReadOnly
+        : dmSupport.status === 'ready');
   useEffect(() => {
     onFileDropEnabledChange(fileDropEnabled);
   }, [fileDropEnabled, onFileDropEnabledChange]);
@@ -1236,10 +1287,10 @@ function ChatPageContent({
     if (!conversationKey) return;
     // Open the chat → subscribe to counterparties' encryption keys and prefetch
     // their DM relay lists, so sending later reads only warmed-up local data.
-    const unsub = encryptionKeyWatcher.watch([conversationKey]);
-    dmService.prefetchCounterpartyRelays([conversationKey]);
+    const unsub = encryptionKeyWatcher.watch(counterparties);
+    dmService.prefetchCounterpartyRelays(counterparties);
     return unsub;
-  }, [conversationKey, isProximity, routeActive, secondaryDataReady]);
+  }, [counterparties, conversationKey, isProximity, routeActive, secondaryDataReady]);
 
   useEffect(() => {
     if (!liveDataReady || !routeActive) return;
@@ -1348,7 +1399,7 @@ function ChatPageContent({
       const { rumorIds } = await conversationSendService.sendFile({
         accountPubkey,
         signer,
-        targets: [{ deliveryKind, conversationKey }],
+        targets: [{ deliveryKind, conversationKey, group: isGroup }],
         localUri: item.localUri,
         mime: item.mime,
         name: item.name,
@@ -1466,11 +1517,21 @@ function ChatPageContent({
     // Monotonic, captured here at tap time so rapid sends keep millisecond order;
     // threaded into sendMessage so the optimistic bubble and stored rumor share it.
     const timestamp = nextRumorTimestamp();
-    let tags: string[][] = counterparties.map((r) => ['p', r]);
     const emojiTags = customEmojis.map(buildEmojiTag);
-    tags.push(...emojiTags);
-    if (replyToId) tags.push(['e', replyToId]);
-    if (!isProximity && conversation?.name) tags.push(['subject', conversation.name]);
+    let tags: string[][] = counterparties.map((r) => ['p', r]);
+    if (isGroup && conversation?.groupId) {
+      tags.push(['h', conversation.groupId]);
+      if (!conversation.membersBootstrapEventId) {
+        tags.push(['action', 'create']);
+        if (conversation.name) tags.push(['subject', conversation.name]);
+      }
+      if (replyToId) tags.push(['e', replyToId]);
+      tags.push(...emojiTags);
+    } else {
+      tags.push(...emojiTags);
+      if (replyToId) tags.push(['e', replyToId]);
+      if (!isProximity && conversation?.name) tags.push(['subject', conversation.name]);
+    }
     tags = withMessageOrderTag(tags, timestamp.millisecond);
     const template = {
       kind: 14,
@@ -1492,7 +1553,7 @@ function ChatPageContent({
       createdAt: timestamp.createdAt,
       orderAt: timestamp.orderAt,
       replyToId: replyToId ?? null,
-      subject: isProximity ? null : (conversation?.name ?? null),
+      subject: isProximity || isGroup ? null : (conversation?.name ?? null),
       tags,
       rumor: optimisticRumor,
       deliveryStatus: null,
@@ -1511,10 +1572,10 @@ function ChatPageContent({
         void conversationSendService
           .sendMessage({
             accountPubkey,
-            target: { deliveryKind, conversationKey },
+            target: { deliveryKind, conversationKey, group: isGroup },
             content: text,
             replyToId,
-            subject: isProximity ? undefined : (conversation?.name ?? undefined),
+            subject: isProximity || isGroup ? undefined : (conversation?.name ?? undefined),
             extraTags: emojiTags,
             timestamp,
           })
@@ -1753,16 +1814,16 @@ function ChatPageContent({
     setPickedConfirmationVisible(true);
   }
 
-  function createInvoiceForPeer() {
-    if (!accountPubkey || !peerPubkey || !paymentRequestAvailable) return;
+  function createInvoiceForConversation() {
+    if (!accountPubkey || !conversationKey || !paymentRequestAvailable) return;
     router.push(
-      `/wallet-receive?sendTo=${encodeURIComponent(peerPubkey)}&conversationKey=${encodeURIComponent(conversationKey)}&transport=${deliveryKind}`,
+      `/wallet-receive?conversationKey=${encodeURIComponent(conversationKey)}&transport=${deliveryKind}`,
     );
   }
 
   function launchPicker(source: AttachmentSource) {
     if (!accountPubkey) return;
-    if (source === 'invoice') createInvoiceForPeer();
+    if (source === 'invoice') createInvoiceForConversation();
     else if (source === 'card') setCardSheetOpen(true);
     else if (source === 'camera') void pickFromCamera();
     else if (source === 'library') void pickFromLibrary();
@@ -2013,7 +2074,7 @@ function ChatPageContent({
     onGraduate();
     await conversationSendService.sendReaction({
       accountPubkey,
-      target: { deliveryKind, conversationKey },
+      target: { deliveryKind, conversationKey, group: isGroup },
       targetMessageId: targetMessage.id,
       emoji,
     });
@@ -2306,6 +2367,7 @@ function ChatPageContent({
     : null;
   const composerMode =
     (isProximity && !proximityHistoryReadOnly) ||
+    (isGroup && !groupMembershipPending && !groupReadOnly) ||
     (!isProximity && (dmSupport.status === 'ready' || dmSupport.status === 'local'))
       ? 'input'
       : 'gate';
@@ -2313,7 +2375,11 @@ function ChatPageContent({
     ? proximityHistoryReadOnly
       ? 'proximity_identity_changed'
       : null
-    : dmSupport.status === 'checking' || dmSupport.status === 'unsupported'
+    : isGroup
+      ? groupMembershipPending
+        ? 'checking'
+        : groupReadOnly ? 'group_read_only' : null
+      : dmSupport.status === 'checking' || dmSupport.status === 'unsupported'
       ? dmSupport.status
       : null;
 
@@ -2333,7 +2399,7 @@ function ChatPageContent({
         }}
         model={{
           mode: composerMode,
-          disabled: isProximity && proximityHistoryReadOnly,
+          disabled: (isProximity && proximityHistoryReadOnly) || groupReadOnly,
           attachmentSources,
           supportsVoice,
           replyTo: composerReplyTo,
@@ -2353,6 +2419,7 @@ function ChatPageContent({
           accountPubkey={accountPubkey}
           selfPubkey={messageSelfPubkey}
           proximity={isProximity}
+          group={isGroup}
           peerDisplayName={proximityPeerDisplayName}
           conversationKey={conversationKey}
           // Hold silently until the local row resolves so request media never
@@ -2548,22 +2615,15 @@ function ChatPageContent({
                 : null
             }
             transport={isProximity ? 'proximity' : 'relay'}
-            onResend={
+            onRetryAll={
               isProximity
                 ? undefined
-                : (relayUrls) => {
+                : () => {
                     if (detailRumorId) {
-                      if (relayUrls.length > 0) {
-                        void dmService.resendToRelays({
-                          rumorId: detailRumorId,
-                          relayUrls,
-                        });
-                      } else {
-                        void dmService.retryMessage({
-                          accountPubkey,
-                          rumorId: detailRumorId,
-                        });
-                      }
+                      void dmService.retryMessage({
+                        accountPubkey,
+                        rumorId: detailRumorId,
+                      });
                     }
                   }
             }

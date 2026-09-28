@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, View } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 
 import { ChromeDivider } from '@/components/common/ChromeDivider';
 import { AppButton } from '@/components/common/AppButton';
@@ -15,6 +16,8 @@ import { useContactEntries } from '@/hooks/use-contact-entries';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '@/lib/platform';
 import { resolveNostrUserInput } from '@/lib/nostr/user-input';
 import { useActiveAccount } from '@/stores/active-account.store';
+import { groupService } from '@/services/group/group.service';
+import { platform } from '@/platform';
 import { spacing } from '@/theme';
 
 export default function NewChat() {
@@ -23,12 +26,18 @@ export default function NewChat() {
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   // The same localized contact index as the Contacts tab — tap a contact to skip the
   // paste box and open the chat straight away.
-  const { entries, loaded } = useContactEntries(accountPubkey);
+  const { entries: contactEntries, loaded } = useContactEntries(accountPubkey);
+  const entries = useMemo(
+    () => contactEntries.filter((entry) => entry.pubkey !== accountPubkey),
+    [accountPubkey, contactEntries],
+  );
   const titleClearance = useScreenHeaderClearance();
 
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedPubkeys, setSelectedPubkeys] = useState<Set<string>>(() => new Set());
+  const selectProgress = useSharedValue(1);
 
   // Open (replace, so Back skips this picker) the 1:1 conversation with a
   // recipient pubkey. We don't pre-check DM support here: that's a slow
@@ -71,6 +80,39 @@ export default function NewChat() {
     void start(data);
   }
 
+  function toggleSelected(pubkey: string) {
+    setSelectedPubkeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(pubkey)) next.delete(pubkey);
+      else next.add(pubkey);
+      return next;
+    });
+  }
+
+  async function startSelected() {
+    if (!accountPubkey || loading || selectedPubkeys.size === 0) return;
+    if (selectedPubkeys.size === 1) {
+      openConversation([...selectedPubkeys][0]);
+      return;
+    }
+    if (selectedPubkeys.size + 1 > 8) {
+      const confirmed = await platform.confirmationDialog.confirm({
+        title: t('group.large_group_title'),
+        message: t('group.large_group_message'),
+        cancelLabel: t('common.cancel'),
+        confirmLabel: t('common.ok'),
+      });
+      if (!confirmed) return;
+    }
+    setLoading(true);
+    try {
+      const group = await groupService.createLocalGroup(accountPubkey, [...selectedPubkeys]);
+      router.replace(`/chat/${encodeURIComponent(group.conversationKey)}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <AppScreen edges={['bottom']}>
       <KeyboardAvoidingView
@@ -105,12 +147,18 @@ export default function NewChat() {
             trailingAccessory={<QrScanButton onScanned={handleScanned} />}
           />
           <AppButton
-            label={t('new_chat.start')}
+            label={
+              input.trim()
+                ? t('new_chat.start')
+                : selectedPubkeys.size >= 2
+                  ? t('group.create_with_count', { count: selectedPubkeys.size })
+                  : t('new_chat.start')
+            }
             variant="primary"
             size="lg"
             loading={loading}
-            disabled={!input.trim()}
-            onPress={() => void start(input)}
+            disabled={!input.trim() && selectedPubkeys.size === 0}
+            onPress={() => input.trim() ? void start(input) : void startSelected()}
           />
         </View>
 
@@ -119,7 +167,9 @@ export default function NewChat() {
             <ContactSectionList
               {...scrollProps}
               entries={entries}
-              onSelect={openConversation}
+              onSelect={toggleSelected}
+              selectedPubkeys={selectedPubkeys}
+              selectProgress={selectProgress}
             />
             <ChromeDivider visible={scrolled} edge="top" />
           </View>

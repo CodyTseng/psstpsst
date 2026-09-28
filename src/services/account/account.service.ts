@@ -8,6 +8,7 @@ import {
   blockedUsers,
   contacts,
   conversations,
+  groupMemberActions,
   mediaServerLists,
   messageDrafts,
   messageDeliveryCopies,
@@ -16,6 +17,7 @@ import {
   outbox,
   configurationOutbox,
   pendingAttachments,
+  pendingGroupRumors,
   processedGiftWraps,
   processedSyncRequests,
   proximityPeers,
@@ -26,6 +28,7 @@ import {
 import { bytesToHex, hexToBytes, nsecToPrivkey, privkeyToNsec } from '@/lib/nostr/keys';
 
 import { deleteAllAccountArchives } from '../dm/dm-backup-storage';
+import { clearSyncCursorCache } from '../dm/sync-store';
 import { clearAccountKeyMaterial } from '../dm/encryption-key.service';
 import { removeKeyRotationInterval } from '../dm/encryption-key-rotation-prefs';
 import { deleteAccountAttachments } from '../files/file-attachment.service';
@@ -232,6 +235,8 @@ async function deleteAccountData(pubkey: string): Promise<void> {
   await Promise.all(pendingFiles.map((row) => deletePendingAttachmentFile(row.localName)));
   const scoped = [
     messages,
+    groupMemberActions,
+    pendingGroupRumors,
     messageDeliveryCopies,
     messageMedia,
     conversations,
@@ -265,6 +270,7 @@ export async function removeAccount(pubkey: string): Promise<void> {
   await deleteAccountNearbyFileData(pubkey);
   await deleteAllAccountArchives(pubkey);
   await deleteAccountData(pubkey);
+  clearSyncCursorCache(pubkey);
   await db.delete(accounts).where(eq(accounts.pubkey, pubkey));
   await removeIdentityPrivkey(pubkey);
   await removeNip46ClientKey(pubkey);

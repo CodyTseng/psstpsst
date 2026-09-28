@@ -27,10 +27,9 @@ import { useWallets } from '@/hooks/use-wallets';
 import { setStringAsync } from '@/lib/clipboard';
 import {
   parseConversationRouteParams,
-  routeHexIdParam,
 } from '@/lib/navigation/route-params';
 import { invoiceMessageTags } from '@/lib/wallet/invoice-message';
-import type { ConversationDeliveryKind } from '@/lib/conversation/capabilities';
+import { conversationTargetFromRoute } from '@/lib/conversation/target';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { conversationSendService } from '@/services/conversation/conversation-send.service';
@@ -64,7 +63,6 @@ export default function WalletReceiveScreen() {
   const titleClearance = useScreenHeaderClearance();
   const params = useLocalSearchParams<{
     conversationKey?: string | string[];
-    sendTo?: string | string[];
     transport?: string | string[];
   }>();
   const chatRoute = params.conversationKey === undefined
@@ -73,20 +71,13 @@ export default function WalletReceiveScreen() {
         key: params.conversationKey,
         transport: params.transport,
       });
-  const parsedRecipientPubkey = params.sendTo === undefined
-    ? null
-    : routeHexIdParam(params.sendTo);
+  const chatTarget = chatRoute ? conversationTargetFromRoute(chatRoute) : null;
   const invalidChatRoute =
     params.conversationKey !== undefined ||
-    params.sendTo !== undefined ||
     params.transport !== undefined
-      ? !chatRoute || !parsedRecipientPubkey
+      ? !chatTarget
       : false;
-  const chatRecipientPubkey = parsedRecipientPubkey ?? '';
-  const chatConversationKey = chatRoute?.key ?? '';
-  const chatDeliveryKind: ConversationDeliveryKind =
-    chatRoute?.transport === 'proximity' ? 'proximity' : 'relay';
-  const sendToChat = !!chatRecipientPubkey && !!chatConversationKey;
+  const sendToChat = chatTarget != null;
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { wallets } = useWallets(accountPubkey);
   const profile = useProfile(accountPubkey);
@@ -226,14 +217,11 @@ export default function WalletReceiveScreen() {
         const request = await resolveLnurlPayTarget(source.address);
         parsedInvoice = await requestLnurlPayInvoice(request, sats, description);
       }
-      if (sendToChat && accountPubkey) {
+      if (chatTarget && accountPubkey) {
         try {
           await conversationSendService.sendMessage({
             accountPubkey,
-            target: {
-              deliveryKind: chatDeliveryKind,
-              conversationKey: chatRecipientPubkey,
-            },
+            target: chatTarget,
             content: parsedInvoice.invoice,
             extraTags: invoiceMessageTags(description),
           });

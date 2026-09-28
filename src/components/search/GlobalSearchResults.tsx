@@ -118,6 +118,7 @@ export function GlobalSearchResults({
             <SearchResultRow
               counterpartyPubkey={counterparty}
               conversationName={conv.name}
+              groupMemberPubkeys={conv.groupId ? conv.memberPubkeys : undefined}
               subtitle={preview}
               timestamp={conv.lastMessageAt}
               onPress={() =>

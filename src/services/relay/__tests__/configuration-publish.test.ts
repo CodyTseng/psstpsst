@@ -56,10 +56,15 @@ jest.mock('@/db/client', () => {
     CREATE TABLE conversations (
       account_pubkey TEXT, conversation_key TEXT, has_replied INTEGER DEFAULT 0,
       delivery_kind TEXT DEFAULT 'relay', proximity_account_pubkey TEXT, name TEXT,
+      created_at INTEGER DEFAULT 0, created_order_at INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT 0, updated_order_at INTEGER DEFAULT 0,
       last_message_at INTEGER DEFAULT 0, last_message_order_at INTEGER DEFAULT 0,
       last_message_id TEXT, unread_count INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0,
       deleted_at INTEGER, deleted_order_at INTEGER, muted INTEGER DEFAULT 0, pinned INTEGER DEFAULT 0,
       last_read_at INTEGER, last_read_order_at INTEGER, last_read_message_id TEXT,
+      group_id TEXT, member_pubkeys TEXT, members_bootstrap_order_at INTEGER,
+      members_bootstrap_event_id TEXT, members_action_order_at INTEGER,
+      members_action_event_id TEXT, name_order_at INTEGER, name_event_id TEXT,
       PRIMARY KEY (account_pubkey, conversation_key)
     );
     CREATE TABLE blocked_users (

@@ -35,6 +35,7 @@ const NO_WIDE_PANE_SELECTION: WidePaneSelection = {
   conversationKey: null,
   profilePubkey: null,
   settingsItem: null,
+  contactsItem: null,
 };
 
 const compactPrimaryPaneNavigation: PrimaryPaneNavigation = {

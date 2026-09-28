@@ -46,6 +46,7 @@ import { useScrolled } from '@/hooks/use-scrolled';
 import { useIsBlocked } from '@/hooks/use-blocked';
 import { useContact } from '@/hooks/use-contacts';
 import { useConversation } from '@/hooks/use-conversations';
+import { useCommonGroups } from '@/hooks/use-common-groups';
 import { useProfile } from '@/hooks/use-profile';
 import { setStringAsync } from '@/lib/clipboard';
 import { resolveName } from '@/lib/nostr/display-name';
@@ -62,6 +63,7 @@ import { useForwardDraftStore } from '@/stores/forward-draft.store';
 import { mediaViewer } from '@/stores/media-viewer.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
+import Users from 'lucide-react-native/icons/users';
 
 /**
  * Another user's profile. Minimal, messenger-first identity card: centered
@@ -89,6 +91,10 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
   // conversation_key is the counterparty pubkey (self included, for note-to-self).
   const conversationKey = pubkey;
   const { conversation } = useConversation(accountPubkey, conversationKey);
+  const { groups: commonGroups, loaded: commonGroupsLoaded } = useCommonGroups(
+    accountPubkey,
+    pubkey,
+  );
   const muted = conversation?.muted ?? false;
   const hasConversationContent = !!conversation?.lastMessageId;
   const lightningAddress = profile?.lud16 || profile?.lud06 || '';
@@ -457,6 +463,15 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
         {!isSelf ? (
           <View style={{ marginTop: spacing['2xl'] }}>
             <ListGroup>
+              {commonGroupsLoaded && commonGroups.length > 0 ? (
+                <ListRow
+                  icon={<Users size={22} color={c.text} strokeWidth={iconStrokeWidth.default} />}
+                  title={t('group.common_groups')}
+                  value={String(commonGroups.length)}
+                  trailing={<ChevronRight size={18} color={c.textMuted} />}
+                  onPress={() => router.push(`/common-groups/${encodeURIComponent(pubkey)}`)}
+                />
+              ) : null}
               {hasConversationContent ? (
                 <ListRow
                   icon={<Images size={22} color={c.text} />}

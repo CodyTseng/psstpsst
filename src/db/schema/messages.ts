@@ -29,7 +29,7 @@ export const messages = sqliteTable(
      * jobs update it from acknowledgements; UI progress never overrides it from
      * a separate in-memory delivery copy. */
     deliveryStatus: text('delivery_status', {
-      enum: ['queued', 'sent', 'failed'],
+      enum: ['queued', 'sent', 'partial', 'failed'],
     }),
     /** Whole-message failure before relay copies could be created. Per-relay
      * failures stay on `message_delivery_copies.relays`. */

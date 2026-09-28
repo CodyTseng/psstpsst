@@ -1,11 +1,11 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AppButton } from '../AppButton';
 import { AppText } from '../AppText';
 import { InteractionOverlay } from '../InteractionOverlay';
 import { InteractivePressable, resolveInteractiveState } from '../InteractivePressable';
-import { darkPalette, lightPalette } from '@/theme';
+import { darkPalette, lightPalette, spacing, uiDensity } from '@/theme';
 
 let mockPreference: 'light' | 'dark' = 'light';
 
@@ -90,6 +90,24 @@ describe('AppButton layout', () => {
     expect(pressable.props.hitSlop).toBe(8);
   });
 
+  it('applies a registered custom inset to a compact control', () => {
+    act(() => {
+      renderer = create(
+        <AppButton
+          accessibilityLabel="Tab"
+          iconLeft={<View />}
+          compact
+          compactInset={spacing.md}
+        />,
+      );
+    });
+
+    const pressable = renderer!.root.findByType(InteractivePressable);
+    expect(pressable.props.style({ pressed: false })).toMatchObject({
+      padding: spacing.md,
+    });
+  });
+
   it('layers the shared interaction overlay over ghost press feedback', () => {
     act(() => {
       renderer = create(<AppButton accessibilityLabel="Back" variant="ghost" />);
@@ -102,6 +120,27 @@ describe('AppButton layout', () => {
     expect(pressable.props.children({ pressed: true }).props.children[0].type).toBe(
       InteractionOverlay,
     );
+  });
+
+  it('keeps a selected tab frame and its hover surface on the same control', () => {
+    act(() => {
+      renderer = create(
+        <AppButton label="Tab" variant="ghost" selected />,
+      );
+    });
+
+    const pressable = renderer!.root.findByType(InteractivePressable);
+    expect(pressable.props.style({ pressed: false })).toMatchObject({
+      backgroundColor: lightPalette.accent,
+      borderWidth: 0,
+      overflow: 'hidden',
+    });
+    expect(
+      renderer!.root.findAllByType(View).some((view) =>
+        StyleSheet.flatten(view.props.style)?.backgroundColor === lightPalette.accentSoft &&
+        StyleSheet.flatten(view.props.style)?.top === uiDensity.selectedControlRingWidth,
+      ),
+    ).toBe(true);
   });
 
   it.each(['primary', 'accentGhost', 'danger'] as const)(
@@ -135,6 +174,7 @@ describe('AppButton layout', () => {
         backgroundColor: palette.surfaceElevated,
         borderColor: palette.border,
         borderWidth: 1,
+        overflow: 'hidden',
       });
       expect(pressable.props.style({ pressed: true })).toMatchObject({
         backgroundColor: palette.surfaceElevated,
@@ -142,6 +182,9 @@ describe('AppButton layout', () => {
       expect(pressable.props.children({ pressed: true }).props.children[0].type).toBe(
         InteractionOverlay,
       );
+      expect(
+        pressable.props.children({ pressed: true }).props.children[0].props.borderRadius,
+      ).toBeUndefined();
     },
   );
 

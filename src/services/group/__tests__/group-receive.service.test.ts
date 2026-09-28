@@ -1,0 +1,270 @@
+import type { DatabaseSync } from 'node:sqlite';
+
+import type { Rumor } from '@/db/schema';
+
+let mockDatabase: { sqlite: DatabaseSync; db: unknown } | undefined;
+
+jest.mock('@/db/client', () => {
+  if (mockDatabase) return mockDatabase;
+  const { DatabaseSync } = jest.requireActual('node:sqlite');
+  const { readFileSync, readdirSync } = jest.requireActual('node:fs');
+  const { createAsyncDatabase } = jest.requireActual('@/platform/create-async-database');
+  const schema = jest.requireActual('@/db/schema');
+  const sqlite = new DatabaseSync(':memory:');
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  const files = readdirSync(`${process.cwd()}/src/db/migrations`)
+    .filter((name: string) => /^\d{4}_.+\.sql$/.test(name))
+    .sort();
+  for (const name of files) {
+    const source = readFileSync(`${process.cwd()}/src/db/migrations/${name}`, 'utf8');
+    for (const statement of source.split('--> statement-breakpoint')) {
+      if (statement.trim()) sqlite.exec(statement);
+    }
+  }
+  const execute = async (query: string, params: unknown[], method: string) => {
+    const statement = sqlite.prepare(query);
+    statement.setReturnArrays(true);
+    if (method === 'run') {
+      statement.run(...params);
+      return { rows: [] };
+    }
+    return { rows: method === 'get' ? statement.get(...params) : statement.all(...params) };
+  };
+  let tail = Promise.resolve();
+  const serialized = <T,>(task: () => Promise<T>): Promise<T> => {
+    const result = tail.then(task);
+    tail = result.then(() => {}, () => {});
+    return result;
+  };
+  const executor = {
+    execute: (query: string, params: unknown[], method: string) =>
+      serialized(() => execute(query, params, method)),
+    transaction: (task: (tx: unknown) => Promise<unknown>) => serialized(async () => {
+      sqlite.exec('BEGIN');
+      try {
+        const result = await task({ execute });
+        sqlite.exec('COMMIT');
+        return result;
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    }),
+  };
+  mockDatabase = { sqlite, db: createAsyncDatabase(executor, schema) };
+  return mockDatabase;
+});
+
+jest.mock('@/services/conversation/message-tail-cache', () => ({
+  mergeStoredMessageIntoTail: jest.fn(),
+}));
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- load after database mock
+const { groupReceiveService } = require('../group-receive.service') as typeof import('../group-receive.service');
+
+const ACCOUNT = 'a'.repeat(64);
+const BOB = 'b'.repeat(64);
+const CAROL = 'c'.repeat(64);
+const DAVE = 'd'.repeat(64);
+
+function rumor(
+  idChar: string,
+  author: string,
+  createdAt: number,
+  tags: string[][],
+  content = '',
+): Rumor {
+  return {
+    id: idChar.repeat(64),
+    pubkey: author,
+    kind: 14,
+    created_at: createdAt,
+    tags,
+    content,
+  } as Rumor;
+}
+
+beforeAll(() => {
+  mockDatabase!.sqlite.prepare(
+    "INSERT INTO accounts (pubkey, signer_type, added_at, sort_order) VALUES (?, 'nsec', 1, 0)",
+  ).run(ACCOUNT);
+});
+
+afterAll(() => mockDatabase?.sqlite.close());
+
+it('keeps a stranger-created group in requests until local activity accepts it', async () => {
+  const h = 'stranger-request-test';
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('f', BOB, 5, [
+      ['p', ACCOUNT],
+      ['h', h],
+      ['action', 'create'],
+    ], 'hello'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  })).resolves.toMatchObject({ stored: true });
+
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('e', BOB, 6, [['p', ACCOUNT], ['h', h]], 'follow-up'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+
+  const row = mockDatabase!.sqlite.prepare(
+    'SELECT has_replied FROM conversations WHERE group_id = ?',
+  ).get(h) as { has_replied: number };
+  expect(row.has_replied).toBe(0);
+});
+
+it('bootstraps, applies tail actions, and authorizes ordinary messages from the roster', async () => {
+  const h = 'family-test';
+  const create = rumor('1', BOB, 10, [
+    ['p', ACCOUNT],
+    ['h', h],
+    ['action', 'create'],
+  ], 'hello');
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: create,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  })).resolves.toMatchObject({ stored: true });
+
+  const invite = rumor('2', BOB, 11, [
+    ['p', ACCOUNT],
+    ['p', CAROL],
+    ['h', h],
+    ['action', 'invite', CAROL],
+  ]);
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: invite,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  })).resolves.toMatchObject({ stored: true });
+
+  const carolMessage = rumor('3', CAROL, 12, [['p', ACCOUNT], ['h', h]], 'hi');
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: carolMessage,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  })).resolves.toMatchObject({ stored: true });
+
+  const row = mockDatabase!.sqlite.prepare(
+    'SELECT member_pubkeys FROM conversations WHERE group_id = ?',
+  ).get(h) as { member_pubkeys: string };
+  expect(JSON.parse(row.member_pubkeys)).toEqual([ACCOUNT, BOB, CAROL]);
+});
+
+it('drops finalized actions and ignores finalized ordinary subjects without dropping content', async () => {
+  const h = 'finality-test';
+  const create = rumor('4', BOB, 200, [
+    ['p', ACCOUNT],
+    ['h', h],
+    ['action', 'create'],
+  ], 'hello');
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: create,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+  const lateInvite = rumor('5', BOB, 50, [
+    ['p', ACCOUNT],
+    ['p', DAVE],
+    ['h', h],
+    ['action', 'invite', DAVE],
+  ]);
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: lateInvite,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: { backwardUntil: 0, forwardSince: 100 },
+  })).resolves.toMatchObject({ stored: false });
+
+  const lateSubject = rumor('6', BOB, 50, [
+    ['p', ACCOUNT],
+    ['h', h],
+    ['subject', 'Backdated'],
+  ], 'old but visible');
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: lateSubject,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: { backwardUntil: 0, forwardSince: 100 },
+  })).resolves.toMatchObject({ stored: true });
+  const state = mockDatabase!.sqlite.prepare(
+    'SELECT name, member_pubkeys FROM conversations WHERE group_id = ?',
+  ).get(h) as { name: string | null; member_pubkeys: string };
+  expect(state.name).toBeNull();
+  expect(JSON.parse(state.member_pubkeys)).not.toContain(DAVE);
+});
+
+it('promotes a quarantined action when an earlier prerequisite arrives', async () => {
+  const h = 'replay-test';
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('7', BOB, 300, [
+      ['p', ACCOUNT],
+      ['h', h],
+      ['action', 'create'],
+    ], 'hello'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+  const pending = rumor('8', CAROL, 320, [
+    ['p', ACCOUNT],
+    ['p', DAVE],
+    ['h', h],
+    ['action', 'invite', DAVE],
+  ]);
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: pending,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  })).resolves.toMatchObject({ stored: false });
+
+  const prerequisite = rumor('9', BOB, 310, [
+    ['p', ACCOUNT],
+    ['p', CAROL],
+    ['h', h],
+    ['action', 'invite', CAROL],
+  ]);
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: prerequisite,
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  })).resolves.toMatchObject({ stored: true, promoted: expect.arrayContaining([pending]) });
+
+  const state = mockDatabase!.sqlite.prepare(
+    'SELECT member_pubkeys FROM conversations WHERE group_id = ?',
+  ).get(h) as { member_pubkeys: string };
+  expect(JSON.parse(state.member_pubkeys)).toEqual([ACCOUNT, BOB, CAROL, DAVE]);
+});

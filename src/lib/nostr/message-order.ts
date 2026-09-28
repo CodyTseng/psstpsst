@@ -4,6 +4,7 @@ import { pickTagValue } from './tags';
 
 /** PsstPsst's authenticated, non-indexed millisecond ordering tag for private rumors. */
 export const MESSAGE_ORDER_TAG = 'ms';
+export const MAX_RUMOR_FUTURE_SKEW_MS = 10 * 60 * 1000;
 
 export type MessageOrderKey = { orderAt: number; id: string };
 
@@ -40,4 +41,12 @@ export function messageOrderAt(rumor: Pick<Rumor, 'created_at' | 'tags'>): numbe
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 999) return fallback;
   return fallback + parsed;
+}
+
+/** Reject the authenticated inner rumor, never the randomized outer envelope. */
+export function isRumorTooFarInFuture(
+  rumor: Pick<Rumor, 'created_at'>,
+  nowMs = Date.now(),
+): boolean {
+  return rumor.created_at * 1000 > nowMs + MAX_RUMOR_FUTURE_SKEW_MS;
 }

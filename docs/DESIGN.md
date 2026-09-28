@@ -139,8 +139,18 @@ between a message bubble and its reaction row.
   share the same spacing so pinning does not shift the text.
 - Do not nest scrolling containers unless the shared component explicitly owns
   that pattern.
+- Compact horizontal rails use `HorizontalFadeScrollView`. Logical-start and
+  logical-end fades appear only while content remains hidden beyond that edge;
+  native and Electron overlay scrollbars stay hidden because the fades are the
+  rail's overflow affordance.
 - Single-line names and titles truncate within the available width. Adjacent
   status marks, timestamps, and actions retain their space, including in selection mode.
+- In a wide layout, opening a conversation freezes any existing draft preview
+  in its active primary row. Composer keystrokes stay local; leaving the
+  conversation reveals the latest draft once, while clearing or sending removes
+  the frozen preview immediately.
+- Ordinary group-conversation previews prefix the resolved sender name on the
+  same truncated line. Drafts and group system actions keep their own labels.
 
 Message reactions sit in a compact, separate row directly below the bubble,
 with the dedicated `messageLayout.reactionGap` and without overlap or a
@@ -149,6 +159,64 @@ The reaction row adds no bottom margin; the following message row owns the
 inter-message separation. Reactions share the message's logical edge: start for
 received messages, end for sent messages. Own reactions retain an accent
 outline.
+
+Chat system events use the centered inline date-capsule visual family and stay
+anchored at their event position in the message timeline. They never join the
+floating sticky date indicator. A system event may own the inline date boundary
+or unread boundary at its position and always breaks bubble grouping across it.
+Group actions follow ordinary-message unread, badge, preview, activity, and
+notification behavior.
+Own authored system-event capsules reserve one fixed-size delivery-status slot
+while incoming system events do not. Every system-event capsule opens the
+standard message detail when pressed.
+System-event capsules remain single-line. Dynamic arguments such as member and
+group names truncate independently with end ellipses so localized action words
+remain visible; accessibility exposes the complete untruncated sentence. A
+compact leading icon identifies invite, remove, leave, and rename actions.
+Leading action and trailing delivery glyphs share one icon box size.
+System-event capsules never enter message selection or content actions such as
+copy, reply, react, quote, and forward.
+
+Received group-message runs show the sender name once at the run start and the
+sender avatar beside the run's final bubble. The logical-start avatar column is
+reserved across the run. The sender name uses semibold text at reduced opacity
+and aligns with the bubble's text inset. The avatar diameter matches a one-line text bubble's height,
+stays attached to the final bubble, and scrolls with it; it never floats
+independently. Reserve group-message geometry from the first route render;
+asynchronous conversation metadata must never shift existing bubbles. Own-message
+runs show neither. In message-selection mode, the received avatar column moves
+with its bubbles as one motion unit so the selector owns the leading slot
+without overlap or a second avatar animation target. Group sender labels move
+with that unit but remain outside the selected-row wash and selector alignment.
+
+The group conversation header opens group information. Sender names and avatars
+open that member's profile, as do member rows on group information. Add, remove,
+and leave controls remain on group information. The global profile screen may
+link to a read-only list of common groups, but never gains group-specific
+actions. Common-group rows open their chat histories.
+
+Automatically derived group titles resolve at most three member names in a
+stable order, followed by a localized remaining-member count. Full member
+rosters use virtualized lists.
+
+Multi-copy delivery details use a horizontally scrollable avatar tab for each
+target, including self delivery to other devices, with the selected target's
+relay detail shown below. Selection never changes avatar size, and status marks
+use equal logical-end and bottom insets near the avatar edge without obscuring
+its centre. The selected tab uses an accent ring around an accent-soft surface;
+the ring uses nested fills instead of a platform border stroke so its curved
+and straight segments stay visually even. Its frame, hover region, and tap
+region share one fixed geometry. The delivery summary row owns one retry-all
+action for every failed relay across all copies and keeps the same single-line
+height whether that action is present or absent. Failed relay rows expand in
+place to show their failure reason. Targets stay in stable
+identity order while statuses update, with the user's own copy labelled as
+themselves and kept last. Avatar tabs use a compact gap and sit close to the
+selected target detail. An overflowing rail uses the shared translucent
+logical-edge fades while content remains beyond either side. The rail extends through the sheet
+body gutter while its resting tabs retain that gutter, so scrolling content is
+never clipped at the inner padding boundary. Status changes never reorder the
+tabs.
 
 ## 5. Shape and elevation
 
@@ -254,6 +322,7 @@ this table records when to choose each primitive.
 | Single-choice indicator | `RadioIndicator` inside a radio `ListRow` |
 | Contact or conversation row | `ContactListItem` / `ConversationListItem` |
 | Section heading | `SectionLabel` |
+| Scrollable horizontal rail | `HorizontalFadeScrollView` |
 | Summoned task, picker, or form | `BottomSheet` |
 | Short decision or notice | `platform.confirmationDialog` |
 | Small Electron value entry | `InputDialog` |
@@ -474,6 +543,13 @@ uncertainty without an alarming warning treatment.
 
 Conversation-list draft previews appear only after the user leaves that
 conversation. An active split-pane row never mirrors live composer input.
+Conversation ordering follows its own activity time: accepted new messages and
+committed draft activity advance it, while debounced text persistence, live
+keystrokes, and historical replay do not.
+A conversation with neither messages nor a draft reserves the normal preview
+line height without showing placeholder copy.
+Read-only group conversations may retain a hidden local draft, but their list
+rows show the latest visible message or system event until membership returns.
 
 Image attachments default to optimized quality. After selection, the send
 preview shows the chosen images and exposes one quiet `Image quality` row;

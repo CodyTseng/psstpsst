@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { useMemo } from 'react';
 
 import { db } from '@/db/client';
@@ -26,7 +26,8 @@ export function useMessageDelivery(
           eq(messageDeliveryCopies.accountPubkey, accountPubkey),
           eq(messageDeliveryCopies.messageId, safeId),
         ),
-      ),
+      )
+      .orderBy(asc(messageDeliveryCopies.recipientPubkey)),
     [accountPubkey, safeId, 'delivery-copies', queryEnabled],
     { enabled: queryEnabled },
   );
@@ -55,6 +56,7 @@ export function useMessageDelivery(
         recipient: copy.recipientPubkey,
         self: copy.recipientPubkey === accountPubkey,
         relays: copy.relays,
+        error: copy.error ?? undefined,
       })),
     };
   }, [accountPubkey, copies, copiesResolved, messageResolved, messageRows, safeId]);

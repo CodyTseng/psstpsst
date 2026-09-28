@@ -124,10 +124,10 @@ async function createGiftWrap(
     {
       kind: KIND_GIFT_WRAP,
       content: encryptedContent,
-      tags: Array.from(new Set([recipientEncPubkey, recipientMainPubkey])).map((p) => [
-        'p',
-        p,
-      ]),
+      // Route and authorize relay access by the stable identity. The encryption
+      // key is already used to encrypt the content and need not be exposed as a
+      // second public recipient tag.
+      tags: [['p', recipientMainPubkey]],
       created_at: randomTimeUpTo2DaysInThePast(),
     },
     ephemeralPrivkey,

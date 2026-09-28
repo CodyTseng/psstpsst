@@ -25,16 +25,26 @@ export type SyncCursor = {
   backwardUntil: number | null;
 };
 
+const cursorCache = new Map<string, SyncCursor>();
+
+export function peekSyncCursor(accountPubkey: string): SyncCursor | undefined {
+  return cursorCache.get(accountPubkey);
+}
+
 export async function getSyncCursor(accountPubkey: string): Promise<SyncCursor> {
+  const cached = cursorCache.get(accountPubkey);
+  if (cached) return cached;
   const [row] = await db
     .select()
     .from(syncCursors)
     .where(eq(syncCursors.accountPubkey, accountPubkey))
     .limit(1);
-  return {
+  const cursor = {
     forwardSince: row?.forwardSince ?? null,
     backwardUntil: row?.backwardUntil ?? null,
   };
+  cursorCache.set(accountPubkey, cursor);
+  return cursor;
 }
 
 async function upsertCursor(
@@ -49,6 +59,15 @@ async function upsertCursor(
       target: syncCursors.accountPubkey,
       set: { ...patch, updatedAt: now },
     });
+  const previous = cursorCache.get(accountPubkey) ?? {
+    forwardSince: null,
+    backwardUntil: null,
+  };
+  cursorCache.set(accountPubkey, { ...previous, ...patch });
+}
+
+export function clearSyncCursorCache(accountPubkey: string): void {
+  cursorCache.delete(accountPubkey);
 }
 
 export function setForwardSince(accountPubkey: string, since: number): Promise<void> {

@@ -10,7 +10,7 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 
 import { AppText } from './AppText';
 import { InteractionOverlay } from './InteractionOverlay';
-import { radius, uiDensity, useThemeColors } from '@/theme';
+import { radius, uiDensity, useThemeColors, type FontWeight } from '@/theme';
 
 type Variant =
   | 'primary'
@@ -33,8 +33,11 @@ type Props = Omit<PressableProps, 'children' | 'style'> & {
   iconLeft?: React.ReactNode;
   iconRight?: React.ReactNode;
   labelVariant?: 'body' | 'caption' | 'subtitle' | 'title' | 'display' | 'amount' | 'code';
+  labelWeight?: FontWeight;
   labelNumberOfLines?: TextProps['numberOfLines'];
   labelEllipsizeMode?: TextProps['ellipsizeMode'];
+  /** Selected tab surface: accent-soft fill with an inset accent outline. */
+  selected?: boolean;
   orientation?: 'horizontal' | 'vertical';
   contentAlign?: 'center' | 'baseline';
   contentJustify?: 'center' | 'start';
@@ -50,6 +53,8 @@ type Props = Omit<PressableProps, 'children' | 'style'> & {
    * horizontal inset while hit slop preserves the touch target. */
   compact?: boolean;
   compactAxis?: 'all' | 'horizontal' | 'none';
+  /** Equal compact padding override. Pass a registered spacing token. */
+  compactInset?: number;
 };
 
 // Equal inset for compact pills, matching the registered icon-button language.
@@ -63,8 +68,10 @@ export function AppButton({
   iconLeft,
   iconRight,
   labelVariant = 'body',
+  labelWeight,
   labelNumberOfLines,
   labelEllipsizeMode,
+  selected = false,
   orientation = 'horizontal',
   contentAlign = 'center',
   contentJustify = 'center',
@@ -72,6 +79,7 @@ export function AppButton({
   corner: cornerProp,
   compact: compactProp,
   compactAxis: compactAxisProp,
+  compactInset: compactInsetProp,
   disabled,
   hitSlop,
   ...rest
@@ -83,6 +91,7 @@ export function AppButton({
   const corner = cornerProp ?? (textChrome ? 'full' : 'lg');
   const compact = compactProp ?? false;
   const compactAxis = compactAxisProp ?? 'all';
+  const compactInset = compactInsetProp ?? COMPACT_INSET;
 
   // For framed controls, size controls height/padding. Label hierarchy is
   // explicit through `labelVariant` and its documented uses in DESIGN §8.
@@ -139,7 +148,7 @@ export function AppButton({
   const buttonRadius = corner === 'full' ? radius.full : radius.lg;
   // Text chrome stays visually equal to its text line. Expand only the hit
   // target, so accessibility does not force a larger layout box.
-  const resolvedHitSlop = hitSlop ?? (textChrome ? COMPACT_INSET : undefined);
+  const resolvedHitSlop = hitSlop ?? (textChrome ? compactInset : undefined);
 
   return (
     <Pressable
@@ -151,15 +160,15 @@ export function AppButton({
         // insets or their registered control height + side padding.
         ...(textChrome
           ? {
-              paddingHorizontal: compact && compactAxis === 'none' ? 0 : COMPACT_INSET,
+              paddingHorizontal: compact && compactAxis === 'none' ? 0 : compactInset,
               paddingVertical: 0,
             }
           : compact
             ? compactAxis === 'horizontal'
-              ? { paddingHorizontal: COMPACT_INSET, paddingVertical: 0 }
+              ? { paddingHorizontal: compactInset, paddingVertical: 0 }
               : compactAxis === 'none'
                 ? { padding: 0 }
-                : { padding: COMPACT_INSET }
+                : { padding: compactInset }
             : {
                 // A label must remain readable in every locale. Standard buttons
                 // retain their registered height for one line and grow only when
@@ -167,10 +176,14 @@ export function AppButton({
                 minHeight: sizing.height,
                 paddingHorizontal: sizing.horizontalPadding,
               }),
-        backgroundColor: v.bg,
-        borderColor: v.border ?? 'transparent',
-        borderWidth: v.border ? 1 : 0,
+        backgroundColor: selected ? c.accent : v.bg,
+        borderColor: selected ? 'transparent' : v.border ?? 'transparent',
+        borderWidth: selected ? 0 : v.border ? 1 : 0,
         borderRadius: buttonRadius,
+        // Clip the interaction layer with the control itself. Giving an inset
+        // absolute child the same capsule radius leaves a visible ring between
+        // the hover fill and a bordered control on React Native Web.
+        overflow: 'hidden',
         alignItems: contentJustify === 'start' ? 'stretch' : 'center',
         justifyContent: contentJustify === 'start' ? 'flex-start' : 'center',
         flexDirection: orientation === 'vertical' ? 'column' : 'row',
@@ -181,8 +194,29 @@ export function AppButton({
     >
       {({ pressed }) => (
         <>
-          {!isDisabled && pressed && !textChrome ? (
-            <InteractionOverlay borderRadius={buttonRadius} />
+          {selected ? (
+            <>
+              <View
+                style={{
+                  position: 'absolute',
+                  top: uiDensity.selectedControlRingWidth,
+                  end: uiDensity.selectedControlRingWidth,
+                  bottom: uiDensity.selectedControlRingWidth,
+                  start: uiDensity.selectedControlRingWidth,
+                  backgroundColor: c.accentSoft,
+                  borderRadius: Math.max(
+                    0,
+                    buttonRadius - uiDensity.selectedControlRingWidth,
+                  ),
+                  pointerEvents: 'none',
+                }}
+              />
+              {!isDisabled && pressed && !textChrome ? (
+                <InteractionOverlay />
+              ) : null}
+            </>
+          ) : !isDisabled && pressed && !textChrome ? (
+            <InteractionOverlay />
           ) : null}
           <View
             // Loading changes opacity and adds the spinner. Keep this native node
@@ -207,7 +241,8 @@ export function AppButton({
               <AppText
                 variant={labelVariant}
                 weight={
-                  largeNumericLabel
+                  labelWeight ??
+                  (largeNumericLabel
                     ? 'bold'
                     : technicalLabel
                       ? 'regular'
@@ -219,7 +254,7 @@ export function AppButton({
                           labelVariant === 'body'
                           ? 'medium'
                           : undefined
-                        : 'semibold'
+                        : 'semibold')
                 }
                 numberOfLines={labelNumberOfLines ?? (singleLineNumericLabel ? 1 : undefined)}
                 ellipsizeMode={labelEllipsizeMode}

@@ -12,8 +12,12 @@ export const conversations = sqliteTable(
      * conversations. Changing it requires an explicit identity migration. */
     proximityAccountPubkey: text('proximity_account_pubkey'),
     name: text('name'),
-    lastMessageAt: integer('last_message_at').notNull(),
-    lastMessageOrderAt: integer('last_message_order_at').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    createdOrderAt: integer('created_order_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    updatedOrderAt: integer('updated_order_at').notNull(),
+    lastMessageAt: integer('last_message_at'),
+    lastMessageOrderAt: integer('last_message_order_at'),
     lastMessageId: text('last_message_id'),
     unreadCount: integer('unread_count').notNull().default(0),
     hasReplied: integer('has_replied', { mode: 'boolean' }).notNull().default(false),
@@ -30,10 +34,21 @@ export const conversations = sqliteTable(
     /** Id of the newest message read here. Together with `lastReadOrderAt` it
      * forms the same `(order_at, id)` cursor used by the message list. */
     lastReadMessageId: text('last_read_message_id'),
+    /** Raw h-tag value. Null keeps direct and Nearby conversations unchanged. */
+    groupId: text('group_id'),
+    /** Sorted active roster for a group. Null for non-group conversations. */
+    memberPubkeys: text('member_pubkeys', { mode: 'json' }).$type<string[]>(),
+    membersBootstrapOrderAt: integer('members_bootstrap_order_at'),
+    membersBootstrapEventId: text('members_bootstrap_event_id'),
+    membersActionOrderAt: integer('members_action_order_at'),
+    membersActionEventId: text('members_action_event_id'),
+    nameOrderAt: integer('name_order_at'),
+    nameEventId: text('name_event_id'),
   },
   (t) => [
     primaryKey({ columns: [t.accountPubkey, t.conversationKey] }),
     index('idx_conv_last_msg').on(t.accountPubkey, t.lastMessageOrderAt),
+    index('idx_conv_activity').on(t.accountPubkey, t.updatedOrderAt, t.conversationKey),
     index('idx_conv_backup_owner').on(
       t.accountPubkey,
       t.deliveryKind,

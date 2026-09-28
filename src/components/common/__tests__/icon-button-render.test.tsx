@@ -137,6 +137,7 @@ describe('Button feedback', () => {
     const pressable = () => renderer!.root.find((node) => typeof node.props.onPointerEnter === 'function' && typeof node.props.style === 'function');
     act(() => { pressable().props.onPointerEnter({ nativeEvent: { pointerType: 'mouse' } }); });
     expect(renderer!.root.findAllByType(InteractionOverlay)).toHaveLength(1);
+    expect(renderer!.root.findByType(InteractionOverlay).props.borderRadius).toBeUndefined();
     act(() => { renderer!.update(renderButton(true)); });
     const disabledStyle = StyleSheet.flatten(pressable().props.style({ pressed: true, hovered: true }));
     expect(disabledStyle.backgroundColor).toBe('transparent');

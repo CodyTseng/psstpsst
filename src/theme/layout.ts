@@ -91,6 +91,8 @@ export const density = {
     selectedRecipientAvatarSize: 48,
     selectedRecipientWidth: 56,
     shareRecipientSummaryAvatarSize: 32,
+    messageDeliveryStatusInset: 6,
+    selectedControlRingWidth: 1,
     countBadge: {
       sm: { size: 18, horizontalPadding: 4 },
       md: { size: 20, horizontalPadding: 6 },
@@ -143,6 +145,8 @@ export const density = {
     selectedRecipientAvatarSize: 40,
     selectedRecipientWidth: 48,
     shareRecipientSummaryAvatarSize: 28,
+    messageDeliveryStatusInset: 6,
+    selectedControlRingWidth: 1,
     countBadge: {
       sm: { size: 16, horizontalPadding: 4 },
       md: { size: 20, horizontalPadding: 6 },
