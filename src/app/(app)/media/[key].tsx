@@ -9,6 +9,10 @@ import { ChromeBackdrop } from '@/components/common/ChromeBackdrop';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { MediaThumbnail } from '@/components/media/MediaThumbnail';
+import {
+  mediaGridCellSize,
+  mediaGridColumnCount,
+} from '@/components/media/media-grid-layout';
 import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedirect';
 import { useIsContact } from '@/hooks/use-contacts';
 import { useScrolled } from '@/hooks/use-scrolled';
@@ -19,17 +23,16 @@ import {
 } from '@/lib/navigation/route-params';
 import { formatMonthLabel, monthKey } from '@/lib/time';
 import { useActiveAccount } from '@/stores/active-account.store';
-import { spacing, typography } from '@/theme';
+import { mediaGrid, spacing, typography, uiDensity } from '@/theme';
 
-const COLS = 3;
-const GAP = 2;
+const GAP = spacing.xs;
 const MONTH_HEADER_STYLE = {
   paddingHorizontal: spacing.lg,
   paddingVertical: spacing.sm,
 };
 const MONTH_HEADER_HEIGHT = typography.caption.lineHeight + spacing.sm * 2;
 
-/** A month divider, or a grid row of up to COLS media. `monthLabel` rides on both
+/** A month divider, or a responsive grid row. `monthLabel` rides on both
  * so the floating header can read it off the topmost visible item. */
 type MonthItem = { type: 'month'; key: string; monthLabel: string };
 type RowItem = { type: 'row'; key: string; monthLabel: string; items: ConversationMediaItem[] };
@@ -85,7 +88,13 @@ export default function ConversationMediaGallery() {
   const { items, loadOlder, loadNewer, hasMore, hasMoreNewer, anchored, loaded } =
     useConversationMedia(accountPubkey ?? '', conversationKey, anchor);
 
-  const cellSize = Math.floor((galleryWidth - GAP * (COLS - 1)) / COLS);
+  const columns = mediaGridColumnCount(
+    galleryWidth,
+    mediaGrid.minColumns,
+    uiDensity.mediaGridMinCellSize,
+    GAP,
+  );
+  const cellSize = mediaGridCellSize(galleryWidth, columns, GAP);
   const rowHeight = cellSize + GAP; // cell + its marginBottom
 
   // Group the ascending items into month sections, each chunked into grid rows,
@@ -110,11 +119,11 @@ export default function ConversationMediaGallery() {
         asc.push({ type: 'month', key: `m:${m}`, monthLabel: label });
       }
       buf.push(item);
-      if (buf.length === COLS) flushRow();
+      if (buf.length === columns) flushRow();
     }
     flushRow();
     return asc.reverse();
-  }, [items]);
+  }, [columns, items]);
 
   // Precomputed offsets so `getItemLayout` is O(1) — lets `scrollToIndex` (the
   // anchor jump) land exactly without measuring rows first.
@@ -191,7 +200,15 @@ export default function ConversationMediaGallery() {
   return (
     <AppScreen edges={[]}>
       {!loaded ? null : data.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, paddingTop: titleClearance + 24 }}>
+        <View
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: spacing.xl,
+            paddingTop: titleClearance + spacing.xl,
+          }}
+        >
           <AppText variant="body" tone="muted">
             {t('media.empty')}
           </AppText>
@@ -233,7 +250,8 @@ export default function ConversationMediaGallery() {
               scrollProps.onScroll(e);
               // Inverted: y == 0 is the bottom (newest). Scrolling down to it in
               // anchored mode pages toward the live tail.
-              if (anchored && hasMoreNewer && e.nativeEvent.contentOffset.y < 24) loadNewer();
+              if (anchored && hasMoreNewer && e.nativeEvent.contentOffset.y < spacing.xl)
+                loadNewer();
             }}
             scrollEventThrottle={scrollProps.scrollEventThrottle}
             renderItem={({ item }) =>

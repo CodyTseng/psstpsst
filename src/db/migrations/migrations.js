@@ -48,6 +48,9 @@ import m0043 from './0043_attachment-send-options.sql';
 import m0044 from './0044_contact-sync-state.sql';
 import m0045 from './0045_configuration-outbox.sql';
 import m0046 from './0046_local-account-setup.sql';
+import m0047 from './0047_message-order-tiebreak.sql';
+import m0048 from './0048_message_delivery_status.sql';
+import m0049 from './0049_relay_message_outbox.sql';
 
   export default {
     journal,
@@ -98,6 +101,9 @@ m0042,
 m0043,
 m0044,
 m0045,
-m0046
+m0046,
+m0047,
+m0048,
+m0049
     }
   }

@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { BackHandler } from 'react-native';
+import { BackHandler, Platform } from 'react-native';
 
 import {
   ChatComposerPanelBackHandler,
@@ -16,11 +16,20 @@ jest.mock('expo-router', () => ({
 
 describe('ChatComposerPanelProvider', () => {
   let renderer: ReactTestRenderer | null = null;
+  const originalPlatform = Platform.OS;
+
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = null;
     jest.restoreAllMocks();
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: originalPlatform,
+    });
   });
 
   it('updates panel consumers without re-rendering an unchanged message subtree', () => {

@@ -41,6 +41,7 @@ import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
 import { scheduleBottomSheetInputFocus } from './bottom-sheet-input-focus';
 import { scheduleBottomSheetOpenAnimation } from './bottom-sheet-open-animation';
 import { SheetHeader } from './SheetHeader';
+import { Toast } from './Toast';
 
 type Props<ItemT = never> = {
   visible: boolean;
@@ -652,6 +653,7 @@ export function BottomSheet<ItemT = never>({
           </Animated.View>
         </View>
         {modalOverlay}
+        <Toast managesLifetime={false} />
       </GestureHandlerRootView>
     </Modal>
   );

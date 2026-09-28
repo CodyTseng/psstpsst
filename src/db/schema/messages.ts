@@ -18,12 +18,22 @@ export const messages = sqliteTable(
     kind: integer('kind').notNull(),
     content: text('content').notNull(),
     createdAt: integer('created_at').notNull(),
-    /** Normalized authenticated `ms` tag, or the legacy second floor. */
+    /** Normalized authenticated `ms` tag, or the legacy second floor. Equal
+     * values use the smaller event ID as the newer message. */
     orderAt: integer('order_at').notNull(),
     replyToId: text('reply_to_id'),
     subject: text('subject'),
     tags: text('tags', { mode: 'json' }).$type<string[][]>().notNull(),
     rumor: text('rumor', { mode: 'json' }).$type<Rumor>().notNull(),
+    /** Coarse, list-facing delivery result for locally-authored messages. Relay
+     * jobs update it from acknowledgements; UI progress never overrides it from
+     * a separate in-memory delivery copy. */
+    deliveryStatus: text('delivery_status', {
+      enum: ['queued', 'sent', 'failed'],
+    }),
+    /** Whole-message failure before relay copies could be created. Per-relay
+     * failures stay on `message_delivery_copies.relays`. */
+    deliveryError: text('delivery_error'),
     /**
      * Relays the incoming gift wrap was seen on (best-effort, captured at
      * receive time and persisted so the message-info drawer can show it after a

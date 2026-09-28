@@ -174,7 +174,7 @@ export function useConversationMedia(
       .where(base)
       .orderBy(
         desc(messageMedia.orderAt),
-        desc(messageMedia.messageId),
+        asc(messageMedia.messageId),
         desc(messageMedia.url),
       )
       .limit(tailLimit),
@@ -188,7 +188,7 @@ export function useConversationMedia(
         and(
           eq(messageMedia.orderAt, anchor.orderAt),
           or(
-            lt(messageMedia.messageId, anchor.messageId),
+            gt(messageMedia.messageId, anchor.messageId),
             and(
               eq(messageMedia.messageId, anchor.messageId),
               lte(messageMedia.url, anchor.url),
@@ -202,7 +202,7 @@ export function useConversationMedia(
       .where(and(base, olderCond))
       .orderBy(
         desc(messageMedia.orderAt),
-        desc(messageMedia.messageId),
+        asc(messageMedia.messageId),
         desc(messageMedia.url),
       )
       .limit(olderLimit),
@@ -216,7 +216,7 @@ export function useConversationMedia(
         and(
           eq(messageMedia.orderAt, anchor.orderAt),
           or(
-            gt(messageMedia.messageId, anchor.messageId),
+            lt(messageMedia.messageId, anchor.messageId),
             and(
               eq(messageMedia.messageId, anchor.messageId),
               gt(messageMedia.url, anchor.url),
@@ -230,7 +230,7 @@ export function useConversationMedia(
       .where(and(base, newerCond))
       .orderBy(
         asc(messageMedia.orderAt),
-        asc(messageMedia.messageId),
+        desc(messageMedia.messageId),
         asc(messageMedia.url),
       )
       .limit(newerLimit),

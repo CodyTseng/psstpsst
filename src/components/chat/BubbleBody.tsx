@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import Check from 'lucide-react-native/icons/check';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -93,6 +93,10 @@ type Props = {
   presentation?: PreparedMessagePresentation;
 };
 
+type BubbleBodyBaseProps = Props & {
+  liveDelivery: MessageDelivery | null;
+};
+
 // Spacer characters (written as escapes so an editor can't silently turn the
 // wide figure-space into a narrow ASCII space — see blockMetaSpacer below).
 const ZWSP = '\u200b'; // zero-width space — lets the line break before the spacer
@@ -114,7 +118,7 @@ type InlineMessageSegment = Exclude<MessageSegment, { type: 'event' }>;
  * (the lifted copy floated over the blurred backdrop), so the lifted bubble is
  * pixel-identical to the one in the list — including live delivery status.
  */
-export function BubbleBody({
+function BubbleBodyBase({
   content,
   tags,
   isSelf,
@@ -134,13 +138,13 @@ export function BubbleBody({
   onShowDelivery,
   liftedCopy = false,
   presentation: preparedPresentation,
-}: Props) {
+  liveDelivery,
+}: BubbleBodyBaseProps) {
   const c = useThemeColors();
   const isRTL = useIsRTL();
 
   // Live delivery (this session) wins; else the persisted (DB) status survives
   // restarts. null for incoming messages or ones that were never tracked.
-  const liveDelivery = useDelivery(rumorId ?? '');
   const delivery = liveDelivery ?? persistedDelivery ?? null;
   // Our own messages always reserve the status slot (even before a delivery
   // record loads), so the bubble width never shifts when the glyph appears.
@@ -269,7 +273,6 @@ export function BubbleBody({
   function renderTextBubble(
     bodySegments: InlineMessageSegment[],
     options: {
-      key?: string;
       showReply: boolean;
       showMeta: boolean;
       squareTop?: boolean;
@@ -278,7 +281,6 @@ export function BubbleBody({
   ) {
     return (
       <View
-        key={options.key}
         style={{
           backgroundColor: bubbleBg,
           paddingVertical: BUBBLE_PADDING_VERTICAL,
@@ -321,7 +323,7 @@ export function BubbleBody({
         ? -StyleSheet.hairlineWidth / (blockMetaSpacer.length - 1)
         : undefined;
 
-    const containsCustomEmoji = bodySegments.some(
+    const containsCustomEmoji = customEmojiMap.size > 0 && bodySegments.some(
       (segment) =>
         segment.type === 'text' &&
         splitCustomEmojiText(segment.value, customEmojiMap).some((part) => part.type === 'emoji'),
@@ -774,3 +776,51 @@ export function BubbleBody({
     squareBottom,
   });
 }
+
+function areBubbleBodyPropsEqual(a: Props, b: Props): boolean {
+  const aReply = a.replyTo;
+  const bReply = b.replyTo;
+  return (
+    a.content === b.content &&
+    a.tags === b.tags &&
+    a.isSelf === b.isSelf &&
+    a.createdAt === b.createdAt &&
+    a.orderAt === b.orderAt &&
+    a.rumorId === b.rumorId &&
+    a.persistedDelivery === b.persistedDelivery &&
+    a.attachment === b.attachment &&
+    a.hideMeta === b.hideMeta &&
+    a.squareTop === b.squareTop &&
+    a.squareBottom === b.squareBottom &&
+    a.conversationKey === b.conversationKey &&
+    a.proximity === b.proximity &&
+    a.remoteContentMode === b.remoteContentMode &&
+    a.liftedCopy === b.liftedCopy &&
+    a.presentation === b.presentation &&
+    aReply?.senderPubkey === bReply?.senderPubkey &&
+    aReply?.senderDisplayName === bReply?.senderDisplayName &&
+    aReply?.contentPreview === bReply?.contentPreview
+  );
+}
+
+function OwnBubbleBody(props: Props) {
+  const liveDelivery = useDelivery(props.rumorId ?? '');
+  return (
+    <BubbleBodyBase
+      {...props}
+      liveDelivery={props.proximity ? liveDelivery : null}
+    />
+  );
+}
+
+function BubbleBodyWithScopedDelivery(props: Props) {
+  return props.isSelf ? (
+    <OwnBubbleBody {...props} />
+  ) : (
+    <BubbleBodyBase {...props} liveDelivery={null} />
+  );
+}
+
+/** Selection-mode chrome can update every mounted row without rebuilding the
+ * expensive attachment/text subtree. Callback identity is deliberately ignored. */
+export const BubbleBody = memo(BubbleBodyWithScopedDelivery, areBubbleBodyPropsEqual);

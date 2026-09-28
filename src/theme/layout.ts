@@ -8,11 +8,15 @@ export const wideLayout = {
   minHeight: 600,
   primaryFraction: 0.4,
   primaryMinWidth: 280,
-  primaryMaxWidth: 420,
+  primaryMaxWidth: 560,
+  detailMinWidth: 280,
   primaryDesktopWidth: 320,
   primaryDesktopMinWidth: 280,
   detailDesktopMinWidth: 280,
   paneResizeHandleWidth: 8,
+  paneResizeTouchWidth: 48,
+  paneResizeIndicatorWidth: 4,
+  paneResizeIndicatorHeight: 32,
   paneResizeKeyboardStep: 16,
   onboardingArtworkWidth: '44%',
   onboardingArtworkMaxWidth: 480,
@@ -25,6 +29,11 @@ export const contentWidth = {
   sheet: 640,
   toast: 480,
   dialog: 320,
+} as const;
+
+/** Responsive conversation-media gallery geometry shared across runtimes. */
+export const mediaGrid = {
+  minColumns: 3,
 } as const;
 
 /** Bottom chrome geometry outside the fixed 56px control row. */
@@ -76,6 +85,7 @@ export const density = {
     settingsIdentityGap: 14,
     detailRowHorizontalPadding: 14,
     detailRowVerticalPadding: 11,
+    mediaGridMinCellSize: 144,
     accentSwatchSize: 44,
     accentSwatchDotSize: 34,
     selectedRecipientAvatarSize: 48,
@@ -127,6 +137,7 @@ export const density = {
     settingsIdentityGap: 12,
     detailRowHorizontalPadding: 12,
     detailRowVerticalPadding: 8,
+    mediaGridMinCellSize: 128,
     accentSwatchSize: 36,
     accentSwatchDotSize: 28,
     selectedRecipientAvatarSize: 40,

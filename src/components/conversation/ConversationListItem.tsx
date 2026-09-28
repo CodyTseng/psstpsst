@@ -70,6 +70,8 @@ type Props = {
   lastMessageTags?: string[][] | null;
   lastMessageFromSelf?: boolean;
   lastMessageAt: number;
+  /** Current unix-minute bucket, used to refresh and calculate relative time. */
+  currentMinute?: number;
   unreadCount: number;
   muted: boolean;
   identityKind?: 'relay' | 'proximity';
@@ -109,6 +111,8 @@ type Props = {
 };
 
 const ACTION_WIDTH = SWIPE_ACTION_WIDTH;
+const SWIPE_ACTIVATION_DISTANCE = 24;
+const SWIPE_VERTICAL_FAILURE_DISTANCE = 12;
 
 type DesktopPressableProps = ComponentProps<typeof Pressable> & {
   onContextMenu?: (event: DesktopContextMenuEvent) => void;
@@ -257,6 +261,7 @@ function ConversationListItemBase({
   lastMessageTags,
   lastMessageFromSelf,
   lastMessageAt,
+  currentMinute,
   unreadCount,
   muted,
   identityKind = 'relay',
@@ -507,17 +512,37 @@ function ConversationListItemBase({
     );
   }
 
+  const swipeActionsKey = [
+    isRTL ? 'rtl' : 'ltr',
+    onToggleUnread ? 'unread' : 'no-unread',
+    onTogglePin ? 'pin' : 'no-pin',
+  ].join(':');
+
   return (
     <Swipeable
+      // Legacy Swipeable caches measured action widths. Recreate only its
+      // subtree when the available actions change so toggling unread indicators
+      // remeasures one Pin cell or the full Read/Unread + Pin pair correctly.
+      key={swipeActionsKey}
       ref={swipeableRef}
       // RN Web has no native animated module; run the swipe on the JS
       // driver there so Animated stops warning about `useNativeDriver`.
       useNativeAnimations={Platform.OS !== 'web'}
       renderLeftActions={isRTL ? renderRightActions : renderLeftActions}
       renderRightActions={isRTL ? renderLeftActions : renderRightActions}
+      // Let the vertical list claim ordinary diagonal drags before a row can
+      // activate. The default 10pt offset is too easy to cross while scrolling.
+      dragOffsetFromLeftEdge={SWIPE_ACTIVATION_DISTANCE}
+      dragOffsetFromRightEdge={SWIPE_ACTIVATION_DISTANCE}
+      failOffsetY={[-SWIPE_VERTICAL_FAILURE_DISTANCE, SWIPE_VERTICAL_FAILURE_DISTANCE]}
       leftThreshold={40}
       rightThreshold={40}
       friction={2}
+      // Stop at the rendered action width. This matters when unread actions are
+      // disabled and the leading side contains only Pin: overdrag would expose
+      // an empty second-cell-sized gap beside it.
+      overshootLeft={false}
+      overshootRight={false}
       // Keep a left-edge strip free for the OS back-swipe: the leading (read /
       // pin) swipe is left→right like the navigator's pop gesture, so without
       // this guard a row would swallow the back-swipe. Negative `hitSlop`
@@ -651,7 +676,10 @@ function ConversationListItemBase({
                     numberOfLines={1}
                     style={{ flexShrink: 0 }}
                   >
-                    {formatListTime(lastMessageAt)}
+                    {formatListTime(
+                      lastMessageAt,
+                      currentMinute === undefined ? undefined : currentMinute * 60,
+                    )}
                   </AppText>
                 </View>
                 {/* Bottom line: the message preview takes the full width, with the

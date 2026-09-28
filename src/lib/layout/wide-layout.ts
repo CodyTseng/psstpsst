@@ -35,6 +35,23 @@ export function getPrimaryPaneWidth(width: number, isDesktop = IS_ELECTRON): num
   );
 }
 
+/** Keep both touch panes usable while applying the user's requested width. */
+export function clampTouchPrimaryPaneWidth(width: number, requestedWidth: number): number {
+  'worklet';
+  const maximum = Math.max(
+    wideLayout.primaryMinWidth,
+    Math.min(wideLayout.primaryMaxWidth, width - wideLayout.detailMinWidth),
+  );
+  const responsiveDefault = Math.min(
+    wideLayout.primaryMaxWidth,
+    Math.max(wideLayout.primaryMinWidth, Math.round(width * wideLayout.primaryFraction)),
+  );
+  const preferred = Number.isFinite(requestedWidth)
+    ? requestedWidth
+    : responsiveDefault;
+  return Math.min(maximum, Math.max(wideLayout.primaryMinWidth, Math.round(preferred)));
+}
+
 /** Reserve usable detail space even when the window shrinks during a drag. */
 export function clampDesktopPrimaryPaneWidth(width: number, requestedWidth: number): number {
   const maximum = Math.max(

@@ -30,6 +30,7 @@ export function AppUpdatePromptHost() {
         message: t('app_update.ready_message', { version }),
         cancelLabel: t('app_update.later'),
         confirmLabel: t('app_update.restart_and_install'),
+        actionLayout: 'vertical',
       });
       if (!active || !confirmed) return;
       try {

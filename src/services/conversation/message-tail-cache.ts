@@ -4,6 +4,7 @@ import {
   type PreparedMessagePresentation,
 } from '@/lib/chat/message-presentation';
 import { MESSAGES_PAGE_SIZE } from '@/lib/message-window';
+import { isMessageOrderNewer } from '@/lib/nostr/message-order';
 import {
   aggregateReactionsByTarget,
   type ReactionAggregate,
@@ -26,6 +27,7 @@ type RawMessageRow = {
   subject: string | null;
   tags: string;
   rumor: string;
+  delivery_status: MessageRow['deliveryStatus'];
   source_relays: string | null;
 };
 
@@ -110,6 +112,9 @@ function decodeRow(row: RawMessageRow): MessageRow {
     subject: row.subject,
     tags: JSON.parse(row.tags) as MessageRow['tags'],
     rumor: JSON.parse(row.rumor) as MessageRow['rumor'],
+    deliveryStatus: row.delivery_status,
+    // Whole-message errors are loaded only by the detail sheet.
+    deliveryError: null,
     sourceRelays: row.source_relays
       ? (JSON.parse(row.source_relays) as MessageRow['sourceRelays'])
       : null,
@@ -192,7 +197,13 @@ function storeSnapshot(
   accountPubkey: string,
   rows: MessageRow[],
 ): void {
-  const prepared = prepareTail(accountPubkey, rows);
+  // The cache is the navigation-time tail, never the screen's expanded paging
+  // window. Keeping this invariant here protects every current and future writer.
+  const boundedRows =
+    rows.length > MESSAGES_PAGE_SIZE
+      ? rows.slice(0, MESSAGES_PAGE_SIZE)
+      : rows;
+  const prepared = prepareTail(accountPubkey, boundedRows);
   cache.delete(key);
   cache.set(key, {
     accountPubkey,
@@ -260,7 +271,7 @@ export function getWarmedMessageTailPresentation(
   };
 }
 
-/** Replace the whole cached window with an authoritative live-query result. */
+/** Refresh the bounded cached tail from an authoritative live-query result. */
 export function replaceWarmedMessageTail(
   accountPubkey: string,
   conversationKey: string,
@@ -300,10 +311,11 @@ export async function warmMessageTail(
     try {
       const rows = await platform.database.rawQuery<RawMessageRow>(
         `SELECT account_pubkey, id, conversation_key, sender_pubkey, kind, content,
-                created_at, order_at, reply_to_id, subject, tags, rumor, source_relays
+                created_at, order_at, reply_to_id, subject, tags, rumor,
+                delivery_status, source_relays
            FROM messages
           WHERE account_pubkey = ? AND conversation_key = ? AND kind IN (14, 15, 7)
-          ORDER BY order_at DESC, id DESC
+          ORDER BY order_at DESC, id ASC
           LIMIT ?`,
         [accountPubkey, conversationKey, MESSAGES_PAGE_SIZE],
       );
@@ -368,9 +380,9 @@ export function mergeStoredMessageIntoTail(accountPubkey: string, row: MessageRo
   const rows = entry.prepared.rowsNewestFirst;
   if (rows.some((existing) => existing.id === row.id)) return;
 
-  // Window order matches the SQLite query: order_at DESC, id DESC.
+  // Window order matches the SQLite query: order_at DESC, id ASC.
   const comesBefore = (a: MessageRow, b: MessageRow): boolean =>
-    a.orderAt !== b.orderAt ? a.orderAt > b.orderAt : a.id > b.id;
+    isMessageOrderNewer(a, b);
 
   // A row older than the whole window cannot enter it — the common case once a
   // history backfill moves past the cached newest page.

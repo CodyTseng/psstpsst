@@ -11,9 +11,11 @@ import {
   getBatteryOptimizationPrompted,
   getNotificationContentPreferences,
   getNotificationsEnabled,
+  getUnreadIndicatorsEnabled,
   setBatteryOptimizationPrompted,
   setNotificationContentPreferences,
   setNotificationsEnabled,
+  setUnreadIndicatorsEnabled,
 } from '@/services/notifications/notification-prefs';
 
 jest.mock('@/services/preferences/device-preferences.service', () => ({
@@ -47,6 +49,17 @@ test('notifications default on and preserve an explicit disable', async () => {
 
   await setNotificationsEnabled(false);
   expect(setPreference).toHaveBeenCalledWith('notifications.enabled', '0');
+});
+
+test('unread indicators default on and preserve an explicit disable', async () => {
+  getPreference.mockResolvedValueOnce(null);
+  await expect(getUnreadIndicatorsEnabled()).resolves.toBe(true);
+
+  getPreference.mockResolvedValueOnce('0');
+  await expect(getUnreadIndicatorsEnabled()).resolves.toBe(false);
+
+  await setUnreadIndicatorsEnabled(false);
+  expect(setPreference).toHaveBeenCalledWith('notifications.unreadIndicators', '0');
 });
 
 test('notification content defaults to fully hidden and persists independent choices', async () => {

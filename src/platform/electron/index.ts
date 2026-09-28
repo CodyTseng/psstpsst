@@ -201,7 +201,7 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     urlOpener: {
-      openExternalUrl: (url) => bridge.system.openExternalUrl(url),
+      openExternalUrl: (url) => bridge.system.openExternalUrl(url).then(() => true, () => false),
     },
     localization: {
       preferredLanguageTag: () => navigator.languages[0] ?? null,

@@ -1,6 +1,7 @@
 import {
   isNearMessageHistoryEdge,
   isNearMessageTail,
+  messageHistoryPageRequest,
   messageTailScrollMode,
   MESSAGE_HISTORY_PREFETCH_VIEWPORTS,
   MESSAGE_TAIL_FOLLOW_THRESHOLD,
@@ -39,6 +40,48 @@ describe('message tail following', () => {
     ).toBe(false);
   });
 
+  it('prefetches once before interaction and then pages continuously', () => {
+    expect(
+      messageHistoryPageRequest({
+        ready: true,
+        hasMore: true,
+        loading: false,
+        continuous: false,
+        initialAvailable: true,
+      }),
+    ).toEqual({ request: true, consumeInitial: true });
+    expect(
+      messageHistoryPageRequest({
+        ready: true,
+        hasMore: true,
+        loading: false,
+        continuous: false,
+        initialAvailable: false,
+      }).request,
+    ).toBe(false);
+    expect(
+      messageHistoryPageRequest({
+        ready: true,
+        hasMore: true,
+        loading: false,
+        continuous: true,
+        initialAvailable: false,
+      }).request,
+    ).toBe(true);
+  });
+
+  it('deduplicates history requests while a page is loading', () => {
+    expect(
+      messageHistoryPageRequest({
+        ready: true,
+        hasMore: true,
+        loading: true,
+        continuous: true,
+        initialAvailable: false,
+      }).request,
+    ).toBe(false);
+  });
+
   it('treats fast-fling overshoot and short histories as being at the history edge', () => {
     expect(
       isNearMessageHistoryEdge({
@@ -56,7 +99,7 @@ describe('message tail following', () => {
     ).toBe(true);
   });
 
-  it('anchors only a ready bidirectional message window', () => {
+  it('anchors a ready bidirectional jump window only', () => {
     expect(
       shouldMaintainVisibleMessagePosition({
         anchored: false,

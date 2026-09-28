@@ -1,11 +1,21 @@
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
+import { useIsRTL } from '@/i18n/direction';
+import { BUBBLE_SELECTION_OFFSET } from './bubble-layout';
 import {
   ActivityIndicator,
   FlatList,
   View,
+  type ListRenderItemInfo,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ViewToken,
@@ -27,15 +37,17 @@ import { AppText } from '@/components/common/AppText';
 import { CountBadge } from '@/components/common/CountBadge';
 import { FrostedBackdrop } from '@/components/common/FrostedBackdrop';
 import { IconButton } from '@/components/common/IconButton';
-import { getSessionCachedContact, useContacts } from '@/hooks/use-contacts';
-import { MESSAGES_PAGE_SIZE } from '@/hooks/use-messages';
+import { useContactsMap } from '@/hooks/use-contacts';
+import { MESSAGES_PAGE_SIZE, type MessageBoundary } from '@/hooks/use-messages';
+import { useElectronHistoryPagination } from '@/hooks/use-electron-history-pagination';
 import { markChatMessageListMounted } from '@/lib/perf/chat-open';
 import { useProfilesMap } from '@/hooks/use-profile';
 import {
   isNearMessageHistoryEdge,
   isNearMessageTail,
-  messageTailScrollMode,
+  messageHistoryPageRequest,
   MESSAGE_HISTORY_PREFETCH_VIEWPORTS,
+  messageTailScrollMode,
   shouldMaintainVisibleMessagePosition,
   type MessageTailScrollMode,
 } from '@/lib/chat/message-tail-follow';
@@ -59,7 +71,12 @@ import {
 } from './MessageBubble';
 import { DatePill, DateSeparator } from './message-date-separator';
 import { PendingAttachmentBubble } from './PendingAttachmentBubble';
-import { startsTimelineDay, timelineItemCreatedAt } from './message-timeline-boundary';
+import {
+  startsLoadedTimelineDay,
+  startsLoadedSenderGroup,
+  startsTimelineDay,
+  timelineItemCreatedAt,
+} from './message-timeline-boundary';
 
 type MessageRow = typeof messagesSchema.$inferSelect;
 
@@ -127,8 +144,15 @@ type Props = {
   onLoadNewer: () => void;
   /** Whether older pages may still exist (drives the top spinner). */
   hasMore: boolean;
+  /** Whether an older page is currently being read. */
+  loadingOlder: boolean;
+  /** Whether a historical window is paging toward the live tail. */
+  loadingNewer: boolean;
   /** Whether newer pages exist between the window and the live tail. */
   hasMoreNewer: boolean;
+  /** Creation time of the unrendered row immediately beyond the oldest edge. */
+  oldestBoundary: MessageBoundary | null | undefined;
+  tailJumpVersion: number;
   /** True while the window is centred on a jumped-to message (not the tail). */
   anchored: boolean;
   /** Whether the active window's queries have all resolved (both sides, when
@@ -154,6 +178,8 @@ type Props = {
   firstUnreadId?: string | null;
   /** Frozen unread count: gates the divider and bounds background preloading. */
   unreadCount?: number;
+  /** Hide unread and newly-arrived markers while retaining ordinary scrolling. */
+  showNewMessageIndicators?: boolean;
   onSwipeReply?: (message: MessageRow) => void;
   /** Long-press a bubble: hands up the message, its measured screen rect, and a
    * ready-to-render lifted copy (reply/attachment already resolved here). */
@@ -185,15 +211,33 @@ type Props = {
   /** Attach secondary profile/contact live reads after native navigation while
    * retaining memory-cached names for the first interactive route commit. */
   liveDataEnabled?: boolean;
+  /** Keep the mounted gesture tree stable while subscriptions pause on blur. */
+  interactive?: boolean;
 };
 
-type ListItem =
+type ListItemSource =
   | {
       kind: 'message';
       message: MessageRow;
       prepared: PreparedBubbleRenderItem | null;
     }
   | { kind: 'pending'; pending: PendingAttachment };
+
+type ListItem = ListItemSource & {
+  /** The adjacent older source. Stored on the item so a prepended history page
+   * changes only the previous boundary cell, not renderItem. */
+  older: ListItemSource | null;
+  boundaryCreatedAt: number | null | undefined;
+  boundaryIsSelf: boolean | null | undefined;
+};
+
+type CachedListItem = {
+  prepared: PreparedBubbleRenderItem | null;
+  olderSource: MessageRow | PendingAttachment | null;
+  boundaryCreatedAt: number | null | undefined;
+  boundaryIsSelf: boolean | null | undefined;
+  item: ListItem;
+};
 
 /** Tapping a reply to an out-of-window target pages older up to this many times,
  * smoothly scrolling to it once it appears. A reply almost always points just up
@@ -208,6 +252,10 @@ const MAX_SEEK_PAGES = 3;
  * never takes more than a page. Skipped when there's no older left (top of
  * history). */
 const SEEK_MARGIN = 8;
+
+/** Keep normal history releases aligned with FlatList's cell batch. Waiting two
+ * frames between batches gives input a chance to run without starving flings. */
+const MESSAGE_CELL_RENDER_BATCH_PERIOD_MS = 32;
 
 const ANCHORED_VISIBLE_POSITION = { minIndexForVisible: 1 } as const;
 
@@ -230,7 +278,11 @@ export function MessageList({
   onLoadOlder,
   onLoadNewer,
   hasMore,
+  loadingOlder,
+  loadingNewer,
   hasMoreNewer,
+  oldestBoundary,
+  tailJumpVersion,
   anchored,
   windowLoaded,
   onFocusAnchor,
@@ -241,6 +293,7 @@ export function MessageList({
   firstUnreadOrderAt,
   firstUnreadId: firstUnreadMessageId,
   unreadCount = 0,
+  showNewMessageIndicators = true,
   onSwipeReply,
   onLongPress,
   onLongPressPending,
@@ -255,20 +308,47 @@ export function MessageList({
   bottomInset,
   topInset,
   liveDataEnabled = true,
+  interactive = true,
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const reducedMotion = useReducedMotion();
+  const isRTL = useIsRTL();
+  // All received messages move together; one mapper owns this transition
+  // instead of installing a dormant selection mapper in every buffered row.
+  const selectionShiftStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: withTiming(
+      selectionMode ? BUBBLE_SELECTION_OFFSET * (isRTL ? -1 : 1) : 0,
+      { duration: reducedMotion ? 0 : 200 },
+    ) }],
+  }));
+  const boundaryIsSelf = oldestBoundary == null
+    ? oldestBoundary
+    : proximity
+      ? oldestBoundary.senderPubkey !== conversationKey
+      : oldestBoundary.senderPubkey === selfPubkey;
   const listRef = useRef<FlatList<ListItem>>(null);
+  const scrollMetricsRef = useRef({
+    offsetY: 0,
+    viewportHeight: 0,
+    contentHeight: 0,
+  });
+  // Warm one page before the first interaction. Once the reader starts moving
+  // toward history, keep paging by distance for the rest of the session instead
+  // of requiring a fresh gesture for every page.
+  const initialHistoryPrefetchRef = useRef(true);
+  const continuousHistoryPagingRef = useRef(false);
   // Native content updates must not start a tail correction while the reader's
   // drag or momentum scroll is still in progress.
   const userScrollInProgressRef = useRef(false);
-  // Whether the list is currently pinned at the bottom (offset ≈ 0). A ref so
+  // Whether the list is currently pinned at the bottom. A ref so
   // pending-row layout corrections can read it without re-subscribing on every
   // scroll.
   const atBottomRef = useRef(true);
   useLayoutEffect(() => {
     markChatMessageListMounted(conversationKey);
+    initialHistoryPrefetchRef.current = true;
+    continuousHistoryPagingRef.current = false;
   }, [conversationKey]);
   const attachmentLabels = useMemo(
     () => ({
@@ -296,14 +376,14 @@ export function MessageList({
   const activeFocusId = focusMessageId ?? localFocusId;
   const tailMode = activeFocusId == null && !anchored;
   // A small unread tail already fits in the first page, so marking its boundary
-  // adds visual noise and can perturb the inverted list after first paint. Only
+  // adds visual noise and can perturb the list after first paint. Only
   // keep the divider affordance when the unread tail fills at least one page.
-  const showUnreadDivider = unreadCount >= MESSAGES_PAGE_SIZE;
+  const showUnreadDivider = showNewMessageIndicators && unreadCount >= MESSAGES_PAGE_SIZE;
   const pendingIdsSignature = pendingAttachments
     .map((pending) => pending.tempId)
     .join('|');
   // Existing pending items can join one frame after the DB rows (route/store
-  // subscription timing). MVCP then anchors a DB row instead of the inverted
+  // subscription timing). MVCP can then anchor a DB row instead of the
   // tail. Hide only that first pending layout, snap to offset 0 without
   // animation once its content size is known, then reveal. A send on this page
   // carries a new `pendingTailVersion` and follows the normal animated path.
@@ -339,7 +419,8 @@ export function MessageList({
   const pendingRemovalPinRafRef = useRef<number | null>(null);
   const pinTailAfterPendingRemovalRef = useRef(false);
 
-  function handleContentSizeChange() {
+  function handleContentSizeChange(_width: number, contentHeight: number) {
+    scrollMetricsRef.current.contentHeight = contentHeight;
     if (!pendingInitialPosition.ready && tailMode) {
       if (userScrollInProgressRef.current || !atBottomRef.current) {
         setPendingInitialPosition((current) =>
@@ -381,26 +462,32 @@ export function MessageList({
       }
     }
 
-    // Removing index 0 from an inverted list can make MVCP preserve the next
-    // bubble by converting the removed cell's height into scroll offset. When
+    // Removing the final pending row can make MVCP preserve the adjacent bubble
+    // by converting the removed cell's height into scroll offset. When
     // the user discarded from the tail, reset that compensation only after the
     // new content size is committed, so no empty cell-height gap remains.
-    if (!pinTailAfterPendingRemovalRef.current) return;
-    if (userScrollInProgressRef.current || !atBottomRef.current) {
-      pinTailAfterPendingRemovalRef.current = false;
-      return;
-    }
-    listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    if (pendingRemovalPinRafRef.current != null) {
-      cancelAnimationFrame(pendingRemovalPinRafRef.current);
-    }
-    pendingRemovalPinRafRef.current = requestAnimationFrame(() => {
-      if (!userScrollInProgressRef.current && atBottomRef.current) {
+    if (pinTailAfterPendingRemovalRef.current) {
+      if (userScrollInProgressRef.current || !atBottomRef.current) {
+        pinTailAfterPendingRemovalRef.current = false;
+      } else {
         listRef.current?.scrollToOffset({ offset: 0, animated: false });
+        if (pendingRemovalPinRafRef.current != null) {
+          cancelAnimationFrame(pendingRemovalPinRafRef.current);
+        }
+        pendingRemovalPinRafRef.current = requestAnimationFrame(() => {
+          if (!userScrollInProgressRef.current && atBottomRef.current) {
+            listRef.current?.scrollToOffset({ offset: 0, animated: false });
+          }
+          pendingRemovalPinRafRef.current = null;
+          pinTailAfterPendingRemovalRef.current = false;
+        });
       }
-      pendingRemovalPinRafRef.current = null;
-      pinTailAfterPendingRemovalRef.current = false;
-    });
+    }
+
+    const { viewportHeight } = scrollMetricsRef.current;
+    if (viewportHeight > 0 && contentHeight <= viewportHeight) {
+      requestOlderFromScroll(true);
+    }
   }
 
   useEffect(
@@ -424,8 +511,9 @@ export function MessageList({
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Show a "scroll to bottom" button once scrolled up far enough.
   const [showScrollDown, setShowScrollDown] = useState(false);
-  // Inverted lists open pinned to the bottom (newest) on the very first frame, so
-  // a normal open needs no cover. The one exception is opening straight into a
+  const showScrollDownRef = useRef(false);
+  // Inverted lists open pinned to the bottom on the very first frame, so a
+  // normal open needs no cover. The one exception is opening straight into a
   // search jump (`focusMessageId`): the anchored window first lays out at its
   // newest end, then we scrollToIndex to the target — cover only that single
   // reposition so it isn't seen as a flash.
@@ -472,15 +560,43 @@ export function MessageList({
 
   function handleScrollBeginDrag() {
     userScrollInProgressRef.current = true;
+    continuousHistoryPagingRef.current = true;
     // Treat a deliberate gesture as leaving the tail until its final offset is
     // known. This prevents an async row commit from racing the first scroll tick.
     atBottomRef.current = false;
     nearTailRef.current = false;
+    if (scrollMetricsRef.current.offsetY >= 24) activateFloatingDate(false);
   }
 
   function handleMomentumScrollBegin() {
     userScrollInProgressRef.current = true;
+    continuousHistoryPagingRef.current = true;
+    if (scrollMetricsRef.current.offsetY >= 24) activateFloatingDate(false);
   }
+
+  function requestOlderFromScroll(fillShortViewport = false) {
+    const decision = messageHistoryPageRequest({
+      ready: ready && windowLoaded,
+      hasMore,
+      loading: loadingOlder,
+      continuous: continuousHistoryPagingRef.current || fillShortViewport,
+      initialAvailable: initialHistoryPrefetchRef.current,
+    });
+    if (!decision.request) return;
+    if (decision.consumeInitial) {
+      initialHistoryPrefetchRef.current = false;
+    }
+    onLoadOlder();
+  }
+
+  useEffect(() => {
+    if (!windowLoaded || activeFocusId != null) return;
+    const frame = requestAnimationFrame(() => requestOlderFromScroll());
+    return () => cancelAnimationFrame(frame);
+    // This is the one post-hydration prefetch. Later pages are driven by the
+    // distance callbacks and must not turn a state change into an eager loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowLoaded]);
 
   function handleScrollSettled(
     event: NativeSyntheticEvent<NativeScrollEvent>,
@@ -493,21 +609,26 @@ export function MessageList({
     } = event.nativeEvent;
     nearTailRef.current = isNearMessageTail(contentOffset.y);
     atBottomRef.current = contentOffset.y < 24;
+    scrollMetricsRef.current = {
+      offsetY: contentOffset.y,
+      viewportHeight: layoutMeasurement.height,
+      contentHeight: contentSize.height,
+    };
+    if (atBottomRef.current) clearFloatingActive();
+    else scheduleFloatingDateHide();
 
-    // VirtualizedList only fires onEndReached after its final cell has rendered.
+    // The edge callback only fires after its final cell has rendered.
     // A fast fling can reach the physical edge before that happens and leave no
     // further scroll event to retry it, so settled gestures perform one guarded
     // edge check. useMessages deduplicates repeated requests for the same page.
     if (
-      ready &&
-      hasMore &&
       isNearMessageHistoryEdge({
         offsetY: contentOffset.y,
         contentHeight: contentSize.height,
         viewportHeight: layoutMeasurement.height,
       })
     ) {
-      onLoadOlder();
+      requestOlderFromScroll();
     }
   }
 
@@ -565,10 +686,8 @@ export function MessageList({
   );
 
   // Drives the cover + the "stop waiting" safety net for a jump. Re-armed on every
-  // *new* focus target (a search/gallery open at mount, or a far reply routed in
-  // mid-session): cover the list and reset expiry, then a 1s timer reveals and
-  // stops waiting even if the target never loads — so we never leave a blank or
-  // covered screen.
+  // new focus target. The timeout reveals the conversation even if the target
+  // cannot be loaded, so focus navigation cannot leave the screen covered.
   const [focusExpired, setFocusExpired] = useState(false);
   const prevActiveFocusRef = useRef<string | null>(activeFocusId);
   useEffect(() => {
@@ -605,7 +724,6 @@ export function MessageList({
       return;
     }
     releaseStaged();
-    // Inverted: the newest sits at offset 0.
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }
 
@@ -685,19 +803,29 @@ export function MessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floatingDate]);
 
-  /** Mark the list as actively scrolled-up and (re)arm the idle fade-out. */
-  function bumpFloatingActive() {
-    floatingActiveRef.current = true;
+  /** Show the floating date without doing timer work on every scroll event. */
+  function activateFloatingDate(autoHide: boolean) {
+    if (floatingHideTimer.current) clearTimeout(floatingHideTimer.current);
+    floatingHideTimer.current = null;
+    if (!floatingActiveRef.current) {
+      floatingActiveRef.current = true;
+      reconcileFloating();
+    }
+    if (autoHide) scheduleFloatingDateHide();
+  }
+
+  function scheduleFloatingDateHide() {
     if (floatingHideTimer.current) clearTimeout(floatingHideTimer.current);
     floatingHideTimer.current = setTimeout(() => {
+      floatingHideTimer.current = null;
       floatingActiveRef.current = false;
       reconcileFloating();
     }, 1400);
-    reconcileFloating();
   }
 
   /** Hide the floating header immediately (e.g. the list returned to bottom). */
   function clearFloatingActive() {
+    if (!floatingActiveRef.current && floatingHideTimer.current == null) return;
     floatingActiveRef.current = false;
     if (floatingHideTimer.current) {
       clearTimeout(floatingHideTimer.current);
@@ -719,16 +847,15 @@ export function MessageList({
   }));
 
   // The label tracks the topmost visible message. `data` is newest-first and the
-  // list is inverted, so the *largest* viewable index is the message highest on
-  // screen — its day drives the sticky header. Fires only on viewability changes
+  // list is inverted, so the largest viewable index is the message highest on
+  // screen. Fires only on viewability changes
   // (not per scroll frame), so it's cheap regardless of conversation size. The
   // ref callback is stable, so it reads the live list through `dataRef`.
   const handleViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    ({ viewableItems }: { viewableItems: ViewToken<ListItem>[] }) => {
       // Unread divider direction: compare its row index to the visible range.
-      // Inverted (newest-first): a *higher* index sits higher up the screen, so an
-      // index past the visible max means the divider is above the viewport (older);
-      // below the min means it's toward the newest end (down). Within → on screen.
+      // Inverted (newest-first): an index past the visible maximum is above the
+      // viewport (older); below the minimum is toward the newest end (down).
       const fuIdx = firstUnreadIndexRef.current;
       if (fuIdx == null) {
         setUnreadDir((p) => (p === null ? p : null));
@@ -767,7 +894,7 @@ export function MessageList({
       // When the topmost visible message is itself a day-start, its inline
       // separator is on screen — suppress the floating copy so they don't
       // double up. (Same predicate the renderer uses for `showDate`: the older
-      // neighbour is `topIdx + 1` in newest-first data.)
+      // neighbour is `topIdx + 1`.)
       const arr = dataRef.current;
       const older = arr[topIdx + 1];
       floatingDupeRef.current =
@@ -779,15 +906,15 @@ export function MessageList({
   ).current;
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 1 }).current;
 
-  // React to new tail messages. A new message prepends at index 0 (the bottom) of
-  // the inverted list; MVCP holds the reader's position, so we follow the tail
+  // React to new tail messages. A new message prepends at index 0 of the
+  // inverted list. MVCP holds the reader's position, so we follow the tail
   // explicitly: scroll to offset 0 for our own sends, or for an incoming message
   // when the reader is near the bottom. Use a layout effect so the released
   // boundary commits before paint; a near-tail arrival therefore cannot expose
   // the transient staged count and flash the scroll-down control for one frame.
   // Incoming messages that land while the user is farther up stay staged, so
-  // nothing shifts while history is being read. An older page appends at the end
-  // (the top), leaving the newest unchanged, so it never triggers here.
+  // nothing shifts while history is being read. An older page prepends at the
+  // top, leaving the newest unchanged, so it never triggers here.
   useLayoutEffect(() => {
     if (messages.length === 0) return;
     const newest = messages[messages.length - 1];
@@ -823,11 +950,10 @@ export function MessageList({
   // reload is async, so once the anchor is gone we pin to the newest (offset 0)
   // without animation across the swap — a couple of nudges to catch the tail's
   // layout — rather than animating a long scroll over the stale anchored content.
-  const prevAnchoredRef = useRef(anchored);
+  const previousTailJumpRef = useRef(tailJumpVersion);
   useEffect(() => {
-    const leftAnchor = prevAnchoredRef.current && !anchored;
-    prevAnchoredRef.current = anchored;
-    if (!leftAnchor) return;
+    if (previousTailJumpRef.current === tailJumpVersion) return;
+    previousTailJumpRef.current = tailJumpVersion;
     setLocalFocusId(null); // a far-reply focus (if any) ends when we return to tail
     setReleasedNewestId(null); // show the whole fresh tail
     const toBottom = () =>
@@ -838,7 +964,7 @@ export function MessageList({
       cancelAnimationFrame(raf);
       timers.forEach(clearTimeout);
     };
-  }, [anchored]);
+  }, [tailJumpVersion]);
 
   // Follow only explicit sends/retries from this mounted page. Watching the
   // pending store itself is incorrect: route params/store subscriptions can
@@ -874,12 +1000,11 @@ export function MessageList({
       clearTimeout(timer);
     };
   }, [pendingFailureVersion]);
-  // Inverted: rows are merged newest-first so a supplementary text message can
-  // sit after the attachment ordering slots reserved before upload begins.
+  // Rows are merged newest-first for the inverted chat list.
   const messageById = useMemo(() => {
-    const m = new Map<string, MessageRow>();
-    for (const msg of messages) m.set(msg.id, msg);
-    return m;
+    const map = new Map<string, MessageRow>();
+    for (const msg of messages) map.set(msg.id, msg);
+    return map;
   }, [messages]);
   const displayedAttachmentUrls = useMemo(() => {
     const urls = new Set<string>();
@@ -888,20 +1013,26 @@ export function MessageList({
     }
     return urls;
   }, [displayedMessages]);
+  const listItemCache = useMemo(
+    () => new WeakMap<MessageRow | PendingAttachment, CachedListItem>(),
+    [],
+  );
 
   // A reply target may sit outside the loaded window: fall back to the
   // separately-fetched `referencedById`. Returns null only when the target
   // isn't in the local DB at all (we never received it).
-  const resolveTarget = (id: string): MessageRow | null =>
-    messageById.get(id) ?? referencedById[id] ?? null;
+  const resolveTarget = useCallback(
+    (id: string): MessageRow | null => messageById.get(id) ?? referencedById[id] ?? null,
+    [messageById, referencedById],
+  );
 
-  const data = useMemo<ListItem[]>(() => {
-    // Inverted: newest-first (index 0 sits at the bottom). The final upload URL
-    // is known before publication, so a matching placeholder is hidden in the
-    // same render that its DB message first appears. Pending and stored rows are
-    // individually sorted, then merged in O(n) so reserved attachment order is
-    // preserved without repeatedly sorting the full combined window.
-    const pendingItems: ListItem[] = [...pendingAttachments]
+  const data = useMemo(() => {
+    // Newest-first. The final upload URL is known before publication, so a
+    // matching placeholder is hidden in the same render that its DB message
+    // first appears. Pending and stored rows are individually sorted, then
+    // merged in O(n) so reserved attachment order is preserved without
+    // repeatedly sorting the full combined window.
+    const pendingItems: ListItemSource[] = [...pendingAttachments]
       .filter(
         (p) =>
           !(p.uploadedUrl && displayedAttachmentUrls.has(p.uploadedUrl)) &&
@@ -917,27 +1048,25 @@ export function MessageList({
           (a.messageOrderAt ?? (a.startedAt ?? 0) * 1000),
       )
       .map((p) => ({ kind: 'pending', pending: p }));
-    const messageItems: ListItem[] = [];
+    const messageItems: ListItemSource[] = [];
     for (let index = displayedMessages.length - 1; index >= 0; index -= 1) {
       const message = displayedMessages[index];
-      messageItems.push({
-        kind: 'message',
-        message,
-        prepared: bubbleRenderItemsById[message.id] ?? null,
-      });
+      const prepared = bubbleRenderItemsById[message.id] ?? null;
+      messageItems.push({ kind: 'message', message, prepared });
     }
-    const merged: ListItem[] = [];
+    const merged: ListItemSource[] = [];
     let pendingIndex = 0;
     let messageIndex = 0;
     while (pendingIndex < pendingItems.length || messageIndex < messageItems.length) {
       const pending = pendingItems[pendingIndex];
       const message = messageItems[messageIndex];
-      const pendingOrder =
-        pending?.kind === 'pending'
-          ? (pending.pending.messageOrderAt ?? (pending.pending.startedAt ?? 0) * 1000)
-          : -Infinity;
-      const messageOrder = message?.kind === 'message' ? message.message.orderAt : -Infinity;
-      if (pendingOrder >= messageOrder) {
+      const pendingOrder = pending?.kind === 'pending'
+        ? (pending.pending.messageOrderAt ?? (pending.pending.startedAt ?? 0) * 1000)
+        : -Infinity;
+      const messageOrder = message?.kind === 'message'
+        ? message.message.orderAt
+        : -Infinity;
+      if (!message || (pending && pendingOrder >= messageOrder)) {
         merged.push(pending);
         pendingIndex += 1;
       } else {
@@ -945,11 +1074,48 @@ export function MessageList({
         messageIndex += 1;
       }
     }
-    return merged;
+    return merged.map((source, index): ListItem => {
+      const older = merged[index + 1] ?? null;
+      const sourceRow = source.kind === 'message' ? source.message : source.pending;
+      const olderSource = older == null
+        ? null
+        : older.kind === 'message'
+          ? older.message
+          : older.pending;
+      const prepared = source.kind === 'message' ? source.prepared : null;
+      const boundaryCreatedAt = older == null ? oldestBoundary?.createdAt : undefined;
+      const edgeIsSelf = older == null ? boundaryIsSelf : undefined;
+      const cached = listItemCache.get(sourceRow);
+      if (
+        cached?.prepared === prepared &&
+        cached.olderSource === olderSource &&
+        cached.boundaryCreatedAt === boundaryCreatedAt &&
+        cached.boundaryIsSelf === edgeIsSelf
+      ) {
+        return cached.item;
+      }
+      const item = {
+        ...source,
+        older,
+        boundaryCreatedAt,
+        boundaryIsSelf: edgeIsSelf,
+      } as ListItem;
+      listItemCache.set(sourceRow, {
+        prepared,
+        olderSource,
+        boundaryCreatedAt,
+        boundaryIsSelf: edgeIsSelf,
+        item,
+      });
+      return item;
+    });
   }, [
     bubbleRenderItemsById,
+    boundaryIsSelf,
     displayedMessages,
     displayedAttachmentUrls,
+    listItemCache,
+    oldestBoundary?.createdAt,
     pendingAttachments,
     messageById,
   ]);
@@ -958,21 +1124,16 @@ export function MessageList({
   dataRef.current = data;
 
   const dataIndexById = useMemo(() => {
-    const m = new Map<string, number>();
+    const map = new Map<string, number>();
     data.forEach((it, i) => {
-      if (it.kind === 'message') m.set(it.message.id, i);
+      if (it.kind === 'message') map.set(it.message.id, i);
     });
-    return m;
+    return map;
   }, [data]);
 
-  // Opening straight into a jump (search / media gallery): the chat screen sets
-  // `focusMessageId` synchronously, so from the first render we hold the list
-  // unmounted (behind the cover) until the anchored window is **fully loaded**
-  // (`windowLoaded` — both sides in, so the target's index is final) AND contains
-  // the target. Mounting only then lets `initialNumToRender` lay out the whole
-  // small window at once, so every row is measured (and cached) up front — making
-  // the centring `scrollToIndex` exact instead of estimating an offset across
-  // not-yet-measured variable-height media bubbles (which lands wrong).
+  // A direct search/gallery jump waits for its bounded window and target row
+  // before mounting the list. The expiry above is the safety net for missing
+  // targets or failed loads.
   const focusIndex =
     activeFocusId != null ? (dataIndexById.get(activeFocusId) ?? null) : null;
   const waitingForFocus =
@@ -980,43 +1141,46 @@ export function MessageList({
     (focusIndex == null || !windowLoaded) &&
     !focusExpired;
 
-  // Latest index map for the delayed re-snaps below (the window can keep growing
-  // for a beat after a jump fires).
+  useElectronHistoryPagination({
+    listRef,
+    mounted: !waitingForFocus,
+    onHistoryEdge: () => {
+      continuousHistoryPagingRef.current = true;
+      requestOlderFromScroll();
+    },
+  });
+
+  // Latest index map for imperative jumps.
   const dataIndexByIdRef = useRef(dataIndexById);
   dataIndexByIdRef.current = dataIndexById;
 
-  /** Scroll a message to the vertical centre and keep it there as nearby rows
-   * settle. Variable-height (media) bubbles only measure their real height once
-   * rendered, which nudges the target after the first scroll — and MVCP may shift
-   * to hold a different row while later pages load. Re-snapping a few times, each
-   * reading the *current* index, lands it exactly. Returns a cleanup that cancels
-   * the pending re-snaps. */
+  /** Centre an item after the bounded focus window has committed, then correct
+   * once more after variable-height rows have settled under the cover. */
   function snapToCentre(id: string, animatedFirst: boolean): () => void {
     const snap = (animated: boolean) => {
       const i = dataIndexByIdRef.current.get(id);
       if (i != null)
-        listRef.current?.scrollToIndex({
+        void listRef.current?.scrollToIndex({
           index: i,
           viewPosition: 0.5,
           animated,
         });
     };
     const raf = requestAnimationFrame(() => snap(animatedFirst));
-    const timers = [220].map((ms) => setTimeout(() => snap(false), ms));
+    const timer = setTimeout(() => snap(false), 220);
     return () => {
       cancelAnimationFrame(raf);
-      timers.forEach(clearTimeout);
+      clearTimeout(timer);
     };
   }
 
   /** Smoothly scroll a loaded message to the vertical centre — a single animated
    * pass, the clean glide used for reply / seek jumps (the target is already in
-   * the window and measured). Unlike `snapToCentre`, no instant re-snap truncates
-   * the animation; that re-snap is only for the under-cover fresh-open jump. */
+   * the window and measured). */
   function smoothCentre(id: string) {
     const i = dataIndexByIdRef.current.get(id);
     if (i != null)
-      listRef.current?.scrollToIndex({
+      void listRef.current?.scrollToIndex({
         index: i,
         viewPosition: 0.5,
         animated: true,
@@ -1034,7 +1198,9 @@ export function MessageList({
       const message = messages[i];
       const unread =
         message.orderAt > unreadBoundaryOrderAt ||
-        (message.orderAt === unreadBoundaryOrderAt && message.id > boundaryId);
+        (boundaryId !== '' &&
+          message.orderAt === unreadBoundaryOrderAt &&
+          message.id < boundaryId);
       if (!unread) break;
       count += 1;
     }
@@ -1076,8 +1242,7 @@ export function MessageList({
 
   /** Jump to where the user left off, landing the unread divider about a fifth
    * down from the top so the first unread message and everything after it reads
-   * downward. Inverted flips viewPosition (1 = top, 0 = bottom), so "a fifth down
-   * from the top" is 0.8. */
+   * downward. Inversion flips viewPosition, so a fifth from the top is 0.8. */
   function scrollToUnread() {
     if (firstUnreadId == null || firstUnreadOrderAt == null) return;
     const idx = dataIndexById.get(firstUnreadId);
@@ -1103,7 +1268,7 @@ export function MessageList({
     stagedCount > 0 ||
     unreadAbove ||
     unreadBelow ||
-    (anchored && hasMoreNewer);
+    hasMoreNewer;
 
   function handleFloatingScrollDown() {
     if ((unreadAbove || unreadBelow) && stagedCount === 0) {
@@ -1113,24 +1278,17 @@ export function MessageList({
     scrollToBottom();
   }
 
-  function handleCancelPending(tempId: string) {
-    // Preserve a reader's historical position, but a discard performed at the
-    // live tail must remain at offset 0 after the pending row disappears.
-    pinTailAfterPendingRemovalRef.current = tailMode && atBottomRef.current;
-    onCancelPending(tempId);
-  }
-
   /** Scroll to a message by id. A reply target is almost always just up the
    * thread, so the seek effect **pages older toward it** (rather than re-anchoring,
    * which would flash the whole list and lose the reader's bearings), ensures
    * there's room above it to centre on, then scrolls — handling the in-window,
    * near-top, and out-of-window cases uniformly. Only a genuinely distant target
    * (past `MAX_SEEK_PAGES`) falls back to a re-anchored jump. */
-  function scrollToMessage(id: string) {
+  const scrollToMessage = useCallback((id: string) => {
     if (dataIndexById.get(id) == null && !referencedById[id]) return; // unreachable
     seekAttemptsRef.current = 0;
     setSeekReplyId(id);
-  }
+  }, [dataIndexById, referencedById, setSeekReplyId]);
 
   // A jump target (search / gallery open, or a far reply): the window loads
   // centred on it, then the target flashes only once the positioning cover lifts.
@@ -1232,22 +1390,19 @@ export function MessageList({
 
   // Private petnames (local nicknames) win over the published name in reply
   // previews too — same rule as the chat header and lists.
-  const { contacts: contactsList } = useContacts(
+  const contactsByPubkey = useContactsMap(
     accountPubkey,
+    repliedSenderPubkeys,
     liveDataEnabled,
   );
   const petnameByPubkey = useMemo(() => {
     const m: Record<string, string> = {};
-    if (!liveDataEnabled) {
-      for (const pubkey of repliedSenderPubkeys) {
-        const cached = getSessionCachedContact(accountPubkey, pubkey);
-        if (cached?.petname) m[pubkey] = cached.petname;
-      }
+    for (const [pubkey, contact] of Object.entries(contactsByPubkey)) {
+      if (contact.petname) m[pubkey] = contact.petname;
     }
-    for (const ct of contactsList) if (ct.petname) m[ct.pubkey] = ct.petname;
     return m;
-  }, [accountPubkey, contactsList, liveDataEnabled, repliedSenderPubkeys]);
-  const replySenderName = (
+  }, [contactsByPubkey]);
+  const replySenderName = useCallback((
     senderPubkey: string,
     profile?: { displayName?: string | null; name?: string | null } | null,
   ) => {
@@ -1261,8 +1416,286 @@ export function MessageList({
       displayName: profile?.displayName,
       name: profile?.name,
     });
-  };
+  }, [conversationKey, peerDisplayName, petnameByPubkey, proximity, t]);
+  // Parent callbacks can change while scrolling chrome updates. Cell handlers
+  // read their latest versions without changing FlatList's renderItem identity.
+  const rowActionsRef = useRef({
+    onSwipeReply,
+    onLongPress,
+    onLongPressPending,
+    onTapReaction,
+    onShowDelivery,
+    onStopPending,
+    onRetryPending,
+    onCancelPending,
+    onToggleSelect,
+    tailMode,
+  });
+  useLayoutEffect(() => {
+    rowActionsRef.current = {
+      onSwipeReply,
+      onLongPress,
+      onLongPressPending,
+      onTapReaction,
+      onShowDelivery,
+      onStopPending,
+      onRetryPending,
+      onCancelPending,
+      onToggleSelect,
+      tailMode,
+    };
+  }, [
+    onSwipeReply, onLongPress, onLongPressPending, onTapReaction,
+    onShowDelivery, onStopPending, onRetryPending, onCancelPending,
+    onToggleSelect, tailMode,
+  ]);
 
+  const canSwipeReply = onSwipeReply != null;
+  const canShowDelivery = onShowDelivery != null;
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<ListItem>) => {
+      const older = item.older;
+      if (item.kind === 'pending') {
+        // Pending attachments are always our own. Match MessageBubble's
+        // sender-run spacing: tight after another own row, wider after a peer.
+        const olderIsSelf =
+          older?.kind === 'pending' ||
+          (older?.kind === 'message' &&
+            isMessageFromSelf(older.message, selfPubkey, proximity));
+        const replyId = item.pending.replyToId;
+        const target = replyId ? resolveTarget(replyId) : null;
+        const profile = target ? profileMap[target.senderPubkey] : null;
+        const replyPreview: MessageBubbleReplyPreview | null = target
+          ? {
+              senderPubkey: target.senderPubkey,
+              senderDisplayName: replySenderName(
+                target.senderPubkey,
+                profile,
+              ),
+              contentPreview:
+                target.kind === 15
+                  ? attachmentLabel(target.tags, attachmentLabels)
+                  : target.content,
+            }
+          : replyId
+            ? {
+                senderPubkey: '',
+                senderDisplayName: null,
+                contentPreview: '…',
+              }
+            : null;
+        const dateLabel = startsLoadedTimelineDay(
+          item,
+          older ?? undefined,
+          item.boundaryCreatedAt,
+        )
+          ? formatDateSeparator(timelineItemCreatedAt(item))
+          : null;
+        return (
+          <>
+            <PendingAttachmentBubble
+              pending={item.pending}
+              onStop={(id) => rowActionsRef.current.onStopPending(id)}
+              onRetry={(id) => rowActionsRef.current.onRetryPending(id)}
+              onCancel={(id) => {
+                pinTailAfterPendingRemovalRef.current =
+                  rowActionsRef.current.tailMode && atBottomRef.current;
+                rowActionsRef.current.onCancelPending(id);
+              }}
+              groupStart={startsLoadedSenderGroup(
+                true,
+                older ? olderIsSelf : item.boundaryIsSelf,
+              )}
+              replyTo={replyPreview}
+              onPressReply={
+                replyId ? () => scrollToMessage(replyId) : undefined
+              }
+              onLongPress={
+                item.pending.status === 'failed' && !selectionMode
+                  ? (rect) =>
+                      rowActionsRef.current.onLongPressPending(item.pending, rect, {
+                        content: '',
+                        isSelf: true,
+                        createdAt: item.pending.startedAt ?? 0,
+                        renderBody: (
+                          <PendingAttachmentBubble
+                            pending={item.pending}
+                            onStop={() => {}}
+                            onRetry={() => {}}
+                            onCancel={() => {}}
+                            replyTo={replyPreview}
+                            lifted
+                          />
+                        ),
+                      })
+                  : undefined
+              }
+            />
+            {dateLabel ? <DateSeparator label={dateLabel} /> : null}
+          </>
+        );
+      }
+      const msg = item.message;
+      const preparedRow = item.prepared;
+      const olderMessageId =
+        older?.kind === 'message' ? older.message.id : null;
+      const preparedNeighboursMatch =
+        preparedRow != null &&
+        ((older?.kind === 'message' && preparedRow.olderMessageId === olderMessageId) ||
+          (!older && preparedRow.olderMessageId == null));
+
+      // When the older neighbour is on a different day (or the loaded boundary
+      // is), this message starts a new day and gets a separator above it.
+      const showDate = !older
+        ? startsLoadedTimelineDay(item, undefined, item.boundaryCreatedAt)
+        : preparedNeighboursMatch
+          ? preparedRow.showDate
+          : startsTimelineDay(item, older);
+      const dateLabel = showDate
+        ? formatDateSeparator(msg.createdAt)
+        : null;
+      // The unread divider sits above the first message past the watermark.
+      const showUnread = msg.id === firstUnreadId;
+
+      let replyPreview: MessageBubbleReplyPreview | null = null;
+      if (msg.replyToId) {
+        const target =
+          preparedRow?.replyTarget ?? resolveTarget(msg.replyToId);
+        if (target) {
+          const profile = profileMap[target.senderPubkey];
+          replyPreview = {
+            senderPubkey: target.senderPubkey,
+            senderDisplayName: replySenderName(
+              target.senderPubkey,
+              profile,
+            ),
+            contentPreview:
+              target.kind === 15
+                ? attachmentLabel(target.tags, attachmentLabels)
+                : target.content,
+          };
+        } else {
+          // Not in the window and not in the local DB — we never received it.
+          replyPreview = {
+            senderPubkey: '',
+            senderDisplayName: null,
+            contentPreview: '…',
+          };
+        }
+      }
+
+      const reactions =
+        preparedRow?.reactions ?? reactionsByMessageId[msg.id] ?? [];
+      const presentation =
+        preparedRow?.presentation ??
+        presentationsByMessageId[msg.id] ??
+        prepareMessagePresentation({
+          messageId: msg.id,
+          kind: msg.kind,
+          content: msg.content,
+          tags: msg.tags,
+        });
+      const attachment = presentation.attachment;
+      const isSelf = isMessageFromSelf(msg, selfPubkey, proximity);
+      const persistedDelivery = deliveriesByMessageId[msg.id] ??
+        (msg.deliveryStatus
+          ? {
+              rumorId: msg.id,
+              phase: msg.deliveryStatus,
+              copies: [],
+            }
+          : null);
+      // Starts a new sender run (wider top gap) when the older neighbour is from
+      // a different sender — in a 1:1
+      // thread that's exactly each self ↔ other switch. Consecutive same-sender
+      // messages stay tight.
+      const olderIsSelf =
+        older?.kind === 'pending' ||
+        (older?.kind === 'message' &&
+          isMessageFromSelf(older.message, selfPubkey, proximity));
+      const groupStart = !older
+        ? startsLoadedSenderGroup(isSelf, item.boundaryIsSelf)
+        : preparedNeighboursMatch
+        ? preparedRow.groupStart
+        : !older || isSelf !== olderIsSelf;
+
+      return (
+        <>
+          <MessageBubble
+            content={msg.content}
+            tags={msg.tags}
+            isSelf={isSelf}
+            createdAt={msg.createdAt}
+            orderAt={msg.orderAt}
+            rumorId={msg.id}
+            persistedDelivery={persistedDelivery}
+            replyTo={replyPreview}
+            reactions={reactions}
+            attachment={attachment}
+            presentation={presentation}
+            interactive={interactive}
+            conversationKey={msg.conversationKey}
+            proximity={proximity}
+            remoteContentMode={remoteContentMode}
+            // While selecting, disable swipe/long-press so a tap toggles instead.
+            onSwipeReply={
+              selectionMode || !canSwipeReply
+                ? undefined
+                : () => rowActionsRef.current.onSwipeReply?.(msg)
+            }
+            onLongPress={
+              selectionMode
+                ? undefined
+                : (rect) =>
+                    rowActionsRef.current.onLongPress(msg, rect, {
+                      content: msg.content,
+                      tags: msg.tags,
+                      isSelf,
+                      createdAt: msg.createdAt,
+                      rumorId: msg.id,
+                      persistedDelivery,
+                      replyTo: replyPreview,
+                      attachment,
+                      remoteContentMode,
+                      reactions,
+                    })
+            }
+            onShowDelivery={
+              canShowDelivery ? () => rowActionsRef.current.onShowDelivery?.(msg.id) : undefined
+            }
+            onPressReply={
+              msg.replyToId
+                ? () => scrollToMessage(msg.replyToId!)
+                : undefined
+            }
+            highlighted={flashTarget?.id === msg.id}
+            highlightTick={
+              flashTarget?.id === msg.id ? flashTarget.tick : 0
+            }
+            groupStart={groupStart}
+            separatorAbove={showUnread}
+            onTapReaction={(r) => rowActionsRef.current.onTapReaction(msg, r)}
+            selectionMode={selectionMode}
+            selectionShiftStyle={selectionShiftStyle}
+            selected={selectedIds?.has(msg.id) ?? false}
+            onToggleSelect={() => rowActionsRef.current.onToggleSelect?.(msg.id)}
+          />
+          {showUnread ? (
+            <UnreadDivider label={t('chat.unread_divider')} />
+          ) : null}
+          {dateLabel ? <DateSeparator label={dateLabel} /> : null}
+        </>
+      );
+    },
+    [
+      attachmentLabels, canShowDelivery, canSwipeReply,
+      deliveriesByMessageId, firstUnreadId, flashTarget, interactive,
+      presentationsByMessageId, profileMap,
+      proximity, reactionsByMessageId, remoteContentMode, replySenderName,
+      resolveTarget, scrollToMessage, selectedIds, selectionMode,
+      selectionShiftStyle, selfPubkey, t,
+    ],
+  );
   return (
     <View style={{ flex: 1 }}>
       {!waitingForFocus ? (
@@ -1278,15 +1711,14 @@ export function MessageList({
             pendingInitialPosition.ready ? 'auto' : 'no-hide-descendants'
           }
           onContentSizeChange={handleContentSizeChange}
-          // Inverted (newest at index 0 / bottom, oldest at the top) — the standard RN
-          // chat layout. It opens pinned to the bottom on the very first frame with no
-          // measuring and no scroll-to-end. Older pages append at the end (the top) and
-          // never shift the viewport; newer pages (forward paging in an anchored
-          // window) prepend at index 0, so only that mode enables native position
-          // anchoring. Tail mode stages incoming messages while the reader is away
-          // from the bottom and handles explicit sends itself. Leaving MVCP enabled
-          // there lets delayed cell measurement or older-page commits choose a new
-          // native anchor after a fast fling, visibly moving an otherwise idle list.
+          onLayout={(event) => {
+            const viewportHeight = event.nativeEvent.layout.height;
+            scrollMetricsRef.current.viewportHeight = viewportHeight;
+            const { contentHeight } = scrollMetricsRef.current;
+            if (contentHeight > 0 && contentHeight <= viewportHeight) {
+              requestOlderFromScroll(true);
+            }
+          }}
           inverted
           maintainVisibleContentPosition={
             shouldMaintainVisibleMessagePosition({
@@ -1296,39 +1728,53 @@ export function MessageList({
               ? ANCHORED_VISIBLE_POSITION
               : undefined
           }
-          // Normal open: ~2 screens on the first frame (default is 10). Jump-open:
-          // render the whole small anchored window at once, so every row measures (and
-          // caches its height) up front — that's what makes the centring scrollToIndex
-          // exact, rather than estimating an offset across not-yet-measured media
-          // bubbles. We open at the bottom (no initialScrollIndex) and the focus effect
-          // snaps to the centred target instantly, under the cover.
           initialNumToRender={activeFocusId != null ? 60 : MESSAGES_PAGE_SIZE}
-          // When data arrives after the FlatList itself mounts, RN otherwise renders
-          // ten cells, waits ~50ms, then renders the rest. Our data window is already
-          // bounded, so commit one complete page per batch and avoid progressive
-          // bubble pop-in without increasing history size.
           maxToRenderPerBatch={activeFocusId != null ? 60 : MESSAGES_PAGE_SIZE}
-          updateCellsBatchingPeriod={0}
+          updateCellsBatchingPeriod={
+            activeFocusId != null ? 0 : MESSAGE_CELL_RENDER_BATCH_PERIOD_MS
+          }
+          // Retain FlatList's full two-sided Android fling buffer. Database pages
+          // are exposed incrementally, while FlatList owns view virtualization;
+          // reducing this window causes visible blanks on fast flings.
+          windowSize={21}
+          // Android clipping and inverted transforms can detach visible cells.
+          // Virtualization still unmounts rows outside the render window.
+          removeClippedSubviews={false}
           onScrollBeginDrag={handleScrollBeginDrag}
           onScrollEndDrag={handleScrollSettled}
           onMomentumScrollBegin={handleMomentumScrollBegin}
           onMomentumScrollEnd={handleScrollSettled}
           onScroll={(e) => {
-            // Inverted: offset 0 is the bottom (newest).
             const y = e.nativeEvent.contentOffset.y;
+            const movingOlder = y > scrollMetricsRef.current.offsetY;
+            scrollMetricsRef.current = {
+              offsetY: y,
+              viewportHeight: e.nativeEvent.layoutMeasurement.height,
+              contentHeight: e.nativeEvent.contentSize.height,
+            };
+            if (movingOlder && userScrollInProgressRef.current &&
+                isNearMessageHistoryEdge({
+                  offsetY: y,
+                  contentHeight: e.nativeEvent.contentSize.height,
+                  viewportHeight: e.nativeEvent.layoutMeasurement.height,
+                })) {
+              requestOlderFromScroll();
+            }
             const nearTail = isNearMessageTail(y);
             const show = !nearTail;
-            setShowScrollDown((prev) => (prev === show ? prev : show));
+            if (showScrollDownRef.current !== show) {
+              showScrollDownRef.current = show;
+              setShowScrollDown(show);
+            }
             nearTailRef.current = nearTail;
             const atBottom = y < 24;
             atBottomRef.current = !userScrollInProgressRef.current && atBottom;
-            // Floating date header: reveal while scrolled up, then fade out once the
-            // list settles (the hide timer is reset on every scroll tick) or hits the
-            // bottom (where the newest/"today" needs no banner).
+            // Cross the React boundary only when the floating-date visibility
+            // changes. Gesture-end callbacks arm the idle fade once per scroll.
             if (atBottom) {
               clearFloatingActive();
-            } else {
-              bumpFloatingActive();
+            } else if (!floatingActiveRef.current) {
+              activateFloatingDate(!userScrollInProgressRef.current);
             }
           }}
           scrollEventThrottle={64}
@@ -1339,252 +1785,28 @@ export function MessageList({
               ? `m:${item.message.id}`
               : `p:${item.pending.tempId}`
           }
-          renderItem={({ item, index }) => {
-            const older = data[index + 1];
-            if (item.kind === 'pending') {
-              // Pending attachments are always our own. Match MessageBubble's
-              // sender-run spacing: tight after another own row, wider after a peer.
-              const olderIsSelf =
-                older?.kind === 'pending' ||
-                (older?.kind === 'message' &&
-                  isMessageFromSelf(older.message, selfPubkey, proximity));
-              const replyId = item.pending.replyToId;
-              const target = replyId ? resolveTarget(replyId) : null;
-              const profile = target ? profileMap[target.senderPubkey] : null;
-              const replyPreview: MessageBubbleReplyPreview | null = target
-                ? {
-                    senderPubkey: target.senderPubkey,
-                    senderDisplayName: replySenderName(
-                      target.senderPubkey,
-                      profile,
-                    ),
-                    contentPreview:
-                      target.kind === 15
-                        ? attachmentLabel(target.tags, attachmentLabels)
-                        : target.content,
-                  }
-                : replyId
-                  ? {
-                      senderPubkey: '',
-                      senderDisplayName: null,
-                      contentPreview: '…',
-                    }
-                  : null;
-              const dateLabel = startsTimelineDay(item, older)
-                ? formatDateSeparator(timelineItemCreatedAt(item))
-                : null;
-              return (
-                <>
-                  <PendingAttachmentBubble
-                    pending={item.pending}
-                    onStop={onStopPending}
-                    onRetry={onRetryPending}
-                    onCancel={handleCancelPending}
-                    groupStart={!older || !olderIsSelf}
-                    replyTo={replyPreview}
-                    onPressReply={
-                      replyId ? () => scrollToMessage(replyId) : undefined
-                    }
-                    onLongPress={
-                      item.pending.status === 'failed' && !selectionMode
-                        ? (rect) =>
-                            onLongPressPending(item.pending, rect, {
-                              content: '',
-                              isSelf: true,
-                              createdAt: item.pending.startedAt ?? 0,
-                              renderBody: (
-                                <PendingAttachmentBubble
-                                  pending={item.pending}
-                                  onStop={() => {}}
-                                  onRetry={() => {}}
-                                  onCancel={() => {}}
-                                  replyTo={replyPreview}
-                                  lifted
-                                />
-                              ),
-                            })
-                        : undefined
-                    }
-                  />
-                  {dateLabel ? <DateSeparator label={dateLabel} /> : null}
-                </>
-              );
-            }
-            const msg = item.message;
-            const preparedRow = item.prepared;
-            const olderMessageId =
-              older?.kind === 'message' ? older.message.id : null;
-            const preparedNeighboursMatch =
-              preparedRow != null &&
-              ((older?.kind === 'message' && preparedRow.olderMessageId === olderMessageId) ||
-                (!older && preparedRow.olderMessageId == null));
-
-            // Day-boundary separator: `data` is newest-first, so `index + 1` is the
-            // older neighbour. When it's a different day (or there's none — the oldest
-            // loaded message), this message starts a new day → show its date above it.
-            // Render the date (and unread band) *after* the bubble in the JSX: this
-            // inverted list paints a cell's later children above earlier ones, so a
-            // separator placed after the bubble lands above it — at the boundary
-            // between the older day and this first message of the new day.
-            const showDate = preparedNeighboursMatch
-              ? preparedRow.showDate
-              : startsTimelineDay(item, older);
-            const dateLabel = showDate
-              ? formatDateSeparator(msg.createdAt)
-              : null;
-            // The unread divider sits above the first message past the watermark.
-            const showUnread = msg.id === firstUnreadId;
-
-            let replyPreview: MessageBubbleReplyPreview | null = null;
-            if (msg.replyToId) {
-              const target =
-                preparedRow?.replyTarget ?? resolveTarget(msg.replyToId);
-              if (target) {
-                const profile = profileMap[target.senderPubkey];
-                replyPreview = {
-                  senderPubkey: target.senderPubkey,
-                  senderDisplayName: replySenderName(
-                    target.senderPubkey,
-                    profile,
-                  ),
-                  contentPreview:
-                    target.kind === 15
-                      ? attachmentLabel(target.tags, attachmentLabels)
-                      : target.content,
-                };
-              } else {
-                // Not in the window and not in the local DB — we never received it.
-                replyPreview = {
-                  senderPubkey: '',
-                  senderDisplayName: null,
-                  contentPreview: '…',
-                };
-              }
-            }
-
-            const reactions =
-              preparedRow?.reactions ?? reactionsByMessageId[msg.id] ?? [];
-            const presentation =
-              preparedRow?.presentation ??
-              presentationsByMessageId[msg.id] ??
-              prepareMessagePresentation({
-                messageId: msg.id,
-                kind: msg.kind,
-                content: msg.content,
-                tags: msg.tags,
-              });
-            const attachment = presentation.attachment;
-            const isSelf = isMessageFromSelf(msg, selfPubkey, proximity);
-            const persistedDelivery = deliveriesByMessageId[msg.id] ?? null;
-            // Starts a new sender run (wider top gap) when the older neighbour
-            // (`index + 1`, newest-first data) is from a different sender — in a 1:1
-            // thread that's exactly each self ↔ other switch. Consecutive same-sender
-            // messages stay tight.
-            const olderIsSelf =
-              older?.kind === 'pending' ||
-              (older?.kind === 'message' &&
-                isMessageFromSelf(older.message, selfPubkey, proximity));
-            const groupStart = preparedNeighboursMatch
-              ? preparedRow.groupStart
-              : !older || isSelf !== olderIsSelf;
-
-            return (
-              <>
-                <MessageBubble
-                  content={msg.content}
-                  tags={msg.tags}
-                  isSelf={isSelf}
-                  createdAt={msg.createdAt}
-                  orderAt={msg.orderAt}
-                  rumorId={msg.id}
-                  persistedDelivery={persistedDelivery}
-                  replyTo={replyPreview}
-                  reactions={reactions}
-                  attachment={attachment}
-                  presentation={presentation}
-                  interactive={liveDataEnabled}
-                  conversationKey={msg.conversationKey}
-                  proximity={proximity}
-                  remoteContentMode={remoteContentMode}
-                  // While selecting, disable swipe/long-press so a tap toggles instead.
-                  onSwipeReply={
-                    selectionMode || !onSwipeReply
-                      ? undefined
-                      : () => onSwipeReply(msg)
-                  }
-                  onLongPress={
-                    selectionMode
-                      ? undefined
-                      : (rect) =>
-                          onLongPress(msg, rect, {
-                            content: msg.content,
-                            tags: msg.tags,
-                            isSelf,
-                            createdAt: msg.createdAt,
-                            rumorId: msg.id,
-                            persistedDelivery,
-                            replyTo: replyPreview,
-                            attachment,
-                            remoteContentMode,
-                            reactions,
-                          })
-                  }
-                  onShowDelivery={
-                    onShowDelivery ? () => onShowDelivery(msg.id) : undefined
-                  }
-                  onPressReply={
-                    msg.replyToId
-                      ? () => scrollToMessage(msg.replyToId!)
-                      : undefined
-                  }
-                  highlighted={flashTarget?.id === msg.id}
-                  highlightTick={
-                    flashTarget?.id === msg.id ? flashTarget.tick : 0
-                  }
-                  groupStart={groupStart}
-                  separatorAbove={showUnread}
-                  onTapReaction={(r) => onTapReaction(msg, r)}
-                  selectionMode={selectionMode}
-                  selected={selectedIds?.has(msg.id) ?? false}
-                  onToggleSelect={() => onToggleSelect?.(msg.id)}
-                />
-                {showUnread ? (
-                  <UnreadDivider label={t('chat.unread_divider')} />
-                ) : null}
-                {dateLabel ? <DateSeparator label={dateLabel} /> : null}
-              </>
-            );
-          }}
-          // List end = oldest (the top) → load an older page; held in place by MVCP.
-          // Prefetch ~2 screens early so scrolling up never stalls waiting for it.
-          // Suppressed until `ready`: during a jump-open the list mounts at the bottom
-          // and snaps to the target under the cover; letting a page load mid-snap would
-          // grow the window and shift the target out from under the scroll.
+          renderItem={renderItem}
+          // Inverted list end = oldest → load an older page.
           onEndReached={() => {
-            if (!ready) return;
-            if (hasMore) onLoadOlder();
+            requestOlderFromScroll();
           }}
           onEndReachedThreshold={MESSAGE_HISTORY_PREFETCH_VIEWPORTS}
-          // List start = newest (the bottom) → in an anchored window page forward
-          // toward the present (prepend at index 0, absorbed by MVCP); in tail mode
+          // Inverted list start = newest → in an anchored window page forward;
+          // in tail mode
           // reveal whatever was staged while the user read up. Also gated on `ready`:
           // a jump-open mounts at the bottom, so this would otherwise fire instantly
           // and `loadNewer` would move the target mid-positioning (the cause of jumps
           // landing near, but not on, the target).
           onStartReached={() => {
             if (!ready) return;
-            if (anchored) {
-              if (hasMoreNewer) onLoadNewer();
+            if (hasMoreNewer) {
+              onLoadNewer();
             } else if (stagedCount > 0) {
               releaseStaged();
             }
           }}
           onStartReachedThreshold={1}
           onScrollToIndexFailed={(info) => {
-            // Rare with the small anchored window (the target row is usually already
-            // rendered). Don't estimate-jump by offset — that can land in a not-yet-
-            // rendered region and blank the list — just retry the precise scroll once
-            // the row has had a tick to measure.
             setTimeout(() => {
               listRef.current?.scrollToIndex({
                 index: info.index,
@@ -1593,31 +1815,20 @@ export function MessageList({
               });
             }, 80);
           }}
-          // Inverted swaps the ends: the footer renders at the top (oldest end) →
-          // older-page spinner; the header renders at the bottom (newest end) →
-          // newer-page spinner while an anchored window still has newer to page in.
-          ListFooterComponent={() =>
-            hasMore ? (
+          ListFooterComponent={
               <View style={{ height: topInset, justifyContent: 'center' }}>
-                <ActivityIndicator color={c.textMuted} />
+                {loadingOlder ? <ActivityIndicator color={c.textMuted} /> : null}
               </View>
-            ) : (
-              <View style={{ height: topInset }} />
-            )
           }
-          ListHeaderComponent={() =>
-            anchored && hasMoreNewer ? (
+          ListHeaderComponent={
               <View
                 style={{
                   height: bottomInset + spacing.md,
                   justifyContent: 'center',
                 }}
               >
-                <ActivityIndicator color={c.textMuted} />
+                {loadingNewer ? <ActivityIndicator color={c.textMuted} /> : null}
               </View>
-            ) : (
-              <View style={{ height: bottomInset + spacing.md }} />
-            )
           }
         />
       ) : null}
@@ -1649,8 +1860,7 @@ export function MessageList({
           gap: 10,
         }}
       >
-        {/* Also persistent in an anchored window (`anchored && hasMoreNewer`):
-            scrolling down pages forward toward the present, but this is the
+        {/* A bidirectional jump can page toward the present; this remains the
             shortcut straight back to the live tail. */}
         {showFloatingScrollDown ? (
           <View>
@@ -1695,7 +1905,7 @@ export function MessageList({
                 style={{ zIndex: 1 }}
               />
             </View>
-            {stagedCount > 0 ? (
+            {showNewMessageIndicators && stagedCount > 0 ? (
               <View
                 style={{
                   position: 'absolute',
@@ -1710,9 +1920,6 @@ export function MessageList({
           </View>
         ) : null}
       </View>
-      {/* Only used when opening straight into a search jump: covers the list while
-          it repositions from the anchored window's newest end onto the target, so
-          that one scroll isn't seen. A normal open starts ready (no cover). */}
       {!ready ? (
         <View
           style={{

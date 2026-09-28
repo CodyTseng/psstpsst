@@ -8,6 +8,7 @@ import { Pen as Pencil } from '@solar-icons/react-native/category/messages/Linea
 import Check from 'lucide-react-native/icons/check';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
 import { ForbiddenCircle as Ban } from '@solar-icons/react-native/category/ui/Linear/ForbiddenCircle';
+import { Flag } from '@solar-icons/react-native/category/ui/Linear/Flag';
 import AtSign from 'lucide-react-native/icons/at-sign';
 import { Share as Share2 } from '@solar-icons/react-native/category/ui/Linear/Share';
 import { GalleryWide as Images } from '@solar-icons/react-native/category/video/Linear/GalleryWide';
@@ -40,6 +41,7 @@ import { SelfBadge } from '@/components/common/SelfBadge';
 import { Nip05Label } from '@/components/profile/Nip05Label';
 import { NpubQrSheet } from '@/components/profile/NpubQrSheet';
 import { ProfileAction } from '@/components/profile/ProfileAction';
+import { ReportUserSheet } from '@/components/profile/report-user-sheet';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useIsBlocked } from '@/hooks/use-blocked';
 import { useContact } from '@/hooks/use-contacts';
@@ -114,6 +116,7 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
   const [savingPetname, setSavingPetname] = useState(false);
   const [busyContact, setBusyContact] = useState(false);
   const [busyBlock, setBusyBlock] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   async function copyNpub() {
     await setStringAsync(npub);
@@ -478,9 +481,14 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
             </ListGroup>
           </View>
         ) : null}
-        {!isSelf && (saved || blocked !== undefined) ? (
+        {!isSelf ? (
           <View style={{ marginTop: spacing.xl }}>
             <ListGroup>
+              <ListRow
+                icon={<Flag size={22} color={c.text} />}
+                title={t('report.title')}
+                onPress={() => setReportOpen(true)}
+              />
               {blocked !== undefined ? (
                 <ListRow
                   icon={<Ban size={22} color={blocked ? c.text : c.danger} />}
@@ -522,6 +530,13 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
         npub={npub}
         name={profileName}
         nip05={profile?.nip05}
+      />
+
+      <ReportUserSheet
+        visible={reportOpen}
+        accountPubkey={accountPubkey}
+        reportedPubkey={pubkey}
+        onClose={() => setReportOpen(false)}
       />
 
       {IS_ELECTRON ? (

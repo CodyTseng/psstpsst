@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useId, useMemo } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
@@ -14,6 +14,26 @@ type Props = {
 };
 
 const svgCache = new Map<string, string>();
+const imageLoadedListeners = new Map<string, Set<() => void>>();
+const MAX_CACHED_GRADIENTS = 512;
+const MAX_SHARED_CACHE_RETRIES = 2;
+
+function notifyImageLoaded(url: string) {
+  imageLoadedListeners.get(url)?.forEach((listener) => listener());
+}
+
+function subscribeImageLoaded(url: string, listener: () => void) {
+  let listeners = imageLoadedListeners.get(url);
+  if (!listeners) {
+    listeners = new Set();
+    imageLoadedListeners.set(url, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) imageLoadedListeners.delete(url);
+  };
+}
 
 /**
  * Deterministic gradient avatar derived from the pubkey hex.
@@ -22,7 +42,11 @@ const svgCache = new Map<string, string>();
  */
 function generateAvatarSvg(pubkey: string): string {
   const cached = svgCache.get(pubkey);
-  if (cached) return cached;
+  if (cached) {
+    svgCache.delete(pubkey);
+    svgCache.set(pubkey, cached);
+    return cached;
+  }
 
   const paddedPubkey = pubkey.padEnd(2, '0');
 
@@ -60,34 +84,54 @@ function generateAvatarSvg(pubkey: string): string {
   const svg = `<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="${colors[2]}" fill-opacity="0.3" />${gradients}</svg>`;
 
   svgCache.set(pubkey, svg);
+  if (svgCache.size > MAX_CACHED_GRADIENTS) {
+    const oldest = svgCache.keys().next().value;
+    if (oldest !== undefined) svgCache.delete(oldest);
+  }
   return svg;
 }
 
 export function Avatar({ pubkey, picture, size = 44 }: Props) {
   const c = useThemeColors();
   const gradientId = `avatar-${useId().replace(/:/g, '')}`;
+  const pictureUrl = typeof picture === 'string' ? picture : null;
+  const currentPictureUrl = useRef(pictureUrl);
+  const failedUrl = useRef<string | null>(null);
+  const retryCount = useRef(0);
+  const [retryRevision, setRetryRevision] = useState(0);
+  const [failedPictureUrl, setFailedPictureUrl] = useState<string | null>(null);
+  const showGradient = !picture || (!!pictureUrl && failedPictureUrl === pictureUrl);
+  const imageSource = useMemo(
+    () => (pictureUrl ? { uri: pictureUrl } : picture),
+    [pictureUrl, picture],
+  );
+
+  useEffect(() => {
+    currentPictureUrl.current = pictureUrl;
+    failedUrl.current = null;
+    retryCount.current = 0;
+    if (!pictureUrl) return;
+    return subscribeImageLoaded(pictureUrl, () => {
+      // A different avatar can finish after this one has changed its picture.
+      if (
+        currentPictureUrl.current !== pictureUrl ||
+        failedUrl.current !== pictureUrl ||
+        retryCount.current >= MAX_SHARED_CACHE_RETRIES
+      ) return;
+      failedUrl.current = null;
+      retryCount.current += 1;
+      // Remount only the failed image view. The shared Expo cache now has the
+      // bytes, while a previously failed native view does not reload itself.
+      setRetryRevision((revision) => revision + 1);
+    });
+  }, [pictureUrl]);
+
   const svg = useMemo(() => {
-    if (picture || !/^[0-9a-f]{12,}$/i.test(pubkey)) return null;
+    if (!showGradient || !/^[0-9a-f]{12,}$/i.test(pubkey)) return null;
     // Keep the cached artwork shared, but scope SVG references to this instance:
     // a hidden screen's duplicate IDs can suppress another avatar's gradients.
     return generateAvatarSvg(pubkey).replaceAll('avatar-gradient-', `${gradientId}-gradient-`);
-  }, [pubkey, picture, gradientId]);
-
-  if (picture) {
-    return (
-      <Image
-        source={typeof picture === 'string' ? { uri: picture } : picture}
-        // expo-image keeps a global, URL-keyed memory+disk cache, so an avatar
-        // loaded on one screen stays instant everywhere — unlike RN's Image,
-        // which leans on the OS HTTP cache and re-fetches on each remount.
-        cachePolicy="memory-disk"
-        recyclingKey={typeof picture === 'string' ? picture : undefined}
-        transition={150}
-        contentFit="cover"
-        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: c.surfaceMuted }}
-      />
-    );
-  }
+  }, [pubkey, gradientId, showGradient]);
 
   return (
     <View
@@ -100,6 +144,30 @@ export function Avatar({ pubkey, picture, size = 44 }: Props) {
       }}
     >
       {svg ? <SvgXml xml={svg} width={size} height={size} /> : null}
+      {picture ? (
+        <Image
+          key={`${pictureUrl ?? picture}:${retryRevision}`}
+          source={imageSource}
+          cachePolicy="memory-disk"
+          recyclingKey={pictureUrl ?? undefined}
+          transition={150}
+          contentFit="cover"
+          onError={() => {
+            if (pictureUrl && currentPictureUrl.current === pictureUrl) {
+              failedUrl.current = pictureUrl;
+              setFailedPictureUrl(pictureUrl);
+            }
+          }}
+          onLoad={() => {
+            if (pictureUrl && currentPictureUrl.current === pictureUrl) {
+              failedUrl.current = null;
+              setFailedPictureUrl(null);
+              notifyImageLoaded(pictureUrl);
+            }
+          }}
+          style={{ position: 'absolute', width: size, height: size }}
+        />
+      ) : null}
     </View>
   );
 }

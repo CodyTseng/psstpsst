@@ -117,7 +117,8 @@ their text direction follows that language independently of the app locale.
 
 Spacing comes from the closed, multiples-of-four scale in `src/theme/index.ts`:
 `xs`, `sm`, `md`, `lg`, `xl`, `2xl`, and `3xl`. Do not use arbitrary margins,
-padding, or gaps.
+padding, or gaps. The sole optical exception is the tighter semantic gap
+between a message bubble and its reaction row.
 
 - The default page and sheet gutter is `spacing.lg` (16px).
 - Sections normally use `spacing.xl` separation.
@@ -142,10 +143,12 @@ padding, or gaps.
   status marks, timestamps, and actions retain their space, including in selection mode.
 
 Message reactions sit in a compact, separate row directly below the bubble,
-without added top spacing, overlap, or a canvas-coloured cutout. Separation
-below the reactions keeps them visually grouped with their message. They share
-the message's logical edge: start for received messages, end for sent messages.
-Own reactions retain an accent outline.
+with the dedicated `messageLayout.reactionGap` and without overlap or a
+canvas-coloured cutout.
+The reaction row adds no bottom margin; the following message row owns the
+inter-message separation. Reactions share the message's logical edge: start for
+received messages, end for sent messages. Own reactions retain an accent
+outline.
 
 Chat system events use the centered inline date-capsule visual family and stay
 anchored at their event position in the message timeline. They never join the
@@ -284,6 +287,7 @@ this table records when to choose each primitive.
 | Content container | `AppCard` |
 | Navigation title bar | `ScreenHeader` |
 | Settings/value row | `ListRow` inside `ListGroup` |
+| Single-choice indicator | `RadioIndicator` inside a radio `ListRow` |
 | Contact or conversation row | `ContactListItem` / `ConversationListItem` |
 | Section heading | `SectionLabel` |
 | Summoned task, picker, or form | `BottomSheet` |
@@ -291,6 +295,8 @@ this table records when to choose each primitive.
 | Small Electron value entry | `InputDialog` |
 | Time-of-day entry | `TimeOfDayPicker` (native `@expo/ui` wheel/clock on touch, `InputDialog` on Electron) |
 | Brief success acknowledgement | `Toast` |
+
+Transient toasts remain visible above an active sheet or modal.
 
 `AppButton` and `IconButton` are the only button primitives. A specialist
 interactive surface may use `InteractivePressable`, but it must not recreate a
@@ -309,6 +315,10 @@ overlay.
 
 Value rows that open a name editor use a trailing directional chevron, not a
 pencil icon, matching other editable settings rows.
+
+Single-choice lists use a trailing `RadioIndicator` on every row and expose
+radio-group, radio, and checked semantics. A checkmark communicates completion,
+not mutually exclusive choice.
 
 Quiet destructive icon actions use a soft danger fill with a danger-coloured
 glyph; solid danger fills remain reserved for prominent destructive actions.
@@ -348,6 +358,10 @@ saved from the shared media viewer; the artwork is not general page decoration.
 Do not choose density from window width; choose it from the runtime.
 Embedded media previews fit the available message width and keep artwork
 bounded on wide conversation panes.
+Conversation media galleries keep compact square thumbnails and derive their
+column count from the available pane width instead of using a fixed grid.
+Custom-emoji grids keep artwork bounded and derive their column count from the
+available container width on both touch devices and Electron.
 Image framing and full-screen image viewing on Electron provide explicit zoom
 controls, pointer dragging while zoomed, and trackpad two-finger zooming and
 panning; essential actions must not depend on multi-touch gestures.
@@ -358,12 +372,17 @@ Reduce Motion is respected.
 At the responsive split threshold, tablets and Electron present a persistent
 primary pane and a detail pane using the same navigation state. Narrow windows
 show the normal single-stack presentation. An unselected detail pane shows only
-a quiet, centered prompt to select a chat, without branding. Resizing must not reset navigation,
-selection, drafts, or scroll state. Electron primary panes support pointer and
-keyboard resizing at the divider, bounded to keep both panes usable. The chosen
-width survives navigation, temporary switches to a narrow window, and app
-restarts. Electron restores window bounds and maximization on launch, keeping
-the window reachable when the available displays change.
+a quiet, centered prompt to select a chat, without branding. Resizing must not
+reset navigation, selection, drafts, or scroll state. Tablet primary panes
+support direct touch resizing at a thin divider with a compact centred grip and
+a 48-point touch target. Electron primary panes support pointer and keyboard
+resizing there. Double-tapping the divider restores its default position on
+both platforms; on tablets it also resumes responsive default sizing until the
+user adjusts the divider again. Both stay bounded to keep each pane usable.
+Each platform's preferred width survives navigation, temporary switches to a
+narrow window, and app restarts. Electron restores window bounds and
+maximization on launch, keeping the window reachable when the available
+displays change.
 Screenshot preview starts the Electron content canvas at 960x720, remains
 resizable, and restores the prior window geometry and resize behaviour on exit.
 
@@ -411,6 +430,11 @@ Only one native modal may be presented at a time. Close the current modal and
 start the next action from `onClosed`. Do not coordinate modal sequencing with
 delays guessed at call sites.
 
+Menus consume Android Back and Electron Escape while open, closing before
+route or page handling.
+With no menu open, Electron Escape cancels an active message reply before page
+handling.
+
 On Electron, short decisions use the shared confirmation dialog and small value
 entries use `InputDialog`; larger pickers and task flows remain sheets or pages.
 
@@ -422,8 +446,12 @@ input step. Browsing and picker steps do not summon the keyboard preemptively.
 On pushed screens, focus inputs with `useFocusAfterTransition` so the keyboard
 does not animate with the navigation transition. Modal-owned inputs may focus
 from the modal's supported presentation callback.
-Opening a conversation on Electron focuses its composer immediately; mobile
-conversation entry does not raise the software keyboard.
+Opening a conversation on Electron focuses its composer immediately; printable
+typing elsewhere in the conversation restores composer focus unless a shortcut,
+modal, or another text editor owns the event. Pasting files anywhere in the
+active conversation opens the attachment preview under the same ownership
+rules; ordinary text paste stays with the focused editor. Mobile conversation
+entry does not raise the software keyboard.
 
 Focused inputs stay visible above the software keyboard with breathing room.
 Full-page forms use `AppFormScrollView` to scroll the active field into view;
@@ -434,12 +462,17 @@ the page themselves.
 ## 11. States, copy, and accessibility
 
 Loading, empty, error, and disabled are distinct states.
+Profile avatars with a remote picture keep a quiet surface while loading and
+show their pubkey-derived gradient only if the picture fails. Without a picture,
+they show the gradient immediately.
 
 Notification controls show the effective app preference and OS permission together
 where permission can be queried. Otherwise, keep visible guidance to enable
 notifications in system settings and explain that system permission cannot be checked.
 When the OS denies permission, explain how to enable it in system settings and
 refresh the control when the user returns.
+Disabling new-message indicators hides unread counts, dots, dividers, arrival
+banners, and manual read/unread actions without disabling system notifications.
 
 Electron application updates require separate download and install
 confirmations. Declining either action must not start it implicitly later.
@@ -456,6 +489,9 @@ a previously declined update.
 
 Recent wallet activity includes pending transactions until they expire.
 Completed payments remain visible after their invoice expiry.
+Lightning payment flows always preserve access to the raw request, its QR code,
+and external-wallet handoff. A connected wallet may be the primary action but
+never removes these alternatives; connecting a wallet remains optional.
 
 User-facing copy is concise and ordinary. Avoid protocol jargon in `src/i18n/`.
 Say “public key”, “private key”, “message relay”, and “media server” rather than

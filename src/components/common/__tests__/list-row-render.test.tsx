@@ -199,4 +199,21 @@ describe('ListRow layout', () => {
       });
     }
   });
+
+  it('exposes checked radio semantics for a single-choice row', () => {
+    act(() => {
+      renderer = create(
+        <ListRow
+          title="Spam"
+          active
+          selectionMode="single"
+          onPress={jest.fn()}
+        />,
+      );
+    });
+
+    const row = renderer!.root.findByType(InteractivePressable);
+    expect(row.props.accessibilityRole).toBe('radio');
+    expect(row.props.accessibilityState).toEqual({ checked: true });
+  });
 });

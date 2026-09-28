@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
@@ -7,7 +7,7 @@ import { AppText } from '@/components/common/AppText';
 import { InteractionOverlay } from '@/components/common/InteractionOverlay';
 import { CustomEmojiImage } from '@/components/emoji/CustomEmojiImage';
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
-import { emojiSize, radius, spacing, useThemeColors } from '@/theme';
+import { emojiSize, messageLayout, radius, spacing, useThemeColors } from '@/theme';
 
 type Props = {
   reactions: ReactionAggregate[];
@@ -26,7 +26,7 @@ const REACTION_BADGE_ACTIVE_BORDER_WIDTH =
   process.env.EXPO_OS === 'android' ? 1 : StyleSheet.hairlineWidth;
 
 /** Quiet reaction badges below a message, aligned to the same logical edge. */
-export function ReactionsRow({
+function ReactionsRowBase({
   reactions,
   isSelfBubble,
   loadRemote = false,
@@ -63,7 +63,7 @@ export function ReactionsRow({
         flexWrap: expanded ? 'wrap' : 'nowrap',
         gap: spacing.xs,
         justifyContent: isSelfBubble ? 'flex-end' : 'flex-start',
-        marginBottom: spacing.xs,
+        marginTop: messageLayout.reactionGap,
         alignSelf: isSelfBubble ? 'flex-end' : 'flex-start',
       }}
     >
@@ -140,3 +140,29 @@ export function ReactionsRow({
     </View>
   );
 }
+
+function areReactionRowsEqual(a: Props, b: Props): boolean {
+  if (
+    a.isSelfBubble !== b.isSelfBubble ||
+    a.loadRemote !== b.loadRemote ||
+    a.reactions.length !== b.reactions.length
+  ) {
+    return false;
+  }
+  for (let index = 0; index < a.reactions.length; index += 1) {
+    const left = a.reactions[index];
+    const right = b.reactions[index];
+    if (
+      left.emoji !== right.emoji ||
+      left.customEmoji?.url !== right.customEmoji?.url ||
+      left.count !== right.count ||
+      left.selfReacted !== right.selfReacted
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Keep selection-mode updates out of unchanged reaction subtrees. */
+export const ReactionsRow = memo(ReactionsRowBase, areReactionRowsEqual);

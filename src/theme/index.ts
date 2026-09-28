@@ -15,6 +15,7 @@ export {
   contentWidth,
   density,
   desktopChrome,
+  mediaGrid,
   wideLayout,
 } from './layout';
 export { fontWeight, typography } from './typography';
@@ -195,6 +196,11 @@ export const spacing = {
   '3xl': 48,
 } as const;
 
+/** Optical chat spacing that is intentionally tighter than the global scale. */
+export const messageLayout = {
+  reactionGap: spacing.xs / 2,
+} as const;
+
 /** Shared outer alignment for every mode inside the full emoji picker. */
 export const emojiPickerLayout = {
   horizontalGutter: IS_ELECTRON ? spacing.sm : spacing.lg,
@@ -288,7 +294,7 @@ export const emojiSize = {
   /** Custom-emoji artwork in the composer's floating shortcode suggestion strip. */
   composerSuggestionImage: IS_ELECTRON ? 48 : 64,
   /** Custom-emoji image in touch picker and pack grids. */
-  composerPickerImage: 64,
+  composerPickerImage: 68,
   /** Custom-emoji thumbnail in a pack row, matching a conversation avatar. */
   listImage: 44,
   /** Bubble-free custom-emoji message image. */

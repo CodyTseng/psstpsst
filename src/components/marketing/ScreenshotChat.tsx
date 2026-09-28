@@ -69,6 +69,8 @@ function buildMessages(
       subject: null,
       tags: [],
       rumor,
+      deliveryStatus: message.own ? 'sent' : null,
+      deliveryError: null,
       sourceRelays: message.own ? null : [],
     };
   });
@@ -110,7 +112,11 @@ export function ScreenshotChat({ previewId }: { previewId: string | undefined })
                 onLoadOlder={NOOP}
                 onLoadNewer={NOOP}
                 hasMore={false}
+                loadingOlder={false}
+                loadingNewer={false}
                 hasMoreNewer={false}
+                oldestBoundary={null}
+                tailJumpVersion={0}
                 anchored={false}
                 windowLoaded
                 onFocusAnchor={NOOP}
@@ -124,6 +130,7 @@ export function ScreenshotChat({ previewId }: { previewId: string | undefined })
                 bottomInset={bottomInset}
                 topInset={topInset}
                 liveDataEnabled={false}
+                interactive={false}
               />
               <ChatComposerPanelDismissOverlay />
             </View>

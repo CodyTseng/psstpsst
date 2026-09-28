@@ -29,6 +29,7 @@ import { loadChatPageRuntime } from '@/components/chat/chat-page-runtime-loader'
 import { SearchBar, SEARCH_BAR_SCREEN_GUTTER } from '@/components/search/SearchBar';
 import { SEARCH_ACTIVATION_SHORTCUT_LABEL } from '@/components/search/search-shortcut';
 import { useMainInboxConversations, type ConversationWithLast } from '@/hooks/use-conversations';
+import { useMinuteClock } from '@/hooks/use-minute-clock';
 import { scheduleMessageTailWarm } from '@/services/conversation/message-tail-cache';
 import { useProfile } from '@/hooks/use-profile';
 import { useScrolled } from '@/hooks/use-scrolled';
@@ -46,12 +47,13 @@ import {
 import { dmService } from '@/services/dm/dm.service';
 import { getProximityEnabled } from '@/services/proximity/proximity-preferences';
 import { syncPersonalConfigs } from '@/services/relay/personal-configs.service';
-import { getDefaultWallet } from '@/services/wallet/wallet.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useComposerFileHandoffStore } from '@/stores/composer-file-handoff.store';
 import { useProximityStore } from '@/stores/proximity.store';
 import { useSyncPhase } from '@/stores/sync-status.store';
 import { useScreenshotPreviewStore } from '@/stores/screenshot-preview.store';
+import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
+import { useWalletConnectionHandoffStore } from '@/stores/wallet-connection-handoff.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { bottomBarHeight, headerHeight, spacing, uiDensity, useThemeColors } from '@/theme';
 
@@ -85,6 +87,7 @@ function RealConversations() {
     (state) => (accountPubkey != null && state.featureEnabledByAccount[accountPubkey]) === true,
   );
   const { conversations: items, loaded } = useMainInboxConversations(accountPubkey ?? '');
+  const unreadIndicatorsEnabled = useUnreadIndicatorsEnabled();
   const { conversationKey: activeConversationKey } = useWidePaneSelection();
   const { open: openInDetailPane, wide } = usePrimaryPaneNavigation();
   const startComposerFileHandoff = useComposerFileHandoffStore((state) => state.start);
@@ -145,6 +148,11 @@ function RealConversations() {
   // the next unread; it resets to the first whenever the tab regains focus.
   const unreadCursor = useRef(0);
   const focused = useIsFocused();
+  const currentMinute = useMinuteClock(focused);
+  const listExtraData = useMemo(
+    () => ({ activeConversationKey, currentMinute, unreadIndicatorsEnabled }),
+    [activeConversationKey, currentMinute, unreadIndicatorsEnabled],
+  );
   const navigation = useNavigation();
 
   // Native production bundles already contain the route bytecode, but module
@@ -262,10 +270,12 @@ function RealConversations() {
         return;
       }
       // Global indices of unread (non-muted) conversations, in list order.
-      const unreadIdxs = items.reduce<number[]>((acc, it, i) => {
-        if (it.conversation.unreadCount > 0 && !it.conversation.muted) acc.push(i);
-        return acc;
-      }, []);
+      const unreadIdxs = unreadIndicatorsEnabled
+        ? items.reduce<number[]>((acc, it, i) => {
+            if (it.conversation.unreadCount > 0 && !it.conversation.muted) acc.push(i);
+            return acc;
+          }, [])
+        : [];
       if (unreadIdxs.length === 0) {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });
         return;
@@ -296,7 +306,7 @@ function RealConversations() {
       onTabPress();
       onFocus();
     };
-  }, [navigation, items, searchActive, closeSearch, topClearance]);
+  }, [navigation, items, unreadIndicatorsEnabled, searchActive, closeSearch, topClearance]);
 
   useEffect(
     () => () => {
@@ -316,15 +326,21 @@ function RealConversations() {
     }
 
     setSearchActive(false);
+    if (result.kind === 'wallet') {
+      if (!accountPubkey) return;
+      const handoffId = useWalletConnectionHandoffStore.getState().start({
+        accountPubkey,
+        connectionString: result.connectionString,
+      });
+      openInDetailPane(`/wallet-add?handoff=${handoffId}`);
+      return;
+    }
+
     if (result.kind === 'chat') {
       openInDetailPane(`/profile/${encodeURIComponent(result.pubkey)}`);
       return;
     }
 
-    if (!accountPubkey || !(await getDefaultWallet(accountPubkey))) {
-      openInDetailPane('/wallet');
-      return;
-    }
     openInDetailPane(`/wallet-send?input=${encodeURIComponent(result.input)}`);
   }
 
@@ -407,7 +423,7 @@ function RealConversations() {
             <FlatList
               ref={listRef}
               data={items}
-              extraData={activeConversationKey}
+              extraData={listExtraData}
               // Fixed-height rows (+ a hairline separator) after the search
               // header, so we hand FlatList the geometry directly: no per-row
               // measurement, and scrollToIndex (jump-to-unread) lands exactly.
@@ -510,7 +526,8 @@ function RealConversations() {
                         : item.lastMessageSenderPubkey === accountPubkey
                     }
                     lastMessageAt={conv.lastMessageAt}
-                    unreadCount={conv.unreadCount}
+                    currentMinute={currentMinute}
+                    unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}
                     muted={conv.muted}
                     identityKind={conv.deliveryKind}
                     pinned={conv.pinned}
@@ -522,7 +539,7 @@ function RealConversations() {
                     onDropFiles={dropFilesIntoConversation}
                     onToggleMute={toggleConversationMute}
                     onTogglePin={toggleConversationPin}
-                    onToggleUnread={toggleConversationUnread}
+                    onToggleUnread={unreadIndicatorsEnabled ? toggleConversationUnread : undefined}
                     onDelete={deleteConversation}
                   />
                 );

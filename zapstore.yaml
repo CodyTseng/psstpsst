@@ -1,5 +1,5 @@
 repository: https://github.com/codytseng/psstpsst
-match: ^PsstPsst-[0-9]+\.[0-9]+\.[0-9]+-android\.apk$
+match: ^PsstPsst-android\.apk$
 name: PsstPsst
 tags:
     - messaging

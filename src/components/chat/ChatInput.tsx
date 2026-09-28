@@ -46,16 +46,16 @@ import { InteractivePressable as Pressable } from "@/components/common/Interacti
 import Plus from "lucide-react-native/icons/plus";
 import { CustomEmojiImage } from "@/components/emoji/CustomEmojiImage";
 import { useCustomEmojis } from "@/hooks/use-custom-emojis";
+import { useElectronComposerEscape } from '@/hooks/use-electron-composer-escape';
+import { useElectronComposerFilePaste } from '@/hooks/use-electron-composer-file-paste';
+import { useElectronComposerTypingFocus } from '@/hooks/use-electron-composer-typing-focus';
 import { useDirectionalIconStyle, useIsRTL } from "@/i18n/direction";
 import { classifyMessageSendFailure } from '@/lib/chat/message-send-error';
 import { impact } from "@/lib/haptics";
 import { getBottomChromeInset } from "@/lib/layout/bottom-chrome";
 import { normalizeBareNostrUris } from "@/lib/nostr/normalize-content";
 import type { CustomEmoji } from "@/lib/nostr/custom-emoji";
-import {
-  composerFilesFromClipboard,
-  type ComposerFile,
-} from '@/lib/attachments/composer-file';
+import type { ComposerFile } from '@/lib/attachments/composer-file';
 import { DESKTOP_OS, IS_ELECTRON } from "@/lib/platform";
 import {
   markChatComposerMounted,
@@ -96,7 +96,10 @@ import { ComposerEmojiPickerPanel } from './ComposerEmojiPickerPanel';
 import type { EmojiPickerPopoverAnchor } from './EmojiPickerSheet';
 import { QuotedReply } from "./QuotedReply";
 import { VoiceRecorderBar, type VoicePayload } from "./VoiceRecorderBar";
-import { shouldSendOnDesktopKeyPress } from './desktop-send-shortcut';
+import {
+  type DesktopTextInputKeyEvent,
+  shouldSendOnDesktopKeyPress,
+} from './desktop-send-shortcut';
 
 const LazyEmojiPickerSheet = lazy(() =>
   import('./EmojiPickerSheet').then((module) => ({ default: module.EmojiPickerSheet })),
@@ -107,8 +110,8 @@ type Props = {
   onSend: (text: string, customEmojis: CustomEmoji[]) => Promise<void> | void;
   /** Pick an attachment source from the inline tray; absent hides the `+`. */
   onPickAttachment?: (source: AttachmentSource) => void;
-  /** Electron-only file payloads pasted into the text field. Ordinary text
-   * paste continues through the browser's native TextInput behaviour. */
+  /** Electron-only file payloads pasted anywhere in the active conversation.
+   * Ordinary text paste stays with the focused editor. */
   onPasteFiles?: (files: ComposerFile[]) => void;
   /** Sources supported by this conversation transport. */
   attachmentSources?: readonly AttachmentSource[];
@@ -132,35 +135,15 @@ type Props = {
 
 type ComposerPanelMode = 'attachments' | 'emoji';
 
-type DesktopTextInputKeyEvent = NativeSyntheticEvent<TextInputKeyPressEventData> & {
-  key?: string;
-  metaKey?: boolean;
-  ctrlKey?: boolean;
-  shiftKey?: boolean;
-  altKey?: boolean;
-  isComposing?: boolean;
-  repeat?: boolean;
-  keyCode?: number;
-  nativeEvent: TextInputKeyPressEventData & {
-    metaKey?: boolean;
-    ctrlKey?: boolean;
-    shiftKey?: boolean;
-    altKey?: boolean;
-    isComposing?: boolean;
-    repeat?: boolean;
-    keyCode?: number;
-  };
-};
-
 // The text field auto-grows from one line up to this many lines, then scrolls.
 const INPUT_LINE_HEIGHT = typography.body.lineHeight;
 const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * 5;
 // Extra room the box needs when the reply quote sits above the text field
 // (two caption lines + the quote↔field gap).
 const REPLY_BLOCK_HEIGHT = 48;
-const COMPOSER_PANEL_MIN_HEIGHT = 380;
-const COMPOSER_PANEL_MAX_HEIGHT = 440;
-const COMPOSER_PANEL_SCREEN_RATIO = 0.48;
+const COMPOSER_PANEL_MIN_HEIGHT = 330;
+const COMPOSER_PANEL_MAX_HEIGHT = 350;
+const COMPOSER_PANEL_SCREEN_RATIO = 0.385;
 const COMPOSER_ACTION_SIZE = uiDensity.composerActionSize;
 const INPUT_ACTION_SIZE = spacing['2xl'];
 const INPUT_ACTION_INSET = spacing.xs;
@@ -230,7 +213,6 @@ export function ChatInput({
     [],
   );
   const inputRef = useRef<TextInput>(null);
-  const detachPasteListenerRef = useRef<(() => void) | null>(null);
   const attachmentButtonRef = useRef<View>(null);
   const emojiButtonRef = useRef<View>(null);
   const [desktopAttachmentAnchor, setDesktopAttachmentAnchor] = useState<{
@@ -241,8 +223,6 @@ export function ChatInput({
     useState<EmojiPickerPopoverAnchor | null>(null);
   const [desktopEmojiMounted, setDesktopEmojiMounted] = useState(false);
   const [desktopEmojiVisible, setDesktopEmojiVisible] = useState(false);
-  const pasteFilesRef = useRef(onPasteFiles);
-  pasteFilesRef.current = onPasteFiles;
   const accountPubkey = useActiveAccount((state) => state.activePubkey);
   const emojiCollection = useCustomEmojis(accountPubkey, liveDataEnabled);
   const customEmojiByShortcode = useMemo(() => {
@@ -293,34 +273,6 @@ export function ChatInput({
     if (!draftKey) return;
     return () => flushDraft(draftKey);
   }, [draftKey, flushDraft]);
-  useEffect(
-    () => () => {
-      detachPasteListenerRef.current?.();
-    },
-    [],
-  );
-
-  const setInputRef = useCallback((node: TextInput | null) => {
-    detachPasteListenerRef.current?.();
-    detachPasteListenerRef.current = null;
-    inputRef.current = node;
-    if (!IS_ELECTRON || !node) return;
-
-    const target = node as unknown as {
-      addEventListener?: (type: 'paste', listener: (event: Event) => void) => void;
-      removeEventListener?: (type: 'paste', listener: (event: Event) => void) => void;
-    };
-    if (!target.addEventListener || !target.removeEventListener) return;
-
-    const handlePaste = (event: Event) => {
-      const files = composerFilesFromClipboard(event);
-      if (files.length === 0 || !pasteFilesRef.current) return;
-      event.preventDefault();
-      pasteFilesRef.current(files);
-    };
-    target.addEventListener('paste', handlePaste);
-    detachPasteListenerRef.current = () => target.removeEventListener?.('paste', handlePaste);
-  }, []);
   useLayoutEffect(() => {
     // Electron conversations are keyboard-first. Focus on mount and whenever
     // navigation changes the active conversation without remounting this shell.
@@ -412,16 +364,10 @@ export function ChatInput({
   // The provider keeps this volatile state below the chat's data component, so
   // opening composer chrome never re-runs message queries or list derivations.
   const { open: trayOpen, setOpen: setTrayOpen } = useChatComposerPanel();
-  // Prepare the custom-emoji body just after the route transition releases live
-  // data. This avoids competing with navigation without leaving a fixed 400ms
-  // cold window in which a user's first tap has to build the grid.
-  useEffect(() => {
-    if (IS_ELECTRON || emojiMounted || trayOpen || !liveDataEnabled) return;
-    return scheduleComposerPanelWorkAfterPaint(() => setEmojiMounted(true));
-  }, [emojiMounted, liveDataEnabled, trayOpen]);
-  // Load the large Unicode catalog only after the default sticker panel has
-  // pre-mounted. This keeps both chat entry and the first picker animation off
-  // the catalog's module-evaluation path while making the later tab switch warm.
+  // Keep the heavy picker absent until its first real presentation. Its module
+  // is preloaded by the chat shell; mounting the complete hidden tree in every
+  // conversation adds entry and exit work even when the user never opens it.
+  // Load the large Unicode catalog after the first custom-picker presentation.
   useEffect(() => {
     if (IS_ELECTRON || !emojiMounted || trayOpen || !liveDataEnabled) return;
     return scheduleComposerPanelWorkAfterPaint(() => {
@@ -433,13 +379,22 @@ export function ChatInput({
     insets.bottom,
     attachmentSources.length,
   );
-  const emojiHeight = Math.min(
+  const fallbackEmojiHeight = Math.min(
     COMPOSER_PANEL_MAX_HEIGHT,
     Math.max(
       COMPOSER_PANEL_MIN_HEIGHT,
       Math.round(screenHeight * COMPOSER_PANEL_SCREEN_RATIO),
     ),
   );
+  const [emojiPanelSize, setEmojiPanelSize] = useState(() => ({
+    height: fallbackEmojiHeight,
+    screenHeight,
+    screenWidth,
+  }));
+  const emojiHeight =
+    emojiPanelSize.screenHeight === screenHeight && emojiPanelSize.screenWidth === screenWidth
+      ? emojiPanelSize.height
+      : fallbackEmojiHeight;
   const SAFE = getBottomChromeInset(insets.bottom);
   const attachmentOpen = trayOpen && panelMode === 'attachments';
   const emojiOpen = trayOpen && panelMode === 'emoji';
@@ -526,6 +481,8 @@ export function ChatInput({
         customPanelHeight.value = withTiming(SAFE, {
           duration: 320,
           easing: COMPOSER_PANEL_EASE,
+        }, (finished) => {
+          if (finished && mode === 'emoji') runOnJS(setEmojiMounted)(false);
         });
       }
     },
@@ -680,9 +637,17 @@ export function ChatInput({
       return;
     }
     if (draftKey) markChatPanelRequest(draftKey);
+    const visibleKeyboardHeight = keyboardHeight.get();
+    const nextEmojiHeight =
+      visibleKeyboardHeight > SAFE ? visibleKeyboardHeight : fallbackEmojiHeight;
     // The UI-thread transition starts immediately. If idle prewarming has not
     // finished, its completion mounts the heavy picker after the motion settles.
-    animatePanelTransition(true, 'emoji', emojiHeight);
+    setEmojiPanelSize({
+      height: nextEmojiHeight,
+      screenHeight,
+      screenWidth,
+    });
+    animatePanelTransition(true, 'emoji', nextEmojiHeight);
     setPanelMode('emoji');
     Keyboard.dismiss();
     setTrayOpen(true);
@@ -890,6 +855,20 @@ export function ChatInput({
     }
   }
 
+  useElectronComposerTypingFocus({
+    enabled: !disabled && !recording,
+    inputRef,
+  });
+  useElectronComposerFilePaste({
+    enabled: !disabled && !recording,
+    inputRef,
+    onPasteFiles,
+  });
+  useElectronComposerEscape({
+    active: replyTo != null,
+    onCancel: onCancelReply,
+  });
+
   if (recording && onSendVoice) {
     return (
       <VoiceRecorderBar
@@ -1067,7 +1046,7 @@ export function ChatInput({
             // field isn't focused then), so remounting costs nothing — `value`
             // lives in the parent and survives.
             key={enterToSend ? "enter-send" : "enter-newline"}
-            ref={setInputRef}
+            ref={inputRef}
             value={value}
             // While the suggestion card owns the arrow keys on Electron, the
             // field keeps focus but hides its caret.

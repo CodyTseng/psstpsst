@@ -40,6 +40,7 @@ type TitleTone = 'default' | 'danger' | 'accent';
 type ValueTone = 'default' | 'muted' | 'success' | 'warning' | 'danger';
 type ValuePlacement = 'trailing' | 'below';
 type PreserveColumn = 'title' | 'value';
+type SelectionMode = 'single';
 
 type Props = {
   /** An icon node — rendered as-is in a fixed-width slot (no background).
@@ -78,6 +79,9 @@ type Props = {
    * Uses the same muted surface as press feedback so selection settles without
    * a color flash after the route opens. */
   active?: boolean;
+  /** Gives a selectable row radio semantics. Pair with a trailing
+   * `RadioIndicator`; `active` supplies its checked state. */
+  selectionMode?: SelectionMode;
   /** Standalone only — ignored inside a `ListGroup`. `card` = lone bordered row;
    * `plain` = borderless sheet-option row; `embedded` = opaque content whose
    * parent owns the fixed card border/radius (for swipeable wrappers);
@@ -113,6 +117,7 @@ export function ListRow({
   loading,
   disabled,
   active = false,
+  selectionMode,
   variant = 'card',
 }: Props) {
   const c = useThemeColors();
@@ -151,13 +156,16 @@ export function ListRow({
     <Pressable
       onPress={onPress}
       accessible={onPress != null}
+      accessibilityRole={selectionMode === 'single' ? 'radio' : undefined}
       hoverFeedback={trailingOnHover == null ? undefined : false}
       onHoverIn={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(true)}
       onHoverOut={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(false)}
       pressFeedback="delayed"
       fallbackHoverOpacity={false}
       disabled={disabled || (!onPress && trailingOnHover == null)}
-      accessibilityState={{ selected: active }}
+      accessibilityState={
+        selectionMode === 'single' ? { checked: active } : { selected: active }
+      }
       style={{
         flexDirection: 'row',
         alignItems: 'center',

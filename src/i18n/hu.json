@@ -89,6 +89,22 @@
     "qr_save_failed": "Nem sikerült menteni. Próbáld újra.",
     "qr_save_permission": "A PsstPsstnek fénykép-hozzáférésre van szüksége a kártya mentéséhez."
   },
+  "report": {
+    "title": "Felhasználó jelentése",
+    "description": "Válaszd ki a legmegfelelőbb okot. A jelentések nyilvánosak, és bárki láthatja őket.",
+    "submit": "Jelentés elküldése",
+    "success": "Jelentés elküldve",
+    "failed": "Nem sikerült elküldeni a jelentést. Próbáld újra.",
+    "types": {
+      "nudity": "Meztelenség vagy szexuális tartalom",
+      "malware": "Kártevő",
+      "profanity": "Gyűlöletkeltő vagy sértő tartalom",
+      "illegal": "Illegális tartalom",
+      "spam": "Spam",
+      "impersonation": "Személyazonossággal való visszaélés",
+      "other": "Egyéb"
+    }
+  },
   "profile_edit": {
     "title": "Profil szerkesztése",
     "username": "Felhasználónév",
@@ -524,6 +540,8 @@
   "notifications": {
     "title": "Értesítések",
     "enable_label": "Értesítések engedélyezése",
+    "unread_indicators_label": "Új üzenetek jelzéseinek megjelenítése",
+    "unread_indicators_note": "Megjeleníti az olvasatlan számlálókat és pontokat, és lehetővé teszi a beszélgetések olvasottnak vagy olvasatlannak jelölését.",
     "show_sender": "Feladó nevének és profilképének mutatása",
     "show_message_content": "Üzenet tartalmának mutatása",
     "channel_name": "Üzenetek",
@@ -780,8 +798,8 @@
     "description": "Leírás",
     "description_placeholder": "Mire szolgál?",
     "direction": "Irány",
-    "empty_title": "Lightning-tárca kapcsolása",
-    "empty_hint": "Használd meglévő tárcádat a PsstPsstben fizetésekhez és fizetési kérelmekhez.",
+    "empty_title": "Lightning-fizetések",
+    "empty_hint": "Fizess egy tárcaalkalmazással, vagy kapcsolj tárcát a PsstPsstben történő fizetéshez és fizetési kérelmekhez.",
     "expires": "Lejárat",
     "expires_at": "Lejárat",
     "expires_in": "Lejár ennyi idő múlva:",
@@ -812,6 +830,9 @@
     "no_lightning_address_message": "{{name}} nem állított be Lightning-címet.",
     "no_qr_found": "Nem található QR-kód a képen.",
     "none": "Nincs",
+    "open_wallet_app": "Tárcaalkalmazás megnyitása",
+    "open_wallet_failed": "Nem sikerült kompatibilis tárcaalkalmazást megnyitni.",
+    "other_payment_options": "Egyéb fizetési lehetőségek",
     "pay": "Fizetés",
     "pay_to": "Fizetés neki:",
     "paid_at": "Kifizetve",

@@ -168,16 +168,34 @@ resume pending work independently of messaging readiness. See
 ### Sending
 
 1. The UI inserts the outgoing message optimistically.
-2. CPU-bound encryption/signing and synchronous native work are deferred to a
-   later macrotask so the optimistic frame can paint.
-3. The service creates the immutable rumor and any delivery-specific envelope
-   required by the selected transport.
-4. The rumor and durable outbox work are stored before network delivery.
+2. The service creates the immutable rumor and stores it with a durable,
+   account-scoped FIFO outbox job in one transaction. A job row means unfinished
+   work; completion deletes it.
+3. CPU-bound encryption/signing and synchronous native work are deferred to a
+   later macrotask so the optimistic frame can paint. One signed gift wrap per
+   recipient/job is persisted and reused across that job's relay targets and
+   crash recovery.
+4. Active job targets are normalized recipient/relay rows. Settling a target
+   updates its compact long-lived recipient copy and removes the target in the
+   same transaction. Explicit failures wait for a user retry; interrupted
+   pending jobs resume for the active account after startup, foreground, or
+   network recovery.
 5. Delivery status is derived from acknowledgements, not merely from a socket
    write succeeding.
 
-Retries reuse settled payloads where the protocol permits. A resend that must
-refresh timestamps creates and persists a replacement intentionally.
+Recipient relay attempts settle independently under a hard deadline. At least
+half of the recipient relays must acknowledge the message, with at least one
+acknowledgement required. Failed relays remain individually retryable even after
+the message is considered sent, and retries do not target relays that already
+acknowledged it.
+
+The message-level verdict is derived from all durable recipient relay targets,
+never from one job's subset. Successful relay results are terminal. A manual
+retry creates a fresh gift wrap; recovery of the same interrupted job reuses its
+persisted wrap. Self/sync copies are retained but excluded from ordinary
+delivery counts, except for note-to-self messages.
+See [relay message delivery](protocols/relay-message-delivery.md) for the queue
+and state-machine details.
 
 ### Receiving
 
@@ -211,6 +229,11 @@ refresh timestamps creates and persists a replacement intentionally.
 4. Duplicate events are ignored without duplicating conversation state.
 5. Successful inserts update the conversation read model and invalidate only
    relevant live queries.
+
+Message chronology uses the authenticated `(order_at, id)` cursor. A larger
+`order_at` is newer; equal timestamps follow the Nostr replaceable-event rule,
+where the lexicographically smaller event ID is newer. Pagination, unread
+watermarks, conversation heads, notifications, and media views share this rule.
 
 Mobile local notifications and badges use the project-owned native notification
 module behind the platform ports; no remote push SDK is linked. Notification
@@ -282,9 +305,25 @@ headless background work, and development inspection tolerate brief connection
 overlap. Detached resumable work must consume and log failures with their native
 cause; cursor progress remains unchanged so the next session can retry safely.
 
-- Message lists load a bounded newest window and page older rows incrementally.
+- Message history reads use indexed chronology cursors. Each database read
+  prefetches one bounded batch, then releases UI-sized slices to FlatList before
+  the reader reaches the edge. FlatList mounts variable-height rows in small
+  frame-spaced batches. Exposed data is append-only during ordinary history browsing,
+  while native virtualization bounds mounted rows. Scrolling toward newer rows
+  never removes list data or re-queries SQLite. Tail and anchored windows retain
+  their loaded pages across in-screen mode switches and release them only with
+  the conversation screen session. Anchored windows own independent older and
+  newer cursors; neither direction grows a query from the anchor.
+- Message rows carry only a coarse persisted delivery status. Compact,
+  account-scoped recipient copies hold the bounded per-relay detail and are
+  queried only while the message detail sheet is open. The UI does not infer
+  message state from outbox rows or session memory.
+  Reply targets outside a loaded window are batch-read by indexed ID with their
+  source history page and cached for the screen session. Scrolling must not
+  drive reply-target queries or React state updates.
 - Search returns identifiers and opens a small window around the target.
-- Reactions and reply targets are resolved only for the active window.
+- Reactions stay attached to retained message pages; database-only reply targets
+  resolve with the fetched source page and remain cached for the screen session.
 - Incoming messages are staged while the user reads older history and merged at
   the live tail.
 - List rows subscribe only to their own changing state.
@@ -459,9 +498,10 @@ wallet data, or URLs, and it leaves the device only through an explicit user
 export. Repeated failures favor a safe return to the Chats route over retrying
 the same broken route again.
 
-Wallet connections are non-custodial. NWC secrets stay in secure storage, and a
-payment requires system authentication or the account's wallet PIN immediately
-before the request is sent.
+Wallet connections are non-custodial. NWC connection strings pass between
+routes only through ephemeral memory, never URL parameters. Their secrets stay
+in secure storage, and a payment requires system authentication or the
+account's wallet PIN immediately before the request is sent.
 
 ## 13. Change rules
 

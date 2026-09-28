@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { signAndroid, signingMode } from './release-signing.mjs';
+import { androidSigningArguments, signAndroid, signingMode } from './release-signing.mjs';
 
 const credentials = {
   android: {
@@ -17,6 +17,15 @@ const credentials = {
     APPLE_ID: 'test@example.com', APPLE_APP_SPECIFIC_PASSWORD: 'test-password', APPLE_TEAM_ID: 'TESTTEAM01',
   },
 };
+
+test('Android signing uses F-Droid-compatible signature options', () => {
+  const args = androidSigningArguments('release.keystore', 'signed.apk', 'unsigned.apk', credentials.android);
+  assert.ok(args.includes('--alignment-preserved'));
+  assert.ok(args.indexOf('--alignment-preserved') < args.indexOf('--out'));
+  assert.deepEqual(args.slice(args.indexOf('--v1-signing-enabled'), args.indexOf('--v1-signing-enabled') + 2), [
+    '--v1-signing-enabled', 'false',
+  ]);
+});
 
 for (const platform of ['android', 'macos']) {
   test(`${platform}: missing credentials only allow branch testing`, () => {

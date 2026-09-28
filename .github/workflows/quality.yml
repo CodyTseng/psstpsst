@@ -42,5 +42,11 @@ jobs:
         run: npm run test:dependencies
       - name: App identity regressions
         run: node --test scripts/app-identities.test.mjs
+      - name: Release asset regressions
+        run: node --test scripts/release-assets.test.mjs
       - name: Electron signing regressions
         run: node --test scripts/electron-signing.test.mjs
+      - name: Android release signing regressions
+        run: |
+          node --test scripts/release-signing.test.mjs
+          node --test scripts/verify-fdroid-reproducibility.test.mjs

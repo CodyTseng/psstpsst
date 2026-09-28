@@ -62,6 +62,7 @@ import { usePendingAttachmentsStore } from '@/stores/pending-attachments.store';
 import { useReactionPrefsStore } from '@/stores/reaction-prefs.store';
 import { useDesktopLayoutStore } from '@/stores/desktop-layout.store';
 import { useThemeStore } from '@/stores/theme.store';
+import { useTouchLayoutStore } from '@/stores/touch-layout.store';
 import {
   SystemColorSchemeProvider,
   useEffectiveColorScheme,
@@ -185,7 +186,10 @@ function RootLayoutContent() {
   const bootPhase = useActiveAccount((s) => s.bootPhase);
   const switchingTo = useActiveAccount((s) => s.switchingTo);
   const desktopLayoutLoaded = useDesktopLayoutStore((s) => s.loaded);
-  const layoutReady = !IS_ELECTRON || desktopLayoutLoaded;
+  const touchLayoutLoaded = useTouchLayoutStore((s) => s.loaded);
+  const layoutReady = Platform.OS === 'web'
+    ? !IS_ELECTRON || desktopLayoutLoaded
+    : touchLayoutLoaded;
   const themeLoaded = useThemeStore((s) => s.loaded);
   const languageLoaded = useLanguageStore((s) => s.loaded);
   const direction = useLanguageDirection();
@@ -297,6 +301,7 @@ function RootLayoutContent() {
     const profile = createPerfSpan('app.startupPrefs');
     void Promise.all([
       ...(IS_ELECTRON ? [profileAsync(profile, 'desktopLayout.load', () => useDesktopLayoutStore.getState().load())] : []),
+      ...(Platform.OS !== 'web' ? [profileAsync(profile, 'touchLayout.load', () => useTouchLayoutStore.getState().load())] : []),
       profileAsync(profile, 'theme.load', () => useThemeStore.getState().load()),
       // Language preference — also gated (see below), so the first frame is already
       // in the chosen language rather than flashing the system default.

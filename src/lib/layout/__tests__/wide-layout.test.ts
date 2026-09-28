@@ -1,4 +1,9 @@
-import { clampDesktopPrimaryPaneWidth, getPrimaryPaneWidth, isWideLayoutSize } from '../wide-layout';
+import {
+  clampDesktopPrimaryPaneWidth,
+  clampTouchPrimaryPaneWidth,
+  getPrimaryPaneWidth,
+  isWideLayoutSize,
+} from '../wide-layout';
 
 describe('wide layout', () => {
   it('requires both window axes on mobile layouts', () => {
@@ -16,7 +21,7 @@ describe('wide layout', () => {
   it('keeps touch primary panes within their responsive bounds', () => {
     expect(getPrimaryPaneWidth(600, false)).toBe(280);
     expect(getPrimaryPaneWidth(1024, false)).toBe(410);
-    expect(getPrimaryPaneWidth(1400, false)).toBe(420);
+    expect(getPrimaryPaneWidth(1400, false)).toBe(560);
   });
 
   it('uses a fixed narrower primary pane on desktop', () => {
@@ -45,5 +50,19 @@ describe('desktop pane resizing', () => {
     expect(clampDesktopPrimaryPaneWidth(1000, 351.6)).toBe(352);
     expect(clampDesktopPrimaryPaneWidth(1000, NaN)).toBe(320);
     expect(clampDesktopPrimaryPaneWidth(1000, Infinity)).toBe(320);
+  });
+});
+
+describe('touch pane resizing', () => {
+  it('bounds the primary pane while preserving usable detail space', () => {
+    expect(clampTouchPrimaryPaneWidth(600, 100)).toBe(280);
+    expect(clampTouchPrimaryPaneWidth(600, 500)).toBe(320);
+    expect(clampTouchPrimaryPaneWidth(700, 500)).toBe(420);
+    expect(clampTouchPrimaryPaneWidth(1024, 360)).toBe(360);
+  });
+
+  it('uses the responsive default for invalid requested widths', () => {
+    expect(clampTouchPrimaryPaneWidth(1024, NaN)).toBe(410);
+    expect(clampTouchPrimaryPaneWidth(1400, Infinity)).toBe(560);
   });
 });

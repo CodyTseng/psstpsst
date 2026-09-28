@@ -40,6 +40,29 @@ import {
 } from './attachment-layout';
 import { AttachmentTransferProgress } from './AttachmentTransferProgress';
 
+function PlayingVideo({ uri, onError }: { uri: string; onError: () => void }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = false;
+  });
+  const { status } = useEvent(player, 'statusChange', { status: player.status });
+
+  useEffect(() => {
+    player.play();
+  }, [player]);
+  useEffect(() => {
+    if (status === 'error') onError();
+  }, [onError, status]);
+
+  return (
+    <VideoView
+      player={player}
+      style={{ width: '100%', height: '100%' }}
+      contentFit="contain"
+      nativeControls
+    />
+  );
+}
+
 function parseDim(dim?: string): { w: number; h: number } | null {
   const m = dim?.match(/^(\d+)x(\d+)$/);
   if (!m) return null;
@@ -53,13 +76,8 @@ function parseDim(dim?: string): { w: number; h: number } | null {
  * user taps play — then it's downloaded + decrypted to a local file and played
  * inline with native controls (`expo-video`).
  *
- * Crucially the on-disk file is handed to the player **only once the user starts
- * playback** (`started`), never on mount. `localUri` (resolved on mount) just
- * records that a copy is already downloaded so the tap skips the fetch — it is
- * NOT fed to `useVideoPlayer` until `started`. Otherwise the player would parse
- * every cached video the moment the conversation opens (wasted work across a
- * media-heavy thread, and a stream of AVFoundation track-load warnings for a
- * format it can't decode — all before the user even taps).
+ * The native player mounts only after the user starts playback. `localUri`
+ * records a cached download without allocating a player for every video row.
  *
  * Format is never pre-judged from the mime (codec support differs across
  * iOS/Android and grows over time): we let the player try, and only when it
@@ -93,28 +111,9 @@ export function AttachmentVideo({
   const [paused, setPaused] = useState(false);
   const [failKind, setFailKind] = useState<AttachmentErrorKind | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
   const downloadController = useRef<AbortController | null>(null);
   const pausedAllowIntegrityMismatch = useRef(false);
-
-  const source = started ? localUri : null;
-  const player = useVideoPlayer(source, (p) => {
-    p.loop = false;
-  });
-  // Watch the player's own verdict: 'error' means it couldn't decode the file we
-  // handed it — the signal (not the mime) that triggers plan B. Only meaningful
-  // once `started`, since the source is null before that.
-  const { status } = useEvent(player, 'statusChange', { status: player.status });
-  const playbackFailed = started && status === 'error';
-
-  // Start playback once the source is attached after a tap. Never on mount (the
-  // source is null until `started`), so a cached video doesn't auto-play.
-  const autoPlayRef = useRef(false);
-  useEffect(() => {
-    if (source && autoPlayRef.current && !playbackFailed) {
-      autoPlayRef.current = false;
-      player.play();
-    }
-  }, [source, player, playbackFailed]);
 
   // Resolve whether the blob is already downloaded (no network) so a tap can skip
   // the fetch. Records availability only — it does not start the player.
@@ -134,7 +133,6 @@ export function AttachmentVideo({
   async function load(allowIntegrityMismatch = false) {
     if (loading || started) return;
     pausedAllowIntegrityMismatch.current = allowIntegrityMismatch;
-    autoPlayRef.current = true;
     // Already on disk → just attach it to the player.
     if (localUri) {
       setPaused(false);
@@ -158,7 +156,6 @@ export function AttachmentVideo({
       setStarted(true);
     } catch (err) {
       if (downloadController.current !== controller) return;
-      autoPlayRef.current = false;
       if (isAbortError(err)) setPaused(true);
       else setFailKind(attachmentErrorKind(err));
     } finally {
@@ -171,7 +168,6 @@ export function AttachmentVideo({
 
   function pauseDownload() {
     downloadController.current?.abort();
-    autoPlayRef.current = false;
     setPaused(true);
     setLoading(false);
   }
@@ -282,13 +278,8 @@ export function AttachmentVideo({
               </View>
             )}
           </Pressable>
-        ) : started ? (
-          <VideoView
-            player={player}
-            style={{ width: '100%', height: '100%' }}
-            contentFit="contain"
-            nativeControls
-          />
+        ) : started && localUri ? (
+          <PlayingVideo uri={localUri} onError={() => setPlaybackFailed(true)} />
         ) : (
           <Pressable
             hoverFeedback={false}

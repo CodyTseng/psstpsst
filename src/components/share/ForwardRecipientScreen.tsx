@@ -27,6 +27,7 @@ type Props = {
   accountPubkey: string;
   title: string;
   preview: ReactNode;
+  topAction?: ReactNode;
   supportedDeliveryKinds: ReadonlySet<ConversationDeliveryKind>;
   sending: boolean;
   onConfirm: (targets: ShareTarget[]) => void;
@@ -42,6 +43,7 @@ export function ForwardRecipientScreen({
   accountPubkey,
   title,
   preview,
+  topAction,
   supportedDeliveryKinds,
   sending,
   onConfirm,
@@ -221,7 +223,14 @@ export function ForwardRecipientScreen({
               selectedIds={multiSelect ? selectedIds : undefined}
               selectProgress={selectProgress}
               header={
-                <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
+                <View
+                  style={{
+                    paddingHorizontal: spacing.lg,
+                    paddingVertical: spacing.md,
+                    gap: spacing.md,
+                  }}
+                >
+                  {topAction}
                   <AppButton
                     variant="secondary"
                     label={t('conversations.new_chat_action')}

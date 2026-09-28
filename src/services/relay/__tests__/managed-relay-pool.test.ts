@@ -9,11 +9,18 @@ import type {
 import { ManagedRelayPool } from '../managed-relay-pool';
 
 let mockAppState = 'active';
+let mockAppStateChange: (() => void) | undefined;
 let mockPulse: (() => void) | undefined;
 jest.mock('@/lib/platform', () => ({ IS_ANDROID: true }));
 jest.mock('@/platform', () => ({
   platform: {
-    appState: { currentState: () => mockAppState, addChangeListener: jest.fn(() => () => {}) },
+    appState: {
+      currentState: () => mockAppState,
+      addChangeListener: jest.fn((listener: () => void) => {
+        mockAppStateChange = listener;
+        return () => {};
+      }),
+    },
     backgroundMessaging: {
       isAvailable: () => true,
       addPulseListener: (listener: () => void) => { mockPulse = listener; return () => {}; },
@@ -33,6 +40,61 @@ describe('ManagedRelayPool', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  test('settles a publish whose connection promise never resolves', async () => {
+    const harness = createHarness();
+    jest.spyOn(harness.pool, 'ensureRelay').mockReturnValue(new Promise(() => {}));
+
+    const pending = harness.pool.publishToRelay({
+      url: RELAY_A,
+      event: eventAt('publish', 100),
+      timeoutMs: 1_000,
+    });
+    await jest.advanceTimersByTimeAsync(1_000);
+
+    await expect(pending).resolves.toEqual({
+      ok: false,
+      reason: 'cannot connect: connection timed out',
+    });
+    harness.pool.destroy();
+  });
+
+  test('settles a publish whose relay acknowledgement never resolves', async () => {
+    const harness = createHarness();
+    await harness.pool.ensureRelay(RELAY_A);
+    jest.spyOn(harness.relays[0], 'publish').mockReturnValue(new Promise(() => {}));
+
+    const pending = harness.pool.publishToRelay({
+      url: RELAY_A,
+      event: eventAt('publish', 100),
+      timeoutMs: 1_000,
+    });
+    await jest.advanceTimersByTimeAsync(1_000);
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'publish timed out' });
+    expect(harness.relays[0].connected).toBe(false);
+    harness.pool.destroy();
+  });
+
+  test('uses the native background pulse to settle a suspended publish timer', async () => {
+    const harness = createHarness();
+    await harness.pool.ensureRelay(RELAY_A);
+    jest.spyOn(harness.relays[0], 'publish').mockReturnValue(new Promise(() => {}));
+
+    const pending = harness.pool.publishToRelay({
+      url: RELAY_A,
+      event: eventAt('publish', 100),
+      timeoutMs: 1_000,
+    });
+    await flushPromises();
+    mockAppState = 'background';
+    mockAppStateChange!();
+    jest.setSystemTime(Date.now() + 1_000);
+    mockPulse!();
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'publish timed out' });
+    harness.pool.destroy();
   });
 
   test('requires fresh wire traffic and actual EOSE on every relay before skipping a poll', async () => {

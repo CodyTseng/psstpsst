@@ -7,12 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppButton } from '@/components/common/AppButton';
+import { ActionRow } from '@/components/common/ActionRow';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
+import { ExternalInvoicePayment } from '@/components/wallet/external-invoice-payment';
 import { WalletAmountDisplay } from '@/components/wallet/WalletAmountDisplay';
 import { WalletPaymentConfirmSheet } from '@/components/wallet/WalletPaymentConfirmSheet';
 import { WalletPaymentStatus, type WalletPaymentStatusValue } from '@/components/wallet/WalletPaymentStatus';
@@ -46,10 +47,12 @@ export default function WalletInvoiceScreen() {
     invoice?: string | string[];
     role?: string | string[];
     description?: string | string[];
+    external?: string | string[];
   }>();
   const invoiceInput = firstParam(params.invoice, 8_192);
   const role = firstParam(params.role, 16);
   const messageDescription = firstParam(params.description, 2_048);
+  const externalPaymentView = firstParam(params.external, 16) === '1';
   const isSender = role === 'sent';
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { wallets, loaded: walletLoaded } = useWallets(accountPubkey);
@@ -70,10 +73,14 @@ export default function WalletInvoiceScreen() {
         canVerifyPayment: walletLoaded ? !!wallet : true,
       })
     : null;
-  const payable =
+  const payableWithConnectedWallet =
+    !!parsedInvoice && !isSender && status === 'pending' && !!wallet && !externalPaymentView;
+  const payableWithExternalWallet =
     !!parsedInvoice &&
     !isSender &&
-    ((status === 'pending' && !!wallet) || (status === 'unknown' && walletLoaded && !wallet));
+    (status === 'pending' || status === 'unknown') &&
+    walletLoaded &&
+    (externalPaymentView || !wallet);
   const description =
     walletDescriptionText(transaction?.description) ??
     walletDescriptionText(parsedInvoice?.description) ??
@@ -127,17 +134,26 @@ export default function WalletInvoiceScreen() {
   }
 
   function handlePrimaryAction() {
-    if (!parsedInvoice) return;
-    if (!wallet) {
-      router.push('/wallet');
-      return;
-    }
+    if (!parsedInvoice || !wallet) return;
     if (paymentStatus !== 'idle') return;
     const paymentWallet =
       wallets.find((candidate) => candidate.id === paymentWalletId) ?? wallet;
     paymentWalletRef.current = paymentWallet;
     setPaymentWalletId(paymentWallet.id);
     setPaymentConfirmOpen(true);
+  }
+
+  function openExternalPaymentOptions() {
+    if (!parsedInvoice) return;
+    router.push({
+      pathname: '/wallet-invoice',
+      params: {
+        invoice: parsedInvoice.invoice,
+        role: 'received',
+        external: '1',
+        ...(description ? { description } : {}),
+      },
+    });
   }
 
   function selectPaymentWallet(walletId: string) {
@@ -225,6 +241,35 @@ export default function WalletInvoiceScreen() {
             </View>
 
             <ListGroup>
+              <CopyableDetailRow
+                title={t('wallet.invoice')}
+                value={parsedInvoice.invoice}
+                copied={copiedField === 'invoice'}
+                onCopy={() => void copy('invoice', parsedInvoice.invoice)}
+              />
+              {paymentHash ? (
+                <CopyableDetailRow
+                  title={t('wallet.payment_hash')}
+                  value={paymentHash}
+                  copied={copiedField === 'payment_hash'}
+                  onCopy={() => void copy('payment_hash', paymentHash)}
+                />
+              ) : null}
+              {preimage ? (
+                <CopyableDetailRow
+                  title={t('wallet.preimage')}
+                  value={preimage}
+                  copied={copiedField === 'preimage'}
+                  onCopy={() => void copy('preimage', preimage)}
+                />
+              ) : null}
+            </ListGroup>
+
+            {payableWithExternalWallet ? (
+              <ExternalInvoicePayment invoice={parsedInvoice.invoice} showPaymentRequest={false} />
+            ) : null}
+
+            <ListGroup>
               <ListRow
                 title={t('wallet.status')}
                 value={status ? statusLabel(t, status, isSender) : t('wallet.unknown')}
@@ -250,37 +295,14 @@ export default function WalletInvoiceScreen() {
               ) : null}
             </ListGroup>
 
-            <ListGroup>
-              <CopyableDetailRow
-                title={t('wallet.invoice')}
-                value={parsedInvoice.invoice}
-                copied={copiedField === 'invoice'}
-                onCopy={() => void copy('invoice', parsedInvoice.invoice)}
-              />
-              {paymentHash ? (
-                <CopyableDetailRow
-                  title={t('wallet.payment_hash')}
-                  value={paymentHash}
-                  copied={copiedField === 'payment_hash'}
-                  onCopy={() => void copy('payment_hash', paymentHash)}
-                />
-              ) : null}
-              {preimage ? (
-                <CopyableDetailRow
-                  title={t('wallet.preimage')}
-                  value={preimage}
-                  copied={copiedField === 'preimage'}
-                  onCopy={() => void copy('preimage', preimage)}
-                />
-              ) : null}
-            </ListGroup>
-
-            {payable ? (
-              <AppButton
-                label={wallet ? t('wallet.continue') : t('wallet.connect')}
-                variant="primary"
-                size="lg"
-                onPress={handlePrimaryAction}
+            {payableWithConnectedWallet ? (
+              <ActionRow
+                layout="vertical"
+                confirm={{ label: t('wallet.continue'), onPress: handlePrimaryAction }}
+                dismiss={{
+                  label: t('wallet.other_payment_options'),
+                  onPress: openExternalPaymentOptions,
+                }}
               />
             ) : null}
           </>
@@ -291,7 +313,10 @@ export default function WalletInvoiceScreen() {
           )}
         </ScrollView>
       )}
-      <ScreenHeader bordered={paymentStatus === 'idle' && scrolled} title={t('wallet.invoice')} />
+      <ScreenHeader
+        bordered={paymentStatus === 'idle' && scrolled}
+        title={t(externalPaymentView ? 'wallet.other_payment_options' : 'wallet.invoice')}
+      />
       <WalletPaymentConfirmSheet
         visible={paymentConfirmOpen}
         amount={displayAmount}

@@ -89,6 +89,22 @@
     "qr_save_failed": "無法儲存，請再試一次。",
     "qr_save_permission": "PsstPsst 需要照片存取權才能儲存名片。"
   },
+  "report": {
+    "title": "檢舉使用者",
+    "description": "請選擇最合適的原因。檢舉是公開的，任何人都可以看到。",
+    "submit": "提交檢舉",
+    "success": "檢舉已傳送",
+    "failed": "無法傳送檢舉，請再試一次。",
+    "types": {
+      "nudity": "裸露或色情內容",
+      "malware": "惡意軟體",
+      "profanity": "仇恨或侮辱性內容",
+      "illegal": "違法內容",
+      "spam": "垃圾訊息",
+      "impersonation": "冒充他人",
+      "other": "其他"
+    }
+  },
   "profile_edit": {
     "title": "編輯個人檔案",
     "username": "使用者名稱",
@@ -524,6 +540,8 @@
   "notifications": {
     "title": "通知",
     "enable_label": "允許通知",
+    "unread_indicators_label": "顯示新訊息標記",
+    "unread_indicators_note": "顯示未讀計數和提示點，並允許將對話標記為已讀或未讀。",
     "show_sender": "顯示使用者名稱和頭像",
     "show_message_content": "顯示訊息內容",
     "channel_name": "訊息",
@@ -780,8 +798,8 @@
     "description": "說明",
     "description_placeholder": "這筆款項的用途是什麼？",
     "direction": "方向",
-    "empty_title": "連接 Lightning 錢包",
-    "empty_hint": "在 PsstPsst 中使用現有錢包付款及請款。",
+    "empty_title": "Lightning 支付",
+    "empty_hint": "使用錢包應用程式付款，或連接錢包以便在 PsstPsst 中付款及請款。",
     "expires": "到期",
     "expires_at": "到期",
     "expires_in": "剩餘時間",
@@ -812,6 +830,9 @@
     "no_lightning_address_message": "{{name}} 尚未設定 Lightning 位址。",
     "no_qr_found": "此圖片中找不到 QR code。",
     "none": "無",
+    "open_wallet_app": "開啟錢包應用程式",
+    "open_wallet_failed": "無法開啟相容的錢包應用程式。",
+    "other_payment_options": "其他付款方式",
     "pay": "付款",
     "pay_to": "付款給",
     "paid_at": "付款時間",

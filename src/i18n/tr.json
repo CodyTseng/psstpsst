@@ -89,6 +89,22 @@
     "qr_save_failed": "Kaydedilemedi. Tekrar dene.",
     "qr_save_permission": "PsstPsst'in kartı kaydetmek için fotoğraflara erişmesi gerekiyor."
   },
+  "report": {
+    "title": "Kullanıcıyı bildir",
+    "description": "En uygun nedeni seçin. Bildirimler herkese açıktır ve herkes tarafından görülebilir.",
+    "submit": "Bildirimi gönder",
+    "success": "Bildirim gönderildi",
+    "failed": "Bildirim gönderilemedi. Tekrar deneyin.",
+    "types": {
+      "nudity": "Çıplaklık veya cinsel içerik",
+      "malware": "Kötü amaçlı yazılım",
+      "profanity": "Nefret dolu veya hakaret içeren içerik",
+      "illegal": "Yasa dışı içerik",
+      "spam": "Spam",
+      "impersonation": "Başkasının kimliğine bürünme",
+      "other": "Diğer"
+    }
+  },
   "profile_edit": {
     "title": "Profili düzenle",
     "username": "Kullanıcı adı",
@@ -524,6 +540,8 @@
   "notifications": {
     "title": "Bildirimler",
     "enable_label": "Bildirimlere izin ver",
+    "unread_indicators_label": "Yeni mesaj göstergelerini göster",
+    "unread_indicators_note": "Okunmamış mesaj sayılarını ve noktalarını gösterir, konuşmaları okundu veya okunmadı olarak işaretlemenizi sağlar.",
     "show_sender": "Gönderenin adını ve avatarını göster",
     "show_message_content": "Mesaj içeriğini göster",
     "channel_name": "Mesajlar",
@@ -780,8 +798,8 @@
     "description": "Açıklama",
     "description_placeholder": "Bu ne için?",
     "direction": "Yön",
-    "empty_title": "Lightning cüzdanı bağla",
-    "empty_hint": "Mevcut cüzdanını PsstPsst'te ödeme ve ödeme istekleri için kullan.",
+    "empty_title": "Lightning ödemeleri",
+    "empty_hint": "Bir cüzdan uygulamasıyla ödeme yap veya PsstPsst'te ödeme ve ödeme isteği için bir cüzdan bağla.",
     "expires": "Sona erer",
     "expires_at": "Sona erer",
     "expires_in": "Sona ermesine",
@@ -812,6 +830,9 @@
     "no_lightning_address_message": "{{name}} bir Lightning adresi ayarlamadı.",
     "no_qr_found": "Bu görselde QR kodu bulunamadı.",
     "none": "Yok",
+    "open_wallet_app": "Cüzdan uygulamasını aç",
+    "open_wallet_failed": "Uyumlu bir cüzdan uygulaması açılamadı.",
+    "other_payment_options": "Diğer ödeme seçenekleri",
     "pay": "Öde",
     "pay_to": "Şuna öde",
     "paid_at": "Ödendi",

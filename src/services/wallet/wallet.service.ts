@@ -2,7 +2,6 @@ import { and, asc, desc, eq } from 'drizzle-orm';
 import {
   finalizeEvent,
   nip04,
-  nip47,
   type Event,
   type EventTemplate,
 } from 'nostr-tools';
@@ -12,6 +11,7 @@ import { db } from '@/db/client';
 import { wallets, walletTransactions } from '@/db/schema';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { walletDescriptionText } from '@/lib/wallet/description';
+import { parseNwcConnectionString } from '@/lib/wallet/nwc';
 import { platform } from '@/platform';
 import { relayPool } from '@/services/relay/relay-pool';
 import { parseBolt11Invoice } from '@/services/wallet/bolt11';
@@ -605,11 +605,9 @@ export function validateWalletConnectionString(connectionString: string): void {
   parseWalletConnection(connectionString);
 }
 
-function parseWalletConnection(connectionString: string): ReturnType<typeof nip47.parseConnectionString> {
+function parseWalletConnection(connectionString: string): ReturnType<typeof parseNwcConnectionString> {
   try {
-    const parsed = nip47.parseConnectionString(connectionString.trim());
-    parsed.relays.map(normalizeRelayUrl);
-    return parsed;
+    return parseNwcConnectionString(connectionString);
   } catch {
     throw new WalletError('invalid_connection');
   }

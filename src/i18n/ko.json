@@ -89,6 +89,22 @@
     "qr_save_failed": "저장할 수 없습니다. 다시 시도하세요.",
     "qr_save_permission": "카드를 저장하려면 PsstPsst에 사진 접근 권한이 필요합니다."
   },
+  "report": {
+    "title": "사용자 신고",
+    "description": "가장 적절한 이유를 선택하세요. 신고는 공개되며 누구나 볼 수 있습니다.",
+    "submit": "신고 제출",
+    "success": "신고를 보냈습니다",
+    "failed": "신고를 보내지 못했습니다. 다시 시도하세요.",
+    "types": {
+      "nudity": "노출 또는 성적인 콘텐츠",
+      "malware": "악성 소프트웨어",
+      "profanity": "혐오 또는 모욕적인 콘텐츠",
+      "illegal": "불법 콘텐츠",
+      "spam": "스팸",
+      "impersonation": "사칭",
+      "other": "기타"
+    }
+  },
   "profile_edit": {
     "title": "프로필 편집",
     "username": "사용자 이름",
@@ -524,6 +540,8 @@
   "notifications": {
     "title": "알림",
     "enable_label": "알림 허용",
+    "unread_indicators_label": "새 메시지 표시 보기",
+    "unread_indicators_note": "읽지 않은 메시지 수와 점을 표시하고 대화를 읽음 또는 읽지 않음으로 표시할 수 있습니다.",
     "show_sender": "보낸 사람 이름과 아바타 표시",
     "show_message_content": "메시지 내용 표시",
     "channel_name": "메시지",
@@ -780,8 +798,8 @@
     "description": "설명",
     "description_placeholder": "어디에 사용하나요?",
     "direction": "방향",
-    "empty_title": "Lightning 지갑 연결",
-    "empty_hint": "기존 지갑을 PsstPsst의 결제와 결제 요청에 사용하세요.",
+    "empty_title": "Lightning 결제",
+    "empty_hint": "지갑 앱으로 결제하거나 PsstPsst에서 결제와 결제 요청에 사용할 지갑을 연결하세요.",
     "expires": "만료",
     "expires_at": "만료",
     "expires_in": "남은 시간",
@@ -812,6 +830,9 @@
     "no_lightning_address_message": "{{name}} 님이 Lightning 주소를 설정하지 않았습니다.",
     "no_qr_found": "이 이미지에서 QR 코드를 찾을 수 없습니다.",
     "none": "없음",
+    "open_wallet_app": "지갑 앱 열기",
+    "open_wallet_failed": "호환되는 지갑 앱을 열 수 없습니다.",
+    "other_payment_options": "다른 결제 방법",
     "pay": "결제",
     "pay_to": "결제 대상",
     "paid_at": "결제됨",

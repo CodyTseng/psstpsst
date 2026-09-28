@@ -89,6 +89,22 @@
     "qr_save_failed": "保存できませんでした。もう一度お試しください。",
     "qr_save_permission": "カードを保存するには PsstPsst に写真へのアクセスが必要です。"
   },
+  "report": {
+    "title": "ユーザーを通報",
+    "description": "最も適切な理由を選んでください。通報は公開され、誰でも見ることができます。",
+    "submit": "通報を送信",
+    "success": "通報を送信しました",
+    "failed": "通報を送信できませんでした。もう一度お試しください。",
+    "types": {
+      "nudity": "ヌードまたは性的なコンテンツ",
+      "malware": "マルウェア",
+      "profanity": "差別的または侮辱的なコンテンツ",
+      "illegal": "違法なコンテンツ",
+      "spam": "スパム",
+      "impersonation": "なりすまし",
+      "other": "その他"
+    }
+  },
   "profile_edit": {
     "title": "プロフィールを編集",
     "username": "ユーザー名",
@@ -524,6 +540,8 @@
   "notifications": {
     "title": "通知",
     "enable_label": "通知を許可",
+    "unread_indicators_label": "新着メッセージの印を表示",
+    "unread_indicators_note": "未読件数とドットを表示し、会話を既読または未読にできます。",
     "show_sender": "送信者名とアバターを表示",
     "show_message_content": "メッセージ内容を表示",
     "channel_name": "メッセージ",
@@ -780,8 +798,8 @@
     "description": "説明",
     "description_placeholder": "何のための支払いですか？",
     "direction": "方向",
-    "empty_title": "Lightning ウォレットを接続",
-    "empty_hint": "既存のウォレットを PsstPsst での支払いと支払いリクエストに使用できます。",
+    "empty_title": "Lightning 支払い",
+    "empty_hint": "ウォレットアプリで支払うか、PsstPsst での支払いと支払いリクエスト用にウォレットを接続します。",
     "expires": "有効期限",
     "expires_at": "有効期限",
     "expires_in": "有効期限まで",
@@ -812,6 +830,9 @@
     "no_lightning_address_message": "{{name}} は Lightning アドレスを設定していません。",
     "no_qr_found": "この画像にQRコードは見つかりませんでした。",
     "none": "なし",
+    "open_wallet_app": "ウォレットアプリを開く",
+    "open_wallet_failed": "対応するウォレットアプリを開けませんでした。",
+    "other_payment_options": "その他の支払い方法",
     "pay": "支払う",
     "pay_to": "支払い先",
     "paid_at": "支払い済み",

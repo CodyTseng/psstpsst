@@ -1,0 +1,2 @@
+# Keep this exact version and hash aligned with the F-Droid verification environment.
+apksigcopier==1.1.1 --hash=sha256:0834bb7d6f3607bb0994cf8cd2e26b8f0c9d481e13b75872e0fa9cec052e519b

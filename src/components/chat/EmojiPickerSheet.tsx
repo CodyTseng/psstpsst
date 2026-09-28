@@ -105,7 +105,7 @@ const OPEN_MS = 260;
 const CLOSE_MS = 200;
 const MODE_SWITCH_HEIGHT = 40;
 const MODE_SWITCH_CONTENT_GAP = spacing.xl;
-const POPOVER_WIDTH = 360;
+const POPOVER_WIDTH = 400;
 const POPOVER_HEIGHT = 400;
 const POPOVER_MIN_HEIGHT = 240;
 

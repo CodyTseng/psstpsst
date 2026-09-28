@@ -89,6 +89,22 @@
     "qr_save_failed": "Não foi possível guardar. Tente novamente.",
     "qr_save_permission": "O PsstPsst precisa de acesso às fotografias para guardar o cartão."
   },
+  "report": {
+    "title": "Denunciar utilizador",
+    "description": "Escolha o motivo mais adequado. As denúncias são públicas e podem ser vistas por qualquer pessoa.",
+    "submit": "Enviar denúncia",
+    "success": "Denúncia enviada",
+    "failed": "Não foi possível enviar a denúncia. Tente novamente.",
+    "types": {
+      "nudity": "Nudez ou conteúdo sexual",
+      "malware": "Software malicioso",
+      "profanity": "Conteúdo de ódio ou ofensivo",
+      "illegal": "Conteúdo ilegal",
+      "spam": "Spam",
+      "impersonation": "Usurpação de identidade",
+      "other": "Outro"
+    }
+  },
   "profile_edit": {
     "title": "Editar perfil",
     "username": "Nome de utilizador",
@@ -527,6 +543,8 @@
   "notifications": {
     "title": "Notificações",
     "enable_label": "Permitir notificações",
+    "unread_indicators_label": "Mostrar indicadores de novas mensagens",
+    "unread_indicators_note": "Mostra contagens e pontos de mensagens não lidas e permite marcar conversas como lidas ou não lidas.",
     "show_sender": "Mostrar nome e avatar do remetente",
     "show_message_content": "Mostrar conteúdo da mensagem",
     "channel_name": "Mensagens",
@@ -784,8 +802,8 @@
     "description": "Descrição",
     "description_placeholder": "Para que é?",
     "direction": "Direção",
-    "empty_title": "Ligar uma carteira Lightning",
-    "empty_hint": "Use a sua carteira existente no PsstPsst para pagamentos e pedidos de pagamento.",
+    "empty_title": "Pagamentos Lightning",
+    "empty_hint": "Pague com uma aplicação de carteira ou ligue uma para fazer pagamentos e pedidos de pagamento no PsstPsst.",
     "expires": "Expira",
     "expires_at": "Expira",
     "expires_in": "Expira em",
@@ -816,6 +834,9 @@
     "no_lightning_address_message": "{{name}} não definiu um endereço Lightning.",
     "no_qr_found": "Não foi encontrado nenhum código QR nessa imagem.",
     "none": "Nenhuma",
+    "open_wallet_app": "Abrir aplicação da carteira",
+    "open_wallet_failed": "Não foi possível abrir uma aplicação de carteira compatível.",
+    "other_payment_options": "Outras opções de pagamento",
     "pay": "Pagar",
     "pay_to": "Pagar a",
     "paid_at": "Pago",

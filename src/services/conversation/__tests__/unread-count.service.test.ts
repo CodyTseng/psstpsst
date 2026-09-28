@@ -45,6 +45,11 @@ jest.mock('@/services/unread-indicator.service', () => ({
   syncUnreadIndicator: (count: number) => mockSetCount(count),
 }));
 
+jest.mock('@/services/notifications/notification-prefs', () => ({
+  getUnreadIndicatorsEnabled: jest.fn(async () => true),
+  setUnreadIndicatorsEnabled: jest.fn(async () => {}),
+}));
+
 /** Whether the last aggregate query's where tree binds `value` as a SQL param
  * (drizzle wraps bound values in `Param` chunks, which carry an `encoder`). */
 function lastWhereBindsParam(value: unknown): boolean {
@@ -61,11 +66,13 @@ function lastWhereBindsParam(value: unknown): boolean {
 }
 
 describe('unread count service', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockTotal = 0;
     mockShouldNotifyNow = false;
     mockWhere = jest.fn(async () => [{ total: mockTotal }]);
     mockSelect.mockClear();
+    mockSetCount.mockClear();
+    await unreadCountService.setIndicatorsEnabled(true);
     mockSetCount.mockClear();
   });
 
@@ -110,6 +117,8 @@ describe('unread count service', () => {
     expect(unreadCountStore.getState()).toEqual({
       accountPubkey: 'active-account',
       count: 3,
+      indicatorsEnabled: true,
+      indicatorsResolved: true,
     });
     expect(mockSetCount).toHaveBeenLastCalledWith(3);
 
@@ -171,5 +180,15 @@ describe('unread count service', () => {
 
     expect(mockWhere).toHaveBeenCalledTimes(1);
     expect(lastWhereBindsParam('peer-a')).toBe(false);
+  });
+
+  it('clears platform chrome while retaining the internal count when indicators are off', async () => {
+    mockTotal = 7;
+    await refreshUnreadIndicator('active-account');
+    await unreadCountService.setIndicatorsEnabled(false);
+
+    expect(unreadCountStore.getState().count).toBe(7);
+    expect(unreadCountStore.getState().indicatorsEnabled).toBe(false);
+    expect(mockSetCount).toHaveBeenLastCalledWith(0);
   });
 });

@@ -5,6 +5,7 @@ import {
   getWarmedMessageTail,
   getWarmedMessageTailPresentation,
   mergeStoredMessageIntoTail,
+  replaceWarmedMessageTail,
   warmMessageTail,
 } from '../message-tail-cache';
 
@@ -25,6 +26,7 @@ type RawMessage = {
   subject: string | null;
   tags: string;
   rumor: string;
+  delivery_status: MessageRow['deliveryStatus'];
   source_relays: string | null;
 };
 
@@ -50,6 +52,7 @@ function rawMessageBase(id: string, conversationKey: string): RawMessage {
     subject: null,
     tags: '[]',
     rumor: '{}',
+    delivery_status: null,
     source_relays: null,
   };
 }
@@ -72,6 +75,8 @@ function messageRow(
     subject: null,
     tags: [],
     rumor: {} as MessageRow['rumor'],
+    deliveryStatus: null,
+    deliveryError: null,
     sourceRelays: null,
     ...overrides,
   };
@@ -123,6 +128,23 @@ describe('message tail cache', () => {
     ]);
   });
 
+  it('puts the smaller id first in a newest-first timestamp tie', async () => {
+    const conversationKey = 'merge-tie';
+    mockRawQuery.mockResolvedValueOnce([
+      rawMessage('id-m', conversationKey),
+      rawMessage('id-z', conversationKey),
+    ]);
+    await warmMessageTail('account', conversationKey);
+
+    mergeStoredMessageIntoTail('account', messageRow('id-a', conversationKey));
+
+    expect(getWarmedMessageTail('account', conversationKey)?.map((row) => row.id)).toEqual([
+      'id-a',
+      'id-m',
+      'id-z',
+    ]);
+  });
+
   it('skips rows older than a full window and trims inserts to the page size', async () => {
     const conversationKey = 'merge-window';
     mockRawQuery.mockResolvedValueOnce(
@@ -150,6 +172,22 @@ describe('message tail cache', () => {
     expect(ids?.[0]).toBe('fresh');
     expect(ids).toHaveLength(15);
     expect(ids).not.toContain('m14');
+  });
+
+  it('keeps only one tail page when a paginated live result refreshes the cache', () => {
+    const conversationKey = 'replace-window';
+    const rows = Array.from({ length: 30 }, (_, index) =>
+      messageRow(`m${index}`, conversationKey, { orderAt: 100 - index }),
+    );
+
+    replaceWarmedMessageTail('account', conversationKey, rows);
+
+    expect(getWarmedMessageTail('account', conversationKey)?.map((row) => row.id)).toEqual(
+      rows.slice(0, 15).map((row) => row.id),
+    );
+    expect(
+      getWarmedMessageTailPresentation('account', conversationKey)?.rowsNewestFirst,
+    ).toHaveLength(15);
   });
 
   it('ignores a message already in the window', async () => {

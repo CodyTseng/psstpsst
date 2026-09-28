@@ -15,6 +15,7 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 import { AppText } from '@/components/common/AppText';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { InteractionOverlay } from '@/components/common/InteractionOverlay';
+import { useMessageDelivery } from '@/hooks/use-message-deliveries';
 import { useLanguageDirection } from '@/i18n/direction';
 import { formatClock } from '@/lib/audio/voice';
 import { setStringAsync } from '@/lib/clipboard';
@@ -23,7 +24,7 @@ import { findFileMeta } from '@/lib/nostr/file-tags';
 import { formatDetailTimestamp } from '@/lib/time';
 import {
   deliveryCounts,
-  failedRelayRetryUrls,
+  retryableRelayUrls,
   surfacedRelays,
   useDelivery,
   type MessageDelivery,
@@ -33,6 +34,7 @@ import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 
 type Props = {
+  accountPubkey: string;
   /** Also the visibility key — the sheet is open while this is non-null. */
   rumorId: string | null;
   /** The message's full rumor — powers the time and the raw-JSON block. */
@@ -41,8 +43,6 @@ type Props = {
   isSelf: boolean;
   /** Relays this (incoming) message was received from. */
   sourceRelays?: string[] | null;
-  /** Persisted delivery (DB) — fallback when there's no live entry (self only). */
-  persistedDelivery?: MessageDelivery | null;
   /** The chat transport. Nearby messages never show relay-derived details. */
   transport?: 'relay' | 'proximity';
   /** Resend the message to the relays it failed on (self only). */
@@ -132,11 +132,11 @@ function SectionCaption({ children }: { children: string }) {
  * the raw rumor JSON (collapsed by default, with a copy button).
  */
 export function MessageDetailSheet({
+  accountPubkey,
   rumorId,
   rumor,
   isSelf,
   sourceRelays,
-  persistedDelivery,
   transport,
   onResend,
   onClose,
@@ -145,6 +145,7 @@ export function MessageDetailSheet({
   const c = useThemeColors();
   const direction = useLanguageDirection();
   const visible = rumorId != null;
+  const persistedDelivery = useMessageDelivery(accountPubkey, rumorId, visible && isSelf);
 
   // Retain the last shown data so the *exit* animation keeps painting the real
   // content. BottomSheet stays mounted while it slides out, but by then the
@@ -172,7 +173,10 @@ export function MessageDetailSheet({
   const snap = snapRef.current;
 
   const liveDelivery = useDelivery(snap?.rumorId ?? '');
-  const delivery = liveDelivery ?? snap?.persistedDelivery ?? null;
+  const delivery =
+    snap?.transport === 'proximity'
+      ? liveDelivery ?? snap.persistedDelivery ?? null
+      : snap?.persistedDelivery ?? null;
   const shownIsSelf = snap?.isSelf ?? false;
   const shownRumor = snap?.rumor ?? null;
   const relayList = snap?.sourceRelays ?? [];
@@ -182,10 +186,16 @@ export function MessageDetailSheet({
   const counts = delivery ? deliveryCounts(delivery) : { ok: 0, total: 0 };
   // The surfaced (recipient, non-self) relays — what "delivered to" shows.
   const rows = delivery ? surfacedRelays(delivery) : [];
-  const signing = delivery?.phase === 'signing';
+  const signing =
+    delivery?.phase === 'signing' ||
+    (delivery?.phase === 'queued' && delivery.copies.length === 0);
   const failed = delivery?.phase === 'failed';
-  const retryUrls = delivery ? failedRelayRetryUrls(delivery) : null;
-  const canResend = !!onResend && retryUrls !== null;
+  const retryUrls = delivery ? retryableRelayUrls(delivery) : null;
+  const hasNonSelfRecipient =
+    shownRumor?.tags.some(
+      (tag) => tag[0] === 'p' && tag[1] != null && tag[1] !== accountPubkey,
+    ) ?? false;
+  const canResend = !!onResend && hasNonSelfRecipient && retryUrls !== null;
 
   // Which failed relays have their reason expanded (tap the row to toggle).
   const [openReasons, setOpenReasons] = useState<Set<string>>(new Set());

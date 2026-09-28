@@ -327,10 +327,15 @@ export class ManagedRelayPool {
 
   async publishToRelay(options: ManagedPublishOptions): Promise<ManagedPublishOutcome> {
     const url = normalizeRelayUrl(options.url);
+    const timeoutMs = options.timeoutMs ?? CONNECTION_TIMEOUT_MS;
     let relay: AbstractRelay;
     try {
       relay = await abortable(
-        this.ensureRelay(url, options.timeoutMs ?? CONNECTION_TIMEOUT_MS),
+        withBackgroundTimeout(
+          this.ensureRelay(url, timeoutMs),
+          timeoutMs,
+          'connection timed out',
+        ),
         options.abort,
       );
     } catch (error) {
@@ -341,7 +346,11 @@ export class ManagedRelayPool {
     const attempt = async (): Promise<ManagedPublishOutcome> => {
       try {
         const message = await abortable(
-          this.publishWithTimeout(relay, options.event, options.timeoutMs),
+          withBackgroundTimeout(
+            this.publishWithTimeout(relay, options.event, options.timeoutMs),
+            timeoutMs,
+            'publish timed out',
+          ),
           options.abort,
         );
         return { ok: true, message };
@@ -1017,7 +1026,7 @@ export class ManagedRelayPool {
   }
 
   private authenticate(relay: AbstractRelay, signAuth: SignAuth): Promise<string> {
-    return withTimeout(
+    return withBackgroundTimeout(
       relay.auth(signAuth as (event: EventTemplate) => Promise<VerifiedEvent>),
       AUTH_TIMEOUT_MS,
       'auth timed out',
@@ -1244,16 +1253,23 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+/** A hard outer deadline for third-party relay promises. The managed pool cannot
+ * assume a library or socket promise will always settle. Android background
+ * messaging supplies the backup pulse when ordinary React Native timers pause. */
+function withBackgroundTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
   return new Promise((resolve, reject) => {
-    const handle = setTimeout(() => reject(new Error(message)), timeoutMs);
+    const cancel = scheduleBackgroundDeadline(() => reject(new Error(message)), timeoutMs);
     promise.then(
       (value) => {
-        clearTimeout(handle);
+        cancel();
         resolve(value);
       },
       (error) => {
-        clearTimeout(handle);
+        cancel();
         reject(error);
       },
     );

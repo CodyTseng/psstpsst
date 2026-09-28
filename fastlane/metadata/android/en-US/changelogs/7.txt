@@ -1,0 +1,6 @@
+PsstPsst 26.9.1
+
+- Pay Lightning requests with any compatible wallet app, without connecting one first.
+- More reliable message delivery after network interruptions.
+- Scan a wallet QR code to connect and switch wallets instantly.
+- Other small fixes and improvements.

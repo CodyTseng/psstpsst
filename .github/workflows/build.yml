@@ -23,9 +23,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+      - name: Verify Android build image
+        run: bash scripts/build-android-reproducible.sh --check-image
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24.15.0
           package-manager-cache: false
       - name: Verify third-party notices
         run: |
@@ -114,7 +116,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24.15.0
           cache: npm
 
       - name: Use stable Rust
@@ -180,18 +182,19 @@ jobs:
     name: Android APK
     needs: validate-version
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 180
     env:
       CI: '1'
       NODE_ENV: production
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
-          cache: npm
+          node-version: 24.15.0
+          package-manager-cache: false
 
       - uses: actions/setup-java@v6
         with:
@@ -203,25 +206,20 @@ jobs:
       - name: Install APK signing tools
         run: sdkmanager "build-tools;36.0.0"
 
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Install dependencies
-        run: npm ci --include=dev
-
-      - name: Generate Android project
-        run: npm run android:prebuild
-
-      - name: Check Android dependencies
+      - name: Build Android APK in the F-Droid environment
         shell: bash
+        env:
+          ANDROID_RELEASE_UNSIGNED: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '1' || '0' }}
         run: |
-          (cd android && ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
-          node scripts/check-android-dependencies.mjs android-dependencies.txt
-
-      - name: Build release APK
-        run: npm run android:build
-
-      - name: Verify APK scanner dependencies
-        run: python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release.apk
+          for attempt in 1 2; do
+            if bash scripts/build-android-reproducible.sh release/fdroid-build; then
+              exit 0
+            fi
+            if (( attempt == 2 )); then
+              exit 1
+            fi
+            echo "::warning::The isolated Android build failed; retrying once with a fresh container."
+          done
 
       - name: Sign and verify APK
         shell: bash
@@ -231,10 +229,9 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          version="$(node -p "require('./app.json').expo.version")"
           node scripts/release-signing.mjs sign-android \
-            android/app/build/outputs/apk/release/app-release.apk \
-            "release/PsstPsst-${version}-android.apk"
+            release/fdroid-build/app-release.apk \
+            release/PsstPsst-android.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
@@ -243,6 +240,31 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: release/*.apk
+
+      - name: Audit F-Droid signature compatibility (non-blocking)
+        id: fdroid_audit
+        if: env.HAS_ANDROID_SIGNING == 'true'
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          PYTHON: ${{ runner.temp }}/fdroid-verifier/bin/python
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fdroid-verifier"
+          "$PYTHON" -m pip install \
+            --disable-pip-version-check \
+            --no-deps \
+            --only-binary=:all: \
+            --require-hashes \
+            --retries 2 \
+            --timeout 20 \
+            --requirement scripts/fdroid-reproducibility-requirements.txt
+          node scripts/verify-fdroid-reproducibility.mjs \
+            release/fdroid-build/app-release.apk \
+            release/PsstPsst-android.apk
+
+      - name: Report F-Droid audit failure
+        if: always() && steps.fdroid_audit.outcome == 'failure'
+        run: echo "::warning::F-Droid signature audit failed; the APK was already uploaded and the release will continue."
 
   publish-draft:
     name: Publish draft release
@@ -268,37 +290,7 @@ jobs:
           path: release-assets
 
       - name: Validate release assets
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          required_assets=(
-            "PsstPsst-${version}-android.apk"
-            "latest-mac.yml"
-            "latest-x64.yml"
-            "latest-arm64.yml"
-            "latest-linux.yml"
-            "latest-linux-arm64.yml"
-            "PsstPsst-${version}-mac-arm64.dmg"
-            "PsstPsst-${version}-mac-arm64.zip"
-            "PsstPsst-${version}-win-x64.exe"
-            "PsstPsst-${version}-win-arm64.exe"
-            "PsstPsst-${version}-linux-x86_64.AppImage"
-            "PsstPsst-${version}-linux-amd64.deb"
-            "PsstPsst-${version}-linux-arm64.AppImage"
-            "PsstPsst-${version}-linux-arm64.deb"
-          )
-
-          missing_assets=0
-          for asset in "${required_assets[@]}"; do
-            if [[ ! -f "release-assets/$asset" ]]; then
-              echo "::error file=release-assets/$asset::Required release asset is missing."
-              missing_assets=1
-            fi
-          done
-
-          if (( missing_assets != 0 )); then
-            exit 1
-          fi
+        run: node scripts/release-assets.mjs release-assets
 
       - name: Create or update draft release
         shell: bash

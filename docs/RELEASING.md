@@ -97,15 +97,46 @@ runs only in `codytseng/psstpsst`, waits for all six builds, and requires all
 installers and desktop update metadata. Publish the draft manually after testing.
 Re-runs may replace draft assets but refuse to modify a published release.
 
-The preflight checks credential presence; invalid passwords, certificates, or
-Apple account permissions still fail at signing or notarization. A manual run
-on a tag requires signatures too, but does not create a release.
+Android release builds run in the pinned F-Droid buildserver image through
+`scripts/build-android-reproducible.sh`. The script copies the checkout to
+`/home/vagrant/build/chat.psstpsst.app`, fixes Node.js/npm and the Android native
+toolchain, sets `SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
+Android module from source. Tagged and credentialed runs produce an unsigned APK
+inside the container and apply the developer signature on the GitHub runner.
+The signer preserves the unsigned APK's ZIP alignment metadata and disables the
+legacy v1 scheme, which is unnecessary at minimum SDK 24, so F-Droid can copy
+the v2/v3 signature onto an independent rebuild. After uploading the normal APK
+artifact, CI performs that exact copy with checksum-pinned `apksigcopier` and
+verifies the result with `apksigner` as a non-blocking audit. An audit failure is
+reported as a warning but does not prevent the draft release. Manual runs
+without Android credentials retain the generated debug signature. The isolated
+Android build is retried once in a fresh container to tolerate a transient
+dependency-repository failure; both attempts use the same pinned inputs.
 
-To check changes to the signing helper, run
-`node --test scripts/release-signing.test.mjs`. With `ANDROID_HOME` pointing to
-an SDK containing platform 36 and Build Tools 36.0.0, the tests also create a
-temporary APK and disposable keys to exercise real signature replacement and
-verification. Without that SDK, the integration test is skipped.
+The preflight checks that the pinned Android build image is still available and
+checks credential presence. Invalid passwords, certificates, or Apple account
+permissions still fail at signing or notarization. A manual run on a tag
+requires signatures too, but does not create a release.
+
+To check changes to the signing and F-Droid verification helpers, run:
+
+```sh
+node --test scripts/release-signing.test.mjs
+node --test scripts/verify-fdroid-reproducibility.test.mjs
+```
+
+With `ANDROID_HOME` pointing to an SDK containing platform 36 and Build Tools
+36.0.0, the signing tests also create a temporary APK and disposable keys to
+exercise real signature replacement and verification. Without that SDK, the
+integration test is skipped. To reproduce the release audit locally, install the
+checksum-pinned verifier dependency and compare the unsigned and signed APKs:
+
+```sh
+python3 -m pip install --no-deps --only-binary=:all: --require-hashes \
+  --requirement scripts/fdroid-reproducibility-requirements.txt
+node scripts/verify-fdroid-reproducibility.mjs \
+  release/fdroid-build/app-release.apk release/PsstPsst-android.apk
+```
 
 ## Add GitHub configuration
 
@@ -231,7 +262,7 @@ npm run electron:package:signed -- --mac --arm64 --config.mac.notarize=false
 
 Signing alone does not provide Apple's notarization ticket for distribution.
 Both commands disable GitHub publishing. The output is
-`release/PsstPsst-<version>-mac-arm64.dmg` and `.zip`, with the application at
+`release/PsstPsst-mac-arm64.dmg` and `.zip`, with the application at
 `release/mac-arm64/PsstPsst.app`.
 
 **4. Verify the result.** Verify the signature for either build:
@@ -298,7 +329,7 @@ All four values must be nonempty. CI installs Android Build Tools 36.0.0,
 generates the native project from the checked-in Expo configuration, and runs
 Gradle's `:app:assembleRelease`. It then replaces the template's debug signature
 using `apksigner`, verifies the resulting APK, and uploads
-`PsstPsst-<version>-android.apk`. The decoded keystore exists only in a temporary
+`PsstPsst-android.apk`. The decoded keystore exists only in a temporary
 directory during signing and is removed afterward. Passwords are read from
 environment variables, not passed as literal command arguments.
 
@@ -377,6 +408,10 @@ Complete the toolchain, release-commit, signing-fingerprint, and reproducibility
 steps in [`fdroid/README.md`](../fdroid/README.md) before submitting it. Local
 YAML validation does not establish F-Droid build or inclusion readiness.
 
+The APK asset has a stable basename, while F-Droid's `Binaries` URL remains
+versioned by the `v%v` release-tag path. This gives each reproducibility check a
+version-specific URL without putting the version in the APK filename.
+
 For Zapstore, publish the signed APK as a public GitHub Release asset first.
 Install the official `zsp` publisher, then use `zsp publish --wizard`, selecting
 `https://github.com/codytseng/psstpsst` as the release source. Review the generated
@@ -394,9 +429,13 @@ must reproduce it and specify the upstream binary URL and allowed signing
 certificate fingerprint (`Binaries`/`binary` and `AllowedAPKSigningKeys`). F-Droid
 can then verify the APK without receiving the private key.
 
-This project has not yet passed that reproducibility check. Pin and verify the
-Expo template, Node/npm, JDK, Gradle/AGP, Android SDK/NDK, and native dependencies
-in the build recipe; a lockfile and successful CI build alone are insufficient.
+The `v0.2.2` APK did not pass that reproducibility check because it used Expo
+prebuilt modules while the F-Droid-compliant rebuild compiled them from source.
+Starting with the next release, GitHub uses the same pinned F-Droid container,
+source directory, source-built Expo modules, Node/npm, JDK, Gradle, SDK, NDK,
+CMake, and commit timestamp as the F-Droid recipe. A successful GitHub build is
+still not sufficient: compare the signed release candidate with an independent
+F-Droid recipe build before enabling a new build block.
 Mobile notifications use the project's local native module. CI rejects FCM and
 the removed notification SDK in Android's release runtime dependency tree.
 Android barcode scanning uses ZXing-C++ through the patched Expo Camera module.
@@ -429,6 +468,17 @@ Electron Builder writes artifacts to `release/`:
 - macOS: DMG and ZIP; local packaging disables certificate signing and notarization
 - Windows: x64/arm64 NSIS
 - Linux: x64/arm64 AppImage and DEB
+
+Public release asset basenames intentionally omit the application version. The
+Git tag identifies the release, while Electron update metadata retains the
+version and checksum. Keep these basenames stable so public download links can
+use GitHub's `/releases/latest/download/<asset>` form without changing for each
+release.
+
+Do not switch a public `latest/download` link until the latest published release
+contains the stable basename. Before rolling `latest` back to an older release,
+ensure that release also contains stable-name assets or the public links will
+return `404`.
 
 Linux x64 artifacts use the target's architecture spelling: `linux-x86_64.AppImage`
 and `linux-amd64.deb`. ARM64 artifacts use `linux-arm64` for both targets. Keep
@@ -568,10 +618,15 @@ and Expo's [local release guide](https://docs.expo.dev/guides/local-app-producti
 
 ## Version and release checklist
 
+Release versions use `YY.M.PATCH` calendar versioning: the two-digit year, the
+calendar month without a leading zero, and the release sequence within that
+month starting at 1. For example, the first release in September 2026 is
+`26.9.1` and its tag is `v26.9.1`.
+
 1. Set the root and desktop `package.json` versions and `app.json`'s
    `expo.version` to the same release version. Update the root and desktop
    workspace versions in the lockfile too. The tag must match exactly, for
-   example `v1.2.3`. Even a version-only lockfile edit changes the license input
+   example `v26.9.1`. Even a version-only lockfile edit changes the license input
    hash: run `npm run licenses:generate`, `npm run licenses:check`, and
    `npm run licenses:test`, then commit the generated changes before tagging.
 2. Increase `app.json`'s `expo.android.versionCode` for each Android update and
@@ -583,7 +638,9 @@ and Expo's [local release guide](https://docs.expo.dev/guides/local-app-producti
    run. Windows signing remains separately configured through `WIN_CSC_LINK`
    and `WIN_CSC_KEY_PASSWORD`.
 4. Run `Build Apps` manually on the reviewed branch. Check signature fingerprints,
-   macOS notarization, installation, and upgrades from the prior release.
+   macOS notarization, installation, and upgrades from the prior release. For an
+   F-Droid candidate, independently rebuild the Android APK from its final commit
+   and verify the signed candidate with F-Droid's signature-copy comparison.
 5. Push the matching version tag when ready. Review the resulting draft Release
    and publish it only when its installers and update metadata are complete.
 6. Publish the release to Zapstore and follow up on the F-Droid build recipe and

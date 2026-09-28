@@ -8,7 +8,7 @@ import { getMainInboxUnreadCount } from '@/services/conversation/unread-count.se
 import { dmService } from '@/services/dm/dm.service';
 import { receiveSessionStore } from '@/services/dm/receive-session';
 import { retryUnreadIndicator } from '@/services/unread-indicator.service';
-import { messageOrderAt } from '@/lib/nostr/message-order';
+import { isMessageOrderNewer, messageOrderAt } from '@/lib/nostr/message-order';
 
 import { registerBackgroundPoll, unregisterBackgroundPoll } from './background-task';
 import { filterNotifiableMessages } from './notification-filter';
@@ -19,6 +19,7 @@ import {
   getDndWindow,
   getNotificationContentPreferences,
   getNotificationsEnabled,
+  getUnreadIndicatorsEnabled,
   isDndActiveNow,
   setBatteryOptimizationPrompted,
   setDndWindow,
@@ -288,9 +289,9 @@ class NotificationService {
   private isNewer(candidate: Rumor, current: Rumor): boolean {
     const candidateOrder = messageOrderAt(candidate);
     const currentOrder = messageOrderAt(current);
-    return (
-      candidateOrder > currentOrder ||
-      (candidateOrder === currentOrder && candidate.id > current.id)
+    return isMessageOrderNewer(
+      { orderAt: candidateOrder, id: candidate.id },
+      { orderAt: currentOrder, id: current.id },
     );
   }
 
@@ -422,7 +423,7 @@ class NotificationService {
     if (IS_DEVELOPMENT_BUILD && process.env.NODE_ENV !== 'test') {
       console.info(`[notifications] Presenting aggregate; count = ${count}`);
     }
-    const badgeCount = accountPubkey
+    const badgeCount = accountPubkey && (await getUnreadIndicatorsEnabled())
       ? await getMainInboxUnreadCount(accountPubkey)
       : 0;
     if (epoch !== this.notificationEpoch || this.isReceiveBlocked(accountPubkey)) return;

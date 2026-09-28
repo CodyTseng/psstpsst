@@ -11,6 +11,7 @@ import { ChecklistMinimalistic as ListChecks } from '@solar-icons/react-native/c
 import { StickerSmileCircle2 as SmilePlus } from '@solar-icons/react-native/category/faces/Linear/StickerSmileCircle2';
 import {
   lazy,
+  startTransition,
   Suspense,
   useCallback,
   useEffect,
@@ -74,8 +75,7 @@ import { NearbyOutgoingRequestSheet } from '@/components/proximity/nearby-outgoi
 import type { messages as messagesSchema } from '@/db/schema';
 import { useConversation } from '@/hooks/use-conversations';
 import { useDmSupport } from '@/hooks/use-dm-support';
-import { useMessageDeliveries } from '@/hooks/use-message-deliveries';
-import { useMessages, useMessagesByIds } from '@/hooks/use-messages';
+import { useMessages } from '@/hooks/use-messages';
 import { useIsBlocked } from '@/hooks/use-blocked';
 import {
   getSessionCachedContact,
@@ -90,7 +90,7 @@ import { useWallets } from '@/hooks/use-wallets';
 import { setStringAsync } from '@/lib/clipboard';
 import { isAbortError } from '@/lib/async/abort';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
-import { IS_ANDROID, IS_ELECTRON } from '@/lib/platform';
+import { IS_ELECTRON } from '@/lib/platform';
 import {
   parseConversationRouteParams,
   routeHexIdParam,
@@ -113,6 +113,7 @@ import {
   type CustomEmoji,
 } from '@/lib/nostr/custom-emoji';
 import { nearbyFileUploadService } from '@/services/files/nearby-file-upload.service';
+import type { MessageDelivery } from '@/stores/delivery-status.store';
 import {
   attachmentTransferKey,
   attachmentTransferStore,
@@ -142,7 +143,6 @@ import {
   nextRumorTimestamp,
   rumorTimestampFromOrderAt,
 } from '@/services/dm/rumor-clock';
-import { loadEncryptionKeypair } from '@/services/dm/encryption-key.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useComposerFileHandoffStore } from '@/stores/composer-file-handoff.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
@@ -160,6 +160,7 @@ import {
 } from '@/services/proximity/proximity-identity.service';
 import { useProximityStore, type NearbyConnectionFailure } from '@/stores/proximity.store';
 import { showToast } from '@/stores/toast.store';
+import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
 import {
   conversationAttachmentSources,
   conversationSupportsContent,
@@ -296,8 +297,15 @@ export default function ChatPageRuntime() {
   const focused = useIsFocused();
   const { width, height } = useWindowDimensions();
   const wide = isWideLayoutSize(width, height);
+  // The custom wide navigator renders only the active detail descriptor, but
+  // React Navigation can report that descriptor as unfocused while the nested
+  // primary tabs retain focus. A rendered wide detail is therefore active even
+  // when useIsFocused() is false; otherwise chat data stops at the 15-row warm
+  // cache until the window collapses back to the native stack.
+  const routeActive = focused || wide;
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const unreadIndicatorsEnabled = useUnreadIndicatorsEnabled();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const exitSelection = useCallback(() => {
@@ -465,6 +473,7 @@ export default function ChatPageRuntime() {
   // ownership reads are the exception: they start immediately but do not block
   // the optimistic composer. Anchored opens also enable live data immediately.
   const [liveDataReady, setLiveDataReady] = useState(routeHexIdParam(params.focus) !== null);
+  const [secondaryDataReady, setSecondaryDataReady] = useState(false);
   const proximityConnectionStatus = useProximityStore(
     (state) => state.peers[conversationKey]?.connectionStatus ?? 'disconnected',
   );
@@ -536,10 +545,8 @@ export default function ChatPageRuntime() {
   useEffect(() => {
     if (!liveDataReady) return;
     const idleHandle = requestIdleCallback(
-      () => {
-        void import('@/components/chat/EmojiPickerSheet');
-      },
-      { timeout: 1000 },
+      () => setSecondaryDataReady(true),
+      { timeout: 600 },
     );
     return () => cancelIdleCallback(idleHandle);
   }, [liveDataReady]);
@@ -662,7 +669,7 @@ export default function ChatPageRuntime() {
         <ChatComposerPanelProvider>
           <ChatComposerPanelBackHandler />
           <ChatSelectionCancelHandler active={selectionMode} onCancel={exitSelection} />
-          {liveDataReady && isRelationshipEligible ? (
+          {liveDataReady && routeActive && isRelationshipEligible ? (
             <ChatRelationshipLiveSync
               key={relationshipKey}
               accountPubkey={accountPubkey}
@@ -712,6 +719,9 @@ export default function ChatPageRuntime() {
                   topInset={contentTopInset}
                   topOccluderRef={topNoticeRef}
                   liveDataReady={liveDataReady}
+                  secondaryDataReady={secondaryDataReady}
+                  routeActive={routeActive}
+                  unreadIndicatorsEnabled={unreadIndicatorsEnabled}
                   manualReconnectPending={manualReconnectPending}
                   composerControllerRef={composerControllerRef}
                   onComposerModelChange={handleComposerModelChange}
@@ -725,7 +735,7 @@ export default function ChatPageRuntime() {
             composerModel.mode === 'input' ? (
               <ChatInput
                 draftKey={conversationKey}
-                liveDataEnabled={liveDataReady}
+                liveDataEnabled={secondaryDataReady && routeActive}
                 disabled={composerModel.disabled}
                 onSend={sendFromComposer}
                 onPickAttachment={
@@ -748,28 +758,28 @@ export default function ChatPageRuntime() {
         </ChatComposerPanelProvider>
         {/* Keep the blur after the dynamic list in render order. Expo BlurView
             otherwise may not refresh content mounted after it. */}
-        {selectionMode ? (
-          <SelectionHeader count={selectedIds.size} onCancel={exitSelection} />
-        ) : (
-          <ChatHeader
-            counterpartyPubkey={conversationKey || null}
-            fallbackName={route?.name}
-            proximityConnectionStatus={
-              isProximity ? proximityConnectionStatus : undefined
-            }
-            proximityNickname={persistedProximityPeer?.nickname}
-            proximityDisplayName={persistedProximityPeer?.displayName}
-            identityKind={isProximity ? 'proximity' : 'relay'}
-            liveDataEnabled={liveDataReady}
-          />
-        )}
-        {liveDataReady && focused && !wide && !selectionMode ? (
-          <IncomingMessageBanner
-            key={conversationKey}
-            accountPubkey={accountPubkey}
-            activeConversationKey={conversationKey}
-          />
-        ) : null}
+          {selectionMode ? (
+            <SelectionHeader count={selectedIds.size} onCancel={exitSelection} />
+          ) : (
+            <ChatHeader
+              counterpartyPubkey={conversationKey || null}
+              fallbackName={route?.name}
+              proximityConnectionStatus={
+                isProximity ? proximityConnectionStatus : undefined
+              }
+              proximityNickname={persistedProximityPeer?.nickname}
+              proximityDisplayName={persistedProximityPeer?.displayName}
+              identityKind={isProximity ? 'proximity' : 'relay'}
+              liveDataEnabled={secondaryDataReady && routeActive}
+            />
+          )}
+          {unreadIndicatorsEnabled && liveDataReady && routeActive && !wide && !selectionMode ? (
+            <IncomingMessageBanner
+              key={conversationKey}
+              accountPubkey={accountPubkey}
+              activeConversationKey={conversationKey}
+            />
+          ) : null}
       </ChatFileDropZone>
     </AppScreen>
   );
@@ -788,6 +798,9 @@ type ChatPageContentProps = {
   topInset: number;
   topOccluderRef: MutableRefObject<View | null>;
   liveDataReady: boolean;
+  secondaryDataReady: boolean;
+  routeActive: boolean;
+  unreadIndicatorsEnabled: boolean;
   manualReconnectPending: boolean;
   composerControllerRef: MutableRefObject<ChatComposerController | null>;
   onComposerModelChange: (model: ChatComposerModel) => void;
@@ -808,6 +821,9 @@ function ChatPageContent({
   topInset,
   topOccluderRef,
   liveDataReady,
+  secondaryDataReady,
+  routeActive,
+  unreadIndicatorsEnabled,
   manualReconnectPending,
   composerControllerRef,
   onComposerModelChange,
@@ -839,12 +855,15 @@ function ChatPageContent({
   const route = parseConversationRouteParams(params);
   const conversationKey = route?.key ?? '';
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
-  const selfProfile = useProfile(accountPubkey, liveDataReady);
-  const { wallets } = useWallets(accountPubkey, liveDataReady);
+  const selfProfile = useProfile(accountPubkey, secondaryDataReady && routeActive);
+  const { wallets } = useWallets(accountPubkey, secondaryDataReady && routeActive);
   const hasConnectedWallet = wallets.some((wallet) => wallet.accountPubkey === accountPubkey);
   const paymentRequestAvailable =
     hasConnectedWallet || !!(selfProfile?.lud16 || selfProfile?.lud06);
-  const emojiCollection = useCustomEmojis(accountPubkey, liveDataReady);
+  const emojiCollection = useCustomEmojis(
+    accountPubkey,
+    secondaryDataReady && routeActive,
+  );
   const ownedEmojiPacks = useMemo(
     () =>
       accountPubkey
@@ -859,7 +878,7 @@ function ChatPageContent({
   const { conversation, loaded: conversationLoaded } = useConversation(
     accountPubkey ?? '',
     conversationKey,
-    liveDataReady || routeIsProximity,
+    routeActive && (liveDataReady || routeIsProximity),
   );
   const isProximity =
     routeIsProximity || conversation?.deliveryKind === 'proximity';
@@ -897,7 +916,7 @@ function ChatPageContent({
   );
   const { identity: liveProximityIdentity } = useProximityIdentity(
     accountPubkey,
-    liveDataReady || isProximity,
+    routeActive && (liveDataReady || isProximity),
   );
   // The nearby service and inbox live query both warm this account-scoped
   // session cache. Reading it synchronously prevents the first message paint
@@ -935,22 +954,26 @@ function ChatPageContent({
     reactionsByMessageId,
     presentationsByMessageId,
     bubbleRenderItemsById,
+    replyTargetsById: referencedById,
     loadOlder,
     loadNewer,
     hasMore,
+    loadingOlder,
+    loadingNewer,
     hasMoreNewer,
+    oldestBoundary,
+    tailJumpVersion,
     anchored,
     windowLoaded,
     focusAnchor,
-    jumpToTail,
+    jumpToTail: resetMessageWindowToTail,
   } = useMessages(
     accountPubkey ?? '',
     conversationKey,
-    liveDataReady,
+    liveDataReady && routeActive,
     messageSelfPubkey ?? '',
     isProximity,
   );
-
   // A search result deep in history: centre the window on it (once per focus
   // id), and remember the id locally so MessageList scrolls + flashes it once
   // the anchored window has loaded it. Initialised synchronously from the param
@@ -960,6 +983,10 @@ function ChatPageContent({
   const [focusMessageId, setFocusMessageId] = useState<string | undefined>(() =>
     routeHexIdParam(params.focus) ?? undefined,
   );
+  const jumpToTail = useCallback(() => {
+    setFocusMessageId(undefined);
+    resetMessageWindowToTail();
+  }, [resetMessageWindowToTail]);
   const focusAppliedRef = useRef<string | null>(null);
   useEffect(() => {
     const id = routeHexIdParam(params.focus) ?? undefined;
@@ -974,21 +1001,10 @@ function ChatPageContent({
       focusAnchor({ id, orderAt });
     }
   }, [params.focus, params.focusOrderAt, params.focusAt, focusAnchor]);
-  const messageIdList = useMemo(() => messages.map((m) => m.id), [messages]);
-  const deliveriesByMessageId = useMessageDeliveries(messageIdList, liveDataReady);
-
-  // Reply targets that fall outside the loaded window — fetched by id so the
-  // reply preview still resolves (the message is in the local DB, just not on
-  // this page).
-  const replyTargetIds = useMemo(() => {
-    const loaded = new Set(messageIdList);
-    const out = new Set<string>();
-    for (const m of messages) {
-      if (m.replyToId && !loaded.has(m.replyToId)) out.add(m.replyToId);
-    }
-    return Array.from(out);
-  }, [messages, messageIdList]);
-  const referencedById = useMessagesByIds(accountPubkey ?? '', replyTargetIds, liveDataReady);
+  const loadedMessageIds = useMemo(
+    () => new Set(messages.map((message) => message.id)),
+    [messages],
+  );
 
   // Optimistic text bubbles: rendered the instant Send is tapped, before the
   // rumor is written to the DB and round-tripped through the live query — so a
@@ -1015,15 +1031,14 @@ function ChatPageContent({
   // [text · time · status] shape as the real bubble that replaces them — the
   // handoff is then seamless (no width change from a missing status glyph).
   const deliveriesForDisplay = useMemo(() => {
-    if (visibleOptimistic.length === 0) return deliveriesByMessageId;
-    const m: typeof deliveriesByMessageId = { ...deliveriesByMessageId };
+    const m: Record<string, MessageDelivery> = {};
     for (const o of visibleOptimistic) {
       m[o.id] = isProximity
         ? { rumorId: o.id, phase: 'queued', transport: 'proximity', copies: [] }
         : { rumorId: o.id, phase: 'signing', copies: [] };
     }
     return m;
-  }, [deliveriesByMessageId, visibleOptimistic, isProximity]);
+  }, [visibleOptimistic, isProximity]);
 
   // Drop optimistic rows once their real DB row has landed; reset on conv change.
   useEffect(() => {
@@ -1071,7 +1086,6 @@ function ChatPageContent({
     bubble: LiftedBubble;
     contentTop?: number;
     contentBottom?: number;
-    preserveKeyboard: boolean;
   } | null>(null);
   // The message-list viewport (between the header and the input). Measured on
   // long-press so the action menu clips its lifted copy to where the bubble is
@@ -1123,8 +1137,9 @@ function ChatPageContent({
     emoji: CustomEmoji;
     coordinate?: string;
   } | null>(null);
+  const restoreKeyboardAfterMenuRef = useRef(false);
 
-  const messageIds = useMemo(() => new Set(messageIdList), [messageIdList]);
+  const messageIds = loadedMessageIds;
 
   useEffect(() => {
     if (
@@ -1205,15 +1220,18 @@ function ChatPageContent({
     onFileDropEnabledChange(fileDropEnabled);
   }, [fileDropEnabled, onFileDropEnabledChange]);
 
-  const replyingToSenderProfile = useProfile(replyingTo?.senderPubkey ?? null, liveDataReady);
+  const replyingToSenderProfile = useProfile(
+    replyingTo?.senderPubkey ?? null,
+    secondaryDataReady && routeActive,
+  );
   const replyingToSenderContact = useContact(
     accountPubkey ?? '',
     replyingTo?.senderPubkey ?? '',
-    liveDataReady,
+    secondaryDataReady && routeActive,
   );
 
   useEffect(() => {
-    if (!liveDataReady) return;
+    if (!secondaryDataReady || !routeActive) return;
     if (isProximity) return;
     if (!conversationKey) return;
     // Open the chat → subscribe to counterparties' encryption keys and prefetch
@@ -1221,10 +1239,10 @@ function ChatPageContent({
     const unsub = encryptionKeyWatcher.watch([conversationKey]);
     dmService.prefetchCounterpartyRelays([conversationKey]);
     return unsub;
-  }, [conversationKey, isProximity, liveDataReady]);
+  }, [conversationKey, isProximity, routeActive, secondaryDataReady]);
 
   useEffect(() => {
-    if (!liveDataReady) return;
+    if (!liveDataReady || !routeActive) return;
     if (!isProximity || !accountPubkey || proximityHistoryReadOnly) return;
     let release: (() => void) | null = null;
     let cancelled = false;
@@ -1239,7 +1257,7 @@ function ChatPageContent({
       cancelled = true;
       release?.();
     };
-  }, [accountPubkey, conversationKey, isProximity, liveDataReady, proximityHistoryReadOnly]);
+  }, [accountPubkey, conversationKey, isProximity, liveDataReady, proximityHistoryReadOnly, routeActive]);
 
   // The unread watermark frozen at the moment this chat was opened — drives the
   // "unread messages" divider. Captured before marking the conversation read
@@ -1258,7 +1276,7 @@ function ChatPageContent({
     | undefined
   >(undefined);
   useEffect(() => {
-    if (!liveDataReady) return;
+    if (!liveDataReady || !routeActive) return;
     if (!accountPubkey || !conversationKey) return;
     dmService.setActiveConversation(accountPubkey, conversationKey);
     setUnreadBoundary(undefined);
@@ -1291,7 +1309,7 @@ function ChatPageContent({
       cancelled = true;
       dmService.clearActiveConversation();
     };
-  }, [accountPubkey, conversationKey, liveDataReady]);
+  }, [accountPubkey, conversationKey, liveDataReady, routeActive]);
 
   // Reconcile sent placeholders against the DB: once the real rumor renders,
   // drop the in-memory bubble. MessageList already hides it this same frame,
@@ -1431,9 +1449,8 @@ function ChatPageContent({
       return Promise.reject(new Error('Nearby conversation is not writable'));
     }
 
-    // Sending while reading history (an anchored, jumped-to window) returns to the
-    // live tail — same as the scroll-to-bottom button — so the new message is
-    // shown: drop the anchor, the tail reloads, and MessageList lands at the newest.
+    // Sending from a search jump returns to the live tail so the optimistic
+    // message appears in chronological context.
     if (anchored) jumpToTail();
 
     // A send graduates a request out of the inbox gate.
@@ -1478,6 +1495,8 @@ function ChatPageContent({
       subject: isProximity ? null : (conversation?.name ?? null),
       tags,
       rumor: optimisticRumor,
+      deliveryStatus: null,
+      deliveryError: null,
       sourceRelays: null, // our own outgoing message — no inbound source
     };
     setOptimistic((prev) => [...prev, optimisticRow]);
@@ -1532,8 +1551,7 @@ function ChatPageContent({
   ): Promise<void> {
     if (!accountPubkey || parts.length === 0) return Promise.resolve();
     if (isProximity && proximityHistoryReadOnly) return Promise.resolve();
-    // As with text: sending from an anchored (jumped-to) window returns to the
-    // live tail so the new attachment is shown at the newest.
+    // As with text, leave an anchored jump before showing the attachment.
     if (anchored) jumpToTail();
     onGraduate();
     const replyToId = replyingTo?.id;
@@ -1875,10 +1893,13 @@ function ChatPageContent({
   }
 
   function openMeasuredMenu(rect: BubbleRect, bubble: LiftedBubble) {
-    const preserveKeyboard = KeyboardController.isVisible();
+    // Modal temporarily owns window focus. Remember the user's keyboard state
+    // so a plain dismiss/action can restore it after the native window closes.
+    restoreKeyboardAfterMenuRef.current =
+      KeyboardController.isVisible() && !IS_ELECTRON;
     const node = contentRef.current;
     if (!node) {
-      setMenuAnchor({ rect, bubble, preserveKeyboard });
+      setMenuAnchor({ rect, bubble });
       return;
     }
 
@@ -1894,7 +1915,6 @@ function ChatPageContent({
         setMenuAnchor({
           rect,
           bubble,
-          preserveKeyboard,
           ...viewport,
         });
       };
@@ -1991,12 +2011,9 @@ function ChatPageContent({
     // the inbox gate (storeRumor sets hasReplied for the outgoing kind-7), so
     // backing out should land on the Chats home, not the Requests list.
     onGraduate();
-    const encKp = isProximity ? undefined : await loadEncryptionKeypair(accountPubkey);
-    if (!isProximity && !encKp) return;
     await conversationSendService.sendReaction({
       accountPubkey,
       target: { deliveryKind, conversationKey },
-      encryptionKeypair: encKp ?? undefined,
       targetMessageId: targetMessage.id,
       emoji,
     });
@@ -2026,6 +2043,16 @@ function ChatPageContent({
    * the row (react) or present another modal (picker) without the lifted copy
    * still on screen. */
   function handleMenuClosed() {
+    const restoreKeyboard =
+      restoreKeyboardAfterMenuRef.current &&
+      !pendingReplyTarget &&
+      !pendingPicker &&
+      !pendingDetailId &&
+      !pendingSelectId &&
+      !pendingForwardMessages &&
+      !pendingPackPickerEmoji &&
+      !pendingSaveUpload;
+    restoreKeyboardAfterMenuRef.current = false;
     if (pendingReplyTarget) {
       const target = pendingReplyTarget;
       setPendingReplyTarget(null);
@@ -2052,7 +2079,9 @@ function ChatPageContent({
       const id = pendingSelectId;
       setPendingSelectId(null);
       setSelectedIds(new Set([id]));
-      setSelectionMode(true);
+      // Let the menu-dismiss frame paint before the virtualized list mounts its
+      // lightweight selection chrome across buffered rows.
+      startTransition(() => setSelectionMode(true));
     }
     if (pendingForwardMessages) {
       const messages = pendingForwardMessages;
@@ -2070,6 +2099,9 @@ function ChatPageContent({
       const upload = pendingSaveUpload;
       setPendingSaveUpload(null);
       void handleSavePendingUpload(upload);
+    }
+    if (restoreKeyboard) {
+      setTimeout(() => KeyboardController.setFocusTo('current'), 0);
     }
   }
 
@@ -2162,10 +2194,7 @@ function ChatPageContent({
                   icon: <Reply size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
                   onPress: () => {
                     const target = menuTarget;
-                    if (target) {
-                      if (IS_ANDROID) startReply(target);
-                      else setPendingReplyTarget(target);
-                    }
+                    if (target) setPendingReplyTarget(target);
                     closeMenu();
                   },
                 } as MessageMenuAction,
@@ -2338,7 +2367,11 @@ function ChatPageContent({
           onLoadOlder={loadOlder}
           onLoadNewer={loadNewer}
           hasMore={hasMore}
+          loadingOlder={loadingOlder}
+          loadingNewer={loadingNewer}
           hasMoreNewer={hasMoreNewer}
+          oldestBoundary={oldestBoundary}
+          tailJumpVersion={tailJumpVersion}
           anchored={anchored}
           windowLoaded={windowLoaded}
           onFocusAnchor={focusAnchor}
@@ -2349,6 +2382,7 @@ function ChatPageContent({
           firstUnreadOrderAt={unreadBoundary?.firstUnreadOrderAt ?? null}
           firstUnreadId={unreadBoundary?.firstUnreadId ?? null}
           unreadCount={unreadBoundary?.count ?? 0}
+          showNewMessageIndicators={unreadIndicatorsEnabled}
           onSwipeReply={proximityHistoryReadOnly ? undefined : startReply}
           onLongPress={handleLongPress}
           onLongPressPending={handlePendingLongPress}
@@ -2362,7 +2396,8 @@ function ChatPageContent({
           onToggleSelect={toggleSelect}
           bottomInset={composerClearance}
           topInset={topInset}
-          liveDataEnabled={liveDataReady}
+          liveDataEnabled={liveDataReady && routeActive}
+          interactive={liveDataReady}
         />
         {/* While the attachment tray is open, a tap anywhere on the messages
             closes it (like tapping to dismiss a keyboard). Transparent, only
@@ -2436,7 +2471,6 @@ function ChatPageContent({
             bubble={menuAnchor?.bubble ?? null}
             contentTop={menuAnchor?.contentTop}
             contentBottom={menuAnchor?.contentBottom}
-            preserveKeyboard={menuAnchor?.preserveKeyboard}
             quickEmojis={menuQuickEmojis}
             reactedReactionKeys={reactedReactionKeys}
             onReact={handleReactFromMenu}
@@ -2491,6 +2525,7 @@ function ChatPageContent({
             />
           ) : null}
           <MessageDetailSheet
+            accountPubkey={accountPubkey}
             rumorId={detailRumorId}
             rumor={detailMessage?.rumor ?? null}
             isSelf={
@@ -2511,9 +2546,6 @@ function ChatPageContent({
                     ]),
                   )
                 : null
-            }
-            persistedDelivery={
-              detailRumorId ? (deliveriesByMessageId[detailRumorId] ?? null) : null
             }
             transport={isProximity ? 'proximity' : 'relay'}
             onResend={

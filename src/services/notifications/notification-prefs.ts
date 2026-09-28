@@ -8,6 +8,7 @@ const ENABLED_KEY = 'notifications.enabled';
 const BATTERY_OPTIMIZATION_PROMPTED_KEY = 'notifications.batteryOptimizationPrompted';
 const CONTENT_PREFERENCES_KEY = 'notifications.contentPreferences';
 const DND_WINDOW_KEY = 'notifications.dndWindow';
+const UNREAD_INDICATORS_KEY = 'notifications.unreadIndicators';
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -49,6 +50,15 @@ export async function getNotificationsEnabled(): Promise<boolean> {
 
 export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
   await setDevicePreference(ENABLED_KEY, enabled ? '1' : '0');
+}
+
+/** Device-level unread indicators. On until explicitly disabled. */
+export async function getUnreadIndicatorsEnabled(): Promise<boolean> {
+  return (await getDevicePreference(UNREAD_INDICATORS_KEY)) !== '0';
+}
+
+export async function setUnreadIndicatorsEnabled(enabled: boolean): Promise<void> {
+  await setDevicePreference(UNREAD_INDICATORS_KEY, enabled ? '1' : '0');
 }
 
 export async function getNotificationContentPreferences(): Promise<NotificationContentPreferences> {

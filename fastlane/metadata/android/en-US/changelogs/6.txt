@@ -1,0 +1,9 @@
+PsstPsst 0.2.4
+
+- Browse long chats more smoothly.
+- Report abusive accounts directly from their profile.
+- Resize split panes on touch devices.
+- Refined the emoji picker on mobile and desktop.
+- Reduced accidental conversation swipes.
+- Improved avatar loading consistency across the app.
+- Improved Back/Escape behavior for menus and replies.

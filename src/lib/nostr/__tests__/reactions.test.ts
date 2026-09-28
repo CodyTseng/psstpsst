@@ -28,6 +28,8 @@ function reactionRow({
     subject: null,
     tags,
     rumor: {} as MessageRow['rumor'],
+    deliveryStatus: null,
+    deliveryError: null,
     sourceRelays: null,
   };
 }

@@ -2,8 +2,8 @@
  * Monotonic millisecond clock for outgoing rumors.
  *
  * Nostr `created_at` is second-resolution. PsstPsst adds an authenticated `ms` tag
- * containing the `0..999` millisecond component, with the event id as the final
- * deterministic tie-breaker for legacy and non-PsstPsst messages.
+ * containing the `0..999` millisecond component, with the smaller event id as
+ * the final deterministic tie-breaker for legacy and non-PsstPsst messages.
  *
  * All outgoing paths share this counter. When several messages are authored in
  * one wall-clock millisecond, their logical milliseconds increment by one. The

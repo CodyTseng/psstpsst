@@ -1,112 +1,116 @@
-import { deliveryStatusStore, failedRelayRetryUrls } from '../delivery-status';
-import { dmService } from '../dm.service';
 import {
-  beginMessagingSendPreparation,
-  cancelMessagingSendPreparation,
-} from '../messaging-send-readiness';
-
-jest.mock('@/db/client', () => ({ db: {} }));
-jest.mock('@/platform', () => ({
-  platform: {
-    appState: {
-      currentState: () => 'active',
-      addChangeListener: () => () => {},
-    },
-    notifications: { shouldNotifyNow: () => true },
-  },
-}));
-jest.mock('../../account/account.service', () => ({ buildSigner: jest.fn() }));
-jest.mock('../../files/media-index.service', () => ({}));
-jest.mock('../../files/file-attachment.service', () => ({}));
-jest.mock('../../conversation/message-tail-cache', () => ({}));
-jest.mock('../../relay/relay-list.service', () => ({}));
-jest.mock('../../relay/relay-router', () => ({ capDeliveryRelays: (urls: string[]) => urls }));
-jest.mock('../../relay/relay-pool', () => ({ relayPool: {} }));
-jest.mock('../../self-events/self-event-stream.service', () => ({
-  selfEventStream: { destroy: jest.fn() },
-}));
-jest.mock('../encryption-key-watcher', () => ({
-  encryptionKeyWatcher: { destroy: jest.fn() },
-}));
-jest.mock('../block.service', () => ({}));
-jest.mock('../sync-store', () => ({}));
-jest.mock('../encryption-key.service', () => ({}));
-
-const accountPubkey = 'a'.repeat(64);
-const recipientPubkey = 'b'.repeat(64);
-
-type MutableDmService = {
-  accountPubkey: string | null;
-  encryptionKeys: { pubkey: string; privkey: Uint8Array; createdAt: number }[];
-  storeRumor: () => Promise<void>;
-};
+  beginRelayTargets,
+  deliveryStatusStore,
+  relayDeliveryVerdict,
+  retryableRelayUrls,
+  settleRelayTarget,
+  surfacedCopies,
+  type MessageDelivery,
+} from '../delivery-status';
 
 afterEach(() => {
-  jest.restoreAllMocks();
-  cancelMessagingSendPreparation();
-  dmService.destroy();
   deliveryStatusStore.setState({ byId: {} });
 });
 
-it('stores a pending message without waiting for the startup session', () => {
-  const service = dmService as unknown as MutableDmService;
-  service.accountPubkey = null;
-  service.encryptionKeys = [];
-  beginMessagingSendPreparation(accountPubkey);
-  const stored = new Promise<void>(() => {});
-  const storeRumor = jest.spyOn(service, 'storeRumor').mockReturnValue(stored);
+it('keeps failed mirrors retryable after a majority-successful delivery', () => {
+  const delivery: MessageDelivery = {
+    rumorId: 'rumor',
+    phase: 'sent',
+    copies: [
+      {
+        recipient: 'recipient',
+        self: false,
+        relays: [
+          { url: 'wss://one.example', status: 'ok' },
+          { url: 'wss://two.example', status: 'ok' },
+          { url: 'wss://three.example', status: 'failed', error: 'rejected' },
+        ],
+      },
+    ],
+  };
 
-  void dmService.sendMessage({
-    accountPubkey,
-    recipientPubkeys: [recipientPubkey],
-    content: 'hello',
-    timestamp: { createdAt: 1, millisecond: 0, orderAt: 1000 },
-  });
-
-  expect(storeRumor).toHaveBeenCalledTimes(1);
-  const rumorId = Object.keys(deliveryStatusStore.getState().byId)[0];
-  expect(deliveryStatusStore.getState().byId[rumorId!]?.phase).toBe('signing');
+  expect(relayDeliveryVerdict(2, 3)).toBe('sent');
+  expect(retryableRelayUrls(delivery)).toEqual(['wss://three.example']);
 });
 
-it('retains a whole-attempt failure reason for message details', () => {
-  const delivery = deliveryStatusStore.getState();
-  delivery.begin('rumor');
-  delivery.finish('rumor', 'failed', 'Signer rejected the request.');
+it('suppresses another retry while a target is pending', () => {
+  const delivery: MessageDelivery = {
+    rumorId: 'rumor',
+    phase: 'sent',
+    copies: [
+      {
+        recipient: 'recipient',
+        self: false,
+        relays: [
+          { url: 'wss://one.example', status: 'ok' },
+          { url: 'wss://two.example', status: 'pending' },
+        ],
+      },
+    ],
+  };
 
-  expect(deliveryStatusStore.getState().byId.rumor).toMatchObject({
-    phase: 'failed',
-    error: 'Signer rejected the request.',
-  });
-  expect(failedRelayRetryUrls(deliveryStatusStore.getState().byId.rumor!)).toEqual([]);
+  expect(retryableRelayUrls(delivery)).toBeNull();
 });
 
-it('seeds signing status before the stored message can replace its optimistic row', () => {
-  const service = dmService as unknown as MutableDmService;
-  service.accountPubkey = accountPubkey;
-  service.encryptionKeys = [
-    {
-      pubkey: 'c'.repeat(64),
-      privkey: new Uint8Array(32).fill(1),
-      createdAt: 1,
-    },
-  ];
+it('uses recipient copies for the verdict and self only for note-to-self', () => {
+  const self = { recipient: 'self', self: true, relays: [] };
+  const recipient = { recipient: 'peer', self: false, relays: [] };
 
-  const stored = new Promise<void>(() => {});
-  const storeRumor = jest.spyOn(service, 'storeRumor').mockReturnValue(stored);
+  expect(surfacedCopies([self, recipient])).toEqual([recipient]);
+  expect(surfacedCopies([self])).toEqual([self]);
+});
 
-  void dmService.sendMessage({
-    accountPubkey,
-    recipientPubkeys: [recipientPubkey],
-    content: 'hello',
-    timestamp: { createdAt: 1, millisecond: 0, orderAt: 1000 },
-  });
+it('never offers a retry for a self/sync copy', () => {
+  expect(
+    retryableRelayUrls({
+      rumorId: 'note-to-self',
+      phase: 'failed',
+      copies: [
+        {
+          recipient: 'self',
+          self: true,
+          relays: [{ url: 'wss://self.example', status: 'failed' }],
+        },
+      ],
+    }),
+  ).toBeNull();
+});
 
-  expect(storeRumor).toHaveBeenCalledTimes(1);
-  const rumorId = Object.keys(deliveryStatusStore.getState().byId)[0];
-  expect(rumorId).toBeDefined();
-  expect(deliveryStatusStore.getState().byId[rumorId!]).toMatchObject({
-    rumorId,
-    phase: 'signing',
+it('keeps the session store limited to nearby progress', () => {
+  deliveryStatusStore.getState().setProximityPhase('rumor', 'awaiting_ack');
+
+  expect(deliveryStatusStore.getState().byId.rumor).toEqual({
+    rumorId: 'rumor',
+    phase: 'awaiting_ack',
+    transport: 'proximity',
     copies: [],
   });
+});
+
+it('allows every non-OK state to start while keeping OK terminal', () => {
+  expect(
+    beginRelayTargets(
+      [
+        { url: 'wss://ok.example', status: 'ok' },
+        { url: 'wss://failed.example', status: 'failed', error: 'old' },
+      ],
+      ['wss://ok.example', 'wss://failed.example', 'wss://new.example'],
+    ),
+  ).toEqual([
+    { url: 'wss://ok.example', status: 'ok' },
+    { url: 'wss://failed.example', status: 'pending' },
+    { url: 'wss://new.example', status: 'pending' },
+  ]);
+});
+
+it('settles from the protocol boolean and never regresses OK', () => {
+  const accepted = settleRelayTarget(
+    [{ url: 'wss://relay.example', status: 'pending' }],
+    'wss://relay.example',
+    true,
+  );
+  expect(accepted).toEqual([{ url: 'wss://relay.example', status: 'ok' }]);
+  expect(
+    settleRelayTarget(accepted, 'wss://relay.example', false, 'duplicate'),
+  ).toEqual(accepted);
 });

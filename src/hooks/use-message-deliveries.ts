@@ -1,75 +1,61 @@
-import { inArray } from 'drizzle-orm';
-import { useLiveQuery } from '@/db/use-live-query';
+import { and, eq } from 'drizzle-orm';
 import { useMemo } from 'react';
 
 import { db } from '@/db/client';
-import { messageDeliveries, outbox } from '@/db/schema';
+import { messageDeliveryCopies, messages } from '@/db/schema';
+import { useLiveQuery } from '@/db/use-live-query';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
 
 /**
- * Persisted delivery status for a specific set of messages (the loaded window),
- * keyed by message id. Survives app restarts (the in-memory
- * `delivery-status.store` only covers the live send within a session). A bubble
- * prefers its live entry and falls back to this. Scoped by message id so it
- * scales with what's on screen, not the whole history.
+ * Load relay detail only while the message-info sheet is visible. Message rows
+ * keep reading their coarse state directly from `messages.delivery_status`.
  */
-export function useMessageDeliveries(
-  messageIds: string[],
+export function useMessageDelivery(
+  accountPubkey: string,
+  messageId: string | null,
   liveDataEnabled = true,
-): Record<string, MessageDelivery> {
-  // inArray([]) is unsafe; use a never-matching sentinel when empty.
-  const safeIds = messageIds.length > 0 ? messageIds : [' '];
-  const queryEnabled = liveDataEnabled && messageIds.length > 0;
-  const { data } = useLiveQuery(
+): MessageDelivery | null {
+  const safeId = messageId ?? ' ';
+  const queryEnabled = liveDataEnabled && messageId != null;
+  const { data: copies, isResolved: copiesResolved } = useLiveQuery(
     db
       .select()
-      .from(messageDeliveries)
-      .where(inArray(messageDeliveries.messageId, safeIds)),
-    [safeIds.join(','), queryEnabled],
+      .from(messageDeliveryCopies)
+      .where(
+        and(
+          eq(messageDeliveryCopies.accountPubkey, accountPubkey),
+          eq(messageDeliveryCopies.messageId, safeId),
+        ),
+      ),
+    [accountPubkey, safeId, 'delivery-copies', queryEnabled],
     { enabled: queryEnabled },
   );
-  const { data: pending } = useLiveQuery(
-    db.select().from(outbox).where(inArray(outbox.messageId, safeIds)),
-    [safeIds.join(','), 'outbox', queryEnabled],
+  const { data: messageRows, isResolved: messageResolved } = useLiveQuery(
+    db
+      .select({
+        deliveryStatus: messages.deliveryStatus,
+        deliveryError: messages.deliveryError,
+      })
+      .from(messages)
+      .where(and(eq(messages.accountPubkey, accountPubkey), eq(messages.id, safeId)))
+      .limit(1),
+    [accountPubkey, safeId, 'delivery-message', queryEnabled],
     { enabled: queryEnabled },
   );
 
   return useMemo(() => {
-    const map: Record<string, MessageDelivery> = {};
-    for (const row of data ?? []) {
-      map[row.messageId] = {
-        rumorId: row.messageId,
-        phase: row.status, // 'sent' | 'failed'
-        copies: (row.copies ?? []).map((cp) => ({
-          recipient: cp.recipient,
-          self: cp.self,
-          relays: cp.relays.map((r) => ({
-            url: r.url,
-            status: r.status,
-            error: r.error,
-          })),
-        })),
-      };
-    }
-    for (const row of pending ?? []) {
-      const existing = map[row.messageId];
-      if (existing) {
-        map[row.messageId] = {
-          ...existing,
-          phase: row.status,
-          transport: row.deliveryKind,
-          error: row.lastError ?? existing.error,
-        };
-      } else {
-        map[row.messageId] = {
-          rumorId: row.messageId,
-          phase: row.status,
-          transport: row.deliveryKind,
-          copies: [],
-          error: row.lastError ?? undefined,
-        };
-      }
-    }
-    return map;
-  }, [data, pending]);
+    if (!copiesResolved || !messageResolved) return null;
+    const message = messageRows?.[0];
+    if (!message?.deliveryStatus) return null;
+    return {
+      rumorId: safeId,
+      phase: message.deliveryStatus,
+      error: message.deliveryError ?? undefined,
+      copies: (copies ?? []).map((copy) => ({
+        recipient: copy.recipientPubkey,
+        self: copy.recipientPubkey === accountPubkey,
+        relays: copy.relays,
+      })),
+    };
+  }, [accountPubkey, copies, copiesResolved, messageResolved, messageRows, safeId]);
 }

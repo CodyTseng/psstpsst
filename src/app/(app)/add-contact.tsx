@@ -27,6 +27,7 @@ import { setConversationMuted } from '@/services/conversation/conversation-prefs
 import { dmService } from '@/services/dm/dm.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { showToast } from '@/stores/toast.store';
+import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
 import { spacing, typography, useThemeColors } from '@/theme';
 
 export default function SearchUser() {
@@ -36,6 +37,7 @@ export default function SearchUser() {
   const titleClearance = useScreenHeaderClearance();
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { conversations: requestItems } = useRequestConversations(accountPubkey ?? '');
+  const unreadIndicatorsEnabled = useUnreadIndicatorsEnabled();
 
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +45,10 @@ export default function SearchUser() {
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const inputRef = useFocusAfterTransition();
   const hasUnreadRequests = useMemo(
-    () => requestItems.some((item) => item.conversation.unreadCount > 0),
-    [requestItems],
+    () =>
+      unreadIndicatorsEnabled &&
+      requestItems.some((item) => item.conversation.unreadCount > 0),
+    [requestItems, unreadIndicatorsEnabled],
   );
   const attachmentLabels = useMemo(
     () => ({
@@ -214,7 +218,7 @@ export default function SearchUser() {
                 lastMessageTags={item.lastMessageTags}
                 lastMessageFromSelf={item.lastMessageSenderPubkey === accountPubkey}
                 lastMessageAt={conv.lastMessageAt}
-                unreadCount={conv.unreadCount}
+                unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}
                 muted={conv.muted}
                 onPress={() => openRequestConversation(conv.conversationKey)}
                 onToggleMute={() => {

@@ -7,7 +7,13 @@ import { resolveMessagingMetadata, type MessagingMetadata } from '../messaging-m
 import { loadEncryptionKeys } from '../encryption-key.service';
 import { relayPool, type SubscribeOpts } from '../../relay/relay-pool';
 import { selfEventStream } from '../../self-events/self-event-stream.service';
-import { getSyncCursor, markGiftWrapProcessed, setForwardSince, setBackwardUntil } from '../sync-store';
+import {
+  getProcessedGiftWrapIds,
+  getSyncCursor,
+  markGiftWrapProcessed,
+  setBackwardUntil,
+  setForwardSince,
+} from '../sync-store';
 import { unwrapGiftWrapWithKeys, type GiftWrapUnwrapOutcome } from '../../crypto/nip17-gift-wrap';
 
 const mockProcessedIds = new Set<string>();
@@ -52,6 +58,8 @@ jest.mock('../encryption-key-watcher', () => ({ encryptionKeyWatcher: { init: je
 jest.mock('../block.service', () => ({ loadBlockedIntoCache: jest.fn(), isBlocked: () => false }));
 jest.mock('../sync-store', () => ({
   getSyncCursor: jest.fn(), isGiftWrapProcessed: async (id: string) => mockProcessedIds.has(id),
+  getProcessedGiftWrapIds: jest.fn(async (ids: string[]) =>
+    new Set(ids.filter((id) => mockProcessedIds.has(id)))),
   markGiftWrapProcessed: jest.fn(async (id: string) => { mockProcessedIds.add(id); }),
   setForwardSince: jest.fn(), setBackwardUntil: jest.fn(),
 }));
@@ -194,6 +202,24 @@ it('cancels pending backfill without advancing its cursor', async () => {
   queried.resolve([]);
   await flush();
   expect(setForwardSince).not.toHaveBeenCalled();
+});
+
+it('checks an already-processed backfill page in one batch', async () => {
+  mockAppState = 'active';
+  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+  const page = [
+    { id: 'seen-1', kind: 1059, created_at: 3 },
+    { id: 'seen-2', kind: 1059, created_at: 2 },
+  ] as Event[];
+  mockProcessedIds.add('seen-1');
+  mockProcessedIds.add('seen-2');
+  jest.mocked(relayPool.query).mockResolvedValueOnce(page);
+
+  await dmService.init(options);
+  await flush();
+
+  expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(['seen-1', 'seen-2']);
+  expect(unwrapGiftWrapWithKeys).not.toHaveBeenCalled();
 });
 
 it('does not let a cold notification poll pull messages with a missing key', async () => {
