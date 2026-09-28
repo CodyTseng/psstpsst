@@ -1602,7 +1602,6 @@ export function MessageList({
         parsedAction.status === 'valid' &&
         parsedAction.action.type !== 'create';
       if (systemAction) {
-        const isSelf = msg.senderPubkey === selfPubkey;
         const persistedDelivery = deliveriesByMessageId[msg.id] ??
           (msg.deliveryStatus
             ? { rumorId: msg.id, phase: msg.deliveryStatus, copies: [] }
@@ -1611,12 +1610,11 @@ export function MessageList({
           <>
             <GroupSystemMessage
               accountPubkey={accountPubkey}
-              conversationKey={conversationKey}
               senderPubkey={msg.senderPubkey}
               tags={msg.tags}
               delivery={persistedDelivery}
-              onShowDelivery={
-                isSelf && canShowDelivery
+              onShowDetail={
+                canShowDelivery
                   ? () => rowActionsRef.current.onShowDelivery?.(msg.id)
                   : undefined
               }

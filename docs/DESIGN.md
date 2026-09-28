@@ -167,11 +167,13 @@ or unread boundary at its position and always breaks bubble grouping across it.
 Group actions follow ordinary-message unread, badge, preview, activity, and
 notification behavior.
 Own authored system-event capsules reserve one fixed-size delivery-status slot
-and open the standard delivery detail when pressed. Incoming system events do
-not reserve that slot and open group information when pressed.
+while incoming system events do not. Every system-event capsule opens the
+standard message detail when pressed.
 System-event capsules remain single-line. Dynamic arguments such as member and
 group names truncate independently with end ellipses so localized action words
-remain visible; accessibility exposes the complete untruncated sentence.
+remain visible; accessibility exposes the complete untruncated sentence. A
+compact leading icon identifies invite, remove, leave, and rename actions.
+Leading action and trailing delivery glyphs share one icon box size.
 System-event capsules never enter message selection or content actions such as
 copy, reply, react, quote, and forward.
 

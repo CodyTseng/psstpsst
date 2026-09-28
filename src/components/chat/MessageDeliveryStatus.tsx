@@ -14,6 +14,8 @@ type Props = {
   /** Base color — matches the bubble's metadata text. Failures override to
    * danger. */
   color: string;
+  /** Optional larger slot for controls outside compact bubble metadata. */
+  size?: number;
 };
 
 /**
@@ -24,7 +26,11 @@ type Props = {
  * Just the glyph — the surrounding metadata (time + this) is the tap target that
  * opens the per-relay sheet; the exact `n/m` lives there.
  */
-export function MessageDeliveryStatus({ delivery, color }: Props) {
+export function MessageDeliveryStatus({
+  delivery,
+  color,
+  size = MESSAGE_DELIVERY_ICON_SIZE,
+}: Props) {
   const c = useThemeColors();
 
   let Icon = Clock;
@@ -42,7 +48,7 @@ export function MessageDeliveryStatus({ delivery, color }: Props) {
   return (
     <Icon
       strokeWidth={delivery.phase === 'sent' ? iconStrokeWidth.compact : undefined}
-      size={MESSAGE_DELIVERY_ICON_SIZE}
+      size={size}
       color={iconColor}
     />
   );
