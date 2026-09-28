@@ -61,6 +61,10 @@ export function getWidePaneSelection(
   const chatKey = routeValue(pathname, 'chat');
   const chatSearchKey = routeValue(pathname, 'chat-search');
   const mediaConversationKey = routeValue(pathname, 'media');
+  const groupConversationKey =
+    routeValue(pathname, 'group') ??
+    routeValue(pathname, 'group-add') ??
+    routeValue(pathname, 'group-rename');
   const profilePubkey = routeValue(pathname, 'profile');
   const rootRoute = pathname.split('/').filter(Boolean)[0] ?? '';
 
@@ -69,6 +73,7 @@ export function getWidePaneSelection(
       chatKey ??
       chatSearchKey ??
       mediaConversationKey ??
+      groupConversationKey ??
       (profileOpenedFromChat ? profilePubkey : null),
     profilePubkey,
     settingsItem: SETTINGS_ITEM_BY_ROUTE[rootRoute] ?? null,

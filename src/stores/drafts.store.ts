@@ -1,8 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { create } from 'zustand';
 
 import { db } from '@/db/client';
-import { messageDrafts } from '@/db/schema';
+import { conversations, messageDrafts } from '@/db/schema';
 import { platform } from '@/platform';
 
 /**
@@ -22,6 +22,7 @@ const DEBOUNCE_MS = 800;
 // Debounced writes: `${account}\n${key}` → the latest text owed to SQLite, plus
 // its pending timer. `pending` lets us flush everything when the app backgrounds.
 const pending = new Map<string, { accountPubkey: string; conversationKey: string; text: string }>();
+const activityDirty = new Map<string, { accountPubkey: string; conversationKey: string }>();
 const writeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function clearTimer(id: string): void {
@@ -32,12 +33,15 @@ function clearTimer(id: string): void {
   }
 }
 
-function flushPending(id: string): void {
+function flushPending(id: string, advanceActivity = false): void {
   clearTimer(id);
   const p = pending.get(id);
-  if (!p) return;
-  pending.delete(id);
-  void persist(p.accountPubkey, p.conversationKey, p.text);
+  const dirty = activityDirty.get(id);
+  if (!p && (!advanceActivity || !dirty)) return;
+  if (p) pending.delete(id);
+  if (advanceActivity) activityDirty.delete(id);
+  const owner = p ?? dirty!;
+  void persist(owner.accountPubkey, owner.conversationKey, p?.text, advanceActivity);
 }
 
 // Persist any debounced drafts the instant the app leaves the foreground — a
@@ -45,7 +49,9 @@ function flushPending(id: string): void {
 // drop a draft still inside its debounce window.
 platform.appState.addChangeListener((state) => {
   if (state !== 'active') {
-    for (const id of Array.from(pending.keys())) flushPending(id);
+    for (const id of new Set([...pending.keys(), ...activityDirty.keys()])) {
+      flushPending(id, true);
+    }
   }
 });
 
@@ -53,10 +59,15 @@ platform.appState.addChangeListener((state) => {
 // awaited (or `.run()`/`.then()`) — a bare `void db.insert(...)` never executes,
 // so the write would silently no-op. Errors are swallowed (best-effort; the
 // in-memory store is this session's source of truth).
-async function persist(accountPubkey: string, conversationKey: string, text: string): Promise<void> {
+async function persist(
+  accountPubkey: string,
+  conversationKey: string,
+  text: string | undefined,
+  advanceActivity: boolean,
+): Promise<void> {
   try {
     // Empty draft → no row (a present row always means "there's a draft").
-    if (text.trim().length === 0) {
+    if (text !== undefined && text.trim().length === 0) {
       await db
         .delete(messageDrafts)
         .where(
@@ -65,16 +76,31 @@ async function persist(accountPubkey: string, conversationKey: string, text: str
             eq(messageDrafts.conversationKey, conversationKey),
           ),
         );
-      return;
+    } else if (text !== undefined) {
+      const updatedAt = Math.floor(Date.now() / 1000);
+      await db
+        .insert(messageDrafts)
+        .values({ accountPubkey, conversationKey, text, updatedAt })
+        .onConflictDoUpdate({
+          target: [messageDrafts.accountPubkey, messageDrafts.conversationKey],
+          set: { text, updatedAt },
+        });
     }
-    const updatedAt = Math.floor(Date.now() / 1000);
-    await db
-      .insert(messageDrafts)
-      .values({ accountPubkey, conversationKey, text, updatedAt })
-      .onConflictDoUpdate({
-        target: [messageDrafts.accountPubkey, messageDrafts.conversationKey],
-        set: { text, updatedAt },
-      });
+    if (advanceActivity) {
+      const activityOrderAt = Date.now();
+      await db
+        .update(conversations)
+        .set({
+          updatedAt: sql`CASE WHEN ${conversations.updatedOrderAt} < ${activityOrderAt} THEN ${Math.floor(activityOrderAt / 1000)} ELSE ${conversations.updatedAt} END`,
+          updatedOrderAt: sql`MAX(${conversations.updatedOrderAt}, ${activityOrderAt})`,
+        })
+        .where(
+          and(
+            eq(conversations.accountPubkey, accountPubkey),
+            eq(conversations.conversationKey, conversationKey),
+          ),
+        );
+    }
   } catch {
     // Best-effort persistence.
   }
@@ -83,14 +109,15 @@ async function persist(accountPubkey: string, conversationKey: string, text: str
 function scheduleWrite(accountPubkey: string, conversationKey: string, text: string): void {
   const id = `${accountPubkey}\n${conversationKey}`;
   pending.set(id, { accountPubkey, conversationKey, text });
+  activityDirty.set(id, { accountPubkey, conversationKey });
   clearTimer(id);
-  writeTimers.set(id, setTimeout(() => flushPending(id), DEBOUNCE_MS));
+  writeTimers.set(id, setTimeout(() => flushPending(id, false), DEBOUNCE_MS));
 }
 
 function flushWrite(accountPubkey: string, conversationKey: string, text: string): void {
   const id = `${accountPubkey}\n${conversationKey}`;
   pending.set(id, { accountPubkey, conversationKey, text });
-  flushPending(id);
+  flushPending(id, false);
 }
 
 type State = {
@@ -151,6 +178,6 @@ export const useDraftsStore = create<State>((set, get) => ({
     // Keystrokes already enqueue the latest value. If its debounce completed,
     // there is nothing left to persist; avoid an unconditional write on every
     // chat unmount, including untouched empty composers.
-    flushPending(`${account}\n${conversationKey}`);
+    flushPending(`${account}\n${conversationKey}`, true);
   },
 }));

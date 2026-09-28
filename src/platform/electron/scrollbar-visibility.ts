@@ -7,6 +7,7 @@ const THUMB_THICKNESS_PX = 4;
 const EDGE_INSET_PX = 2;
 const MIN_THUMB_LENGTH_PX = 24;
 const OCCLUSION_ATTRIBUTE = 'data-psstpsst-scrollbar-occlusion';
+const HIDDEN_ATTRIBUTE = 'data-psstpsst-scrollbar-hidden';
 /** A scroll event counts as user-driven only this soon after a wheel/touch input. */
 const USER_SCROLL_INPUT_WINDOW_MS = 200;
 
@@ -251,6 +252,13 @@ export function installElectronScrollbarVisibility(): void {
         event.target instanceof Element ? event.target : document.scrollingElement;
       if (!target) return;
       if (Date.now() - lastUserScrollInputAt > USER_SCROLL_INPUT_WINDOW_MS) return;
+      if (target.closest(`[${HIDDEN_ATTRIBUTE}="true"]`)) {
+        if (thumbs) {
+          setThumbActive(thumbs.vertical, false);
+          setThumbActive(thumbs.horizontal, false);
+        }
+        return;
+      }
 
       thumbs ??= ensureOverlayThumbs();
       updateOverlayThumbs(target, thumbs);

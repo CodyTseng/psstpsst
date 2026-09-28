@@ -409,8 +409,9 @@
     "send": "Hangüzenet küldése"
   },
   "delivery": {
+    "self": "Te",
     "title": "Kézbesítés",
-    "summary": "Kézbesítve {{ok}}/{{total}} relaynek",
+    "summary": "Kézbesítve {{ok}}/{{total}} címzettnek",
     "signing": "Aláírás…",
     "resend": "Újraküldés",
     "failed": "Sikertelen kézbesítés"
@@ -987,6 +988,35 @@
     "unexpected_message": "Az adataid biztonságban vannak. Próbáld újra, vagy térj vissza a csevegésekhez.",
     "return_to_chats": "Vissza a csevegésekhez",
     "export_diagnostics": "Diagnosztika exportálása"
+  },
+  "group": {
+    "unnamed": "Csoport",
+    "derived_title_with_others": "{{names}} és további {{count}} fő",
+    "create_with_count": "Csoport létrehozása {{count}} személlyel",
+    "large_group_title": "Nagy csoport létrehozása?",
+    "large_group_message": "Minden üzenetet külön kell titkosítani és elküldeni a csoport minden tagjának. Nagyobb csoportokban a küldés lassabb lehet. Folytatod?",
+    "info_title": "Csoport adatai",
+    "members": "Tagok",
+    "add_member": "Tag hozzáadása",
+    "rename": "Csoport átnevezése",
+    "leave": "Kilépés a csoportból",
+    "leave_confirm": "Addig nem küldhetsz üzenetet, amíg egy tag újra meg nem hív.",
+    "remove_member": "Tag eltávolítása",
+    "remove_member_confirm": "Eltávolítod ezt a személyt a csoportból?",
+    "name_too_long": "A csoport neve legfeljebb 80 karakter lehet.",
+    "read_only": "Már nem vagy a csoport tagja. Az előzményeket továbbra is olvashatod.",
+    "other_devices": "A többi eszközöd",
+    "new_message": "Új csoportüzenet",
+    "member_invited": "Egy tag meghívást kapott",
+    "member_removed": "Egy tagot eltávolítottak",
+    "member_left": "Egy tag kilépett",
+    "name_changed": "A csoport neve megváltozott",
+    "invited": "{{actor}} meghívta: {{member}}",
+    "removed": "{{actor}} eltávolította: {{member}}",
+    "left": "{{actor}} kilépett a csoportból",
+    "renamed": "{{actor}} átnevezte a csoportot erre: {{name}}",
+    "cleared_name": "{{actor}} törölte a csoport nevét",
+    "common_groups": "Közös csoportok"
   },
   "licenses": {
     "intro": "Köszönjük a nyílt forráskódú közösség munkáját.",

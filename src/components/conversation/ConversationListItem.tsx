@@ -24,6 +24,7 @@ import Animated, {
 
 import { BlockedBadge } from '@/components/blocked/BlockedBadge';
 import { Avatar } from '@/components/common/Avatar';
+import { GroupAvatar } from '@/components/common/GroupAvatar';
 import { MessagePreviewText } from '@/components/chat/MessagePreviewText';
 import { AppText } from '@/components/common/AppText';
 import {
@@ -42,6 +43,7 @@ import { useContact } from '@/hooks/use-contacts';
 import { useElectronFileDrop } from '@/hooks/use-electron-file-drop';
 import { useIsRTL } from '@/i18n/direction';
 import { useProfile } from '@/hooks/use-profile';
+import { useGroupPresentation } from '@/hooks/use-group-presentation';
 import {
   BACK_SWIPE_GUARD,
   clearOpenSwipeable,
@@ -50,6 +52,7 @@ import {
   registerOpenSwipeable,
 } from '@/lib/gestures';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
+import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import type { ComposerFile } from '@/lib/attachments/composer-file';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
 import { formatListTime } from '@/lib/time';
@@ -64,12 +67,14 @@ type Props = {
   conversationKey: string;
   counterpartyPubkey: string | null;
   conversationName: string | null;
+  groupMemberPubkeys?: string[] | null;
   /** Optional in-memory picture used instead of a live profile picture. */
   conversationPicture?: string | number | null;
   lastMessagePreview: string | null;
   lastMessageTags?: string[][] | null;
   lastMessageFromSelf?: boolean;
-  lastMessageAt: number;
+  lastMessageSenderPubkey?: string | null;
+  lastMessageAt: number | null;
   /** Current unix-minute bucket, used to refresh and calculate relative time. */
   currentMinute?: number;
   unreadCount: number;
@@ -108,6 +113,7 @@ type Props = {
    * the action. The direction is derived from `unreadCount`. */
   onToggleUnread?: (conversationKey: string, unreadCount: number) => void;
   onDelete: (conversationKey: string) => void;
+  rowActionsEnabled?: boolean;
 };
 
 const ACTION_WIDTH = SWIPE_ACTION_WIDTH;
@@ -256,10 +262,12 @@ function ConversationListItemBase({
   conversationKey,
   counterpartyPubkey,
   conversationName,
+  groupMemberPubkeys,
   conversationPicture,
   lastMessagePreview,
   lastMessageTags,
   lastMessageFromSelf,
+  lastMessageSenderPubkey,
   lastMessageAt,
   currentMinute,
   unreadCount,
@@ -277,6 +285,7 @@ function ConversationListItemBase({
   onTogglePin,
   onToggleUnread,
   onDelete,
+  rowActionsEnabled = true,
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
@@ -289,6 +298,69 @@ function ConversationListItemBase({
       : 'disconnected',
   );
   const profile = useProfile(counterpartyPubkey, liveDataEnabled);
+  const isGroup = Array.isArray(groupMemberPubkeys);
+  const groupPresentation = useGroupPresentation(
+    accountPubkey,
+    conversationName,
+    groupMemberPubkeys,
+    liveDataEnabled && isGroup,
+  );
+  const parsedGroupAction = isGroup && lastMessageTags
+    ? parseGroupAction(lastMessageTags)
+    : { status: 'none' as const };
+  const actionTargetPubkey =
+    parsedGroupAction.status === 'valid' &&
+    (parsedGroupAction.action.type === 'invite' || parsedGroupAction.action.type === 'remove')
+      ? parsedGroupAction.action.memberPubkey
+      : '';
+  const actionSenderProfile = useProfile(
+    isGroup ? lastMessageSenderPubkey ?? null : null,
+    liveDataEnabled && isGroup,
+  );
+  const actionSenderContact = useContact(
+    accountPubkey,
+    isGroup ? lastMessageSenderPubkey ?? '' : '',
+    liveDataEnabled && isGroup,
+  );
+  const actionTargetProfile = useProfile(
+    actionTargetPubkey || null,
+    liveDataEnabled && isGroup,
+  );
+  const actionTargetContact = useContact(
+    accountPubkey,
+    actionTargetPubkey,
+    liveDataEnabled && isGroup,
+  );
+  const actionPreview = (() => {
+    if (
+      parsedGroupAction.status !== 'valid' ||
+      parsedGroupAction.action.type === 'create' ||
+      !lastMessageSenderPubkey
+    ) return null;
+    const actor = resolveDisplayName(lastMessageSenderPubkey, {
+      petname: actionSenderContact?.petname,
+      displayName: actionSenderProfile?.displayName,
+      name: actionSenderProfile?.name,
+    });
+    const member = actionTargetPubkey
+      ? resolveDisplayName(actionTargetPubkey, {
+          petname: actionTargetContact?.petname,
+          displayName: actionTargetProfile?.displayName,
+          name: actionTargetProfile?.name,
+        })
+      : '';
+    if (parsedGroupAction.action.type === 'invite') {
+      return t('group.invited', { actor, member });
+    }
+    if (parsedGroupAction.action.type === 'remove') {
+      return parsedGroupAction.action.memberPubkey === lastMessageSenderPubkey
+        ? t('group.left', { actor })
+        : t('group.removed', { actor, member });
+    }
+    return parsedGroupAction.action.name
+      ? t('group.renamed', { actor, name: parsedGroupAction.action.name })
+      : t('group.cleared_name', { actor });
+  })();
   // Two-step delete: the first Delete tap morphs the whole trailing action set
   // into a single "Confirm delete" button; the swipe closing (or sliding back)
   // resets it. Replaces the old confirmation Alert with an inline confirm.
@@ -350,13 +422,14 @@ function ConversationListItemBase({
   // The note-to-self conversation is just a 1:1 with yourself — show your own
   // name, resolved like any peer (the `SelfBadge` marks that it's genuinely you).
   const isSelf = !!counterpartyPubkey && counterpartyPubkey === accountPubkey;
-  const displayName =
-    conversationName ||
-    resolveDisplayName(counterpartyPubkey ?? '', {
-      petname: contact?.petname,
-      displayName: profile?.displayName,
-      name: profile?.name,
-    });
+  const displayName = isGroup
+    ? groupPresentation.title
+    : conversationName ||
+      resolveDisplayName(counterpartyPubkey ?? '', {
+        petname: contact?.petname,
+        displayName: profile?.displayName,
+        name: profile?.name,
+      });
 
   const unread = unreadCount > 0;
   const contextMenuItems: ContextMenuItem[] = [];
@@ -386,7 +459,7 @@ function ConversationListItemBase({
       onPress: () => onTogglePin(conversationKey, !!pinned),
     });
   }
-  if (contextMenuAnchor) {
+  if (contextMenuAnchor && rowActionsEnabled) {
     contextMenuItems.push({
       key: 'mute',
       title: t(muted ? 'conversations.unmute' : 'conversations.mute'),
@@ -438,7 +511,8 @@ function ConversationListItemBase({
   const draft = useDraftsStore((s) =>
     active ? undefined : s.drafts[conversationKey],
   );
-  const draftText = draft ? draft.replace(/\s+/g, ' ').trim() : '';
+  const groupWritable = !isGroup || groupMemberPubkeys?.includes(accountPubkey) === true;
+  const draftText = groupWritable && draft ? draft.replace(/\s+/g, ' ').trim() : '';
 
   // Leading (left→right) swipe: read/unread toggle then pin toggle. Each is
   // shown only where its handler is supplied (both are inbox-only). null when
@@ -492,6 +566,7 @@ function ConversationListItemBase({
   // Trailing (right→left) swipe: mute + delete, with delete's two-step confirm
   // animated as a growing red cell (see TrailingActions).
   function renderRightActions() {
+    if (!rowActionsEnabled) return null;
     return (
       <TrailingActions
         confirming={confirmingDelete}
@@ -572,7 +647,7 @@ function ConversationListItemBase({
         ref={fileDropTargetRef}
         fallbackHoverOpacity={false}
         pressFeedback="immediate"
-        onContextMenu={IS_ELECTRON ? handleContextMenu : undefined}
+        onContextMenu={IS_ELECTRON && rowActionsEnabled ? handleContextMenu : undefined}
         // Visible-row warming already owns database I/O. Starting a cold read
         // under the finger cannot reliably finish before release and can return
         // decoding work exactly when navigation needs the JS thread.
@@ -630,12 +705,19 @@ function ConversationListItemBase({
           return (
             <>
               {selectedOrPressed || wideHover ? <InteractionOverlay /> : null}
-              <Avatar
-                pubkey={counterpartyPubkey ?? '0'.repeat(64)}
-                picture={conversationPicture ?? profile?.picture}
-                name={displayName}
-                size={uiDensity.conversationAvatarSize}
-              />
+              {isGroup ? (
+                <GroupAvatar
+                  members={groupPresentation.avatarMembers}
+                  size={uiDensity.conversationAvatarSize}
+                />
+              ) : (
+                <Avatar
+                  pubkey={counterpartyPubkey ?? '0'.repeat(64)}
+                  picture={conversationPicture ?? profile?.picture}
+                  name={displayName}
+                  size={uiDensity.conversationAvatarSize}
+                />
+              )}
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 {/* Top line: name (with its leading You/Blocked marker — mutually
                     exclusive, so they read consistently with the contacts list) and the
@@ -669,18 +751,20 @@ function ConversationListItemBase({
                       />
                     ) : null}
                   </View>
-                  <AppText
-                    variant="caption"
-                    tone="subtle"
-                    weight="regular"
-                    numberOfLines={1}
-                    style={{ flexShrink: 0 }}
-                  >
-                    {formatListTime(
-                      lastMessageAt,
-                      currentMinute === undefined ? undefined : currentMinute * 60,
-                    )}
-                  </AppText>
+                  {lastMessageAt != null ? (
+                    <AppText
+                      variant="caption"
+                      tone="subtle"
+                      weight="regular"
+                      numberOfLines={1}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {formatListTime(
+                        lastMessageAt,
+                        currentMinute === undefined ? undefined : currentMinute * 60,
+                      )}
+                    </AppText>
+                  ) : null}
                 </View>
                 {/* Bottom line: the message preview takes the full width, with the
                     unread count tucked to its right *only when there is one* — so a row
@@ -705,11 +789,17 @@ function ConversationListItemBase({
                       </>
                     </AppText>
                   ) : (
-                    <MessagePreviewText
-                      content={lastMessagePreview ?? ''}
-                      tags={lastMessageTags}
-                      invoiceRole={lastMessageFromSelf ? 'sent' : 'received'}
-                    />
+                    actionPreview ? (
+                      <AppText variant="body" tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+                        {actionPreview}
+                      </AppText>
+                    ) : (
+                      <MessagePreviewText
+                        content={lastMessagePreview ?? ''}
+                        tags={lastMessageTags}
+                        invoiceRole={lastMessageFromSelf ? 'sent' : 'received'}
+                      />
+                    )
                   )}
                   {unreadCount > 0 ? (
                     <CountBadge

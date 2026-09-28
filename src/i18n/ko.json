@@ -409,8 +409,9 @@
     "send": "음성 메시지 전송"
   },
   "delivery": {
+    "self": "나",
     "title": "전달",
-    "summary": "릴레이 {{total}}개 중 {{ok}}개에 전달됨",
+    "summary": "받는 사람 {{total}}명 중 {{ok}}명에게 전달됨",
     "signing": "서명 중…",
     "resend": "다시 전송",
     "failed": "전달 실패"
@@ -987,6 +988,35 @@
     "unexpected_message": "데이터는 안전합니다. 다시 시도하거나 채팅으로 돌아가세요.",
     "return_to_chats": "채팅으로 돌아가기",
     "export_diagnostics": "진단 정보 내보내기"
+  },
+  "group": {
+    "unnamed": "그룹",
+    "derived_title_with_others": "{{names}} 외 {{count}}명",
+    "create_with_count": "{{count}}명과 그룹 만들기",
+    "large_group_title": "대규모 그룹을 만들까요?",
+    "large_group_message": "각 메시지는 그룹의 모든 사람에게 개별적으로 암호화되어 전송됩니다. 큰 그룹에서는 전송이 더 느릴 수 있습니다. 계속할까요?",
+    "info_title": "그룹 정보",
+    "members": "멤버",
+    "add_member": "멤버 추가",
+    "rename": "그룹 이름 변경",
+    "leave": "그룹 나가기",
+    "leave_confirm": "다른 멤버가 다시 초대할 때까지 메시지를 보낼 수 없습니다.",
+    "remove_member": "멤버 삭제",
+    "remove_member_confirm": "이 사람을 그룹에서 삭제할까요?",
+    "name_too_long": "그룹 이름은 80자까지 입력할 수 있습니다.",
+    "read_only": "더 이상 이 그룹의 멤버가 아닙니다. 대화 기록은 계속 볼 수 있습니다.",
+    "other_devices": "내 다른 기기",
+    "new_message": "새 그룹 메시지",
+    "member_invited": "멤버가 초대되었습니다",
+    "member_removed": "멤버가 삭제되었습니다",
+    "member_left": "멤버가 그룹을 나갔습니다",
+    "name_changed": "그룹 이름이 변경되었습니다",
+    "invited": "{{actor}}님이 {{member}}님을 초대했습니다",
+    "removed": "{{actor}}님이 {{member}}님을 삭제했습니다",
+    "left": "{{actor}}님이 그룹을 나갔습니다",
+    "renamed": "{{actor}}님이 그룹 이름을 {{name}}(으)로 변경했습니다",
+    "cleared_name": "{{actor}}님이 그룹 이름을 지웠습니다",
+    "common_groups": "공통 그룹"
   },
   "licenses": {
     "intro": "오픈 소스 커뮤니티에 감사드립니다.",

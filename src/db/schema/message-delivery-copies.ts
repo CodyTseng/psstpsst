@@ -20,6 +20,8 @@ export const messageDeliveryCopies = sqliteTable(
     messageId: text('message_id').notNull(),
     recipientPubkey: text('recipient_pubkey').notNull(),
     relays: text('relays', { mode: 'json' }).$type<DeliveryRelayRecord[]>().notNull(),
+    /** Recipient-specific failure before relay targets could be materialized. */
+    error: text('error'),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [

@@ -1,4 +1,8 @@
-import { isMessageOrderNewer, messageOrderAt } from '../message-order';
+import {
+  isMessageOrderNewer,
+  isRumorTooFarInFuture,
+  messageOrderAt,
+} from '../message-order';
 
 describe('message order', () => {
   it('normalizes the authenticated millisecond tag', () => {
@@ -31,5 +35,11 @@ describe('message order', () => {
         { orderAt: 10_000, id: 'id-a' },
       ),
     ).toBe(true);
+  });
+
+  it('rejects only inner rumors more than ten minutes in the future', () => {
+    const now = 1_000_000;
+    expect(isRumorTooFarInFuture({ created_at: 1_600 }, now)).toBe(false);
+    expect(isRumorTooFarInFuture({ created_at: 1_601 }, now)).toBe(true);
   });
 });

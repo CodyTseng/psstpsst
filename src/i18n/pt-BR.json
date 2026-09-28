@@ -412,8 +412,9 @@
     "send": "Enviar mensagem de voz"
   },
   "delivery": {
+    "self": "Você",
     "title": "Entrega",
-    "summary": "Entregue a {{ok}} de {{total}} relays",
+    "summary": "Entregue a {{ok}} de {{total}} destinatários",
     "signing": "Assinando…",
     "resend": "Reenviar",
     "failed": "Falha na entrega"
@@ -992,6 +993,35 @@
     "unexpected_message": "Seus dados estão seguros. Tente novamente ou volte para as conversas.",
     "return_to_chats": "Voltar às conversas",
     "export_diagnostics": "Exportar diagnóstico"
+  },
+  "group": {
+    "unnamed": "Grupo",
+    "derived_title_with_others": "{{names}} e mais {{count}}",
+    "create_with_count": "Criar grupo com {{count}} pessoas",
+    "large_group_title": "Criar um grupo grande?",
+    "large_group_message": "Cada mensagem precisa ser criptografada e enviada separadamente para cada pessoa do grupo. Grupos maiores podem demorar mais. Continuar?",
+    "info_title": "Informações do grupo",
+    "members": "Membros",
+    "add_member": "Adicionar membro",
+    "rename": "Renomear grupo",
+    "leave": "Sair do grupo",
+    "leave_confirm": "Você não poderá enviar mensagens até que outro membro convide você novamente.",
+    "remove_member": "Remover membro",
+    "remove_member_confirm": "Remover esta pessoa do grupo?",
+    "name_too_long": "Nomes de grupo podem ter até 80 caracteres.",
+    "read_only": "Você não faz mais parte deste grupo. Ainda pode ler o histórico.",
+    "other_devices": "Seus outros dispositivos",
+    "new_message": "Nova mensagem de grupo",
+    "member_invited": "Um membro foi convidado",
+    "member_removed": "Um membro foi removido",
+    "member_left": "Um membro saiu do grupo",
+    "name_changed": "Nome do grupo alterado",
+    "invited": "{{actor}} convidou {{member}}",
+    "removed": "{{actor}} removeu {{member}}",
+    "left": "{{actor}} saiu do grupo",
+    "renamed": "{{actor}} renomeou o grupo para {{name}}",
+    "cleared_name": "{{actor}} apagou o nome do grupo",
+    "common_groups": "Grupos em comum"
   },
   "licenses": {
     "intro": "Obrigado à comunidade de código aberto.",

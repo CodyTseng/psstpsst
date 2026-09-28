@@ -139,6 +139,10 @@ between a message bubble and its reaction row.
   share the same spacing so pinning does not shift the text.
 - Do not nest scrolling containers unless the shared component explicitly owns
   that pattern.
+- Compact horizontal rails use `HorizontalFadeScrollView`. Logical-start and
+  logical-end fades appear only while content remains hidden beyond that edge;
+  native and Electron overlay scrollbars stay hidden because the fades are the
+  rail's overflow affordance.
 - Single-line names and titles truncate within the available width. Adjacent
   status marks, timestamps, and actions retain their space, including in selection mode.
 
@@ -167,24 +171,44 @@ copy, reply, react, quote, and forward.
 
 Received group-message runs show the sender name once at the run start and the
 sender avatar beside the run's final bubble. The logical-start avatar column is
-reserved across the run. While a long run crosses the viewport, its avatar
-sticks to the viewport bottom within the run and releases at every sender,
-system-event, date, or unread boundary. Own-message runs show neither.
+reserved across the run. The sender name uses semibold text at reduced opacity
+and aligns with the bubble's text inset. The avatar diameter matches a one-line text bubble's height,
+stays attached to the final bubble, and scrolls with it; it never floats
+independently. Reserve group-message geometry from the first route render;
+asynchronous conversation metadata must never shift existing bubbles. Own-message
+runs show neither. In message-selection mode, the received avatar column moves
+with its bubbles as one motion unit so the selector owns the leading slot
+without overlap or a second avatar animation target. Group sender labels move
+with that unit but remain outside the selected-row wash and selector alignment.
 
-Identity taps inside a group conversation, including the header and sender
-labels or avatars, open group information. Individual member profiles are
-reached from the member list on that screen. Add, remove, and leave controls
-remain on group information. The global profile screen may link to a read-only
-list of common groups, but never gains group-specific actions. Common-group rows
-open their chat histories.
+The group conversation header opens group information. Sender names and avatars
+open that member's profile, as do member rows on group information. Add, remove,
+and leave controls remain on group information. The global profile screen may
+link to a read-only list of common groups, but never gains group-specific
+actions. Common-group rows open their chat histories.
 
 Automatically derived group titles resolve at most three member names in a
 stable order, followed by a localized remaining-member count. Full member
 rosters use virtualized lists.
 
-Multi-copy delivery details keep target rows, including self delivery to other
-devices, in stable identity order while statuses update; status changes never
-reorder the list.
+Multi-copy delivery details use a horizontally scrollable avatar tab for each
+target, including self delivery to other devices, with the selected target's
+relay detail shown below. Selection never changes avatar size, and status marks
+use equal logical-end and bottom insets near the avatar edge without obscuring
+its centre. The selected tab uses an accent ring around an accent-soft surface;
+the ring uses nested fills instead of a platform border stroke so its curved
+and straight segments stay visually even. Its frame, hover region, and tap
+region share one fixed geometry. The delivery summary row owns one retry-all
+action for every failed relay across all copies and keeps the same single-line
+height whether that action is present or absent. Failed relay rows expand in
+place to show their failure reason. Targets stay in stable
+identity order while statuses update, with the user's own copy labelled as
+themselves and kept last. Avatar tabs use a compact gap and sit close to the
+selected target detail. An overflowing rail uses the shared translucent
+logical-edge fades while content remains beyond either side. The rail extends through the sheet
+body gutter while its resting tabs retain that gutter, so scrolling content is
+never clipped at the inner padding boundary. Status changes never reorder the
+tabs.
 
 ## 5. Shape and elevation
 
@@ -290,6 +314,7 @@ this table records when to choose each primitive.
 | Single-choice indicator | `RadioIndicator` inside a radio `ListRow` |
 | Contact or conversation row | `ContactListItem` / `ConversationListItem` |
 | Section heading | `SectionLabel` |
+| Scrollable horizontal rail | `HorizontalFadeScrollView` |
 | Summoned task, picker, or form | `BottomSheet` |
 | Short decision or notice | `platform.confirmationDialog` |
 | Small Electron value entry | `InputDialog` |

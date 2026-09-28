@@ -409,8 +409,9 @@
     "send": "傳送語音訊息"
   },
   "delivery": {
+    "self": "你自己",
     "title": "傳遞",
-    "summary": "已傳遞至 {{total}} 個中繼站中的 {{ok}} 個",
+    "summary": "已傳遞給 {{total}} 位收件者中的 {{ok}} 位",
     "signing": "正在簽章…",
     "resend": "重新傳送",
     "failed": "傳遞失敗"
@@ -987,6 +988,35 @@
     "unexpected_message": "你的資料是安全的。請重試或返回聊天。",
     "return_to_chats": "返回聊天",
     "export_diagnostics": "匯出診斷資訊"
+  },
+  "group": {
+    "unnamed": "群組",
+    "derived_title_with_others": "{{names}} 等 {{count}} 人",
+    "create_with_count": "與 {{count}} 人建立群組",
+    "large_group_title": "建立大型群組？",
+    "large_group_message": "每則訊息都必須分別加密並傳送給群組中的每個人。大型群組傳送速度可能較慢，部分成員也可能稍晚收到訊息。要繼續嗎？",
+    "info_title": "群組資訊",
+    "members": "成員",
+    "add_member": "加入成員",
+    "rename": "重新命名群組",
+    "leave": "離開群組",
+    "leave_confirm": "離開後將無法傳送訊息，除非其他成員再次邀請你。",
+    "remove_member": "移除成員",
+    "remove_member_confirm": "要將此人移出群組嗎？",
+    "name_too_long": "群組名稱最多可包含 80 個字元。",
+    "read_only": "你已不在此群組中，但仍可查看歷史訊息。",
+    "other_devices": "你的其他裝置",
+    "new_message": "新群組訊息",
+    "member_invited": "已邀請一名成員",
+    "member_removed": "已移除一名成員",
+    "member_left": "一名成員已離開",
+    "name_changed": "群組名稱已變更",
+    "invited": "{{actor}} 邀請了 {{member}}",
+    "removed": "{{actor}} 移除了 {{member}}",
+    "left": "{{actor}} 離開了群組",
+    "renamed": "{{actor}} 將群組名稱改為 {{name}}",
+    "cleared_name": "{{actor}} 清除了群組名稱",
+    "common_groups": "共同群組"
   },
   "licenses": {
     "intro": "感謝開源社群的貢獻。",

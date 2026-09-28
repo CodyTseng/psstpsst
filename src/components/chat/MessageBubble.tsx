@@ -22,6 +22,8 @@ import Reanimated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { SelectionDot } from '@/components/common/SelectionDot';
+import { Avatar } from '@/components/common/Avatar';
+import { AppButton } from '@/components/common/AppButton';
 import { useDirectionalIconStyle, useIsRTL } from '@/i18n/direction';
 import { BACK_SWIPE_GUARD } from '@/lib/gestures';
 import { impact } from '@/lib/haptics';
@@ -35,7 +37,7 @@ import type { ReactionAggregate } from '@/lib/nostr/reactions';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import type { PreparedMessagePresentation } from '@/lib/chat/message-presentation';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
-import { useThemeColors } from '@/theme';
+import { spacing, typography, useThemeColors } from '@/theme';
 
 import { BubbleBody, type RemoteContentMode } from './BubbleBody';
 import { ATTACHMENT_FAILURE_TARGET_SIZE } from './attachment-layout';
@@ -43,6 +45,8 @@ import {
   BUBBLE_GAP,
   BUBBLE_GROUP_GAP,
   BUBBLE_MAX_WIDTH,
+  BUBBLE_PADDING_HORIZONTAL,
+  BUBBLE_PADDING_VERTICAL,
   BUBBLE_ROW_PADDING_HORIZONTAL,
   BUBBLE_SELECTION_OFFSET,
 } from './bubble-layout';
@@ -62,6 +66,10 @@ export const MESSAGE_HIGHLIGHT_CLEAR_MS =
   MESSAGE_HIGHLIGHT_HOLD_MS + MESSAGE_HIGHLIGHT_FADE_MS + 100;
 export const MESSAGE_HIGHLIGHT_REDUCED_CLEAR_MS = 1500;
 const MESSAGE_HIGHLIGHT_EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const GROUP_SENDER_AVATAR_SIZE =
+  typography.message.lineHeight + BUBBLE_PADDING_VERTICAL * 2;
+const GROUP_SENDER_COLUMN_WIDTH = GROUP_SENDER_AVATAR_SIZE + spacing.sm;
+const GROUP_SENDER_NAME_OPACITY = 0.72;
 
 export type MessageBubbleReplyPreview = {
   senderPubkey: string;
@@ -133,6 +141,12 @@ type Props = {
   /** A separator directly above this bubble owns the boundary spacing, so the
    * normal sender-group gap must not be added again. */
   separatorAbove?: boolean;
+  groupSenderPubkey?: string;
+  groupSenderName?: string | null;
+  showGroupSenderName?: boolean;
+  groupSenderPicture?: string | null;
+  showGroupSenderAvatar?: boolean;
+  onGroupSenderPress?: () => void;
   onTapReaction: (reaction: ReactionAggregate) => void;
   /** Selection mode (Telegram-style multi-select, for forwarding): a tap toggles
    * this message; the selected row is tinted. Long-press/swipe are disabled by
@@ -175,6 +189,12 @@ function MessageBubbleBase({
   highlightTick,
   groupStart,
   separatorAbove,
+  groupSenderPubkey,
+  groupSenderName,
+  showGroupSenderName,
+  groupSenderPicture,
+  showGroupSenderAvatar,
+  onGroupSenderPress,
   onTapReaction,
   selectionMode,
   selectionShiftStyle,
@@ -317,13 +337,30 @@ function MessageBubbleBase({
       onShowDelivery={onShowDelivery}
     />
   );
+  const receivedSelectionShift = !isSelf
+    ? selectionShiftStyle ?? {
+        transform: [{
+          translateX: selectionMode
+            ? BUBBLE_SELECTION_OFFSET * (isRTL ? -1 : 1)
+            : 0,
+        }],
+      }
+    : undefined;
+  const showReceivedGroupSenderName =
+    !isSelf && !!groupSenderName && !!showGroupSenderName;
+  const selectionContentTop = showReceivedGroupSenderName
+    ? typography.caption.lineHeight + spacing.xs
+    : 0;
 
   return (
     <GestureDetector gesture={gesture}>
       <DesktopView
         onContextMenu={IS_ELECTRON ? handleContextMenu : undefined}
         style={{
-          paddingHorizontal: BUBBLE_ROW_PADDING_HORIZONTAL,
+          paddingStart:
+            BUBBLE_ROW_PADDING_HORIZONTAL +
+            (!isSelf && groupSenderPubkey ? GROUP_SENDER_COLUMN_WIDTH : 0),
+          paddingEnd: BUBBLE_ROW_PADDING_HORIZONTAL,
           marginTop: separatorAbove
             ? 0
             : groupStart
@@ -344,11 +381,32 @@ function MessageBubbleBase({
               maxWidth: attachment ? '100%' : BUBBLE_MAX_WIDTH,
               minWidth: 0,
             },
-            !isSelf ? selectionShiftStyle ?? {
-              transform: [{ translateX: selectionMode ? BUBBLE_SELECTION_OFFSET * (isRTL ? -1 : 1) : 0 }],
-            } : undefined,
+            receivedSelectionShift,
           ]}
         >
+          {showReceivedGroupSenderName ? (
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                paddingStart: BUBBLE_PADDING_HORIZONTAL,
+                marginBottom: spacing.xs,
+                maxWidth: BUBBLE_MAX_WIDTH,
+                opacity: GROUP_SENDER_NAME_OPACITY,
+              }}
+            >
+              <AppButton
+                label={groupSenderName}
+                labelVariant="caption"
+                labelWeight="semibold"
+                labelNumberOfLines={1}
+                variant="text"
+                compact
+                compactAxis="none"
+                fullWidth={false}
+                onPress={onGroupSenderPress}
+              />
+            </View>
+          ) : null}
           {/* The bubble + its swipe-reply chip, sized to the bubble. Kept
               separate from the reactions row below so the reply chip's
               top/bottom:0 centring tracks the bubble, not the reactions. */}
@@ -381,6 +439,32 @@ function MessageBubbleBase({
               onTapReaction={onTapReaction}
             />
           ) : null}
+          {!isSelf && groupSenderPubkey && showGroupSenderAvatar ? (
+            <View
+              style={{
+                position: 'absolute',
+                start: -GROUP_SENDER_COLUMN_WIDTH,
+                bottom: 0,
+              }}
+            >
+              <AppButton
+                variant="text"
+                compact
+                compactAxis="none"
+                fullWidth={false}
+                accessibilityLabel={groupSenderName ?? groupSenderPubkey}
+                iconLeft={
+                  <Avatar
+                    pubkey={groupSenderPubkey}
+                    picture={groupSenderPicture}
+                    name={groupSenderName ?? undefined}
+                    size={GROUP_SENDER_AVATAR_SIZE}
+                  />
+                }
+                onPress={onGroupSenderPress}
+              />
+            </View>
+          ) : null}
         </Reanimated.View>
 
         {/* Checkbox column — absolutely positioned at the row's start so it never
@@ -391,7 +475,7 @@ function MessageBubbleBase({
             style={{
               position: 'absolute',
               start: 16,
-              top: 0,
+              top: selectionContentTop,
               bottom: 0,
               justifyContent: 'center',
               pointerEvents: 'none',
@@ -404,7 +488,7 @@ function MessageBubbleBase({
         {/* Selected (forwarding): a steady foreground wash across the whole row —
             the same colour family as the jump-to flash below, just persistent and
             fainter — rather than an accent fill. */}
-        {selected ? <SelectedMessageOverlay /> : null}
+        {selected ? <SelectedMessageOverlay topInset={selectionContentTop} /> : null}
 
         {/* Jump-to flash: a foreground wash across the **whole row**, painted on
             top of everything (the bubble included — not hidden behind it), so even
@@ -426,13 +510,13 @@ function MessageBubbleBase({
 }
 
 /** Subscribe to theme state only while the selection overlay is visible. */
-function SelectedMessageOverlay() {
+function SelectedMessageOverlay({ topInset }: { topInset: number }) {
   const c = useThemeColors();
   return (
     <View
       style={{
         position: 'absolute',
-        top: 0,
+        top: topInset,
         left: 0,
         right: 0,
         bottom: 0,
@@ -636,6 +720,11 @@ function areEqual(a: Props, b: Props): boolean {
     a.highlightTick !== b.highlightTick ||
     a.groupStart !== b.groupStart ||
     a.separatorAbove !== b.separatorAbove ||
+    a.groupSenderPubkey !== b.groupSenderPubkey ||
+    a.groupSenderName !== b.groupSenderName ||
+    a.showGroupSenderName !== b.showGroupSenderName ||
+    a.groupSenderPicture !== b.groupSenderPicture ||
+    a.showGroupSenderAvatar !== b.showGroupSenderAvatar ||
     a.selectionMode !== b.selectionMode ||
     a.selectionShiftStyle !== b.selectionShiftStyle ||
     a.selected !== b.selected

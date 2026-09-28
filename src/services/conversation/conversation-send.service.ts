@@ -1,6 +1,6 @@
 import type { CustomEmoji } from '@/lib/nostr/custom-emoji';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
-import type { ConversationDeliveryKind } from '@/lib/conversation/capabilities';
+import type { ConversationTarget } from '@/lib/conversation/target';
 import { throwIfAborted } from '@/lib/async/abort';
 
 import { dmService } from '../dm/dm.service';
@@ -16,10 +16,7 @@ import { proximityService } from '../proximity/proximity.service';
 import type { Signer } from '../signer/signer.interface';
 import { parseNearbyFileOffer } from '../proximity/proximity-file-offer';
 
-export type ConversationSendTarget = {
-  deliveryKind: ConversationDeliveryKind;
-  conversationKey: string;
-};
+export type ConversationSendTarget = ConversationTarget;
 
 type SendMessageOptions = {
   accountPubkey: string;
@@ -44,6 +41,8 @@ type ForwardMessageOptions = {
   kind: number;
   content: string;
   contentTags: string[][];
+  replyToId?: string;
+  subject?: string;
   timestamp?: RumorTimestamp;
 };
 
@@ -96,6 +95,16 @@ class ConversationSendService {
       });
       return { rumorId: rumor.id! };
     }
+    if (opts.target.group) {
+      return dmService.sendGroupMessage({
+        accountPubkey: opts.accountPubkey,
+        conversationKey: opts.target.conversationKey,
+        content: opts.content,
+        contentTags: opts.extraTags,
+        replyToId: opts.replyToId,
+        timestamp: opts.timestamp,
+      });
+    }
     return dmService.sendMessage({
       accountPubkey: opts.accountPubkey,
       recipientPubkeys: [opts.target.conversationKey],
@@ -116,6 +125,14 @@ class ConversationSendService {
         emoji: opts.emoji,
       });
       return { rumorId: rumor.id! };
+    }
+    if (opts.target.group) {
+      return dmService.sendGroupReaction({
+        accountPubkey: opts.accountPubkey,
+        conversationKey: opts.target.conversationKey,
+        targetMessageId: opts.targetMessageId,
+        emoji: opts.emoji,
+      });
     }
     return dmService.sendReaction({
       accountPubkey: opts.accountPubkey,
@@ -144,9 +161,22 @@ class ConversationSendService {
         kind: opts.kind,
         content: opts.content,
         contentTags: opts.contentTags,
+        replyToId: opts.replyToId,
+        subject: opts.subject,
         timestamp: opts.timestamp,
       });
       return { rumorId: rumor.id! };
+    }
+    if (opts.target.group) {
+      return dmService.sendGroupMessage({
+        accountPubkey: opts.accountPubkey,
+        conversationKey: opts.target.conversationKey,
+        kind: opts.kind === 15 ? 15 : 14,
+        content: opts.content,
+        contentTags: opts.contentTags,
+        replyToId: opts.replyToId,
+        timestamp: opts.timestamp,
+      });
     }
     return dmService.forwardMessage({
       accountPubkey: opts.accountPubkey,
@@ -154,6 +184,8 @@ class ConversationSendService {
       kind: opts.kind,
       content: opts.content,
       contentTags: opts.contentTags,
+      replyToId: opts.replyToId,
+      subject: opts.subject,
       timestamp: opts.timestamp,
     });
   }
@@ -234,11 +266,7 @@ class ConversationSendService {
     // Cancellation closes here. From this callback onward, at least one
     // gift-wrapped event may be persisted and queued for delivery.
     opts.onStep?.('publishing');
-    const contentTags = [
-      ...uploaded.tags,
-      ...(opts.replyToId ? [['e', opts.replyToId, '', 'reply']] : []),
-      ...(opts.subject ? [['subject', opts.subject]] : []),
-    ];
+    const contentTags = uploaded.tags;
     const rumorIds: string[] = [];
     const orderedTargets = Array.from(uniqueTargets.values()).sort((a, b) =>
       a.deliveryKind === b.deliveryKind ? 0 : a.deliveryKind === 'proximity' ? -1 : 1,
@@ -261,6 +289,8 @@ class ConversationSendService {
           kind: 15,
           content: uploaded.url,
           contentTags,
+          replyToId: opts.replyToId,
+          subject: opts.subject,
           timestamp: opts.timestamp,
         });
         rumorIds.push(sent.rumorId);

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { db } from '@/db/client';
 import { conversations, messages } from '@/db/schema';
+import { rememberConversationSnapshot } from '@/lib/conversation/conversation-snapshot-cache';
 import { useUnreadCount, useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
 
 export type ConversationWithLast = {
@@ -31,7 +32,7 @@ export function useContactConversations(accountPubkey: string) {
           eq(conversations.hasReplied, true),
         ),
       )
-      .orderBy(desc(conversations.lastMessageOrderAt)),
+      .orderBy(desc(conversations.updatedOrderAt), desc(conversations.conversationKey)),
     [accountPubkey],
   );
   return data ?? [];
@@ -70,7 +71,11 @@ function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean
     // DESC); within each group, most-recent first. Conversation counts are
     // small, so the in-memory sort this adds over the lastMessageOrderAt index is
     // negligible.
-    .orderBy(desc(conversations.pinned), desc(conversations.lastMessageOrderAt));
+    .orderBy(
+      desc(conversations.pinned),
+      desc(conversations.updatedOrderAt),
+      desc(conversations.conversationKey),
+    );
 }
 
 export type ConversationListResult = {
@@ -98,6 +103,10 @@ const inboxWarmCache = new Map<string, ConversationWithLast[]>();
  * against. Module-scoped like the warm cache above; reconciliation is
  * idempotent, so a re-render merging the same input is a no-op. */
 const inboxReconciledCache = new Map<string, ConversationWithLast[]>();
+
+function rememberConversationList(items: readonly ConversationWithLast[]): void {
+  for (const item of items) rememberConversationSnapshot(item.conversation);
+}
 
 function warmMainInbox(accountPubkey: string): ConversationWithLast[] {
   return inboxWarmCache.get(accountPubkey) ?? [];
@@ -192,6 +201,7 @@ export function useMainInboxConversations(accountPubkey: string): ConversationLi
     );
     inboxReconciledCache.set(accountPubkey, reconciled);
     if (liveReady) inboxWarmCache.set(accountPubkey, reconciled);
+    rememberConversationList(reconciled);
     return reconciled;
   }, [liveReady, data, accountPubkey]);
   return { conversations: conversationList, loaded: liveReady };
@@ -203,7 +213,12 @@ export function useRequestConversations(accountPubkey: string): ConversationList
     accountPubkey,
     'request',
   ]);
-  return { conversations: data ?? [], loaded: updatedAt !== undefined };
+  const conversationList = useMemo(() => {
+    const resolved = data ?? [];
+    rememberConversationList(resolved);
+    return resolved;
+  }, [data]);
+  return { conversations: conversationList, loaded: updatedAt !== undefined };
 }
 
 /**
@@ -290,8 +305,15 @@ export function useConversation(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updatedAt]);
   const loaded = resolvedTargetKey === targetKey;
+  const conversation = loaded ? (data?.[0] ?? null) : null;
+  if (
+    conversation?.accountPubkey === accountPubkey &&
+    conversation.conversationKey === conversationKey
+  ) {
+    rememberConversationSnapshot(conversation);
+  }
   return {
-    conversation: loaded ? (data?.[0] ?? null) : null,
+    conversation,
     loaded,
   };
 }

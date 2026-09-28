@@ -51,6 +51,7 @@ import m0046 from './0046_local-account-setup.sql';
 import m0047 from './0047_message-order-tiebreak.sql';
 import m0048 from './0048_message_delivery_status.sql';
 import m0049 from './0049_relay_message_outbox.sql';
+import m0050 from './0050_group_messaging.sql';
 
   export default {
     journal,
@@ -104,6 +105,7 @@ m0045,
 m0046,
 m0047,
 m0048,
-m0049
+m0049,
+m0050
     }
   }

@@ -15,13 +15,27 @@ jest.mock('../BubbleBody', () => ({ BubbleBody: () => {
 } }));
 jest.mock('../ReactionsRow', () => ({ ReactionsRow: () => null }));
 jest.mock('../attachment-layout', () => ({ ATTACHMENT_FAILURE_TARGET_SIZE: 32 }));
-jest.mock('../bubble-layout', () => ({ BUBBLE_GAP: 4, BUBBLE_GROUP_GAP: 8, BUBBLE_MAX_WIDTH: '80%', BUBBLE_ROW_PADDING_HORIZONTAL: 16 }));
+jest.mock('../bubble-layout', () => ({
+  BUBBLE_GAP: 4,
+  BUBBLE_GROUP_GAP: 8,
+  BUBBLE_MAX_WIDTH: '80%',
+  BUBBLE_PADDING_VERTICAL: 6,
+  BUBBLE_ROW_PADDING_HORIZONTAL: 16,
+}));
 jest.mock('@/components/common/SelectionDot', () => ({ SelectionDot: () => null }));
+jest.mock('@/components/common/Avatar', () => ({ Avatar: () => null }));
+jest.mock('@/components/common/AppButton', () => ({
+  AppButton: ({ iconLeft }: { iconLeft?: React.ReactNode }) => iconLeft ?? null,
+}));
 jest.mock('@solar-icons/react-native/category/arrows-action/Linear/Reply', () => ({ Reply: () => null }), { virtual: true });
 jest.mock('@/lib/haptics', () => ({ impact: jest.fn() }));
 jest.mock('@/lib/platform', () => ({ IS_ELECTRON: false }));
 jest.mock('@/i18n/direction', () => ({ useIsRTL: () => false, useDirectionalIconStyle: () => undefined }));
-jest.mock('@/theme', () => ({ useThemeColors: () => ({}) }));
+jest.mock('@/theme', () => ({
+  spacing: { xs: 4, sm: 8 },
+  typography: { caption: { lineHeight: 18 }, message: { lineHeight: 22 } },
+  useThemeColors: () => ({}),
+}));
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: Function, ...args: unknown[]) => fn(...args) }));
 jest.mock('react-native-gesture-handler', () => {
   function gesture(pan = false) {
@@ -93,8 +107,30 @@ it('allocates dormant decorations only when used and preserves the message body'
   act(() => renderer.update(<MessageBubble {...props} highlighted={false} />));
   expect(count('MessageHighlight')).toBe(0);
   const selectionStyle = { transform: [{ translateX: 32 }] };
-  act(() => renderer.update(<MessageBubble {...props} selectionMode selectionShiftStyle={selectionStyle} />));
-  expect(renderer.root.findAll((node) => Array.isArray(node.props.style) && node.props.style.includes(selectionStyle)).length).toBeGreaterThan(0);
+  const shiftedNodeCount = () => renderer.root.findAll((node) =>
+    Array.isArray(node.props.style) && node.props.style.includes(selectionStyle)
+  ).length;
+  act(() => renderer.update(
+    <MessageBubble {...props} selectionMode selectionShiftStyle={selectionStyle} />,
+  ));
+  const messageOnlyShiftedNodes = shiftedNodeCount();
+  act(() => renderer.update(
+    <MessageBubble
+      {...props}
+      selectionMode
+      selected
+      selectionShiftStyle={selectionStyle}
+      groupSenderPubkey="group-sender"
+      groupSenderName="Group sender"
+      showGroupSenderName
+      showGroupSenderAvatar
+    />,
+  ));
+  expect(shiftedNodeCount()).toBe(messageOnlyShiftedNodes);
+  const selectionOverlay = renderer.root.find((node) =>
+    typeof node.type === 'function' && node.type.name === 'SelectedMessageOverlay'
+  );
+  expect(selectionOverlay.props.topInset).toBe(22);
   expect(mockBodyMount).toHaveBeenCalledTimes(1);
   expect(mockBodyUnmount).not.toHaveBeenCalled();
   act(() => renderer.unmount());

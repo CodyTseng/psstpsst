@@ -1,6 +1,6 @@
 # Group Messaging Implementation Plan
 
-> Status: **approved design, not yet implemented**.
+> Status: **implemented**.
 >
 > This is an implementation plan, not a protocol specification. Group messaging
 > deliberately extends NIP-17 room semantics and therefore lives outside
@@ -111,10 +111,22 @@ follow-up migration for the state it did not repair:
 Run this as set-based, indexed SQL. Do not load or sort complete conversation
 histories in JavaScript; histories may contain millions of messages.
 
-Membership actions have no finality cutoff. A newly discovered valid action is
-inserted into the action history and the history is replayed in shared event
-order, regardless of the action's age. This deliberately trusts members not to
-publish misleading backdated actions.
+Membership actions replay in shared event order while account history is still
+being covered. Once the account's full backward history sync completes, its
+persisted forward sync cursor becomes an action-finality boundary. A network
+action first seen after that boundary was persisted is dropped when its
+authenticated inner timestamp is in the already-covered range. This applies to
+`create`, `invite`, `remove`, and `rename`, and drops the entire rumor even when
+a `create` also carries ordinary message content. The cursor has whole-second
+precision, so its boundary second remains open until a later completed forward
+pass covers it.
+
+The finality rule is account-scoped because history sync covers every gift wrap
+addressed to that account. It starts only when `backward_until = 0`; a partial
+backfill establishes no finality. Local sends and explicit archive import are
+trusted inputs and bypass this network late-action check. An ordinary group
+message first seen late remains visible, but its `subject` cannot mutate group
+name state when its inner timestamp is already finalized.
 
 All decrypted chat rumors, including direct messages, groups, reactions, and
 Nearby messages, are dropped when `created_at` is more than ten minutes ahead of
@@ -231,8 +243,9 @@ ordinary message, even when the rumor has text or file content.
 Its `p` tags list every initial member except the author. The message retains
 its ordinary bubble presentation and content. A `create` received after a newer
 invite bootstrap may be stored as historical content without changing the
-roster. A new `create` after the bootstrap cursor cannot reinitialize a known
-group.
+roster. A `create` newer than an existing bootstrap cursor is rejected as a
+whole rumor rather than stored as an ordinary message, and it cannot
+reinitialize a known group.
 
 `invite` addresses every current member except the author plus its target in
 `p`, so a newly invited recipient can initialize the group without receiving
@@ -386,8 +399,10 @@ quarantined rumors first. If only candidate actions remain at a cap, evict the
 oldest candidates to keep the bound absolute. An evicted action is not
 recoverable merely because an earlier action later makes it valid; this accepted
 tradeoff bounds a rare, low-impact case. History coverage alone never deletes a
-quarantined rumor: randomized gift-wrap timestamps cannot establish the absence
-of an earlier inner membership action.
+quarantined rumor until the account's backward history sync completes. When
+that sync first establishes finality, delete still-invalid action candidates
+and pre-bootstrap ordinary rumors whose inner timestamps are now in the final
+covered range; later network actions in that range cannot make them valid.
 
 An existing group is treated as one conversation even when it contains a
 person blocked in one-to-one messaging. Messages and actions from that person
@@ -574,10 +589,14 @@ previously applied:
 
 If a later replay makes a retained candidate action valid, insert its message
 row if it has never applied and apply the normal preview, unread, badge, and
-notification rules for that first application. Action rows remain excluded from
+notification rules for that first application. Unread state is always the
+number of eligible visible messages after the read cursor; replay never adds an
+extra unread increment of its own. Historical backfill and archive import do not
+emit OS notifications, while real-time receipt and notification recovery retain
+their existing notification-window rules. Action rows remain excluded from
 full-text search. An action that applied before already remains visible and does
 not notify a second time. Membership reconciliation must not rescan a
-conversation's ordinary-message history.
+conversation's ordinary-message history or advance conversation activity.
 
 Every action that has applied at least once remains in `messages`, including
 actions whose roster effect is currently inactive, and is exported with
@@ -905,12 +924,13 @@ Read `docs/DESIGN.md`, especially section 12, before implementation.
   row itself never participates in avatar, bubble-corner, or floating-date
   grouping calculations.
 - For each consecutive run of received messages from one sender, show the
-  sender name only on the first bubble and the sender avatar beside the final
-  bubble. Reserve the logical-start avatar column across the run so bubbles do
-  not shift horizontally. Own-message runs show neither name nor avatar.
-- Make the received-run avatar sticky to the viewport bottom while its run spans
-  the visible window, clamped within that run. It releases at the run's final
-  bubble and never crosses a date, unread, system-action, or sender boundary.
+  sender name only on the first bubble, semibold at reduced opacity and aligned
+  with the message text inset, and the sender avatar beside the final bubble. Reserve the
+  logical-start avatar column across the run so bubbles do not shift
+  horizontally. Own-message runs show neither name nor avatar.
+- Keep the received-run avatar attached to the run's final bubble. It scrolls
+  with that bubble and never floats independently. Its diameter matches a
+  one-line text bubble's height.
 - Use the custom name when present; otherwise show up to three names in stable
   pubkey order, including the local user while still a member, followed by the
   localized remaining-member count.
@@ -1074,7 +1094,14 @@ At minimum, cover:
 - shared event comparison, including equal `orderAt` with lower id newer;
 - ordering migration selects the minimum id at equal `orderAt`, preserves a
   monotonic read boundary, and does not create upgrade-time unread messages;
-- membership actions replay regardless of age;
+- membership actions replay regardless of age before account history finality;
+- partial backfill establishes no action cutoff, while a completed backward
+  sync rejects every subsequently discovered network action in the finalized
+  account range and leaves the cursor's current second open;
+- action finality applies to create, invite, remove, and rename, drops the whole
+  rumor, and purges now-unrecoverable quarantine entries;
+- archive import bypasses network finality, while a finalized ordinary rumor is
+  retained without applying its subject to name state;
 - every permutation of the same membership actions converges to one roster;
 - action authors are evaluated against membership at their ordered position;
 - ordered membership actions take the incremental tail-cursor path, while an
@@ -1167,8 +1194,8 @@ At minimum, cover:
 - system action rows own timeline boundaries and break adjacent bubble grouping;
 - action capsules remain single-line and truncate dynamic identity/name
   arguments without truncating their full accessibility label;
-- received sender runs show one name at the start and one bottom-sticky avatar
-  at the end, with stable avatar-column geometry across inverted-list scrolling;
+- received sender runs show one name at the start and one avatar at the final
+  bubble, with stable avatar-column geometry across inverted-list scrolling;
 - pre-bootstrap quarantine, roster-based release, and capacity-based eviction;
 - never-applied action candidates share quarantine caps, while actions that
   applied at least once remain in the canonical log through later invalidation;

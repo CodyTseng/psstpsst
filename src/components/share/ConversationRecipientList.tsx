@@ -6,12 +6,14 @@ import Reanimated, { type SharedValue, useAnimatedStyle } from 'react-native-rea
 
 import { AppText } from '@/components/common/AppText';
 import { Avatar } from '@/components/common/Avatar';
+import { GroupAvatar } from '@/components/common/GroupAvatar';
 import { NearbyBadge } from '@/components/common/NearbyBadge';
 import { SelectionDot } from '@/components/common/SelectionDot';
 import { SelfBadge } from '@/components/common/SelfBadge';
 import type { ConversationWithLast } from '@/hooks/use-conversations';
 import { useContact } from '@/hooks/use-contacts';
 import { useProfile } from '@/hooks/use-profile';
+import { useGroupPresentation } from '@/hooks/use-group-presentation';
 import { useIsRTL } from '@/i18n/direction';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { shareTargetId, type ShareTarget } from '@/lib/share/share-target';
@@ -37,17 +39,27 @@ export const ConversationRecipientRow = memo(function ConversationRecipientRow({
   const isRTL = useIsRTL();
   const accountPubkey = useActiveAccount((state) => state.activePubkey) ?? '';
   const conversation = item.conversation;
-  const relayPubkey = conversation.deliveryKind === 'relay' ? conversation.conversationKey : null;
+  const isGroup = !!conversation.groupId;
+  const relayPubkey = conversation.deliveryKind === 'relay' && !isGroup
+    ? conversation.conversationKey
+    : null;
   const isSelf = relayPubkey === accountPubkey;
   const profile = useProfile(relayPubkey);
   const contact = useContact(accountPubkey, relayPubkey ?? '');
-  const displayName =
-    conversation.name ||
-    resolveDisplayName(conversation.conversationKey, {
-      petname: contact?.petname,
-      displayName: profile?.displayName,
-      name: profile?.name,
-    });
+  const groupPresentation = useGroupPresentation(
+    accountPubkey,
+    conversation.name,
+    conversation.memberPubkeys,
+    isGroup,
+  );
+  const displayName = isGroup
+    ? groupPresentation.title
+    : conversation.name ||
+      resolveDisplayName(conversation.conversationKey, {
+        petname: contact?.petname,
+        displayName: profile?.displayName,
+        name: profile?.name,
+      });
   const contentShift = useAnimatedStyle(() => ({
     marginEnd: (selectProgress?.value ?? 0) * SELECT_COL,
     transform: [{ translateX: (selectProgress?.value ?? 0) * SELECT_COL * (isRTL ? -1 : 1) }],
@@ -62,6 +74,8 @@ export const ConversationRecipientRow = memo(function ConversationRecipientRow({
           conversationKey: conversation.conversationKey,
           deliveryKind: conversation.deliveryKind,
           name: displayName,
+          group: isGroup,
+          groupMemberPubkeys: conversation.memberPubkeys ?? undefined,
         })
       }
       style={({ pressed }) => ({
@@ -86,12 +100,16 @@ export const ConversationRecipientRow = memo(function ConversationRecipientRow({
       <Reanimated.View
         style={[{ flexDirection: 'row', alignItems: 'center', gap: 12 }, contentShift]}
       >
-        <Avatar
-          pubkey={conversation.conversationKey}
-          picture={conversation.deliveryKind === 'relay' ? profile?.picture : null}
-          name={displayName}
-          size={uiDensity.contactAvatarSize}
-        />
+        {isGroup ? (
+          <GroupAvatar members={groupPresentation.avatarMembers} size={uiDensity.contactAvatarSize} />
+        ) : (
+          <Avatar
+            pubkey={conversation.conversationKey}
+            picture={conversation.deliveryKind === 'relay' ? profile?.picture : null}
+            name={displayName}
+            size={uiDensity.contactAvatarSize}
+          />
+        )}
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {isSelf ? <SelfBadge /> : null}
           {conversation.deliveryKind === 'proximity' ? <NearbyBadge /> : null}

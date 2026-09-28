@@ -5,9 +5,11 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 
 import { AppText } from '@/components/common/AppText';
 import { Avatar } from '@/components/common/Avatar';
+import { GroupAvatar } from '@/components/common/GroupAvatar';
 import { SNIPPET_CLOSE, SNIPPET_OPEN } from '@/hooks/use-message-search';
 import { useContact } from '@/hooks/use-contacts';
 import { useProfile } from '@/hooks/use-profile';
+import { useGroupPresentation } from '@/hooks/use-group-presentation';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { formatListTime } from '@/lib/time';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -19,12 +21,13 @@ type Props = {
   avatarPubkey?: string | null;
   /** Conversation subject, if any (otherwise resolved from the counterparty). */
   conversationName: string | null;
+  groupMemberPubkeys?: string[] | null;
   /** Second line: a last-message preview (conversation hit) or a message
    * snippet. When `boldSnippet`, runs wrapped in SNIPPET_OPEN/CLOSE render bold
    * accent (the matched term). */
   subtitle: string | null;
   boldSnippet?: boolean;
-  timestamp: number;
+  timestamp: number | null;
   onPress: () => void;
   identityKind?: 'relay' | 'proximity';
 };
@@ -61,6 +64,7 @@ export function SearchResultRow({
   counterpartyPubkey,
   avatarPubkey,
   conversationName,
+  groupMemberPubkeys,
   subtitle,
   boldSnippet,
   timestamp,
@@ -69,9 +73,12 @@ export function SearchResultRow({
 }: Props) {
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
+  const isGroup = Array.isArray(groupMemberPubkeys);
   const resolvedAvatarPubkey = avatarPubkey ?? counterpartyPubkey;
   const avatarUsesCounterparty = resolvedAvatarPubkey === counterpartyPubkey;
-  const counterpartyRelayPubkey = identityKind === 'relay' ? counterpartyPubkey : null;
+  const counterpartyRelayPubkey = identityKind === 'relay' && !isGroup
+    ? counterpartyPubkey
+    : null;
   const avatarRelayPubkey =
     identityKind === 'relay' && !avatarUsesCounterparty
       ? resolvedAvatarPubkey
@@ -81,13 +88,20 @@ export function SearchResultRow({
   const avatarProfile = useProfile(avatarRelayPubkey);
   const avatarContact = useContact(accountPubkey, avatarRelayPubkey ?? '');
 
-  const displayName =
-    conversationName ||
-    resolveDisplayName(counterpartyPubkey ?? '', {
-      petname: counterpartyContact?.petname,
-      displayName: counterpartyProfile?.displayName,
-      name: counterpartyProfile?.name,
-    });
+  const groupPresentation = useGroupPresentation(
+    accountPubkey,
+    conversationName,
+    groupMemberPubkeys,
+    isGroup,
+  );
+  const displayName = isGroup
+    ? groupPresentation.title
+    : conversationName ||
+      resolveDisplayName(counterpartyPubkey ?? '', {
+        petname: counterpartyContact?.petname,
+        displayName: counterpartyProfile?.displayName,
+        name: counterpartyProfile?.name,
+      });
   const resolvedAvatarProfile = avatarUsesCounterparty
     ? counterpartyProfile
     : avatarProfile;
@@ -118,12 +132,16 @@ export function SearchResultRow({
         backgroundColor: pressed ? c.interactionOverlay : 'transparent',
       })}
     >
-      <Avatar
-        pubkey={resolvedAvatarPubkey ?? '0'.repeat(64)}
-        picture={resolvedAvatarProfile?.picture}
-        name={avatarName}
-        size={uiDensity.contactAvatarSize}
-      />
+      {isGroup && avatarPubkey == null ? (
+        <GroupAvatar members={groupPresentation.avatarMembers} size={uiDensity.contactAvatarSize} />
+      ) : (
+        <Avatar
+          pubkey={resolvedAvatarPubkey ?? '0'.repeat(64)}
+          picture={resolvedAvatarProfile?.picture}
+          name={avatarName}
+          size={uiDensity.contactAvatarSize}
+        />
+      )}
       <View style={{ flex: 1 }}>
         <AppText variant="subtitle" numberOfLines={1}>
           {displayName}
@@ -144,9 +162,11 @@ export function SearchResultRow({
           </AppText>
         ) : null}
       </View>
-      <AppText variant="caption" tone="subtle">
-        {formatListTime(timestamp)}
-      </AppText>
+      {timestamp != null ? (
+        <AppText variant="caption" tone="subtle">
+          {formatListTime(timestamp)}
+        </AppText>
+      ) : null}
     </Pressable>
   );
 }

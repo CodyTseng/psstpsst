@@ -9,23 +9,23 @@ import { Leaf } from '@solar-icons/react-native/category/nature/Linear/Leaf';
 import { Lightbulb } from '@solar-icons/react-native/category/devices/Linear/Lightbulb';
 import { SmileCircle as Smile } from '@solar-icons/react-native/category/faces/Linear/SmileCircle';
 import type { Icon as SolarIcon } from '@solar-icons/react-native/lib/types';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native';
+import { useCallback, useEffect, useRef } from 'react';
+import { StyleSheet, View, type LayoutRectangle, type ScrollView } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import { useTranslation } from 'react-i18next';
 
-import { EdgeFade } from '@/components/common/EdgeFade';
+import { HorizontalFadeScrollView } from '@/components/common/HorizontalFadeScrollView';
 import { CustomEmojiImage } from '@/components/emoji/CustomEmojiImage';
 import Plus from 'lucide-react-native/icons/plus';
-import { useLanguageDirection } from '@/i18n/direction';
 import type { CustomEmoji, EmojiPack } from '@/lib/nostr/custom-emoji';
 import { IS_ELECTRON } from '@/lib/platform';
 import { iconStrokeWidth } from '@/theme/icons';
 import {
   emojiPickerLayout,
   emojiSize,
+  horizontalRailLayout,
   radius,
   spacing,
   uiDensity,
@@ -133,7 +133,6 @@ export function EmojiPickerTabs({
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const direction = useLanguageDirection();
   const reducedMotion = useReducedMotion();
   const hasCustomSources = standaloneCustomEmojis.length > 0 || customPacks.length > 0;
   const customOnly = !showUnicodeCategories;
@@ -144,21 +143,6 @@ export function EmojiPickerTabs({
   const viewportWidthRef = useRef(0);
   const contentWidthRef = useRef(0);
   const scrollXRef = useRef(0);
-  const fadeVisibleRef = useRef(false);
-  const [fadeVisible, setFadeVisible] = useState(false);
-
-  const updateFadeVisibility = useCallback(() => {
-    const viewportWidth = viewportWidthRef.current;
-    const contentWidth = contentWidthRef.current;
-    const nextVisible =
-      contentWidth > viewportWidth &&
-      (direction === 'rtl'
-        ? scrollXRef.current > spacing.xs
-        : scrollXRef.current + viewportWidth < contentWidth - spacing.xs);
-    if (nextVisible === fadeVisibleRef.current) return;
-    fadeVisibleRef.current = nextVisible;
-    setFadeVisible(nextVisible);
-  }, [direction]);
 
   const revealActiveTab = useCallback(() => {
     const layout = activeLayoutRef.current;
@@ -166,10 +150,10 @@ export function EmojiPickerTabs({
     const contentWidth = contentWidthRef.current;
     if (!layout || viewportWidth <= 0 || contentWidth <= 0) return;
 
-    // Keep the selected tab clear of the trailing fade. Measurements and
-    // offsets share physical coordinates; only the content order is RTL.
-    const leftInset = direction === 'rtl' ? emojiPickerLayout.endFadeWidth : railPadding;
-    const rightInset = direction === 'rtl' ? railPadding : emojiPickerLayout.endFadeWidth;
+    // Keep the selected tab clear of either logical-edge fade. Measurements
+    // and offsets share physical coordinates; only the content order is RTL.
+    const leftInset = horizontalRailLayout.fadeWidth;
+    const rightInset = horizontalRailLayout.fadeWidth;
     const currentX = scrollXRef.current;
     let nextX = currentX;
     if (layout.x < currentX + leftInset) {
@@ -181,8 +165,7 @@ export function EmojiPickerTabs({
     if (nextX === currentX) return;
     scrollXRef.current = nextX;
     scrollRef.current?.scrollTo({ x: nextX, animated: !reducedMotion });
-    updateFadeVisibility();
-  }, [direction, railPadding, reducedMotion, updateFadeVisibility]);
+  }, [reducedMotion]);
 
   const handleActiveLayout = useCallback((layout: LayoutRectangle | null) => {
     activeLayoutRef.current = layout;
@@ -190,44 +173,33 @@ export function EmojiPickerTabs({
   }, [revealActiveTab]);
 
   return (
-    <View
-      style={{
-        direction,
-        position: 'relative',
+    <HorizontalFadeScrollView
+      ref={scrollRef}
+      fadeColor={backgroundColor ?? c.background}
+      containerStyle={{
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: c.border,
       }}
+      accessibilityRole="tablist"
+      keyboardShouldPersistTaps="handled"
+      onLayout={(event) => {
+        viewportWidthRef.current = event.nativeEvent.layout.width;
+        revealActiveTab();
+      }}
+      onContentSizeChange={(width) => {
+        contentWidthRef.current = width;
+        revealActiveTab();
+      }}
+      onScroll={(event) => {
+        scrollXRef.current = event.nativeEvent.contentOffset.x;
+      }}
+      contentContainerStyle={{
+        alignItems: 'center',
+        paddingHorizontal: railPadding,
+        paddingVertical: spacing.xs,
+        gap: TAB_GAP,
+      }}
     >
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        style={{ direction: 'ltr' }}
-        accessibilityRole="tablist"
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        onLayout={(event) => {
-          viewportWidthRef.current = event.nativeEvent.layout.width;
-          revealActiveTab();
-          updateFadeVisibility();
-        }}
-        onContentSizeChange={(width) => {
-          contentWidthRef.current = width;
-          revealActiveTab();
-          updateFadeVisibility();
-        }}
-        onScroll={(event) => {
-          scrollXRef.current = event.nativeEvent.contentOffset.x;
-          updateFadeVisibility();
-        }}
-        scrollEventThrottle={16}
-        contentContainerStyle={{
-          direction,
-          alignItems: 'center',
-          paddingHorizontal: railPadding,
-          paddingVertical: spacing.xs,
-          gap: TAB_GAP,
-        }}
-      >
       {customOnly || hasCustomSources ? (
         <EmojiTab
           active={activePack === STANDALONE_EMOJI_TAB}
@@ -309,14 +281,6 @@ export function EmojiPickerTabs({
           </EmojiTab>
         );
       }) : null}
-      </ScrollView>
-      {fadeVisible ? (
-        <EdgeFade
-          edge="end"
-          color={backgroundColor ?? c.background}
-          width={emojiPickerLayout.endFadeWidth}
-        />
-      ) : null}
-    </View>
+    </HorizontalFadeScrollView>
   );
 }

@@ -15,6 +15,7 @@ import { useFocusAfterTransition } from '@/hooks/use-focus-after-transition';
 import { type MessageSearchHit, useMessageSearch } from '@/hooks/use-message-search';
 import { parseConversationRouteParams } from '@/lib/navigation/route-params';
 import { useActiveAccount } from '@/stores/active-account.store';
+import { useConversation } from '@/hooks/use-conversations';
 import { useThemeColors } from '@/theme';
 
 /**
@@ -39,6 +40,7 @@ export default function ChatSearch() {
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
   const [query, setQuery] = useState('');
   const searchRef = useFocusAfterTransition();
+  const { conversation } = useConversation(accountPubkey, conversationKey);
 
   const { results, searching, loadingMore, loadMore } = useMessageSearch(
     accountPubkey,
@@ -85,9 +87,10 @@ export default function ChatSearch() {
           keyExtractor={(hit) => hit.id}
           renderItem={({ item }) => (
             <SearchResultRow
-              counterpartyPubkey={counterparty}
+              counterpartyPubkey={conversation?.groupId ? null : counterparty}
               avatarPubkey={item.senderPubkey}
-              conversationName={isProximity ? route.name ?? null : null}
+              conversationName={conversation?.name ?? (isProximity ? route.name ?? null : null)}
+              groupMemberPubkeys={conversation?.groupId ? conversation.memberPubkeys : undefined}
               identityKind={isProximity ? 'proximity' : 'relay'}
               subtitle={item.snippet}
               boldSnippet

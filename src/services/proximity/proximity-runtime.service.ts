@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, like } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, like, sql } from 'drizzle-orm';
 import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -23,6 +23,7 @@ import { findFileMeta } from '@/lib/nostr/file-tags';
 import { getPTags, getReplyToId, getSubject } from '@/lib/nostr/tags';
 import {
   isMessageOrderNewer,
+  isRumorTooFarInFuture,
   messageOrderAt,
   withMessageOrderTag,
 } from '@/lib/nostr/message-order';
@@ -2733,8 +2734,12 @@ class ProximityService {
           deliveryKind: 'proximity',
           proximityAccountPubkey: identity.proximityPubkey,
           name: displayName,
-          lastMessageAt: now,
-          lastMessageOrderAt: now * 1000,
+          createdAt: now,
+          createdOrderAt: now * 1000,
+          updatedAt: now,
+          updatedOrderAt: now * 1000,
+          lastMessageAt: null,
+          lastMessageOrderAt: null,
           lastMessageId: null,
           unreadCount: 0,
           hasReplied: true,
@@ -2851,7 +2856,7 @@ class ProximityService {
       recipientTags.length !== 1 ||
       recipientTags[0].length < 2 ||
       recipientTags[0][1] !== this.identity.proximityPubkey ||
-      rumor.created_at > Math.floor(Date.now() / 1000) + 600 ||
+      isRumorTooFarInFuture(rumor) ||
       (replyToId !== undefined && !validPubkey(replyToId)) ||
       !validReaction ||
       !validFile ||
@@ -3140,7 +3145,8 @@ class ProximityService {
     const candidates = rumors
       .filter(
         (rumor) =>
-          rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE || rumor.kind === KIND_REACTION,
+          !isRumorTooFarInFuture(rumor) &&
+          (rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE || rumor.kind === KIND_REACTION),
       )
       .map((rumor) => {
         const currentPeer = currentPubkey ? archivedProximityPeer(rumor, currentPubkey) : null;
@@ -3226,17 +3232,25 @@ class ProximityService {
     kind: number;
     content: string;
     contentTags: string[][];
+    replyToId?: string;
+    subject?: string;
     timestamp?: RumorTimestamp;
   }): Promise<Rumor> {
     if (opts.kind !== KIND_CHAT && opts.kind !== KIND_FILE) {
       throw new Error('Unsupported Nearby message kind');
     }
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
+    const routingTags = new Set(['p', 'e', 'h', 'subject', 'action', 'ms']);
     return this.sendRumor(opts.accountPubkey, opts.peerPubkey, {
       kind: opts.kind,
       content: opts.content,
       tags: withMessageOrderTag(
-        [['p', opts.peerPubkey], ...opts.contentTags],
+        [
+          ['p', opts.peerPubkey],
+          ...opts.contentTags.filter((tag) => !routingTags.has(tag[0])),
+          ...(opts.replyToId ? [['e', opts.replyToId]] : []),
+          ...(opts.subject ? [['subject', opts.subject]] : []),
+        ],
         timestamp.millisecond,
       ),
       created_at: timestamp.createdAt,
@@ -3304,6 +3318,8 @@ class ProximityService {
     const localPubkey = archive?.proximityAccountPubkey ?? this.identity?.proximityPubkey;
     if (!accountPubkey || !localPubkey) return false;
     const orderAt = messageOrderAt(rumor);
+    const activityOrderAt = Date.now();
+    const activityAt = Math.floor(activityOrderAt / 1000);
     const replyToId = getReplyToId(rumor.tags) ?? null;
     const subject = getSubject(rumor.tags) ?? null;
     const incoming = rumor.pubkey !== localPubkey;
@@ -3376,6 +3392,10 @@ class ProximityService {
           deliveryKind: 'proximity',
           proximityAccountPubkey: localPubkey,
           name: peerName,
+          createdAt: rumor.created_at,
+          createdOrderAt: orderAt,
+          updatedAt: archive ? rumor.created_at : activityAt,
+          updatedOrderAt: archive ? orderAt : activityOrderAt,
           lastMessageAt: rumor.created_at,
           lastMessageOrderAt: orderAt,
           lastMessageId: rumor.id!,
@@ -3388,6 +3408,7 @@ class ProximityService {
       } else {
         const newest =
           !existing.lastMessageId ||
+          existing.lastMessageOrderAt == null ||
           isMessageOrderNewer(
             { orderAt, id: rumor.id! },
             { orderAt: existing.lastMessageOrderAt, id: existing.lastMessageId },
@@ -3404,6 +3425,12 @@ class ProximityService {
             }),
             unreadCount:
               existing.unreadCount + (incoming && !archive && activePeer !== peerPubkey ? 1 : 0),
+            ...(!archive
+              ? {
+                  updatedAt: sql`CASE WHEN ${conversations.updatedOrderAt} < ${activityOrderAt} THEN ${activityAt} ELSE ${conversations.updatedAt} END`,
+                  updatedOrderAt: sql`MAX(${conversations.updatedOrderAt}, ${activityOrderAt})`,
+                }
+              : {}),
             ...(markRead && (!archive || newest)
               ? {
                   lastReadAt: rumor.created_at,

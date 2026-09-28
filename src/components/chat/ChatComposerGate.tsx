@@ -13,7 +13,7 @@ import { getBottomChromeInset } from '@/lib/layout/bottom-chrome';
 import { bottomBarHeight, useThemeColors } from '@/theme';
 
 type Props = {
-  status: 'checking' | 'unsupported' | 'proximity_identity_changed';
+  status: 'checking' | 'unsupported' | 'proximity_identity_changed' | 'group_read_only';
   /** Open the reason sheet. Only meaningful for `unsupported`. */
   onPressDetails: () => void;
 };
@@ -95,7 +95,9 @@ export function ChatComposerGate({ status, onPressDetails }: Props) {
           <AppText variant="body" tone="muted">
             {status === 'proximity_identity_changed'
               ? t('nearby.account_changed_history')
-              : t('composer.unavailable')}
+              : status === 'group_read_only'
+                ? t('group.read_only')
+                : t('composer.unavailable')}
           </AppText>
         </>
       )}

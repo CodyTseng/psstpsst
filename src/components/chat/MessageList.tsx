@@ -1,5 +1,6 @@
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
+import { router } from 'expo-router';
 import {
   useCallback,
   useEffect,
@@ -54,6 +55,7 @@ import {
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
 import { attachmentLabel } from '@/lib/nostr/attachment-label';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
+import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import { prepareMessagePresentation } from '@/lib/chat/message-presentation';
 import { formatDateSeparator, isDifferentDay } from '@/lib/time';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
@@ -71,6 +73,7 @@ import {
 } from './MessageBubble';
 import { DatePill, DateSeparator } from './message-date-separator';
 import { PendingAttachmentBubble } from './PendingAttachmentBubble';
+import { GroupSystemMessage } from './GroupSystemMessage';
 import {
   startsLoadedTimelineDay,
   startsLoadedSenderGroup,
@@ -88,6 +91,12 @@ function isMessageFromSelf(
   return proximity
     ? message.senderPubkey !== message.conversationKey
     : message.senderPubkey === fallbackPubkey;
+}
+
+function isGroupSystemMessage(message: MessageRow, group: boolean): boolean {
+  if (!group) return false;
+  const action = parseGroupAction(message.tags);
+  return action.status === 'valid' && action.action.type !== 'create';
 }
 
 /** Full-width "Unread messages" band marking where the user last left off
@@ -125,6 +134,7 @@ type Props = {
   /** Pubkey used to classify own bubbles; defaults to the owning account. */
   selfPubkey?: string;
   proximity?: boolean;
+  group?: boolean;
   /** Transport-local peer name used by Nearby quoted replies. */
   peerDisplayName?: string | null;
   conversationKey: string;
@@ -227,6 +237,7 @@ type ListItem = ListItemSource & {
   /** The adjacent older source. Stored on the item so a prepended history page
    * changes only the previous boundary cell, not renderItem. */
   older: ListItemSource | null;
+  newer: ListItemSource | null;
   boundaryCreatedAt: number | null | undefined;
   boundaryIsSelf: boolean | null | undefined;
 };
@@ -234,6 +245,7 @@ type ListItem = ListItemSource & {
 type CachedListItem = {
   prepared: PreparedBubbleRenderItem | null;
   olderSource: MessageRow | PendingAttachment | null;
+  newerSource: MessageRow | PendingAttachment | null;
   boundaryCreatedAt: number | null | undefined;
   boundaryIsSelf: boolean | null | undefined;
   item: ListItem;
@@ -267,6 +279,7 @@ export function MessageList({
   accountPubkey,
   selfPubkey = accountPubkey,
   proximity = false,
+  group = false,
   peerDisplayName,
   conversationKey,
   remoteContentMode,
@@ -312,6 +325,10 @@ export function MessageList({
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
+  const groupRef = useRef(group);
+  useEffect(() => {
+    groupRef.current = group;
+  }, [group]);
   const reducedMotion = useReducedMotion();
   const isRTL = useIsRTL();
   // All received messages move together; one mapper owns this transition
@@ -884,6 +901,7 @@ export function MessageList({
         if (v.index == null) continue;
         const it = v.item as ListItem;
         if (it.kind !== 'message') continue;
+        if (isGroupSystemMessage(it.message, groupRef.current)) continue;
         if (v.index > topIdx) {
           topIdx = v.index;
           topMsg = it.message;
@@ -896,7 +914,17 @@ export function MessageList({
       // double up. (Same predicate the renderer uses for `showDate`: the older
       // neighbour is `topIdx + 1`.)
       const arr = dataRef.current;
-      const older = arr[topIdx + 1];
+      let older: ListItem | undefined;
+      for (let index = topIdx + 1; index < arr.length; index += 1) {
+        const candidate = arr[index];
+        if (
+          candidate.kind === 'message' &&
+          !isGroupSystemMessage(candidate.message, groupRef.current)
+        ) {
+          older = candidate;
+          break;
+        }
+      }
       floatingDupeRef.current =
         !older ||
         older.kind !== 'message' ||
@@ -1076,12 +1104,18 @@ export function MessageList({
     }
     return merged.map((source, index): ListItem => {
       const older = merged[index + 1] ?? null;
+      const newer = merged[index - 1] ?? null;
       const sourceRow = source.kind === 'message' ? source.message : source.pending;
       const olderSource = older == null
         ? null
         : older.kind === 'message'
           ? older.message
           : older.pending;
+      const newerSource = newer == null
+        ? null
+        : newer.kind === 'message'
+          ? newer.message
+          : newer.pending;
       const prepared = source.kind === 'message' ? source.prepared : null;
       const boundaryCreatedAt = older == null ? oldestBoundary?.createdAt : undefined;
       const edgeIsSelf = older == null ? boundaryIsSelf : undefined;
@@ -1089,6 +1123,7 @@ export function MessageList({
       if (
         cached?.prepared === prepared &&
         cached.olderSource === olderSource &&
+        cached.newerSource === newerSource &&
         cached.boundaryCreatedAt === boundaryCreatedAt &&
         cached.boundaryIsSelf === edgeIsSelf
       ) {
@@ -1097,12 +1132,14 @@ export function MessageList({
       const item = {
         ...source,
         older,
+        newer,
         boundaryCreatedAt,
         boundaryIsSelf: edgeIsSelf,
       } as ListItem;
       listItemCache.set(sourceRow, {
         prepared,
         olderSource,
+        newerSource,
         boundaryCreatedAt,
         boundaryIsSelf: edgeIsSelf,
         item,
@@ -1371,6 +1408,7 @@ export function MessageList({
   const repliedSenderPubkeys = useMemo(() => {
     const set = new Set<string>();
     for (const m of messages) {
+      if (group) set.add(m.senderPubkey);
       if (m.replyToId) {
         const target =
           messageById.get(m.replyToId) ?? referencedById[m.replyToId];
@@ -1384,7 +1422,7 @@ export function MessageList({
       if (target) set.add(target.senderPubkey);
     }
     return Array.from(set);
-  }, [messages, messageById, referencedById, pendingAttachments]);
+  }, [group, messages, messageById, referencedById, pendingAttachments]);
 
   const profileMap = useProfilesMap(repliedSenderPubkeys, liveDataEnabled);
 
@@ -1452,6 +1490,9 @@ export function MessageList({
 
   const canSwipeReply = onSwipeReply != null;
   const canShowDelivery = onShowDelivery != null;
+  const openGroupMemberProfile = useCallback((pubkey: string) => {
+    router.push(`/profile/${encodeURIComponent(pubkey)}`);
+  }, []);
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<ListItem>) => {
       const older = item.older;
@@ -1556,6 +1597,35 @@ export function MessageList({
         : null;
       // The unread divider sits above the first message past the watermark.
       const showUnread = msg.id === firstUnreadId;
+      const parsedAction = group ? parseGroupAction(msg.tags) : { status: 'none' as const };
+      const systemAction =
+        parsedAction.status === 'valid' &&
+        parsedAction.action.type !== 'create';
+      if (systemAction) {
+        const isSelf = msg.senderPubkey === selfPubkey;
+        const persistedDelivery = deliveriesByMessageId[msg.id] ??
+          (msg.deliveryStatus
+            ? { rumorId: msg.id, phase: msg.deliveryStatus, copies: [] }
+            : null);
+        return (
+          <>
+            <GroupSystemMessage
+              accountPubkey={accountPubkey}
+              conversationKey={conversationKey}
+              senderPubkey={msg.senderPubkey}
+              tags={msg.tags}
+              delivery={persistedDelivery}
+              onShowDelivery={
+                isSelf && canShowDelivery
+                  ? () => rowActionsRef.current.onShowDelivery?.(msg.id)
+                  : undefined
+              }
+            />
+            {showUnread ? <UnreadDivider label={t('chat.unread_divider')} /> : null}
+            {dateLabel ? <DateSeparator label={dateLabel} /> : null}
+          </>
+        );
+      }
 
       let replyPreview: MessageBubbleReplyPreview | null = null;
       if (msg.replyToId) {
@@ -1613,11 +1683,44 @@ export function MessageList({
         older?.kind === 'pending' ||
         (older?.kind === 'message' &&
           isMessageFromSelf(older.message, selfPubkey, proximity));
+      const olderAction =
+        group && older?.kind === 'message'
+          ? parseGroupAction(older.message.tags)
+          : { status: 'none' as const };
+      const olderIsSystem =
+        olderAction.status === 'valid' && olderAction.action.type !== 'create';
+      const olderSenderChanged =
+        group &&
+        older?.kind === 'message' &&
+        older.message.senderPubkey !== msg.senderPubkey;
+      const boundarySenderChanged =
+        group &&
+        !older &&
+        oldestBoundary != null &&
+        oldestBoundary.senderPubkey !== msg.senderPubkey;
       const groupStart = !older
-        ? startsLoadedSenderGroup(isSelf, item.boundaryIsSelf)
+        ? boundarySenderChanged || startsLoadedSenderGroup(isSelf, item.boundaryIsSelf)
         : preparedNeighboursMatch
-        ? preparedRow.groupStart
-        : !older || isSelf !== olderIsSelf;
+        ? showDate || showUnread || olderIsSystem || olderSenderChanged || preparedRow.groupStart
+        : !older || showDate || showUnread || olderIsSystem || olderSenderChanged || isSelf !== olderIsSelf;
+      const newer = item.newer;
+      const newerAction =
+        group && newer?.kind === 'message'
+          ? parseGroupAction(newer.message.tags)
+          : { status: 'none' as const };
+      const newerIsSystem =
+        newerAction.status === 'valid' && newerAction.action.type !== 'create';
+      const groupRunEnd =
+        !newer ||
+        newer.kind !== 'message' ||
+        newerIsSystem ||
+        isDifferentDay(newer.message.createdAt, msg.createdAt) ||
+        newer.message.id === firstUnreadId ||
+        newer.message.senderPubkey !== msg.senderPubkey;
+      const senderProfile = group ? profileMap[msg.senderPubkey] : null;
+      const groupSenderName = group && !isSelf
+        ? replySenderName(msg.senderPubkey, senderProfile)
+        : null;
 
       return (
         <>
@@ -1673,6 +1776,16 @@ export function MessageList({
               flashTarget?.id === msg.id ? flashTarget.tick : 0
             }
             groupStart={groupStart}
+            groupSenderPubkey={group && !isSelf ? msg.senderPubkey : undefined}
+            groupSenderName={groupSenderName}
+            groupSenderPicture={senderProfile?.picture}
+            showGroupSenderName={group && !isSelf && groupStart}
+            showGroupSenderAvatar={group && !isSelf && groupRunEnd}
+            onGroupSenderPress={
+              group
+                ? () => openGroupMemberProfile(msg.senderPubkey)
+                : undefined
+            }
             separatorAbove={showUnread}
             onTapReaction={(r) => rowActionsRef.current.onTapReaction(msg, r)}
             selectionMode={selectionMode}
@@ -1688,7 +1801,9 @@ export function MessageList({
       );
     },
     [
-      attachmentLabels, canShowDelivery, canSwipeReply,
+      accountPubkey, attachmentLabels, canShowDelivery, canSwipeReply,
+      conversationKey, group, openGroupMemberProfile,
+      oldestBoundary,
       deliveriesByMessageId, firstUnreadId, flashTarget, interactive,
       presentationsByMessageId, profileMap,
       proximity, reactionsByMessageId, remoteContentMode, replySenderName,

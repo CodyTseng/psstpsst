@@ -412,8 +412,9 @@
     "send": "Invia messaggio vocale"
   },
   "delivery": {
+    "self": "Tu",
     "title": "Consegna",
-    "summary": "Consegnato a {{ok}} relay su {{total}}",
+    "summary": "Consegnato a {{ok}} destinatari su {{total}}",
     "signing": "Firma…",
     "resend": "Invia di nuovo",
     "failed": "Consegna non riuscita"
@@ -992,6 +993,35 @@
     "unexpected_message": "I tuoi dati sono al sicuro. Riprova o torna alle chat.",
     "return_to_chats": "Torna alle chat",
     "export_diagnostics": "Esporta diagnostica"
+  },
+  "group": {
+    "unnamed": "Gruppo",
+    "derived_title_with_others": "{{names}} e altri {{count}}",
+    "create_with_count": "Crea un gruppo con {{count}} persone",
+    "large_group_title": "Creare un gruppo numeroso?",
+    "large_group_message": "Ogni messaggio deve essere cifrato e inviato separatamente a ogni persona del gruppo. I gruppi più numerosi possono essere più lenti. Continuare?",
+    "info_title": "Info gruppo",
+    "members": "Membri",
+    "add_member": "Aggiungi membro",
+    "rename": "Rinomina gruppo",
+    "leave": "Lascia il gruppo",
+    "leave_confirm": "Non potrai più inviare messaggi finché un membro non ti inviterà di nuovo.",
+    "remove_member": "Rimuovi membro",
+    "remove_member_confirm": "Rimuovere questa persona dal gruppo?",
+    "name_too_long": "I nomi dei gruppi possono contenere fino a 80 caratteri.",
+    "read_only": "Non fai più parte di questo gruppo. Puoi ancora leggere la cronologia.",
+    "other_devices": "I tuoi altri dispositivi",
+    "new_message": "Nuovo messaggio di gruppo",
+    "member_invited": "È stato invitato un membro",
+    "member_removed": "È stato rimosso un membro",
+    "member_left": "Un membro ha lasciato il gruppo",
+    "name_changed": "Nome del gruppo modificato",
+    "invited": "{{actor}} ha invitato {{member}}",
+    "removed": "{{actor}} ha rimosso {{member}}",
+    "left": "{{actor}} ha lasciato il gruppo",
+    "renamed": "{{actor}} ha rinominato il gruppo in {{name}}",
+    "cleared_name": "{{actor}} ha cancellato il nome del gruppo",
+    "common_groups": "Gruppi in comune"
   },
   "licenses": {
     "intro": "Grazie alla comunità open source.",

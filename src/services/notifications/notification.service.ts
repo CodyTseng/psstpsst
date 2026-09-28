@@ -9,6 +9,7 @@ import { dmService } from '@/services/dm/dm.service';
 import { receiveSessionStore } from '@/services/dm/receive-session';
 import { retryUnreadIndicator } from '@/services/unread-indicator.service';
 import { isMessageOrderNewer, messageOrderAt } from '@/lib/nostr/message-order';
+import { firstGroupId } from '@/lib/nostr/group-messaging';
 
 import { registerBackgroundPoll, unregisterBackgroundPoll } from './background-task';
 import { filterNotifiableMessages } from './notification-filter';
@@ -389,7 +390,9 @@ class NotificationService {
     const count = this.pendingCount;
     const genericTitle =
       count <= 1
-        ? i18n.t('notifications.new_message')
+        ? this.latestPendingRumor && firstGroupId(this.latestPendingRumor.tags)
+          ? i18n.t('group.new_message')
+          : i18n.t('notifications.new_message')
         : i18n.t('notifications.new_messages', { count });
     await this.ensureContentPreferencesLoaded();
 
@@ -409,7 +412,9 @@ class NotificationService {
         : genericTitle;
     const subtitle = title !== genericTitle && count > 1 ? genericTitle : undefined;
     const body = this.contentPreferences.showMessageContent
-      ? preview?.messageContent ?? undefined
+      ? preview?.group && this.contentPreferences.showSender && preview.senderName && preview.messageContent
+        ? `${preview.senderName}: ${preview.messageContent}`
+        : preview?.messageContent ?? undefined
       : i18n.t('notifications.open_to_view_message');
     const avatarUrl = this.contentPreferences.showSender
       ? preview?.avatarUrl ?? undefined

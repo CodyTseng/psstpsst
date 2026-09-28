@@ -12,22 +12,35 @@ after interruption. A new user retry is a new job and therefore creates a fresh
 gift wrap. Multiple jobs may reference one message; before publishing, each job
 skips targets whose durable result is already `ok`.
 
-A target row means unfinished work. A relay's boolean `OK` value alone decides
+A target row means unfinished work. Recipient metadata is prepared with bounded
+parallelism and committed as one complete result: successful recipients gain
+targets, while a missing key or relay list becomes a copy-level error without
+blocking other recipients. Wrapping is likewise isolated per recipient and
+yields between copies. Session invalidation pauses unfinished work rather than
+turning cancellation into delivery failure.
+
+A relay's boolean `OK` value alone decides
 success. Settling a target updates the long-lived recipient copy and removes the
 target atomically. `ok` is terminal; any other durable relay state may enter
 `pending` when a job starts, and `pending` settles to `ok` or `failed`. Explicit
 failures are not retried automatically. When no targets remain, payloads and the
 job are deleted. No attempt history is retained.
 
-Message-level delivery is derived from every durable recipient relay result,
-not from the current job. It becomes `sent` as soon as at least one recipient
-relay and at least half of all recipient relay targets have acknowledged it.
-`sent` is terminal while unfinished mirrors continue in the queue. Otherwise it
-stays `queued` while any job remains and becomes `failed` after all jobs finish.
-Self/sync copies are retained but excluded from ordinary counts and manual retry;
-a note-to-self uses its self copy only for the message-level verdict and detail.
+Each copy is delivered when at least one target and at least half of its targets
+acknowledge it. Message delivery uses every frozen copy, including self. A copy
+that has not met its threshold and still has work keeps the message `queued`.
+After all such work settles, all delivered is `sent`, some delivered is
+`partial`, and none delivered is `failed`. An already delivered copy stays
+delivered while an optional failed-relay retry is pending.
+
+Manual retry selects one recipient copy, including self. Failed relay rows retry
+only those URLs; a pre-relay copy error re-resolves that recipient's metadata.
+Every manual retry creates a fresh gift wrap. Whole-message retry remains only
+for failures before any copy state could be materialized.
 
 The UI reads the coarse status from `messages` and reads compact recipient copies
-only while message details are open. It never derives display state from queue
-rows. Whole-message failures before publication live on the message; relay
-failure strings live with the corresponding relay result.
+only while message details are open. Detail rows remain in recipient-pubkey
+order and expose per-copy relay results and retry. The UI never derives display
+state from queue rows. Whole-message failures before copy materialization live
+on the message; pre-relay failures live on the copy; relay failure strings live
+with the corresponding relay result.

@@ -6,6 +6,7 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/common/Avatar';
+import { GroupAvatar } from '@/components/common/GroupAvatar';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { CountBadge } from '@/components/common/CountBadge';
@@ -14,6 +15,7 @@ import { SelfBadge } from '@/components/common/SelfBadge';
 import { useContact } from '@/hooks/use-contacts';
 import { useTotalUnread } from '@/hooks/use-conversations';
 import { useProfile } from '@/hooks/use-profile';
+import { useGroupPresentation } from '@/hooks/use-group-presentation';
 import { useDirectionalIconStyle } from '@/i18n/direction';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -26,6 +28,8 @@ const HEADER_AVATAR_SIZE = 32;
 
 type Props = {
   counterpartyPubkey: string | null;
+  conversationKey?: string;
+  groupMemberPubkeys?: string[] | null;
   fallbackName?: string;
   /** Optional in-memory picture used instead of a live profile picture. */
   pictureOverride?: string | number | null;
@@ -40,6 +44,8 @@ type Props = {
 
 export function ChatHeader({
   counterpartyPubkey,
+  conversationKey,
+  groupMemberPubkeys,
   fallbackName,
   pictureOverride,
   proximityConnectionStatus,
@@ -54,6 +60,13 @@ export function ChatHeader({
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
+  const isGroup = Array.isArray(groupMemberPubkeys);
+  const groupPresentation = useGroupPresentation(
+    accountPubkey,
+    fallbackName,
+    groupMemberPubkeys,
+    liveDataEnabled && isGroup,
+  );
   // The note-to-self conversation is a 1:1 with yourself — show your own name,
   // resolved like any peer (the `SelfBadge` below marks that it's genuinely you).
   const isSelf =
@@ -71,18 +84,24 @@ export function ChatHeader({
   const liveOtherUnread = useTotalUnread(accountPubkey, liveDataEnabled);
   const otherUnread = otherUnreadOverride ?? liveOtherUnread;
 
-  const name = resolveDisplayName(
-    counterpartyPubkey ?? '',
-    identityKind === 'relay'
-      ? { petname: contact?.petname, displayName: profile?.displayName, name: profile?.name }
-      : {
-          petname: proximityNickname,
-          displayName: proximityDisplayName,
-        },
-    fallbackName || undefined,
-  );
+  const name = isGroup
+    ? groupPresentation.title
+    : resolveDisplayName(
+        counterpartyPubkey ?? '',
+        identityKind === 'relay'
+          ? { petname: contact?.petname, displayName: profile?.displayName, name: profile?.name }
+          : {
+              petname: proximityNickname,
+              displayName: proximityDisplayName,
+            },
+        fallbackName || undefined,
+      );
 
   function openDetails() {
+    if (isGroup && conversationKey) {
+      router.push(`/group/${encodeURIComponent(conversationKey)}`);
+      return;
+    }
     if (!counterpartyPubkey) return;
     if (identityKind === 'proximity') {
       router.push({
@@ -135,7 +154,7 @@ export function ChatHeader({
       >
         <Pressable
           onPress={openDetails}
-          disabled={!counterpartyPubkey}
+          disabled={!counterpartyPubkey && !isGroup}
           hitSlop={6}
           style={{ maxWidth: '100%' }}
         >
@@ -226,7 +245,7 @@ export function ChatHeader({
         {/* Avatar — iOS-style trailing accessory; opens the matching identity details. */}
         <Pressable
           onPress={openDetails}
-          disabled={!counterpartyPubkey}
+          disabled={!counterpartyPubkey && !isGroup}
           hitSlop={8}
           style={{
             // Keep the visible avatar on the content gutter at either density.
@@ -237,12 +256,16 @@ export function ChatHeader({
             justifyContent: 'center',
           }}
         >
-          <Avatar
-            pubkey={counterpartyPubkey ?? '0'.repeat(64)}
-            picture={pictureOverride ?? profile?.picture}
-            name={name}
-            size={HEADER_AVATAR_SIZE}
-          />
+          {isGroup ? (
+            <GroupAvatar members={groupPresentation.avatarMembers} size={HEADER_AVATAR_SIZE} />
+          ) : (
+            <Avatar
+              pubkey={counterpartyPubkey ?? '0'.repeat(64)}
+              picture={pictureOverride ?? profile?.picture}
+              name={name}
+              size={HEADER_AVATAR_SIZE}
+            />
+          )}
         </Pressable>
       </View>
     </View>

@@ -20,7 +20,7 @@ export function getReplyToId(tags: string[][]): string | undefined {
 }
 
 /** Tags that describe the original send rather than its forwarded payload. */
-const NON_FORWARDABLE_TAGS = new Set(['p', 'e', 'h', 'subject', 'ms']);
+const NON_FORWARDABLE_TAGS = new Set(['p', 'e', 'h', 'subject', 'action', 'ms']);
 
 /**
  * Tags to carry over when **forwarding** a message: everything that describes

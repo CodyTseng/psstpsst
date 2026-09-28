@@ -409,8 +409,9 @@
     "send": "Sesli mesaj gönder"
   },
   "delivery": {
+    "self": "Sen",
     "title": "Teslim",
-    "summary": "{{total}} relay'den {{ok}} tanesine teslim edildi",
+    "summary": "{{total}} alıcıdan {{ok}} tanesine teslim edildi",
     "signing": "İmzalanıyor…",
     "resend": "Yeniden gönder",
     "failed": "Teslim başarısız"
@@ -987,6 +988,35 @@
     "unexpected_message": "Verileriniz güvende. Yeniden deneyin veya sohbetlere dönün.",
     "return_to_chats": "Sohbetlere dön",
     "export_diagnostics": "Tanılama bilgilerini dışa aktar"
+  },
+  "group": {
+    "unnamed": "Grup",
+    "derived_title_with_others": "{{names}} ve {{count}} kişi daha",
+    "create_with_count": "{{count}} kişiyle grup oluştur",
+    "large_group_title": "Büyük bir grup oluşturulsun mu?",
+    "large_group_message": "Her mesaj gruptaki her kişi için ayrı ayrı şifrelenip gönderilir. Büyük gruplarda gönderim daha yavaş olabilir. Devam edilsin mi?",
+    "info_title": "Grup bilgisi",
+    "members": "Üyeler",
+    "add_member": "Üye ekle",
+    "rename": "Grubu yeniden adlandır",
+    "leave": "Gruptan ayrıl",
+    "leave_confirm": "Başka bir üye sizi yeniden davet edene kadar mesaj gönderemezsiniz.",
+    "remove_member": "Üyeyi çıkar",
+    "remove_member_confirm": "Bu kişi gruptan çıkarılsın mı?",
+    "name_too_long": "Grup adları en fazla 80 karakter olabilir.",
+    "read_only": "Artık bu grubun üyesi değilsiniz. Geçmişi okumaya devam edebilirsiniz.",
+    "other_devices": "Diğer cihazlarınız",
+    "new_message": "Yeni grup mesajı",
+    "member_invited": "Bir üye davet edildi",
+    "member_removed": "Bir üye çıkarıldı",
+    "member_left": "Bir üye gruptan ayrıldı",
+    "name_changed": "Grup adı değiştirildi",
+    "invited": "{{actor}}, {{member}} kişisini davet etti",
+    "removed": "{{actor}}, {{member}} kişisini çıkardı",
+    "left": "{{actor}} gruptan ayrıldı",
+    "renamed": "{{actor}} grubun adını {{name}} olarak değiştirdi",
+    "cleared_name": "{{actor}} grup adını temizledi",
+    "common_groups": "Ortak gruplar"
   },
   "licenses": {
     "intro": "Açık kaynak topluluğuna teşekkürler.",

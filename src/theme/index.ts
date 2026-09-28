@@ -201,11 +201,16 @@ export const messageLayout = {
   reactionGap: spacing.xs / 2,
 } as const;
 
+/** Shared trailing fade geometry for compact horizontal tab rails. */
+export const horizontalRailLayout = {
+  fadeWidth: spacing['3xl'],
+} as const;
+
 /** Shared outer alignment for every mode inside the full emoji picker. */
 export const emojiPickerLayout = {
   horizontalGutter: IS_ELECTRON ? spacing.sm : spacing.lg,
   contentTopGap: spacing.xs,
-  endFadeWidth: spacing['3xl'],
+  endFadeWidth: horizontalRailLayout.fadeWidth,
 } as const;
 
 /** Runtime height (above the home-indicator safe area) of the app's bottom bars — the

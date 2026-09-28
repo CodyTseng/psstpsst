@@ -512,8 +512,9 @@ function RealConversations() {
                 return (
                   <ConversationListItem
                     conversationKey={conv.conversationKey}
-                    counterpartyPubkey={conv.conversationKey}
+                    counterpartyPubkey={conv.groupId ? null : conv.conversationKey}
                     conversationName={conv.name}
+                    groupMemberPubkeys={conv.groupId ? conv.memberPubkeys : undefined}
                     lastMessagePreview={
                       item.lastMessageKind === 15
                         ? attachmentLabel(item.lastMessageTags, attachmentLabels)
@@ -525,6 +526,7 @@ function RealConversations() {
                         ? item.lastMessageSenderPubkey !== conv.conversationKey
                         : item.lastMessageSenderPubkey === accountPubkey
                     }
+                    lastMessageSenderPubkey={item.lastMessageSenderPubkey}
                     lastMessageAt={conv.lastMessageAt}
                     currentMinute={currentMinute}
                     unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}

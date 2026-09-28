@@ -74,13 +74,17 @@ export function ForwardRecipientScreen({
     () =>
       conversations.filter(({ conversation }) => {
         if (!supportedDeliveryKinds.has(conversation.deliveryKind)) return false;
+        if (
+          conversation.groupId &&
+          !conversation.memberPubkeys?.includes(accountPubkey)
+        ) return false;
         return !(
           excludedRelayPubkey &&
           conversation.deliveryKind === 'relay' &&
           conversation.conversationKey === excludedRelayPubkey
         );
       }),
-    [conversations, excludedRelayPubkey, supportedDeliveryKinds],
+    [accountPubkey, conversations, excludedRelayPubkey, supportedDeliveryKinds],
   );
   const selectedTargets = useMemo(
     () =>
@@ -95,7 +99,7 @@ export function ForwardRecipientScreen({
     () =>
       new Set(
         selectedTargets
-          .filter((target) => target.deliveryKind === 'relay')
+          .filter((target) => target.deliveryKind === 'relay' && !target.group)
           .map((target) => target.conversationKey),
       ),
     [selectedTargets],

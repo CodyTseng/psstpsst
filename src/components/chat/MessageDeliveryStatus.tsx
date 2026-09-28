@@ -1,6 +1,7 @@
 import Check from 'lucide-react-native/icons/check';
 import { DangerCircle as CircleAlert } from '@solar-icons/react-native/category/ui/Linear/DangerCircle';
 import { ClockCircle as Clock } from '@solar-icons/react-native/category/time/Linear/ClockCircle';
+import { DangerTriangle as TriangleAlert } from '@solar-icons/react-native/category/ui/Linear/DangerTriangle';
 
 import { type MessageDelivery } from '@/stores/delivery-status.store';
 import { iconStrokeWidth } from '@/theme/icons';
@@ -30,6 +31,9 @@ export function MessageDeliveryStatus({ delivery, color }: Props) {
   let iconColor = color;
   if (delivery.phase === 'sent') {
     Icon = Check;
+  } else if (delivery.phase === 'partial') {
+    Icon = TriangleAlert;
+    iconColor = c.warning;
   } else if (delivery.phase === 'failed') {
     Icon = CircleAlert;
     iconColor = c.danger;

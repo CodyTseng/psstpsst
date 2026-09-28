@@ -16,6 +16,7 @@ import { conversationSendService } from '../conversation-send.service';
 jest.mock('@/services/dm/dm.service', () => ({
   dmService: {
     sendMessage: jest.fn(),
+    sendGroupMessage: jest.fn(),
     sendReaction: jest.fn(),
     forwardMessage: jest.fn(),
   },
@@ -48,6 +49,7 @@ jest.mock('@/services/files/attachment-index.service', () => ({
 
 const mockDmService = dmService as unknown as {
   sendMessage: jest.Mock;
+  sendGroupMessage: jest.Mock;
   sendReaction: jest.Mock;
   forwardMessage: jest.Mock;
 };
@@ -69,6 +71,7 @@ describe('conversation send service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDmService.sendMessage.mockResolvedValue({ rumorId: 'relay-message' });
+    mockDmService.sendGroupMessage.mockResolvedValue({ rumorId: 'group-message' });
     mockDmService.sendReaction.mockResolvedValue({ rumorId: 'relay-reaction' });
     mockDmService.forwardMessage.mockResolvedValue({
       rumorId: 'relay-forward',
@@ -110,6 +113,31 @@ describe('conversation send service', () => {
     expect(mockProximityService.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ content: ':party:', extraTags }),
     );
+  });
+
+  it('sends an authored payload to a group through its conversation target', async () => {
+    const extraTags = [['bolt11', 'invoice']];
+
+    await conversationSendService.sendMessage({
+      accountPubkey: 'account',
+      target: {
+        deliveryKind: 'relay',
+        conversationKey: `group:${'a'.repeat(64)}`,
+        group: true,
+      },
+      content: 'lnbc1invoice',
+      extraTags,
+    });
+
+    expect(mockDmService.sendGroupMessage).toHaveBeenCalledWith({
+      accountPubkey: 'account',
+      conversationKey: `group:${'a'.repeat(64)}`,
+      content: 'lnbc1invoice',
+      contentTags: extraTags,
+      replyToId: undefined,
+      timestamp: undefined,
+    });
+    expect(mockDmService.sendMessage).not.toHaveBeenCalled();
   });
 
   it('prefers a Proximity-signed Blossom upload before publishing Nearby metadata', async () => {
