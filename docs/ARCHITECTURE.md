@@ -402,6 +402,9 @@ Contacts, conversations, requests, mute, and block are separate concepts:
 - Saving or removing a contact does not create or delete a conversation.
 - A first message from an unknown sender remains a request until accepted by
   product rules.
+- A group bootstrap from an unknown sender remains a request until local
+  activity accepts it; later remote messages and membership actions never
+  promote it into the main inbox.
 - Conversation acceptance is not media-download consent. Non-contact attachments
   and media bytes require per-resource intent; unresolved relationships hold those
   downloads. Profile cards and relay metadata resolve independently of sender trust.

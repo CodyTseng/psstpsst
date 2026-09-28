@@ -145,6 +145,10 @@ between a message bubble and its reaction row.
   rail's overflow affordance.
 - Single-line names and titles truncate within the available width. Adjacent
   status marks, timestamps, and actions retain their space, including in selection mode.
+- In a wide layout, opening a conversation freezes any existing draft preview
+  in its active primary row. Composer keystrokes stay local; leaving the
+  conversation reveals the latest draft once, while clearing or sending removes
+  the frozen preview immediately.
 
 Message reactions sit in a compact, separate row directly below the bubble,
 with the dedicated `messageLayout.reactionGap` and without overlap or a

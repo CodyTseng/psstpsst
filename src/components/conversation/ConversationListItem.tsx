@@ -6,7 +6,7 @@ import { BellOff } from '@solar-icons/react-native/category/notifications/Linear
 import { Pin } from '@solar-icons/react-native/category/ui/Linear/Pin';
 import { TrashBinTrash as Trash2 } from '@solar-icons/react-native/category/ui/Linear/TrashBinTrash';
 import type { ComponentProps, ComponentType } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated as RNAnimated, Platform, StyleSheet, View } from 'react-native';
 
@@ -52,6 +52,7 @@ import {
   registerOpenSwipeable,
 } from '@/lib/gestures';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
+import { createDraftPreviewSelector } from '@/lib/chat/draft-preview';
 import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import type { ComposerFile } from '@/lib/attachments/composer-file';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
@@ -502,15 +503,15 @@ function ConversationListItemBase({
     }).start();
   }, [highlighted, highlightTick, highlight]);
 
-  // An unsent composer draft replaces the last-message preview only after the
-  // user leaves this conversation. In a wide layout the active row stays
-  // mounted, so select `undefined` while active: keystrokes do not re-render the
-  // row or expose the live composer text. Changing selection re-renders the row
-  // and reads the latest draft once. Compact navigation unmounts the list while
-  // chatting, then reads the draft when the inbox mounts again.
-  const draft = useDraftsStore((s) =>
-    active ? undefined : s.drafts[conversationKey],
+  // A wide-layout active row freezes the preview that was visible on entry.
+  // The memoized selector keeps returning that snapshot while composer
+  // keystrokes update the store, so the row neither disappears nor re-renders
+  // on each key. Leaving creates a live selector and reveals the latest draft.
+  const selectDraftPreview = useMemo(
+    () => createDraftPreviewSelector(conversationKey, active === true),
+    [active, conversationKey],
   );
+  const draft = useDraftsStore(selectDraftPreview);
   const groupWritable = !isGroup || groupMemberPubkeys?.includes(accountPubkey) === true;
   const draftText = groupWritable && draft ? draft.replace(/\s+/g, ' ').trim() : '';
 

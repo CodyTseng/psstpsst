@@ -92,6 +92,36 @@ beforeAll(() => {
 
 afterAll(() => mockDatabase?.sqlite.close());
 
+it('keeps a stranger-created group in requests until local activity accepts it', async () => {
+  const h = 'stranger-request-test';
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('f', BOB, 5, [
+      ['p', ACCOUNT],
+      ['h', h],
+      ['action', 'create'],
+    ], 'hello'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  })).resolves.toMatchObject({ stored: true });
+
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('e', BOB, 6, [['p', ACCOUNT], ['h', h]], 'follow-up'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+
+  const row = mockDatabase!.sqlite.prepare(
+    'SELECT has_replied FROM conversations WHERE group_id = ?',
+  ).get(h) as { has_replied: number };
+  expect(row.has_replied).toBe(0);
+});
+
 it('bootstraps, applies tail actions, and authorizes ordinary messages from the roster', async () => {
   const h = 'family-test';
   const create = rumor('1', BOB, 10, [

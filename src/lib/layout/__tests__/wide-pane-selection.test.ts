@@ -5,6 +5,8 @@ describe('wide pane selection', () => {
     ['/chat/alice', 'alice'],
     ['/chat-search/alice', 'alice'],
     ['/media/alice', 'alice'],
+    ['/chat/group%3Aabc', 'group:abc'],
+    ['/group/group%3Aabc', 'group:abc'],
   ])('maps %s to conversation %s', (pathname, expected) => {
     expect(getWidePaneSelection(pathname).conversationKey).toBe(expected);
   });

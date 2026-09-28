@@ -50,7 +50,12 @@ function routeValue(pathname: string, route: string): string | null {
   const prefix = `/${route}/`;
   if (!pathname.startsWith(prefix)) return null;
   const value = pathname.slice(prefix.length).split('/')[0];
-  return value || null;
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 /** Maps the globally selected detail route back to its persistent primary row. */

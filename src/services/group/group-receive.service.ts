@@ -294,19 +294,7 @@ async function refreshConversationMessageState(
   const unread = await countUnread(tx, accountPubkey, conversationKey, readCursor);
   const activityOrderAt = Date.now();
   const activityAt = Math.floor(activityOrderAt / 1000);
-  const senderIsContact =
-    options.intake === 'local' ||
-    !conversation.deleted ||
-    (await tx
-      .select({ pubkey: contacts.pubkey })
-      .from(contacts)
-      .where(
-        and(
-          eq(contacts.accountPubkey, accountPubkey),
-          eq(contacts.pubkey, rumor.pubkey),
-        ),
-      )
-      .limit(1)).length > 0;
+  const acceptedByLocalActivity = options.intake === 'local';
 
   await tx
     .update(conversations)
@@ -316,7 +304,11 @@ async function refreshConversationMessageState(
       lastMessageOrderAt: newest[0]?.orderAt ?? null,
       unreadCount: unread,
       deleted: false,
-      hasReplied: senderIsContact ? true : conversation.deleted ? false : conversation.hasReplied,
+      hasReplied: acceptedByLocalActivity
+        ? true
+        : conversation.deleted
+          ? false
+          : conversation.hasReplied,
       ...(readCursor
         ? {
             lastReadOrderAt: readCursor.orderAt,
