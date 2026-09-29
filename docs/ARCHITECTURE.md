@@ -1,8 +1,9 @@
 # PsstPsst Architecture
 
 > The durable system boundaries and data-flow rules for PsstPsst. Keep this file
-> concise. Detailed behaviour belongs in code, tests, or a focused protocol
-> document under [`protocols/`](./protocols/).
+> concise. Interoperable event and wire formats belong in
+> [`protocols/`](./protocols/); product and runtime details belong in code,
+> tests, or [`implementation/`](./implementation/).
 
 PsstPsst supports iOS, Android, and Electron. Ordinary web is not a supported
 product runtime; React Native Web is used inside the Electron renderer.
@@ -124,7 +125,9 @@ inside the authenticated seal. A verified seal without it is unsupported and
 marked processed without decrypting its content. Envelopes that fail decryption
 with all available messaging keys are also marked processed; later key changes
 do not retry them. Results from an invalidated receive session are discarded.
-The event-format extensions are specified in
+Encryption-key announcement and synchronization are specified in the
+[PsstPsst NIP-4E Profile](protocols/nip4e.md). Split-key envelopes, message
+timestamps, and stable-group events are specified in
 [PsstPsst NIP-17 Extensions](protocols/nip17-extensions.md).
 
 All signing goes through the `Signer` interface. Local private keys, remote
@@ -176,7 +179,7 @@ snapshot per author/kind/`d` coordinate remains pending. Each attempt resolves
 current routing and retries unacknowledged targets; a strict majority of those
 targets completes publication. Account activation and foreground/network recovery
 resume pending work independently of messaging readiness. See
-[configuration publication](protocols/configuration-publication.md).
+[configuration publication](implementation/configuration-publication.md).
 
 ## 6. Message lifecycle
 
@@ -210,7 +213,7 @@ self: all delivered is `sent`, some delivered is `partial`, none delivered is
 `failed`, and unfinished non-delivered work is `queued`. Successful relay
 results are terminal. A selected-copy retry creates a fresh gift wrap; recovery
 of the same interrupted job reuses its persisted wrap.
-See [relay message delivery](protocols/relay-message-delivery.md) for the queue
+See [relay message delivery](implementation/relay-message-delivery.md) for the queue
 and state-machine details.
 
 ### Receiving
@@ -239,7 +242,7 @@ and state-machine details.
    Notification polls page only a fixed recent overlap window, independently per
    relay, and never advance the persisted history cursors. Timeouts and saturated
    timestamp boundaries leave coverage unconfirmed. See
-   [notification recovery](protocols/notification-recovery.md) for paging limits.
+   [notification recovery](implementation/notification-recovery.md) for paging limits.
 3. The service removes and verifies any transport envelope, then verifies the
    author, recipient, event ID, and supported rumor kind before storage.
 4. Duplicate events are ignored without duplicating conversation state.
@@ -535,6 +538,7 @@ account's wallet PIN immediately before the request is sent.
 - A new durable model starts with schema ownership and migration rules.
 - A new background task defines lifecycle, idempotency, timeout, and retry.
 - A new list or query states its data bound and incremental update strategy.
-- A new protocol or transport gets a focused document under `docs/protocols/`
-  instead of expanding this file.
+- A new interoperable event or wire format gets a focused specification under
+  `docs/protocols/`. Product, persistence, runtime, and delivery details belong
+  under `docs/implementation/`, in code, or in tests.
 - Visual conventions belong in [`DESIGN.md`](./DESIGN.md), not here.

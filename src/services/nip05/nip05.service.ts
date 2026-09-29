@@ -9,7 +9,7 @@ import type { Signer } from '../signer/signer.interface';
  * claimed and renamed with NIP-98 (kind 27235) authorization events signed by
  * the account key; the bound pubkey always equals the event signer, so a name
  * can never be claimed for someone else's key. Lookup is the public
- * `/.well-known/nostr.json` endpoint. See docs/protocols/nip05-registration.md.
+ * `/.well-known/nostr.json` endpoint. See docs/implementation/nip05-registration.md.
  */
 
 /** 5-30 chars using lowercase ASCII name characters, with alphanumeric ends. */

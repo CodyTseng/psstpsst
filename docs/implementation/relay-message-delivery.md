@@ -1,4 +1,4 @@
-# Relay Message Delivery
+# Relay Message Delivery Implementation
 
 Outgoing relay messages use an account-scoped durable FIFO. The message rumor
 and an unsigned job are committed together; signing and network delivery happen

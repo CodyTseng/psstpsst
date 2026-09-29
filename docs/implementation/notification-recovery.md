@@ -1,4 +1,4 @@
-# Notification recovery
+# Notification Recovery Implementation
 
 Periodic notification recovery scans gift wraps for the account in the inclusive
 window `[poll cutoff - 49 hours, poll cutoff]`. The cutoff stays fixed throughout

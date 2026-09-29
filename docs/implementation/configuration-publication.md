@@ -1,4 +1,4 @@
-# Configuration publication
+# Configuration Publication Implementation
 
 Configuration saves hand signed events to `configuration-publish.service.ts`.
 The SQLite transaction stores both the replaceable cache and a pending outbox

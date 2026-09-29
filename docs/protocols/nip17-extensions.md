@@ -3,62 +3,44 @@ PsstPsst NIP-17 Extensions
 
 `draft` `optional`
 
-This document describes the event fields PsstPsst adds to
-[NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md). It is not a
-published NIP.
+This document defines how PsstPsst uses
+[NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md) with separate
+encryption keys, millisecond timestamps, and stable group conversations. Key
+announcement and synchronization are specified separately in the
+[NIP-4E profile](./nip4e.md).
 
 | Event | Extension | Purpose |
 | --- | --- | --- |
-| kind `10044` | `n` tag | Announce a messaging encryption public key |
-| kind `4454` | client key and relay tags | Request the key on another device |
-| kind `4455` | encrypted key and client-address tags | Transfer the key to that device |
-| kind `13` seal | `n` tag | Identify the sender's messaging encryption key |
-| kind `1059` gift wrap | identity-key `p` tag | Route a split-key recipient's envelope |
-| message rumor | `ms` tag | Add millisecond ordering within `created_at` |
-| group rumor | `h` tag | Keep one stable group identity across membership changes |
-| group rumor | `action` tag | Express group creation, membership changes, and renaming |
+| kind `13` seal | `n` tag | Identify the sender's encryption key |
+| kind `1059` gift wrap | identity-key `p` tag | Route a split-key envelope |
+| message rumor | `ms` tag | Add the millisecond component of creation time |
+| group rumor | `h` tag | Keep one group identity across membership changes |
+| group rumor | `action` tag | Express creation, membership changes, and renaming |
 
-Kind `14` chat messages, kind `15` file messages, kind `7` reactions, kind `13`
-seals, kind `1059` gift wraps, and kind `10050` relay lists otherwise retain
-their NIP-17 meanings.
+Kind `14` chat messages, kind `15` file messages, kind `7` reactions, and their
+NIP-17/NIP-59 envelopes otherwise retain their standard meanings.
 
-## Messaging encryption key
+## Split-key envelope
 
-PsstPsst separates the identity key from the key used for NIP-44 messaging
-encryption. This follows the direction of the
-[NIP-4E proposal](https://github.com/nostr-protocol/nips/pull/1647).
-
-The identity publishes its current encryption public key in a replaceable kind
-`10044` event:
-
-```json
-{
-  "kind": 10044,
-  "pubkey": "<identity-pubkey>",
-  "tags": [["n", "<encryption-pubkey>"]],
-  "content": ""
-}
-```
-
-The identity key signs both this announcement and outgoing kind `13` seals. A
-seal carries the sender's encryption public key in the same tag:
+The identity key signs the kind `13` seal. The seal's first `n` tag identifies
+the sender's encryption public key announced through NIP-4E:
 
 ```text
 ["n", "<sender-encryption-pubkey>"]
 ```
 
-Its content is encrypted with the sender's encryption private key and the
-recipient's encryption public key. The seal's `created_at` equals the rumor's
-`created_at`.
+The seal content is NIP-44-encrypted using the sender's encryption private key
+and the recipient's encryption public key. The seal `created_at` equals the
+rumor `created_at`.
 
-A kind `1059` gift wrap is encrypted to the recipient's encryption key but is
-addressed by the recipient's identity key:
+The kind `1059` gift wrap is NIP-44-encrypted to the recipient's encryption
+public key but routed with the recipient's identity public key:
 
 ```text
 ["p", "<recipient-identity-pubkey>"]
 ```
 
-### Gift-wrap template
+The complete envelope is:
 
 ```js
 {
@@ -66,9 +48,7 @@ addressed by the recipient's identity key:
   "pubkey": "<one-time-ephemeral-pubkey>",
   "created_at": "<random-time-within-the-previous-two-days>",
   "kind": 1059,
-  "tags": [
-    ["p", "<recipient-identity-pubkey>"]
-  ],
+  "tags": [["p", "<recipient-identity-pubkey>"]],
   "content": nip44_encrypt(
     JSON.stringify({
       "id": "<seal-id>",
@@ -94,39 +74,33 @@ addressed by the recipient's identity key:
 }
 ```
 
-One such gift wrap is created for every recipient and for the sender.
+One gift wrap is created for each recipient and for the sender. Relay routing
+continues to use the identity pubkey and kind `10050`; only NIP-44 key agreement
+uses the encryption key.
 
-## Encryption-key synchronization
+### Receiving
 
-Kinds `4454` and `4455` transfer the current messaging encryption private key
-between devices already using the same identity.
+A receiver:
 
-A requesting device generates a one-time client key pair and publishes a kind
-`4454` event signed by the identity key:
+1. Verifies the kind `1059` gift wrap and decrypts it with the recipient's
+   encryption private key and the wrapper's ephemeral public key.
+2. Verifies the enclosed kind `13` seal with the sender's identity public key.
+3. Reads the sender's encryption public key from the seal's first `n` tag and
+   decrypts the rumor with that key and the recipient's encryption private key.
+4. Verifies the rumor ID and requires the rumor `pubkey` to equal the seal
+   `pubkey`.
 
-```text
-["pubkey", "<requester-client-pubkey>"]
-["P", "<requester-client-pubkey>"]
-["relay", "<transfer-relay>"]
-["n", "<requested-encryption-pubkey>"]  // optional
-```
+A relay-delivered seal without a valid `n` tag is not a PsstPsst split-key
+envelope.
 
-Another device publishes a kind `4455` response signed by the same identity.
-Its content is the requested encryption private key encrypted with NIP-44 to
-the requester's client key:
+## `ms` tag
 
-```text
-["P", "<one-time-sender-client-pubkey>"]
-["p", "<identity-pubkey>"]
-["p", "<requester-client-pubkey>"]
-```
-
-The requester uses the `P` key to decrypt the response. The transferred private
-key is valid only when its derived public key matches the current kind `10044`
-`n` value. This prevents an older transfer from replacing the currently
-announced encryption key.
-
-## Millisecond ordering
+Nostr `created_at` has one-second precision, but a user may create several
+messages within the same second. Common examples include sending multiple
+images at once and forwarding multiple messages as one action. Relay arrival
+order is not stable, so `created_at` alone cannot preserve their authored
+order. The `ms` tag exposes the missing sub-second component so clients can
+distinguish messages created within the same second.
 
 Private message rumors may carry the millisecond component of their creation
 time:
@@ -135,29 +109,39 @@ time:
 ["ms", "<0..999>"]
 ```
 
-The full timestamp is `created_at * 1000 + ms`. This tag is encrypted with the
-rumor and is not used for relay queries or gift-wrap timestamps.
+Only the first `ms` tag is used. A missing or malformed value contributes zero
+milliseconds. The full timestamp is:
+
+```text
+created_at * 1000 + ms
+```
+
+The tag is encrypted with the rumor and is not used for relay queries or
+envelope timestamps. Clients may reconstruct the millisecond timestamp from
+`created_at` and `ms`; how they sort or present messages is outside this
+specification.
 
 ## Stable group identity
 
-NIP-17 identifies a room by the rumor author and its `p` tags, so changing the
-participant set creates another room. PsstPsst adds an opaque stable identifier:
+NIP-17 normally identifies a room by the rumor author and its `p` tags, so a
+membership change creates another room. PsstPsst adds an opaque stable ID:
 
 ```text
 ["h", "<group-id>"]
 ```
 
-The same `h` value identifies the same group across membership changes. A group
-ID is a UTF-8 value from 1 to 256 bytes. PsstPsst-generated values are 32 random
-bytes encoded as 64 lowercase hexadecimal characters; they are identifiers,
-not public keys.
+Only the first `h` tag is used. Its value is 1–256 UTF-8 bytes. Senders SHOULD
+generate 32 random bytes and encode them as 64 lowercase hexadecimal
+characters. A group ID is an identifier, not a public key.
 
-Group kind `14` and kind `15` rumors and wrapped kind `7` reactions carry this
-tag.
+Group kind `14` and kind `15` rumors and wrapped kind `7` reactions carry the
+same `h` value. Groups do not introduce a shared encryption key. Each rumor is
+sealed and gift-wrapped separately for every addressed member and for the
+sender. Its `p` tags remain the delivery audience for that rumor.
 
 ## Group actions
 
-Group state changes are represented by the first `action` tag in a rumor:
+The first `action` tag describes a group state change:
 
 ```text
 ["action", "create"]
@@ -166,41 +150,81 @@ Group state changes are represented by the first `action` tag in a rumor:
 ["action", "rename"]
 ```
 
-An action target is a 64-character lowercase hexadecimal public key.
+Targets are 64-character lowercase hexadecimal public keys. A malformed first
+`action` tag invalidates the rumor; later `action` tags are ignored.
+
+A complete invite rumor, before sealing and gift wrapping, has this form:
+
+```json
+{
+  "id": "<rumor-id>",
+  "pubkey": "<author-identity-pubkey>",
+  "created_at": "<unix-timestamp>",
+  "kind": 14,
+  "tags": [
+    ["p", "<current-member-pubkey>"],
+    ["p", "<invited-member-pubkey>"],
+    ["h", "<group-id>"],
+    ["ms", "<0..999>"],
+    ["action", "invite", "<invited-member-pubkey>"],
+    ["subject", "<current-group-name>"]
+  ],
+  "content": ""
+}
+```
+
+The rumor is unsigned; its kind `13` seal supplies the identity signature. The
+`subject` tag is optional.
 
 ### Create
 
-`create` marks the first kind `14` or kind `15` message in a group. The event
-remains an ordinary text or file message. Its `p` tags list the initial members
-other than the author.
+`create` marks the first kind `14` or kind `15` rumor in a group. Its `p` tags
+list the initial members other than the author. A kind `14` create has non-empty
+content; a kind `15` create contains a valid file offer. The rumor keeps its
+ordinary text or file presentation.
 
 ### Invite
 
-`invite` is an empty kind `14` message. Its target is the new member. Its `p`
-tags carry the current members other than the author and include the target,
-allowing the same event to describe the group to the invitee.
+`invite` is an empty kind `14` rumor. Its target is the new member. Its `p` tags
+contain the current members other than the author and MUST include the target.
+This lets the target initialize the group without earlier history.
 
 ### Remove and leave
 
-`remove` is an empty kind `14` message. Its target is the removed member. The
-target remains in `p` when another member removes them so that the target can
-receive the event.
-
-An author removes itself to express leaving the group; there is no separate
-`leave` action.
+`remove` is an empty kind `14` rumor. When removing another member, the target
+MUST remain in `p` so it can receive the removal. When the target equals the
+author, the action means leave and the target need not appear in `p`.
 
 ### Rename
 
-`rename` is an empty kind `14` message carrying a `subject` tag. A non-empty
-trimmed value sets the group name. An empty or value-less subject clears it.
-PsstPsst group names contain at most 80 Unicode code points.
+`rename` is an empty kind `14` rumor with a `subject` tag. A non-empty trimmed
+value sets the group name. A missing, empty, or whitespace-only value clears it.
+Names contain at most 80 Unicode code points.
 
-An invite may also carry the current `subject` so that the invitee receives the
-group name together with the member list.
+An invite MAY include the current `subject` so the new member receives the name
+with the roster.
+
+## Group state
+
+An unknown group is initialized only by `create` or `invite`. Its initial roster
+is the author plus the valid `p` values. After initialization, ordinary-message
+`p` tags describe only that rumor's audience and MUST NOT replace the roster.
+
+Membership actions are applied in rumor order. Their author MUST be a member at
+that point in the action history. `invite` adds its target and `remove` removes
+its target. A later `invite` may add a removed member again. Any current member
+may publish an action; there is no administrator or membership quorum.
+
+Only the first `subject` tag is used. On any accepted kind `14` or kind `15`
+group rumor, absence preserves the name, a missing or empty value clears it, and
+other values are trimmed. The newest accepted subject under the event order
+wins independently of membership replay. An overlong subject is ignored on an
+ordinary message, `create`, or `invite`; it invalidates a `rename` action.
+
+This extension does not deliver earlier rumors to a newly invited member.
 
 ## Compatibility
 
-The split-key envelope requires support for kind `10044` and the seal's `n`
-tag. Clients that understand the envelope but ignore `h` and `action` can still
-read ordinary message content, but may split a stable group when its `p` tags
-change and may display empty action messages.
+Clients that ignore `h` and `action` can still decrypt ordinary NIP-17 content,
+but may split one stable group into multiple rooms when its `p` tags change and
+may display empty action rumors as messages.

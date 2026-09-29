@@ -1,10 +1,10 @@
-# Group Messaging Implementation Plan
+# Group Messaging Implementation
 
 > Status: **implemented**.
 >
-> This document records the implementation plan and detailed product behavior.
+> This document records implementation details and product behavior.
 > The event-format extensions are specified in
-> [PsstPsst NIP-17 Extensions](protocols/nip17-extensions.md).
+> [PsstPsst NIP-17 Extensions](../protocols/nip17-extensions.md).
 
 ## 1. Scope and trust model
 
@@ -620,7 +620,7 @@ current roster effect inactive. A never-applied candidate lives only in
 ### Durable relay delivery
 
 Extend the existing normalized relay-delivery pipeline documented in
-`docs/protocols/relay-message-delivery.md`; do not restore relay use of the
+`docs/implementation/relay-message-delivery.md`; do not restore relay use of the
 legacy `outbox.pending_payload` JSON.
 
 The current durable model already has the required fan-out dimensions:
@@ -1079,7 +1079,7 @@ the next phase begins.
      notifications, delivery details, and large-group warnings.
 9. **Architecture and verification**
    - update `docs/ARCHITECTURE.md` after implementation;
-   - update `docs/protocols/relay-message-delivery.md` for multi-copy
+   - update `docs/implementation/relay-message-delivery.md` for multi-copy
      preparation, self inclusion, selected-copy retry, and partial status;
    - run unit, integration, migration, i18n, and UI tests;
    - verify light/dark themes, RTL, dynamic text, and large histories.

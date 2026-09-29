@@ -194,11 +194,10 @@ with the maintainer before implementation. Report vulnerabilities through the
 
 - [Architecture](docs/ARCHITECTURE.md) and [design system](docs/DESIGN.md)
 - [Builds and releases](docs/RELEASING.md)
-- [Nearby messaging](docs/protocols/nearby-messaging.md) and
-  [file transfer](docs/protocols/nearby-file-transfer.md)
-- [Configuration publication](docs/protocols/configuration-publication.md),
-  [notification recovery](docs/protocols/notification-recovery.md), and
-  [NIP-05 registration](docs/protocols/nip05-registration.md)
+- [Protocol specifications](docs/protocols/README.md): NIP-4E profile, NIP-17
+  extensions, Nearby messaging, and file transfer
+- [Implementation notes](docs/implementation/README.md): delivery, recovery,
+  publication, groups, and client behavior
 - [Android QR scanner maintenance](docs/ANDROID_QR_SCANNER.md)
 - [Third-party notice maintenance](docs/OPEN_SOURCE_NOTICES.md)
 
