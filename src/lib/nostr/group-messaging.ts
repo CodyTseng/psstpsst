@@ -53,16 +53,18 @@ export function initialGroupMembers(
 /** Return the first h value when it is a usable group id. Later h tags never win. */
 export function firstGroupId(tags: readonly string[][]): string | null {
   const tag = tags.find((candidate) => candidate[0] === 'h');
-  if (!tag || typeof tag[1] !== 'string') return null;
-  const byteLength = utf8ToBytes(tag[1]).length;
-  return byteLength >= 1 && byteLength <= MAX_GROUP_ID_BYTES ? tag[1] : null;
+  return isValidGroupId(tag?.[1]) ? tag[1] : null;
+}
+
+export function isValidGroupId(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const byteLength = utf8ToBytes(value).length;
+  return byteLength >= 1 && byteLength <= MAX_GROUP_ID_BYTES;
 }
 
 export function groupConversationKey(groupId: string): string {
+  if (!isValidGroupId(groupId)) throw new Error('Invalid group id');
   const bytes = utf8ToBytes(groupId);
-  if (bytes.length < 1 || bytes.length > MAX_GROUP_ID_BYTES) {
-    throw new Error('Invalid group id');
-  }
   return `group:${bytesToHex(sha256(bytes))}`;
 }
 

@@ -4,25 +4,32 @@ import Pencil from 'lucide-react-native/icons/pencil';
 import UserPlus from 'lucide-react-native/icons/user-plus';
 import { Bell } from '@solar-icons/react-native/category/notifications/Linear/Bell';
 import { BellOff } from '@solar-icons/react-native/category/notifications/Linear/BellOff';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, View } from 'react-native';
 
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { GroupAvatar } from '@/components/common/GroupAvatar';
+import { ListGroup } from '@/components/common/ListGroup';
+import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
+import { Toggle } from '@/components/common/Toggle';
 import { GroupMemberRow } from '@/components/group/GroupMemberRow';
 import { ProfileAction } from '@/components/profile/ProfileAction';
 import { useConversation } from '@/hooks/use-conversations';
+import { useIsGroupSaved } from '@/hooks/use-common-groups';
 import { useGroupPresentation } from '@/hooks/use-group-presentation';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { dmService } from '@/services/dm/dm.service';
 import { groupService } from '@/services/group/group.service';
+import { setGroupSaved } from '@/services/group/saved-groups.service';
 import { setConversationMuted } from '@/services/conversation/conversation-prefs.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useDraftsStore } from '@/stores/drafts.store';
 import { usePendingAttachmentsStore } from '@/stores/pending-attachments.store';
+import { showToast } from '@/stores/toast.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, useThemeColors } from '@/theme';
 import { platform } from '@/platform';
@@ -38,6 +45,11 @@ export default function GroupInfoScreen() {
   const presentation = useGroupPresentation(accountPubkey, conversation?.name, members);
   const writable = members.includes(accountPubkey);
   const localOnly = !conversation?.membersBootstrapEventId;
+  const { saved, loaded: savedLoaded } = useIsGroupSaved(
+    accountPubkey,
+    conversation?.groupId,
+  );
+  const [saving, setSaving] = useState(false);
   const { t } = useTranslation();
   const c = useThemeColors();
   const clearance = useScreenHeaderClearance();
@@ -95,6 +107,13 @@ export default function GroupInfoScreen() {
         action: 'remove',
         memberPubkey: accountPubkey,
       });
+      if (conversation?.groupId) {
+        try {
+          await setGroupSaved(accountPubkey, conversation.groupId, false);
+        } catch {
+          showToast(t('group.save_failed'));
+        }
+      }
     }
     router.back();
   }
@@ -102,6 +121,18 @@ export default function GroupInfoScreen() {
   async function toggleMute() {
     if (!conversation) return;
     await setConversationMuted(accountPubkey, conversationKey, !conversation.muted);
+  }
+
+  async function toggleSaved() {
+    if (!conversation?.groupId || saving) return;
+    setSaving(true);
+    try {
+      await setGroupSaved(accountPubkey, conversation.groupId, !saved);
+    } catch {
+      showToast(t('group.save_failed'));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -202,6 +233,20 @@ export default function GroupInfoScreen() {
                     />
                   ) : null}
                 </View>
+                {!localOnly ? (
+                  <ListGroup style={{ alignSelf: 'stretch', marginTop: spacing.xl }}>
+                    <ListRow
+                      title={t('group.save_to_contacts')}
+                      trailing={
+                        <Toggle
+                          value={saved}
+                          onValueChange={() => void toggleSaved()}
+                          disabled={!savedLoaded || saving}
+                        />
+                      }
+                    />
+                  </ListGroup>
+                ) : null}
                 {!writable ? (
                   <AppText
                     variant="body"

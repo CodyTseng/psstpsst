@@ -69,6 +69,9 @@ the renderer's perspective on every runtime.
 - Every account-owned row is keyed by `account_pubkey`.
 - Messages are immutable and deduplicated by event ID.
 - Conversations are read models derived from messages and relationship state.
+- The group directory is an explicit account-scoped saved set, mirrored across
+  devices as an encrypted application-data snapshot. Saved membership accepts
+  the group into the main inbox; an explicit local leave removes it from the set.
 - Relay groups use `group:<sha256(h)>` conversation keys, retain the raw `h`
   value only in the conversation and rumor, and materialize a sorted roster
   from an ordered membership-action log. Unknown-group rumors wait in a bounded

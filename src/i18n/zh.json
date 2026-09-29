@@ -1019,8 +1019,10 @@
     "cleared_name": "{{actor}} 清除了群名",
     "common_groups": "共同群聊",
     "list_title": "群聊",
-    "list_empty_title": "还没有群聊",
-    "list_empty_hint": "你加入的群聊会显示在这里。"
+    "save_to_contacts": "保存至通讯录",
+    "save_failed": "无法更新通讯录，请重试。",
+    "list_empty_title": "还没有保存的群聊",
+    "list_empty_hint": "你保存的群聊会显示在这里。"
   },
   "licenses": {
     "intro": "感谢开源社区的贡献。",

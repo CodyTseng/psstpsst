@@ -1019,8 +1019,10 @@
     "cleared_name": "{{actor}} cleared the group name",
     "common_groups": "Groups in common",
     "list_title": "Group chats",
-    "list_empty_title": "No group chats yet",
-    "list_empty_hint": "Groups you join will appear here."
+    "save_to_contacts": "Save to Contacts",
+    "save_failed": "Couldn't update Contacts. Try again.",
+    "list_empty_title": "No saved group chats yet",
+    "list_empty_hint": "Groups you save will appear here."
   },
   "licenses": {
     "intro": "Thank you to the open-source community.",

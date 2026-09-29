@@ -1024,8 +1024,10 @@
     "cleared_name": "{{actor}} apagou o nome do grupo",
     "common_groups": "Grupos em comum",
     "list_title": "Conversas em grupo",
-    "list_empty_title": "Nenhuma conversa em grupo ainda",
-    "list_empty_hint": "Os grupos dos quais você participar aparecerão aqui."
+    "save_to_contacts": "Salvar nos contatos",
+    "save_failed": "Não foi possível atualizar os contatos. Tente novamente.",
+    "list_empty_title": "Nenhuma conversa em grupo salva",
+    "list_empty_hint": "Os grupos que você salvar aparecerão aqui."
   },
   "licenses": {
     "intro": "Obrigado à comunidade de código aberto.",

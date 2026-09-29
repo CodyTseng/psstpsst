@@ -1029,8 +1029,10 @@
     "cleared_name": "{{actor}} usunął/usunęła nazwę grupy",
     "common_groups": "Wspólne grupy",
     "list_title": "Czaty grupowe",
-    "list_empty_title": "Nie masz jeszcze czatów grupowych",
-    "list_empty_hint": "Grupy, do których dołączysz, pojawią się tutaj."
+    "save_to_contacts": "Zapisz w kontaktach",
+    "save_failed": "Nie udało się zaktualizować kontaktów. Spróbuj ponownie.",
+    "list_empty_title": "Nie masz jeszcze zapisanych czatów grupowych",
+    "list_empty_hint": "Zapisane grupy pojawią się tutaj."
   },
   "licenses": {
     "intro": "Dziękujemy społeczności open source.",

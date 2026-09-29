@@ -1024,8 +1024,10 @@
     "cleared_name": "{{actor}} a effacé le nom du groupe",
     "common_groups": "Groupes en commun",
     "list_title": "Discussions de groupe",
-    "list_empty_title": "Aucune discussion de groupe",
-    "list_empty_hint": "Les groupes que vous rejoignez apparaîtront ici."
+    "save_to_contacts": "Enregistrer dans les contacts",
+    "save_failed": "Impossible de mettre à jour les contacts. Réessayez.",
+    "list_empty_title": "Aucun groupe enregistré",
+    "list_empty_hint": "Les groupes enregistrés apparaîtront ici."
   },
   "licenses": {
     "intro": "Merci à la communauté open source.",

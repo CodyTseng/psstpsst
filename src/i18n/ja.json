@@ -1019,8 +1019,10 @@
     "cleared_name": "{{actor}}がグループ名を削除しました",
     "common_groups": "共通のグループ",
     "list_title": "グループチャット",
-    "list_empty_title": "グループチャットはまだありません",
-    "list_empty_hint": "参加したグループがここに表示されます。"
+    "save_to_contacts": "連絡先に保存",
+    "save_failed": "連絡先を更新できませんでした。もう一度お試しください。",
+    "list_empty_title": "保存したグループチャットはまだありません",
+    "list_empty_hint": "保存したグループがここに表示されます。"
   },
   "licenses": {
     "intro": "オープンソースコミュニティに感謝します。",

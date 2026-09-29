@@ -1019,8 +1019,10 @@
     "cleared_name": "{{actor}} 清除了群組名稱",
     "common_groups": "共同群組",
     "list_title": "群組聊天",
-    "list_empty_title": "尚無群組聊天",
-    "list_empty_hint": "你加入的群組會顯示在這裡。"
+    "save_to_contacts": "儲存至通訊錄",
+    "save_failed": "無法更新通訊錄，請再試一次。",
+    "list_empty_title": "尚未儲存群組聊天",
+    "list_empty_hint": "你儲存的群組聊天會顯示在這裡。"
   },
   "licenses": {
     "intro": "感謝開源社群的貢獻。",

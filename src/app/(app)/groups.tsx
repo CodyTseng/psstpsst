@@ -8,7 +8,7 @@ import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { ConversationListItem } from '@/components/conversation/ConversationListItem';
-import { useJoinedGroups } from '@/hooks/use-common-groups';
+import { useSavedGroups } from '@/hooks/use-common-groups';
 import { useMinuteClock } from '@/hooks/use-minute-clock';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { attachmentLabel } from '@/lib/nostr/attachment-label';
@@ -22,7 +22,7 @@ export default function GroupsScreen() {
   const { t } = useTranslation();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((state) => state.activePubkey) ?? '';
-  const { groups, loaded } = useJoinedGroups(accountPubkey);
+  const { groups, loaded } = useSavedGroups(accountPubkey);
   const unreadEnabled = useUnreadIndicatorsEnabled();
   const focused = useIsFocused();
   const currentMinute = useMinuteClock(focused);

@@ -1019,8 +1019,10 @@
     "cleared_name": "{{actor}} hat den Gruppennamen gelöscht",
     "common_groups": "Gemeinsame Gruppen",
     "list_title": "Gruppenchats",
-    "list_empty_title": "Noch keine Gruppenchats",
-    "list_empty_hint": "Gruppen, denen du beitrittst, erscheinen hier."
+    "save_to_contacts": "In Kontakten speichern",
+    "save_failed": "Die Kontakte konnten nicht aktualisiert werden. Versuche es erneut.",
+    "list_empty_title": "Noch keine gespeicherten Gruppenchats",
+    "list_empty_hint": "Gespeicherte Gruppen erscheinen hier."
   },
   "licenses": {
     "intro": "Vielen Dank an die Open-Source-Community.",

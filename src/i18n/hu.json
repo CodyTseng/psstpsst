@@ -1019,8 +1019,10 @@
     "cleared_name": "{{actor}} törölte a csoport nevét",
     "common_groups": "Közös csoportok",
     "list_title": "Csoportos csevegések",
-    "list_empty_title": "Még nincsenek csoportos csevegések",
-    "list_empty_hint": "Azok a csoportok, amelyekhez csatlakozol, itt jelennek meg."
+    "save_to_contacts": "Mentés a névjegyek közé",
+    "save_failed": "A névjegyek nem frissíthetők. Próbáld újra.",
+    "list_empty_title": "Még nincsenek mentett csoportos csevegések",
+    "list_empty_hint": "A mentett csoportok itt jelennek meg."
   },
   "licenses": {
     "intro": "Köszönjük a nyílt forráskódú közösség munkáját.",

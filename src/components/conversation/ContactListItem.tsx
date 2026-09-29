@@ -1,21 +1,12 @@
-import { View } from 'react-native';
-
-import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
-import Reanimated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
 
 import { BlockedBadge } from '@/components/blocked/BlockedBadge';
 import { Avatar } from '@/components/common/Avatar';
-import { AppText } from '@/components/common/AppText';
-import { SelectionDot } from '@/components/common/SelectionDot';
+import { IdentityListItem } from '@/components/common/IdentityListItem';
 import { SelfBadge } from '@/components/common/SelfBadge';
 import { useIsBlocked } from '@/hooks/use-blocked';
-import { useIsRTL } from '@/i18n/direction';
 import { useActiveAccount } from '@/stores/active-account.store';
-import { spacing, uiDensity, useThemeColors } from '@/theme';
-
-// Leading checkbox column: the 22px dot + ~12px gap to the avatar. In multi-select
-// the row content slides right by this so the dot never overlaps it.
-const SELECT_COL = 34;
+import { uiDensity } from '@/theme';
 
 type Props = {
   counterpartyPubkey: string;
@@ -56,78 +47,30 @@ export function ContactListItem({
   showSelfBadge = true,
   trailingInset = 0,
 }: Props) {
-  const c = useThemeColors();
-  const isRTL = useIsRTL();
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
   const blocked = useIsBlocked(accountPubkey, counterpartyPubkey) === true;
   // Genuinely our own key → the unforgeable "You" marker on the note-to-self row.
   const isSelf = !!accountPubkey && counterpartyPubkey === accountPubkey;
 
-  // Slide the content right to clear the checkbox column, and fade the dot in —
-  // both driven by the shared progress so the whole list animates as one.
-  // Reserve the translated width at the end so long names stay inside the row.
-  const contentShift = useAnimatedStyle(() => {
-    const p = selectProgress ? selectProgress.value : 0;
-    return {
-      marginEnd: p * SELECT_COL,
-      transform: [{ translateX: p * SELECT_COL * (isRTL ? -1 : 1) }],
-    };
-  });
-  const dotFade = useAnimatedStyle(() => ({
-    opacity: selectProgress ? selectProgress.value : 0,
-  }));
-
   return (
-    <Pressable
+    <IdentityListItem
       onPress={onPress}
-      pressFeedback="delayed"
-      style={({ pressed }) => ({
-        height: uiDensity.contactRowHeight,
-        paddingStart: spacing.lg,
-        paddingEnd: spacing.lg + trailingInset,
-        justifyContent: 'center',
-        backgroundColor: pressed ? c.interactionOverlay : 'transparent',
-      })}
-    >
-      {/* Leading checkbox — absolutely placed so it never reflows the row; the
-          content slides over it (contentShift). Only present in multi-select. */}
-      {selected !== undefined ? (
-        <Reanimated.View
-          style={[
-            { position: 'absolute', start: 16, top: 0, bottom: 0, justifyContent: 'center' },
-            dotFade,
-            { pointerEvents: 'none' },
-          ]}
-        >
-          <SelectionDot selected={selected} />
-        </Reanimated.View>
-      ) : null}
-
-      <Reanimated.View
-        style={[{ flexDirection: 'row', alignItems: 'center', gap: 12 }, contentShift]}
-      >
+      leading={(
         <Avatar
           pubkey={counterpartyPubkey}
           picture={picture}
           name={displayName}
           size={uiDensity.contactAvatarSize}
         />
-        <View style={{ flex: 1 }}>
-          {/* Name line, with the "Blocked" tag as a leading prefix (before the
-              name) — left-aligned, so the floating A–Z index rail never covers it. */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {isSelf && showSelfBadge ? <SelfBadge /> : blocked ? <BlockedBadge /> : null}
-            <AppText variant="subtitle" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {displayName}
-            </AppText>
-          </View>
-          {secondaryName ? (
-            <AppText variant="caption" tone="muted" numberOfLines={1}>
-              {secondaryName}
-            </AppText>
-          ) : null}
-        </View>
-      </Reanimated.View>
-    </Pressable>
+      )}
+      title={displayName}
+      subtitle={secondaryName}
+      titlePrefix={
+        isSelf && showSelfBadge ? <SelfBadge /> : blocked ? <BlockedBadge /> : undefined
+      }
+      selected={selected}
+      selectProgress={selectProgress}
+      trailingInset={trailingInset}
+    />
   );
 }

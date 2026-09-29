@@ -421,6 +421,8 @@ For a previously unseen group:
 - another bootstrap author leaves `hasReplied = false` and routes it to
   Requests;
 - replying reuses `hasReplied` to accept the group;
+- a saved group or any rumor authored by the local account on another device
+  sets `hasReplied = true` and routes it to the main inbox;
 - a blocked first author is rejected.
 
 Persist this decision on the group conversation because its hashed conversation
@@ -871,6 +873,17 @@ Read `docs/DESIGN.md`, especially section 12, before implementation.
 - The group-info screen lists members and supports inviting one person,
   renaming, removing another member, and leaving through remove-self. Render the
   complete member list with a virtualized list.
+- The group directory lists only established groups the user explicitly saves
+  from the saved-list switch on group information. Local-only drafts do not
+  expose it because they do not exist on another device yet. Saved state is
+  independent of soft deletion and removal by another member, so history remains
+  reachable until the user removes the group from the directory. Saving also
+  accepts the group into the main inbox; every later message restores a deleted
+  saved conversation there. An explicit local leave removes the saved state and
+  publishes the replacement snapshot after the leave commits locally.
+- Saved group ids sync as a NIP-44 encrypt-to-self `kind 30078` snapshot at
+  `d=psstpsst-saved-groups`. The encrypted versioned payload contains only raw
+  `h` values; names, rosters, and presentation remain derived from group state.
 - Keep every membership operation on group info: add-member controls, per-member
   removal controls, and the local user's leave action all live there. An
   individual profile opened from the member list remains the ordinary global
@@ -1204,6 +1217,9 @@ At minimum, cover:
 - contact versus Requests routing;
 - group request acceptance is persisted explicitly from the bootstrap or
   resurrecting author rather than inferred from the hashed conversation key;
+- saved groups use raw `h` values in an encrypted `kind 30078` snapshot,
+  reconcile across devices, accept incoming activity into the main inbox, and
+  are removed by an explicit local leave;
 - group soft-delete preserves messages and group state, ignores older events for
   resurrection, and restores only for a strictly newer incoming message;
 - deleting an unbootstrapped local group cancels pending file work and hard

@@ -195,6 +195,13 @@ and leave controls remain on group information. The global profile screen may
 link to a read-only list of common groups, but never gains group-specific
 actions. Common-group rows open their chat histories.
 
+The group directory is an explicit saved list, not a membership mirror.
+Established-group information owns its saved-list switch. Deleting a
+conversation or being removed never changes its saved state. Saving accepts the
+group for the main conversation list, and later messages restore it there after
+deletion. Actively leaving turns the switch off and removes the group from the
+directory.
+
 Automatically derived group titles resolve at most three member names in a
 stable order, followed by a localized remaining-member count. Full member
 rosters use virtualized lists.
@@ -320,6 +327,7 @@ this table records when to choose each primitive.
 | Navigation title bar | `ScreenHeader` |
 | Settings/value row | `ListRow` inside `ListGroup` |
 | Single-choice indicator | `RadioIndicator` inside a radio `ListRow` |
+| Contact-list destination or identity row | `IdentityListItem` |
 | Contact or conversation row | `ContactListItem` / `ConversationListItem` |
 | Section heading | `SectionLabel` |
 | Scrollable horizontal rail | `HorizontalFadeScrollView` |
@@ -364,6 +372,11 @@ Reuse an existing component before creating another. If a new reusable visual
 concept is genuinely needed, add or extend the shared component and record the
 new convention here in the same change. Do not document individual screens or
 copy component implementation into this file.
+
+Destinations embedded in a contact list use `IdentityListItem` with the same
+row height, leading-visual size, and text column as contact rows. Symbolic
+destinations place their icon in a neutral circular surface occupying the avatar
+slot.
 
 ## 9. Density and responsive layout
 

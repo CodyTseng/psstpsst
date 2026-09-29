@@ -22,6 +22,7 @@ let mockBuildSigner: jest.Mock;
 let mockApplyMutedEvent: jest.Mock;
 let mockApplyContactsEvent: jest.Mock;
 let mockApplyBlockedEvent: jest.Mock;
+let mockApplySavedGroupsEvent: jest.Mock;
 let mockApplyMediaServersEvent: jest.Mock;
 let mockApplyUserEmojiListEvent: jest.Mock;
 
@@ -76,6 +77,12 @@ jest.mock('../../contact/contact.service', () => ({
 jest.mock('../../dm/block.service', () => ({
   BLOCKED_D: 'psstpsst-blocked',
   applyBlockedEvent: jest.fn((...args: unknown[]) => mockApplyBlockedEvent(...args)),
+}));
+
+jest.mock('../../group/saved-groups.service', () => ({
+  KIND_APP_DATA: 30078,
+  SAVED_GROUPS_D: 'psstpsst-saved-groups',
+  applySavedGroupsEvent: jest.fn((...args: unknown[]) => mockApplySavedGroupsEvent(...args)),
 }));
 
 jest.mock('../../files/media-server.service', () => ({
@@ -154,6 +161,7 @@ describe('syncPersonalConfigs', () => {
     mockApplyMutedEvent = jest.fn(async () => {});
     mockApplyContactsEvent = jest.fn(async () => {});
     mockApplyBlockedEvent = jest.fn(async () => {});
+    mockApplySavedGroupsEvent = jest.fn(async () => {});
     mockApplyMediaServersEvent = jest.fn(async () => {});
     mockApplyUserEmojiListEvent = jest.fn(async () => {});
     jest.resetModules();
@@ -163,8 +171,9 @@ describe('syncPersonalConfigs', () => {
     const service = loadService();
     const muted = makeEvent('self', 30000, 100, 'psstpsst-muted');
     const contacts = makeEvent('self', 30000, 100, 'psstpsst-contacts');
+    const savedGroups = makeEvent('self', 30078, 100, 'psstpsst-saved-groups');
     const media = makeEvent('self', 10063, 100);
-    mockQuery.mockResolvedValue([muted, contacts, media]);
+    mockQuery.mockResolvedValue([muted, contacts, savedGroups, media]);
 
     await service.syncPersonalConfigs('self');
 
@@ -175,6 +184,7 @@ describe('syncPersonalConfigs', () => {
     expect(call.filters).toEqual([
       { kinds: [10030, 10063], authors: ['self'] },
       { kinds: [30000], authors: ['self'], '#d': ALL_D_TAGS },
+      { kinds: [30078], authors: ['self'], '#d': ['psstpsst-saved-groups'] },
     ]);
 
     // Received events are persisted; missed keys get a negative-cache mark.
@@ -186,6 +196,7 @@ describe('syncPersonalConfigs', () => {
     expect(mockApplyMutedEvent).toHaveBeenCalledWith('self', muted, fakeSigner);
     expect(mockApplyContactsEvent).toHaveBeenCalledWith('self', contacts, fakeSigner);
     expect(mockApplyBlockedEvent).toHaveBeenCalledWith('self', null, fakeSigner);
+    expect(mockApplySavedGroupsEvent).toHaveBeenCalledWith('self', savedGroups, fakeSigner);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith('self', media);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith('self', null);
   });
@@ -197,11 +208,13 @@ describe('syncPersonalConfigs', () => {
     const muted = makeEvent('self', 30000, 100, 'psstpsst-muted');
     const contacts = makeEvent('self', 30000, 100, 'psstpsst-contacts');
     const blocked = makeEvent('self', 30000, 100, 'psstpsst-blocked');
+    const savedGroups = makeEvent('self', 30078, 100, 'psstpsst-saved-groups');
     seedFresh(emojiList);
     seedFresh(media);
     seedFresh(muted, 'psstpsst-muted');
     seedFresh(contacts, 'psstpsst-contacts');
     seedFresh(blocked, 'psstpsst-blocked');
+    seedFresh(savedGroups, 'psstpsst-saved-groups');
 
     await service.syncPersonalConfigs('self');
 
@@ -209,6 +222,7 @@ describe('syncPersonalConfigs', () => {
     expect(mockApplyMutedEvent).toHaveBeenCalledWith('self', muted, fakeSigner);
     expect(mockApplyContactsEvent).toHaveBeenCalledWith('self', contacts, fakeSigner);
     expect(mockApplyBlockedEvent).toHaveBeenCalledWith('self', blocked, fakeSigner);
+    expect(mockApplySavedGroupsEvent).toHaveBeenCalledWith('self', savedGroups, fakeSigner);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith('self', media);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith('self', emojiList);
   });
@@ -224,6 +238,7 @@ describe('syncPersonalConfigs', () => {
     expect(mockApplyMutedEvent).not.toHaveBeenCalled();
     expect(mockApplyContactsEvent).not.toHaveBeenCalled();
     expect(mockApplyBlockedEvent).not.toHaveBeenCalled();
+    expect(mockApplySavedGroupsEvent).not.toHaveBeenCalled();
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith('self', media);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith('self', null);
   });

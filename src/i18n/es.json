@@ -1024,8 +1024,10 @@
     "cleared_name": "{{actor}} borró el nombre del grupo",
     "common_groups": "Grupos en común",
     "list_title": "Chats grupales",
-    "list_empty_title": "Aún no hay chats grupales",
-    "list_empty_hint": "Los grupos a los que te unas aparecerán aquí."
+    "save_to_contacts": "Guardar en Contactos",
+    "save_failed": "No se pudieron actualizar los contactos. Inténtalo de nuevo.",
+    "list_empty_title": "Aún no hay chats grupales guardados",
+    "list_empty_hint": "Los grupos que guardes aparecerán aquí."
   },
   "licenses": {
     "intro": "Gracias a la comunidad de código abierto.",

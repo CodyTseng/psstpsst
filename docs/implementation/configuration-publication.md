@@ -8,8 +8,9 @@ still reject the handoff. Private sets remain encrypted to the identity before
 entering the queue; plaintext lists and signing secrets are not outbox payloads.
 
 The queue covers key announcements (10044), inbox relays (10050), read/write
-relays (10002), profiles (0), private contacts/mute/block sets (30000), emoji
-collections (10030), emoji packs (30030), and Blossom server lists (10063).
+relays (10002), profiles (0), private contacts/mute/block sets (30000), saved
+groups (30078), emoji collections (10030), emoji packs (30030), and Blossom
+server lists (10063).
 Messages, key-transfer exchanges, and wallet requests retain their own delivery
 semantics and do not enter this queue.
 

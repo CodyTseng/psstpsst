@@ -70,6 +70,9 @@ jest.mock('@/db/client', () => {
     CREATE TABLE blocked_users (
       account_pubkey TEXT, pubkey TEXT, blocked_at INTEGER, PRIMARY KEY (account_pubkey, pubkey)
     );
+    CREATE TABLE saved_groups (
+      account_pubkey TEXT, group_id TEXT, PRIMARY KEY (account_pubkey, group_id)
+    );
     CREATE TABLE replaceable_events (
       pubkey TEXT, kind INTEGER, d_tag TEXT, event TEXT, created_at INTEGER, fetched_at INTEGER,
       PRIMARY KEY (pubkey, kind, d_tag)
@@ -321,19 +324,49 @@ it('saves emoji packs and their collection offline, replacing only the edited pa
   expect(mockPublish).not.toHaveBeenCalled();
 });
 
-it('persists private mute/block snapshots before returning and protects them from stale remote lists', async () => {
+it('persists private snapshots before returning and protects them from stale remote lists', async () => {
   const { setConversationMuted, applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
   const { blockUser, unblockUser, applyBlockedEvent, BLOCKED_D, getBlockedPubkeys } = jest.requireActual('../../dm/block.service') as typeof import('../../dm/block.service');
+  const { setGroupSaved, applySavedGroupsEvent, KIND_APP_DATA, SAVED_GROUPS_D } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
   const peer = 'b'.repeat(64);
-  const saves = [setConversationMuted(SELF, peer, true), blockUser(SELF, peer)];
+  const groupId = 'private-group-id';
+  sqlite.prepare(`
+    INSERT INTO conversations (
+      account_pubkey, conversation_key, group_id, deleted, has_replied
+    ) VALUES (?, ?, ?, 1, 0)
+  `).run(SELF, 'group:private', groupId);
+  const saves = [
+    setConversationMuted(SELF, peer, true),
+    blockUser(SELF, peer),
+    setGroupSaved(SELF, groupId, true),
+  ];
   await jest.runAllTimersAsync(); await Promise.all(saves);
   expect((await pending(30000, MUTED_D))?.event.content).toBe(`encrypted:${JSON.stringify([['p', peer]])}`);
   expect((await pending(30000, BLOCKED_D))?.event.content).toBe(`encrypted:${JSON.stringify([['p', peer]])}`);
+  expect((await pending(KIND_APP_DATA, SAVED_GROUPS_D))?.event.content).toBe(
+    `encrypted:${JSON.stringify({ version: 1, groups: [groupId] })}`,
+  );
   const empty = { ...event(30000), content: 'encrypted:[]' };
   await applyMutedEvent(SELF, empty, mockSigner);
   await applyBlockedEvent(SELF, empty, mockSigner);
-  expect(sqlite.prepare('SELECT muted FROM conversations').get()).toEqual({ muted: 1 });
+  await applySavedGroupsEvent(
+    SELF,
+    {
+      ...event(KIND_APP_DATA, SAVED_GROUPS_D),
+      content: 'encrypted:{"version":1,"groups":[]}',
+    },
+    mockSigner,
+  );
+  expect(sqlite.prepare(
+    'SELECT muted FROM conversations WHERE conversation_key = ?',
+  ).get(peer)).toEqual({ muted: 1 });
   expect(await getBlockedPubkeys(SELF)).toEqual([peer]);
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([
+    { group_id: groupId },
+  ]);
+  expect(sqlite.prepare(
+    'SELECT deleted, has_replied FROM conversations WHERE group_id = ?',
+  ).get(groupId)).toEqual({ deleted: 0, has_replied: 1 });
   const removing = unblockUser(SELF, peer); await jest.runAllTimersAsync(); await removing;
   expect((await pending(30000, BLOCKED_D))?.event.content).toBe('encrypted:[]');
   expect(mockPublish).not.toHaveBeenCalled();
@@ -377,6 +410,41 @@ it('ignores a delayed private-list echo after a newer local snapshot is already 
   expect(await pending(30000, MUTED_D)).toBeNull();
   await applyMutedEvent(SELF, { ...event(30000, MUTED_D), content: 'encrypted:[]' }, mockSigner);
   expect(sqlite.prepare('SELECT muted FROM conversations').get()).toEqual({ muted: 1 });
+});
+
+it('reconciles a valid encrypted saved-group snapshot and ignores malformed payloads', async () => {
+  const { applySavedGroupsEvent, KIND_APP_DATA, SAVED_GROUPS_D } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)')
+    .run(SELF, 'old-group');
+  sqlite.prepare(`
+    INSERT INTO conversations (
+      account_pubkey, conversation_key, group_id, deleted, has_replied
+    ) VALUES (?, ?, ?, 1, 0)
+  `).run(SELF, 'group:new', 'new-group');
+  const remote = {
+    ...event(KIND_APP_DATA, SAVED_GROUPS_D),
+    content: `encrypted:${JSON.stringify({
+      version: 1,
+      groups: ['new-group', 'new-group'],
+    })}`,
+  };
+
+  await applySavedGroupsEvent(SELF, remote, mockSigner);
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([
+    { group_id: 'new-group' },
+  ]);
+  expect(sqlite.prepare(
+    'SELECT deleted, has_replied FROM conversations WHERE group_id = ?',
+  ).get('new-group')).toEqual({ deleted: 0, has_replied: 1 });
+
+  await applySavedGroupsEvent(
+    SELF,
+    { ...event(KIND_APP_DATA, SAVED_GROUPS_D), content: 'encrypted:{"version":2}' },
+    mockSigner,
+  );
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([
+    { group_id: 'new-group' },
+  ]);
 });
 
 it('does not reconcile a private-list echo while a newer local snapshot is still being prepared', async () => {

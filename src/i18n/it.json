@@ -1024,8 +1024,10 @@
     "cleared_name": "{{actor}} ha cancellato il nome del gruppo",
     "common_groups": "Gruppi in comune",
     "list_title": "Chat di gruppo",
-    "list_empty_title": "Nessuna chat di gruppo",
-    "list_empty_hint": "I gruppi a cui partecipi appariranno qui."
+    "save_to_contacts": "Salva nei contatti",
+    "save_failed": "Impossibile aggiornare i contatti. Riprova.",
+    "list_empty_title": "Nessuna chat di gruppo salvata",
+    "list_empty_hint": "I gruppi che salvi appariranno qui."
   },
   "licenses": {
     "intro": "Grazie alla comunità open source.",

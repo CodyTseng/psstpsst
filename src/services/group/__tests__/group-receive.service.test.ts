@@ -122,6 +122,72 @@ it('keeps a stranger-created group in requests until local activity accepts it',
   expect(row.has_replied).toBe(0);
 });
 
+it('accepts a saved group and restores it to the main conversation list', async () => {
+  const h = 'saved-group-request-test';
+  mockDatabase!.sqlite.prepare(
+    'INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)',
+  ).run(ACCOUNT, h);
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('a', BOB, 7, [
+      ['p', ACCOUNT],
+      ['h', h],
+      ['action', 'create'],
+    ], 'hello'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+  mockDatabase!.sqlite.prepare(`
+    UPDATE conversations
+    SET deleted = 1, has_replied = 0, deleted_order_at = 7000
+    WHERE account_pubkey = ? AND group_id = ?
+  `).run(ACCOUNT, h);
+
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('b', BOB, 8, [['p', ACCOUNT], ['h', h]], 'new message'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+
+  expect(mockDatabase!.sqlite.prepare(
+    'SELECT deleted, has_replied FROM conversations WHERE group_id = ?',
+  ).get(h)).toEqual({ deleted: 0, has_replied: 1 });
+});
+
+it('treats an own message synced from another device as accepted activity', async () => {
+  const h = 'other-device-accept-test';
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('c', BOB, 9, [
+      ['p', ACCOUNT],
+      ['h', h],
+      ['action', 'create'],
+    ], 'hello'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT,
+    rumor: rumor('d', ACCOUNT, 10, [['p', BOB], ['h', h]], 'sent elsewhere'),
+    intake: 'live',
+    active: false,
+    senderBlocked: false,
+    syncCursor: null,
+  });
+
+  expect(mockDatabase!.sqlite.prepare(
+    'SELECT has_replied FROM conversations WHERE group_id = ?',
+  ).get(h)).toEqual({ has_replied: 1 });
+});
+
 it('bootstraps, applies tail actions, and authorizes ordinary messages from the roster', async () => {
   const h = 'family-test';
   const create = rumor('1', BOB, 10, [

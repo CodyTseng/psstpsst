@@ -23,6 +23,7 @@ import {
   proximityPeers,
   relayOutboxJobs,
   relayLists,
+  savedGroups,
   syncCursors,
 } from '@/db/schema';
 import { bytesToHex, hexToBytes, nsecToPrivkey, privkeyToNsec } from '@/lib/nostr/keys';
@@ -222,10 +223,11 @@ export async function setAccountEncryptionPubkey(
 
 /**
  * Wipe every per-account-scoped row this account owns — messages and their
- * attachments/participants, conversations, drafts, contacts, blocks, relay and
- * media-server lists, sync cursors, and dedup logs. All data is keyed by
- * `account_pubkey` (see migration 0017), so a removed account leaves nothing
- * behind for a later re-add to surface. Global profile rows remain shared.
+ * attachments/participants, conversations, drafts, contacts, blocks, saved
+ * groups, relay and media-server lists, sync cursors, and dedup logs. All data
+ * is keyed by `account_pubkey` (see migration 0017), so a removed account
+ * leaves nothing behind for a later re-add to surface. Global profile rows
+ * remain shared.
  */
 async function deleteAccountData(pubkey: string): Promise<void> {
   const pendingFiles = await db
@@ -243,6 +245,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
     messageDrafts,
     contacts,
     blockedUsers,
+    savedGroups,
     relayLists,
     mediaServerLists,
     syncCursors,

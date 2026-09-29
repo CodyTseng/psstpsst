@@ -8,6 +8,7 @@ import {
   messages,
   pendingGroupRumors,
   relayOutboxJobs,
+  savedGroups,
   type Rumor,
 } from '@/db/schema';
 import {
@@ -246,6 +247,21 @@ function newestCursor(
   return !current || isMessageOrderNewer(candidate, current) ? candidate : current;
 }
 
+async function isSavedGroup(tx: Tx, accountPubkey: string, groupId: string): Promise<boolean> {
+  return (
+    await tx
+      .select({ groupId: savedGroups.groupId })
+      .from(savedGroups)
+      .where(
+        and(
+          eq(savedGroups.accountPubkey, accountPubkey),
+          eq(savedGroups.groupId, groupId),
+        ),
+      )
+      .limit(1)
+  ).length > 0;
+}
+
 async function refreshConversationMessageState(
   tx: Tx,
   options: ReceiveGroupRumorOptions,
@@ -294,7 +310,11 @@ async function refreshConversationMessageState(
   const unread = await countUnread(tx, accountPubkey, conversationKey, readCursor);
   const activityOrderAt = Date.now();
   const activityAt = Math.floor(activityOrderAt / 1000);
-  const acceptedByLocalActivity = options.intake === 'local';
+  const acceptedByOwnActivity = options.intake === 'local' || rumor.pubkey === accountPubkey;
+  const acceptedBySavedGroup =
+    !acceptedByOwnActivity &&
+    !conversation.hasReplied &&
+    await isSavedGroup(tx, accountPubkey, conversation.groupId!);
 
   await tx
     .update(conversations)
@@ -304,11 +324,8 @@ async function refreshConversationMessageState(
       lastMessageOrderAt: newest[0]?.orderAt ?? null,
       unreadCount: unread,
       deleted: false,
-      hasReplied: acceptedByLocalActivity
-        ? true
-        : conversation.deleted
-          ? false
-          : conversation.hasReplied,
+      hasReplied:
+        acceptedByOwnActivity || acceptedBySavedGroup || conversation.hasReplied,
       ...(readCursor
         ? {
             lastReadOrderAt: readCursor.orderAt,
@@ -874,7 +891,8 @@ class GroupReceiveService {
           intake === 'live' || intake === 'recovery' || intake === 'local'
             ? Date.now()
             : orderAt;
-        const senderIsContact = rumor.pubkey === accountPubkey ||
+        const acceptedSavedGroup = await isSavedGroup(tx, accountPubkey, groupId);
+        const senderIsContact = acceptedSavedGroup || rumor.pubkey === accountPubkey ||
           (await tx
             .select({ pubkey: contacts.pubkey })
             .from(contacts)

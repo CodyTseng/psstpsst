@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { IconButton } from '@/components/common/IconButton';
-import { ListRow } from '@/components/common/ListRow';
+import { IdentityListItem } from '@/components/common/IdentityListItem';
 import { NotificationDot } from '@/components/common/NotificationDot';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { usePrimaryPaneNavigation } from '@/components/navigation/primary-pane-navigation';
@@ -26,7 +26,14 @@ import { useUnreadRequestCount } from '@/hooks/use-conversations';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { syncPersonalConfigs } from '@/services/relay/personal-configs.service';
 import { useActiveAccount } from '@/stores/active-account.store';
-import { bottomBarHeight, headerHeight, spacing, uiDensity, useThemeColors } from '@/theme';
+import {
+  bottomBarHeight,
+  headerHeight,
+  radius,
+  spacing,
+  uiDensity,
+  useThemeColors,
+} from '@/theme';
 
 export default function Contacts() {
   const { t } = useTranslation();
@@ -189,17 +196,27 @@ export default function Contacts() {
                     paddingBottom: spacing.sm,
                   }}
                 >
-                  <ListRow
-                    icon={(
-                      <UsersGroup
-                        size={uiDensity.headerActionIconSize}
-                        color={c.text}
-                      />
+                  <IdentityListItem
+                    leading={(
+                      <View
+                        style={{
+                          width: uiDensity.contactAvatarSize,
+                          height: uiDensity.contactAvatarSize,
+                          borderRadius: radius.full,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: c.surfaceMuted,
+                        }}
+                      >
+                        <UsersGroup
+                          size={uiDensity.headerActionIconSize}
+                          color={c.text}
+                        />
+                      </View>
                     )}
                     title={t('group.list_title')}
                     onPress={() => openInDetailPane('/groups')}
                     active={selection.contactsItem === 'groups'}
-                    variant="list"
                   />
                 </View>
               </>

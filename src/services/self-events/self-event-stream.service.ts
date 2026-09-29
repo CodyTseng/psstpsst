@@ -19,6 +19,11 @@ import {
   applyMediaServersEvent,
   KIND_BLOSSOM_SERVER_LIST,
 } from '../files/media-server.service';
+import {
+  applySavedGroupsEvent,
+  KIND_APP_DATA,
+  SAVED_GROUPS_D,
+} from '../group/saved-groups.service';
 import type { SignAuth } from '../relay/managed-relay-pool';
 import {
   applyOwnDmRelayListEvent,
@@ -60,7 +65,7 @@ export type SelfEventStreamConfig = {
   accountPubkey: string;
   /** NIP-42 auth signer for relay reads — the same lazy signer dmService uses. */
   signAuth: SignAuth;
-  /** Lazily builds the identity signer that decrypts the private 30000 sets.
+  /** Lazily builds the identity signer that decrypts private configuration sets.
    * Called on first use and cached; a rejection (e.g. account mid-teardown)
    * permanently skips the private sets for this session while the public lists
    * still apply — the same semantics as `syncPersonalConfigs`. */
@@ -76,6 +81,7 @@ type Route =
   | 'contacts'
   | 'muted'
   | 'blocked'
+  | 'saved-groups'
   | 'emoji'
   | 'media'
   | 'relay-lists';
@@ -132,9 +138,9 @@ function isReplaceableNewer(
  * The self-event dispatch layer: it owns the fixed set of long-lived REQs that
  * watch the **account's own non-message relay events** — key-sync requests and
  * transfers (4454/4455), encryption-key announcements (10044), the private
- * NIP-51 sets (30000 muted/contacts/blocked), the public lists (10030 emoji,
- * 10063 media servers), and the own relay lists (10002/10050) — and routes each
- * event to its service handler/reconciler.
+ * NIP-51 sets (30000 muted/contacts/blocked), saved groups (30078), the public
+ * lists (10030 emoji, 10063 media servers), and the own relay lists
+ * (10002/10050) — and routes each event to its service handler/reconciler.
  *
  * Deliberately out of scope (and owned elsewhere): kind-1059 gift wraps and
  * history backfill (dmService), temporary subscriptions, peers' events, and
@@ -207,6 +213,7 @@ class SelfEventStream {
     ];
     const ownListFilters: Filter[] = [
       { kinds: [KIND_FOLLOW_SET], authors: [self], '#d': [...PRIVATE_SET_D_TAGS] },
+      { kinds: [KIND_APP_DATA], authors: [self], '#d': [SAVED_GROUPS_D] },
       { kinds: [KIND_USER_EMOJI_LIST], authors: [self] },
       { kinds: [KIND_BLOSSOM_SERVER_LIST], authors: [self] },
       { kinds: [KIND_RELAY_LIST_METADATA, KIND_DM_RELAY_LIST], authors: [self] },
@@ -290,6 +297,15 @@ class SelfEventStream {
         return;
       case KIND_FOLLOW_SET:
         this.dispatchFollowSet(config, event);
+        return;
+      case KIND_APP_DATA:
+        if (dTagOf(event) !== SAVED_GROUPS_D || !this.isNewerReplaceable(event)) return;
+        this.storeReplaceable(event);
+        this.enqueue('saved-groups', async () => {
+          const signer = await this.loadSigner(config);
+          if (!signer) return;
+          await applySavedGroupsEvent(config.accountPubkey, event, signer);
+        });
         return;
       case KIND_USER_EMOJI_LIST:
         if (!this.isNewerReplaceable(event)) return;
