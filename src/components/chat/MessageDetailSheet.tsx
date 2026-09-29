@@ -90,7 +90,7 @@ function useDeliveryCopyIdentity(accountPubkey: string, copy: DeliveryCopy) {
   const { t } = useTranslation();
   const profile = useProfile(copy.recipient);
   const contact = useContact(accountPubkey, copy.recipient);
-  const name = copy.self
+  const name = copy.recipient === accountPubkey
     ? t('delivery.self')
     : resolveDisplayName(copy.recipient, {
         petname: contact?.petname,
@@ -100,11 +100,14 @@ function useDeliveryCopyIdentity(accountPubkey: string, copy: DeliveryCopy) {
   return { name, picture: profile?.picture };
 }
 
-export function orderDeliveryCopies(copies: DeliveryCopy[]): DeliveryCopy[] {
+export function orderDeliveryCopies(
+  copies: DeliveryCopy[],
+  accountPubkey: string,
+): DeliveryCopy[] {
   let selfSeen = false;
   let needsReorder = false;
   for (const copy of copies) {
-    if (copy.self) selfSeen = true;
+    if (copy.recipient === accountPubkey) selfSeen = true;
     else if (selfSeen) {
       needsReorder = true;
       break;
@@ -115,7 +118,7 @@ export function orderDeliveryCopies(copies: DeliveryCopy[]): DeliveryCopy[] {
   const recipients: DeliveryCopy[] = [];
   const selfCopies: DeliveryCopy[] = [];
   for (const copy of copies) {
-    (copy.self ? selfCopies : recipients).push(copy);
+    (copy.recipient === accountPubkey ? selfCopies : recipients).push(copy);
   }
   return recipients.concat(selfCopies);
 }
@@ -205,6 +208,7 @@ export function DeliveryCopyTabs({
   onSelect: (recipient: string) => void;
 }) {
   const c = useThemeColors();
+  const orderedCopies = orderDeliveryCopies(copies, accountPubkey);
 
   return (
     <HorizontalFadeScrollView
@@ -221,7 +225,7 @@ export function DeliveryCopyTabs({
         paddingVertical: spacing.xs,
       }}
     >
-      {copies.map((copy) => (
+      {orderedCopies.map((copy) => (
         <DeliveryCopyTab
           key={copy.recipient}
           accountPubkey={accountPubkey}
@@ -503,7 +507,7 @@ export function MessageDetailSheet({
     rumorId: string;
     recipient: string;
   } | null>(null);
-  const deliveryCopies = orderDeliveryCopies(delivery?.copies ?? []);
+  const deliveryCopies = orderDeliveryCopies(delivery?.copies ?? [], accountPubkey);
   const selectedByUser =
     deliverySelection && deliverySelection.rumorId === snap?.rumorId
       ? deliverySelection.recipient

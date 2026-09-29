@@ -306,6 +306,33 @@ describe('DeliveryCopyTabs', () => {
       renderer!.root.findAllByType(EdgeFade).map((fade) => fade.props.edge),
     ).toEqual(['start']);
   });
+
+  it('renders the account copy after every recipient tab', () => {
+    const accountCopy: DeliveryCopy = {
+      recipient: 'account-pubkey',
+      self: false,
+      relays: [],
+    };
+    const recipient: DeliveryCopy = {
+      recipient: 'recipient-pubkey',
+      self: false,
+      relays: [],
+    };
+    act(() => {
+      renderer = create(
+        <DeliveryCopyTabs
+          accountPubkey="account-pubkey"
+          copies={[accountCopy, recipient]}
+          selectedRecipient="recipient-pubkey"
+          onSelect={jest.fn()}
+        />,
+      );
+    });
+
+    expect(
+      renderer!.root.findAllByType(DeliveryCopyTab).map((tab) => tab.props.copy.recipient),
+    ).toEqual(['recipient-pubkey', 'account-pubkey']);
+  });
 });
 
 describe('orderDeliveryCopies', () => {
@@ -314,10 +341,27 @@ describe('orderDeliveryCopies', () => {
     const first: DeliveryCopy = { recipient: 'first', self: false, relays: [] };
     const second: DeliveryCopy = { recipient: 'second', self: false, relays: [] };
 
-    expect(orderDeliveryCopies([self, first, second])).toEqual([
+    expect(orderDeliveryCopies([self, first, second], 'self')).toEqual([
       first,
       second,
       self,
     ]);
+  });
+
+  it('uses recipient identity even when a stale self flag is wrong', () => {
+    const accountCopy: DeliveryCopy = {
+      recipient: 'account-pubkey',
+      self: false,
+      relays: [],
+    };
+    const recipient: DeliveryCopy = {
+      recipient: 'recipient-pubkey',
+      self: true,
+      relays: [],
+    };
+
+    expect(
+      orderDeliveryCopies([accountCopy, recipient], 'account-pubkey'),
+    ).toEqual([recipient, accountCopy]);
   });
 });
