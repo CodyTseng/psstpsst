@@ -271,6 +271,7 @@
     "or": "또는"
   },
   "search": {
+    "clear": "검색 지우기",
     "placeholder": "검색",
     "contacts_placeholder": "연락처 검색",
     "in_conversation": "검색",
@@ -999,6 +1000,8 @@
     "info_title": "그룹 정보",
     "members": "멤버",
     "add_member": "멤버 추가",
+    "add_member_search_hint": "공개 키나 개인 식별자를 입력하거나 QR 코드를 스캔하여 사용자를 추가하세요.",
+    "member_already_added": "이 사용자는 이미 그룹에 참여하고 있습니다.",
     "rename": "그룹 이름 변경",
     "leave": "그룹 나가기",
     "leave_confirm": "다른 멤버가 다시 초대할 때까지 메시지를 보낼 수 없습니다.",

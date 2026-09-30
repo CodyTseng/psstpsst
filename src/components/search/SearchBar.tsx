@@ -1,15 +1,14 @@
 import { Magnifer as Search } from '@solar-icons/react-native/category/search/Linear/Magnifer';
-import X from 'lucide-react-native/icons/x';
 import { forwardRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
+import { InputClearButton } from '@/components/common/InputClearButton';
 
 import { resolveSearchPlaceholder } from '@/components/search/search-shortcut';
 import { SEARCH_ACTIVATION_TRANSITION_MS } from '@/components/search/SearchTransition';
-import { iconStrokeWidth } from '@/theme/icons';
 import { radius, spacing, typography, uiDensity, useThemeColors } from '@/theme';
 
 // The rounded field shell needs a slightly tighter screen gutter than square
@@ -123,9 +122,7 @@ export const SearchBar = forwardRef<TextInput, Props>(function SearchBar(
           }}
         />
         {value.length > 0 ? (
-          <Pressable onPress={() => onChangeText('')} hitSlop={8}>
-            <X strokeWidth={iconStrokeWidth.default} size={16} color={c.textMuted} />
-          </Pressable>
+          <InputClearButton onPress={() => onChangeText('')} />
         ) : null}
         {onPress ? (
           <Pressable

@@ -1,7 +1,8 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { View } from 'react-native';
 
 import { AppButton } from '@/components/common/AppButton';
-import { uiDensity } from '@/theme';
+import { spacing, uiDensity } from '@/theme';
 
 import { GroupSystemMessage } from '../GroupSystemMessage';
 
@@ -116,5 +117,22 @@ describe('GroupSystemMessage', () => {
     const button = renderer!.root.findByType(AppButton);
     expect(button.props.iconLeft.props.size).toBe(uiDensity.conversationStatusIconSize);
     expect(button.props.iconRight.props.size).toBe(uiDensity.conversationStatusIconSize);
+  });
+
+  it('keeps long action capsules away from the page boundary', () => {
+    act(() => {
+      renderer = create(
+        <GroupSystemMessage
+          accountPubkey={'a'.repeat(64)}
+          senderPubkey={'b'.repeat(64)}
+          tags={[['action', 'rename'], ['subject', 'A'.repeat(80)]]}
+          delivery={null}
+        />,
+      );
+    });
+
+    expect(renderer!.root.findByType(View).props.style).toMatchObject({
+      paddingHorizontal: spacing.lg,
+    });
   });
 });

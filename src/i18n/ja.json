@@ -271,6 +271,7 @@
     "or": "または"
   },
   "search": {
+    "clear": "検索をクリア",
     "placeholder": "検索",
     "contacts_placeholder": "連絡先を検索",
     "in_conversation": "検索",
@@ -999,6 +1000,8 @@
     "info_title": "グループ情報",
     "members": "メンバー",
     "add_member": "メンバーを追加",
+    "add_member_search_hint": "公開鍵または個人識別子を入力するか、QRコードをスキャンしてメンバーを追加します。",
+    "member_already_added": "このユーザーはすでにグループに参加しています。",
     "rename": "グループ名を変更",
     "leave": "グループを退出",
     "leave_confirm": "他のメンバーから再び招待されるまで、メッセージを送信できません。",

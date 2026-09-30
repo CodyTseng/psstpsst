@@ -18,6 +18,7 @@ type Props = {
   title: string;
   subtitle?: string | null;
   titlePrefix?: ReactNode;
+  trailing?: ReactNode;
   onPress: () => void;
   active?: boolean;
   /** Multi-select: `undefined` hides the selector; a boolean shows its state. */
@@ -38,6 +39,7 @@ export function IdentityListItem({
   title,
   subtitle,
   titlePrefix,
+  trailing,
   onPress,
   active,
   selected,
@@ -110,6 +112,7 @@ export function IdentityListItem({
             </AppText>
           ) : null}
         </View>
+        {trailing ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
       </Reanimated.View>
     </Pressable>
   );

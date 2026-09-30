@@ -271,6 +271,7 @@
     "or": "或"
   },
   "search": {
+    "clear": "清除搜尋",
     "placeholder": "搜尋",
     "contacts_placeholder": "搜尋聯絡人",
     "in_conversation": "搜尋",
@@ -999,6 +1000,8 @@
     "info_title": "群組資訊",
     "members": "成員",
     "add_member": "加入成員",
+    "add_member_search_hint": "輸入公開金鑰或個人識別碼，或掃描 QR 碼以新增成員。",
+    "member_already_added": "這位使用者已在群組中。",
     "rename": "重新命名群組",
     "leave": "離開群組",
     "leave_confirm": "離開後將無法傳送訊息，除非其他成員再次邀請你。",

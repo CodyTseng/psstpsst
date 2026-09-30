@@ -93,6 +93,7 @@ export function GroupSystemMessage({
         flexDirection: 'row',
         justifyContent: 'center',
         marginVertical: spacing.sm,
+        paddingHorizontal: spacing.lg,
       }}
     >
       <AppButton

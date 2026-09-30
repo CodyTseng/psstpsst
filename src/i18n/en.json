@@ -271,6 +271,7 @@
     "or": "or"
   },
   "search": {
+    "clear": "Clear search",
     "placeholder": "Search",
     "contacts_placeholder": "Search contacts",
     "in_conversation": "Search",
@@ -999,6 +1000,8 @@
     "info_title": "Group info",
     "members": "Members",
     "add_member": "Add member",
+    "add_member_search_hint": "Enter a public key or personal identifier, or scan a QR code to add someone.",
+    "member_already_added": "This person is already in the group.",
     "rename": "Rename group",
     "leave": "Leave group",
     "leave_confirm": "You will no longer be able to send messages unless another member invites you again.",

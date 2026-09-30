@@ -171,8 +171,10 @@ while incoming system events do not. Every system-event capsule opens the
 standard message detail when pressed.
 System-event capsules remain single-line. Dynamic arguments such as member and
 group names truncate independently with end ellipses so localized action words
-remain visible; accessibility exposes the complete untruncated sentence. A
-compact leading icon identifies invite, remove, leave, and rename actions.
+remain visible; accessibility exposes the complete untruncated sentence. At
+their maximum width, capsules retain an additional horizontal inset beyond the
+chat content gutter instead of approaching the page edge. A compact leading
+icon identifies invite, remove, leave, and rename actions.
 Leading action and trailing delivery glyphs share one icon box size.
 System-event capsules never enter message selection or content actions such as
 copy, reply, react, quote, and forward.
@@ -194,6 +196,12 @@ open that member's profile, as do member rows on group information. Add, remove,
 and leave controls remain on group information. The global profile screen may
 link to a read-only list of common groups, but never gains group-specific
 actions. Common-group rows open their chat histories.
+
+Adding a group member offers both eligible saved contacts and the same public
+key, personal-identifier, and QR search paths used by the new-chat and user
+search flows. Search results replace the contact list, open the full profile
+when pressed, and expose a separate trailing invite action. Existing members
+are rejected before an invite is sent.
 
 The group directory is an explicit saved list, not a membership mirror.
 Established-group information owns its saved-list switch. Deleting a

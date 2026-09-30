@@ -15,6 +15,8 @@ type Props = TextInputProps & {
   error?: string;
   /** Control rendered beside the input, such as a scan or add action. */
   trailingAccessory?: ReactNode;
+  /** Compact control rendered inside the input at its logical end. */
+  inputTrailingAccessory?: ReactNode;
 };
 
 export const AppInput = forwardRef<TextInput, Props>(function AppInput(
@@ -24,6 +26,7 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
     description,
     error,
     trailingAccessory,
+    inputTrailingAccessory,
     style,
     onFocus,
     onBlur,
@@ -59,6 +62,8 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
         minHeight: multiline ? uiDensity.multilineInputMinHeight : undefined,
         paddingVertical: multiline ? 12 : 0,
         justifyContent: multiline ? 'flex-start' : 'center',
+        flexDirection: 'row',
+        alignItems: multiline ? 'flex-start' : 'center',
       }}
     >
       {showTruncatedPlaceholder ? (
@@ -105,12 +110,16 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
             fontSize: typography.body.fontSize,
             lineHeight: typography.body.fontFamily ? typography.body.lineHeight : undefined,
             fontFamily: typography.body.fontFamily,
+            flex: 1,
             paddingVertical: 0,
             textAlignVertical: multiline ? 'top' : 'center',
           },
           style,
         ]}
       />
+      {inputTrailingAccessory ? (
+        <View style={{ flexShrink: 0 }}>{inputTrailingAccessory}</View>
+      ) : null}
     </View>
   );
 

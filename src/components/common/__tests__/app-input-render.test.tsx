@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
 import { AppInput } from '../AppInput';
 import { AppText } from '../AppText';
@@ -69,6 +69,15 @@ describe('AppInput field chrome', () => {
 
     expect(renderer!.root.findByProps({ testID: 'field-action' })).toBeTruthy();
     expect(renderer!.root.findByType(TextInput)).toBeTruthy();
+  });
+
+  it('renders a compact action inside the input shell', () => {
+    act(() => {
+      renderer = create(<AppInput inputTrailingAccessory={<View testID="input-action" />} />);
+    });
+
+    const action = renderer!.root.findByProps({ testID: 'input-action' });
+    expect(StyleSheet.flatten(action.parent?.props.style)).toMatchObject({ flexShrink: 0 });
   });
 
   it('ellipsizes single-line placeholders by default', () => {

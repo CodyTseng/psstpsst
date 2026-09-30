@@ -271,6 +271,7 @@
     "or": "ya da"
   },
   "search": {
+    "clear": "Aramayı temizle",
     "placeholder": "Ara",
     "contacts_placeholder": "Kişilerde ara",
     "in_conversation": "Ara",
@@ -999,6 +1000,8 @@
     "info_title": "Grup bilgisi",
     "members": "Üyeler",
     "add_member": "Üye ekle",
+    "add_member_search_hint": "Birini eklemek için genel anahtar veya kişisel tanımlayıcı girin ya da QR kodu tarayın.",
+    "member_already_added": "Bu kişi zaten grupta.",
     "rename": "Grubu yeniden adlandır",
     "leave": "Gruptan ayrıl",
     "leave_confirm": "Başka bir üye sizi yeniden davet edene kadar mesaj gönderemezsiniz.",

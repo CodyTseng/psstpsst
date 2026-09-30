@@ -271,6 +271,7 @@
     "or": "vagy"
   },
   "search": {
+    "clear": "Keresés törlése",
     "placeholder": "Keresés",
     "contacts_placeholder": "Keresés a névjegyek között",
     "in_conversation": "Keresés",
@@ -999,6 +1000,8 @@
     "info_title": "Csoport adatai",
     "members": "Tagok",
     "add_member": "Tag hozzáadása",
+    "add_member_search_hint": "Adj meg egy nyilvános kulcsot vagy személyes azonosítót, vagy olvass be egy QR-kódot valaki hozzáadásához.",
+    "member_already_added": "Ez a személy már a csoport tagja.",
     "rename": "Csoport átnevezése",
     "leave": "Kilépés a csoportból",
     "leave_confirm": "Addig nem küldhetsz üzenetet, amíg egy tag újra meg nem hív.",

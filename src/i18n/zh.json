@@ -271,6 +271,7 @@
     "or": "或"
   },
   "search": {
+    "clear": "清除搜索",
     "placeholder": "搜索",
     "contacts_placeholder": "搜索联系人",
     "in_conversation": "搜索",
@@ -999,6 +1000,8 @@
     "info_title": "群聊信息",
     "members": "成员",
     "add_member": "添加成员",
+    "add_member_search_hint": "输入公钥或个人标识，或扫描二维码添加成员。",
+    "member_already_added": "该用户已在群组中。",
     "rename": "修改群名",
     "leave": "退出群聊",
     "leave_confirm": "退出后将无法发送消息，除非其他成员再次邀请你。",

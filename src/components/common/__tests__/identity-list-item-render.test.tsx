@@ -79,4 +79,20 @@ describe('IdentityListItem layout', () => {
       gap: spacing.md,
     });
   });
+
+  it('keeps a trailing action outside the shrinking identity column', () => {
+    act(() => {
+      renderer = create(
+        <IdentityListItem
+          leading={<View />}
+          title="Alice"
+          trailing={<View testID="trailing" />}
+          onPress={jest.fn()}
+        />,
+      );
+    });
+
+    const trailing = renderer!.root.findByProps({ testID: 'trailing' });
+    expect(StyleSheet.flatten(trailing.parent?.props.style)).toMatchObject({ flexShrink: 0 });
+  });
 });

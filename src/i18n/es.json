@@ -271,6 +271,7 @@
     "or": "o"
   },
   "search": {
+    "clear": "Borrar búsqueda",
     "placeholder": "Buscar",
     "contacts_placeholder": "Buscar contactos",
     "in_conversation": "Buscar",
@@ -1004,6 +1005,8 @@
     "info_title": "Información del grupo",
     "members": "Miembros",
     "add_member": "Añadir miembro",
+    "add_member_search_hint": "Introduce una clave pública o un identificador personal, o escanea un código QR para añadir a alguien.",
+    "member_already_added": "Esta persona ya está en el grupo.",
     "rename": "Cambiar nombre del grupo",
     "leave": "Salir del grupo",
     "leave_confirm": "No podrás enviar mensajes hasta que otro miembro vuelva a invitarte.",

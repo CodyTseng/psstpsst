@@ -15,6 +15,7 @@ type Props = {
    * Null when there's no petname (the name then stands alone). */
   secondaryName?: string | null;
   picture?: string | null;
+  trailing?: React.ReactNode;
   onPress: () => void;
   /** Multi-select: `undefined` = no checkbox; `true`/`false` = show a leading
    * selection dot (filled accent ✓ when selected, hollow ring otherwise). In
@@ -41,6 +42,7 @@ export function ContactListItem({
   displayName,
   secondaryName,
   picture,
+  trailing,
   onPress,
   selected,
   selectProgress,
@@ -68,6 +70,7 @@ export function ContactListItem({
       titlePrefix={
         isSelf && showSelfBadge ? <SelfBadge /> : blocked ? <BlockedBadge /> : undefined
       }
+      trailing={trailing}
       selected={selected}
       selectProgress={selectProgress}
       trailingInset={trailingInset}
