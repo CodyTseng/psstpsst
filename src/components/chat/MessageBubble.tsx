@@ -56,6 +56,7 @@ import {
   SWIPE_REPLY_ACTIVATION,
   SWIPE_REPLY_ARMED_FROM,
   SWIPE_REPLY_TRIGGER,
+  swipeReplyActivationOffset,
   swipeReplyDistance,
   swipeReplyEdgeInset,
 } from './swipe-reply';
@@ -242,8 +243,8 @@ function MessageBubbleBase({
     emitLongPress(false, desktopContextMenuPoint(event));
   }
 
-  // Signal-style touch swipe-to-reply: drag the bubble in either direction and a
-  // round reply arrow fades in beneath the edge the bubble exposes. Past the
+  // Signal-style touch swipe-to-reply: drag from logical trailing to leading and
+  // a round reply arrow fades in beneath the exposed trailing edge. Past the
   // trigger distance, releasing commits the reply and the bubble springs back.
   const tx = useSharedValue(0);
   const [swipeDecorationsMounted, setSwipeDecorationsMounted] = useState(false);
@@ -253,13 +254,12 @@ function MessageBubbleBase({
       // Electron reserves mouse dragging for native text selection. Reply remains
       // available from the right-click action menu there.
       .enabled(!IS_ELECTRON && !!onSwipeReply)
-      // Keep a left-edge strip free for the OS back-swipe (`UIScreenEdgePan`): the
-      // bubble's rightward reply drag would otherwise fight the navigator's pop
-      // gesture there. Negative `hitSlop` shrinks the active area off the edge.
+      // Keep the logical-start edge free for the OS back-swipe
+      // (`UIScreenEdgePan`). Negative `hitSlop` shrinks the active area off it.
       .hitSlop(
         isRTL ? { right: -BACK_SWIPE_GUARD } : { left: -BACK_SWIPE_GUARD },
       )
-      .activeOffsetX([-SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ACTIVATION])
+      .activeOffsetX(swipeReplyActivationOffset(isRTL))
       .failOffsetY([-14, 14]) // … and yield to the list's vertical scroll
       .onStart(() => {
         scheduleOnRN(setSwipeDecorationsMounted, true);
@@ -417,8 +417,8 @@ function MessageBubbleBase({
               minWidth: 0,
             }}
           >
-            {/* A reply arrow sits beneath each logical edge. Only the edge exposed
-                by the current drag fades in; neither intercepts bubble taps. */}
+            {/* The reply arrow sits beneath the logical trailing edge exposed by
+                the drag and does not intercept bubble taps. */}
             {swipeDecorationsMounted ? (
               <SwipeReplyDecorations tx={tx} isSelf={isSelf} hasAttachment={!!attachment} />
             ) : null}
@@ -582,14 +582,6 @@ function SwipeReplyDecorations({ tx, isSelf, hasAttachment }: {
 }) {
   const c = useThemeColors();
   const directionalIconStyle = useDirectionalIconStyle();
-  const replyRevealStart = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      tx.get(),
-      [SWIPE_REPLY_ACTIVATION, SWIPE_REPLY_ARMED_FROM],
-      [0, 1],
-      Extrapolation.CLAMP,
-    ),
-  }));
   const replyRevealEnd = useAnimatedStyle(() => ({
     opacity: interpolate(
       -tx.get(),
@@ -616,84 +608,63 @@ function SwipeReplyDecorations({ tx, isSelf, hasAttachment }: {
   }));
 
   return (
-    <>
-      {(['start', 'end'] as const).map((edge) => (
-            <View
-              key={edge}
-              style={[
-                {
-                  position: 'absolute',
-                  top: 0,
-                  bottom: 0,
-                  justifyContent: 'center',
-                  pointerEvents: 'none',
-                },
-                edge === 'start'
-                  ? {
-                      start: swipeReplyEdgeInset(
-                        hasAttachment,
-                        isSelf,
-                        edge,
-                        ATTACHMENT_FAILURE_TARGET_SIZE,
-                      ),
-                    }
-                  : {
-                      end: swipeReplyEdgeInset(
-                        hasAttachment,
-                        isSelf,
-                        edge,
-                        ATTACHMENT_FAILURE_TARGET_SIZE,
-                      ),
-                    },
-              ]}
-            >
-              <Reanimated.View
-                style={[
-                  {
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  },
-                  edge === 'start'
-                    ? replyRevealStart
-                    : replyRevealEnd,
-                  replyChipFill,
-                ]}
-              >
-                {/* The accent arrow crossfades over the muted arrow once the
-                    drag will commit the reply. */}
-                <CornerUpLeft
-                  size={15}
-                  color={c.textMuted}
-                  style={directionalIconStyle}
-                />
-                <Reanimated.View
-                  style={[
-                    {
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    },
-                    replyArmedArrow,
-                  ]}
-                >
-                  <CornerUpLeft
-                    size={15}
-                    color={c.accent}
-                    style={directionalIconStyle}
-                  />
-                </Reanimated.View>
-              </Reanimated.View>
-            </View>
-          ))}
-
-    </>
+    <View
+      style={{
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        end: swipeReplyEdgeInset(
+          hasAttachment,
+          isSelf,
+          'end',
+          ATTACHMENT_FAILURE_TARGET_SIZE,
+        ),
+        justifyContent: 'center',
+        pointerEvents: 'none',
+      }}
+    >
+      <Reanimated.View
+        style={[
+          {
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          replyRevealEnd,
+          replyChipFill,
+        ]}
+      >
+        {/* The accent arrow crossfades over the muted arrow once the drag will
+            commit the reply. */}
+        <CornerUpLeft
+          size={15}
+          color={c.textMuted}
+          style={directionalIconStyle}
+        />
+        <Reanimated.View
+          style={[
+            {
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+            replyArmedArrow,
+          ]}
+        >
+          <CornerUpLeft
+            size={15}
+            color={c.accent}
+            style={directionalIconStyle}
+          />
+        </Reanimated.View>
+      </Reanimated.View>
+    </View>
   );
 }
 

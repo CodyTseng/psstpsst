@@ -92,10 +92,9 @@ it('allocates dormant decorations only when used and preserves the message body'
   expect(mockPanCreated).toHaveBeenCalledTimes(1);
   act(() => mockPanHandlers.onUpdate({ translationX: 100 }));
   act(() => mockPanHandlers.onUpdate({ translationX: 110 }));
-  expect(impact).toHaveBeenCalledTimes(1);
-  act(() => mockPanHandlers.onUpdate({ translationX: 0 }));
+  expect(impact).not.toHaveBeenCalled();
   act(() => mockPanHandlers.onUpdate({ translationX: -100 }));
-  expect(impact).toHaveBeenCalledTimes(2);
+  expect(impact).toHaveBeenCalledTimes(1);
   act(() => mockPanHandlers.onEnd({ velocityX: 0 }));
   expect(props.onSwipeReply).toHaveBeenCalledTimes(1);
   expect(count('SwipeReplyDecorations')).toBe(0);
