@@ -160,23 +160,22 @@ inter-message separation. Reactions share the message's logical edge: start for
 received messages, end for sent messages. Own reactions retain an accent
 outline.
 
-Chat system events use the centered inline date-capsule visual family and stay
-anchored at their event position in the message timeline. They never join the
-floating sticky date indicator. A system event may own the inline date boundary
-or unread boundary at its position and always breaks bubble grouping across it.
+Chat system events use centered, single-line caption text and stay anchored at
+their event position in the message timeline. The text is muted at rest and
+uses the normal text colour on pointer hover. They never join the floating
+sticky date indicator. A system event may own the inline date boundary or
+unread boundary at its position and always breaks bubble grouping across it.
 Group actions follow ordinary-message unread, badge, preview, activity, and
 notification behavior.
-Own authored system-event capsules reserve one fixed-size delivery-status slot
-while incoming system events do not. Every system-event capsule opens the
-standard message detail when pressed.
-System-event capsules remain single-line. Dynamic arguments such as member and
-group names truncate independently with end ellipses so localized action words
-remain visible; accessibility exposes the complete untruncated sentence. At
-their maximum width, capsules retain an additional horizontal inset beyond the
-chat content gutter instead of approaching the page edge. A compact leading
-icon identifies invite, remove, leave, and rename actions.
-Leading action and trailing delivery glyphs share one icon box size.
-System-event capsules never enter message selection or content actions such as
+Own authored system events reserve one fixed-size delivery-status slot while
+incoming system events do not. Every system event opens the standard message
+detail when pressed.
+System events remain single-line. Dynamic arguments such as member and group
+names truncate independently with end ellipses so localized action words remain
+visible; accessibility exposes the complete untruncated sentence. At their
+maximum width, system events retain an additional horizontal inset beyond the
+chat content gutter instead of approaching the page edge.
+System events never enter message selection or content actions such as
 copy, reply, react, quote, and forward.
 
 Received group-message runs show the sender name once at the run start and the

@@ -1,28 +1,13 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { View } from 'react-native';
 
-import { AppButton } from '@/components/common/AppButton';
-import { spacing, uiDensity } from '@/theme';
+import { AppText } from '@/components/common/AppText';
+import { InteractivePressable } from '@/components/common/InteractivePressable';
+import { darkPalette, spacing } from '@/theme';
 
 import { GroupSystemMessage } from '../GroupSystemMessage';
+import { MESSAGE_DELIVERY_ICON_SIZE } from '../MessageDeliveryStatus';
 
-jest.mock('lucide-react-native/icons/log-out', () => ({
-  __esModule: true,
-  default: function LogOut() { return null; },
-}), { virtual: true });
-jest.mock('lucide-react-native/icons/pencil', () => ({
-  __esModule: true,
-  default: function Pencil() { return null; },
-}), { virtual: true });
-jest.mock('lucide-react-native/icons/user-minus', () => ({
-  __esModule: true,
-  default: function UserMinus() { return null; },
-}), { virtual: true });
-jest.mock('lucide-react-native/icons/user-plus', () => ({
-  __esModule: true,
-  default: function UserPlus() { return null; },
-}), { virtual: true });
-jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('@/hooks/use-profile', () => ({ useProfile: () => null }));
 jest.mock('@/hooks/use-contacts', () => ({ useContact: () => null }));
 jest.mock('@/stores/theme.store', () => ({
@@ -34,7 +19,10 @@ jest.mock('@/stores/theme.store', () => ({
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-jest.mock('../MessageDeliveryStatus', () => ({ MessageDeliveryStatus: () => null }));
+jest.mock('../MessageDeliveryStatus', () => ({
+  MESSAGE_DELIVERY_ICON_SIZE: 11,
+  MessageDeliveryStatus: () => null,
+}));
 
 describe('GroupSystemMessage', () => {
   let renderer: ReactTestRenderer | undefined;
@@ -58,50 +46,36 @@ describe('GroupSystemMessage', () => {
       );
     });
 
-    const button = renderer!.root.findByType(AppButton);
+    const button = renderer!.root.findByType(InteractivePressable);
     act(() => {
       void button.props.onPress();
     });
     expect(onShowDetail).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    {
-      expected: 'UserPlus',
-      sender: 'b',
-      tags: [['action', 'invite', 'c'.repeat(64)]],
-    },
-    {
-      expected: 'LogOut',
-      sender: 'b',
-      tags: [['action', 'remove', 'b'.repeat(64)]],
-    },
-    {
-      expected: 'UserMinus',
-      sender: 'b',
-      tags: [['action', 'remove', 'c'.repeat(64)]],
-    },
-    {
-      expected: 'Pencil',
-      sender: 'b',
-      tags: [['action', 'rename'], ['subject', 'New name']],
-    },
-  ])('uses the $expected icon for its action', ({ expected, sender, tags }) => {
+  it('renders the action as plain muted text', () => {
     act(() => {
       renderer = create(
         <GroupSystemMessage
           accountPubkey={'a'.repeat(64)}
-          senderPubkey={sender.repeat(64)}
-          tags={tags}
+          senderPubkey={'b'.repeat(64)}
+          tags={[['action', 'rename'], ['subject', 'New name']]}
           delivery={null}
         />,
       );
     });
 
-    expect(renderer!.root.findByType(AppButton).props.iconLeft.type.name).toBe(expected);
+    const label = renderer!.root.findByType(AppText);
+    expect(label.props.variant).toBe('caption');
+    expect(label.props.numberOfLines).toBe(1);
+    expect(label.props.style.color).toBe(darkPalette.textMuted);
+
+    const pressable = renderer!.root.findByType(InteractivePressable);
+    const hoveredContent = pressable.props.children({ pressed: false, hovered: true });
+    expect(hoveredContent.props.children[0].props.style.color).toBe(darkPalette.text);
   });
 
-  it('uses one icon size for the action and delivery status slots', () => {
+  it('uses the compact message icon size for own delivery state', () => {
     const accountPubkey = 'a'.repeat(64);
     act(() => {
       renderer = create(
@@ -114,12 +88,14 @@ describe('GroupSystemMessage', () => {
       );
     });
 
-    const button = renderer!.root.findByType(AppButton);
-    expect(button.props.iconLeft.props.size).toBe(uiDensity.conversationStatusIconSize);
-    expect(button.props.iconRight.props.size).toBe(uiDensity.conversationStatusIconSize);
+    const status = renderer!.root.findByType(
+      jest.requireMock('../MessageDeliveryStatus').MessageDeliveryStatus,
+    );
+    expect(status.props.size).toBe(MESSAGE_DELIVERY_ICON_SIZE);
+    expect(status.parent?.props.style.gap).toBe(spacing.xs);
   });
 
-  it('keeps long action capsules away from the page boundary', () => {
+  it('keeps long action text away from the page boundary', () => {
     act(() => {
       renderer = create(
         <GroupSystemMessage

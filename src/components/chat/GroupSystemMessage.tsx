@@ -1,20 +1,22 @@
-import LogOut from 'lucide-react-native/icons/log-out';
-import Pencil from 'lucide-react-native/icons/pencil';
-import UserMinus from 'lucide-react-native/icons/user-minus';
-import UserPlus from 'lucide-react-native/icons/user-plus';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { AppButton } from '@/components/common/AppButton';
+import { AppText } from '@/components/common/AppText';
+import {
+  InteractivePressable as Pressable,
+  isInteractiveHovered,
+} from '@/components/common/InteractivePressable';
 import { useContact } from '@/hooks/use-contacts';
 import { useProfile } from '@/hooks/use-profile';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
-import { iconStrokeWidth } from '@/theme/icons';
-import { spacing, uiDensity, useThemeColors } from '@/theme';
+import { spacing, useThemeColors } from '@/theme';
 
-import { MessageDeliveryStatus } from './MessageDeliveryStatus';
+import {
+  MESSAGE_DELIVERY_ICON_SIZE,
+  MessageDeliveryStatus,
+} from './MessageDeliveryStatus';
 
 type Props = {
   accountPubkey: string;
@@ -73,19 +75,6 @@ export function GroupSystemMessage({
         ? t('group.renamed', { actor, name: parsed.action.name })
         : t('group.cleared_name', { actor });
   const own = senderPubkey === accountPubkey;
-  const actionIconSize = uiDensity.conversationStatusIconSize;
-  const iconProps = {
-    color: c.textMuted,
-    size: actionIconSize,
-    strokeWidth: iconStrokeWidth.default,
-  };
-  const actionIcon = parsed.action.type === 'invite'
-    ? <UserPlus {...iconProps} />
-    : parsed.action.type === 'remove'
-      ? parsed.action.memberPubkey === senderPubkey
-        ? <LogOut {...iconProps} />
-        : <UserMinus {...iconProps} />
-      : <Pencil {...iconProps} />;
   return (
     <View
       style={{
@@ -96,26 +85,44 @@ export function GroupSystemMessage({
         paddingHorizontal: spacing.lg,
       }}
     >
-      <AppButton
-        label={label}
+      <Pressable
+        accessibilityRole="button"
         accessibilityLabel={label}
-        labelVariant="caption"
-        labelNumberOfLines={1}
-        variant="secondary"
-        size="sm"
-        fullWidth={false}
-        iconLeft={actionIcon}
-        iconRight={
-          own && delivery ? (
-            <MessageDeliveryStatus
-              delivery={delivery}
-              color={c.textMuted}
-              size={actionIconSize}
-            />
-          ) : null
-        }
         onPress={onShowDetail}
-      />
+        hitSlop={spacing.sm}
+        fallbackHoverOpacity={false}
+        style={{ maxWidth: '100%' }}
+      >
+        {(state) => {
+          const color = isInteractiveHovered(state) || state.pressed ? c.text : c.textMuted;
+          return (
+            <View
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: spacing.xs,
+                maxWidth: '100%',
+              }}
+            >
+              <AppText
+                variant="caption"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={{ color, flexShrink: 1, userSelect: 'none' }}
+              >
+                {label}
+              </AppText>
+              {own && delivery ? (
+                <MessageDeliveryStatus
+                  delivery={delivery}
+                  color={color}
+                  size={MESSAGE_DELIVERY_ICON_SIZE}
+                />
+              ) : null}
+            </View>
+          );
+        }}
+      </Pressable>
     </View>
   );
 }
