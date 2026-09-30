@@ -1,5 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Image } from 'expo-image';
+import { Platform } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
 import { Avatar } from '../Avatar';
@@ -13,13 +14,23 @@ const pubkey = '9ea00010deb0a143564836345610232523443629204633354945364524364145
 
 describe('Avatar gradient references', () => {
   let renderer: ReactTestRenderer | undefined;
+  const originalPlatform = Platform.OS;
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: originalPlatform,
+    });
   });
 
-  it('isolates repeated identities while preserving their artwork and stable references', () => {
+  const gradientImages = () => renderer!.root.findAllByType(Image).filter(
+    (node) => node.props.source?.uri?.startsWith('data:image/svg+xml,'),
+  );
+  const gradientSvgs = () => renderer!.root.findAllByType(SvgXml);
+
+  it('renders native circular SVG layers with isolated gradient references', () => {
     const avatars = (size: number) => (
       <>
         <Avatar pubkey={pubkey} size={44} />
@@ -30,23 +41,45 @@ describe('Avatar gradient references', () => {
       renderer = create(avatars(32));
     });
 
-    const readXml = () => renderer!.root.findAllByType(SvgXml).map((node) => node.props.xml as string);
-    const before = readXml();
-    const ids = before.map((xml) => Array.from(xml.matchAll(/id="([^"]+)"/g), (match) => match[1]));
-    expect(ids[0].length).toBeGreaterThan(0);
-    expect(ids[1]).toHaveLength(ids[0].length);
+    const before = gradientSvgs().map((node) => node.props.xml as string);
+    expect(before).toHaveLength(2);
+    before.forEach((xml) => {
+      expect(xml).toContain('<radialGradient');
+      expect(xml).toContain('<circle');
+      expect(xml).not.toContain('<rect');
+    });
+    const ids = before.map((xml) => Array.from(
+      xml.matchAll(/id="([^"]+)"/g),
+      (match) => match[1],
+    ));
     expect(ids[0].filter((id) => ids[1].includes(id))).toEqual([]);
     before.forEach((xml, index) => {
-      const references = Array.from(xml.matchAll(/url\(#([^)]+)\)/g), (match) => match[1]);
+      const references = Array.from(
+        xml.matchAll(/url\(#([^)]+)\)/g),
+        (match) => match[1],
+      );
       expect(references).toEqual(ids[index]);
     });
-    const artwork = before.map((xml) => xml
-      .replace(/id="[^"]+"/g, 'id="gradient"')
-      .replace(/url\(#[^)]+\)/g, 'url(#gradient)'));
-    expect(artwork[0]).toBe(artwork[1]);
 
     act(() => renderer!.update(avatars(96)));
-    expect(readXml()).toEqual(before);
+    expect(gradientSvgs().map((node) => node.props.xml)).toEqual(before);
+    expect(gradientSvgs()[1].props.width).toBe(96);
+  });
+
+  it('renders rectangular SVG data images on web', () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+    act(() => {
+      renderer = create(<Avatar pubkey={pubkey} size={44} />);
+    });
+
+    expect(gradientSvgs()).toHaveLength(0);
+    const gradient = gradientImages()[0];
+    const uri = gradient.props.source.uri as string;
+    const xml = decodeURIComponent(uri.slice('data:image/svg+xml,'.length));
+    expect(xml).toContain('<radialGradient');
+    expect(xml).toContain('<rect');
+    expect(xml).not.toContain('<circle');
+    expect(gradient.props.style).toMatchObject({ borderRadius: 22 });
   });
 
   it('shows the gradient only after failure and retries when the same URL loads elsewhere', () => {
@@ -62,10 +95,11 @@ describe('Avatar gradient references', () => {
       );
     });
 
-    expect(renderer!.root.findAllByType(SvgXml)).toHaveLength(0);
+    expect(gradientSvgs()).toHaveLength(0);
     const [failed, successful, unrelated] = renderer!.root.findAllByType(Image);
+    expect(successful.props.style).toMatchObject({ borderRadius: 22 });
     act(() => { void failed.props.onError(); });
-    expect(renderer!.root.findAllByType(SvgXml)).toHaveLength(1);
+    expect(gradientSvgs()).toHaveLength(1);
     act(() => { void successful.props.onLoad(); });
 
     const [retried, stillSuccessful, stillUnrelated] = renderer!.root.findAllByType(Image);
@@ -73,17 +107,16 @@ describe('Avatar gradient references', () => {
     expect(stillSuccessful).toBe(successful);
     expect(stillUnrelated).toBe(unrelated);
     expect(retried.props.source).toEqual({ uri: sharedUrl });
-    expect(renderer!.root.findAllByType(SvgXml)).toHaveLength(1);
+    expect(gradientSvgs()).toHaveLength(0);
 
     act(() => { void retried.props.onError(); });
     act(() => { void successful.props.onLoad(); });
     const secondRetry = renderer!.root.findAllByType(Image)[0];
     expect(secondRetry).not.toBe(retried);
     act(() => { void secondRetry.props.onError(); });
+    const finalGradient = gradientSvgs()[0];
     act(() => { void successful.props.onLoad(); });
-    expect(renderer!.root.findAllByType(Image)[0]).toBe(secondRetry);
-    act(() => { void secondRetry.props.onLoad(); });
-    expect(renderer!.root.findAllByType(SvgXml)).toHaveLength(0);
+    expect(gradientSvgs()[0]).toBe(finalGradient);
   });
 
   it('ignores a success for a previous picture URL', () => {
@@ -98,12 +131,12 @@ describe('Avatar gradient references', () => {
     act(() => { renderer = create(avatars(oldUrl)); });
     const [first, second] = renderer!.root.findAllByType(Image);
     act(() => { void first.props.onError(); });
-    expect(renderer!.root.findAllByType(SvgXml)).toHaveLength(1);
+    expect(gradientSvgs()).toHaveLength(1);
     act(() => renderer!.update(avatars(newUrl)));
-    expect(renderer!.root.findAllByType(SvgXml)).toHaveLength(0);
+    expect(gradientSvgs()).toHaveLength(0);
     const changed = renderer!.root.findAllByType(Image)[0];
     act(() => { void second.props.onLoad(); });
     expect(renderer!.root.findAllByType(Image)[0]).toBe(changed);
-    expect(renderer!.root.findAllByType(SvgXml)).toHaveLength(0);
+    expect(gradientSvgs()).toHaveLength(0);
   });
 });

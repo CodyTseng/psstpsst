@@ -203,8 +203,11 @@ deletion. Actively leaving turns the switch off and removes the group from the
 directory.
 
 Automatically derived group titles resolve at most three member names in a
-stable order, followed by a localized remaining-member count. Full member
-rosters use virtualized lists.
+stable order, followed by a localized remaining-member count. When present,
+that count represents at least two members; a four-member group therefore shows
+two names and a remaining count of two. Full member rosters use virtualized
+lists. Derived group avatars show up to nine members in a stable, compact
+overlapping cluster; larger groups keep the first nine-member composition.
 
 Multi-copy delivery details use a horizontally scrollable avatar tab for each
 target, including self delivery to other devices, with the selected target's

@@ -1,16 +1,15 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  getDerivedGroupTitleNameLimit,
+  MAX_GROUP_AVATAR_MEMBERS,
+  type GroupAvatarMember,
+} from '@/hooks/group-presentation-model';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 
-import { useContact } from './use-contacts';
-import { useProfile } from './use-profile';
-
-export type GroupAvatarMember = {
-  pubkey: string;
-  name: string;
-  picture?: string | null;
-};
+import { useContactsMap } from './use-contacts';
+import { useProfilesMap } from './use-profile';
 
 export function useGroupPresentation(
   accountPubkey: string,
@@ -20,28 +19,19 @@ export function useGroupPresentation(
 ): { title: string; avatarMembers: GroupAvatarMember[] } {
   const { t } = useTranslation();
   const members = memberPubkeys ?? [];
-  const p0 = members[0] ?? '';
-  const p1 = members[1] ?? '';
-  const p2 = members[2] ?? '';
-  const p3 = members[3] ?? '';
-  const profile0 = useProfile(p0 || null, liveDataEnabled);
-  const profile1 = useProfile(p1 || null, liveDataEnabled);
-  const profile2 = useProfile(p2 || null, liveDataEnabled);
-  const profile3 = useProfile(p3 || null, liveDataEnabled);
-  const contact0 = useContact(accountPubkey, p0, liveDataEnabled);
-  const contact1 = useContact(accountPubkey, p1, liveDataEnabled);
-  const contact2 = useContact(accountPubkey, p2, liveDataEnabled);
-  const contact3 = useContact(accountPubkey, p3, liveDataEnabled);
+  const avatarKey = members.slice(0, MAX_GROUP_AVATAR_MEMBERS).join(',');
+  const avatarPubkeys = useMemo(
+    () => (avatarKey ? avatarKey.split(',') : []),
+    [avatarKey],
+  );
+  const profiles = useProfilesMap(avatarPubkeys, liveDataEnabled);
+  const contacts = useContactsMap(accountPubkey, avatarPubkeys, liveDataEnabled);
 
   return useMemo(() => {
-    const pubkeys = [p0, p1, p2, p3];
-    const profiles = [profile0, profile1, profile2, profile3];
-    const contacts = [contact0, contact1, contact2, contact3];
-    const resolved = pubkeys.flatMap((pubkey, index): GroupAvatarMember[] => {
-      if (!pubkey) return [];
-      const profile = profiles[index];
-      const contact = contacts[index];
-      return [{
+    const resolved = avatarPubkeys.map((pubkey): GroupAvatarMember => {
+      const profile = profiles[pubkey];
+      const contact = contacts[pubkey];
+      return {
         pubkey,
         name: resolveDisplayName(pubkey, {
           petname: contact?.petname,
@@ -49,9 +39,10 @@ export function useGroupPresentation(
           name: profile?.name,
         }),
         picture: profile?.picture,
-      }];
+      };
     });
-    const titleNames = resolved.slice(0, 3).map((member) => member.name);
+    const titleNameLimit = getDerivedGroupTitleNameLimit(members.length);
+    const titleNames = resolved.slice(0, titleNameLimit).map((member) => member.name);
     const remaining = Math.max(0, members.length - titleNames.length);
     const fallback = remaining > 0
       ? t('group.derived_title_with_others', {
@@ -64,20 +55,11 @@ export function useGroupPresentation(
       avatarMembers: resolved,
     };
   }, [
-    contact0,
-    contact1,
-    contact2,
-    contact3,
     customName,
+    contacts,
+    avatarPubkeys,
     members.length,
-    p0,
-    p1,
-    p2,
-    p3,
-    profile0,
-    profile1,
-    profile2,
-    profile3,
+    profiles,
     t,
   ]);
 }

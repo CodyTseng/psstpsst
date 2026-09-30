@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
 import { useThemeColors } from '@/theme';
@@ -40,11 +40,12 @@ function subscribeImageLoaded(url: string, listener: () => void) {
  * Ported from jumble's generateImageByPubkey: the first 3 six-char chunks
  * become colors, the rest seed radial-gradient control points.
  */
-function generateAvatarSvg(pubkey: string): string {
-  const cached = svgCache.get(pubkey);
+function generateAvatarSvg(pubkey: string, circularLayers: boolean): string {
+  const cacheKey = `${circularLayers ? 'circle' : 'rect'}:${pubkey}`;
+  const cached = svgCache.get(cacheKey);
   if (cached) {
-    svgCache.delete(pubkey);
-    svgCache.set(pubkey, cached);
+    svgCache.delete(cacheKey);
+    svgCache.set(cacheKey, cached);
     return cached;
   }
 
@@ -61,6 +62,12 @@ function generateAvatarSvg(pubkey: string): string {
     }
   }
 
+  const layer = (fill: string, opacity?: number) => {
+    const fillOpacity = opacity === undefined ? '' : ` fill-opacity="${opacity}"`;
+    return circularLayers
+      ? `<circle cx="50" cy="50" r="50" fill="${fill}"${fillOpacity} />`
+      : `<rect width="100%" height="100%" fill="${fill}"${fillOpacity} />`;
+  };
   const gradients = controlPoints
     .map((point, index) => {
       const cx = parseInt(point.slice(0, 2), 16) % 100;
@@ -71,19 +78,16 @@ function generateAvatarSvg(pubkey: string): string {
       if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r)) {
         return '';
       }
-      return `
-        <radialGradient id="avatar-gradient-${index}" cx="${cx}%" cy="${cy}%" r="${r}%">
+      return `<radialGradient id="avatar-gradient-${index}" cx="${cx}%" cy="${cy}%" r="${r}%">
           <stop offset="0%" stop-color="${color}" stop-opacity="1" />
           <stop offset="100%" stop-color="${color}" stop-opacity="0" />
-        </radialGradient>
-        <rect width="100%" height="100%" fill="url(#avatar-gradient-${index})" />
-      `;
+        </radialGradient>${layer(`url(#avatar-gradient-${index})`)}`;
     })
     .join('');
 
-  const svg = `<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="${colors[2]}" fill-opacity="0.3" />${gradients}</svg>`;
+  const svg = `<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${layer(colors[2], 0.3)}${gradients}</svg>`;
 
-  svgCache.set(pubkey, svg);
+  svgCache.set(cacheKey, svg);
   if (svgCache.size > MAX_CACHED_GRADIENTS) {
     const oldest = svgCache.keys().next().value;
     if (oldest !== undefined) svgCache.delete(oldest);
@@ -122,29 +126,54 @@ export function Avatar({ pubkey, picture, size = 44 }: Props) {
       retryCount.current += 1;
       // Remount only the failed image view. The shared Expo cache now has the
       // bytes, while a previously failed native view does not reload itself.
+      setFailedPictureUrl(null);
       setRetryRevision((revision) => revision + 1);
     });
   }, [pictureUrl]);
 
-  const svg = useMemo(() => {
+  const gradientArtwork = useMemo(() => {
     if (!showGradient || !/^[0-9a-f]{12,}$/i.test(pubkey)) return null;
-    // Keep the cached artwork shared, but scope SVG references to this instance:
-    // a hidden screen's duplicate IDs can suppress another avatar's gradients.
-    return generateAvatarSvg(pubkey).replaceAll('avatar-gradient-', `${gradientId}-gradient-`);
-  }, [pubkey, gradientId, showGradient]);
+    if (Platform.OS === 'web') {
+      const svg = generateAvatarSvg(pubkey, false);
+      return { imageSource: { uri: `data:image/svg+xml,${encodeURIComponent(svg)}` } };
+    }
+    const svg = generateAvatarSvg(pubkey, true)
+      .replaceAll('avatar-gradient-', `${gradientId}-gradient-`);
+    return { svg };
+  }, [gradientId, pubkey, showGradient]);
 
   return (
     <View
       style={{
         width: size,
         height: size,
-        borderRadius: size / 2,
-        overflow: 'hidden',
-        backgroundColor: c.surfaceMuted,
       }}
     >
-      {svg ? <SvgXml xml={svg} width={size} height={size} /> : null}
-      {picture ? (
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: c.surfaceMuted,
+        }}
+      />
+      {gradientArtwork && 'imageSource' in gradientArtwork ? (
+        <Image
+          source={gradientArtwork.imageSource}
+          cachePolicy="memory"
+          contentFit="cover"
+          style={{
+            position: 'absolute',
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          }}
+        />
+      ) : gradientArtwork && 'svg' in gradientArtwork ? (
+        <SvgXml xml={gradientArtwork.svg} width={size} height={size} />
+      ) : null}
+      {picture && !showGradient ? (
         <Image
           key={`${pictureUrl ?? picture}:${retryRevision}`}
           source={imageSource}
@@ -165,7 +194,12 @@ export function Avatar({ pubkey, picture, size = 44 }: Props) {
               notifyImageLoaded(pictureUrl);
             }
           }}
-          style={{ position: 'absolute', width: size, height: size }}
+          style={{
+            position: 'absolute',
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          }}
         />
       ) : null}
     </View>
