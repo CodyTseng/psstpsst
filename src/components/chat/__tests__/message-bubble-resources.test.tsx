@@ -135,3 +135,23 @@ it('allocates dormant decorations only when used and preserves the message body'
   act(() => renderer.unmount());
   expect(mockBodyUnmount).toHaveBeenCalledTimes(1);
 });
+
+it('lets standalone emoji messages use the full row width', () => {
+  const props = {
+    content: '😀😀', isSelf: false, createdAt: 0, orderAt: 0,
+    reactions: [], onTapReaction: jest.fn(),
+    presentation: {
+      shortEmoji: { content: '😀😀', count: 2, emojis: ['😀', '😀'] },
+      shortCustomEmojis: null,
+    } as never,
+  };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<MessageBubble {...props} />); });
+  const messageCluster = renderer.root.find((node) =>
+    Array.isArray(node.props.style) &&
+    node.props.style.some((style: { alignSelf?: string }) => style?.alignSelf === 'flex-start') &&
+    node.props.style.some((style: { maxWidth?: string }) => style?.maxWidth === '100%')
+  );
+  expect(messageCluster).toBeDefined();
+  act(() => renderer.unmount());
+});

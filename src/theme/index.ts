@@ -282,14 +282,8 @@ export const emojiSize = {
   grid: { fontSize: 30, lineHeight: 36 },
   /** Unicode emoji in the Electron full-picker grid. */
   desktopGrid: { fontSize: 26, lineHeight: 32 },
-  /** Bubble-free messages containing at most three emoji. */
+  /** Bubble-free messages containing one to three emoji. */
   message: { fontSize: 80, lineHeight: 88 },
-  /**
-   * Bubble-free message containing exactly one emoji. Electron's color-emoji
-   * bitmaps pixelate at the larger size, so a lone emoji settles between
-   * `message` and the touch size.
-   */
-  singleMessage: IS_ELECTRON ? { fontSize: 112, lineHeight: 124 } : { fontSize: 160, lineHeight: 176 },
   /** Inline custom-emoji image inside a text bubble. */
   inlineImage: 22,
   /** Custom-emoji cover in the picker source tab rail. */
@@ -304,8 +298,6 @@ export const emojiSize = {
   listImage: 44,
   /** Bubble-free custom-emoji message image. */
   messageImage: 80,
-  /** Bubble-free message containing exactly one custom emoji. Matches `singleMessage`. */
-  singleMessageImage: IS_ELECTRON ? 112 : 160,
   /** Emoji tile in pack previews and management grids. */
   packImage: 48,
   /** Selected emoji shown at the top of the detail sheet. */

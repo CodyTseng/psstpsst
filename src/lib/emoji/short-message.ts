@@ -10,7 +10,6 @@ const MAX_EMOJI_COUNT = 3;
 // comfortably inside this bound. Rejecting longer strings before allocating a
 // compact copy keeps the check cheap for ordinary prose and pasted text.
 const MAX_CANDIDATE_CODE_UNITS = 64;
-const SKIN_TONE_MODIFIER = /\uD83C[\uDFFB-\uDFFF]/g;
 const WHITESPACE = /\s/g;
 
 const emojiTrie: EmojiTrieNode = {};
@@ -39,7 +38,13 @@ for (const emoji of orderedEmoji as unknown as string[]) {
 export type ShortEmojiMessage = {
   content: string;
   count: number;
+  emojis: string[];
 };
+
+function isSkinToneModifier(codePoint: string): boolean {
+  const value = codePoint.codePointAt(0);
+  return value !== undefined && value >= 0x1f3fb && value <= 0x1f3ff;
+}
 
 export function shortEmojiMessage(content: string): ShortEmojiMessage | null {
   if (content.length === 0 || content.length > MAX_CANDIDATE_CODE_UNITS) return null;
@@ -48,29 +53,37 @@ export function shortEmojiMessage(content: string): ShortEmojiMessage | null {
   if (!displayContent) return null;
 
   const compact = displayContent.replace(WHITESPACE, '');
-  const normalized = compact.replace(SKIN_TONE_MODIFIER, '');
-  const codePoints = Array.from(normalized);
+  const originalCodePoints = Array.from(compact);
+  const codePoints = originalCodePoints.flatMap((codePoint, originalIndex) =>
+    isSkinToneModifier(codePoint) ? [] : [{ codePoint, originalIndex }],
+  );
   let offset = 0;
-  let emojiCount = 0;
+  const emojis: string[] = [];
 
   while (offset < codePoints.length) {
     let node = emojiTrie;
     let nextOffset = -1;
 
     for (let index = offset; index < codePoints.length; index += 1) {
-      const child = node.children?.get(codePoints[index]);
+      const child = node.children?.get(codePoints[index].codePoint);
       if (!child) break;
       node = child;
       if (node.terminal) nextOffset = index + 1;
     }
 
     if (nextOffset < 0) return null;
-    emojiCount += 1;
-    if (emojiCount > MAX_EMOJI_COUNT) return null;
+    const originalStart = codePoints[offset].originalIndex;
+    const originalEnd = nextOffset < codePoints.length
+      ? codePoints[nextOffset].originalIndex
+      : originalCodePoints.length;
+    emojis.push(originalCodePoints.slice(originalStart, originalEnd).join(''));
+    if (emojis.length > MAX_EMOJI_COUNT) return null;
     offset = nextOffset;
   }
 
-  return emojiCount > 0 ? { content: displayContent, count: emojiCount } : null;
+  return emojis.length > 0
+    ? { content: displayContent, count: emojis.length, emojis }
+    : null;
 }
 
 /** Compatibility helper for callers that only need the original display text. */

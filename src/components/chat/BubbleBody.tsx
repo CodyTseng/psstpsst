@@ -169,7 +169,6 @@ function BubbleBodyBase({
   const customEmojiMap = presentation.customEmojiMap;
   const shortCustomEmojis = presentation.shortCustomEmojis;
   const shortEmoji = presentation.shortEmoji;
-  const shortEmojiContent = shortEmoji?.content ?? null;
   const remoteContentMode = messageRemoteContentMode(conversationMode, isSelf);
   const contentPolicy = remoteContentPolicy(remoteContentMode);
   const attachmentNeedsExplicitDownload = attachment
@@ -561,6 +560,7 @@ function BubbleBodyBase({
             position: 'relative',
             alignSelf: 'flex-end',
             flexDirection: 'row',
+            alignItems: 'flex-end',
             gap: spacing.xs,
           }}
         >
@@ -574,11 +574,7 @@ function BubbleBodyBase({
                 <CustomEmojiImage
                   sourceUri={localUri}
                   emoji={emoji}
-                  size={
-                    shortCustomEmojis.length === 1
-                      ? emojiSize.singleMessageImage
-                      : emojiSize.messageImage
-                  }
+                  size={emojiSize.messageImage}
                   hoverFeedback={false}
                 />
               )}
@@ -593,7 +589,7 @@ function BubbleBodyBase({
   // One to three emoji are the message itself, not text inside a container:
   // enlarge them directly on the chat canvas and float the media metadata chip
   // over their bottom-end corner. A reply stays as a neutral quote card above.
-  if (shortEmojiContent) {
+  if (shortEmoji) {
     return (
       <View style={{ gap: spacing.xs }}>
         {replyTo ? (
@@ -603,13 +599,24 @@ function BubbleBodyBase({
             onPress={onPressReply}
           />
         ) : null}
-        <View style={{ position: 'relative', alignSelf: 'flex-end' }}>
-          <AppText
-            selectable={IS_ELECTRON}
-            style={shortEmoji?.count === 1 ? emojiSize.singleMessage : emojiSize.message}
-          >
-            {shortEmojiContent}
-          </AppText>
+        <View
+          style={{
+            position: 'relative',
+            alignSelf: 'flex-end',
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+            gap: spacing.xs,
+          }}
+        >
+          {shortEmoji.emojis.map((emoji, index) => (
+            <AppText
+              key={`${index}:${emoji}`}
+              selectable={IS_ELECTRON}
+              style={emojiSize.message}
+            >
+              {emoji}
+            </AppText>
+          ))}
           {renderOverlayMeta()}
         </View>
       </View>

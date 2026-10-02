@@ -348,6 +348,9 @@ function MessageBubbleBase({
     : undefined;
   const showReceivedGroupSenderName =
     !isSelf && !!groupSenderName && !!showGroupSenderName;
+  const isStandaloneEmoji = !!(
+    presentation?.shortEmoji || presentation?.shortCustomEmojis
+  );
   const selectionContentTop = showReceivedGroupSenderName
     ? typography.caption.lineHeight + spacing.xs
     : 0;
@@ -378,7 +381,7 @@ function MessageBubbleBase({
               // Attachment bodies own their width and reserve an inward side
               // action. Keep that action inside native hit-test bounds even
               // when the conversation is too narrow for the text width cap.
-              maxWidth: attachment ? '100%' : BUBBLE_MAX_WIDTH,
+              maxWidth: attachment || isStandaloneEmoji ? '100%' : BUBBLE_MAX_WIDTH,
               minWidth: 0,
             },
             receivedSelectionShift,
