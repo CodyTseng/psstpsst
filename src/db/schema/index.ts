@@ -14,6 +14,7 @@ export * from './message-drafts';
 export * from './message-delivery-copies';
 export * from './messages';
 export * from './outbox';
+export * from './observed-peer-encryption-keys';
 export * from './relay-outbox';
 export * from './peer-dm-info';
 export * from './pending-attachments';

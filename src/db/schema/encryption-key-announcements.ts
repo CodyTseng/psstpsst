@@ -2,6 +2,7 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 
 import type { NostrEvent } from './types';
 
+/** Latest public kind-10044 encryption-key announcement for an identity. */
 export const encryptionKeyAnnouncements = sqliteTable('encryption_key_announcements', {
   pubkey: text('pubkey').primaryKey(),
   encryptionPubkey: text('encryption_pubkey').notNull(),

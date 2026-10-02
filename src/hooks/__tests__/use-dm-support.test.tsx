@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { dmService } from '@/services/dm/dm.service';
+import { onPeerEncryptionKeyChanged } from '@/services/dm/peer-encryption-key.service';
 
 import { type DmSupport, useDmSupport } from '../use-dm-support';
 
@@ -10,6 +11,9 @@ jest.mock('@/services/dm/dm.service', () => ({
     getCachedDmSupport: jest.fn(),
     checkDmSupport: jest.fn(),
   },
+}));
+jest.mock('@/services/dm/peer-encryption-key.service', () => ({
+  onPeerEncryptionKeyChanged: jest.fn(),
 }));
 
 type Deferred<T> = {
@@ -26,7 +30,7 @@ function deferred<T>(): Deferred<T> {
 }
 
 function Harness({ onValue }: { onValue: (value: DmSupport) => void }) {
-  const value = useDmSupport(['peer']);
+  const value = useDmSupport('account', ['peer']);
   useEffect(() => onValue(value), [onValue, value]);
   return null;
 }
@@ -36,6 +40,7 @@ describe('useDmSupport', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(onPeerEncryptionKeyChanged).mockReturnValue(jest.fn());
   });
 
   afterEach(() => {
@@ -51,7 +56,7 @@ describe('useDmSupport', () => {
     const relay = deferred<{ encryptionKey: boolean; relays: boolean }>();
     let onRelayQuery: (() => void) | undefined;
     jest.mocked(dmService.getCachedDmSupport).mockReturnValue(cache.promise);
-    jest.mocked(dmService.checkDmSupport).mockImplementation((_pubkey, opts) => {
+    jest.mocked(dmService.checkDmSupport).mockImplementation((_account, _pubkey, opts) => {
       onRelayQuery = opts?.onRelayQuery;
       return relay.promise;
     });
@@ -118,5 +123,35 @@ describe('useDmSupport', () => {
 
     expect(onValue.mock.calls.at(-1)?.[0].status).toBe('ready');
     expect(onValue.mock.calls.map(([value]) => value.status)).toEqual(['local', 'ready']);
+  });
+
+  it('rechecks an open conversation when an incoming message supplies the peer key', async () => {
+    const onValue = jest.fn<void, [DmSupport]>();
+    let onKeyChanged: ((identity: string) => void) | undefined;
+    jest.mocked(onPeerEncryptionKeyChanged).mockImplementation((listener) => {
+      onKeyChanged = listener;
+      return jest.fn();
+    });
+    jest.mocked(dmService.getCachedDmSupport).mockResolvedValue(null);
+    jest.mocked(dmService.checkDmSupport)
+      .mockResolvedValueOnce({ encryptionKey: false, relays: true })
+      .mockResolvedValueOnce({ encryptionKey: true, relays: true });
+
+    act(() => {
+      renderer = create(<Harness onValue={onValue} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onValue.mock.calls.at(-1)?.[0].status).toBe('unsupported');
+
+    await act(async () => {
+      onKeyChanged?.('peer');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onValue.mock.calls.at(-1)?.[0].status).toBe('ready');
+    expect(dmService.checkDmSupport).toHaveBeenCalledTimes(2);
   });
 });

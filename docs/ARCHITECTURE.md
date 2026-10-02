@@ -103,6 +103,17 @@ PsstPsst combines the
 
 - The Nostr identity key identifies and signs for the account.
 - A separate messaging encryption key is announced by kind `10044`.
+- The device materializes the newer key evidence for each peer identity from
+  incoming seals and kind `10044` announcements. Both sources share one signed
+  event-time ordering rule, so every local account reads the same current peer row.
+  Migration seeds existing announcements into that table; later announcements
+  are queried for a missing row, an explicit refresh, or a background daily
+  freshness check when a conversation opens. Freshness uses the local fetch
+  time, not the signed event time; conversation entry never opens a key subscription.
+  Key and DM-relay freshness share one device-wide, peer-deduplicated background
+  queue with bounded concurrency. Queued work continues after navigation. A
+  completed empty kind-10044 lookup records `announcement_checked_at` on an
+  existing seal-derived peer row, preventing another lookup until the daily TTL.
 - Message content uses NIP-44 v2 encryption.
 - A kind-14 message or kind-15 file rumor is sealed as kind `13` and wrapped as
   kind `1059` following NIP-59.
@@ -216,6 +227,10 @@ self: all delivered is `sent`, some delivered is `partial`, none delivered is
 `failed`, and unfinished non-delivered work is `queued`. Successful relay
 results are terminal. A selected-copy retry creates a fresh gift wrap; recovery
 of the same interrupted job reuses its persisted wrap.
+Recipient preparation uses complete local peer-key and DM-relay metadata
+immediately and queues its TTL refresh in the background. If either local piece
+is missing, preparation waits for its one-shot lookup before deciding that the
+recipient is unreachable.
 See [relay message delivery](implementation/relay-message-delivery.md) for the queue
 and state-machine details.
 

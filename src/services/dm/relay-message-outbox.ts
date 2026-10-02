@@ -22,7 +22,6 @@ import {
   KIND_FILE,
   type SignSeal,
 } from '../crypto/nip17-gift-wrap';
-import { fetchDmRelays } from '../relay/relay-list.service';
 import { relayPool, type PublishOutcome } from '../relay/relay-pool';
 import { capDeliveryRelays } from '../relay/relay-router';
 import type { Signer } from '../signer/signer.interface';
@@ -32,8 +31,10 @@ import {
   messageDeliveryVerdict,
   settleRelayTarget,
 } from './delivery-status';
-import { encryptionKeyWatcher } from './encryption-key-watcher';
 import type { EncryptionKeypair } from './encryption-key.service';
+import {
+  resolvePeerMessagingMetadata,
+} from './peer-encryption-key.service';
 
 const PUBLISH_TIMEOUT_MS = 10_000;
 const RECIPIENT_PREPARATION_CONCURRENCY = 4;
@@ -481,19 +482,18 @@ class RelayMessageOutbox {
             if (relays.length === 0) throw new Error('Account has no DM relays');
             return { recipientPubkey: participant, relays, error: null };
           }
-          const encryptionKey = await encryptionKeyWatcher.resolve(participant);
+          const metadata = await resolvePeerMessagingMetadata({
+            peerPubkey: participant,
+            searchRelays: session.dmRelays,
+          });
+          const encryptionKey = metadata.encryptionPubkey;
           if (!encryptionKey) {
             throw new Error(
-              `Recipient ${participant.slice(0, 8)}… has no published NIP-17 encryption key`,
+              `Recipient ${participant.slice(0, 8)}… has no known encryption key`,
             );
           }
           const relays = normalizeTargets(
-            capDeliveryRelays(
-              await fetchDmRelays({
-                pubkey: participant,
-                searchRelays: session.dmRelays,
-              }),
-            ),
+            capDeliveryRelays(metadata.dmRelays),
           );
           if (relays.length === 0) {
             throw new Error(`Recipient ${participant.slice(0, 8)}… has no published DM relays`);
@@ -671,13 +671,15 @@ class RelayMessageOutbox {
         throw new Error('Relay outbox session changed');
       }
       try {
-        const recipientEncPubkey =
-          recipientPubkey === job.accountPubkey
-            ? session.encryptionKeypair.pubkey
-            : await encryptionKeyWatcher.resolve(recipientPubkey);
+        const recipientEncPubkey = recipientPubkey === job.accountPubkey
+          ? session.encryptionKeypair.pubkey
+          : (await resolvePeerMessagingMetadata({
+              peerPubkey: recipientPubkey,
+              searchRelays: session.dmRelays,
+            })).encryptionPubkey;
         if (!recipientEncPubkey) {
           throw new Error(
-            `Recipient ${recipientPubkey.slice(0, 8)}… has no published NIP-17 encryption key`,
+            `Recipient ${recipientPubkey.slice(0, 8)}… has no known encryption key`,
           );
         }
         // Gift-wrap crypto contains synchronous work; let the queued bubble paint

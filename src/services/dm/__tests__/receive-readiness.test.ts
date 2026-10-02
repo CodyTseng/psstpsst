@@ -54,7 +54,15 @@ jest.mock('../../relay/relay-pool', () => ({ relayPool: { subscribe: jest.fn(), 
 jest.mock('../../self-events/self-event-stream.service', () => ({
   selfEventStream: { configure: jest.fn(), start: jest.fn(), destroy: jest.fn(), isHealthy: jest.fn(() => true) },
 }));
-jest.mock('../encryption-key-watcher', () => ({ encryptionKeyWatcher: { init: jest.fn(), destroy: jest.fn() } }));
+jest.mock('../encryption-key-watcher', () => ({
+  encryptionKeyWatcher: {
+    init: jest.fn(),
+    destroy: jest.fn(),
+  },
+}));
+jest.mock('../observed-peer-key.service', () => ({
+  observedPeerKeyService: { rememberVerifiedSealKey: jest.fn() },
+}));
 jest.mock('../block.service', () => ({ loadBlockedIntoCache: jest.fn(), isBlocked: () => false }));
 jest.mock('../sync-store', () => ({
   getSyncCursor: jest.fn(), isGiftWrapProcessed: async (id: string) => mockProcessedIds.has(id),

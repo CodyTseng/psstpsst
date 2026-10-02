@@ -90,6 +90,13 @@ A receiver:
 4. Verifies the rumor ID and requires the rumor `pubkey` to equal the seal
    `pubkey`.
 
+After verification, the receiver submits the seal's encryption public key as
+device-wide key evidence for the sender identity. Seal evidence uses the
+authenticated rumor order (`created_at`, optional `ms`, then event ID); kind
+`10044` evidence uses its signed `created_at` and event ID. The two sources
+share one latest-evidence row, so a newer message or announcement replaces an
+older key while delayed history cannot roll the key back.
+
 A relay-delivered seal without a valid `n` tag is not a PsstPsst split-key
 envelope.
 

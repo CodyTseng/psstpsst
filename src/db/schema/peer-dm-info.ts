@@ -1,8 +1,10 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 
 /**
- * A peer's NIP-17 DM endpoint — their **encryption pubkey** (kind 10044) and
- * **DM relays** (kind 10050) — plus when we checked (`checkedAt`, unix seconds).
+ * A peer's ready NIP-17 DM endpoint — their authenticated **encryption pubkey**
+ * (seal or kind 10044) and **DM relays** (kind 10050) — plus when we checked
+ * (`checkedAt`, unix seconds). Device-wide selection between seal and
+ * announcement evidence lives in `observed_peer_encryption_keys`.
  * A row exists **only for a reachable peer**: both columns are non-null, so the
  * row's mere presence means "we can DM them". An unreachable peer has **no row**,
  * so the composer re-checks them on every open — catching the moment they

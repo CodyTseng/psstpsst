@@ -33,9 +33,23 @@ The identity publishes its current encryption public key in a replaceable kind
 ```
 
 The first `n` value MUST be a 32-byte lowercase hexadecimal secp256k1 public
-key. A sender resolves the recipient's latest valid kind `10044` before
-encrypting to that recipient. Republishing kind `10044` with another `n` value
-rotates the encryption key without changing the account identity.
+key. A sender compares the latest valid kind `10044` with encryption-key
+evidence from the recipient's latest authenticated incoming seal and encrypts
+to whichever signed event is newer. Exact timestamp ties use event ordering,
+with the lexicographically smaller event ID considered newer. Republishing kind
+`10044` with another `n` value rotates the publicly advertised encryption key
+without changing the account identity.
+
+Clients MAY materialize the winning seal-or-announcement evidence per peer
+identity. Once materialized, every local account reads that row directly; public
+announcement lookup is needed only to populate a missing row, explicitly
+refresh it, migrate an existing announcement cache, or run a bounded freshness
+check. PsstPsst performs that check in the background when a conversation opens
+and queries relays only when the locally recorded fetch time is at least one day
+old. The same peer-deduplicated background task independently refreshes DM-relay
+metadata. A completed miss is timestamped alongside an existing seal-derived
+key, so it is not queried again before the TTL; an explicit recheck always
+queries again. It does not subscribe to peer key announcements.
 
 ## Encryption-key synchronization
 

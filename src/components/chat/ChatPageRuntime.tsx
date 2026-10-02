@@ -138,7 +138,6 @@ import { addContact } from '@/services/contact/contact.service';
 import { unreadCountService } from '@/services/conversation/unread-count.service';
 import { blockUser, getSessionCachedBlockedStatus, unblockUser } from '@/services/dm/block.service';
 import { buildRumor, KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
-import { encryptionKeyWatcher } from '@/services/dm/encryption-key-watcher';
 import { dmService } from '@/services/dm/dm.service';
 import {
   nextRumorTimestamp,
@@ -1224,7 +1223,10 @@ function ChatPageContent({
   // Reachability is part of composer readiness, so resolve it immediately while
   // the rest of the live data waits for transitionEnd. The local state stays
   // visually identical to ready; a cached verdict therefore causes no flash.
-  const dmSupport = useDmSupport(isProximity || isGroup ? [] : counterparties);
+  const dmSupport = useDmSupport(
+    accountPubkey ?? '',
+    isProximity || isGroup ? [] : counterparties,
+  );
   const [showUnsupported, setShowUnsupported] = useState(false);
   const [cardSheetOpen, setCardSheetOpen] = useState(false);
   // Attachment-tray open state, lifted here so a tap on the messages can close
@@ -1285,12 +1287,11 @@ function ChatPageContent({
     if (!secondaryDataReady || !routeActive) return;
     if (isProximity) return;
     if (!conversationKey) return;
-    // Open the chat → subscribe to counterparties' encryption keys and prefetch
-    // their DM relay lists, so sending later reads only warmed-up local data.
-    const unsub = encryptionKeyWatcher.watch(counterparties);
-    dmService.prefetchCounterpartyRelays(counterparties);
-    return unsub;
-  }, [counterparties, conversationKey, isProximity, routeActive, secondaryDataReady]);
+    // Queue one device-wide task per peer for key-announcement and DM-relay freshness.
+    if (accountPubkey) {
+      dmService.refreshCounterpartyMessagingMetadata(accountPubkey, counterparties);
+    }
+  }, [accountPubkey, counterparties, conversationKey, isProximity, routeActive, secondaryDataReady]);
 
   useEffect(() => {
     if (!liveDataReady || !routeActive) return;

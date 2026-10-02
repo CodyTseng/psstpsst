@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { dmService } from '@/services/dm/dm.service';
+import { onPeerEncryptionKeyChanged } from '@/services/dm/peer-encryption-key.service';
 
 export type DmSupportStatus = 'local' | 'checking' | 'ready' | 'unsupported';
 
 export type DmSupport = {
   status: DmSupportStatus;
-  /** Once checked: the peer published no encryption key (kind 10044). */
+  /** Once checked: no authenticated encryption key is known for the peer. */
   missingEncryptionKey: boolean;
   /** Once checked: the peer published no DM inbox relay (kind 10050). */
   missingRelays: boolean;
@@ -26,7 +27,7 @@ const CHECKING: DmSupportState = { ...LOCAL, status: 'checking' };
 
 /** A cached verdict this fresh is trusted as-is — no background revalidation on
  * open (the peer's key/relays change rarely, and an open chat still picks up
- * live updates via the encryption-key/relay subscription). */
+ * authenticated key evidence and relay updates). */
 const DM_SUPPORT_TTL_MS = 60 * 60 * 1000;
 
 /**
@@ -37,10 +38,13 @@ const DM_SUPPORT_TTL_MS = 60 * 60 * 1000;
  * only if *every* member is, and only as fresh as its **oldest** check.
  */
 async function readCache(
+  accountPubkey: string,
   counterparties: string[],
 ): Promise<{ state: DmSupportState; fresh: boolean } | null> {
   if (counterparties.length === 0) return null;
-  const verdicts = await Promise.all(counterparties.map((p) => dmService.getCachedDmSupport(p)));
+  const verdicts = await Promise.all(
+    counterparties.map((p) => dmService.getCachedDmSupport(accountPubkey, p)),
+  );
   if (verdicts.some((v) => v == null)) return null;
   const known = verdicts as { encryptionKey: boolean; relays: boolean; at: number }[];
   const missingEncryptionKey = known.some((v) => !v.encryptionKey);
@@ -65,12 +69,17 @@ async function readCache(
  * {@link DM_SUPPORT_TTL_MS} (1 h) is trusted as-is — no relay round-trip on open.
  * An **unreachable** peer has no row, so it's re-checked on **every** open
  * (`local` → `checking` → `unsupported`) — that's deliberate: it catches the peer the
- * instant they publish the missing key/relays. A stale (>TTL) reachable peer is
+ * instant they provide the missing key/relays. A stale (>TTL) reachable peer is
  * shown optimistically then revalidated; `recheck()` forces a fresh query
  * regardless. A request-id guard means a slow stale check can't clobber a newer one.
  */
-export function useDmSupport(counterparties: string[], enabled = true): DmSupport {
-  const key = counterparties.join(',');
+export function useDmSupport(
+  accountPubkey: string,
+  counterparties: string[],
+  enabled = true,
+): DmSupport {
+  const peerKey = counterparties.join(',');
+  const key = `${accountPubkey}\u0000${peerKey}`;
   const [result, setResult] = useState<{ key: string; state: DmSupportState }>(() => ({
     key,
     state: { ...LOCAL },
@@ -84,8 +93,8 @@ export function useDmSupport(counterparties: string[], enabled = true): DmSuppor
     (force: boolean) => {
       const id = ++reqId.current;
       void (async () => {
-        if (counterparties.length === 0) return;
-        const cached = force ? null : await readCache(counterparties);
+        if (!accountPubkey || counterparties.length === 0) return;
+        const cached = force ? null : await readCache(accountPubkey, counterparties);
         if (id !== reqId.current) return;
         if (cached) {
           setResult({ key, state: cached.state });
@@ -102,7 +111,7 @@ export function useDmSupport(counterparties: string[], enabled = true): DmSuppor
             : undefined;
         const results = await Promise.all(
           counterparties.map((p) =>
-            dmService.checkDmSupport(p, {
+            dmService.checkDmSupport(accountPubkey, p, {
               force,
               // A database miss can still be satisfied by the service's warm
               // memory caches. Only expose progress once the service confirms
@@ -132,6 +141,14 @@ export function useDmSupport(counterparties: string[], enabled = true): DmSuppor
     if (!enabled) return;
     run(false);
   }, [enabled, run]);
+
+  useEffect(() => {
+    if (!enabled || !accountPubkey || !peerKey) return;
+    const relevant = new Set(peerKey.split(','));
+    return onPeerEncryptionKeyChanged((identity) => {
+      if (relevant.has(identity)) run(false);
+    });
+  }, [accountPubkey, enabled, peerKey, run]);
 
   const recheck = useCallback(() => run(true), [run]);
 

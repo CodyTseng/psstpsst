@@ -53,6 +53,8 @@ import m0048 from './0048_message_delivery_status.sql';
 import m0049 from './0049_relay_message_outbox.sql';
 import m0050 from './0050_group_messaging.sql';
 import m0051 from './0051_saved_groups.sql';
+import m0052 from './0052_observed-peer-encryption-keys.sql';
+import m0053 from './0053_peer-key-announcement-checked-at.sql';
 
   export default {
     journal,
@@ -108,6 +110,8 @@ m0047,
 m0048,
 m0049,
 m0050,
-m0051
+m0051,
+m0052,
+m0053
     }
   }

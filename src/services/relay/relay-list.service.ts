@@ -128,6 +128,25 @@ async function readStoredDmRelayList(
   return rows[0] ?? null;
 }
 
+/** Read any known DM relay list without applying TTL or touching the network.
+ * `null` means never checked; `[]` is a persisted negative result. */
+export async function getKnownDmRelays(pubkey: string): Promise<string[] | null> {
+  const cached = dmRelaysCache.get(pubkey);
+  if (cached) return cached.relays;
+  const stored = await readStoredDmRelayList(pubkey);
+  if (!stored) return null;
+  if (!stored.event) return [];
+  const relays = parseRelayTags(stored.event);
+  if (relays.length > 0) {
+    dmRelaysCache.set(pubkey, {
+      relays,
+      createdAt: stored.event.created_at,
+      at: stored.fetchedAt * 1000,
+    });
+  }
+  return relays;
+}
+
 /** Fetch a pubkey's NIP-17 DM relays (kind 10050) — the *full, true* list, for
  * the cache. Cache layers: in-memory Map → persisted replaceable-events row
  * (24h TTL, including negative-cache misses) → the peer's outbox relays (their

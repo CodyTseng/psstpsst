@@ -54,7 +54,6 @@ import {
   deleteConversationAttachments,
 } from '../files/file-attachment.service';
 import {
-  fetchDmRelays,
   loadAccountDmRelays,
   ownKeyTransferRelays,
 } from '../relay/relay-list.service';
@@ -97,6 +96,11 @@ import {
 import { relayMessageOutbox } from './relay-message-outbox';
 import { groupReceiveService } from '../group/group-receive.service';
 import { groupService } from '../group/group.service';
+import { observedPeerKeyService } from './observed-peer-key.service';
+import {
+  resolvePeerMessagingMetadata,
+  resolvePeersMessagingMetadata,
+} from './peer-encryption-key.service';
 
 /** The live tail opens at `now - this`, so a new gift wrap whose `created_at` was
  * randomized up to 2 days into the past (NIP-59) is still caught live. The
@@ -609,52 +613,43 @@ class DmService {
     this.activeConversation = { accountPubkey, conversationKey };
   }
 
-  /**
-   * Warm the DM-relay-list cache for a conversation's counterparties when the
-   * chat opens, so the send path reads only local data (the recipient's
-   * encryption key is already kept warm by `encryptionKeyWatcher.watch`). Result
-   * is cached in relay-list.service; this is fire-and-forget.
-   */
-  prefetchCounterpartyRelays(pubkeys: string[]): void {
-    for (const p of pubkeys) {
-      void fetchDmRelays({ pubkey: p, searchRelays: this.dmRelays }).catch(() => {});
-    }
+  /** Queue TTL-gated key and DM-relay refreshes without blocking conversation entry. */
+  refreshCounterpartyMessagingMetadata(accountPubkey: string, pubkeys: string[]): void {
+    void resolvePeersMessagingMetadata(
+      pubkeys.filter((pubkey) => pubkey !== accountPubkey),
+      this.dmRelays,
+    );
   }
 
   /**
    * Whether we can deliver a NIP-17 DM to `pubkey` right now. Both pieces are
-   * required: an encryption key (kind 10044, to encrypt to) AND at least one DM
-   * inbox relay (kind 10050, to deliver to — the recipient doesn't read ours).
+   * required: an authenticated encryption key (from kind 10044 or a verified
+   * incoming seal, to encrypt to) AND at least one DM inbox relay (kind 10050,
+   * to deliver to — the recipient doesn't read ours).
    * Missing either makes the contact literally unreachable, so the chat screen
    * gates the composer on this instead of letting a send fail silently. Lookups
-   * are cache-first (kept warm by `watch()` / `prefetchCounterpartyRelays`), so
-   * an established conversation answers from local state.
+   * are cache-first; an established conversation answers from the materialized
+   * key row and prefetched relay data.
    */
   async checkDmSupport(
+    accountPubkey: string,
     pubkey: string,
     opts?: { force?: boolean; onRelayQuery?: () => void },
   ): Promise<{ encryptionKey: boolean; relays: boolean }> {
     // Note-to-self: we obviously support ourselves (our own key + relays are
     // local), so resolve instantly without a relay round-trip.
-    if (pubkey === this.accountPubkey) {
+    if (pubkey === accountPubkey) {
       return { encryptionKey: true, relays: true };
     }
-    const [encKey, relays] = await Promise.all([
-      opts?.force
-        ? encryptionKeyWatcher.forceRefresh(pubkey, opts.onRelayQuery)
-        : encryptionKeyWatcher.resolve(pubkey, opts?.onRelayQuery),
-      fetchDmRelays({
-        pubkey,
-        searchRelays: this.dmRelays,
-        force: opts?.force,
-        onRelayQuery: opts?.onRelayQuery,
-      }),
-    ]);
-    // A reachable peer (both pieces present) is **persisted** — encryption
-    // pubkey + DM relays + check time — so the next open can answer from the
-    // local database (across restarts) without a "Checking…" flash. An unreachable
-    // peer keeps **no row** (and we drop any stale one), so it's re-checked every
-    // open — the moment they publish the missing piece, the next open catches it.
+    const metadata = await resolvePeerMessagingMetadata({
+      peerPubkey: pubkey,
+      searchRelays: this.dmRelays,
+      force: opts?.force,
+      onRelayQuery: opts?.onRelayQuery,
+    });
+    const encKey = metadata.encryptionPubkey;
+    const relays = metadata.dmRelays;
+    // Persist readiness only while both independently required pieces exist.
     if (encKey && relays.length > 0) {
       const set = {
         encryptionPubkey: encKey,
@@ -674,16 +669,16 @@ class DmService {
 
   /**
    * Local DM-support verdict from the persisted {@link peerDmInfo} row.
-   * A row exists **only for a reachable peer** (both pieces present), so its
-   * presence *is* the `ready` verdict; `null` means unreachable-or-never-checked,
-   * which the composer treats as "must check" (quietly reads local caches, then
-   * shows "Checking…" only if it queries relays). `at` (ms) drives the TTL.
+   * A row exists only while both a peer key and DM relays are available, so its
+   * presence is a `ready` verdict. `null` makes the composer recheck both local
+   * materialized sources before it considers querying relays. `at` drives the TTL.
    * Self is always reachable.
    */
   async getCachedDmSupport(
+    accountPubkey: string,
     pubkey: string,
   ): Promise<{ encryptionKey: boolean; relays: boolean; at: number } | null> {
-    if (pubkey === this.accountPubkey) {
+    if (pubkey === accountPubkey) {
       return { encryptionKey: true, relays: true, at: Date.now() };
     }
     const row = await db
@@ -1273,6 +1268,26 @@ class DmService {
         outcome = 'future-rumor';
         return null;
       }
+      const blocked = profileSync(profile, 'block.isBlocked', () =>
+        isBlocked(accountPubkey, result.rumor.pubkey),
+      );
+      if (!blocked && result.rumor.pubkey !== accountPubkey) {
+        // The decoder verified the identity-signed seal and bound it to this
+        // rumor author. Advance the account-scoped reply key by authenticated
+        // message order, never by relay arrival order.
+        await profileAsync(profile, 'db.rememberSenderKey', () =>
+          observedPeerKeyService.rememberVerifiedSealKey({
+            peerPubkey: result.rumor.pubkey,
+            encryptionPubkey: result.senderEncryptionPubkey,
+            evidenceId: result.rumor.id!,
+            evidenceCreatedAt: messageOrderAt(result.rumor),
+          }),
+        );
+      }
+      if (!isCurrent()) {
+        outcome = 'stale';
+        return null;
+      }
       // Capture which relays delivered this gift wrap before routing the inner
       // rumor. Group and direct storage both persist this same source snapshot.
       const entry = this.giftWrapSeenOn.get(giftWrap.id);
@@ -1281,9 +1296,6 @@ class DmService {
         this.rumorToGiftWrap.set(result.rumor.id!, giftWrap.id);
       }
       const sourceRelays = entry ? Array.from(entry.relays) : [];
-      const blocked = profileSync(profile, 'block.isBlocked', () =>
-        isBlocked(accountPubkey, result.rumor.pubkey),
-      );
       const groupId = firstGroupId(result.rumor.tags);
       if (groupId) {
         const conversationKey = groupConversationKey(groupId);
