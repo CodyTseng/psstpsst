@@ -1,0 +1,5 @@
+PsstPsst 26.10.1
+
+- Added support for small private group chats.
+- Fixed standalone emoji display.
+- Improved messaging reliability.
