@@ -10,6 +10,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { NativeStackView } from 'expo-router/build/fork/native-stack/NativeStackView';
 
 import { PrimaryPane } from './PrimaryPane';
+import { NATIVE_SWIPE_BACK_SCREEN_OPTIONS } from './native-stack-options';
 
 import { AppScreenHorizontalSafeArea } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
@@ -41,6 +42,7 @@ export function ResponsiveAppNavigator({ backgroundColor }: Props) {
         const opensScanner = route.name === 'wallet-send'
           && !(route.params && 'input' in route.params && route.params.input);
         return {
+          ...NATIVE_SWIPE_BACK_SCREEN_OPTIONS,
           headerShown: false,
           contentStyle: { backgroundColor },
           animation: opensScanner ? (reducedMotion ? 'fade' : 'slide_from_bottom') : 'default',

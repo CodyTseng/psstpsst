@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { useWindowDimensions, View } from 'react-native';
 
 import { useImmersiveDesktopTitlebar } from '@/components/common/DesktopWindowFrame';
+import { NATIVE_SWIPE_BACK_SCREEN_OPTIONS } from '@/components/navigation/native-stack-options';
 import { OnboardingArtwork } from '@/components/onboarding/OnboardingArtwork';
 import { isWideLayoutSize } from '@/lib/layout/wide-layout';
 import { useThemeColors } from '@/theme';
@@ -25,7 +26,11 @@ export default function OnboardingLayout() {
       {wide ? <OnboardingArtwork wide fadeColor={c.background} /> : null}
       <View style={{ flex: 1, minWidth: 0, backgroundColor: c.background }}>
         <Stack
-          screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.background } }}
+          screenOptions={{
+            ...NATIVE_SWIPE_BACK_SCREEN_OPTIONS,
+            headerShown: false,
+            contentStyle: { backgroundColor: c.background },
+          }}
         />
       </View>
     </View>
