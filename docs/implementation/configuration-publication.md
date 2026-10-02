@@ -63,6 +63,14 @@ work, not an OS background-execution guarantee. Switching/signing out aborts the
 worker; deleting an account removes its queued work. Only the active identity
 is used for relay authentication.
 
+A completed messaging-metadata lookup keeps relay results separate from the
+local replaceable cache. If the queried relays omit a locally newer kind 10044
+or 10050 snapshot, the exact signed event is returned to the publication queue.
+If no signed snapshot exists, those declarations can be reconstructed from the
+current local encryption key and inbox settings. Kind 10002 is never restored
+automatically: a missing remote NIP-65 declaration may be an intentional
+withdrawal rather than a failed publication.
+
 Contacts retain a durable dirty revision until a signed snapshot enters the
 queue. The queue then owns network delivery; remote reconciliation checks both
 the dirty revision and pending snapshot, including after decryption. Other

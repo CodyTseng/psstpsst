@@ -1,12 +1,17 @@
-import type { Event } from 'nostr-tools';
+import type { Event, EventTemplate } from 'nostr-tools';
 
+import { enqueueConfigurationEvent } from '../../relay/configuration-publish.service';
 import { RelayQueryError } from '../../relay/relay-query-error';
 import { resolveMessagingMetadata } from '../messaging-metadata';
 import { relayPool, type QueryOpts, type QueryCompletion } from '../../relay/relay-pool';
 import { applyOwnDmRelayListEvent, loadAccountDmRelays } from '../../relay/relay-list.service';
 import { getReplaceableEvents } from '../../relay/replaceable-events.service';
+import { loadEncryptionKeys } from '../encryption-key.service';
 
 jest.mock('../../relay/relay-pool', () => ({ relayPool: { query: jest.fn() } }));
+jest.mock('../../relay/configuration-publish.service', () => ({
+  enqueueConfigurationEvent: jest.fn(async () => true),
+}));
 jest.mock('../../relay/relay-list.service', () => ({
   loadAccountDmRelays: jest.fn(), applyOwnDmRelayListEvent: jest.fn(),
 }));
@@ -18,11 +23,17 @@ jest.mock('../../relay/relay-router', () => ({
 }));
 jest.mock('../encryption-key.service', () => ({
   getEncryptionPubkeyFromEvent: (event: Event) => event.tags.find((tag) => tag[0] === 'n')?.[1],
+  loadEncryptionKeys: jest.fn(async () => []),
 }));
 
 const self = 'a'.repeat(64);
 const key = 'b'.repeat(64);
-const signAuth = jest.fn();
+const signAuth = jest.fn(async (template: EventTemplate) => ({
+  ...template,
+  id: `signed-${template.kind}`,
+  pubkey: self,
+  sig: '',
+}) as Event);
 const query = jest.mocked(relayPool.query);
 function event(kind: number, created_at: number, tags: string[][]): Event {
   return { kind, created_at, tags, id: `${kind}-${created_at}`, pubkey: self, content: '', sig: '' };
@@ -39,6 +50,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getReplaceableEvents).mockResolvedValue([null, null, null]);
   jest.mocked(loadAccountDmRelays).mockResolvedValue(['wss://old.example']);
+  jest.mocked(loadEncryptionKeys).mockResolvedValue([]);
   query.mockImplementation((opts) => reply(opts, []));
 });
 
@@ -76,6 +88,62 @@ it('does not replace a newer known announcement with an older replay', async () 
   jest.mocked(getReplaceableEvents).mockResolvedValue([null, null, current]);
   query.mockImplementation((opts) => reply(opts, [event(10044, 10, [['n', 'c'.repeat(64)]])]));
   expect((await resolveMessagingMetadata(self, { signAuth })).announcement).toEqual(current);
+});
+
+it('requeues missing messaging declarations without restoring NIP-65 metadata', async () => {
+  const outbox = event(10002, 20, [['r', 'wss://write.example', 'write']]);
+  const inbox = event(10050, 21, [['relay', 'wss://dm.example']]);
+  const announcement = event(10044, 22, [['n', key]]);
+  jest.mocked(getReplaceableEvents).mockResolvedValue([outbox, inbox, announcement]);
+
+  await resolveMessagingMetadata(self, { signAuth });
+
+  expect(enqueueConfigurationEvent).toHaveBeenCalledTimes(2);
+  expect(jest.mocked(enqueueConfigurationEvent).mock.calls.map(([value]) => value)).toEqual([
+    inbox,
+    announcement,
+  ]);
+  expect(enqueueConfigurationEvent).not.toHaveBeenCalledWith(outbox);
+  expect(signAuth).not.toHaveBeenCalled();
+});
+
+it('does not requeue a local declaration when the relay returned the same event', async () => {
+  const announcement = event(10044, 22, [['n', key]]);
+  jest.mocked(getReplaceableEvents).mockResolvedValue([null, null, announcement]);
+  jest.mocked(loadEncryptionKeys).mockResolvedValue([
+    { pubkey: key, privkey: new Uint8Array(32), createdAt: 1 },
+  ]);
+  query.mockImplementation((opts) => reply(opts, [announcement]));
+
+  await resolveMessagingMetadata(self, { signAuth });
+
+  expect(enqueueConfigurationEvent).toHaveBeenCalledTimes(1);
+  expect(enqueueConfigurationEvent).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 10050, tags: [['relay', 'wss://old.example']] }),
+    undefined,
+    null,
+  );
+});
+
+it('reconstructs missing key and DM-relay declarations from durable local state', async () => {
+  jest.mocked(loadEncryptionKeys).mockResolvedValue([
+    { pubkey: key, privkey: new Uint8Array(32), createdAt: 1 },
+  ]);
+
+  const metadata = await resolveMessagingMetadata(self, { signAuth });
+
+  expect(signAuth.mock.calls.map(([template]) => template.kind)).toEqual([10044, 10050]);
+  expect(enqueueConfigurationEvent).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 10044, tags: [['n', key]] }),
+    undefined,
+    null,
+  );
+  expect(enqueueConfigurationEvent).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 10050, tags: [['relay', 'wss://old.example']] }),
+    undefined,
+    null,
+  );
+  expect(metadata.announcement).toEqual(expect.objectContaining({ kind: 10044 }));
 });
 
 it('stops before persisting routing when the preparation is cancelled', async () => {
