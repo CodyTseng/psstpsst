@@ -37,7 +37,7 @@ export default function CommonGroupsScreen() {
                 lastMessageTags={item.lastMessageTags}
                 lastMessageSenderPubkey={item.lastMessageSenderPubkey}
                 lastMessageFromSelf={item.lastMessageSenderPubkey === accountPubkey}
-                lastMessageAt={conversation.lastMessageAt}
+                updatedAt={conversation.updatedAt}
                 unreadCount={unreadEnabled ? conversation.unreadCount : 0}
                 muted={conversation.muted}
                 pinned={conversation.pinned}

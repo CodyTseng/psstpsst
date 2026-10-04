@@ -16,6 +16,8 @@ export function proximityConversationMessageUpdate({
     hasReplied: true as const,
     ...(newest
       ? {
+          updatedAt: createdAt,
+          updatedOrderAt: orderAt,
           lastMessageAt: createdAt,
           lastMessageOrderAt: orderAt,
           lastMessageId: messageId,

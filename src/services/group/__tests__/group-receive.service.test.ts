@@ -58,9 +58,14 @@ jest.mock('@/db/client', () => {
 jest.mock('@/services/conversation/message-tail-cache', () => ({
   mergeStoredMessageIntoTail: jest.fn(),
 }));
+jest.mock('@/services/files/pending-attachment-file.service', () => ({
+  deletePendingAttachmentFile: jest.fn(),
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- load after database mock
 const { groupReceiveService } = require('../group-receive.service') as typeof import('../group-receive.service');
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- load after database mock
+const { groupService } = require('../group.service') as typeof import('../group.service');
 
 const ACCOUNT = 'a'.repeat(64);
 const BOB = 'b'.repeat(64);
@@ -91,6 +96,56 @@ beforeAll(() => {
 });
 
 afterAll(() => mockDatabase?.sqlite.close());
+
+it('uses creation time for a new group and preserves it during local metadata edits', async () => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(900123);
+  try {
+    const group = await groupService.createLocalGroup(ACCOUNT, [BOB, CAROL]);
+    clock.mockReturnValue(901000);
+    await groupService.renameLocalGroup(ACCOUNT, group.conversationKey, 'renamed');
+    await groupService.updateLocalRoster(ACCOUNT, group.conversationKey, [ACCOUNT, BOB, CAROL, DAVE]);
+    expect(mockDatabase!.sqlite.prepare(`
+      SELECT created_at, created_order_at, updated_at, updated_order_at, last_message_id
+      FROM conversations WHERE account_pubkey = ? AND conversation_key = ?
+    `).get(ACCOUNT, group.conversationKey)).toEqual({
+      created_at: 900, created_order_at: 900123,
+      updated_at: 900, updated_order_at: 900123, last_message_id: null,
+    });
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it('keeps updated timestamps tied to the last-message id across receive paths', async () => {
+  const h = 'updated-time-test';
+  const receive = async (message: Rumor, intake: 'live' | 'recovery' | 'history' | 'archive') => {
+    const result = await groupReceiveService.receive({
+      accountPubkey: ACCOUNT, rumor: { ...message, id: message.id!.slice(0, 63) + '9' }, intake, active: false,
+      senderBlocked: false, syncCursor: null,
+    });
+    expect(result.stored).toBe(true);
+  };
+  const assertTime = (id: string, at: number) => {
+    const row = mockDatabase!.sqlite.prepare(`
+      SELECT updated_at, updated_order_at, last_message_id, last_message_at, last_message_order_at
+      FROM conversations WHERE account_pubkey = ? AND group_id = ?
+    `).get(ACCOUNT, h);
+    expect(row).toEqual({
+      updated_at: at, updated_order_at: at * 1000, last_message_id: id.repeat(63) + '9',
+      last_message_at: at, last_message_order_at: at * 1000,
+    });
+  };
+  await receive(rumor('1', BOB, 100, [['p', ACCOUNT], ['h', h], ['action', 'create']], 'first'), 'live');
+  assertTime('1', 100);
+  await receive(rumor('2', BOB, 90, [['p', ACCOUNT], ['h', h]], 'late older'), 'recovery');
+  assertTime('1', 100);
+  await receive({ ...rumor('3', BOB, 200, [['p', ACCOUNT], ['h', h], ['e', '1'.repeat(63) + '9']], '+'), kind: 7 }, 'live');
+  assertTime('1', 100);
+  await receive(rumor('4', BOB, 300, [['p', ACCOUNT], ['h', h]], 'history newest'), 'history');
+  assertTime('4', 300);
+  await receive(rumor('5', BOB, 400, [['p', ACCOUNT], ['h', h]], 'archive newest'), 'archive');
+  assertTime('5', 400);
+});
 
 it('keeps a stranger-created group in requests until local activity accepts it', async () => {
   const h = 'stranger-request-test';

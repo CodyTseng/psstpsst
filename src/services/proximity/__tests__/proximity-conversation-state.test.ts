@@ -11,6 +11,8 @@ describe('proximity conversation state', () => {
       }),
     ).toEqual({
       hasReplied: true,
+      updatedAt: 123,
+      updatedOrderAt: 123_456,
       lastMessageAt: 123,
       lastMessageOrderAt: 123_456,
       lastMessageId: 'message-id',

@@ -100,7 +100,7 @@ export default function GroupsScreen() {
                 lastMessageTags={item.lastMessageTags}
                 lastMessageFromSelf={item.lastMessageSenderPubkey === accountPubkey}
                 lastMessageSenderPubkey={item.lastMessageSenderPubkey}
-                lastMessageAt={conversation.lastMessageAt}
+                updatedAt={conversation.updatedAt}
                 currentMinute={currentMinute}
                 unreadCount={unreadEnabled ? conversation.unreadCount : 0}
                 muted={conversation.muted}

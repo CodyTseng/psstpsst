@@ -2,11 +2,13 @@ const mockDelete = jest.fn((_table: unknown) => ({ where: jest.fn(() => Promise.
 const mockInsert = jest.fn((_table: unknown) => ({
   values: jest.fn(() => ({ onConflictDoUpdate: jest.fn(() => Promise.resolve()) })),
 }));
+const mockUpdate = jest.fn();
 
 jest.mock('@/db/client', () => ({
   db: {
     delete: (table: unknown) => mockDelete(table),
     insert: (table: unknown) => mockInsert(table),
+    update: (table: unknown) => mockUpdate(table),
   },
 }));
 jest.mock('@/platform', () => ({
@@ -23,6 +25,7 @@ describe('draft persistence', () => {
     jest.useFakeTimers();
     mockDelete.mockClear();
     mockInsert.mockClear();
+    mockUpdate.mockClear();
     useDraftsStore.setState({ account: 'account', drafts: {} });
   });
 
@@ -44,5 +47,16 @@ describe('draft persistence', () => {
     expect(mockInsert).toHaveBeenCalledTimes(1);
     jest.runOnlyPendingTimers();
     expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not write conversation timestamps when a saved draft is flushed again', async () => {
+    useDraftsStore.getState().setDraft('conversation', 'hello');
+    jest.runOnlyPendingTimers();
+    await Promise.resolve();
+    useDraftsStore.getState().flush('conversation');
+    await Promise.resolve();
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

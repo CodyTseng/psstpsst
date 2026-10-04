@@ -69,6 +69,10 @@ the renderer's perspective on every runtime.
 - Every account-owned row is keyed by `account_pubkey`.
 - Messages are immutable and deduplicated by event ID.
 - Conversations are read models derived from messages and relationship state.
+- Conversation `updated_at` and `updated_order_at` equal the timestamps of the
+  message identified by `last_message_id`, or the conversation's creation
+  timestamps when that cursor is empty. Message writes maintain both pairs
+  atomically; drafts and metadata edits do not change them.
 - The group directory is an explicit account-scoped saved set, mirrored across
   devices as an encrypted application-data snapshot. Saved membership accepts
   the group into the main inbox; an explicit local leave removes it from the set.

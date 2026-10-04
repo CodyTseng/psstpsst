@@ -129,7 +129,6 @@ class GroupService {
     conversationKey: string,
     patch: { memberPubkeys?: string[]; name?: string | null },
   ): Promise<void> {
-    const activityOrderAt = Date.now();
     const [localGroup] = await db
       .select({ conversationKey: conversations.conversationKey })
       .from(conversations)
@@ -145,11 +144,7 @@ class GroupService {
     if (!localGroup) throw new Error('Group is not a local draft');
     await db
       .update(conversations)
-      .set({
-        ...patch,
-        updatedAt: sql`CASE WHEN ${conversations.updatedOrderAt} < ${activityOrderAt} THEN ${Math.floor(activityOrderAt / 1000)} ELSE ${conversations.updatedAt} END`,
-        updatedOrderAt: sql`MAX(${conversations.updatedOrderAt}, ${activityOrderAt})`,
-      })
+      .set(patch)
       .where(
         and(
           eq(conversations.accountPubkey, accountPubkey),

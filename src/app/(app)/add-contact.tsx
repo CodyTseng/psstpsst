@@ -219,7 +219,7 @@ export default function SearchUser() {
                 lastMessageTags={item.lastMessageTags}
                 lastMessageFromSelf={item.lastMessageSenderPubkey === accountPubkey}
                 lastMessageSenderPubkey={item.lastMessageSenderPubkey}
-                lastMessageAt={conv.lastMessageAt}
+                updatedAt={conv.updatedAt}
                 unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}
                 muted={conv.muted}
                 onPress={() => openRequestConversation(conv.conversationKey)}

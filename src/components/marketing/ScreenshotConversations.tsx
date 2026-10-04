@@ -86,7 +86,7 @@ export function ScreenshotConversations() {
             conversationName={item.name}
             conversationPicture={item.picture}
             lastMessagePreview={item.preview}
-            lastMessageAt={item.lastMessageAt}
+            updatedAt={item.lastMessageAt}
             unreadCount={readConversationIds[item.id] ? 0 : item.unread}
             muted={false}
             active={wide && conversationKey === item.pubkey}

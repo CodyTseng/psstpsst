@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, like, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, like } from 'drizzle-orm';
 import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -3318,8 +3318,6 @@ class ProximityService {
     const localPubkey = archive?.proximityAccountPubkey ?? this.identity?.proximityPubkey;
     if (!accountPubkey || !localPubkey) return false;
     const orderAt = messageOrderAt(rumor);
-    const activityOrderAt = Date.now();
-    const activityAt = Math.floor(activityOrderAt / 1000);
     const replyToId = getReplyToId(rumor.tags) ?? null;
     const subject = getSubject(rumor.tags) ?? null;
     const incoming = rumor.pubkey !== localPubkey;
@@ -3394,8 +3392,8 @@ class ProximityService {
           name: peerName,
           createdAt: rumor.created_at,
           createdOrderAt: orderAt,
-          updatedAt: archive ? rumor.created_at : activityAt,
-          updatedOrderAt: archive ? orderAt : activityOrderAt,
+          updatedAt: rumor.created_at,
+          updatedOrderAt: orderAt,
           lastMessageAt: rumor.created_at,
           lastMessageOrderAt: orderAt,
           lastMessageId: rumor.id!,
@@ -3425,12 +3423,6 @@ class ProximityService {
             }),
             unreadCount:
               existing.unreadCount + (incoming && !archive && activePeer !== peerPubkey ? 1 : 0),
-            ...(!archive
-              ? {
-                  updatedAt: sql`CASE WHEN ${conversations.updatedOrderAt} < ${activityOrderAt} THEN ${activityAt} ELSE ${conversations.updatedAt} END`,
-                  updatedOrderAt: sql`MAX(${conversations.updatedOrderAt}, ${activityOrderAt})`,
-                }
-              : {}),
             ...(markRead && (!archive || newest)
               ? {
                   lastReadAt: rumor.created_at,

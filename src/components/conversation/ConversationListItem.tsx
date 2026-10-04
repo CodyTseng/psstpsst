@@ -75,7 +75,7 @@ type Props = {
   lastMessageTags?: string[][] | null;
   lastMessageFromSelf?: boolean;
   lastMessageSenderPubkey?: string | null;
-  lastMessageAt: number | null;
+  updatedAt: number | null;
   /** Current unix-minute bucket, used to refresh and calculate relative time. */
   currentMinute?: number;
   unreadCount: number;
@@ -269,7 +269,7 @@ function ConversationListItemBase({
   lastMessageTags,
   lastMessageFromSelf,
   lastMessageSenderPubkey,
-  lastMessageAt,
+  updatedAt,
   currentMinute,
   unreadCount,
   muted,
@@ -760,7 +760,7 @@ function ConversationListItemBase({
                       />
                     ) : null}
                   </View>
-                  {lastMessageAt != null ? (
+                  {updatedAt != null ? (
                     <AppText
                       variant="caption"
                       tone="subtle"
@@ -769,7 +769,7 @@ function ConversationListItemBase({
                       style={{ flexShrink: 0 }}
                     >
                       {formatListTime(
-                        lastMessageAt,
+                        updatedAt,
                         currentMinute === undefined ? undefined : currentMinute * 60,
                       )}
                     </AppText>

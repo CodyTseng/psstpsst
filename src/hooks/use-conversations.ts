@@ -68,9 +68,8 @@ function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean
       ),
     )
     // Pinned conversations float to the top (pinned=1 sorts before 0 under
-    // DESC); within each group, most-recent first. Conversation counts are
-    // small, so the in-memory sort this adds over the lastMessageOrderAt index is
-    // negligible.
+    // DESC). The updated timestamp follows the last-message cursor, or creation
+    // time for a conversation without messages, matching the displayed date.
     .orderBy(
       desc(conversations.pinned),
       desc(conversations.updatedOrderAt),

@@ -153,7 +153,7 @@ Before a locally created group has a bootstrap event, membership and name edits
 are local conversation-draft mutations rather than protocol actions. Inviting
 or removing edits the cached initial roster, rename edits the cached name, and
 leaving abandons the unsent group by deleting its local conversation and draft
-state. These local edits advance conversation activity like a persisted draft.
+state. These local edits preserve the conversation's creation and updated times.
 No system rows or network events are produced. The first text or file send
 freezes that final local state into `create`, `p`, and `subject`.
 
@@ -488,9 +488,9 @@ local creator plus all selected pubkeys there;
 `members_bootstrap_event_id = null` marks the row as local-only until the first
 `create` rumor is stored. Store the conversation's local creation time in
 `created_at` plus its millisecond `created_order_at`, and initialize the matching
-conversation activity fields `updated_at` and `updated_order_at`. Keep every
-last-message field null until a real message exists. Conversation creation,
-activity, composer drafts, and message cursors remain independent. No separate
+conversation updated fields `updated_at` and `updated_order_at`. Keep every
+last-message field null until a real message exists. Composer drafts do not
+change these timestamps. No separate
 group-draft table is needed. Other devices learn the group only after the
 `create` rumor is delivered.
 
@@ -500,28 +500,16 @@ The first outgoing `create` preserves that accepted state.
 
 Allow last-message fields to be null for a conversation with no messages. The
 conversation list sorts by `updated_order_at`, with the conversation key as a
-stable tie-break. A newly accepted outgoing or incoming live/recovery message
-advances the conversation activity time using a local monotonic wall-clock
-value, independently of whether that event advances the event-ordered
-last-message cursor. Persisting a local draft also advances conversation
-activity without touching any last-message field. Keep the existing debounced
-draft-text writes for crash safety, but do not update conversation activity on
-those writes. Commit draft activity once when the user leaves the conversation,
-the composer closes, or the app enters the background. Continuous typing
-therefore does not reorder a visible conversation list. History backfill,
-archive import, duplicates, and action replay do not advance conversation
-activity.
+stable tie-break. `updated_at` and `updated_order_at` match the authored
+timestamps of the message referenced by `last_message_id`, or creation time
+while that cursor is null. Update the cursor and both timestamps atomically,
+including during history backfill and archive import. Delayed older messages,
+reactions, duplicates, drafts, and local-only metadata edits never independently
+change the updated time. Keep debounced draft-text persistence and flush it on
+navigation or background entry for crash safety without writing the conversation.
 
-Every activity update must be an atomic monotonic database update rather than a
-read-then-write sequence. Set `updated_order_at` to the greater of its persisted
-value and the candidate activity time, and update second-level `updated_at` only
-when the candidate wins. Concurrent draft and message writes therefore cannot
-move a conversation backward.
-
-Existing conversation rows gain creation time from their oldest stored message
-and initial activity time from the newer of their last message and persisted
-draft update through an indexed migration. Their non-null last-message cursors
-remain unchanged.
+Existing conversation updated times are repaired through account-scoped,
+indexed last-message lookups, falling back to creation time for empty cursors.
 
 Store `member_pubkeys` as one deduplicated, lexicographically sorted array. This
 intentional denormalization matches the small trusted-group scope: rewriting the
@@ -1142,14 +1130,14 @@ At minimum, cover:
 - local-only groups start accepted in the main list with zero unread;
 - pre-bootstrap membership and name management mutates only local draft state;
   the first create carries the final roster and custom name;
-- message-free groups sort by immutable conversation creation time with null
-  last-message cursors until a persisted draft advances conversation activity;
-- debounced draft-text persistence does not reorder conversations; leaving the
-  conversation, closing the composer, or backgrounding commits activity once;
+- message-free groups display and sort by immutable conversation creation time
+  with null last-message cursors;
+- draft persistence never changes conversation timestamps, including on
+  navigation, composer close, or background entry;
 - message-free, draft-free conversation rows preserve preview geometry without
   placeholder copy;
-- concurrent draft and message activity updates preserve the maximum timestamp
-  atomically;
+- last-message cursor and updated timestamps change atomically and agree across
+  live intake, history backfill, and archive import;
 - only the first `action` tag is parsed; later ones are ignored;
 - a malformed or unknown first action drops the entire rumor instead of falling
   back to ordinary-message handling;

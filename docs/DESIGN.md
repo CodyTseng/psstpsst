@@ -565,9 +565,10 @@ uncertainty without an alarming warning treatment.
 
 Conversation-list draft previews appear only after the user leaves that
 conversation. An active split-pane row never mirrors live composer input.
-Conversation ordering follows its own activity time: accepted new messages and
-committed draft activity advance it, while debounced text persistence, live
-keystrokes, and historical replay do not.
+Conversation lists display and sort by the conversation's updated time; lists
+supporting pins keep pinned rows first. This time is the latest previewed
+message's authored time, or creation time when there are no messages. Arrival
+time, reactions, and draft edits never independently change it.
 A conversation with neither messages nor a draft reserves the normal preview
 line height without showing placeholder copy.
 Read-only group conversations may retain a hidden local draft, but their list

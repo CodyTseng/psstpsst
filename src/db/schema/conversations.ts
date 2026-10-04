@@ -14,12 +14,15 @@ export const conversations = sqliteTable(
     name: text('name'),
     createdAt: integer('created_at').notNull(),
     createdOrderAt: integer('created_order_at').notNull(),
+    /** Last-message time, or creation time while the message cursor is empty. */
     updatedAt: integer('updated_at').notNull(),
     updatedOrderAt: integer('updated_order_at').notNull(),
     lastMessageAt: integer('last_message_at'),
     lastMessageOrderAt: integer('last_message_order_at'),
     lastMessageId: text('last_message_id'),
     unreadCount: integer('unread_count').notNull().default(0),
+    /** Accepted into the main inbox, not necessarily replied to. Incoming
+     * messages from saved contacts set this to true without a reply. */
     hasReplied: integer('has_replied', { mode: 'boolean' }).notNull().default(false),
     deleted: integer('deleted', { mode: 'boolean' }).notNull().default(false),
     deletedAt: integer('deleted_at'),
@@ -47,7 +50,14 @@ export const conversations = sqliteTable(
   },
   (t) => [
     primaryKey({ columns: [t.accountPubkey, t.conversationKey] }),
-    index('idx_conv_last_msg').on(t.accountPubkey, t.lastMessageOrderAt),
+    index('idx_conv_inbox').on(
+      t.accountPubkey,
+      t.deleted,
+      t.hasReplied,
+      t.pinned,
+      t.updatedOrderAt,
+      t.conversationKey,
+    ),
     index('idx_conv_activity').on(t.accountPubkey, t.updatedOrderAt, t.conversationKey),
     index('idx_conv_backup_owner').on(
       t.accountPubkey,

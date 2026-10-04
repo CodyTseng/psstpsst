@@ -527,7 +527,7 @@ function RealConversations() {
                         : item.lastMessageSenderPubkey === accountPubkey
                     }
                     lastMessageSenderPubkey={item.lastMessageSenderPubkey}
-                    lastMessageAt={conv.lastMessageAt}
+                    updatedAt={conv.updatedAt}
                     currentMinute={currentMinute}
                     unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}
                     muted={conv.muted}

@@ -266,7 +266,6 @@ async function refreshConversationMessageState(
   tx: Tx,
   options: ReceiveGroupRumorOptions,
   conversationKey: string,
-  advanceActivity: boolean,
 ): Promise<void> {
   const { accountPubkey, rumor, active } = options;
   const [conversation] = await tx
@@ -308,8 +307,6 @@ async function refreshConversationMessageState(
       : { orderAt: conversation.lastReadOrderAt, id: conversation.lastReadMessageId ?? '' };
   const readCursor = ownOrActive ? newestCursor(previousCursor, eventCursor) : previousCursor;
   const unread = await countUnread(tx, accountPubkey, conversationKey, readCursor);
-  const activityOrderAt = Date.now();
-  const activityAt = Math.floor(activityOrderAt / 1000);
   const acceptedByOwnActivity = options.intake === 'local' || rumor.pubkey === accountPubkey;
   const acceptedBySavedGroup =
     !acceptedByOwnActivity &&
@@ -322,6 +319,8 @@ async function refreshConversationMessageState(
       lastMessageId: newest[0]?.id ?? null,
       lastMessageAt: newest[0]?.createdAt ?? null,
       lastMessageOrderAt: newest[0]?.orderAt ?? null,
+      updatedAt: newest[0]?.createdAt ?? conversation.createdAt,
+      updatedOrderAt: newest[0]?.orderAt ?? conversation.createdOrderAt,
       unreadCount: unread,
       deleted: false,
       hasReplied:
@@ -334,12 +333,6 @@ async function refreshConversationMessageState(
               readCursor.orderAt === eventCursor.orderAt
                 ? rumor.created_at
                 : conversation.lastReadAt,
-          }
-        : {}),
-      ...(advanceActivity
-        ? {
-            updatedAt: sql`CASE WHEN ${conversations.updatedOrderAt} < ${activityOrderAt} THEN ${activityAt} ELSE ${conversations.updatedAt} END`,
-            updatedOrderAt: sql`MAX(${conversations.updatedOrderAt}, ${activityOrderAt})`,
           }
         : {}),
     })
@@ -502,7 +495,7 @@ async function replayKnownMembership(
           eq(conversations.conversationKey, conversationKey),
         ),
       );
-    if (stored) await refreshConversationMessageState(tx, options, conversationKey, true);
+    if (stored) await refreshConversationMessageState(tx, options, conversationKey);
     return { stored, promoted: stored ? [rumor] : [] };
   }
 
@@ -658,7 +651,7 @@ async function replayKnownMembership(
 
   const stored = promoted.some((item) => item.id === rumor.id);
   if (promoted.length) {
-    await refreshConversationMessageState(tx, options, conversationKey, false);
+    await refreshConversationMessageState(tx, options, conversationKey);
   }
   return { stored, promoted };
 }
@@ -887,10 +880,6 @@ class GroupReceiveService {
         }
         const subject = parseGroupSubject(rumor.tags);
         const orderAt = messageOrderAt(rumor);
-        const activityOrderAt =
-          intake === 'live' || intake === 'recovery' || intake === 'local'
-            ? Date.now()
-            : orderAt;
         const acceptedSavedGroup = await isSavedGroup(tx, accountPubkey, groupId);
         const senderIsContact = acceptedSavedGroup || rumor.pubkey === accountPubkey ||
           (await tx
@@ -915,8 +904,8 @@ class GroupReceiveService {
           nameEventId: subject.status === 'valid' ? rumor.id! : null,
           createdAt: rumor.created_at,
           createdOrderAt: orderAt,
-          updatedAt: Math.floor(activityOrderAt / 1000),
-          updatedOrderAt: activityOrderAt,
+          updatedAt: rumor.created_at,
+          updatedOrderAt: orderAt,
           lastMessageAt: null,
           lastMessageOrderAt: null,
           lastMessageId: null,
@@ -939,7 +928,7 @@ class GroupReceiveService {
             rumor,
             cursor,
           );
-          await refreshConversationMessageState(tx, options, conversationKey, false);
+          await refreshConversationMessageState(tx, options, conversationKey);
           return { handled: true, stored, conversationKey, promoted };
         }
         return { handled: true, stored, conversationKey, promoted: [] };
@@ -985,7 +974,7 @@ class GroupReceiveService {
           );
           if (stored) {
             await updateNameState(tx, accountPubkey, conversationKey, rumor, false);
-            await refreshConversationMessageState(tx, options, conversationKey, true);
+            await refreshConversationMessageState(tx, options, conversationKey);
           }
           return { handled: true, stored, conversationKey, promoted: [] };
         }
@@ -1005,7 +994,7 @@ class GroupReceiveService {
           options.sourceRelays,
           intake === 'local',
         );
-        if (stored) await refreshConversationMessageState(tx, options, conversationKey, false);
+        if (stored) await refreshConversationMessageState(tx, options, conversationKey);
         return { handled: true, stored, conversationKey, promoted: [] };
       }
 
@@ -1037,12 +1026,7 @@ class GroupReceiveService {
       );
       if (!stored) return { handled: true, stored: false, conversationKey, promoted: [] };
       await updateNameState(tx, accountPubkey, conversationKey, rumor, finalized);
-      await refreshConversationMessageState(
-        tx,
-        options,
-        conversationKey,
-        intake === 'live' || intake === 'recovery' || intake === 'local',
-      );
+      await refreshConversationMessageState(tx, options, conversationKey);
       return { handled: true, stored: true, conversationKey, promoted: [] };
     });
     if (transactionResult.stored) {

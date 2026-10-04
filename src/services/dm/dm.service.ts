@@ -1900,10 +1900,6 @@ class DmService {
     const subject = getSubject(rumor.tags) ?? null;
     const replyToId = getReplyToId(rumor.tags) ?? null;
     const orderAt = messageOrderAt(rumor);
-    const advancesActivity =
-      options.intake === 'live' || options.intake === 'recovery' || options.intake === 'local';
-    const activityOrderAt = advancesActivity ? Date.now() : orderAt;
-    const activityAt = advancesActivity ? Math.floor(activityOrderAt / 1000) : rumor.created_at;
 
     const stored = await profileAsync(profile, 'db.storeTransaction', () =>
       db.transaction(async (tx) => {
@@ -2018,11 +2014,11 @@ class DmService {
               name: subject,
               createdAt: rumor.created_at,
               createdOrderAt: orderAt,
-              updatedAt: activityAt,
-              updatedOrderAt: activityOrderAt,
-              lastMessageAt: rumor.created_at,
-              lastMessageOrderAt: orderAt,
-              lastMessageId: rumor.id!,
+              updatedAt: rumor.created_at,
+              updatedOrderAt: orderAt,
+              lastMessageAt: isReaction ? null : rumor.created_at,
+              lastMessageOrderAt: isReaction ? null : orderAt,
+              lastMessageId: isReaction ? null : rumor.id!,
               unreadCount: bumpUnread ? 1 : 0,
               // Seed the read cursor at this message when we've seen up to it (own
               // send / active view) — so it never counts as unread against us.
@@ -2089,6 +2085,9 @@ class DmService {
                 lastMessageOrderAt:
                   isNewest && !isReaction ? orderAt : conv.lastMessageOrderAt,
                 lastMessageId: isNewest && !isReaction ? rumor.id! : conv.lastMessageId,
+                ...(isNewest && !isReaction
+                  ? { updatedAt: rumor.created_at, updatedOrderAt: orderAt }
+                  : {}),
                 unreadCount: unread,
                 lastReadAt: nextCursor?.orderAt === orderAt ? rumor.created_at : conv.lastReadAt,
                 lastReadOrderAt: newCursorOrderAt,
@@ -2096,12 +2095,6 @@ class DmService {
                 hasReplied: repliedNow ? true : conv.hasReplied,
                 name: subject && !conv.name ? subject : conv.name,
                 deleted: isNewest ? false : conv.deleted,
-                ...(advancesActivity
-                  ? {
-                      updatedAt: sql`CASE WHEN ${conversations.updatedOrderAt} < ${activityOrderAt} THEN ${activityAt} ELSE ${conversations.updatedAt} END`,
-                      updatedOrderAt: sql`MAX(${conversations.updatedOrderAt}, ${activityOrderAt})`,
-                    }
-                  : {}),
               })
               .where(
                 and(
