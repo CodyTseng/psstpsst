@@ -573,6 +573,8 @@ Conversation lists display and sort by the conversation's updated time; lists
 supporting pins keep pinned rows first. This time is the latest previewed
 message's authored time, or creation time when there are no messages. Arrival
 time, reactions, and draft edits never independently change it.
+List timestamps and chat date labels follow the selected app language's clock,
+date order, and month naming, using compact month labels in lists.
 A conversation with neither messages nor a draft reserves the normal preview
 line height without showing placeholder copy.
 Read-only group conversations may retain a hidden local draft, but their list

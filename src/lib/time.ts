@@ -30,7 +30,8 @@ export function formatDetailTimestamp(ts: number): string {
 
 /**
  * Compact timestamp for the conversation list (Telegram/Signal-style):
- *   now → `{n}m` → HH:mm (today) → Yesterday → weekday (this week) → date.
+ *   now → `{n}m` → local time (today) → Yesterday → weekday (this week) → date.
+ * Clock conventions, month labels, and date order follow the app language.
  * The conversation list advances a foreground-only minute clock so memoized
  * visible rows re-render when this relative label can change.
  */
@@ -44,12 +45,12 @@ export function formatListTime(
   if (diffMin < 1) return i18n.t('time.now');
   if (diffMin < 60) return i18n.t('time.minutes_short', { n: diffMin });
   if (m.isSame(now, 'day')) {
-    return localizedDate(ts, { hour: '2-digit', minute: '2-digit', hour12: false });
+    return localizedDate(ts, { hour: 'numeric', minute: '2-digit' });
   }
   if (m.isSame(now.subtract(1, 'day'), 'day')) return i18n.t('time.yesterday');
   if (now.diff(m, 'day') < 7) return localizedDate(ts, { weekday: 'short' });
-  if (m.isSame(now, 'year')) return localizedDate(ts, { month: 'numeric', day: 'numeric' });
-  return localizedDate(ts, { year: '2-digit', month: 'numeric', day: 'numeric' });
+  if (m.isSame(now, 'year')) return localizedDate(ts, { month: 'short', day: 'numeric' });
+  return localizedDate(ts, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 /**
