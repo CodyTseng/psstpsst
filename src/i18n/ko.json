@@ -995,7 +995,7 @@
     "unnamed": "그룹",
     "derived_title_with_others": "{{names}} 외 {{count}}명",
     "create_with_count": "{{count}}명과 그룹 만들기",
-    "large_group_title": "대규모 그룹을 만들까요?",
+    "large_group_title": "인원이 많은 그룹으로 계속할까요?",
     "large_group_message": "각 메시지는 그룹의 모든 사람에게 개별적으로 암호화되어 전송됩니다. 큰 그룹에서는 전송이 더 느릴 수 있습니다. 계속할까요?",
     "info_title": "그룹 정보",
     "members": "멤버",

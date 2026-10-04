@@ -995,7 +995,7 @@
     "unnamed": "グループ",
     "derived_title_with_others": "{{names}}、他{{count}}人",
     "create_with_count": "{{count}}人でグループを作成",
-    "large_group_title": "大人数のグループを作成しますか？",
+    "large_group_title": "人数の多いグループで続けますか？",
     "large_group_message": "各メッセージはグループの全員に個別に暗号化して送信されます。大きなグループでは送信に時間がかかる場合があります。続けますか？",
     "info_title": "グループ情報",
     "members": "メンバー",

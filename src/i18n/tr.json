@@ -995,7 +995,7 @@
     "unnamed": "Grup",
     "derived_title_with_others": "{{names}} ve {{count}} kişi daha",
     "create_with_count": "{{count}} kişiyle grup oluştur",
-    "large_group_title": "Büyük bir grup oluşturulsun mu?",
+    "large_group_title": "Büyük bir grupla devam edilsin mi?",
     "large_group_message": "Her mesaj gruptaki her kişi için ayrı ayrı şifrelenip gönderilir. Büyük gruplarda gönderim daha yavaş olabilir. Devam edilsin mi?",
     "info_title": "Grup bilgisi",
     "members": "Üyeler",

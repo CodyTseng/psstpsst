@@ -1,10 +1,9 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 
-import { ChromeDivider } from '@/components/common/ChromeDivider';
 import { AppButton } from '@/components/common/AppButton';
 import { AppInput } from '@/components/common/AppInput';
 import { AppScreen } from '@/components/common/AppScreen';
@@ -13,6 +12,7 @@ import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/Scre
 import { ContactSectionList } from '@/components/contacts/ContactSectionList';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useContactEntries } from '@/hooks/use-contact-entries';
+import { LARGE_GROUP_WARNING_THRESHOLD } from '@/lib/group';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '@/lib/platform';
 import { resolveNostrUserInput } from '@/lib/nostr/user-input';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -36,6 +36,9 @@ export default function NewChat() {
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [confirmingSelection, setConfirmingSelection] = useState(false);
+  const selectionConfirmationPending = useRef(false);
+  const largeGroupWarningConfirmed = useRef(false);
   const [selectedPubkeys, setSelectedPubkeys] = useState<Set<string>>(() => new Set());
   const selectProgress = useSharedValue(1);
 
@@ -54,7 +57,7 @@ export default function NewChat() {
   // Resolve the same public-key and NIP-05 inputs as user search, then open the
   // conversation. Public keys stay local; only NIP-05 performs network work.
   async function start(raw: string) {
-    if (loading) return;
+    if (loading || selectionConfirmationPending.current) return;
     setError(null);
     setLoading(true);
     try {
@@ -80,7 +83,30 @@ export default function NewChat() {
     void start(data);
   }
 
-  function toggleSelected(pubkey: string) {
+  async function toggleSelected(pubkey: string) {
+    if (loading || selectionConfirmationPending.current) return;
+    const crossingWarningThreshold =
+      !largeGroupWarningConfirmed.current &&
+      !selectedPubkeys.has(pubkey) &&
+      selectedPubkeys.size + 1 <= LARGE_GROUP_WARNING_THRESHOLD &&
+      selectedPubkeys.size + 2 > LARGE_GROUP_WARNING_THRESHOLD;
+    if (crossingWarningThreshold) {
+      selectionConfirmationPending.current = true;
+      setConfirmingSelection(true);
+      try {
+        const confirmed = await platform.confirmationDialog.confirm({
+          title: t('group.large_group_title'),
+          message: t('group.large_group_message'),
+          cancelLabel: t('common.cancel'),
+          confirmLabel: t('common.ok'),
+        });
+        if (!confirmed) return;
+        largeGroupWarningConfirmed.current = true;
+      } finally {
+        selectionConfirmationPending.current = false;
+        setConfirmingSelection(false);
+      }
+    }
     setSelectedPubkeys((previous) => {
       const next = new Set(previous);
       if (next.has(pubkey)) next.delete(pubkey);
@@ -90,19 +116,12 @@ export default function NewChat() {
   }
 
   async function startSelected() {
-    if (!accountPubkey || loading || selectedPubkeys.size === 0) return;
+    if (
+      !accountPubkey || loading || selectionConfirmationPending.current || selectedPubkeys.size === 0
+    ) return;
     if (selectedPubkeys.size === 1) {
       openConversation([...selectedPubkeys][0]);
       return;
-    }
-    if (selectedPubkeys.size + 1 > 8) {
-      const confirmed = await platform.confirmationDialog.confirm({
-        title: t('group.large_group_title'),
-        message: t('group.large_group_message'),
-        cancelLabel: t('common.cancel'),
-        confirmLabel: t('common.ok'),
-      });
-      if (!confirmed) return;
     }
     setLoading(true);
     try {
@@ -113,71 +132,69 @@ export default function NewChat() {
     }
   }
 
+  const listHeader = (
+    <View
+      style={{
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.sm,
+        paddingBottom: spacing.md,
+        gap: spacing.xl,
+      }}
+    >
+      <AppInput
+        placeholder={t('add_contact.placeholder')}
+        description={t('new_chat.subtitle')}
+        value={input}
+        onChangeText={(v) => {
+          setInput(v);
+          if (error) setError(null);
+        }}
+        autoCapitalize="none"
+        autoCorrect={false}
+        error={error ?? undefined}
+        returnKeyType="go"
+        onSubmitEditing={() => {
+          if (input.trim()) void start(input);
+        }}
+        trailingAccessory={<QrScanButton onScanned={handleScanned} />}
+      />
+      <AppButton
+        label={
+          input.trim()
+            ? t('new_chat.start')
+            : selectedPubkeys.size >= 2
+              ? t('group.create_with_count', { count: selectedPubkeys.size })
+              : t('new_chat.start')
+        }
+        variant="primary"
+        size="lg"
+        loading={loading}
+        disabled={confirmingSelection || (!input.trim() && selectedPubkeys.size === 0)}
+        onPress={() => input.trim() ? void start(input) : void startSelected()}
+      />
+    </View>
+  );
+
   return (
     <AppScreen edges={['bottom']}>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingTop: titleClearance }}
         behavior={KEYBOARD_AVOIDING_BEHAVIOR}
       >
-        {/* Identifier search for reaching someone who isn't a contact. Keep the
-            Start button visible but disabled at rest, matching Search user. */}
-        <View
-          style={{
-            paddingHorizontal: spacing.lg,
-            paddingTop: titleClearance + spacing.sm,
-            paddingBottom: spacing.md,
-            gap: spacing.xl,
-          }}
-        >
-          <AppInput
-            placeholder={t('add_contact.placeholder')}
-            description={t('new_chat.subtitle')}
-            value={input}
-            onChangeText={(v) => {
-              setInput(v);
-              if (error) setError(null);
-            }}
-            autoCapitalize="none"
-            autoCorrect={false}
-            error={error ?? undefined}
-            returnKeyType="go"
-            onSubmitEditing={() => {
-              if (input.trim()) void start(input);
-            }}
-            trailingAccessory={<QrScanButton onScanned={handleScanned} />}
-          />
-          <AppButton
-            label={
-              input.trim()
-                ? t('new_chat.start')
-                : selectedPubkeys.size >= 2
-                  ? t('group.create_with_count', { count: selectedPubkeys.size })
-                  : t('new_chat.start')
-            }
-            variant="primary"
-            size="lg"
-            loading={loading}
-            disabled={!input.trim() && selectedPubkeys.size === 0}
-            onPress={() => input.trim() ? void start(input) : void startSelected()}
-          />
-        </View>
-
         {loaded ? (
-          <View style={{ flex: 1 }}>
-            <ContactSectionList
-              {...scrollProps}
-              entries={entries}
-              onSelect={toggleSelected}
-              selectedPubkeys={selectedPubkeys}
-              selectProgress={selectProgress}
-            />
-            <ChromeDivider visible={scrolled} edge="top" />
-          </View>
+          <ContactSectionList
+            {...scrollProps}
+            entries={entries}
+            onSelect={(pubkey) => void toggleSelected(pubkey)}
+            selectedPubkeys={selectedPubkeys}
+            selectProgress={selectProgress}
+            ListHeaderComponent={listHeader}
+          />
         ) : (
-          <View style={{ flex: 1 }} />
+          listHeader
         )}
       </KeyboardAvoidingView>
-      <ScreenHeader title={t('new_chat.title')} />
+      <ScreenHeader title={t('new_chat.title')} bordered={scrolled} />
     </AppScreen>
   );
 }

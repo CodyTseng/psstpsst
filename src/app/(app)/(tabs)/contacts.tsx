@@ -167,51 +167,52 @@ export default function Contacts() {
           // is always present, so the list is never empty.
           <View style={{ flex: 1 }} />
         ) : (
-          <ContactSectionList
-            ref={groupedListRef}
-            entries={entries}
-            onSelect={openChat}
-            onScroll={scrollProps.onScroll}
-            // Inactive search affordance at the top of the list (visible at rest);
-            // tapping it opens the real (autofocused) search.
-            ListHeaderComponent={
-              <>
-                <View
-                  style={{
-                    paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER,
-                    paddingTop: topClearance,
-                    paddingBottom: spacing.sm,
-                  }}
-                >
-                  <SearchBar
-                    value=""
-                    onChangeText={() => {}}
-                    placeholder={t('search.contacts_placeholder')}
-                    shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL}
-                    onPress={openSearch}
-                  />
-                </View>
-                <View
-                  style={{
-                    paddingBottom: spacing.sm,
-                  }}
-                >
-                  <IdentityListItem
-                    leading={(
-                      <View
-                        style={{
-                          width: uiDensity.contactAvatarSize,
-                          height: uiDensity.contactAvatarSize,
-                          borderRadius: radius.full,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: c.surfaceMuted,
-                        }}
-                      >
-                        <UsersGroup
-                          size={uiDensity.headerActionIconSize}
-                          color={c.text}
-                        />
+          <View style={{ flex: 1, paddingTop: topClearance }}>
+            <ContactSectionList
+              ref={groupedListRef}
+              entries={entries}
+              onSelect={openChat}
+              onScroll={scrollProps.onScroll}
+              // Inactive search affordance at the top of the list (visible at rest);
+              // tapping it opens the real (autofocused) search.
+              ListHeaderComponent={
+                <>
+                  <View
+                    style={{
+                      paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER,
+                      paddingTop: spacing.sm,
+                      paddingBottom: spacing.sm,
+                    }}
+                  >
+                    <SearchBar
+                      value=""
+                      onChangeText={() => {}}
+                      placeholder={t('search.contacts_placeholder')}
+                      shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL}
+                      onPress={openSearch}
+                    />
+                  </View>
+                  <View
+                    style={{
+                      paddingBottom: spacing.sm,
+                    }}
+                  >
+                    <IdentityListItem
+                      leading={(
+                        <View
+                          style={{
+                            width: uiDensity.contactAvatarSize,
+                            height: uiDensity.contactAvatarSize,
+                            borderRadius: radius.full,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: c.surfaceMuted,
+                          }}
+                        >
+                          <UsersGroup
+                            size={uiDensity.headerActionIconSize}
+                            color={c.text}
+                          />
                       </View>
                     )}
                     title={t('group.list_title')}
@@ -223,6 +224,7 @@ export default function Contacts() {
             }
             contentBottomInset={bottomClearance}
           />
+          </View>
         )}
       </SearchTransition>
       <ScreenHeader

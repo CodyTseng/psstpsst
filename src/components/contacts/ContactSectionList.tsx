@@ -41,7 +41,7 @@ type Props = {
   entries: ContactEntry[];
   /** Tapping anywhere in a row, including its avatar. */
   onSelect: (pubkey: string) => void;
-  /** Pinned to the top of the list (e.g. a search affordance). */
+  /** Scrolls before the contact sections (e.g. a search affordance). */
   ListHeaderComponent?: React.ReactElement | null;
   /** Forwarded so a host header can show its bottom hairline once scrolled
    * (see `useScrolled`). The throttle is set internally. */

@@ -18,6 +18,7 @@ import { useConversation } from '@/hooks/use-conversations';
 import { useFocusAfterTransition } from '@/hooks/use-focus-after-transition';
 import { useProfile } from '@/hooks/use-profile';
 import { useScrolled } from '@/hooks/use-scrolled';
+import { LARGE_GROUP_WARNING_THRESHOLD } from '@/lib/group';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { abbreviateNpub } from '@/lib/nostr/format';
 import { pubkeyToNpub } from '@/lib/nostr/keys';
@@ -75,7 +76,7 @@ export default function GroupAddMemberScreen() {
 
   async function invite(pubkey: string) {
     if (!conversation || busy) return;
-    if (members.length + 1 > 8) {
+    if (members.length + 1 > LARGE_GROUP_WARNING_THRESHOLD) {
       const confirmed = await platform.confirmationDialog.confirm({
         title: t('group.large_group_title'),
         message: t('group.large_group_message'),

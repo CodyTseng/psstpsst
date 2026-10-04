@@ -995,7 +995,7 @@
     "unnamed": "Gruppe",
     "derived_title_with_others": "{{names}} und {{count}} weitere",
     "create_with_count": "Gruppe mit {{count}} Personen erstellen",
-    "large_group_title": "Große Gruppe erstellen?",
+    "large_group_title": "Mit einer großen Gruppe fortfahren?",
     "large_group_message": "Jede Nachricht muss für jede Person in der Gruppe einzeln verschlüsselt und gesendet werden. In größeren Gruppen kann der Versand länger dauern. Fortfahren?",
     "info_title": "Gruppeninfo",
     "members": "Mitglieder",

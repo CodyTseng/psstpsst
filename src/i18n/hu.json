@@ -995,7 +995,7 @@
     "unnamed": "Csoport",
     "derived_title_with_others": "{{names}} és további {{count}} fő",
     "create_with_count": "Csoport létrehozása {{count}} személlyel",
-    "large_group_title": "Nagy csoport létrehozása?",
+    "large_group_title": "Folytatod nagy csoporttal?",
     "large_group_message": "Minden üzenetet külön kell titkosítani és elküldeni a csoport minden tagjának. Nagyobb csoportokban a küldés lassabb lehet. Folytatod?",
     "info_title": "Csoport adatai",
     "members": "Tagok",

@@ -995,7 +995,7 @@
     "unnamed": "群組",
     "derived_title_with_others": "{{names}} 等 {{count}} 人",
     "create_with_count": "與 {{count}} 人建立群組",
-    "large_group_title": "建立大型群組？",
+    "large_group_title": "群組成員較多，要繼續嗎？",
     "large_group_message": "每則訊息都必須分別加密並傳送給群組中的每個人。大型群組傳送速度可能較慢，部分成員也可能稍晚收到訊息。要繼續嗎？",
     "info_title": "群組資訊",
     "members": "成員",

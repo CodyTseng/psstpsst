@@ -1000,7 +1000,7 @@
     "unnamed": "Grupo",
     "derived_title_with_others": "{{names}} y {{count}} más",
     "create_with_count": "Crear grupo con {{count}} personas",
-    "large_group_title": "¿Crear un grupo grande?",
+    "large_group_title": "¿Continuar con un grupo grande?",
     "large_group_message": "Cada mensaje debe cifrarse y enviarse por separado a cada persona del grupo. Los grupos grandes pueden tardar más. ¿Continuar?",
     "info_title": "Información del grupo",
     "members": "Miembros",

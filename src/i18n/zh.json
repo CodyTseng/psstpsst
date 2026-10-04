@@ -995,7 +995,7 @@
     "unnamed": "群聊",
     "derived_title_with_others": "{{names}} 等 {{count}} 人",
     "create_with_count": "与 {{count}} 人创建群聊",
-    "large_group_title": "创建大型群聊？",
+    "large_group_title": "群成员较多，要继续吗？",
     "large_group_message": "每条消息都需要分别加密并发送给群里的每个人。大型群聊的发送速度可能较慢，部分成员也可能稍晚收到消息。要继续吗？",
     "info_title": "群聊信息",
     "members": "成员",
