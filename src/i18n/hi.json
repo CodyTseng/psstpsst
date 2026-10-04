@@ -992,6 +992,8 @@
     "export_diagnostics": "डायग्नोस्टिक जानकारी निर्यात करें"
   },
   "group": {
+    "create_title": "नई समूह चैट",
+    "create_hint": "समूह चैट बनाने के लिए कम से कम दो संपर्क चुनें।",
     "unnamed": "समूह",
     "derived_title_with_others": "{{names}} और {{count}} अन्य",
     "create_with_count": "{{count}} लोगों के साथ समूह बनाएँ",

@@ -992,6 +992,8 @@
     "export_diagnostics": "Export diagnostics"
   },
   "group": {
+    "create_title": "New group chat",
+    "create_hint": "Select at least two contacts to create a group chat.",
     "unnamed": "Group",
     "derived_title_with_others": "{{names}} and {{count}} others",
     "create_with_count": "Create group with {{count}} people",

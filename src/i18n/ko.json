@@ -992,6 +992,8 @@
     "export_diagnostics": "진단 정보 내보내기"
   },
   "group": {
+    "create_title": "새 그룹 채팅",
+    "create_hint": "그룹 채팅을 만들려면 연락처를 두 명 이상 선택하세요.",
     "unnamed": "그룹",
     "derived_title_with_others": "{{names}} 외 {{count}}명",
     "create_with_count": "{{count}}명과 그룹 만들기",

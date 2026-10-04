@@ -992,6 +992,8 @@
     "export_diagnostics": "خروجی گرفتن از اطلاعات عیب‌یابی"
   },
   "group": {
+    "create_title": "گفتگوی گروهی جدید",
+    "create_hint": "برای ساخت گفتگوی گروهی حداقل دو مخاطب انتخاب کنید.",
     "unnamed": "گروه",
     "derived_title_with_others": "{{names}} و {{count}} نفر دیگر",
     "create_with_count": "ساخت گروه با {{count}} نفر",

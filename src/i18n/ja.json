@@ -992,6 +992,8 @@
     "export_diagnostics": "診断情報をエクスポート"
   },
   "group": {
+    "create_title": "新しいグループチャット",
+    "create_hint": "連絡先を2人以上選択してグループチャットを作成します。",
     "unnamed": "グループ",
     "derived_title_with_others": "{{names}}、他{{count}}人",
     "create_with_count": "{{count}}人でグループを作成",

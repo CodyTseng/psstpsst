@@ -992,6 +992,8 @@
     "export_diagnostics": "匯出診斷資訊"
   },
   "group": {
+    "create_title": "建立群組",
+    "create_hint": "選擇至少兩位聯絡人以建立群組。",
     "unnamed": "群組",
     "derived_title_with_others": "{{names}} 等 {{count}} 人",
     "create_with_count": "與 {{count}} 人建立群組",

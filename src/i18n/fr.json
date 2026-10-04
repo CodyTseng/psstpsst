@@ -997,6 +997,8 @@
     "export_diagnostics": "Exporter le diagnostic"
   },
   "group": {
+    "create_title": "Nouvelle discussion de groupe",
+    "create_hint": "Sélectionnez au moins deux contacts pour créer une discussion de groupe.",
     "unnamed": "Groupe",
     "derived_title_with_others": "{{names}} et {{count}} autres",
     "create_with_count": "Créer un groupe avec {{count}} personnes",

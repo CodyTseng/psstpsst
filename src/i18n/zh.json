@@ -992,6 +992,8 @@
     "export_diagnostics": "导出诊断信息"
   },
   "group": {
+    "create_title": "新建群聊",
+    "create_hint": "选择至少两位联系人以创建群聊。",
     "unnamed": "群聊",
     "derived_title_with_others": "{{names}} 等 {{count}} 人",
     "create_with_count": "与 {{count}} 人创建群聊",

@@ -196,6 +196,10 @@ and leave controls remain on group information. The global profile screen may
 link to a read-only list of common groups, but never gains group-specific
 actions. Common-group rows open their chat histories.
 
+Private-chat and group-chat creation use separate tasks. Private-chat contact
+rows open a conversation immediately; group creation owns multi-selection and
+a persistent bottom create action.
+
 Adding a group member offers both eligible saved contacts and the same public
 key, personal-identifier, and QR search paths used by the new-chat and user
 search flows. Search results replace the contact list, open the full profile

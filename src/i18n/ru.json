@@ -1002,6 +1002,8 @@
     "export_diagnostics": "Экспортировать диагностику"
   },
   "group": {
+    "create_title": "Новый групповой чат",
+    "create_hint": "Выберите не менее двух контактов, чтобы создать групповой чат.",
     "unnamed": "Группа",
     "derived_title_with_others": "{{names}} и ещё {{count}}",
     "create_with_count": "Создать группу с {{count}} участниками",

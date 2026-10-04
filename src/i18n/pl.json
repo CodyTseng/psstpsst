@@ -1002,6 +1002,8 @@
     "export_diagnostics": "Eksportuj diagnostykę"
   },
   "group": {
+    "create_title": "Nowy czat grupowy",
+    "create_hint": "Wybierz co najmniej dwa kontakty, aby utworzyć czat grupowy.",
     "unnamed": "Grupa",
     "derived_title_with_others": "{{names}} i {{count}} innych",
     "create_with_count": "Utwórz grupę z {{count}} osobami",

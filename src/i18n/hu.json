@@ -992,6 +992,8 @@
     "export_diagnostics": "Diagnosztika exportálása"
   },
   "group": {
+    "create_title": "Új csoportos csevegés",
+    "create_hint": "Válassz legalább két névjegyet egy csoportos csevegés létrehozásához.",
     "unnamed": "Csoport",
     "derived_title_with_others": "{{names}} és további {{count}} fő",
     "create_with_count": "Csoport létrehozása {{count}} személlyel",

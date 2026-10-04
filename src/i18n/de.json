@@ -992,6 +992,8 @@
     "export_diagnostics": "Diagnosedaten exportieren"
   },
   "group": {
+    "create_title": "Neuer Gruppenchat",
+    "create_hint": "Wähle mindestens zwei Kontakte aus, um einen Gruppenchat zu erstellen.",
     "unnamed": "Gruppe",
     "derived_title_with_others": "{{names}} und {{count}} weitere",
     "create_with_count": "Gruppe mit {{count}} Personen erstellen",

@@ -1012,6 +1012,8 @@
     "export_diagnostics": "تصدير معلومات التشخيص"
   },
   "group": {
+    "create_title": "محادثة جماعية جديدة",
+    "create_hint": "اختر جهتي اتصال على الأقل لإنشاء محادثة جماعية.",
     "unnamed": "مجموعة",
     "derived_title_with_others": "{{names}} و{{count}} آخرون",
     "create_with_count": "إنشاء مجموعة مع {{count}} أشخاص",

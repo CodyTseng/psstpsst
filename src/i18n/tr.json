@@ -992,6 +992,8 @@
     "export_diagnostics": "Tanılama bilgilerini dışa aktar"
   },
   "group": {
+    "create_title": "Yeni grup sohbeti",
+    "create_hint": "Grup sohbeti oluşturmak için en az iki kişi seçin.",
     "unnamed": "Grup",
     "derived_title_with_others": "{{names}} ve {{count}} kişi daha",
     "create_with_count": "{{count}} kişiyle grup oluştur",

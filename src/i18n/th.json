@@ -992,6 +992,8 @@
     "export_diagnostics": "ส่งออกข้อมูลวินิจฉัย"
   },
   "group": {
+    "create_title": "แชทกลุ่มใหม่",
+    "create_hint": "เลือกผู้ติดต่ออย่างน้อยสองคนเพื่อสร้างแชทกลุ่ม",
     "unnamed": "กลุ่ม",
     "derived_title_with_others": "{{names}} และอีก {{count}} คน",
     "create_with_count": "สร้างกลุ่มกับ {{count}} คน",
