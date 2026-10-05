@@ -15,8 +15,9 @@ import { processedGiftWraps, processedSyncRequests, syncCursors } from '@/db/sch
  *   - `backwardUntil` — how far back history backfill has paged. `null` = not
  *     started; `0` = fully backfilled to the beginning of time.
  *   - `forwardSince`  — wall-clock time the *recent* side has been fully paged up
- *     to. The forward backfill drains `(forwardSince, foregroundCutoff]` page by
- *     page, then advances this to that pass's cutoff. It is NOT the live-subscription
+ *     to. Forward backfill starts at the foreground cutoff and pages back past
+ *     this watermark by the gift-wrap randomization overlap, then advances it
+ *     to that pass's cutoff. It is NOT the live-subscription
  *     anchor (the live tail is a fixed `now - overlap` window) and is NOT advanced
  *     by background notification polling (which only scans a recent overlap window).
  */

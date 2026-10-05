@@ -1595,7 +1595,7 @@ class DmService {
    * the two paged frontiers (see `sync-store`): the forward gap first (newest —
    * what the user is waiting for), then deep history.
    *
-   *  - Forward gap: drain `(forwardSince, through]` page by page, then
+   *  - Forward gap: drain `(forwardSince - overlap, through]` page by page, then
    *    advance `forwardSince` to its cutoff. Not persisted mid-drain — a kill
    *    re-drains the gap on the next foreground entry, skipping processed ids.
    *    First pass (`forwardSince` null) → floor = through → an
@@ -1618,7 +1618,12 @@ class DmService {
     try {
       // Forward gap: everything that arrived (or was `limit`-truncated off the
       // live tail) since we were last fully synced up to `forwardSince`.
-      const forwardFloor = cursor.forwardSince ?? through;
+      // New wraps can be backdated before that wall-clock cutoff. Re-read the
+      // same bounded overlap as live intake, even after a long offline gap.
+      // The first pass leaves this range to deep history instead.
+      const forwardFloor = cursor.forwardSince === null
+        ? through
+        : Math.max(BACKFILL_DONE, cursor.forwardSince - FORWARD_OVERLAP_SECONDS);
       const forward = await this.drainWindow(
         accountPubkey,
         through,

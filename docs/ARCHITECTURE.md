@@ -257,7 +257,9 @@ and state-machine details.
    newest known events. At least one effective EOSE is required despite failed replicas.
    With no completed response, startup retries without enabling message intake.
 2. Backfill uses persisted cursors to recover history and starts only while the
-   app is active, including foreground re-entry. An already-started pass may
+   app is active, including foreground re-entry. Forward recovery re-reads the
+   gift-wrap randomization window before its previous wall-clock watermark;
+   processed envelope IDs deduplicate the overlap. An already-started pass may
    continue after backgrounding; foreground transitions do not start overlapping
    passes. Background polls, socket recovery, and background session reinitialization
    never start history backfill. Account/key changes still cancel stale work.

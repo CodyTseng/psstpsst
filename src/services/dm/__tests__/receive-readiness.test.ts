@@ -241,6 +241,36 @@ it('does not let a cold notification poll pull messages with a missing key', asy
   expect(dmService.getAccountPubkey()).toBeNull();
 });
 
+it.each([24, 48])('backfills a new wrap backdated %i hours before the previous cutoff after a long offline gap', async (hours) => {
+  mockAppState = 'active';
+  const previousCutoff = 400_000;
+  const cutoff = previousCutoff + 4 * 24 * 60 * 60;
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(cutoff * 1000);
+  const completed = deferred<void>();
+  const missing = { id: 'backdated-wrap', kind: 1059, created_at: previousCutoff - hours * 60 * 60 } as Event;
+  const seen = { id: 'seen-boundary', kind: 1059, created_at: previousCutoff } as Event;
+  mockProcessedIds.add(seen.id);
+  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: previousCutoff, backwardUntil: 0 });
+  jest.mocked(setForwardSince).mockImplementationOnce(async () => { completed.resolve(); });
+  jest.mocked(relayPool.query).mockImplementation(async (opts) => {
+    const events = [seen, missing].filter((event) => event.created_at <= opts.filter!.until!).slice(0, 1);
+    opts.onComplete?.({ eosed: true, status: 'complete', relays: opts.relays.map((url) => ({
+      url, status: 'eose', received: events.length,
+    })) });
+    return events;
+  });
+  try {
+    await dmService.init(options);
+    await completed.promise;
+    expect(jest.mocked(unwrapGiftWrapWithKeys).mock.calls[0]?.[0]).toEqual(missing);
+    expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(1);
+    expect(setForwardSince).toHaveBeenCalledWith(self, cutoff);
+    expect(setBackwardUntil).not.toHaveBeenCalled();
+  } finally {
+    clock.mockRestore();
+  }
+});
+
 it('a background poll leaves the live account and subscriptions intact', async () => {
   await dmService.init(options);
   jest.mocked(selfEventStream.destroy).mockClear();
