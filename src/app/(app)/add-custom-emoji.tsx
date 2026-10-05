@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +24,7 @@ import {
 } from '@/components/emoji/SquareImageCropper';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useCustomEmojis } from '@/hooks/use-custom-emojis';
+import { backSafely } from '@/lib/navigation';
 import { isAnimatedGifImage } from '@/lib/image/animated-image';
 import { optionalRouteTextParam } from '@/lib/navigation/route-params';
 import { IS_ELECTRON } from '@/lib/platform';
@@ -195,7 +196,7 @@ export default function AddCustomEmojiScreen() {
       void save
         .then(() => {
           setSaveCompleted(true);
-          setTimeout(() => router.back(), 0);
+          setTimeout(backSafely, 0);
         })
         .catch((error: unknown) => {
           console.error('[custom-emoji] Failed to capture or upload image.', error);
@@ -336,7 +337,7 @@ export default function AddCustomEmojiScreen() {
               label={t('common.back')}
               variant="secondary"
               fullWidth={false}
-              onPress={() => router.back()}
+              onPress={backSafely}
             />
           </View>
         )}
@@ -349,7 +350,7 @@ export default function AddCustomEmojiScreen() {
             if (draftRequestId) {
               cancelEmojiDraftRequest(draftRequestId);
             }
-            router.back();
+            backSafely();
           }
         }}
       />

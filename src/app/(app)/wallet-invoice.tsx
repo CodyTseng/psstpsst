@@ -20,6 +20,7 @@ import { WalletPaymentStatus, type WalletPaymentStatusValue } from '@/components
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useInvoiceTransaction } from '@/hooks/use-invoice-transaction';
 import { useWallets } from '@/hooks/use-wallets';
+import { backSafely } from '@/lib/navigation';
 import { setStringAsync } from '@/lib/clipboard';
 import { routeStringParam, type RouteParam } from '@/lib/navigation/route-params';
 import { walletDescriptionText } from '@/lib/wallet/description';
@@ -229,7 +230,7 @@ export default function WalletInvoiceScreen() {
             processingLabel={t('wallet.payment_processing')}
             successTitle={t('wallet.payment_sent')}
             actionLabel={t('common.close')}
-            onAction={() => router.back()}
+            onAction={backSafely}
           />
         </View>
       ) : (

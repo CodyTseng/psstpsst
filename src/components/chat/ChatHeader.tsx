@@ -17,6 +17,7 @@ import { useTotalUnread } from '@/hooks/use-conversations';
 import { useProfile } from '@/hooks/use-profile';
 import { useGroupPresentation } from '@/hooks/use-group-presentation';
 import { useDirectionalIconStyle } from '@/i18n/direction';
+import { backSafely } from '@/lib/navigation';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { useActiveAccount } from '@/stores/active-account.store';
 import type { NearbyConnectionStatus } from '@/stores/proximity.store';
@@ -226,7 +227,7 @@ export function ChatHeader({
             fullWidth={false}
             corner="full"
             compact
-            onPress={() => router.back()}
+            onPress={backSafely}
             accessibilityLabel="Back"
             iconLeft={
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>

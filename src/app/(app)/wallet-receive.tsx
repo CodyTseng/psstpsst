@@ -1,7 +1,7 @@
 import { Backspace as Delete } from '@solar-icons/react-native/category/text-formatting/Linear/Backspace';
 import { ChatSquare as MessageSquare } from '@solar-icons/react-native/category/messages/Linear/ChatSquare';
 import { Share as Share2 } from '@solar-icons/react-native/category/ui/Linear/Share';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Share, TextInput, View } from 'react-native';
@@ -24,6 +24,7 @@ import { WalletSuccessState } from '@/components/wallet/WalletSuccessState';
 import { useAmountKeypadKeyboard } from '@/hooks/use-amount-keypad-keyboard';
 import { useProfile } from '@/hooks/use-profile';
 import { useWallets } from '@/hooks/use-wallets';
+import { backSafely } from '@/lib/navigation';
 import { setStringAsync } from '@/lib/clipboard';
 import {
   parseConversationRouteParams,
@@ -226,7 +227,7 @@ export default function WalletReceiveScreen() {
             extraTags: invoiceMessageTags(description),
           });
           showToast(t('wallet.invoice_sent'));
-          router.back();
+          backSafely();
         } catch {
           void platform.confirmationDialog.notify({ title: t('wallet.invoice_send_failed'), okLabel: t('common.ok') });
         }
@@ -378,7 +379,7 @@ export default function WalletReceiveScreen() {
             amountSourceCenterY={amountSourceCenterY}
             description={description}
             actionLabel={t('common.done')}
-            onAction={() => router.back()}
+            onAction={backSafely}
           />
         </View>
       ) : (

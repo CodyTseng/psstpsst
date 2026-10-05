@@ -16,6 +16,7 @@ import { EmojiPackAuthorRow } from '@/components/emoji/EmojiPackAuthorRow';
 import { EmojiPackSkeleton } from '@/components/emoji/EmojiPackCard';
 import { useCustomEmojis } from '@/hooks/use-custom-emojis';
 import { useScrolled } from '@/hooks/use-scrolled';
+import { backSafely } from '@/lib/navigation';
 import type { EmojiPack } from '@/lib/nostr/custom-emoji';
 import { platform } from '@/platform';
 import {
@@ -214,7 +215,7 @@ export default function EmojiPackDetailScreen() {
                 label={t('common.back')}
                 variant="primary"
                 fullWidth={false}
-                onPress={() => router.back()}
+                onPress={backSafely}
               />
             </View>
           ) : (

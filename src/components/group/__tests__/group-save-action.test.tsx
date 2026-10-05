@@ -25,7 +25,7 @@ const mockListRow: jest.Mock<null, [MockListRowProps]> = jest.fn(
 let mockSaved = false;
 
 jest.mock('expo-router', () => ({
-  router: { back: jest.fn(), dismissAll: jest.fn(), push: jest.fn(), replace: jest.fn() },
+  router: { canGoBack: jest.fn(() => true), back: jest.fn(), dismissAll: jest.fn(), push: jest.fn(), replace: jest.fn() },
   useLocalSearchParams: () => ({ key: 'group:key' }),
 }));
 jest.mock('react-i18next', () => ({

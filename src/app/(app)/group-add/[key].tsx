@@ -18,6 +18,7 @@ import { useConversation } from '@/hooks/use-conversations';
 import { useFocusAfterTransition } from '@/hooks/use-focus-after-transition';
 import { useProfile } from '@/hooks/use-profile';
 import { useScrolled } from '@/hooks/use-scrolled';
+import { backSafely } from '@/lib/navigation';
 import { LARGE_GROUP_WARNING_THRESHOLD } from '@/lib/group';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { abbreviateNpub } from '@/lib/nostr/format';
@@ -97,7 +98,7 @@ export default function GroupAddMemberScreen() {
       } else {
         await groupService.updateLocalRoster(accountPubkey, conversationKey, [...members, pubkey]);
       }
-      router.back();
+      backSafely();
     } finally {
       setBusy(false);
     }

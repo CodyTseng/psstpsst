@@ -9,7 +9,7 @@ import { useWalletConnectionHandoffStore } from '@/stores/wallet-connection-hand
 let mockHandoffId = '';
 
 jest.mock('expo-router', () => ({
-  router: { back: jest.fn(), dismissTo: jest.fn() },
+  router: { canGoBack: jest.fn(() => true), back: jest.fn(), dismissTo: jest.fn() },
   useLocalSearchParams: () => ({ handoff: mockHandoffId }),
 }));
 

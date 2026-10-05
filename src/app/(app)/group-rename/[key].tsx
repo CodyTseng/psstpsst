@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -11,6 +11,7 @@ import { useConversation } from '@/hooks/use-conversations';
 import { dmService } from '@/services/dm/dm.service';
 import { groupService } from '@/services/group/group.service';
 import { useActiveAccount } from '@/stores/active-account.store';
+import { backSafely } from '@/lib/navigation';
 import { spacing } from '@/theme';
 
 export default function GroupRenameScreen() {
@@ -46,7 +47,7 @@ export default function GroupRenameScreen() {
       } else {
         await groupService.renameLocalGroup(accountPubkey, conversationKey, normalized || null);
       }
-      router.back();
+      backSafely();
     } finally {
       setBusy(false);
     }

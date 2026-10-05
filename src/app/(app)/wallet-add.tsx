@@ -9,6 +9,7 @@ import { AppScreen } from '@/components/common/AppScreen';
 import { QrScanButton } from '@/components/common/QrScanButton';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { useScrolled } from '@/hooks/use-scrolled';
+import { backSafely } from '@/lib/navigation';
 import { routeStringParam } from '@/lib/navigation/route-params';
 import { platform } from '@/platform';
 import { getProfile } from '@/services/profile/profile.service';
@@ -104,7 +105,7 @@ export default function AddWalletScreen() {
       setConfirmPin('');
       return;
     }
-    router.back();
+    backSafely();
   }
 
   return (

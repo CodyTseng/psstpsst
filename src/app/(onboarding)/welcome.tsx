@@ -22,6 +22,7 @@ import { OnboardingArtwork } from '@/components/onboarding/OnboardingArtwork';
 import { useAccountList } from '@/hooks/use-account-list';
 import { useProfilesMap } from '@/hooks/use-profile';
 import { useDirectionalIconStyle } from '@/i18n/direction';
+import { backSafely } from '@/lib/navigation';
 import { resolveName } from '@/lib/nostr/display-name';
 import { abbreviateNpub } from '@/lib/nostr/format';
 import { pubkeyToNpub } from '@/lib/nostr/keys';
@@ -61,7 +62,7 @@ function WelcomeBackButton() {
         fullWidth={false}
         corner="full"
         compact
-        onPress={() => router.back()}
+        onPress={backSafely}
         accessibilityLabel={t('common.back')}
         iconLeft={
           <ChevronLeft

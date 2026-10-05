@@ -507,6 +507,10 @@ presentation: narrow windows show a stack; wide tablets and Electron show a
 persistent primary pane plus detail. Resizing must not create a second route
 state or remount the active application session.
 
+Back actions check navigation availability when dispatched. Stale events while
+session gates have unmounted the navigator are ignored, never deferred into the
+next session.
+
 Native modal presentation is serialized. A modal that opens another closes
 first and continues from `onClosed`; guessed delays are not a coordination
 mechanism. Gesture-heavy overlays keep animation and gesture arbitration on the

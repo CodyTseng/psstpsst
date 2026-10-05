@@ -30,6 +30,7 @@ import { useActiveAccount } from '@/stores/active-account.store';
 import { useDraftsStore } from '@/stores/drafts.store';
 import { usePendingAttachmentsStore } from '@/stores/pending-attachments.store';
 import { showToast } from '@/stores/toast.store';
+import { backSafely } from '@/lib/navigation';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, useThemeColors } from '@/theme';
 import { platform } from '@/platform';
@@ -115,7 +116,7 @@ export default function GroupInfoScreen() {
         }
       }
     }
-    router.back();
+    backSafely();
   }
 
   async function toggleMute() {

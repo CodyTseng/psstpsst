@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -14,6 +13,7 @@ import Plus from 'lucide-react-native/icons/plus';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { SortableUrlList } from '@/components/common/SortableUrlList';
+import { backSafely } from '@/lib/navigation';
 import { DEFAULT_BLOSSOM_SERVERS, normalizeBlossomUrl } from '@/lib/nostr/blossom-url';
 import { buildSigner } from '@/services/account/account.service';
 import {
@@ -93,7 +93,7 @@ export default function MediaServersPage() {
       const signer = await buildSigner(accountPubkey);
       await saveAndPublishMediaServers({ accountPubkey, signer, servers });
       setOriginal(servers);
-      router.back();
+      backSafely();
     } catch (e) {
       setError((e as Error).message);
     } finally {

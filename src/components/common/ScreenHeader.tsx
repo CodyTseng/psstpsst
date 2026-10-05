@@ -1,9 +1,9 @@
-import { router } from 'expo-router';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useDirectionalIconStyle } from '@/i18n/direction';
+import { backSafely } from '@/lib/navigation';
 import { iconStrokeWidth } from '@/theme/icons';
 import { headerHeight, spacing, uiDensity, useThemeColors } from '@/theme';
 
@@ -19,7 +19,7 @@ type Props = {
    * `title`; use an `AppButton variant="text"` with `labelVariant="subtitle"`
    * (the wallet selector, DESIGN §8). */
   titleControl?: React.ReactNode;
-  /** Defaults to `router.back()`. */
+  /** Defaults to `backSafely()`. */
   onBack?: () => void;
   /** Optional trailing accessory (an `IconButton plain` or `AppButton
    * variant="text"`); balances the back chevron. */
@@ -159,7 +159,7 @@ export function ScreenHeader({
                 fullWidth={false}
                 corner="full"
                 compact
-                onPress={onBack ?? (() => router.back())}
+                onPress={onBack ?? backSafely}
                 accessibilityLabel="Back"
                 iconLeft={
                   <ChevronLeft

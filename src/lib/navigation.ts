@@ -6,6 +6,15 @@ let lastHref: string | null = null;
 let lastAt = 0;
 
 /**
+ * Ignore stale back events after a session gate unmounts the navigator, or
+ * after an earlier queued tap has already returned to the root. Check at
+ * dispatch time; a value captured during render can outlive the navigator.
+ */
+export function backSafely(): void {
+  if (router.canGoBack()) router.back();
+}
+
+/**
  * Push a route, collapsing rapid duplicate pushes of the **same** href into
  * one. When the JS thread is briefly busy (e.g. the gift-wrap replay burst on
  * launch), taps queue up and then all dispatch at once — without this guard

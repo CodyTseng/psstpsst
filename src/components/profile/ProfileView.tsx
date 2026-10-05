@@ -1,5 +1,4 @@
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
 import AtSign from 'lucide-react-native/icons/at-sign';
 import Check from 'lucide-react-native/icons/check';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
@@ -23,6 +22,7 @@ import { AppButton } from '@/components/common/AppButton';
 import { AppInput } from '@/components/common/AppInput';
 import { AppScreen } from '@/components/common/AppScreen';
 import { BottomSheet } from '@/components/common/BottomSheet';
+import { backSafely } from '@/lib/navigation';
 import { setStringAsync } from '@/lib/clipboard';
 import { IS_ELECTRON } from '@/lib/platform';
 import { Avatar } from '@/components/common/Avatar';
@@ -225,7 +225,7 @@ export function ProfileView({ pubkey }: { pubkey: string }) {
 
   function handleBack() {
     if (editing) leaveEditing();
-    else router.back();
+    else backSafely();
   }
 
   async function saveEdits() {

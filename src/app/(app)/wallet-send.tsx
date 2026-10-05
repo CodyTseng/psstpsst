@@ -28,6 +28,7 @@ import { WalletPaymentStatus, type WalletPaymentStatusValue } from '@/components
 import { WalletPinSheet } from '@/components/wallet/WalletPinSheet';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWallets } from '@/hooks/use-wallets';
+import { backSafely } from '@/lib/navigation';
 import { getStringAsync } from '@/lib/clipboard';
 import { routeStringParam, type RouteParam } from '@/lib/navigation/route-params';
 import { resolveName } from '@/lib/nostr/display-name';
@@ -597,7 +598,7 @@ export default function WalletSendScreen() {
             processingLabel={t('wallet.payment_processing')}
             successTitle={t('wallet.payment_sent')}
             actionLabel={t('common.close')}
-            onAction={() => router.back()}
+            onAction={backSafely}
           />
         </View>
       ) : step === 'review' && reviewInvoice ? (
@@ -722,7 +723,7 @@ export default function WalletSendScreen() {
         </View>
       )}
       {step === 'scan' ? (
-        <ScannerCloseButton onClose={() => router.back()} />
+        <ScannerCloseButton onClose={backSafely} />
       ) : (
         <ScreenHeader bordered={(step === 'manual' || step === 'review') && scrolled} title={t('wallet.send')} />
       )}

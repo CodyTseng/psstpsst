@@ -11,7 +11,7 @@ import { resolveNostrUserInput } from '@/lib/nostr/user-input';
 import { dmService } from '@/services/dm/dm.service';
 
 jest.mock('expo-router', () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { canGoBack: jest.fn(() => true), back: jest.fn(), push: jest.fn() },
   useLocalSearchParams: () => ({ key: 'group:key' }),
 }));
 jest.mock('react-i18next', () => ({
