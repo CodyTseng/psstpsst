@@ -56,3 +56,8 @@ Conventions enforced here (and by `no-restricted-imports` in `eslint.config.js`)
 # Project Direction
 
 Confirm priorities with the maintainer before starting a major new feature.
+
+# Release Preparation
+
+Before preparing a release or writing a changelog, read `docs/RELEASING.md` and
+follow its changelog conventions.

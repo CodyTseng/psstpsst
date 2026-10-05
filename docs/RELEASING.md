@@ -374,7 +374,19 @@ Store copy and the icon live in `fastlane/metadata/android/en-US/`. Keep
 `title.txt`, `short_description.txt` (under 80 characters),
 `full_description.txt`, and `changelogs/<versionCode>.txt` (at most 500
 characters) up to date before each release tag. The tag workflow also uses that
-changelog as the GitHub draft release notes, so keep it concise and user-facing.
+changelog as the GitHub draft release notes.
+
+Changelog conventions:
+
+- Write concise English for users, describing visible changes and benefits.
+  Avoid implementation details, internal terminology, and commit-by-commit lists.
+- Order entries by type: additions, improvements, then fixes. Keep entries of
+  the same type together without type headings.
+- Within each group, list the most important changes first, prioritizing message
+  reliability and data integrity over smaller usability or visual changes.
+- Use short bullets, combine related changes, and keep the entire changelog
+  within 500 characters, including the version title.
+
 Shared screenshots live in
 `images/phoneScreenshots/1.png` through `4.png`. For the first release, the
 maintainer has chosen to reuse the supplied iPhone promotional artwork for
