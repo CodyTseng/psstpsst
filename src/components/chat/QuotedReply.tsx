@@ -111,7 +111,10 @@ export function QuotedReply({
           variant="plain"
           size={spacing['2xl']}
           hitSlop={10}
-          onPress={onCancel}
+          onPress={(event) => {
+            event.stopPropagation();
+            onCancel();
+          }}
           icon={<X strokeWidth={iconStrokeWidth.default} size={20} color={contentColor} />}
         />
       ) : null}

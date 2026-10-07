@@ -120,6 +120,8 @@ type Props = {
   /** Quote shown inside the input box while composing a reply (with a cancel
    * button); null when not replying. */
   replyTo?: { senderName: string; contentPreview: string } | null;
+  /** Jump to the message currently quoted in the composer. */
+  onPressReply?: () => void;
   onCancelReply?: () => void;
   /** Changes whenever an explicit reply action should restore input focus. */
   focusRequestVersion?: number;
@@ -174,6 +176,7 @@ export function ChatInput({
   attachmentSources = [],
   onSendVoice,
   replyTo,
+  onPressReply,
   onCancelReply,
   focusRequestVersion,
   disabled,
@@ -1016,7 +1019,7 @@ export function ChatInput({
               INPUT_MAX_HEIGHT + 16 + (replyTo ? REPLY_BLOCK_HEIGHT : 0),
             paddingHorizontal: INPUT_CONTENT_INSET,
             paddingVertical: 8,
-            borderRadius: 20,
+            borderRadius: radius.xl,
             backgroundColor: c.surface,
             justifyContent: "center",
             // Breathing room between the reply quote and the text field (only
@@ -1029,12 +1032,22 @@ export function ChatInput({
               bare
               senderName={replyTo.senderName}
               contentPreview={replyTo.contentPreview}
+              onPress={onPressReply}
               onCancel={onCancelReply}
               style={{
-                // Pull the cancel X out past the box's content padding so
-                // its right edge lands on the emoji button's trailing inset —
-                // both trailing controls share one right edge.
-                marginEnd: INPUT_ACTION_INSET - INPUT_CONTENT_INSET,
+                // Make the whole upper composer region interactive while
+                // preserving the quote text and trailing control alignment.
+                marginTop: -spacing.sm,
+                marginBottom: -spacing.xs,
+                marginStart: -INPUT_CONTENT_INSET,
+                marginEnd: -INPUT_CONTENT_INSET,
+                paddingTop: spacing.sm,
+                paddingBottom: spacing.xs,
+                paddingStart: INPUT_CONTENT_INSET,
+                paddingEnd: INPUT_ACTION_INSET,
+                borderTopStartRadius: radius.xl,
+                borderTopEndRadius: radius.xl,
+                overflow: 'hidden',
               }}
             />
           ) : null}

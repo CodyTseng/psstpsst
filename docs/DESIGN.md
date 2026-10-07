@@ -261,6 +261,11 @@ Motion is short, restrained, interruptible, and tied to a state transition.
 Message bubbles accept swipe-to-reply from the trailing edge toward the leading
 edge. The physical direction reverses in RTL layouts.
 
+Quoted replies in messages and the composer jump to their source message when
+pressed. The composer's cancel action only dismisses the reply.
+Composer quote feedback fills the input's upper region and follows its outer
+top corners, without a separate rounded card.
+
 - Press feedback is immediate.
 - Ordinary transitions use the shared duration and easing tokens.
 - Avoid decorative bounce, looping motion, and layout jumps.

@@ -69,7 +69,7 @@ import {
 import type { BubbleRect } from '@/components/chat/MessageBubble';
 import { resolveMessageContentViewport } from '@/components/chat/message-action-menu-placement';
 import type { EmojiPickerPopoverAnchor } from '@/components/chat/EmojiPickerSheet';
-import { MessageList } from '@/components/chat/MessageList';
+import { MessageList, type MessageListHandle } from '@/components/chat/MessageList';
 import { AddEmojiToPackSheet } from '@/components/emoji/AddEmojiToPackSheet';
 import { NearbyOutgoingRequestSheet } from '@/components/proximity/nearby-outgoing-request-sheet';
 import type { messages as messagesSchema } from '@/db/schema';
@@ -209,6 +209,7 @@ type ChatComposerController = {
   pickAttachment: (source: AttachmentSource) => void;
   sendVoice: (payload: VoicePayload) => void;
   cancelReply: () => void;
+  focusReply: () => void;
   openUnsupported: () => void;
 };
 
@@ -427,6 +428,9 @@ export default function ChatPageRuntime() {
   }, []);
   const cancelComposerReply = useCallback(() => {
     composerControllerRef.current?.cancelReply();
+  }, []);
+  const focusComposerReply = useCallback(() => {
+    composerControllerRef.current?.focusReply();
   }, []);
   const openComposerGateDetails = useCallback(() => {
     composerControllerRef.current?.openUnsupported();
@@ -759,6 +763,7 @@ export default function ChatPageRuntime() {
                 attachmentSources={composerModel.attachmentSources}
                 onSendVoice={composerModel.supportsVoice ? sendVoiceFromComposer : undefined}
                 replyTo={composerModel.replyTo}
+                onPressReply={focusComposerReply}
                 focusRequestVersion={composerModel.focusRequestVersion}
                 onCancelReply={cancelComposerReply}
               />
@@ -1117,6 +1122,7 @@ function ChatPageContent({
   );
 
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
+  const messageListRef = useRef<MessageListHandle | null>(null);
   const [replyFocusRequestVersion, setReplyFocusRequestVersion] = useState(0);
   const [pendingReplyTarget, setPendingReplyTarget] = useState<MessageRow | null>(null);
   // Long-press action-menu target: the message, its measured rect, and a
@@ -2396,6 +2402,9 @@ function ChatPageContent({
           pickAttachment: launchPicker,
           sendVoice: handleSendVoice,
           cancelReply: () => setReplyingTo(null),
+          focusReply: () => {
+            if (replyingTo) messageListRef.current?.scrollToMessage(replyingTo);
+          },
           openUnsupported: () => setShowUnsupported(true),
         }}
         model={{
@@ -2413,6 +2422,7 @@ function ChatPageContent({
           keyboard ⇄ attachment-tray swap is one continuous animation. */}
       <View ref={contentRef} collapsable={false} style={{ flex: 1 }}>
         <MessageList
+          ref={messageListRef}
           messages={isProximity && !messageSelfPubkey ? [] : displayMessages}
           pendingAttachments={inFlight}
           pendingTailVersion={pendingTailVersion}

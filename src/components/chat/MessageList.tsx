@@ -4,10 +4,12 @@ import { router } from 'expo-router';
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type Ref,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useIsRTL } from '@/i18n/direction';
@@ -123,7 +125,12 @@ function UnreadDivider({ label }: { label: string }) {
   );
 }
 
+export type MessageListHandle = {
+  scrollToMessage: (message: MessageRow) => void;
+};
+
 type Props = {
+  ref?: Ref<MessageListHandle>;
   messages: MessageRow[];
   pendingAttachments: PendingAttachment[];
   /** Incremented only by an attachment send/retry on this mounted chat page. */
@@ -272,6 +279,7 @@ const MESSAGE_CELL_RENDER_BATCH_PERIOD_MS = 32;
 const ANCHORED_VISIBLE_POSITION = { minIndexForVisible: 1 } as const;
 
 export function MessageList({
+  ref,
   messages,
   pendingAttachments,
   pendingTailVersion,
@@ -1326,6 +1334,20 @@ export function MessageList({
     seekAttemptsRef.current = 0;
     setSeekReplyId(id);
   }, [dataIndexById, referencedById, setSeekReplyId]);
+
+  useImperativeHandle(ref, () => ({
+    scrollToMessage(message) {
+      if (dataIndexById.has(message.id) || referencedById[message.id]) {
+        scrollToMessage(message.id);
+        return;
+      }
+      // The composer retains its source even after it leaves the loaded window.
+      // Re-anchor directly without querying or loading the intervening history.
+      setSeekReplyId(null);
+      setLocalFocusId(message.id);
+      onFocusAnchor({ id: message.id, orderAt: message.orderAt });
+    },
+  }), [dataIndexById, onFocusAnchor, referencedById, scrollToMessage, setSeekReplyId]);
 
   // A jump target (search / gallery open, or a far reply): the window loads
   // centred on it, then the target flashes only once the positioning cover lifts.
