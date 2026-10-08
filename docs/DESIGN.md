@@ -431,6 +431,15 @@ Conversation media galleries keep compact square thumbnails and derive their
 column count from the available pane width instead of using a fixed grid.
 Custom-emoji grids keep artwork bounded and derive their column count from the
 available container width on both touch devices and Electron.
+Standalone custom emoji use larger artwork than Unicode emoji, independently
+of inline custom-emoji sizes. Standalone custom-emoji runs wrap to fit the
+available conversation width.
+Message custom-emoji artwork retains its original corners without rounded clipping.
+Standalone Unicode emoji keep the timestamp and delivery-status capsule below
+the artwork at the trailing edge, so it never obscures the expression. Keep this
+stack compact without an added metadata gap. Use natural system-font height on
+every platform and preserve Android font padding; never force a fixed line height
+to tighten emoji spacing.
 Image framing and full-screen image viewing on Electron provide explicit zoom
 controls, pointer dragging while zoomed, and trackpad two-finger zooming and
 panning; essential actions must not depend on multi-touch gestures.

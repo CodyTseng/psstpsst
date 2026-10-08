@@ -27,6 +27,8 @@ function resolveAlign(align: Align, isRTL: boolean): 'left' | 'center' | 'right'
 
 type Props = TextProps & {
   variant?: TextVariant;
+  /** Let standalone artwork use its font's natural metrics instead of the variant's line height. */
+  naturalLineHeight?: boolean;
   tone?: Tone;
   weight?: FontWeight;
   align?: Align;
@@ -36,6 +38,7 @@ type Props = TextProps & {
 
 export function AppText({
   variant = 'body',
+  naturalLineHeight = false,
   tone = 'default',
   weight,
   align = 'start',
@@ -68,7 +71,7 @@ export function AppText({
       style={[
         {
           fontSize: v.fontSize,
-          lineHeight: v.lineHeight,
+          ...(!naturalLineHeight ? { lineHeight: v.lineHeight } : {}),
           fontWeight: fontWeight[weight ?? v.weight],
           fontFamily: v.fontFamily,
           color: toneColor[tone],

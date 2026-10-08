@@ -60,6 +60,7 @@ export const CustomEmojiImage = memo(function CustomEmojiImage({
       variant="plain"
       shape="square"
       size={size}
+      style={{ borderRadius: cornerRadius }}
       hoverFeedback={hoverFeedback}
       onPress={() => showCustomEmojiDetail(emoji)}
       accessibilityLabel={emoji.shortcode}

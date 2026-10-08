@@ -260,10 +260,10 @@ function BubbleBodyBase({
   }
 
   /** The shared inset metadata capsule used over media and large emoji. */
-  function renderOverlayMeta() {
+  function renderOverlayMeta(placement: 'overlay' | 'below' = 'overlay') {
     if (hideMeta) return null;
     return (
-      <MessageMetaOverlay>
+      <MessageMetaOverlay placement={placement}>
         {renderMeta(c.onOverlay, true)}
       </MessageMetaOverlay>
     );
@@ -562,6 +562,8 @@ function BubbleBodyBase({
             position: 'relative',
             alignSelf: 'flex-end',
             flexDirection: 'row',
+            flexWrap: 'wrap',
+            maxWidth: '100%',
             alignItems: 'flex-end',
             gap: spacing.xs,
           }}
@@ -589,8 +591,8 @@ function BubbleBodyBase({
   }
 
   // One to three emoji are the message itself, not text inside a container:
-  // enlarge them directly on the chat canvas and float the media metadata chip
-  // over their bottom-end corner. A reply stays as a neutral quote card above.
+  // enlarge them directly on the chat canvas and keep the metadata capsule below
+  // the artwork. A reply stays as a neutral quote card above.
   if (shortEmoji) {
     return (
       <View style={{ gap: spacing.xs }}>
@@ -614,13 +616,14 @@ function BubbleBodyBase({
             <AppText
               key={`${index}:${emoji}`}
               selectable={IS_ELECTRON}
+              naturalLineHeight
               style={emojiSize.message}
             >
               {emoji}
             </AppText>
           ))}
-          {renderOverlayMeta()}
         </View>
+        {renderOverlayMeta('below')}
       </View>
     );
   }
