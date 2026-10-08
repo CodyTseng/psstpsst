@@ -519,6 +519,8 @@ delays guessed at call sites.
 
 Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
+Header action menus open below their trigger on all platforms, accounting for
+each platform's modal coordinates.
 With no menu open, Electron Escape cancels an active message reply before page
 handling.
 

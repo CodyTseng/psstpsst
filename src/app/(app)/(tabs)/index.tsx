@@ -6,7 +6,7 @@ import { Radar } from '@solar-icons/react-native/category/map/Linear/Radar';
 import { Radar2 } from '@solar-icons/react-native/category/map/Linear/Radar2';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Keyboard, StyleSheet, View, type ViewToken } from 'react-native';
+import { FlatList, Keyboard, Platform, StyleSheet, View, type ViewToken } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,7 +38,6 @@ import { closeOpenSwipeable } from '@/lib/gestures';
 import type { ComposerFile } from '@/lib/attachments/composer-file';
 import { attachmentLabel } from '@/lib/nostr/attachment-label';
 import { resolveChatQrScan } from '@/lib/scan/chat-qr';
-import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import {
   setConversationMuted,
@@ -350,11 +349,11 @@ function RealConversations() {
       return;
     }
     headerActionRef.current?.measureInWindow((x, y, width, height) => {
-      // Electron drops the menu below the trigger like a desktop menubar;
-      // touch keeps the trigger's top-end corner alignment.
       setHeaderMenuAnchor({
         x: x + width,
-        y: IS_ELECTRON ? y + height + spacing.xs : y,
+        // Android's modal coordinate correction already places the menu below
+        // the header action; only iOS and Electron need the trigger height.
+        y: Platform.OS === 'android' ? y : y + height + spacing.xs,
       });
       setHeaderMenuOpen(true);
     });

@@ -40,7 +40,7 @@ export function HeaderActionMenu({ visible, anchor, onClose, items }: Props) {
 
   // With an edge-to-edge Android window, measureInWindow reports Y from the
   // app-content origin while a statusBarTranslucent Modal starts at the physical
-  // screen origin. Keep the menu's top-right corner on the trigger's top-right.
+  // screen origin. Preserve the anchor below the trigger in modal coordinates.
   const menuTop = anchor.y + (Platform.OS === 'android' ? insets.top : 0);
 
   return (
