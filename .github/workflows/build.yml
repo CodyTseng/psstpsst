@@ -2,6 +2,27 @@ name: Build Apps
 
 on:
   workflow_dispatch:
+    inputs:
+      macos:
+        description: macOS architecture
+        type: choice
+        default: arm64
+        options: [none, arm64]
+      windows:
+        description: Windows architectures
+        type: choice
+        default: all
+        options: [none, x64, arm64, all]
+      linux:
+        description: Linux architectures
+        type: choice
+        default: all
+        options: [none, x64, arm64, all]
+      android:
+        description: 'Android packages (all: APK plus AAB when signing is configured)'
+        type: choice
+        default: all
+        options: [none, apk, aab, all]
   push:
     tags:
       - "v*"
@@ -21,20 +42,34 @@ jobs:
   validate-version:
     name: Validate version and signing
     runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+      desktop: ${{ steps.targets.outputs.desktop }}
+      android: ${{ steps.targets.outputs.android }}
+      apk: ${{ steps.targets.outputs.apk }}
+      aab: ${{ steps.targets.outputs.aab }}
     steps:
       - uses: actions/checkout@v6
-      - name: Verify Android build image
-        run: bash scripts/build-android-reproducible.sh --check-image
       - uses: actions/setup-node@v6
         with:
           node-version: 24.15.0
           package-manager-cache: false
+      - name: Select build targets
+        id: targets
+        env:
+          HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
+        run: node scripts/build-targets.mjs
+      - name: Verify Android build image
+        if: steps.targets.outputs.android == 'true'
+        run: bash scripts/build-android-reproducible.sh --check-image
       - name: Verify third-party notices
         run: |
           npm run licenses:check
           npm run licenses:test
       - name: Validate signing configuration
         env:
+          BUILD_MACOS: ${{ steps.targets.outputs.macos }}
+          BUILD_ANDROID: ${{ steps.targets.outputs.android }}
           MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -45,8 +80,12 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          node scripts/release-signing.mjs check macos
-          node scripts/release-signing.mjs check android
+          if [[ "$BUILD_MACOS" == 'true' ]]; then
+            node scripts/release-signing.mjs check macos
+          fi
+          if [[ "$BUILD_ANDROID" == 'true' ]]; then
+            node scripts/release-signing.mjs check android
+          fi
       - name: Match tag to desktop and Android versions
         if: github.event_name == 'push'
         shell: bash
@@ -84,32 +123,12 @@ jobs:
   build:
     name: ${{ matrix.name }}
     needs: validate-version
+    if: needs.validate-version.outputs.desktop == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: macOS arm64
-            artifact: electron-macos-arm64
-            runner: macos-15
-            builder-args: --mac --arm64
-          - name: Windows x64
-            artifact: electron-windows-x64
-            runner: windows-2025
-            builder-args: --win --x64
-          - name: Windows arm64
-            artifact: electron-windows-arm64
-            runner: windows-11-arm
-            builder-args: --win --arm64
-          - name: Linux x64
-            artifact: electron-linux-x64
-            runner: ubuntu-24.04
-            builder-args: --linux --x64
-          - name: Linux arm64
-            artifact: electron-linux-arm64
-            runner: ubuntu-24.04-arm
-            builder-args: --linux --arm64
+      matrix: ${{ fromJSON(needs.validate-version.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v6
@@ -179,8 +198,9 @@ jobs:
             !release/builder-*.yaml
 
   build-android:
-    name: Android APK and AAB
+    name: Android packages
     needs: validate-version
+    if: needs.validate-version.outputs.android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
@@ -210,7 +230,8 @@ jobs:
         shell: bash
         env:
           ANDROID_RELEASE_UNSIGNED: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '1' || '0' }}
-          ANDROID_BUILD_BUNDLE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '1' || '0' }}
+          ANDROID_BUILD_APK: ${{ needs.validate-version.outputs.apk == 'true' && '1' || '0' }}
+          ANDROID_BUILD_BUNDLE: ${{ needs.validate-version.outputs.aab == 'true' && '1' || '0' }}
         run: |
           for attempt in 1 2; do
             if bash scripts/build-android-reproducible.sh release/fdroid-build; then
@@ -223,6 +244,7 @@ jobs:
           done
 
       - name: Sign and verify APK
+        if: needs.validate-version.outputs.apk == 'true'
         shell: bash
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -235,6 +257,7 @@ jobs:
             release/PsstPsst-android.apk
 
       - name: Upload APK
+        if: needs.validate-version.outputs.apk == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: android-apk
@@ -243,7 +266,7 @@ jobs:
           path: release/*.apk
 
       - name: Sign and verify AAB
-        if: env.HAS_ANDROID_SIGNING == 'true'
+        if: needs.validate-version.outputs.aab == 'true'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -255,7 +278,7 @@ jobs:
             release/PsstPsst-android.aab
 
       - name: Upload AAB
-        if: env.HAS_ANDROID_SIGNING == 'true'
+        if: needs.validate-version.outputs.aab == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: android-aab
@@ -265,7 +288,7 @@ jobs:
 
       - name: Audit F-Droid signature compatibility (non-blocking)
         id: fdroid_audit
-        if: env.HAS_ANDROID_SIGNING == 'true'
+        if: needs.validate-version.outputs.apk == 'true' && env.HAS_ANDROID_SIGNING == 'true'
         continue-on-error: true
         timeout-minutes: 5
         env:

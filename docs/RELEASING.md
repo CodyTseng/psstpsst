@@ -85,11 +85,34 @@ Before making the repository public or publishing its first release:
 
 ## Workflow behavior
 
+Manual runs let you select platforms and architectures in **Actions → Build Apps
+→ Run workflow**. These selections build the production app identity from the
+selected Git ref; they do not change application versions or version codes.
+
+| Input | Choices | Default |
+| --- | --- | --- |
+| `macos` | `none`, `arm64` | `arm64` |
+| `windows` | `none`, `x64`, `arm64`, `all` | `all` |
+| `linux` | `none`, `x64`, `arm64`, `all` | `all` |
+| `android` | `none`, `apk`, `aab`, `all` | `all` |
+
+`none` skips that platform. For manual runs, Android `all` builds an APK and adds
+an AAB when Android signing credentials are configured; without credentials it
+builds only a testing APK. Explicit `aab` requires Android credentials and builds
+only the bundle. Select at least one target.
+Only selected macOS/Android targets require their signing checks, and desktop-only
+runs skip the Android build image check. Windows signing remains optional.
+
+For example, select `windows=arm64` and set all other inputs to `none` to build
+only Windows arm64. Select `android=aab` and set the desktop inputs to `none` to
+build only the Google Play bundle. Tag pushes always build all five desktop
+targets plus APK and AAB, ignoring manual input selections.
+
 | Trigger and credentials | Result |
 | --- | --- |
-| Manual run on a branch, no signing secrets for a platform | Unsigned macOS package or debug-signed Android APK for testing |
-| Manual run with complete signing secrets | Signed Android APK and AAB; signed and notarized macOS packages |
-| Any run with only some signing secrets for either platform | Fails before building, listing missing secret names |
+| Manual run on a branch, no signing secrets for a selected platform | Unsigned macOS package or debug-signed Android APK for testing; explicit AAB selection fails |
+| Manual run with complete signing secrets | Builds selected targets, signing Android packages and signing/notarizing macOS packages |
+| Any run with only some signing secrets for a selected platform | Fails before building, listing missing secret names |
 | Run on a `v*` tag without complete macOS and Android credentials | Fails before building |
 | Push a matching `v*` tag with complete credentials | Builds the configured Android and desktop targets and creates or updates a draft GitHub Release |
 
@@ -102,11 +125,12 @@ Android release builds run in the pinned F-Droid buildserver image through
 `scripts/build-android-reproducible.sh`. The script copies the checkout to
 `/home/vagrant/build/chat.psstpsst.app`, fixes Node.js/npm and the Android native
 toolchain, sets `SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
-Android module from source. Tagged and credentialed runs produce an unsigned APK
-inside the container and apply the developer signature on the GitHub runner.
-CI sets `ANDROID_BUILD_BUNDLE=1` for these runs to also build an unsigned AAB
-from the same native project and sign it with `jarsigner` on the runner. The
-container script defaults to APK-only builds for independent F-Droid rebuilds.
+Android module from source. Selected signed Android packages are built unsigned
+inside the container and signed on the GitHub runner. CI sets `ANDROID_BUILD_APK`
+and `ANDROID_BUILD_BUNDLE` to select the Gradle tasks and output files; AAB signing
+uses `jarsigner`. APK/AAB content checks both enforce the ZXing-C++ scanner and
+exclude ML Kit. The container script defaults to APK-only builds for independent
+F-Droid rebuilds.
 The signer preserves the unsigned APK's ZIP alignment metadata and disables the
 legacy v1 scheme, which is unnecessary at minimum SDK 24, so F-Droid can copy
 the v2/v3 signature onto an independent rebuild. After uploading the normal APK
@@ -126,6 +150,7 @@ To check changes to the signing and F-Droid verification helpers, run:
 
 ```sh
 node --test scripts/release-signing.test.mjs
+node --test scripts/build-targets.test.mjs
 node --test scripts/build-android-bundle.test.mjs scripts/release-assets.test.mjs
 node --test scripts/verify-fdroid-reproducibility.test.mjs
 ```
@@ -375,7 +400,7 @@ and [apksigner reference](https://developer.android.com/tools/apksigner).
 
 ### Android: Google Play App Bundle
 
-Credentialed CI runs upload `PsstPsst-android.aab` as the `android-aab` Actions
+CI runs that select AAB upload `PsstPsst-android.aab` as the `android-aab` Actions
 artifact; tag runs also attach it to the draft GitHub Release. Download that file
 and upload it to a Google Play Console testing track before promoting it to
 production. APK distribution through GitHub, Zapstore, and F-Droid continues

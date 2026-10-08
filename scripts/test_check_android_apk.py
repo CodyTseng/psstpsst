@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import re
 from pathlib import Path
 import unittest
 import zipfile
@@ -10,7 +11,7 @@ spec.loader.exec_module(checker)
 
 
 class AndroidApkCheckTest(unittest.TestCase):
-    def apk(self, extra=None, omitted=()):
+    def apk(self, extra=None, omitted=(), *, bundle=False):
         entries = {
             "lib/arm64-v8a/libzxingcpp_android.so": b"reader",
             "lib/x86_64/libzxingcpp_android.so": b"reader",
@@ -23,9 +24,29 @@ class AndroidApkCheckTest(unittest.TestCase):
         with zipfile.ZipFile(buffer, "w") as archive:
             for name, data in entries.items():
                 if name not in omitted:
+                    if bundle:
+                        if re.fullmatch(r"classes\d*\.dex", name):
+                            name = "dex/" + name
+                        elif name == "AndroidManifest.xml":
+                            name = "manifest/" + name
+                        name = "base/" + name
                     archive.writestr(name, data)
         buffer.seek(0)
         return buffer
+
+    def test_bundle_checks_native_readers_licenses_dex_and_manifest(self):
+        self.assertEqual(checker.check_apk(self.apk(bundle=True), bundle=True), ["arm64-v8a", "x86_64"])
+        with self.assertRaisesRegex(ValueError, "armeabi-v7a"):
+            checker.check_apk(self.apk({"lib/armeabi-v7a/libhermes.so": b"engine"}, bundle=True), bundle=True)
+        with self.assertRaisesRegex(ValueError, "license"):
+            checker.check_apk(self.apk(omitted=("assets/zxing-cpp/LICENSE",), bundle=True), bundle=True)
+        for entry in (
+            {"lib/arm64-v8a/libbarhopper_v3.so": b"binary"},
+            {"classes2.dex": b"Lcom/google/mlkit/vision/barcode/BarcodeScanning;"},
+            {"AndroidManifest.xml": "com.google.mlkit.vision.DEPENDENCIES".encode("utf-16-le")},
+        ):
+            with self.subTest(entry=entry), self.assertRaisesRegex(ValueError, "ML Kit"):
+                checker.check_apk(self.apk(entry, bundle=True), bundle=True)
 
     def test_accepts_reader_for_every_packaged_abi(self):
         self.assertEqual(checker.check_apk(self.apk()), ["arm64-v8a", "x86_64"])

@@ -1,17 +1,25 @@
-"""Verify that a release APK ships ZXing-C++ and excludes ML Kit binaries."""
+"""Verify that a release APK or AAB ships ZXing-C++ and excludes ML Kit binaries."""
 
 import re
 import sys
 import zipfile
 
 
-def check_apk(path):
+def check_apk(path, *, bundle=False):
     with zipfile.ZipFile(path) as apk:
-        names = apk.namelist()
-        forbidden = [name for name in names if re.search(r"mlkit|barhopper", name, re.I)]
+        entries = {}
+        for name in apk.namelist():
+            normalized = name
+            if bundle and name.startswith("base/"):
+                normalized = name.removeprefix("base/")
+                if normalized.startswith(("dex/", "manifest/")):
+                    normalized = normalized.split("/", 1)[1]
+            entries[normalized] = name
+        names = set(entries)
+        forbidden = [name for name in apk.namelist() if re.search(r"mlkit|barhopper", name, re.I)]
         for name in names:
             if re.fullmatch(r"classes\d*\.dex", name) or name == "AndroidManifest.xml":
-                data = apk.read(name)
+                data = apk.read(entries[name])
                 for marker in ("com/google/mlkit", "com.google.mlkit", "com/google/android/gms/internal/mlkit"):
                     if marker.encode() in data or marker.encode("utf-16-le") in data:
                         forbidden.append(f"{name}: {marker}")
@@ -26,15 +34,15 @@ def check_apk(path):
                 raise ValueError(f"APK is missing the ZXing-C++ reader for {abi}")
         for filename, marker in (("LICENSE", b"Apache License"), ("NOTICE", b"libzueci")):
             license_path = f"assets/zxing-cpp/{filename}"
-            if license_path not in names or marker not in apk.read(license_path):
+            if license_path not in names or marker not in apk.read(entries[license_path]):
                 raise ValueError(f"APK is missing the ZXing-C++ license or notices: {filename}")
     return sorted(abis)
 
 
 if __name__ == "__main__":
     try:
-        abis = check_apk(sys.argv[1])
+        abis = check_apk(sys.argv[1], bundle=sys.argv[1].endswith(".aab"))
     except (IndexError, OSError, ValueError, zipfile.BadZipFile) as error:
-        print(f"Android APK check failed: {error}", file=sys.stderr)
+        print(f"Android package check failed: {error}", file=sys.stderr)
         sys.exit(1)
-    print(f"Android APK scanner check passed ({', '.join(abis)}).")
+    print(f"Android package scanner check passed ({', '.join(abis)}).")
