@@ -352,6 +352,9 @@ export function MessageList({
     : proximity
       ? oldestBoundary.senderPubkey !== conversationKey
       : oldestBoundary.senderPubkey === selfPubkey;
+  const oldestBoundaryCreatedAt = oldestBoundary == null
+    ? oldestBoundary
+    : oldestBoundary.createdAt;
   const listRef = useRef<FlatList<ListItem>>(null);
   const scrollMetricsRef = useRef({
     offsetY: 0,
@@ -1125,7 +1128,7 @@ export function MessageList({
           ? newer.message
           : newer.pending;
       const prepared = source.kind === 'message' ? source.prepared : null;
-      const boundaryCreatedAt = older == null ? oldestBoundary?.createdAt : undefined;
+      const boundaryCreatedAt = older == null ? oldestBoundaryCreatedAt : undefined;
       const edgeIsSelf = older == null ? boundaryIsSelf : undefined;
       const cached = listItemCache.get(sourceRow);
       if (
@@ -1160,7 +1163,7 @@ export function MessageList({
     displayedMessages,
     displayedAttachmentUrls,
     listItemCache,
-    oldestBoundary?.createdAt,
+    oldestBoundaryCreatedAt,
     pendingAttachments,
     messageById,
   ]);
