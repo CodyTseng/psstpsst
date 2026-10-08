@@ -320,8 +320,8 @@ export function AttachmentVideo({
               <Image
                 source={posterUri ? { uri: posterUri } : undefined}
                 placeholder={meta.thumbhash ? { thumbhash: meta.thumbhash } : undefined}
-                placeholderContentFit="cover"
-                contentFit="cover"
+                placeholderContentFit="contain"
+                contentFit="contain"
                 cachePolicy="memory-disk"
                 recyclingKey={meta.cipherSha256Hex}
                 style={{ position: 'absolute', inset: 0 }}

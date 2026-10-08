@@ -422,6 +422,9 @@ saved from the shared media viewer; the artwork is not general page decoration.
 Do not choose density from window width; choose it from the runtime.
 Embedded media previews fit the available message width and keep artwork
 bounded on wide conversation panes.
+Message image and video containers retain minimum width and height so controls
+and metadata remain visible. Media keeps its aspect ratio without cropping;
+unused space uses the theme's muted grey surface, including pending previews.
 Local video previews use cached frame images in chat and media lists. Players
 are mounted only for playback; unavailable posters retain the ThumbHash or neutral fallback.
 Conversation media galleries keep compact square thumbnails and derive their

@@ -179,9 +179,9 @@ export function AttachmentImage({
             // Even with a zero-duration transition, a newly mounted native
             // image view may draw the supplied placeholder for one frame.
             placeholder={readyOnMount ? undefined : placeholder}
-            placeholderContentFit="cover"
+            placeholderContentFit="contain"
             style={{ width: '100%', height: '100%' }}
-            contentFit="cover"
+            contentFit="contain"
             transition={readyOnMount ? 0 : 150}
             // Keep the decoded bitmap in memory (default is disk-only). A
             // long-press lifts a fresh `BubbleBody` copy over the backdrop, which

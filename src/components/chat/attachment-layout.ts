@@ -6,6 +6,9 @@ import { BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL } from './bubble-lay
  * values so an upload settling never changes the message's shape. */
 export const ATTACHMENT_MEDIA_MAX_WIDTH = 240;
 export const ATTACHMENT_MEDIA_MAX_HEIGHT = 320;
+/** Reserve room for transfer/play controls and message metadata. */
+export const ATTACHMENT_MEDIA_MIN_WIDTH = 120;
+export const ATTACHMENT_MEDIA_MIN_HEIGHT = 120;
 export const ATTACHMENT_IMAGE_DEFAULT_ASPECT = 4 / 3;
 export const ATTACHMENT_VIDEO_DEFAULT_ASPECT = 16 / 9;
 export const ATTACHMENT_FILE_WIDTH = 240;
@@ -37,5 +40,8 @@ export function fitAttachmentMediaBox(aspect: number): { width: number; height: 
     height = ATTACHMENT_MEDIA_MAX_HEIGHT;
     width = height * aspect;
   }
-  return { width, height };
+  return {
+    width: Math.max(ATTACHMENT_MEDIA_MIN_WIDTH, width),
+    height: Math.max(ATTACHMENT_MEDIA_MIN_HEIGHT, height),
+  };
 }

@@ -225,8 +225,8 @@ function EmbeddedImage({
               : undefined
           }
           placeholder={mediaPlaceholder(media)}
-          placeholderContentFit="cover"
-          contentFit="cover"
+          placeholderContentFit="contain"
+          contentFit="contain"
           transition={loadRemote ? 150 : 0}
           cachePolicy="memory-disk"
           recyclingKey={media.sha256 ?? media.url}
@@ -278,8 +278,8 @@ function EmbeddedVideo(props: Props) {
         {mediaPlaceholder(media) ? (
           <Image
             placeholder={mediaPlaceholder(media)}
-            placeholderContentFit="cover"
-            contentFit="cover"
+            placeholderContentFit="contain"
+            contentFit="contain"
             style={StyleSheet.absoluteFill}
           />
         ) : null}

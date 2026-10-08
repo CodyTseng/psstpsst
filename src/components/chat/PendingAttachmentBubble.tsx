@@ -84,7 +84,7 @@ function PendingVideoPreview({ uri }: { uri: string }) {
   return posterUri ? (
     <Image
       source={{ uri: posterUri }}
-      contentFit="cover"
+      contentFit="contain"
       cachePolicy="memory-disk"
       style={{ position: 'absolute', inset: 0 }}
     />
@@ -422,7 +422,7 @@ export function PendingAttachmentBubble({
               <Image
                 source={{ uri: pending.localUri }}
                 style={{ width: '100%', height: '100%' }}
-                contentFit="cover"
+                contentFit="contain"
               />
             ) : (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
