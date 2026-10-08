@@ -1,122 +1,74 @@
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Image } from 'expo-image';
+import { useEvent } from 'expo';
+import * as Sharing from 'expo-sharing';
+import { useVideoPlayer, VideoView, type VideoSource } from 'expo-video';
 import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
-
 import { AttachmentFailure } from '@/components/chat/AttachmentFailure';
+import { AppText } from '@/components/common/AppText';
+import { AppButton } from '@/components/common/AppButton';
+import { useAttachment } from '@/hooks/use-attachment';
 import type { ConversationMediaItem } from '@/hooks/use-conversation-media';
 import { revealOrRetry } from '@/lib/attachments/failure';
 import type { EmbeddedMedia } from '@/lib/nostr/embedded-media';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
-import {
-  type AttachmentErrorKind,
-  attachmentErrorKind,
-  fetchAndDecryptAttachment,
-  getCachedAttachmentUri,
-  getSessionCachedUri,
-} from '@/services/files/file-attachment.service';
-import { useActiveAccount } from '@/stores/active-account.store';
-import { useThemeColors } from '@/theme';
+import { copyForShare } from '@/services/files/file-attachment.service';
+import { IS_ELECTRON } from '@/lib/platform';
+import { platform } from '@/platform';
+import { spacing, useThemeColors } from '@/theme';
 
 type Props = {
   item: ConversationMediaItem;
-  /** Whether this is the focused pager page — an off-screen video is paused. */
+  /** Only the selected viewer page may download or allocate a playback player. */
   active: boolean;
 };
 
 export function MediaVideoPage({ item, active }: Props) {
+  if (!active) return <VideoPlaceholder thumbhash={item.meta.thumbhash} />;
   return item.source === 'attachment' ? (
-    <AttachmentMediaVideoPage meta={item.meta} active={active} />
+    <AttachmentMediaVideoPage meta={item.meta} />
   ) : (
-    <RemoteMediaVideoPage media={item.meta} active={active} />
+    <RemoteMediaVideoPage media={item.meta} />
   );
 }
 
-/**
- * Full-screen video page of the media pager. Like the in-bubble video, the
- * (possibly large) blob isn't fetched until the user taps play; an already-
- * downloaded one resolves from the local store and is ready to play. Paused
- * whenever it scrolls off-screen so swiping away stops the sound.
- */
-function AttachmentMediaVideoPage({
-  meta,
-  active,
-}: {
-  meta: FileAttachmentMeta;
-  active: boolean;
-}) {
+function VideoPlaceholder({ thumbhash }: { thumbhash?: string }) {
+  const c = useThemeColors();
+  return (
+    <View style={{ flex: 1, backgroundColor: c.lightboxBackdrop }}>
+      {thumbhash ? (
+        <Image placeholder={{ thumbhash }} placeholderContentFit="contain" style={StyleSheet.absoluteFill} />
+      ) : null}
+    </View>
+  );
+}
+
+/** Opening or selecting this page is the explicit intent to download and play. */
+function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const accountPubkey = useActiveAccount((s) => s.activePubkey);
-  const [uri, setUri] = useState<string | null>(() => getSessionCachedUri(meta));
-  const [loading, setLoading] = useState(false);
-  const [failKind, setFailKind] = useState<AttachmentErrorKind | null>(null);
-
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = false;
-  });
-
-  // Auto-play only right after an explicit tap, never on mount (a session-cached
-  // video would otherwise start the moment the page is rendered).
-  const autoPlayRef = useRef(false);
-  useEffect(() => {
-    if (uri && autoPlayRef.current) {
-      autoPlayRef.current = false;
-      player.play();
-    }
-  }, [uri, player]);
-
-  // Swiping to another page pauses this one.
-  useEffect(() => {
-    if (!active) player.pause();
-  }, [active, player]);
-
-  // Resolve an already-downloaded video from the local store on mount (no
-  // network); a missing one waits for a tap. Never auto-plays.
-  useEffect(() => {
-    if (uri) return;
-    let cancelled = false;
-    getCachedAttachmentUri(meta)
-      .then((cached) => {
-        if (!cancelled && cached) setUri(cached);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [meta.cipherSha256Hex]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function load(allowIntegrityMismatch = false) {
-    if (loading || uri) return;
-    setLoading(true);
-    setFailKind(null);
-    try {
-      autoPlayRef.current = true;
-      setUri(await fetchAndDecryptAttachment(meta, { accountPubkey, allowIntegrityMismatch }));
-    } catch (err) {
-      autoPlayRef.current = false;
-      setFailKind(attachmentErrorKind(err));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const attachment = useAttachment(meta, { autoLoad: true });
+  const { state } = attachment;
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+  const onPlaybackError = useCallback(() => setPlaybackFailed(true), []);
 
   function onTap() {
-    void revealOrRetry(failKind, t, 'play', (allow) => void load(allow));
+    if (state.status === 'loading' || state.status === 'checking') return;
+    if (state.status === 'paused') attachment.resume();
+    else void revealOrRetry(state.status === 'error' ? state.kind : null, t, 'play', (allow) => {
+      if (allow) attachment.reveal();
+      else attachment.retry();
+    });
   }
 
-  if (uri) {
-    return (
-      <VideoView
-        player={player}
-        style={StyleSheet.absoluteFill}
-        contentFit="contain"
-        nativeControls
-      />
-    );
+  if (state.status === 'ready') {
+    return playbackFailed
+      ? <UnsupportedVideo uri={state.localUri} mime={meta.mime} name={meta.name} />
+      : <AutoplayVideo source={state.localUri} onError={onPlaybackError} />;
   }
 
   return (
@@ -124,10 +76,13 @@ function AttachmentMediaVideoPage({
       onPress={onTap}
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
     >
-      {loading ? (
+      {meta.thumbhash ? (
+        <Image placeholder={{ thumbhash: meta.thumbhash }} placeholderContentFit="contain" style={StyleSheet.absoluteFill} />
+      ) : null}
+      {state.status === 'loading' || state.status === 'checking' ? (
         <ActivityIndicator color={c.onOverlay} />
-      ) : failKind ? (
-        <AttachmentFailure kind={failKind} action="play" iconSize={28} />
+      ) : state.status === 'error' ? (
+        <AttachmentFailure kind={state.kind} action="play" iconSize={28} />
       ) : (
         <View
           style={{
@@ -146,63 +101,70 @@ function AttachmentMediaVideoPage({
   );
 }
 
-function RemoteMediaVideoPage({ media, active }: { media: EmbeddedMedia; active: boolean }) {
+function RemoteMediaVideoPage({ media }: { media: EmbeddedMedia }) {
+  const source = useMemo(() => ({ uri: media.url, useCaching: !media.streaming }), [media.url, media.streaming]);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+  const onPlaybackError = useCallback(() => setPlaybackFailed(true), []);
+  return playbackFailed ? <UnsupportedVideo /> : <AutoplayVideo source={source} onError={onPlaybackError} />;
+}
+
+function UnsupportedVideo({ uri, mime, name }: { uri?: string; mime?: string; name?: string }) {
+  const { t } = useTranslation();
   const c = useThemeColors();
-  const [uri, setUri] = useState<string | null>(null);
-  const autoPlayRef = useRef(false);
-  const source = useMemo(
-    () => (uri ? { uri, useCaching: !media.streaming } : null),
-    [media.streaming, uri],
+  const [sharing, setSharing] = useState(false);
+  async function openExternally() {
+    if (!uri || sharing) return;
+    setSharing(true);
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(await copyForShare(uri, name), { mimeType: mime });
+      }
+    } catch {
+      void platform.confirmationDialog.notify({ title: t('attach.open_failed'), okLabel: t('common.ok') });
+    } finally {
+      setSharing(false);
+    }
+  }
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, gap: spacing.md }}>
+      <AppText variant="caption" style={{ color: c.onOverlay }} align="center">
+        {t(IS_ELECTRON ? 'attach.video_unsupported_desktop' : 'attach.video_unsupported')}
+      </AppText>
+      {!IS_ELECTRON && uri ? (
+        <AppButton variant="secondary" label={t('attach.open_external')} loading={sharing} onPress={() => void openExternally()} />
+      ) : null}
+    </View>
   );
-  const player = useVideoPlayer(source, (instance) => {
+}
+
+/** An inactive page unmounts this player, including when a download finishes late. */
+function AutoplayVideo({ source, onError }: { source: VideoSource; onError: () => void }) {
+  const player = useVideoPlayer(null, (instance) => {
     instance.loop = false;
   });
-
+  const { status } = useEvent(player, 'statusChange', { status: player.status });
   useEffect(() => {
-    if (uri && autoPlayRef.current) {
-      autoPlayRef.current = false;
-      player.play();
-    }
-  }, [player, uri]);
-
+    if (status === 'error') onError();
+  }, [status, onError]);
   useEffect(() => {
-    if (!active) player.pause();
-  }, [active, player]);
-
-  function load() {
-    if (uri) return;
-    autoPlayRef.current = true;
-    setUri(media.url);
-  }
-
-  if (uri) {
-    return (
-      <VideoView
-        player={player}
-        style={StyleSheet.absoluteFill}
-        contentFit="contain"
-        nativeControls
-      />
-    );
-  }
-
+    let cancelled = false;
+    void player.replaceAsync(source).then(() => {
+      if (!cancelled) player.play();
+    }).catch(() => { if (!cancelled) onError(); });
+    return () => {
+      cancelled = true;
+      // useVideoPlayer owns release; its native cleanup runs before this one.
+    };
+  }, [player, source, onError]);
   return (
-    <Pressable
-      onPress={load}
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-    >
-      <View
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: 36,
-          backgroundColor: c.overlay,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Play size={32} color={c.onOverlay} fill={c.onOverlay} />
-      </View>
-    </Pressable>
+    <VideoView
+      player={player}
+      // On web, VideoView is a replaced <video> element: insets alone do not
+      // constrain its intrinsic dimensions. Explicit bounds make contain work.
+      style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+      contentFit="contain"
+      nativeControls
+      fullscreenOptions={{ enable: true }}
+    />
   );
 }

@@ -82,7 +82,6 @@ export async function prepareAttachmentImage(
   uri: string,
   mime: string | undefined,
   quality: ImageSendQuality,
-  dimensions?: { width?: number; height?: number },
 ): Promise<StrippedImage | null> {
   if (
     !mime?.startsWith('image/') ||
@@ -109,8 +108,8 @@ export async function prepareAttachmentImage(
     return sanitized;
   }
 
-  const width = dimensions?.width ?? sanitized.width;
-  const height = dimensions?.height ?? sanitized.height;
+  const width = sanitized.width;
+  const height = sanitized.height;
   const candidates = [
     { edge: OPTIMIZED_MAX_EDGE, quality: 0.82 },
     { edge: OPTIMIZED_MAX_EDGE, quality: 0.72 },

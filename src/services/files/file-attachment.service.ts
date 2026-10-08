@@ -3,7 +3,6 @@ import { base64 } from '@scure/base';
 import { platform } from '@/platform';
 import { throwIfAborted } from '@/lib/async/abort';
 import { resolveVoiceMime } from '@/lib/audio/voice';
-import { computeThumbhash } from '@/lib/image/thumbhash';
 import {
   DEFAULT_IMAGE_SEND_QUALITY,
   type ImageSendQuality,
@@ -12,6 +11,8 @@ import { buildFileTags, type FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { blossomDownloadUrls, parseBlossomUri } from '@/lib/nostr/blossom-uri';
 
 import type { Signer } from '../signer/signer.interface';
+import { readAttachmentMediaMetadata } from './attachment-media-metadata';
+import { copyVideoPoster } from './video-poster.service';
 import {
   listConversationUrls,
   listOrphanBlobsForAccount,
@@ -138,7 +139,7 @@ export type UploadAttachmentOpts = {
   mime?: string;
   /** Original filename (documents) — carried in the private `name` tag. */
   name?: string;
-  /** "WxH" — populates imeta dim. */
+  /** Legacy caller hint; ignored when deriving outgoing dimensions from the file. */
   dim?: string;
   /** Voice messages: clip length in seconds (`duration` tag). */
   durationSec?: number;
@@ -152,6 +153,8 @@ export type UploadAttachmentOpts = {
   /** Invoked as the pipeline transitions; lets the UI update overlays. */
   onStep?: (step: 'encrypting' | 'uploading') => void;
   onUploadProgress?: (sentBytes: number, totalBytes: number) => void;
+  /** Real media dimensions for the optimistic bubble, before upload begins. */
+  onMediaDimensions?: (dimensions: { width: number; height: number }) => void;
   signal?: AbortSignal;
 };
 
@@ -173,6 +176,16 @@ export type StageNearbyAttachmentOpts = Omit<UploadAttachmentOpts, 'signer'> & {
   accountPubkey: string;
   servers: string[];
 };
+
+function reportMediaDimensions(opts: UploadAttachmentOpts | StageNearbyAttachmentOpts, dim?: string): void {
+  if (!dim || !opts.onMediaDimensions) return;
+  const [width, height] = dim.split('x').map(Number);
+  try {
+    opts.onMediaDimensions({ width, height });
+  } catch {
+    // Optimistic display updates must not interrupt attachment delivery.
+  }
+}
 
 async function ensureUploadDir(): Promise<string> {
   const dir = `${await platform.fileSystem.cacheDirectoryUri()}psstpsst-uploads/`;
@@ -197,50 +210,26 @@ export async function uploadAttachment(
   // the capture location. Best-effort: on any failure we fall back to the
   // original. Videos can't be stripped without a transcode, so they pass through.
   let sourceUri = opts.localUri;
-  let dim = opts.dim;
+  let encodedDimensions: { width: number; height: number } | undefined;
   let strippedUri: string | null = null;
   try {
-    const requestedDim = opts.dim?.match(/^(\d+)x(\d+)$/);
     const stripped = await prepareAttachmentImage(
       opts.localUri,
       opts.mime,
       opts.imageQuality ?? DEFAULT_IMAGE_SEND_QUALITY,
-      requestedDim
-        ? { width: Number(requestedDim[1]), height: Number(requestedDim[2]) }
-        : undefined,
     );
     if (stripped) {
       sourceUri = stripped.uri;
       strippedUri = stripped.uri;
-      dim = `${stripped.width}x${stripped.height}`;
+      encodedDimensions = { width: stripped.width, height: stripped.height };
     }
   } catch {
     // keep the original file
   }
   throwIfAborted(opts.signal);
 
-  // Compute the ThumbHash placeholder for images in parallel — the native
-  // resize overlaps the encryption + upload below, so it adds no real latency.
-  const dimMatch = dim?.match(/^(\d+)x(\d+)$/);
-  const thumbhashPromise = opts.mime?.startsWith('image/')
-    ? computeThumbhash(
-        sourceUri,
-        dimMatch ? Number(dimMatch[1]) : undefined,
-        dimMatch ? Number(dimMatch[2]) : undefined,
-      )
-    : opts.mime?.startsWith('video/')
-      ? platform.videoThumbnail.generateThumbhash(sourceUri)
-      : Promise.resolve<string | undefined>(undefined);
-
   const plain = await readLocalFileBytes(sourceUri);
   throwIfAborted(opts.signal);
-  opts.onStep?.('encrypting');
-  // AES-GCM now runs off the JS thread (expo-crypto, async), so the optimistic
-  // "encrypting" bubble paints on its own — no manual macrotask yield needed.
-  const { cipher, cipherSha256Hex, plainSha256Hex, keyHex, nonceHex } =
-    await encryptBytes(plain);
-  throwIfAborted(opts.signal);
-
   // The real type, most-trusted first: sniff the bytes, then a specific picker
   // mime, else encode the original suffix as `application/<ext>` so receivers can
   // still name the file (`report.sketch` → `application/sketch`), else opaque.
@@ -254,13 +243,27 @@ export async function uploadAttachment(
   // no video track, so its explicit voice metadata is the authoritative signal
   // for the media category.
   const mime = isVoice ? resolveVoiceMime(opts.mime, detectedMime) : detectedMime;
+  // Read once for the live preview while encryption runs; reuse it if the
+  // upload descriptor omits metadata. Callers without a preview stay server-first.
+  const previewMetadataPromise = opts.onMediaDimensions
+    ? readAttachmentMediaMetadata(sourceUri, mime, encodedDimensions)
+    : Promise.resolve(undefined);
+
+  opts.onStep?.('encrypting');
+  // AES-GCM now runs off the JS thread (expo-crypto, async), so the optimistic
+  // "encrypting" bubble paints on its own — no manual macrotask yield needed.
+  const { cipher, cipherSha256Hex, plainSha256Hex, keyHex, nonceHex } =
+    await encryptBytes(plain);
+  throwIfAborted(opts.signal);
 
   const uploadDir = await ensureUploadDir();
   const cipherUri = `${uploadDir}${cipherSha256Hex}.bin`;
-  await writeFileBytes(cipherUri, cipher);
-  throwIfAborted(opts.signal);
-  opts.onStep?.('uploading');
   try {
+    await writeFileBytes(cipherUri, cipher);
+    const previewMetadata = await previewMetadataPromise;
+    throwIfAborted(opts.signal);
+    reportMediaDimensions(opts, previewMetadata?.dim);
+    opts.onStep?.('uploading');
     const uploaded = await uploadEncryptedBlob({
       signer: opts.signer,
       cipherFileUri: cipherUri,
@@ -271,8 +274,11 @@ export async function uploadAttachment(
       onProgress: opts.onUploadProgress,
     });
     throwIfAborted(opts.signal);
-    const thumbhash = await thumbhashPromise;
+    const { dim, thumbhash } = await readAttachmentMediaMetadata(
+      sourceUri, mime, encodedDimensions, uploaded.dim, uploaded.thumbhash, previewMetadata,
+    );
     throwIfAborted(opts.signal);
+    reportMediaDimensions(opts, dim);
     const meta: FileAttachmentMeta = {
       url: uploaded.url,
       mime,
@@ -298,6 +304,7 @@ export async function uploadAttachment(
     try {
       const mirror = await attachmentPath(attachmentName(plainSha256Hex, mime));
       await writeDedup(mirror, plain);
+      if (mime.startsWith('video/')) await copyVideoPoster(sourceUri, mirror);
       throwIfAborted(opts.signal);
       sessionCache.set(uploaded.url, mirror);
       storedLocally = true;
@@ -330,38 +337,20 @@ export async function stageNearbyAttachment(
 ): Promise<UploadAttachmentResult> {
   throwIfAborted(opts.signal);
   let sourceUri = opts.localUri;
-  let dim = opts.dim;
+  let encodedDimensions: { width: number; height: number } | undefined;
   let strippedUri: string | null = null;
   try {
-    const requestedDim = opts.dim?.match(/^(\d+)x(\d+)$/);
     const stripped = await prepareAttachmentImage(
       opts.localUri,
       opts.mime,
       opts.imageQuality ?? DEFAULT_IMAGE_SEND_QUALITY,
-      requestedDim
-        ? { width: Number(requestedDim[1]), height: Number(requestedDim[2]) }
-        : undefined,
     ).catch(() => null);
     if (stripped) {
       sourceUri = stripped.uri;
       strippedUri = stripped.uri;
-      dim = `${stripped.width}x${stripped.height}`;
+      encodedDimensions = { width: stripped.width, height: stripped.height };
     }
-    const dimMatch = dim?.match(/^(\d+)x(\d+)$/);
-    const thumbhashPromise = opts.mime?.startsWith('image/')
-      ? computeThumbhash(
-          sourceUri,
-          dimMatch ? Number(dimMatch[1]) : undefined,
-          dimMatch ? Number(dimMatch[2]) : undefined,
-        )
-      : opts.mime?.startsWith('video/')
-        ? platform.videoThumbnail.generateThumbhash(sourceUri)
-        : Promise.resolve<string | undefined>(undefined);
     const plain = await readLocalFileBytes(sourceUri);
-    throwIfAborted(opts.signal);
-    opts.onStep?.('encrypting');
-    const { cipher, cipherSha256Hex, plainSha256Hex, keyHex, nonceHex } =
-      await encryptBytes(plain);
     throwIfAborted(opts.signal);
     const origExt = extFromName(opts.name);
     const detectedMime =
@@ -370,12 +359,19 @@ export async function stageNearbyAttachment(
       (origExt ? `application/${origExt}` : 'application/octet-stream');
     const isVoice = opts.durationSec !== undefined || opts.waveform !== undefined;
     const mime = isVoice ? resolveVoiceMime(opts.mime, detectedMime) : detectedMime;
-    const thumbhash = await thumbhashPromise;
+    const metadataPromise = readAttachmentMediaMetadata(sourceUri, mime, encodedDimensions);
+    opts.onStep?.('encrypting');
+    const { cipher, cipherSha256Hex, plainSha256Hex, keyHex, nonceHex } =
+      await encryptBytes(plain);
     throwIfAborted(opts.signal);
+    const { dim, thumbhash } = await metadataPromise;
+    throwIfAborted(opts.signal);
+    reportMediaDimensions(opts, dim);
 
     await ensureAttachmentDir();
     const mirror = await attachmentPath(attachmentName(plainSha256Hex, mime));
     await writeDedup(mirror, plain);
+    if (mime.startsWith('video/')) await copyVideoPoster(sourceUri, mirror);
     const staged = await stageNearbyUpload({
       accountPubkey: opts.accountPubkey,
       x: cipherSha256Hex,

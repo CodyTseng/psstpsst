@@ -18,6 +18,8 @@ export type RenderedImage = {
 };
 
 export interface ImageManipulatorPort {
+  /** Read the display dimensions of the source without re-encoding it. */
+  getDimensions(uri: string): Promise<{ width: number; height: number }>;
   /**
    * Re-render an image — optionally resized on a single dimension (the other
    * scales proportionally) — and save the result to a fresh cache file.

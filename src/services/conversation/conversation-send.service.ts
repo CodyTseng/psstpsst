@@ -62,6 +62,7 @@ type SendFileOptions = {
   timestamp?: RumorTimestamp;
   onStep?: (step: 'encrypting' | 'uploading' | 'publishing') => void;
   onUploadProgress?: (sentBytes: number, totalBytes: number) => void;
+  onMediaDimensions?: (dimensions: { width: number; height: number }) => void;
   /** Announces the encrypted transfer identity as soon as durable staging is ready. */
   onUploadPrepared?: (file: { cipherSha256Hex: string }) => void;
   /** Best-effort display-cache warmup after the permanent local mirror exists,
@@ -225,6 +226,7 @@ class ConversationSendService {
       servers,
       onStep: (step: 'encrypting' | 'uploading') => opts.onStep?.(step),
       onUploadProgress: opts.onUploadProgress,
+      onMediaDimensions: opts.onMediaDimensions,
       signal: opts.signal,
     };
     const uploaded = hasProximityTarget

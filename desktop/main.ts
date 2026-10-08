@@ -43,6 +43,8 @@ import { EXTERNAL_SCHEMES, openExternalUrl } from './external-url';
 import { NoiseService } from './noise-service';
 import { IPC } from './ipc-channels';
 import { ProximityService } from './proximity-service';
+import { isAllowedRendererPermission } from './renderer-permissions';
+import { localFileResponse } from './local-file-protocol';
 import { SecureStorageService } from './secure-storage-service';
 import { trayUnreadSvg, trayUnreadTitle } from './tray-unread-icon';
 import { configureTrayInteractions } from './tray-interactions';
@@ -74,7 +76,7 @@ protocol.registerSchemesAsPrivileged([
   },
   {
     scheme: 'psstpsst-file',
-    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
   },
 ]);
 
@@ -1013,7 +1015,14 @@ function registerIpcHandlers(): void {
 }
 
 async function registerProtocols(): Promise<void> {
-  protocol.handle('psstpsst-file', (request) => net.fetch(services().files.fileUrl(request.url)));
+  protocol.handle('psstpsst-file', async (request) => {
+    if (request.method === 'OPTIONS') {
+      return localFileResponse(request, new Response(null, { status: 204 }),
+        isTrustedRendererLocation, DEVELOPMENT_RENDERER_ORIGIN ?? 'app://renderer');
+    }
+    const response = await net.fetch(services().files.fileUrl(request.url));
+    return localFileResponse(request, response, isTrustedRendererLocation, DEVELOPMENT_RENDERER_ORIGIN ?? 'app://renderer');
+  });
   protocol.handle('app', async (request) => {
     const url = new URL(request.url);
     if (url.hostname !== 'renderer') return new Response('Not found', { status: 404 });
@@ -1159,11 +1168,11 @@ async function openWindow(): Promise<void> {
     const trusted =
       webContents === mainWindow?.webContents &&
       isTrustedRendererLocation(requestingOrigin);
-    return trusted && (permission === 'media' || permission === 'notifications');
+    return trusted && isAllowedRendererPermission(permission);
   });
   session.setPermissionRequestHandler((webContents, permission, callback) => {
     const trusted = webContents === mainWindow?.webContents;
-    callback(trusted && (permission === 'media' || permission === 'notifications'));
+    callback(trusted && isAllowedRendererPermission(permission));
   });
   session.setDevicePermissionHandler(() => false);
 

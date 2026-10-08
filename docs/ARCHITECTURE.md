@@ -387,6 +387,11 @@ macrotask before work that would prevent a frame from painting.
 ## 8. Attachments
 
 Kind-15 attachments are encrypted with a fresh symmetric key before upload.
+Outgoing media dimensions and ThumbHash independently prefer Blossom upload
+metadata; missing values come from the actual plaintext file (after image
+optimization), through platform adapters. Picker and preview dimensions are UI hints.
+Live upload previews read file metadata before transfer and reuse it for missing
+upload-descriptor fields; server metadata still takes precedence in the rumor.
 Media servers store ciphertext and are not trusted with plaintext. The message
 carries authenticated URL, key, nonce, MIME, size, and optional integrity
 metadata inside the encrypted rumor.
@@ -396,6 +401,9 @@ metadata inside the encrypted rumor.
 - Store downloaded plaintext in a content-addressed managed-file pool.
 - Deduplicate by plaintext hash and reference-count deletion across accounts.
 - Download and decrypt lazily; media lists never load attachment bytes eagerly.
+- Local video posters are small, evictable image caches shared by chat and media
+  lists. Poster work is deduplicated and concurrency-bounded, never fetches remote
+  media, and survives list remounts without mounting a player per row.
 - Image resources resolve local files before requesting download consent. Image
   cache lookup and authorized download are separate platform operations; rendering
   cached bytes never hands a remote URL to an image view as a fallback.

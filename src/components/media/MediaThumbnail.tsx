@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { useAttachment } from '@/hooks/use-attachment';
+import { useVideoPoster } from '@/hooks/use-video-poster';
 import type { ConversationMediaItem } from '@/hooks/use-conversation-media';
 import { mediaViewer, type MediaViewerPreview } from '@/stores/media-viewer.store';
 import { useThemeColors } from '@/theme';
@@ -21,8 +22,8 @@ type Props = {
  * One square cell of the media grid. Encrypted images resolve their persistent
  * local copy lazily; direct images use expo-image's native cache. Non-contact
  * thumbnails resolve only local attachments until the user opens an item. Both show the
- * ThumbHash while loading. Videos are **not** loaded for the grid (they can be
- * large) — the ThumbHash plus a play badge stands in until the player opens.
+ * ThumbHash while loading. Local videos reuse cached poster images; remote
+ * videos are never downloaded just to populate the grid.
  */
 function MediaThumbnailBase({ item, size, conversationKey, autoLoad }: Props) {
   const c = useThemeColors();
@@ -43,7 +44,9 @@ function MediaThumbnailBase({ item, size, conversationKey, autoLoad }: Props) {
   return item.isVideo ? (
     <Pressable onPress={() => open()} style={{ width: size, height: size }}>
       <View style={{ flex: 1, backgroundColor: c.surfaceMuted, overflow: 'hidden' }}>
-        <VideoCell placeholder={placeholder} />
+        {item.source === 'attachment'
+          ? <AttachmentVideoCell item={item} placeholder={placeholder} />
+          : <VideoCell placeholder={placeholder} />}
       </View>
     </Pressable>
   ) : item.source === 'attachment' ? (
@@ -90,15 +93,27 @@ function ImageCell({ uri, cacheKey, size, placeholder, onOpen }: ImageCellProps)
   );
 }
 
-function VideoCell({ placeholder }: { placeholder: { thumbhash: string } | undefined }) {
+function AttachmentVideoCell({ item, placeholder }: {
+  item: Extract<ConversationMediaItem, { source: 'attachment' }>;
+  placeholder: { thumbhash: string } | undefined;
+}) {
+  const { state } = useAttachment(item.meta, { autoLoad: false });
+  const uri = useVideoPoster(state.status === 'ready' ? state.localUri : null);
+  return <VideoCell uri={uri} placeholder={placeholder} />;
+}
+
+function VideoCell({ uri, placeholder }: { uri?: string; placeholder: { thumbhash: string } | undefined }) {
   const c = useThemeColors();
   return (
     <>
       <Image
+        source={uri ? { uri } : undefined}
         placeholder={placeholder}
         placeholderContentFit="cover"
         style={{ width: '100%', height: '100%' }}
         contentFit="cover"
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
       />
       <View
         style={{

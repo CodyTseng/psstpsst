@@ -7,6 +7,11 @@ import { platform } from '@/platform';
 import { darkPalette, lightPalette } from '@/theme';
 
 import { PendingAttachmentBubble } from '../PendingAttachmentBubble';
+import { Image } from 'expo-image';
+import { useVideoPlayer } from 'expo-video';
+import { useVideoPoster } from '@/hooks/use-video-poster';
+
+jest.mock('@/hooks/use-video-poster', () => ({ useVideoPoster: jest.fn() }));
 
 jest.mock('@/stores/pending-attachments.store', () => ({
   PENDING_UPLOAD_INTERRUPTED: 'UPLOAD_INTERRUPTED',
@@ -200,6 +205,15 @@ describe('pending attachment transfer controls', () => {
         (node) => node.children.includes('attach.upload_preparing'),
       ),
     ).toHaveLength(0);
+  });
+
+  it.each(['light', 'dark'] as const)('uses a cached poster without a video player in %s mode', (scheme) => {
+    mockThemePreference = scheme;
+    jest.mocked(useVideoPoster).mockReturnValue('file:///poster.jpg');
+    render({ ...BASE, mime: 'video/quicktime', width: 2056, height: 1576 });
+    expect(renderer!.root.findByType(Image).props.source).toEqual({ uri: 'file:///poster.jpg' });
+    expect(useVideoPlayer).not.toHaveBeenCalled();
+    jest.mocked(useVideoPoster).mockReturnValue(undefined);
   });
 
   it('keeps the message row transparent over the conversation canvas', () => {

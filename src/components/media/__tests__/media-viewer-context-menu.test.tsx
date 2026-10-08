@@ -19,6 +19,7 @@ jest.mock('@/components/common/ContextMenu', () => ({
   ContextMenu: () => null, CONTEXT_MENU_ICON_SIZE: { pointer: 16 },
 }));
 jest.mock('@solar-icons/react-native/category/ui/Linear/Copy', () => ({ Copy: () => null }), { virtual: true });
+jest.mock('@solar-icons/react-native/category/messages/Linear/ChatRound', () => ({ ChatRound: () => null }), { virtual: true });
 jest.mock('lucide-react-native/icons/download', () => ({ __esModule: true, default: () => null }), { virtual: true });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/stores/toast.store', () => ({ showToast: jest.fn() }));
@@ -80,4 +81,43 @@ it('saves the media whose menu was opened, even if the current page changes', as
   await act(async () => renderer.root.findByType(ContextMenu).props.items[1].onPress());
   expect(save).toHaveBeenCalledTimes(1);
   expect(nextSave).not.toHaveBeenCalled();
+});
+
+it.each([lightPalette, darkPalette])('offers message navigation for image and video viewers using theme colors', (colors) => {
+  mockColors = colors;
+  const navigate = jest.fn();
+  act(() => {
+    renderer = create(<MediaViewerContextMenu onSave={save} onGoToMessage={navigate}><View /></MediaViewerContextMenu>);
+  });
+  open();
+  const item = renderer.root.findByType(ContextMenu).props.items.find((item: { key: string }) => item.key === 'go-to-message');
+  expect(item.title).toBe('media.go_to_message');
+  expect(item.icon.props.color).toBe(colors.text);
+  act(() => { item.onPress(); });
+  expect(navigate).toHaveBeenCalledTimes(1);
+});
+
+it('retains the selected message anchor if the page changes while the menu is open', () => {
+  const original = jest.fn();
+  const next = jest.fn();
+  act(() => {
+    renderer = create(<MediaViewerContextMenu onGoToMessage={original}><View /></MediaViewerContextMenu>);
+  });
+  open();
+  act(() => {
+    renderer.update(<MediaViewerContextMenu onGoToMessage={next}><View /></MediaViewerContextMenu>);
+  });
+  act(() => { renderer.root.findByType(ContextMenu).props.items[0].onPress(); });
+  expect(original).toHaveBeenCalledTimes(1);
+  expect(next).not.toHaveBeenCalled();
+});
+
+it('can navigate to a streaming video message even when it cannot be saved or copied', () => {
+  const navigate = jest.fn();
+  act(() => {
+    renderer = create(<MediaViewerContextMenu onGoToMessage={navigate}><View /></MediaViewerContextMenu>);
+  });
+  open();
+  expect(renderer.root.findByType(ContextMenu).props.items.map((item: { key: string }) => item.key))
+    .toEqual(['go-to-message']);
 });

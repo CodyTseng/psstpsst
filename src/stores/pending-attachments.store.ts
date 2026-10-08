@@ -11,6 +11,7 @@ import {
   stagePendingAttachmentFile,
 } from '@/services/files/pending-attachment-file.service';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
+import { validMediaDimensions, type MediaDimensions } from '@/lib/attachments/media-dim';
 
 /**
  * Pending attachments use an in-memory runtime model backed by SQLite metadata
@@ -94,6 +95,7 @@ type State = {
   ) => void;
   markPaused: (tempId: string) => void;
   markUploaded: (tempId: string, url: string) => void;
+  setDimensions: (tempId: string, dimensions: MediaDimensions) => void;
   markSent: (tempId: string, rumorId: string) => void;
   markFailed: (tempId: string, error: string) => void;
 };
@@ -317,6 +319,21 @@ export const usePendingAttachmentsStore = create<State>((set, get) => ({
         item.tempId === tempId ? { ...item, uploadedUrl: url } : item,
       ),
     })),
+  setDimensions: (tempId, dimensions) => {
+    if (!validMediaDimensions(dimensions)) return;
+    set((s) => {
+      const index = s.items.findIndex((item) => item.tempId === tempId);
+      const previous = s.items[index];
+      if (!previous || (previous.width === dimensions.width && previous.height === dimensions.height)) {
+        return s;
+      }
+      const item = { ...previous, ...dimensions };
+      const items = s.items.slice();
+      items[index] = item;
+      queuePersistence(item, () => persistItem(item));
+      return { items };
+    });
+  },
   markPaused: (tempId) =>
     set((s) => {
       const items = s.items.map((item) =>

@@ -20,10 +20,7 @@ describe('attachment image preparation', () => {
     renderAndSave.mockResolvedValue({ uri: 'file:///original.jpg', width: 3000, height: 2000 });
 
     await expect(
-      prepareAttachmentImage('file:///source.jpg', 'image/jpeg', 'original', {
-        width: 3000,
-        height: 2000,
-      }),
+      prepareAttachmentImage('file:///source.jpg', 'image/jpeg', 'original'),
     ).resolves.toEqual({ uri: 'file:///original.jpg', width: 3000, height: 2000 });
     expect(renderAndSave).toHaveBeenCalledWith('file:///source.jpg', {
       format: 'jpeg',
@@ -40,10 +37,7 @@ describe('attachment image preparation', () => {
       .mockResolvedValueOnce({ exists: true, size: 400_000 });
 
     await expect(
-      prepareAttachmentImage('file:///source.jpg', 'image/jpeg', 'optimized', {
-        width: 3000,
-        height: 2000,
-      }),
+      prepareAttachmentImage('file:///source.jpg', 'image/jpeg', 'optimized'),
     ).resolves.toEqual({ uri: 'file:///optimized.webp', width: 1600, height: 1067, size: 400_000 });
     expect(renderAndSave).toHaveBeenLastCalledWith('file:///source.jpg', {
       resize: { width: 1600 },

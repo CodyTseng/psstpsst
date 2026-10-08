@@ -1102,6 +1102,7 @@ function ChatPageContent({
   const setStatusPending = usePendingAttachmentsStore((s) => s.setStatus);
   const markPausedPending = usePendingAttachmentsStore((s) => s.markPaused);
   const markUploadedPending = usePendingAttachmentsStore((s) => s.markUploaded);
+  const setPendingDimensions = usePendingAttachmentsStore((s) => s.setDimensions);
   const markSentPending = usePendingAttachmentsStore((s) => s.markSent);
   const markFailedPending = usePendingAttachmentsStore((s) => s.markFailed);
   // Explicit UI events for MessageList. Store hydration must never be mistaken
@@ -1452,6 +1453,11 @@ function ChatPageContent({
               uploadByteProgress(sentBytes, totalBytes),
               100,
             ),
+        onMediaDimensions: (dimensions) => {
+          if (controller.signal.aborted ||
+            attachmentAbortControllersRef.current.get(item.tempId) !== controller) return;
+          setPendingDimensions(item.tempId, dimensions);
+        },
         onUploadPrepared: ({ cipherSha256Hex }) => {
           if (!isProximity) return;
           const current = usePendingAttachmentsStore

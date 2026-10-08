@@ -10,6 +10,7 @@ import {
   eligibleBlossomMirrorTargets,
 } from '@/lib/nostr/blossom-url';
 import { bytesToHex } from '@/lib/nostr/keys';
+import { validMediaDim } from '@/lib/attachments/media-dim';
 
 import type { Signer } from '../signer/signer.interface';
 import { stripImageMetadata } from './strip-metadata';
@@ -106,6 +107,8 @@ export type UploadResult = {
   sha256: string;
   size: number;
   server: string;
+  dim?: string;
+  thumbhash?: string;
 };
 
 type PutBlobResult = UploadResult & {
@@ -142,7 +145,14 @@ async function putBlobToServers(opts: {
         errors.push(`${server} → ${res.status} ${res.body.slice(0, 120)}`);
         continue;
       }
-      const json = JSON.parse(res.body) as { url?: string; sha256?: string; size?: number };
+      const json = JSON.parse(res.body) as {
+        url?: string;
+        sha256?: string;
+        size?: number;
+        dim?: unknown;
+        thumbhash?: unknown;
+        nip94?: unknown;
+      };
       if (!json.url || !json.sha256) {
         failedServers.add(base);
         errors.push(`${server} → malformed descriptor`);
@@ -153,6 +163,17 @@ async function putBlobToServers(opts: {
         sha256: json.sha256,
         size: json.size ?? opts.fallbackSize,
         server: base,
+        dim: validMediaDim(json.dim) ?? (Array.isArray(json.nip94)
+          ? json.nip94.reduce<string | undefined>((dim, tag: unknown) =>
+            dim ?? (Array.isArray(tag) && tag[0] === 'dim' ? validMediaDim(tag[1]) : undefined),
+          undefined)
+          : undefined),
+        thumbhash: (typeof json.thumbhash === 'string' && json.thumbhash ? json.thumbhash : undefined)
+          ?? (Array.isArray(json.nip94)
+            ? json.nip94.reduce<string | undefined>((hash, tag: unknown) =>
+              hash ?? (Array.isArray(tag) && tag[0] === 'thumbhash' &&
+                typeof tag[1] === 'string' && tag[1] ? tag[1] : undefined), undefined)
+            : undefined),
         failedServers,
       };
     } catch (err) {

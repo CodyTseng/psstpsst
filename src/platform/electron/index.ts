@@ -181,6 +181,12 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     imageManipulator: {
+      async getDimensions(uri) {
+        const image = new Image();
+        image.src = uri;
+        await image.decode();
+        return { width: image.naturalWidth, height: image.naturalHeight };
+      },
       async renderAndSave(uri, options) {
         if (uri.startsWith('psstpsst-file://')) return bridge.image.renderAndSave(uri, options);
         const cacheUri = `${await bridge.fileSystem.cacheDirectoryUri()}image-input-${await bridge.deviceCrypto.randomUUID()}`;

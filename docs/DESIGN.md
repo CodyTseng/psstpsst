@@ -422,6 +422,8 @@ saved from the shared media viewer; the artwork is not general page decoration.
 Do not choose density from window width; choose it from the runtime.
 Embedded media previews fit the available message width and keep artwork
 bounded on wide conversation panes.
+Local video previews use cached frame images in chat and media lists. Players
+are mounted only for playback; unavailable posters retain the ThumbHash or neutral fallback.
 Conversation media galleries keep compact square thumbnails and derive their
 column count from the available pane width instead of using a fixed grid.
 Custom-emoji grids keep artwork bounded and derive their column count from the
@@ -429,8 +431,15 @@ available container width on both touch devices and Electron.
 Image framing and full-screen image viewing on Electron provide explicit zoom
 controls, pointer dragging while zoomed, and trackpad two-finger zooming and
 panning; essential actions must not depend on multi-touch gestures.
-On Electron, full-screen media viewers expose Copy for images and Save through
-the shared pointer context menu.
+On Electron, full-screen media viewers expose Copy for images, Save for savable
+media, and Go to message when opened from the media gallery through the shared
+pointer context menu. Message-origin viewers omit that navigation action.
+Opening or selecting a video in the media viewer starts its download and playback;
+unselected neighbouring pages neither download nor keep playback players mounted.
+Video message posters open the shared conversation media viewer once the file is
+available. Viewer videos fit within both dimensions of the viewport without cropping.
+On Electron, the player's fullscreen control presents the video on the display
+through system fullscreen; exiting restores the application's previous window.
 Full-screen media viewers use opacity-only entrance and dismissal. Dismissal
 finishes before the viewer is removed or a context action navigates elsewhere;
 Reduce Motion is respected.
@@ -595,6 +604,8 @@ provides one optional message field paired with its send icon below the
 attachment controls, and closes from the header instead of a footer action row.
 
 An active attachment transfer shows its progress ring around a pause glyph.
+Image and video uploads use the prepared file's aspect ratio before transfer
+begins; upload metadata keeps the pending-to-sent geometry consistent.
 Pausing a download replaces it with a download glyph; pausing an upload uses an
 upload glyph. Tapping that primary control resumes the transfer. An outgoing
 transfer starts with the ring immediately, includes preparation in its progress,

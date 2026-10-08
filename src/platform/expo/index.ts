@@ -165,7 +165,7 @@ function lazyVideoThumbnailAdapter(): VideoThumbnailPort {
     return real;
   };
   return {
-    generateThumbhash: (uri) => load().generateThumbhash(uri),
+    generateMetadata: (uri, options) => load().generateMetadata(uri, options),
   };
 }
 

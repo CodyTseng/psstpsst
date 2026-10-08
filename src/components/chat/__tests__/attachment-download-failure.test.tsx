@@ -4,16 +4,22 @@ import { StyleSheet, View } from 'react-native';
 import { InteractivePressable } from '@/components/common/InteractivePressable';
 import { IconButton } from '@/components/common/IconButton';
 import { platform } from '@/platform';
-import { fetchAndDecryptAttachment } from '@/services/files/file-attachment.service';
+import { fetchAndDecryptAttachment, getSessionCachedUri } from '@/services/files/file-attachment.service';
+import { mediaViewer } from '@/stores/media-viewer.store';
 import { darkPalette, lightPalette } from '@/theme';
 
 import { AttachmentFrame } from '../AttachmentFrame';
 import { AttachmentAudio } from '../AttachmentAudio';
 import { AttachmentFile } from '../AttachmentFile';
 import { AttachmentVideo } from '../AttachmentVideo';
+import { useVideoPoster } from '@/hooks/use-video-poster';
+import { Image } from 'expo-image';
+
 import { AudioClock } from '../audio-clock';
 import { VoiceWaveform } from '../VoiceWaveform';
 
+jest.mock('@/hooks/use-video-poster', () => ({ useVideoPoster: jest.fn() }));
+jest.mock('@/stores/media-viewer.store', () => ({ mediaViewer: { openConversation: jest.fn() } }));
 jest.mock('@/platform', () => ({
   platform: { confirmationDialog: { confirm: jest.fn(), notify: jest.fn() } },
 }));
@@ -210,6 +216,48 @@ describe.each(['audio', 'file', 'video'] as const)('%s download failure', (mediu
 });
 
 describe('video message metadata', () => {
+  it('opens a cached message video in the conversation viewer with its exact anchor', async () => {
+    jest.mocked(getSessionCachedUri).mockReturnValueOnce('file:///cached-video.mp4');
+    await act(async () => {
+      renderer = create(<AttachmentVideo meta={META} conversationKey="peer" messageId="video-message" orderAt={123} />);
+    });
+    await act(async () => { renderer.root.findByType(InteractivePressable).props.onPress(); });
+    expect(mediaViewer.openConversation).toHaveBeenCalledWith({
+      conversationKey: 'peer', focusMessageId: 'video-message', focusOrderAt: 123, focusUrl: META.url,
+    });
+    expect(fetchAndDecryptAttachment).not.toHaveBeenCalled();
+  });
+
+  it('opens the conversation viewer after an uncached message video finishes downloading', async () => {
+    let finish!: (uri: string) => void;
+    jest.mocked(fetchAndDecryptAttachment).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await act(async () => {
+      renderer = create(<AttachmentVideo meta={META} conversationKey="peer" messageId="video-message" orderAt={123} />);
+    });
+    act(() => { renderer.root.findByType(InteractivePressable).props.onPress(); });
+    expect(mediaViewer.openConversation).not.toHaveBeenCalled();
+    await act(async () => { finish('file:///downloaded.mp4'); });
+    expect(mediaViewer.openConversation).toHaveBeenCalledWith(expect.objectContaining({ focusMessageId: 'video-message' }));
+  });
+
+  it('does not open a late download after leaving the message', async () => {
+    let finish!: (uri: string) => void;
+    jest.mocked(fetchAndDecryptAttachment).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await act(async () => {
+      renderer = create(<AttachmentVideo meta={META} conversationKey="peer" messageId="video-message" orderAt={123} />);
+    });
+    act(() => { renderer.root.findByType(InteractivePressable).props.onPress(); });
+    act(() => renderer.unmount());
+    await act(async () => { finish('file:///late.mp4'); });
+    expect(mediaViewer.openConversation).not.toHaveBeenCalled();
+  });
+  it.each(['light', 'dark'] as const)('uses a local poster ahead of ThumbHash in %s mode', (scheme) => {
+    mockThemePreference = scheme;
+    jest.mocked(useVideoPoster).mockReturnValue('file:///poster.jpg');
+    act(() => { renderer = create(<AttachmentVideo meta={{ ...META, thumbhash: 'preview' }} />); });
+    expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///poster.jpg' });
+    jest.mocked(useVideoPoster).mockReturnValue(undefined);
+  });
   it('hides the timestamp overlay once the inline player starts', async () => {
     jest.mocked(fetchAndDecryptAttachment).mockResolvedValueOnce('file:///attachment');
     const MessageTime = () => null;

@@ -1,4 +1,5 @@
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
+import { ChatRound } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
 import Download from 'lucide-react-native/icons/download';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,11 +21,12 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
   onCopy?: () => Promise<void>;
-  onSave: () => Promise<void>;
+  onSave?: () => Promise<void>;
+  onGoToMessage?: () => void;
 };
 
 /** Capture the visible media's actions when the pointer menu opens. */
-export function MediaViewerContextMenu({ children, style, disabled, onCopy, onSave }: Props) {
+export function MediaViewerContextMenu({ children, style, disabled, onCopy, onSave, onGoToMessage }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const [copying, setCopying] = useState(false);
@@ -36,6 +38,9 @@ export function MediaViewerContextMenu({ children, style, disabled, onCopy, onSa
     const anchor = desktopContextMenuPoint(event);
     if (!anchor || disabled || copying) return;
     const copy = onCopy;
+    const save = onSave;
+    const goToMessage = onGoToMessage;
+    if (!copy && !save && !goToMessage) return;
     setMenu({ anchor, items: [
       ...(copy ? [{
         key: 'copy', title: t('chat.actions.copy'),
@@ -48,11 +53,16 @@ export function MediaViewerContextMenu({ children, style, disabled, onCopy, onSa
           ).finally(() => setCopying(false));
         },
       }] : []),
-      {
+      ...(save ? [{
         key: 'save', title: t('chat.actions.save'),
         icon: <Download size={CONTEXT_MENU_ICON_SIZE.pointer} color={c.text} strokeWidth={iconStrokeWidth.default} />,
-        onPress: () => { void onSave(); },
-      },
+        onPress: () => { void save(); },
+      }] : []),
+      ...(goToMessage ? [{
+        key: 'go-to-message', title: t('media.go_to_message'),
+        icon: <ChatRound size={CONTEXT_MENU_ICON_SIZE.pointer} color={c.text} />,
+        onPress: goToMessage,
+      }] : []),
     ] });
   }
 

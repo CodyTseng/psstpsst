@@ -190,8 +190,10 @@ export function MediaPager({
 
   return (
     <MediaViewerContextMenu
-      disabled={saving || isClosing || !currentItem || (currentItem.source === 'embedded' && !!currentItem.meta.streaming)}
-      onSave={async () => { if (currentItem) await save(currentItem); }}
+      disabled={saving || isClosing || !currentItem}
+      onSave={!currentItem || (currentItem.source === 'embedded' && currentItem.meta.streaming)
+        ? undefined : () => save(currentItem)}
+      onGoToMessage={!showGrid && currentItem ? () => jumpToChat(currentItem) : undefined}
       onCopy={!currentItem || currentItem.isVideo ? undefined : () =>
         currentItem.source === 'attachment'
           ? copyAttachment(currentItem.meta, { accountPubkey })

@@ -12,6 +12,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { AttachmentFrame } from '@/components/chat/AttachmentFrame';
+import { useVideoPoster } from '@/hooks/use-video-poster';
 import { AppText } from '@/components/common/AppText';
 import { isAbortError } from '@/lib/async/abort';
 import { revealOrRetry } from '@/lib/attachments/failure';
@@ -29,6 +30,7 @@ import {
 } from '@/services/files/file-attachment.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useAttachmentTransfer } from '@/stores/attachment-transfer.store';
+import { mediaViewer } from '@/stores/media-viewer.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { radius, spacing, useThemeColors } from '@/theme';
 
@@ -59,6 +61,7 @@ function PlayingVideo({ uri, onError }: { uri: string; onError: () => void }) {
       style={{ width: '100%', height: '100%' }}
       contentFit="contain"
       nativeControls
+      fullscreenOptions={{ enable: true }}
     />
   );
 }
@@ -89,12 +92,16 @@ export function AttachmentVideo({
   isSelf,
   overlay,
   messageId,
+  conversationKey,
+  orderAt,
   nearby,
 }: {
   meta: FileAttachmentMeta;
   isSelf?: boolean;
   overlay?: React.ReactNode;
   messageId?: string;
+  conversationKey?: string;
+  orderAt?: number;
   nearby?: NearbyAttachmentFetchContext;
 }) {
   const { t } = useTranslation();
@@ -104,9 +111,9 @@ export function AttachmentVideo({
   // The on-disk path once available (session cache or resolved on mount). Knowing
   // it lets a tap skip the download — but it is NOT the player's source.
   const [localUri, setLocalUri] = useState<string | null>(() => getSessionCachedUri(meta));
-  // The player gets a source only after the user taps play. Until then it's null,
-  // so nothing loads/parses on conversation open.
+  // Inline playback starts only after a tap; list previews use cached images.
   const [started, setStarted] = useState(false);
+  const posterUri = useVideoPoster(started ? null : localUri);
   const [loading, setLoading] = useState(false);
   const [paused, setPaused] = useState(false);
   const [failKind, setFailKind] = useState<AttachmentErrorKind | null>(null);
@@ -114,6 +121,22 @@ export function AttachmentVideo({
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const downloadController = useRef<AbortController | null>(null);
   const pausedAllowIntegrityMismatch = useRef(false);
+
+  useEffect(() => () => {
+    downloadController.current?.abort();
+    downloadController.current = null;
+  }, []);
+
+  function openVideo() {
+    if (conversationKey && messageId && orderAt != null) {
+      mediaViewer.openConversation({
+        conversationKey,
+        focusMessageId: messageId,
+        focusOrderAt: orderAt,
+        focusUrl: meta.url,
+      });
+    } else setStarted(true);
+  }
 
   // Resolve whether the blob is already downloaded (no network) so a tap can skip
   // the fetch. Records availability only — it does not start the player.
@@ -136,7 +159,7 @@ export function AttachmentVideo({
     // Already on disk → just attach it to the player.
     if (localUri) {
       setPaused(false);
-      setStarted(true);
+      openVideo();
       return;
     }
     const controller = new AbortController();
@@ -153,7 +176,7 @@ export function AttachmentVideo({
       });
       if (downloadController.current !== controller) return;
       setLocalUri(fetched);
-      setStarted(true);
+      openVideo();
     } catch (err) {
       if (downloadController.current !== controller) return;
       if (isAbortError(err)) setPaused(true);
@@ -293,10 +316,14 @@ export function AttachmentVideo({
             }
             style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
           >
-            {meta.thumbhash ? (
+            {posterUri || meta.thumbhash ? (
               <Image
-                placeholder={{ thumbhash: meta.thumbhash }}
+                source={posterUri ? { uri: posterUri } : undefined}
+                placeholder={meta.thumbhash ? { thumbhash: meta.thumbhash } : undefined}
                 placeholderContentFit="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={meta.cipherSha256Hex}
                 style={{ position: 'absolute', inset: 0 }}
               />
             ) : null}
@@ -314,7 +341,7 @@ export function AttachmentVideo({
                   inset: 0,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: meta.thumbhash ? c.overlay : undefined,
+                  backgroundColor: posterUri || meta.thumbhash ? c.overlay : undefined,
                 }}
               />
             ) : paused ? (

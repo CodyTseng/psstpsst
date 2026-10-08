@@ -507,6 +507,8 @@ function BubbleBodyBase({
               isSelf={isSelf}
               overlay={renderOverlayMeta()}
               messageId={rumorId}
+              conversationKey={conversationKey}
+              orderAt={orderAt}
               nearby={nearbyAttachment}
             />
           ) : attachment.mime?.startsWith('image/') ? (

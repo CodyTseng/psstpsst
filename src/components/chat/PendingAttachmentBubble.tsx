@@ -1,5 +1,4 @@
 import { Image } from 'expo-image';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { FileText } from '@solar-icons/react-native/category/files/Linear/FileText';
 import { Clapperboard as Film } from '@solar-icons/react-native/category/video/Linear/Clapperboard';
 import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
@@ -25,6 +24,7 @@ import {
   type DesktopPointerPoint,
 } from '@/lib/platform';
 import { platform } from '@/platform';
+import { useVideoPoster } from '@/hooks/use-video-poster';
 import {
   PENDING_UPLOAD_INTERRUPTED,
   type PendingAttachment,
@@ -80,18 +80,15 @@ type Props = {
 };
 
 function PendingVideoPreview({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (instance) => {
-    instance.muted = true;
-  });
-  return (
-    <VideoView
-      player={player}
-      nativeControls={false}
+  const posterUri = useVideoPoster(uri);
+  return posterUri ? (
+    <Image
+      source={{ uri: posterUri }}
       contentFit="cover"
-      pointerEvents="none"
+      cachePolicy="memory-disk"
       style={{ position: 'absolute', inset: 0 }}
     />
-  );
+  ) : null;
 }
 
 function displayUploadError(
