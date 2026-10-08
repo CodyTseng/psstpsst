@@ -1,0 +1,10 @@
+PsstPsst 26.10.3
+
+- Added attachment copying and media viewer menus.
+- Improved video previews and playback controls, with seek previews and drag-to-close on mobile.
+- Fixed desktop copying.
+- Fixed jumping to original messages from reply quotes.
+- Fixed image and video sizing in chats.
+- Fixed standalone emoji layout.
+- Fixed the missing date separator before the first message.
+- Fixed back navigation.

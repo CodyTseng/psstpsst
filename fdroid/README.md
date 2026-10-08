@@ -156,7 +156,7 @@ signing path must be built and verified before submission.
    packagers. Existing FCM/ML Kit checks remain only a subset of this review.
 5. Remove `disable` in the validation copy, then run `fdroid readmeta`,
    `fdroid lint chat.psstpsst.app`, `fdroid rewritemeta chat.psstpsst.app`, and
-   `fdroid build --server chat.psstpsst.app:<versionCode>` in the configured fdroiddata
+   `fdroid build --server chat.psstpsst.app:10` in the configured fdroiddata
    checkout. Compare the rebuilt APK with the published APK using F-Droid's
    reproducible-build verification.
 6. Enable automatic updates only after the first verified build, using

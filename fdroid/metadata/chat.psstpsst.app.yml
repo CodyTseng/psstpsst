@@ -20,10 +20,10 @@ AllowedAPKSigningKeys:
   - '7c527f9acbcc7aee588c9c44acbe9880dc698460e8e974a646c67e8fb8342cc0'
 
 Builds:
-  - versionName: 26.9.1
-    versionCode: 7
+  - versionName: 26.10.3
+    versionCode: 10
     disable: Pending release commit and reproducibility verification
-    commit: v26.9.1
+    commit: v26.10.3
     output: android/app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 27.1.12297006
     # Node 24.15.0/npm 11.12.1 match the upstream release environment.
@@ -88,5 +88,5 @@ Builds:
 AutoUpdateMode: None
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
 UpdateCheckData: 'app.json|"versionCode":\s*(\d+)|.|"version":\s*"([^"]+)"'
-CurrentVersion: 26.9.1
-CurrentVersionCode: 7
+CurrentVersion: 26.10.3
+CurrentVersionCode: 10
