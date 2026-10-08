@@ -8,7 +8,7 @@ import { ScreenHeader } from '../ScreenHeader';
 jest.mock('expo-router', () => ({
   router: { canGoBack: jest.fn(), back: jest.fn() },
 }));
-jest.mock('lucide-react-native/icons/chevron-left', () => () => null);
+jest.mock('lucide-react-native/icons/chevron-left', () => () => null, { virtual: true });
 jest.mock('@/components/common/ChromeBackdrop', () => ({ ChromeBackdrop: () => null }));
 jest.mock('@/stores/theme.store', () => ({
   useThemeStore: (selector: (state: { accent: 'blue'; preference: 'light' }) => unknown) =>
