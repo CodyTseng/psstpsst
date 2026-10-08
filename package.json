@@ -118,6 +118,7 @@
     "ios:dev": "EXPO_PUBLIC_APP_ENV=development expo run:ios --device --no-bundler",
     "android:prebuild": "EXPO_PUBLIC_APP_ENV=production expo prebuild --platform android --clean --no-install",
     "android:build": "cd android && EXPO_PUBLIC_APP_ENV=production ./gradlew :app:assembleRelease --no-daemon --max-workers=2",
+    "android:bundle": "EXPO_PUBLIC_APP_ENV=production node scripts/build-android-bundle.mjs",
     "ios:prebuild": "EXPO_PUBLIC_APP_ENV=production expo prebuild --platform ios --clean",
     "ios:build": "EXPO_PUBLIC_APP_ENV=production expo run:ios --configuration Release --device --no-bundler",
     "ios:archive": "mkdir -p release && EXPO_PUBLIC_APP_ENV=production xcodebuild -workspace ios/PsstPsst.xcworkspace -scheme PsstPsst -configuration Release -destination 'generic/platform=iOS' -archivePath \"$PWD/release/PsstPsst.xcarchive\" -allowProvisioningUpdates archive",

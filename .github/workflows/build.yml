@@ -179,7 +179,7 @@ jobs:
             !release/builder-*.yaml
 
   build-android:
-    name: Android APK
+    name: Android APK and AAB
     needs: validate-version
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -206,10 +206,11 @@ jobs:
       - name: Install APK signing tools
         run: sdkmanager "build-tools;36.0.0"
 
-      - name: Build Android APK in the F-Droid environment
+      - name: Build Android packages in the F-Droid environment
         shell: bash
         env:
           ANDROID_RELEASE_UNSIGNED: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '1' || '0' }}
+          ANDROID_BUILD_BUNDLE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '1' || '0' }}
         run: |
           for attempt in 1 2; do
             if bash scripts/build-android-reproducible.sh release/fdroid-build; then
@@ -240,6 +241,27 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: release/*.apk
+
+      - name: Sign and verify AAB
+        if: env.HAS_ANDROID_SIGNING == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          node scripts/release-signing.mjs sign-android-bundle \
+            release/fdroid-build/app-release.aab \
+            release/PsstPsst-android.aab
+
+      - name: Upload AAB
+        if: env.HAS_ANDROID_SIGNING == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-aab
+          if-no-files-found: error
+          retention-days: 14
+          path: release/PsstPsst-android.aab
 
       - name: Audit F-Droid signature compatibility (non-blocking)
         id: fdroid_audit
@@ -287,6 +309,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: android-apk
+          path: release-assets
+
+      - name: Download Android AAB
+        uses: actions/download-artifact@v8
+        with:
+          name: android-aab
           path: release-assets
 
       - name: Validate release assets

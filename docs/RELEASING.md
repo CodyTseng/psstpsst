@@ -2,9 +2,10 @@
 
 This guide covers the `Build Apps` workflow in
 [`build.yml`](../.github/workflows/build.yml), Android distribution through
-Zapstore and F-Droid, and local iOS builds. CI currently builds macOS arm64,
-Windows x64/arm64, Linux x64/arm64, and a universal Android APK. It does not build
-or upload iOS apps, submit to F-Droid, or publish Nostr events to Zapstore.
+Zapstore, F-Droid, and Google Play, and local iOS builds. CI currently builds macOS
+arm64, Windows x64/arm64, Linux x64/arm64, a universal Android APK, and a signed
+Android App Bundle (AAB) when Android credentials are configured. It does not build
+or upload iOS apps, submit to Google Play or F-Droid, or publish Nostr events to Zapstore.
 
 ## Development and production identities
 
@@ -87,14 +88,14 @@ Before making the repository public or publishing its first release:
 | Trigger and credentials | Result |
 | --- | --- |
 | Manual run on a branch, no signing secrets for a platform | Unsigned macOS package or debug-signed Android APK for testing |
-| Manual run with complete signing secrets | Signed Android APK; signed and notarized macOS packages |
+| Manual run with complete signing secrets | Signed Android APK and AAB; signed and notarized macOS packages |
 | Any run with only some signing secrets for either platform | Fails before building, listing missing secret names |
 | Run on a `v*` tag without complete macOS and Android credentials | Fails before building |
 | Push a matching `v*` tag with complete credentials | Builds the configured Android and desktop targets and creates or updates a draft GitHub Release |
 
 Manual runs only upload Actions artifacts, retained for 14 days. Tag publishing
 runs only in `codytseng/psstpsst`, waits for all six builds, and requires all
-installers and desktop update metadata. Publish the draft manually after testing.
+installers, the signed AAB, and desktop update metadata. Publish the draft manually after testing.
 Re-runs may replace draft assets but refuse to modify a published release.
 
 Android release builds run in the pinned F-Droid buildserver image through
@@ -103,6 +104,9 @@ Android release builds run in the pinned F-Droid buildserver image through
 toolchain, sets `SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
 Android module from source. Tagged and credentialed runs produce an unsigned APK
 inside the container and apply the developer signature on the GitHub runner.
+CI sets `ANDROID_BUILD_BUNDLE=1` for these runs to also build an unsigned AAB
+from the same native project and sign it with `jarsigner` on the runner. The
+container script defaults to APK-only builds for independent F-Droid rebuilds.
 The signer preserves the unsigned APK's ZIP alignment metadata and disables the
 legacy v1 scheme, which is unnecessary at minimum SDK 24, so F-Droid can copy
 the v2/v3 signature onto an independent rebuild. After uploading the normal APK
@@ -122,6 +126,7 @@ To check changes to the signing and F-Droid verification helpers, run:
 
 ```sh
 node --test scripts/release-signing.test.mjs
+node --test scripts/build-android-bundle.test.mjs scripts/release-assets.test.mjs
 node --test scripts/verify-fdroid-reproducibility.test.mjs
 ```
 
@@ -367,6 +372,47 @@ keytool -list -v -keystore /absolute/path/to/psstpsst-release.keystore -alias ps
 
 See Android's [signing guide](https://developer.android.com/studio/publish/app-signing)
 and [apksigner reference](https://developer.android.com/tools/apksigner).
+
+### Android: Google Play App Bundle
+
+Credentialed CI runs upload `PsstPsst-android.aab` as the `android-aab` Actions
+artifact; tag runs also attach it to the draft GitHub Release. Download that file
+and upload it to a Google Play Console testing track before promoting it to
+production. APK distribution through GitHub, Zapstore, and F-Droid continues
+to use `PsstPsst-android.apk`. AAB files cannot be installed directly on a device.
+
+For a local build, load the same four `ANDROID_*` signing variables used for APK
+releases, install JDK 17 and the Android SDK, and run:
+
+```bash
+npm run android:prebuild
+npm run android:bundle
+node scripts/release-signing.mjs sign-android-bundle \
+  android/app/build/outputs/bundle/release/app-release.aab \
+  release/PsstPsst-android.aab
+```
+
+The bundle command temporarily disables the generated release debug signature
+and restores `android/app/build.gradle` after Gradle exits. The signing helper
+requires complete credentials, rejects already-signed input, and uses `jarsigner`
+to sign and strictly verify the bundle against the configured certificate. It
+removes failed output and the temporary keystore; passwords are read from
+environment variables. JDK tools are resolved through `JAVA_HOME` or `PATH`, with
+optional `JAR` and `JARSIGNER` executable overrides. The AAB signing integration
+test uses disposable keys and archives when JDK tools are available; it does
+not require an Android SDK or verify the app bundle's Android structure.
+
+During initial Play App Signing enrollment, provide the existing app signing key
+if Play and other distribution channels must support in-place updates between
+them. Signing the uploaded AAB with that key alone does not choose the certificate
+Google Play uses for delivered APKs. This workflow reuses the APK credentials for
+the upload signature; if a separate upload key is registered in Play Console,
+configure the AAB signing step with that key instead. Keep the production
+application ID `chat.psstpsst.app` and increase `expo.android.versionCode` for each
+new upload; APK and AAB from the same release share the version code.
+
+See Android's [bundle build guide](https://developer.android.com/build/building-cmdline)
+and [Play App Signing guide](https://developer.android.com/studio/publish/app-signing).
 
 ### Zapstore and F-Droid
 

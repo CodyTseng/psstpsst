@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 export const RELEASE_ASSET_NAMES = Object.freeze([
   'PsstPsst-android.apk',
+  'PsstPsst-android.aab',
   'latest-mac.yml',
   'latest-x64.yml',
   'latest-arm64.yml',

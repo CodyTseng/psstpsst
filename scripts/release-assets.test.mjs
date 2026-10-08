@@ -17,6 +17,9 @@ test('public release assets use stable version-independent names', () => {
 
   const workflow = readFileSync(new URL('.github/workflows/build.yml', root), 'utf8');
   assert.match(workflow, /release\/PsstPsst-android\.apk/);
+  assert.match(workflow, /release\/PsstPsst-android\.aab/);
+  assert.ok(RELEASE_ASSET_NAMES.includes('PsstPsst-android.aab'));
+  assert.match(workflow, /name: android-aab/);
   assert.match(workflow, /node scripts\/release-assets\.mjs release-assets/);
   assert.doesNotMatch(workflow, /PsstPsst-\$\{version\}/);
 

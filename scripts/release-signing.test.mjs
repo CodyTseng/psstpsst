@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { androidSigningArguments, signAndroid, signingMode } from './release-signing.mjs';
+import { androidBundleSigningArguments, androidSigningArguments, signAndroid, signAndroidBundle, signingMode } from './release-signing.mjs';
 
 const credentials = {
   android: {
@@ -68,6 +68,79 @@ test('invalid Base64 produces no distributable APK', () => {
     }), /valid Base64/);
     assert.ok(!existsSync(output));
     assert.equal(readFileSync(input, 'utf8'), 'fixture');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('AAB signing requires credentials and keeps passwords out of arguments', () => {
+  assert.throws(() => signAndroidBundle('input.aab', 'output.aab', {}), /requires all four/);
+  assert.throws(() => signAndroidBundle('input.aab', 'input.aab', credentials.android), /distinct/);
+  const args = androidBundleSigningArguments('key.p12', 'output.aab', 'input.aab', credentials.android);
+  assert.ok(args.includes('-storepass:env'));
+  assert.ok(args.includes('-keypass:env'));
+  assert.ok(!args.includes(credentials.android.ANDROID_KEY_PASSWORD));
+});
+
+test('invalid Base64 produces no distributable AAB', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'psstpsst-invalid-bundle-signing-'));
+  try {
+    const input = join(dir, 'input.aab');
+    const output = join(dir, 'output.aab');
+    writeFileSync(input, 'fixture');
+    assert.throws(() => signAndroidBundle(input, output, {
+      ...credentials.android, ANDROID_KEYSTORE_BASE64: 'not!base64',
+    }), /valid Base64/);
+    assert.ok(!existsSync(output));
+    assert.equal(readFileSync(input, 'utf8'), 'fixture');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const jdkTool = (name) => process.env.JAVA_HOME ? join(process.env.JAVA_HOME, 'bin', name) : name;
+const hasJdk = ['jar', 'jarsigner', 'keytool'].every((name) =>
+  spawnSync(jdkTool(name), [name === 'jar' ? '--help' : '-help'], { stdio: 'ignore' }).status === 0);
+
+test('real AAB archive signing verifies the configured key and rejects signed input and wrong passwords', {
+  skip: !hasJdk,
+}, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'psstpsst-aab-signing-test-'));
+  const env = { ...process.env, ...credentials.android };
+  const command = (name, args) => {
+    const result = spawnSync(jdkTool(name), args, { env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr || result.error?.message);
+    return result.stdout;
+  };
+  try {
+    const keyPath = join(dir, 'key.p12');
+    command('keytool', ['-genkeypair', '-keystore', keyPath, '-storetype', 'PKCS12',
+      '-alias', env.ANDROID_KEY_ALIAS, '-keyalg', 'RSA', '-keysize', '2048', '-validity', '365',
+      '-dname', 'CN=Disposable bundle signing test', '-storepass:env', 'ANDROID_KEYSTORE_PASSWORD']);
+    env.ANDROID_KEYSTORE_BASE64 = readFileSync(keyPath).toString('base64');
+    const input = join(dir, 'input.aab');
+    const output = join(dir, 'output.aab');
+    const failedOutput = join(dir, 'failed.aab');
+    writeFileSync(join(dir, 'payload'), 'bundle signing fixture');
+    command('jar', ['--create', '--file', input, '-C', dir, 'payload']);
+    const original = readFileSync(input);
+    signAndroidBundle(input, output, env);
+    const certificate = command('keytool', ['-printcert', '-rfc', '-jarfile', output]);
+    const expected = command('keytool', ['-exportcert', '-rfc', '-keystore', keyPath,
+      '-alias', env.ANDROID_KEY_ALIAS, '-storepass:env', 'ANDROID_KEYSTORE_PASSWORD']);
+    assert.equal(new X509Certificate(certificate).fingerprint256, new X509Certificate(expected).fingerprint256);
+    assert.deepEqual(readFileSync(input), original);
+    assert.throws(() => signAndroidBundle(output, failedOutput, env), /already signed/);
+    assert.ok(!existsSync(failedOutput));
+    assert.throws(() => signAndroidBundle(input, failedOutput, {
+      ...env, ANDROID_KEYSTORE_PASSWORD: 'wrong-password',
+    }), /failed/);
+    assert.ok(!existsSync(failedOutput));
+    writeFileSync(join(dir, 'payload'), 'tampered bundle content');
+    command('jar', ['--update', '--file', output, '-C', dir, 'payload']);
+    assert.notEqual(spawnSync(jdkTool('jarsigner'), ['-verify', '-strict', '-keystore', keyPath,
+      '-storepass:env', 'ANDROID_KEYSTORE_PASSWORD', output, env.ANDROID_KEY_ALIAS],
+    { env, stdio: 'ignore' }).status, 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

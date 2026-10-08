@@ -15,6 +15,11 @@ if [[ "${1:-}" == "--check-image" ]]; then
   exit
 fi
 
+if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" && "${ANDROID_RELEASE_UNSIGNED:-1}" != "1" ]]; then
+  echo 'AAB builds require ANDROID_RELEASE_UNSIGNED=1.' >&2
+  exit 1
+fi
+
 if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   output_dir="${1:-$repo_root/release/fdroid-build}"
@@ -25,6 +30,7 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
     --mount "type=bind,src=$repo_root,dst=/workspace,readonly" \
     --mount "type=bind,src=$output_dir,dst=/output" \
     --env ANDROID_RELEASE_UNSIGNED="${ANDROID_RELEASE_UNSIGNED:-1}" \
+    --env ANDROID_BUILD_BUNDLE="${ANDROID_BUILD_BUNDLE:-0}" \
     --env PSSTPSST_FDROID_CONTAINER=1 \
     "$IMAGE" \
     bash /workspace/scripts/build-android-reproducible.sh
@@ -63,6 +69,7 @@ if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
     PSSTPSST_FDROID_CONTAINER=1 \
     PSSTPSST_FDROID_USER=1 \
     ANDROID_RELEASE_UNSIGNED="${ANDROID_RELEASE_UNSIGNED:-1}" \
+    ANDROID_BUILD_BUNDLE="${ANDROID_BUILD_BUNDLE:-0}" \
     bash "$PROJECT_DIR/scripts/build-android-reproducible.sh"
 
   if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
@@ -71,6 +78,9 @@ if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
     artifact="$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk"
   fi
   install -m 0644 "$artifact" /output/app-release.apk
+  if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
+    install -m 0644 "$PROJECT_DIR/android/app/build/outputs/bundle/release/app-release.aab" /output/app-release.aab
+  fi
   exit
 fi
 
@@ -103,7 +113,11 @@ fi
 find . -name gradle-wrapper.jar -type f -delete
 (cd android && gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain -PreactNativeDevServerIp=127.0.0.1) > android-dependencies.txt
 node scripts/check-android-dependencies.mjs android-dependencies.txt
-(cd android && gradle :app:assembleRelease --no-daemon --max-workers=2 -PreactNativeDevServerIp=127.0.0.1)
+release_tasks=(:app:assembleRelease)
+if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
+  release_tasks+=(:app:bundleRelease)
+fi
+(cd android && gradle "${release_tasks[@]}" --no-daemon --max-workers=2 -PreactNativeDevServerIp=127.0.0.1)
 
 if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
   artifact="android/app/build/outputs/apk/release/app-release-unsigned.apk"
