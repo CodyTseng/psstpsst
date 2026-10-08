@@ -253,6 +253,8 @@
     "account_changed_history": "近距離通信アカウントが変更されました。この履歴は閲覧のみ可能です。"
   },
   "common": {
+    "copy_failed": "コピーできませんでした。もう一度お試しください。",
+    "paste_failed": "貼り付けできませんでした。もう一度お試しください。",
     "copied": "コピーしました",
     "resize_sidebar": "サイドバーの幅を変更",
     "cancel": "キャンセル",

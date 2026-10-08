@@ -253,6 +253,8 @@
     "account_changed_history": "近距離通訊帳號已變更，此對話僅供瀏覽。"
   },
   "common": {
+    "copy_failed": "複製失敗，請重試。",
+    "paste_failed": "貼上失敗，請重試。",
     "copied": "已複製",
     "resize_sidebar": "調整側欄寬度",
     "cancel": "取消",

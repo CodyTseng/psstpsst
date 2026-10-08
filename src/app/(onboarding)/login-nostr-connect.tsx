@@ -23,7 +23,7 @@ import { AppText } from '@/components/common/AppText';
 import { IconButton } from '@/components/common/IconButton';
 import { OnboardingFormLayout } from '@/components/onboarding/OnboardingFormLayout';
 import Plus from 'lucide-react-native/icons/plus';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { QrCode } from '@/components/common/QrCode';
 import { platform } from '@/platform';
 import { SectionLabel } from '@/components/common/SectionLabel';
@@ -42,12 +42,12 @@ const QR_SIZE = 220;
 export default function LoginNostrConnect() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const { copyText, copied } = useClipboard();
   const c = useThemeColors();
   const setActive = useActiveAccount((s) => s.setActive);
 
   const [attempt, setAttempt] = useState(0);
   const [errored, setErrored] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Advanced: which relays the connection URI advertises. Changing the set
   // re-mints the session below (the relays are baked into the URI).
@@ -91,9 +91,7 @@ export default function LoginNostrConnect() {
   }
 
   async function handleCopy() {
-    await setStringAsync(uri);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    await copyText(uri);
   }
 
   function handleOpen() {

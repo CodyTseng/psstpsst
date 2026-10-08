@@ -181,6 +181,8 @@
     "invoice_preview_sent": "[تم إرسال طلب دفع] {{amount}}"
   },
   "common": {
+    "copy_failed": "تعذّر النسخ. حاول مرة أخرى.",
+    "paste_failed": "تعذّر اللصق. حاول مرة أخرى.",
     "copied": "تم النسخ",
     "resize_sidebar": "تغيير عرض الشريط الجانبي",
     "cancel": "إلغاء",

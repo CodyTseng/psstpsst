@@ -104,6 +104,8 @@ const bridge: ElectronBridge = {
     deleteItem: (key) => invoke(IPC.secureDelete, key),
   },
   clipboard: {
+    writeText: (text) => invoke(IPC.clipboardWriteText, text),
+    readText: () => invoke(IPC.clipboardReadText),
     copyAttachment: (uri, options) => invoke(IPC.clipboardCopyAttachment, uri, options),
   },
   fileSystem: {

@@ -11,7 +11,7 @@ import { AppScreen } from '@/components/common/AppScreen';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { platform } from '@/platform';
 import { exportIdentityNsec } from '@/services/signer/signer-factory';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -25,6 +25,7 @@ import { spacing, useThemeColors } from '@/theme';
 export default function AccountSettings() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const { copyText } = useClipboard({ trackCopied: false });
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const activePubkey = useActiveAccount((s) => s.activePubkey);
@@ -54,7 +55,7 @@ export default function AccountSettings() {
       });
       return;
     }
-    await setStringAsync(nsec);
+    if (!await copyText(nsec)) return;
     await platform.confirmationDialog.notify({
       title: t('settings.export_nsec_copied'),
       okLabel: t('common.ok'),

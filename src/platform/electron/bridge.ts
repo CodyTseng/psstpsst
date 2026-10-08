@@ -59,6 +59,8 @@ export type ElectronBridge = {
     deleteItem(key: string): Promise<void>;
   };
   clipboard: {
+    writeText(text: string): Promise<void>;
+    readText(): Promise<string>;
     copyAttachment(uri: string, options?: { mimeType?: string; name?: string }): Promise<void>;
   };
   fileSystem: {

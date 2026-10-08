@@ -253,6 +253,8 @@
     "account_changed_history": "Nearby account changed. This history is read-only."
   },
   "common": {
+    "copy_failed": "Couldn't copy. Try again.",
+    "paste_failed": "Couldn't paste. Try again.",
     "copied": "Copied",
     "resize_sidebar": "Resize sidebar",
     "cancel": "Cancel",

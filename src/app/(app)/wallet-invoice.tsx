@@ -21,7 +21,7 @@ import { useScrolled } from '@/hooks/use-scrolled';
 import { useInvoiceTransaction } from '@/hooks/use-invoice-transaction';
 import { useWallets } from '@/hooks/use-wallets';
 import { backSafely } from '@/lib/navigation';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { routeStringParam, type RouteParam } from '@/lib/navigation/route-params';
 import { walletDescriptionText } from '@/lib/wallet/description';
 import { invoiceStatus, type InvoiceStatus } from '@/lib/wallet/invoice-status';
@@ -42,6 +42,7 @@ import { spacing, useThemeColors } from '@/theme';
 
 export default function WalletInvoiceScreen() {
   const { t } = useTranslation();
+  const { copyText, copiedKey: copiedField } = useClipboard();
   const insets = useSafeAreaInsets();
   const titleClearance = useScreenHeaderClearance();
   const params = useLocalSearchParams<{
@@ -65,7 +66,6 @@ export default function WalletInvoiceScreen() {
   const { scrolled, scrollProps } = useScrolled({ resetKey: paymentStatus });
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
   const [paymentWalletId, setPaymentWalletId] = useState<string | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
   const paymentConfirmedRef = useRef(false);
   const paymentWalletRef = useRef<WalletRow | null>(null);
 
@@ -129,9 +129,7 @@ export default function WalletInvoiceScreen() {
 
   async function copy(field: string, value: string | null | undefined) {
     if (!value) return;
-    await setStringAsync(value);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1800);
+    await copyText(value, field);
   }
 
   function handlePrimaryAction() {

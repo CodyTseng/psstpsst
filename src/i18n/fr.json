@@ -253,6 +253,8 @@
     "account_changed_history": "Le compte à proximité a changé. Cet historique est en lecture seule."
   },
   "common": {
+    "copy_failed": "Impossible de copier. Réessayez.",
+    "paste_failed": "Impossible de coller. Réessayez.",
     "copied": "Copié",
     "resize_sidebar": "Redimensionner la barre latérale",
     "cancel": "Annuler",

@@ -48,7 +48,7 @@ import { useContact } from '@/hooks/use-contacts';
 import { useConversation } from '@/hooks/use-conversations';
 import { useCommonGroups } from '@/hooks/use-common-groups';
 import { useProfile } from '@/hooks/use-profile';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { resolveName } from '@/lib/nostr/display-name';
 import { pubkeyToNpub } from '@/lib/nostr/keys';
 import { IS_ELECTRON } from '@/lib/platform';
@@ -74,6 +74,7 @@ import Users from 'lucide-react-native/icons/users';
 export function PeerProfile({ pubkey }: { pubkey: string }) {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const { copyText, copiedKey } = useClipboard<'npub' | 'nip05' | 'lightning'>();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
   const startForwardDraft = useForwardDraftStore((state) => state.start);
@@ -112,9 +113,6 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
     resolveName({ petname, displayName: profile?.displayName, name: profile?.name }) ??
     t('profile.unnamed');
 
-  const [copiedNpub, setCopiedNpub] = useState(false);
-  const [copiedNip05, setCopiedNip05] = useState(false);
-  const [copiedLightning, setCopiedLightning] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [petnameInput, setPetnameInput] = useState('');
@@ -125,23 +123,17 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
   const [reportOpen, setReportOpen] = useState(false);
 
   async function copyNpub() {
-    await setStringAsync(npub);
-    setCopiedNpub(true);
-    setTimeout(() => setCopiedNpub(false), 2000);
+    await copyText(npub, 'npub');
   }
 
   async function copyNip05() {
     if (!nip05) return;
-    await setStringAsync(nip05);
-    setCopiedNip05(true);
-    setTimeout(() => setCopiedNip05(false), 2000);
+    await copyText(nip05, 'nip05');
   }
 
   async function copyLightningAddress() {
     if (!lightningAddress) return;
-    await setStringAsync(lightningAddress);
-    setCopiedLightning(true);
-    setTimeout(() => setCopiedLightning(false), 2000);
+    await copyText(lightningAddress, 'lightning');
   }
 
   function handleMessage() {
@@ -380,7 +372,7 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
               valuePlacement="below"
               valueEllipsizeMode="middle"
               trailing={
-                copiedNpub ? (
+                copiedKey === 'npub' ? (
                   <Check strokeWidth={iconStrokeWidth.default} size={18} color={c.success} />
                 ) : (
                   <Copy size={18} color={c.textMuted} />
@@ -398,7 +390,7 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
                 valuePlacement="below"
                 valueEllipsizeMode="middle"
                 trailing={
-                  copiedNip05 ? (
+                  copiedKey === 'nip05' ? (
                     <Check strokeWidth={iconStrokeWidth.default} size={18} color={c.success} />
                   ) : (
                     <Copy size={18} color={c.textMuted} />
@@ -416,7 +408,7 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
                 valuePlacement="below"
                 valueEllipsizeMode="middle"
                 trailing={
-                  copiedLightning ? (
+                  copiedKey === 'lightning' ? (
                     <Check strokeWidth={iconStrokeWidth.default} size={18} color={c.success} />
                   ) : (
                     <Copy size={18} color={c.textMuted} />

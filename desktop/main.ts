@@ -624,6 +624,10 @@ function registerIpcHandlers(): void {
       validateString(operationId, 'upload operation ID'),
     );
   });
+  handle(IPC.clipboardWriteText, (_event, text) => {
+    clipboard.writeText(validateString(text, 'clipboard text', 64 * 1024 * 1024));
+  });
+  handle(IPC.clipboardReadText, () => clipboard.readText());
   handle(IPC.clipboardCopyAttachment, async (_event, uri, options) => {
     const source = services().files.resolve(validateString(uri, 'file URI'));
     const stat = await fs.stat(source);

@@ -53,7 +53,7 @@ jest.mock('@/hooks/use-wallets', () => ({
   }),
 }));
 
-jest.mock('@/lib/clipboard', () => ({ setStringAsync: jest.fn(async () => {}) }));
+jest.mock('@/hooks/use-clipboard', () => ({ useClipboard: () => ({ copyText: jest.fn(async () => true) }) }));
 jest.mock('@/platform', () => ({
   platform: { confirmationDialog: { notify: jest.fn(async () => {}) } },
 }));

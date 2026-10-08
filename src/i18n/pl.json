@@ -253,6 +253,8 @@
     "account_changed_history": "Konto komunikacji w pobliżu uległo zmianie. Ta historia jest tylko do odczytu."
   },
   "common": {
+    "copy_failed": "Nie udało się skopiować. Spróbuj ponownie.",
+    "paste_failed": "Nie udało się wkleić. Spróbuj ponownie.",
     "copied": "Skopiowano",
     "resize_sidebar": "Zmień szerokość panelu bocznego",
     "cancel": "Anuluj",

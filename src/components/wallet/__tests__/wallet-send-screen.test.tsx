@@ -3,11 +3,15 @@ import { router } from 'expo-router';
 
 import WalletSendScreen from '@/app/(app)/wallet-send';
 import { AppButton } from '@/components/common/AppButton';
+import { RoundOverlayAction } from '@/components/common/RoundOverlayAction';
 import { ExternalInvoicePayment } from '@/components/wallet/external-invoice-payment';
+import { platform } from '@/platform';
+import { showToast } from '@/stores/toast.store';
 import { requestLnurlPayInvoice, resolveLnurlPayTarget } from '@/services/wallet/lnurl';
 
 const INVOICE = 'lnbc1u1qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 let mockInput = INVOICE;
+let mockCameraGranted = false;
 let mockWallets: Array<{ id: string; isDefault: boolean; name: string; customName: null }> = [];
 
 jest.mock('expo-router', () => ({
@@ -18,7 +22,7 @@ jest.mock('expo-router', () => ({
 jest.mock('expo-camera', () => ({
   CameraView: () => null,
   scanFromURLAsync: jest.fn(),
-  useCameraPermissions: () => [{ granted: false }, jest.fn()],
+  useCameraPermissions: () => [{ granted: mockCameraGranted }, jest.fn()],
 }));
 
 jest.mock('expo-image-picker', () => ({
@@ -99,8 +103,12 @@ jest.mock('@/stores/theme.store', () => ({
 }));
 
 jest.mock('@/platform', () => ({
-  platform: { confirmationDialog: { notify: jest.fn(async () => {}) } },
+  platform: {
+    confirmationDialog: { notify: jest.fn(async () => {}) },
+    clipboard: { readText: jest.fn() },
+  },
 }));
+jest.mock('@/stores/toast.store', () => ({ showToast: jest.fn() }));
 
 jest.mock('@/services/profile/profile.service', () => ({
   fetchProfile: jest.fn(),
@@ -135,6 +143,7 @@ describe('WalletSendScreen payment options', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockInput = INVOICE;
+    mockCameraGranted = false;
     mockWallets = [];
     jest.clearAllMocks();
   });
@@ -155,6 +164,22 @@ describe('WalletSendScreen payment options', () => {
       await Promise.resolve();
     });
   }
+
+  it('reports a paste failure and accepts the invoice after retrying', async () => {
+    mockInput = '';
+    mockCameraGranted = true;
+    jest.mocked(platform.clipboard.readText)
+      .mockRejectedValueOnce(new Error('Clipboard unavailable'))
+      .mockResolvedValueOnce(INVOICE);
+    await renderInitialInput();
+    const pasteButton = renderer!.root.findAllByType(RoundOverlayAction)
+      .find((button) => button.props.label === 'wallet.paste');
+    await act(async () => { await pasteButton!.props.onPress(); });
+    expect(showToast).toHaveBeenCalledWith('common.paste_failed');
+    expect(renderer!.root.findAllByType(ExternalInvoicePayment)).toHaveLength(0);
+    await act(async () => { await pasteButton!.props.onPress(); });
+    expect(renderer!.root.findByType(ExternalInvoicePayment).props.invoice).toBe(INVOICE);
+  });
 
   it('offers the invoice to an external wallet', async () => {
     await renderInitialInput();

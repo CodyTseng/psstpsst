@@ -2,7 +2,6 @@ import { useLocalSearchParams } from 'expo-router';
 import dayjs from 'dayjs';
 import Check from 'lucide-react-native/icons/check';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
@@ -15,7 +14,7 @@ import { InvalidRouteRedirect } from '@/components/navigation/InvalidRouteRedire
 import { WalletAmountDisplay } from '@/components/wallet/WalletAmountDisplay';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWalletTransaction } from '@/hooks/use-wallets';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { routeOpaqueIdParam } from '@/lib/navigation/route-params';
 import { walletDescriptionText } from '@/lib/wallet/description';
 import { formatSats } from '@/services/wallet/bolt11';
@@ -25,13 +24,13 @@ import { spacing, useThemeColors } from '@/theme';
 export default function WalletTransactionDetailScreen() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const { copyText, copiedKey: copiedField } = useClipboard();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const parsedId = routeOpaqueIdParam(params.id);
   const id = parsedId ?? '';
   const { transaction: tx, loaded } = useWalletTransaction(id);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const incoming = tx?.type === 'incoming';
   const outgoing = tx?.type === 'outgoing';
@@ -52,9 +51,7 @@ export default function WalletTransactionDetailScreen() {
 
   async function copy(field: string, value: string | null) {
     if (!value) return;
-    await setStringAsync(value);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1800);
+    await copyText(value, field);
   }
 
   if (!parsedId) return <InvalidRouteRedirect />;

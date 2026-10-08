@@ -88,7 +88,7 @@ import { getSessionCachedConversation } from '@/lib/conversation/conversation-sn
 import { useProximityIdentity, useProximityPeer } from '@/hooks/use-proximity';
 import { useCustomEmojis } from '@/hooks/use-custom-emojis';
 import { useWallets } from '@/hooks/use-wallets';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { isAbortError } from '@/lib/async/abort';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
 import { IS_ELECTRON } from '@/lib/platform';
@@ -858,6 +858,7 @@ function ChatPageContent({
   const insets = useSafeAreaInsets();
   const composerClearance = bottomBarHeight + getBottomChromeInset(insets.bottom);
   const { t } = useTranslation();
+  const { copyText } = useClipboard({ trackCopied: false });
   const c = useThemeColors();
   const attachmentLabels = useMemo(
     () => ({
@@ -2346,7 +2347,7 @@ function ChatPageContent({
                   onPress: () => {
                     const text = menuTarget?.content ?? '';
                     closeMenu();
-                    void setStringAsync(text);
+                    void copyText(text);
                   },
                 } as MessageMenuAction,
               ]

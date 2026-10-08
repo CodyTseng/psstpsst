@@ -253,6 +253,8 @@
     "account_changed_history": "A közeli fiók megváltozott. Ez az előzmény csak olvasható."
   },
   "common": {
+    "copy_failed": "Nem sikerült másolni. Próbáld újra.",
+    "paste_failed": "Nem sikerült beilleszteni. Próbáld újra.",
     "copied": "Másolva",
     "resize_sidebar": "Oldalsáv átméretezése",
     "cancel": "Mégse",

@@ -564,6 +564,9 @@ a previously declined update.
 - An empty state has an icon, a short title, and optional guidance/action.
 - Show recoverable errors where the failed action lives; use a dialog only when
   the user must decide or acknowledge something.
+- Clipboard actions report failures with a localized toast. Show copied
+  confirmation only after the platform accepts the write, on the latest copied
+  field, and clear it after two seconds.
 - Keep control geometry stable while loading.
 
 Recent wallet activity includes pending transactions until they expire.

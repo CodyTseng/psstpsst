@@ -21,7 +21,7 @@ import { InteractionOverlay } from '@/components/common/InteractionOverlay';
 import { useMessageDelivery } from '@/hooks/use-message-deliveries';
 import { useLanguageDirection } from '@/i18n/direction';
 import { formatClock } from '@/lib/audio/voice';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import type { Rumor } from '@/db/schema/types';
 import { findFileMeta } from '@/lib/nostr/file-tags';
 import { formatDetailTimestamp } from '@/lib/time';
@@ -454,6 +454,7 @@ export function MessageDetailSheet({
   onClose,
 }: Props) {
   const { t } = useTranslation();
+  const { copyText, copied, resetCopied } = useClipboard();
   const c = useThemeColors();
   const direction = useLanguageDirection();
   const visible = rumorId != null;
@@ -502,7 +503,6 @@ export function MessageDetailSheet({
     (delivery?.phase === 'queued' && delivery.copies.length === 0);
   const failed = delivery?.phase === 'failed';
   const [jsonOpen, setJsonOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [deliverySelection, setDeliverySelection] = useState<{
     rumorId: string;
     recipient: string;
@@ -525,9 +525,9 @@ export function MessageDetailSheet({
   useEffect(() => {
     if (rumorId) {
       setJsonOpen(false);
-      setCopied(false);
+      resetCopied();
     }
-  }, [rumorId]);
+  }, [rumorId, resetCopied]);
 
   // File messages (kind 15): surface the human-meaningful attachment fields.
   // Deliberately NOT the decryption key / hashes (sensitive / jargon).
@@ -550,9 +550,7 @@ export function MessageDetailSheet({
   const rawJson = shownRumor ? JSON.stringify(shownRumor, null, 2) : '';
   async function copyJson() {
     if (!rawJson) return;
-    await setStringAsync(rawJson);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    await copyText(rawJson);
   }
 
   const sentAt = shownRumor?.created_at ?? null;

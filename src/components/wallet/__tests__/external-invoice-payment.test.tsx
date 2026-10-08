@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { QrCode } from '@/components/common/QrCode';
-import { setStringAsync } from '@/lib/clipboard';
 import { platform } from '@/platform';
 import { showToast } from '@/stores/toast.store';
 import { darkPalette, lightPalette } from '@/theme';
@@ -28,25 +27,28 @@ jest.mock('@/components/common/QrCode', () => ({
 }));
 
 jest.mock('@/platform', () => ({
-  platform: { urlOpener: { openExternalUrl: jest.fn(async () => true) } },
+  platform: {
+    urlOpener: { openExternalUrl: jest.fn(async () => true) },
+    clipboard: { writeText: jest.fn(async () => {}) },
+  },
 }));
 
 jest.mock('@/stores/toast.store', () => ({
   showToast: jest.fn(),
 }));
 
-jest.mock('@/lib/clipboard', () => ({
-  setStringAsync: jest.fn(async () => {}),
-}));
-
 describe('ExternalInvoicePayment', () => {
   let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => { jest.useFakeTimers(); });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
     mockPreference = 'light';
     jest.clearAllMocks();
+    jest.clearAllTimers();
+    jest.useRealTimers();
   });
 
   it.each(['light', 'dark'] as const)(
@@ -87,12 +89,26 @@ describe('ExternalInvoicePayment', () => {
       await Promise.resolve();
     });
 
-    expect(setStringAsync).toHaveBeenCalledWith('lnbc-test-invoice');
+    expect(platform.clipboard.writeText).toHaveBeenCalledWith('lnbc-test-invoice');
     expect(
       renderer!.root
         .findAllByType(AppButton)
         .some((button) => button.props.label === 'wallet.copied'),
     ).toBe(true);
+  });
+
+  it('keeps the copy action available when copying fails', async () => {
+    jest.mocked(platform.clipboard.writeText).mockRejectedValueOnce(new Error('Clipboard unavailable'));
+    act(() => {
+      renderer = create(<ExternalInvoicePayment invoice="lnbc-test-invoice" />);
+    });
+    const copyButton = renderer!.root.findAllByType(AppButton)
+      .find((button) => button.props.label === 'wallet.copy_invoice');
+    await act(async () => { await copyButton!.props.onPress(); });
+    expect(renderer!.root.findAllByType(AppButton)
+      .some((button) => button.props.label === 'wallet.copied')).toBe(false);
+    expect(renderer!.root.findAllByType(AppButton)
+      .some((button) => button.props.label === 'wallet.copy_invoice')).toBe(true);
   });
 
   it('hands the request to an installed wallet app', async () => {

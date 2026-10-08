@@ -253,6 +253,8 @@
     "account_changed_history": "근거리 통신 계정이 변경되었습니다. 이 기록은 읽기 전용입니다."
   },
   "common": {
+    "copy_failed": "복사하지 못했습니다. 다시 시도해 주세요.",
+    "paste_failed": "붙여넣지 못했습니다. 다시 시도해 주세요.",
     "copied": "복사됨",
     "resize_sidebar": "사이드바 너비 조절",
     "cancel": "취소",

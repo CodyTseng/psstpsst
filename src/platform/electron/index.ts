@@ -157,6 +157,8 @@ export function createElectronAdapters(): PlatformAdapters {
       saveToLibrary: (uri) => bridge.dialogs.saveMedia(uri),
     },
     clipboard: {
+      writeText: (text) => bridge.clipboard.writeText(text),
+      readText: () => bridge.clipboard.readText(),
       canCopyAttachment: () => true,
       copyAttachment: (uri, options) => bridge.clipboard.copyAttachment(uri, options),
     },

@@ -253,6 +253,8 @@
     "account_changed_history": "Yakındaki iletişim hesabı değişti. Bu geçmiş salt okunurdur."
   },
   "common": {
+    "copy_failed": "Kopyalanamadı. Tekrar deneyin.",
+    "paste_failed": "Yapıştırılamadı. Tekrar deneyin.",
     "copied": "Kopyalandı",
     "resize_sidebar": "Kenar çubuğunu yeniden boyutlandır",
     "cancel": "İptal",

@@ -253,6 +253,8 @@
     "account_changed_history": "L'account nelle vicinanze è cambiato. Questa cronologia è in sola lettura."
   },
   "common": {
+    "copy_failed": "Impossibile copiare. Riprova.",
+    "paste_failed": "Impossibile incollare. Riprova.",
     "copied": "Copiato",
     "resize_sidebar": "Ridimensiona la barra laterale",
     "cancel": "Annulla",

@@ -1,11 +1,13 @@
 import { clipboardAdapter } from '../clipboard';
 import { imageManipulatorAdapter } from '../image-manipulator';
 import { fileSystemAdapter } from '../file-system';
-import { setImageAsync } from 'expo-clipboard';
+import { getStringAsync, setImageAsync, setStringAsync } from 'expo-clipboard';
 
 jest.mock('../image-manipulator', () => ({ imageManipulatorAdapter: { renderAndSave: jest.fn() } }));
 jest.mock('../file-system', () => ({ fileSystemAdapter: { delete: jest.fn() } }));
-jest.mock('expo-clipboard', () => ({ setImageAsync: jest.fn() }));
+jest.mock('expo-clipboard', () => ({
+  setImageAsync: jest.fn(), setStringAsync: jest.fn(), getStringAsync: jest.fn(),
+}));
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -14,6 +16,13 @@ beforeEach(() => {
   });
   jest.mocked(fileSystemAdapter.delete).mockResolvedValue(undefined);
   jest.mocked(setImageAsync).mockResolvedValue(undefined);
+});
+
+it('copies and reads text with the native Expo clipboard', async () => {
+  jest.mocked(getStringAsync).mockResolvedValue('event JSON');
+  await clipboardAdapter.writeText('event JSON');
+  expect(setStringAsync).toHaveBeenCalledWith('event JSON');
+  await expect(clipboardAdapter.readText()).resolves.toBe('event JSON');
 });
 
 it('offers image copying and rejects ordinary files without image work', async () => {

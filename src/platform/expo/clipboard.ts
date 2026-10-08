@@ -2,6 +2,16 @@ import type { ClipboardPort } from '../ports/clipboard';
 import { imageManipulatorAdapter } from './image-manipulator';
 
 export const clipboardAdapter: ClipboardPort = {
+  async writeText(text) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional native capability
+    const clipboard = require('expo-clipboard') as typeof import('expo-clipboard');
+    await clipboard.setStringAsync(text);
+  },
+  async readText() {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional native capability
+    const clipboard = require('expo-clipboard') as typeof import('expo-clipboard');
+    return clipboard.getStringAsync();
+  },
   canCopyAttachment: (mime) => !!mime?.startsWith('image/'),
   async copyAttachment(uri, options) {
     if (!options?.mimeType?.startsWith('image/')) throw new Error('File clipboard unavailable');

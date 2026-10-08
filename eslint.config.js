@@ -182,7 +182,6 @@ module.exports = defineConfig([
     // import on purpose (thin pass-throughs, in the spirit of lib/haptics.ts).
     files: [
       'src/lib/haptics.ts',
-      'src/lib/clipboard.ts',
       'src/lib/navigation.ts',
       'src/lib/platform.ts',
       'src/lib/attachments/failure.ts',

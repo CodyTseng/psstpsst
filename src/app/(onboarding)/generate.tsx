@@ -12,7 +12,7 @@ import { AppContentColumn } from '@/components/common/AppContentColumn';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { OnboardingFormLayout } from '@/components/onboarding/OnboardingFormLayout';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import {
   generateAccountKeyMaterial,
   persistGeneratedAccount,
@@ -24,19 +24,17 @@ import { spacing, useThemeColors } from '@/theme';
 export default function Generate() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const { copyText, copied } = useClipboard();
   const c = useThemeColors();
   // Generate the keypair in memory only. The account is persisted (SQLite row
   // + secure-storage privkey) only when the user confirms the backup below —
   // leaving this screen early must not leave a half-created account behind.
   const [keyMaterial] = useState(() => generateAccountKeyMaterial());
   const [continuing, setContinuing] = useState(false);
-  const [copied, setCopied] = useState(false);
   const { nsec } = keyMaterial;
 
   async function handleCopy() {
-    await setStringAsync(nsec);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    await copyText(nsec);
   }
 
   async function handleContinue() {

@@ -253,6 +253,8 @@
     "account_changed_history": "A conta de proximidade mudou. Este histórico é apenas de leitura."
   },
   "common": {
+    "copy_failed": "Não foi possível copiar. Tenta novamente.",
+    "paste_failed": "Não foi possível colar. Tenta novamente.",
     "copied": "Copiado",
     "resize_sidebar": "Redimensionar barra lateral",
     "cancel": "Cancelar",

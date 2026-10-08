@@ -253,6 +253,8 @@
     "account_changed_history": "近距离通信账号已变更，此会话仅可浏览。"
   },
   "common": {
+    "copy_failed": "复制失败，请重试。",
+    "paste_failed": "粘贴失败，请重试。",
     "copied": "已复制",
     "resize_sidebar": "调整侧栏宽度",
     "cancel": "取消",

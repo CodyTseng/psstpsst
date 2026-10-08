@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { QrCode } from '@/components/common/QrCode';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { platform } from '@/platform';
 import { showToast } from '@/stores/toast.store';
 import { radius, spacing, useThemeColors } from '@/theme';
@@ -20,13 +19,12 @@ export function ExternalInvoicePayment({
   showPaymentRequest?: boolean;
 }) {
   const { t } = useTranslation();
+  const { copyText, copied } = useClipboard();
   const c = useThemeColors();
-  const [copied, setCopied] = useState(false);
   const lightningUri = `lightning:${invoice}`;
 
   async function copyInvoice() {
-    await setStringAsync(invoice);
-    setCopied(true);
+    await copyText(invoice);
   }
 
   async function openWalletApp() {

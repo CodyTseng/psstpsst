@@ -25,7 +25,7 @@ import { useAmountKeypadKeyboard } from '@/hooks/use-amount-keypad-keyboard';
 import { useProfile } from '@/hooks/use-profile';
 import { useWallets } from '@/hooks/use-wallets';
 import { backSafely } from '@/lib/navigation';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import {
   parseConversationRouteParams,
 } from '@/lib/navigation/route-params';
@@ -59,6 +59,7 @@ type ReceiveSource =
 
 export default function WalletReceiveScreen() {
   const { t } = useTranslation();
+  const { copyText, copied } = useClipboard();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const titleClearance = useScreenHeaderClearance();
@@ -123,7 +124,6 @@ export default function WalletReceiveScreen() {
   const [paymentHash, setPaymentHash] = useState<string | null>(null);
   const [invoiceState, setInvoiceState] = useState<'waiting' | 'settled' | 'expired'>('waiting');
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [amountSourceCenterY, setAmountSourceCenterY] = useState<number | null>(null);
   const descriptionInputRef = useRef<TextInput>(null);
   const recordAmountCenterY = useCallback((centerY: number) => {
@@ -245,9 +245,7 @@ export default function WalletReceiveScreen() {
   }
 
   async function copyInvoice() {
-    await setStringAsync(invoice);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    await copyText(invoice);
   }
 
   const appendDigit = useCallback((digit: string) => {

@@ -29,7 +29,7 @@ import { WalletPinSheet } from '@/components/wallet/WalletPinSheet';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWallets } from '@/hooks/use-wallets';
 import { backSafely } from '@/lib/navigation';
-import { getStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { routeStringParam, type RouteParam } from '@/lib/navigation/route-params';
 import { resolveName } from '@/lib/nostr/display-name';
 import { abbreviateNpub } from '@/lib/nostr/format';
@@ -69,6 +69,7 @@ class ProfilePaymentError extends Error {
 
 export default function WalletSendScreen() {
   const { t } = useTranslation();
+  const { readText } = useClipboard();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const titleClearance = useScreenHeaderClearance();
@@ -366,8 +367,8 @@ export default function WalletSendScreen() {
   }
 
   async function pasteInvoice() {
-    const text = await getStringAsync();
-    if (text.trim()) {
+    const text = await readText();
+    if (text?.trim()) {
       handledScanRef.current = true;
       void acceptPaymentInput(text, 'manual', true);
     }

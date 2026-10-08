@@ -1,4 +1,6 @@
 export const IPC = {
+  clipboardWriteText: 'psstpsst:clipboard:write-text',
+  clipboardReadText: 'psstpsst:clipboard:read-text',
   clipboardCopyAttachment: 'psstpsst:clipboard:copy-attachment',
   appUpdateCheck: 'psstpsst:app-update:check',
   appUpdateGetStatus: 'psstpsst:app-update:get-status',

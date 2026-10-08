@@ -11,7 +11,7 @@ import { captureRef } from 'react-native-view-shot';
 import { BottomSheet } from '../common/BottomSheet';
 import { NpubShareCard } from './NpubShareCard';
 import { ProfileAction } from './ProfileAction';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { saveUriToLibrary } from '@/services/files/media-save.service';
@@ -48,10 +48,10 @@ type Props = {
  */
 export function NpubQrSheet({ visible, onClose, npub, name, nip05 }: Props) {
   const { t } = useTranslation();
+  const { copyText, copied } = useClipboard();
   const c = useThemeColors();
   const cardRef = useRef<View>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   async function captureCard() {
     if (!cardRef.current) throw new Error('The profile card is unavailable.');
@@ -68,9 +68,7 @@ export function NpubQrSheet({ visible, onClose, npub, name, nip05 }: Props) {
   }
 
   async function copy() {
-    await setStringAsync(npub);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    await copyText(npub);
   }
 
   async function share() {

@@ -253,6 +253,8 @@
     "account_changed_history": "Das Nearby-Konto hat sich geändert. Dieser Verlauf ist schreibgeschützt."
   },
   "common": {
+    "copy_failed": "Kopieren fehlgeschlagen. Versuche es erneut.",
+    "paste_failed": "Einfügen fehlgeschlagen. Versuche es erneut.",
     "copied": "Kopiert",
     "resize_sidebar": "Seitenleistenbreite ändern",
     "cancel": "Abbrechen",

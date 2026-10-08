@@ -32,7 +32,7 @@ import { useConversation } from '@/hooks/use-conversations';
 import { useProximityPeer } from '@/hooks/use-proximity';
 import { useScrolled } from '@/hooks/use-scrolled';
 import i18n from '@/i18n';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { pubkeyToNpub } from '@/lib/nostr/keys';
 import { IS_ELECTRON } from '@/lib/platform';
@@ -65,6 +65,7 @@ function statusLabel(status: NearbyConnectionStatus): string {
 /** Local-only identity details for an authenticated Nearby Messaging peer. */
 export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
   const { t } = useTranslation();
+  const { copyText, copied } = useClipboard();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((state) => state.activePubkey) ?? '';
   const runtimePeer = useProximityStore((state) => state.peers[pubkey]);
@@ -77,7 +78,6 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
   const { conversation } = useConversation(accountPubkey, pubkey);
   const titleClearance = useScreenHeaderClearance();
   const { scrolled, scrollProps } = useScrolled();
-  const [copied, setCopied] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [nicknameDraft, setNicknameDraft] = useState('');
   const [savingNickname, setSavingNickname] = useState(false);
@@ -85,7 +85,6 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
   const [connectAttemptPending, setConnectAttemptPending] = useState(false);
   const [relationshipBusy, setRelationshipBusy] = useState(false);
   const [relationshipFailed, setRelationshipFailed] = useState(false);
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nicknameInputRef = useRef<TextInput>(null);
 
   const { peer: persistedPeer, loaded: peerLoaded } = useProximityPeer(accountPubkey, pubkey);
@@ -126,13 +125,6 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
         ? c.warning
         : c.textMuted;
 
-  useEffect(
-    () => () => {
-      if (copyResetRef.current) clearTimeout(copyResetRef.current);
-    },
-    [],
-  );
-
   useEffect(() => {
     if (!accountPubkey) return;
     let release: (() => void) | null = null;
@@ -151,10 +143,7 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
   }, [accountPubkey, pubkey]);
 
   async function copyPublicKey() {
-    await setStringAsync(encodedPubkey);
-    setCopied(true);
-    if (copyResetRef.current) clearTimeout(copyResetRef.current);
-    copyResetRef.current = setTimeout(() => setCopied(false), 1500);
+    await copyText(encodedPubkey);
   }
 
   function openChat() {

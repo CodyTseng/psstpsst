@@ -23,7 +23,7 @@ import { AppInput } from '@/components/common/AppInput';
 import { AppScreen } from '@/components/common/AppScreen';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { backSafely } from '@/lib/navigation';
-import { setStringAsync } from '@/lib/clipboard';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { IS_ELECTRON } from '@/lib/platform';
 import { Avatar } from '@/components/common/Avatar';
 import { ListGroup } from '@/components/common/ListGroup';
@@ -67,6 +67,7 @@ type DraftPicture = {
 export function ProfileView({ pubkey }: { pubkey: string }) {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const { copyText, copiedKey: copiedField, resetCopied } = useClipboard<CopyField>();
   const c = useThemeColors();
   const profile = useProfile(pubkey);
   const titleClearance = useScreenHeaderClearance();
@@ -82,14 +83,12 @@ export function ProfileView({ pubkey }: { pubkey: string }) {
   const [draftLightningAddress, setDraftLightningAddress] = useState('');
   const [draftPicture, setDraftPicture] = useState<DraftPicture | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [copiedField, setCopiedField] = useState<CopyField | null>(null);
   const [nip05ClaimOpen, setNip05ClaimOpen] = useState(false);
   const [ownedNip05, setOwnedNip05] = useState<{
     pubkey: string;
     name: string | null;
     reliable: boolean;
   } | null>(null);
-  const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nip05InputRef = useRef<TextInput>(null);
   const nip05ClaimInputRef = useRef<TextInput>(null);
   const lightningInputRef = useRef<TextInput>(null);
@@ -106,13 +105,6 @@ export function ProfileView({ pubkey }: { pubkey: string }) {
   const ownedNip05Hint =
     hasOwnedNip05Lookup && ownedNip05.reliable ? ownedNip05.name : undefined;
   const nip05Action = resolveProfileNip05Action(draftNip05, ownedNip05Name);
-
-  useEffect(
-    () => () => {
-      if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
-    },
-    [],
-  );
 
   useEffect(() => {
     if (!editing || hasOwnedNip05Lookup) return;
@@ -131,13 +123,7 @@ export function ProfileView({ pubkey }: { pubkey: string }) {
 
   async function copyValue(field: CopyField, value: string) {
     if (!value) return;
-    await setStringAsync(value);
-    setCopiedField(field);
-    if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
-    copyResetTimer.current = setTimeout(() => {
-      setCopiedField(null);
-      copyResetTimer.current = null;
-    }, 2000);
+    await copyText(value, field);
   }
 
   /** Merge changed fields over the existing kind-0 so unknown fields survive. */
@@ -199,16 +185,12 @@ export function ProfileView({ pubkey }: { pubkey: string }) {
   }
 
   function beginEditing() {
-    if (copyResetTimer.current) {
-      clearTimeout(copyResetTimer.current);
-      copyResetTimer.current = null;
-    }
     setDraftName(name);
     setDraftNip05(nip05);
     setNip05InputErrorVisible(false);
     setDraftLightningAddress(lightningAddress);
     setDraftPicture(null);
-    setCopiedField(null);
+    resetCopied();
     // Ownership is remote state and may have changed since the previous edit session.
     setOwnedNip05(null);
     setEditing(true);
