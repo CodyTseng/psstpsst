@@ -402,7 +402,12 @@
     "title": "Medya",
     "empty": "Henüz fotoğraf veya video yok",
     "show_all": "Tüm medya",
-    "go_to_message": "Mesaja git"
+    "go_to_message": "Mesaja git",
+    "playback_speed": "Oynatma hızı: {{speed}}×",
+    "playback_position": "Oynatma konumu",
+    "speed_value": "{{speed}}×",
+    "mute": "Sesi kapat",
+    "unmute": "Sesi aç"
   },
   "voice": {
     "permission": "Sesli mesaj kaydetmek için mikrofon erişimi gerekir. Ayarlar'dan etkinleştir.",

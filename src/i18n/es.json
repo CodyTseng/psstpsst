@@ -405,7 +405,12 @@
     "title": "Contenido multimedia",
     "empty": "Aún no hay fotos ni vídeos",
     "show_all": "Todo el contenido multimedia",
-    "go_to_message": "Ir al mensaje"
+    "go_to_message": "Ir al mensaje",
+    "playback_speed": "Velocidad de reproducción: {{speed}}×",
+    "playback_position": "Posición de reproducción",
+    "speed_value": "{{speed}}×",
+    "mute": "Silenciar",
+    "unmute": "Activar sonido"
   },
   "voice": {
     "permission": "Se necesita acceso al micrófono para grabar mensajes de voz. Actívalo en Ajustes.",

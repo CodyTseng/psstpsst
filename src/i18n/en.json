@@ -402,7 +402,12 @@
     "title": "Media",
     "empty": "No photos or videos yet",
     "show_all": "All media",
-    "go_to_message": "Go to message"
+    "go_to_message": "Go to message",
+    "playback_speed": "Playback speed: {{speed}}×",
+    "playback_position": "Playback position",
+    "speed_value": "{{speed}}×",
+    "mute": "Mute",
+    "unmute": "Unmute"
   },
   "voice": {
     "permission": "Microphone access is needed to record voice messages. Enable it in Settings.",

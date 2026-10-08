@@ -20,6 +20,7 @@ import { copyForShare } from '@/services/files/file-attachment.service';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { spacing, useThemeColors } from '@/theme';
+import { MediaPlaybackControls } from './MediaPlaybackControls';
 
 type Props = {
   item: ConversationMediaItem;
@@ -141,6 +142,7 @@ function UnsupportedVideo({ uri, mime, name }: { uri?: string; mime?: string; na
 function AutoplayVideo({ source, onError }: { source: VideoSource; onError: () => void }) {
   const player = useVideoPlayer(null, (instance) => {
     instance.loop = false;
+    instance.timeUpdateEventInterval = IS_ELECTRON ? 0 : 0.5;
   });
   const { status } = useEvent(player, 'statusChange', { status: player.status });
   useEffect(() => {
@@ -157,16 +159,19 @@ function AutoplayVideo({ source, onError }: { source: VideoSource; onError: () =
     };
   }, [player, source, onError]);
   return (
-    <VideoView
-      player={player}
-      // On web, VideoView is a replaced <video> element: insets alone do not
-      // constrain its intrinsic dimensions. Explicit bounds make contain work.
-      style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
-      contentFit="contain"
-      // The viewer translates and fades this surface during drag dismissal.
-      surfaceType="textureView"
-      nativeControls
-      fullscreenOptions={{ enable: true }}
-    />
+    <>
+      <VideoView
+        player={player}
+        // On web, VideoView is a replaced <video> element: insets alone do not
+        // constrain its intrinsic dimensions. Explicit bounds make contain work.
+        style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+        contentFit="contain"
+        // The viewer translates and fades this surface during drag dismissal.
+        surfaceType="textureView"
+        nativeControls={IS_ELECTRON}
+        fullscreenOptions={{ enable: IS_ELECTRON }}
+      />
+      {!IS_ELECTRON ? <MediaPlaybackControls player={player} /> : null}
+    </>
   );
 }

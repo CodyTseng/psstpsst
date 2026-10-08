@@ -402,7 +402,12 @@
     "title": "Média",
     "empty": "Még nincsenek fényképek vagy videók",
     "show_all": "Összes média",
-    "go_to_message": "Ugrás az üzenethez"
+    "go_to_message": "Ugrás az üzenethez",
+    "playback_speed": "Lejátszási sebesség: {{speed}}×",
+    "playback_position": "Lejátszási pozíció",
+    "speed_value": "{{speed}}×",
+    "mute": "Némítás",
+    "unmute": "Némítás feloldása"
   },
   "voice": {
     "permission": "Hangüzenetek rögzítéséhez mikrofon-hozzáférés szükséges. Engedélyezd a Beállításokban.",

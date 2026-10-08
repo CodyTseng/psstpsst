@@ -15,6 +15,7 @@ import { radius, uiDensity, useThemeColors, type FontWeight } from '@/theme';
 type Variant =
   | 'primary'
   | 'secondary'
+  | 'overlay'
   | 'ghost'
   | 'accentGhost'
   | 'text'
@@ -55,6 +56,8 @@ type Props = Omit<PressableProps, 'children' | 'style'> & {
   compactAxis?: 'all' | 'horizontal' | 'none';
   /** Equal compact padding override. Pass a registered spacing token. */
   compactInset?: number;
+  /** Equal minimum width and height for a compact media action. Use a density token. */
+  minimumSize?: number;
 };
 
 // Equal inset for compact pills, matching the registered icon-button language.
@@ -80,6 +83,7 @@ export function AppButton({
   compact: compactProp,
   compactAxis: compactAxisProp,
   compactInset: compactInsetProp,
+  minimumSize,
   disabled,
   hitSlop,
   ...rest
@@ -113,6 +117,7 @@ export function AppButton({
       text: c.text,
       border: c.border,
     },
+    overlay: { bg: c.overlayControl, text: c.onOverlay },
     ghost: {
       bg: 'transparent',
       text: c.textMuted,
@@ -176,7 +181,8 @@ export function AppButton({
                 minHeight: sizing.height,
                 paddingHorizontal: sizing.horizontalPadding,
               }),
-        backgroundColor: selected ? c.accent : v.bg,
+        ...(minimumSize === undefined ? {} : { minWidth: minimumSize, minHeight: minimumSize }),
+        backgroundColor: selected ? c.accent : variant === 'overlay' && pressed && !isDisabled ? c.overlayControlActive : v.bg,
         borderColor: selected ? 'transparent' : v.border ?? 'transparent',
         borderWidth: selected ? 0 : v.border ? 1 : 0,
         borderRadius: buttonRadius,
@@ -211,11 +217,11 @@ export function AppButton({
                   pointerEvents: 'none',
                 }}
               />
-              {!isDisabled && pressed && !textChrome ? (
+              {!isDisabled && pressed && !textChrome && variant !== 'overlay' ? (
                 <InteractionOverlay />
               ) : null}
             </>
-          ) : !isDisabled && pressed && !textChrome ? (
+          ) : !isDisabled && pressed && !textChrome && variant !== 'overlay' ? (
             <InteractionOverlay />
           ) : null}
           <View

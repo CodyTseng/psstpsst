@@ -402,7 +402,12 @@
     "title": "미디어",
     "empty": "아직 사진이나 동영상이 없습니다",
     "show_all": "모든 미디어",
-    "go_to_message": "메시지로 이동"
+    "go_to_message": "메시지로 이동",
+    "playback_speed": "재생 속도: {{speed}}배",
+    "playback_position": "재생 위치",
+    "speed_value": "{{speed}}×",
+    "mute": "음소거",
+    "unmute": "음소거 해제"
   },
   "voice": {
     "permission": "음성 메시지를 녹음하려면 마이크 접근 권한이 필요합니다. 설정에서 허용하세요.",

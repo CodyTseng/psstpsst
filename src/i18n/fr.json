@@ -405,7 +405,12 @@
     "title": "Médias",
     "empty": "Aucune photo ni vidéo pour le moment",
     "show_all": "Tous les médias",
-    "go_to_message": "Accéder au message"
+    "go_to_message": "Accéder au message",
+    "playback_speed": "Vitesse de lecture : {{speed}}×",
+    "playback_position": "Position de lecture",
+    "speed_value": "{{speed}}×",
+    "mute": "Couper le son",
+    "unmute": "Rétablir le son"
   },
   "voice": {
     "permission": "L'accès au microphone est nécessaire pour enregistrer des messages vocaux. Activez-le dans les réglages.",

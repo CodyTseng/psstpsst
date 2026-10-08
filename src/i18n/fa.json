@@ -402,7 +402,12 @@
     "title": "رسانه",
     "empty": "هنوز عکس یا ویدیویی نیست",
     "show_all": "همه رسانه‌ها",
-    "go_to_message": "رفتن به پیام"
+    "go_to_message": "رفتن به پیام",
+    "playback_speed": "سرعت پخش: {{speed}}×",
+    "playback_position": "موقعیت پخش",
+    "speed_value": "{{speed}}×",
+    "mute": "بی‌صدا",
+    "unmute": "لغو بی‌صدا"
   },
   "voice": {
     "permission": "برای ضبط پیام صوتی به دسترسی میکروفون نیاز است. آن را در تنظیمات فعال کنید.",

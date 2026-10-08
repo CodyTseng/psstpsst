@@ -405,7 +405,12 @@
     "title": "Mídia",
     "empty": "Nenhuma foto ou vídeo ainda",
     "show_all": "Todas as mídias",
-    "go_to_message": "Ir para a mensagem"
+    "go_to_message": "Ir para a mensagem",
+    "playback_speed": "Velocidade de reprodução: {{speed}}×",
+    "playback_position": "Posição de reprodução",
+    "speed_value": "{{speed}}×",
+    "mute": "Silenciar",
+    "unmute": "Ativar som"
   },
   "voice": {
     "permission": "É necessário acessar o microfone para gravar mensagens de voz. Ative o acesso nas Configurações.",

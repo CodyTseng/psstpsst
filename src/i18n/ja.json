@@ -402,7 +402,12 @@
     "title": "メディア",
     "empty": "まだ写真や動画はありません",
     "show_all": "すべてのメディア",
-    "go_to_message": "メッセージに移動"
+    "go_to_message": "メッセージに移動",
+    "playback_speed": "再生速度：{{speed}}倍",
+    "playback_position": "再生位置",
+    "speed_value": "{{speed}}×",
+    "mute": "ミュート",
+    "unmute": "ミュート解除"
   },
   "voice": {
     "permission": "音声メッセージの録音にはマイクへのアクセスが必要です。設定で有効にしてください。",

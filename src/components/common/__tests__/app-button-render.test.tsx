@@ -53,6 +53,22 @@ describe('AppButton layout', () => {
     expect(label.props.style).toMatchObject({ includeFontPadding: false });
   });
 
+  it.each(['light', 'dark'] as const)('keeps compact media labels square at minimum size and legible in %s mode', (preference) => {
+    mockPreference = preference;
+    act(() => {
+      renderer = create(<AppButton label="1×" variant="overlay" compact fullWidth={false}
+        minimumSize={uiDensity.headerActionSize} labelVariant="caption" corner="full" />);
+    });
+    const palette = preference === 'dark' ? darkPalette : lightPalette;
+    const pressable = renderer!.root.findByType(InteractivePressable);
+    expect(pressable.props.style({ pressed: false })).toMatchObject({
+      minWidth: uiDensity.headerActionSize, minHeight: uiDensity.headerActionSize,
+      backgroundColor: palette.overlayControl,
+    });
+    expect(pressable.props.style({ pressed: true }).backgroundColor).toBe(palette.overlayControlActive);
+    expect(renderer!.root.findByType(AppText).props.style.color).toBe(palette.onOverlay);
+  });
+
   it('can keep a changing text action to one stable line', () => {
     act(() => {
       renderer = create(

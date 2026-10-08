@@ -34,11 +34,14 @@ jest.mock('@/stores/theme.store', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 12, right: 0, bottom: 0, left: 0 }),
+  useSafeAreaInsets: () => mockInsets,
 }));
+let mockInsets = { top: 12, right: 0, bottom: 0, left: 0 };
 
 describe('MediaViewerTopBar', () => {
   let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => { mockInsets = { top: 12, right: 0, bottom: 0, left: 0 }; });
 
   afterEach(() => {
     act(() => renderer?.unmount());
@@ -58,7 +61,7 @@ describe('MediaViewerTopBar', () => {
         top: 12 + spacing.sm,
         start: 0,
         end: 0,
-        paddingHorizontal: spacing.sm,
+        paddingHorizontal: spacing.lg,
       }),
     );
 
@@ -67,6 +70,14 @@ describe('MediaViewerTopBar', () => {
     expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual(['Close', 'Save']);
     expect(buttons.every((button) => button.props.variant === 'overlay')).toBe(true);
     expect(buttons.every((button) => button.props.size === uiDensity.headerActionSize)).toBe(true);
+  });
+
+  it('keeps landscape actions inside symmetric safe gutters', () => {
+    mockInsets = { top: 0, bottom: 21, left: 44, right: 0 };
+    act(() => {
+      renderer = create(<MediaViewerTopBar onClose={jest.fn()} onSave={jest.fn()} />);
+    });
+    expect(renderer!.root.findAllByType(View)[0].props.style.paddingHorizontal).toBe(44 + spacing.lg);
   });
 
   it('adds one context action between close and save', () => {

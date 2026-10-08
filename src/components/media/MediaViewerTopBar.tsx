@@ -40,7 +40,7 @@ export function MediaViewerTopBar({ disabled, extraAction, imageZoom, onClose, o
         top: insets.top + spacing.sm,
         start: 0,
         end: 0,
-        paddingHorizontal: spacing.sm,
+        paddingHorizontal: spacing.lg + Math.max(insets.left ?? 0, insets.right ?? 0),
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',

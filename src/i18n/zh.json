@@ -402,7 +402,12 @@
     "title": "媒体",
     "empty": "暂无图片或视频",
     "show_all": "全部媒体",
-    "go_to_message": "跳转到聊天"
+    "go_to_message": "跳转到聊天",
+    "playback_speed": "播放速度：{{speed}} 倍",
+    "playback_position": "播放进度",
+    "speed_value": "{{speed}}×",
+    "mute": "静音",
+    "unmute": "取消静音"
   },
   "voice": {
     "permission": "录制语音需要麦克风权限，请在系统设置中开启。",

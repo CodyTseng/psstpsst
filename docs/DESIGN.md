@@ -452,6 +452,13 @@ Video message posters open the shared conversation media viewer once the file is
 available. Viewer videos fit within both dimensions of the viewport without cropping.
 On Electron, the player's fullscreen control presents the video on the display
 through system fullscreen; exiting restores the application's previous window.
+Mobile media viewers already fill the screen and omit the player's fullscreen control.
+Touch video previews stay immersive, with a separate progress rail above the
+bottom playback, mute, and speed actions. Do not enclose them in a card.
+Playback chrome shares the media action styling and stays clear of window safe areas.
+Top and bottom media actions align to the same horizontal gutters.
+Scrubbing previews the video frame, retains touch ownership outside the rail,
+and restores the preceding playback intent when released.
 Full-screen media viewers use opacity-only entrance and dismissal. Dismissal
 finishes before the viewer is removed or a context action navigates elsewhere;
 Reduce Motion is respected.

@@ -408,7 +408,12 @@
     "title": "Multimedia",
     "empty": "Brak zdjęć i filmów",
     "show_all": "Wszystkie multimedia",
-    "go_to_message": "Przejdź do wiadomości"
+    "go_to_message": "Przejdź do wiadomości",
+    "playback_speed": "Prędkość odtwarzania: {{speed}}×",
+    "playback_position": "Pozycja odtwarzania",
+    "speed_value": "{{speed}}×",
+    "mute": "Wycisz",
+    "unmute": "Włącz dźwięk"
   },
   "voice": {
     "permission": "Do nagrywania wiadomości głosowych wymagany jest dostęp do mikrofonu. Włącz go w Ustawieniach.",

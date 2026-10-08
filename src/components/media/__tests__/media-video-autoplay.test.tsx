@@ -26,6 +26,7 @@ jest.mock('expo-video', () => ({
   }), VideoView: () => null,
 }));
 jest.mock('expo', () => ({ useEvent: () => ({ status: mockStatus }) }));
+jest.mock('../MediaPlaybackControls', () => ({ MediaPlaybackControls: () => null }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } }));
 jest.mock('@/platform', () => ({ platform: { confirmationDialog: { notify: jest.fn() } } }));
@@ -80,16 +81,19 @@ beforeEach(() => {
 });
 afterEach(() => act(() => renderer?.unmount()));
 
-it.each(['light', 'dark'] as const)('downloads and plays the selected attachment without a second tap in %s mode', async (scheme) => {
+it.each([
+  ['light', false], ['dark', false], ['light', true], ['dark', true],
+] as const)('downloads and plays the selected attachment without a second tap in %s mode (Electron=%s)', async (scheme, electron) => {
   mockThemePreference = scheme;
+  mockElectron = electron;
   await act(async () => { renderer = create(<MediaVideoPage item={attachment} active />); });
   expect(fetchVideo).toHaveBeenCalledTimes(1);
   expect(mockPlayer.replaceAsync).toHaveBeenCalledWith('file:///downloaded.mp4');
   expect(mockPlayer.play).toHaveBeenCalledTimes(1);
-  expect(renderer.root.findByType(VideoView).props.nativeControls).toBe(true);
+  expect(renderer.root.findByType(VideoView).props.nativeControls).toBe(electron);
   expect(StyleSheet.flatten(renderer.root.findByType(VideoView).props.style))
     .toMatchObject({ width: '100%', height: '100%' });
-  expect(renderer.root.findByType(VideoView).props.fullscreenOptions).toEqual({ enable: true });
+  expect(renderer.root.findByType(VideoView).props.fullscreenOptions).toEqual({ enable: electron });
 });
 
 it('plays an already-cached video without downloading it', async () => {

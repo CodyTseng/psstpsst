@@ -402,7 +402,12 @@
     "title": "Medien",
     "empty": "Noch keine Fotos oder Videos",
     "show_all": "Alle Medien",
-    "go_to_message": "Zur Nachricht"
+    "go_to_message": "Zur Nachricht",
+    "playback_speed": "Wiedergabegeschwindigkeit: {{speed}}×",
+    "playback_position": "Wiedergabeposition",
+    "speed_value": "{{speed}}×",
+    "mute": "Stummschalten",
+    "unmute": "Ton einschalten"
   },
   "voice": {
     "permission": "Zum Aufnehmen von Sprachnachrichten ist Mikrofonzugriff erforderlich. Aktiviere ihn in den Einstellungen.",

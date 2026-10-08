@@ -405,7 +405,12 @@
     "title": "Media",
     "empty": "Ancora nessuna foto o video",
     "show_all": "Tutti i media",
-    "go_to_message": "Vai al messaggio"
+    "go_to_message": "Vai al messaggio",
+    "playback_speed": "Velocità di riproduzione: {{speed}}×",
+    "playback_position": "Posizione di riproduzione",
+    "speed_value": "{{speed}}×",
+    "mute": "Disattiva audio",
+    "unmute": "Attiva audio"
   },
   "voice": {
     "permission": "Per registrare messaggi vocali serve l'accesso al microfono. Abilitalo nelle Impostazioni.",

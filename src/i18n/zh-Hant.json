@@ -402,7 +402,12 @@
     "title": "媒體",
     "empty": "尚無照片或影片",
     "show_all": "所有媒體",
-    "go_to_message": "前往訊息"
+    "go_to_message": "前往訊息",
+    "playback_speed": "播放速度：{{speed}} 倍",
+    "playback_position": "播放進度",
+    "speed_value": "{{speed}}×",
+    "mute": "靜音",
+    "unmute": "取消靜音"
   },
   "voice": {
     "permission": "錄製語音訊息需要麥克風存取權。請在「設定」中啟用。",
