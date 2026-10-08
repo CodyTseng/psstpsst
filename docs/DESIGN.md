@@ -455,6 +455,9 @@ through system fullscreen; exiting restores the application's previous window.
 Full-screen media viewers use opacity-only entrance and dismissal. Dismissal
 finishes before the viewer is removed or a context action navigates elsewhere;
 Reduce Motion is respected.
+On touch devices, images at fit size and videos support vertical drag or flick
+to dismiss while horizontal swipes page through media. Video playback controls
+remain interactive.
 
 At the responsive split threshold, tablets and Electron present a persistent
 primary pane and a detail pane using the same navigation state. Narrow windows

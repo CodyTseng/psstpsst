@@ -163,6 +163,8 @@ function AutoplayVideo({ source, onError }: { source: VideoSource; onError: () =
       // constrain its intrinsic dimensions. Explicit bounds make contain work.
       style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
       contentFit="contain"
+      // The viewer translates and fades this surface during drag dismissal.
+      surfaceType="textureView"
       nativeControls
       fullscreenOptions={{ enable: true }}
     />

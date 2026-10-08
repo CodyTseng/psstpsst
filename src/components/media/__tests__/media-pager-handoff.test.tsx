@@ -6,6 +6,7 @@ import { useAttachment } from '@/hooks/use-attachment';
 import { useConversationMedia, type ConversationMediaItem } from '@/hooks/use-conversation-media';
 import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { MediaPager } from '../MediaPager';
+import { MediaDismissSurface } from '../MediaDismissSurface';
 
 let mockEntered = false;
 let mockElectron = false;
@@ -15,6 +16,7 @@ let mockInstance = 0;
 const mockMounted = jest.fn();
 const mockUnmounted = jest.fn();
 const mockScrollToOffset = jest.fn();
+const mockRequestClose = jest.fn();
 
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('expo-router', () => ({ router: { navigate: jest.fn() } }));
@@ -29,11 +31,14 @@ jest.mock('@/lib/attachments/failure', () => ({ revealOrRetry: jest.fn() }));
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: () => 'account' }));
 jest.mock('@/theme', () => ({ useThemeColors: () => ({}), desktopChrome: { titlebarHeight: 32 }, uiDensity: {} }));
 jest.mock('../MediaVideoPage', () => ({ MediaVideoPage: () => null }));
+jest.mock('../MediaDismissSurface', () => ({
+  MediaDismissSurface: ({ children }: { children: ReactNode }) => children,
+}));
 jest.mock('../MediaViewerTopBar', () => ({ MediaViewerTopBar: () => null }));
 jest.mock('../use-media-viewer-transition', () => ({
   useMediaViewerTransition: () => ({
     entered: mockEntered, isClosing: false, animatedStyle: {}, contentStyle: {},
-    requestClose: jest.fn(),
+    requestClose: mockRequestClose,
   }),
 }));
 jest.mock('@/hooks/use-conversation-media', () => ({
@@ -153,6 +158,25 @@ it('does not mount neighbouring remote images until the user selects their page'
     preview.uri,
     'https://media.test/newer',
   ]);
+});
+
+it('connects video dismissal to the viewer transition only on the selected page', () => {
+  mockEntered = true;
+  mockLoaded = true;
+  mockItems = [focus, ...['first', 'second'].map((id) => ({
+    ...neighbour(id), isVideo: true,
+  }))];
+  render();
+  const list = renderer!.root.findByType(FlatList);
+  act(() => {
+    list.props.onMomentumScrollEnd({
+      nativeEvent: { contentOffset: { x: list.props.getItemLayout(null, 1).offset } },
+    });
+  });
+  const surfaces = renderer!.root.findAllByType(MediaDismissSurface);
+  expect(surfaces.map((surface) => surface.props.active)).toEqual([true, false]);
+  act(() => { surfaces[0].props.onRequestClose(); });
+  expect(mockRequestClose).toHaveBeenCalledTimes(1);
 });
 
 jest.mock('../MediaViewerContextMenu', () => ({

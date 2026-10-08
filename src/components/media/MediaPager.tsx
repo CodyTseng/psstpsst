@@ -23,6 +23,7 @@ import { MediaViewerTopBar } from '@/components/media/MediaViewerTopBar';
 import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
 import { MediaVideoPage } from '@/components/media/MediaVideoPage';
+import { MediaDismissSurface } from '@/components/media/MediaDismissSurface';
 import { useAttachment } from '@/hooks/use-attachment';
 import {
   type ConversationMediaItem,
@@ -240,7 +241,13 @@ export function MediaPager({
             renderItem={({ item, index }) => (
               <View style={{ width, height: pageHeight }}>
                 {item.isVideo ? (
-                  <MediaVideoPage item={item} active={index === currentIndex} />
+                  <MediaDismissSurface
+                    active={index === currentIndex}
+                    backdrop={backdrop}
+                    onRequestClose={() => requestClose()}
+                  >
+                    <MediaVideoPage item={item} active={index === currentIndex} />
+                  </MediaDismissSurface>
                 ) : index === currentIndex ? (
                   <MediaImagePage
                     preview={item.mediaKey === focusMediaKey ? preview : undefined}
