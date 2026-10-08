@@ -253,6 +253,7 @@
     "account_changed_history": "근거리 통신 계정이 변경되었습니다. 이 기록은 읽기 전용입니다."
   },
   "common": {
+    "copied": "복사됨",
     "resize_sidebar": "사이드바 너비 조절",
     "cancel": "취소",
     "delete": "삭제",
@@ -381,6 +382,7 @@
     "save": "저장",
     "saved": "사진에 저장했습니다.",
     "save_permission": "라이브러리에 저장하려면 사진 접근 권한이 필요합니다. 설정에서 허용하세요.",
+    "copy_failed": "복사하지 못했습니다. 다시 시도해 주세요.",
     "save_failed": "저장할 수 없습니다. 다시 시도하세요.",
     "download_failed": "다운로드 실패",
     "transfer_bluetooth": "Bluetooth",

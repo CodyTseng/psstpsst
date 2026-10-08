@@ -253,6 +253,7 @@
     "account_changed_history": "Das Nearby-Konto hat sich geändert. Dieser Verlauf ist schreibgeschützt."
   },
   "common": {
+    "copied": "Kopiert",
     "resize_sidebar": "Seitenleistenbreite ändern",
     "cancel": "Abbrechen",
     "delete": "Löschen",
@@ -381,6 +382,7 @@
     "save": "Speichern",
     "saved": "In deinen Fotos gespeichert.",
     "save_permission": "Zum Speichern in deiner Mediathek ist Fotozugriff erforderlich. Aktiviere ihn in den Einstellungen.",
+    "copy_failed": "Kopieren fehlgeschlagen. Versuche es erneut.",
     "save_failed": "Speichern fehlgeschlagen. Versuche es erneut.",
     "download_failed": "Download fehlgeschlagen",
     "transfer_bluetooth": "Bluetooth",

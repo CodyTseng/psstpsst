@@ -253,6 +253,7 @@
     "account_changed_history": "Nearby account changed. This history is read-only."
   },
   "common": {
+    "copied": "Copied",
     "resize_sidebar": "Resize sidebar",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -381,6 +382,7 @@
     "save": "Save",
     "saved": "Saved to your photos.",
     "save_permission": "Photo access is needed to save to your library. Enable it in Settings.",
+    "copy_failed": "Couldn't copy. Try again.",
     "save_failed": "Couldn't save. Try again.",
     "download_failed": "Download failed",
     "transfer_bluetooth": "Bluetooth",

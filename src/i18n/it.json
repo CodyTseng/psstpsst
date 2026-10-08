@@ -253,6 +253,7 @@
     "account_changed_history": "L'account nelle vicinanze è cambiato. Questa cronologia è in sola lettura."
   },
   "common": {
+    "copied": "Copiato",
     "resize_sidebar": "Ridimensiona la barra laterale",
     "cancel": "Annulla",
     "delete": "Elimina",
@@ -384,6 +385,7 @@
     "save": "Salva",
     "saved": "Salvato nelle foto.",
     "save_permission": "Per salvare nella libreria serve l'accesso alle foto. Abilitalo nelle Impostazioni.",
+    "copy_failed": "Impossibile copiare. Riprova.",
     "save_failed": "Impossibile salvare. Riprova.",
     "download_failed": "Download non riuscito",
     "transfer_bluetooth": "Bluetooth",

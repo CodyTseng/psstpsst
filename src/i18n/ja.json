@@ -253,6 +253,7 @@
     "account_changed_history": "近距離通信アカウントが変更されました。この履歴は閲覧のみ可能です。"
   },
   "common": {
+    "copied": "コピーしました",
     "resize_sidebar": "サイドバーの幅を変更",
     "cancel": "キャンセル",
     "delete": "削除",
@@ -381,6 +382,7 @@
     "save": "保存",
     "saved": "写真に保存しました。",
     "save_permission": "ライブラリへの保存には写真へのアクセスが必要です。設定で有効にしてください。",
+    "copy_failed": "コピーできませんでした。もう一度お試しください。",
     "save_failed": "保存できませんでした。もう一度お試しください。",
     "download_failed": "ダウンロードに失敗しました",
     "transfer_bluetooth": "Bluetooth",

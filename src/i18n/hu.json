@@ -253,6 +253,7 @@
     "account_changed_history": "A közeli fiók megváltozott. Ez az előzmény csak olvasható."
   },
   "common": {
+    "copied": "Másolva",
     "resize_sidebar": "Oldalsáv átméretezése",
     "cancel": "Mégse",
     "delete": "Törlés",
@@ -381,6 +382,7 @@
     "save": "Mentés",
     "saved": "Mentve a fényképek közé.",
     "save_permission": "A könyvtárba mentéshez fénykép-hozzáférés szükséges. Engedélyezd a Beállításokban.",
+    "copy_failed": "Nem sikerült másolni. Próbáld újra.",
     "save_failed": "Nem sikerült menteni. Próbáld újra.",
     "download_failed": "Sikertelen letöltés",
     "transfer_bluetooth": "Bluetooth",

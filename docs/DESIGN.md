@@ -429,6 +429,8 @@ available container width on both touch devices and Electron.
 Image framing and full-screen image viewing on Electron provide explicit zoom
 controls, pointer dragging while zoomed, and trackpad two-finger zooming and
 panning; essential actions must not depend on multi-touch gestures.
+On Electron, full-screen media viewers expose Copy for images and Save through
+the shared pointer context menu.
 Full-screen media viewers use opacity-only entrance and dismissal. Dismissal
 finishes before the viewer is removed or a context action navigates elsewhere;
 Reduce Motion is respected.
@@ -512,7 +514,8 @@ does not animate with the navigation transition. Modal-owned inputs may focus
 from the modal's supported presentation callback.
 Opening a conversation on Electron focuses its composer immediately; printable
 typing elsewhere in the conversation restores composer focus unless a shortcut,
-modal, or another text editor owns the event. Pasting files anywhere in the
+modal, or another text editor owns the event. Attachment menus expose Copy only for content supported by the platform
+clipboard; copying hands off the actual image or file. Pasting files anywhere in the
 active conversation opens the attachment preview under the same ownership
 rules; ordinary text paste stays with the focused editor. Mobile conversation
 entry does not raise the software keyboard.

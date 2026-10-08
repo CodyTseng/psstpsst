@@ -103,6 +103,9 @@ const bridge: ElectronBridge = {
     setItem: (key, value) => invoke(IPC.secureSet, key, value),
     deleteItem: (key) => invoke(IPC.secureDelete, key),
   },
+  clipboard: {
+    copyAttachment: (uri, options) => invoke(IPC.clipboardCopyAttachment, uri, options),
+  },
   fileSystem: {
     documentDirectoryUri: () => invoke(IPC.fsDocumentDirectory),
     cacheDirectoryUri: () => invoke(IPC.fsCacheDirectory),

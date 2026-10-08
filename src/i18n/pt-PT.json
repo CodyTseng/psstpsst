@@ -253,6 +253,7 @@
     "account_changed_history": "A conta de proximidade mudou. Este histórico é apenas de leitura."
   },
   "common": {
+    "copied": "Copiado",
     "resize_sidebar": "Redimensionar barra lateral",
     "cancel": "Cancelar",
     "delete": "Eliminar",
@@ -384,6 +385,7 @@
     "save": "Guardar",
     "saved": "Guardado nas suas fotografias.",
     "save_permission": "É necessário acesso às fotografias para guardar na galeria. Ative-o nas Definições.",
+    "copy_failed": "Não foi possível copiar. Tenta novamente.",
     "save_failed": "Não foi possível guardar. Tente novamente.",
     "download_failed": "Falha na transferência",
     "transfer_bluetooth": "Bluetooth",

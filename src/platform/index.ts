@@ -2,6 +2,7 @@ import type { PlatformAdapters } from './ports';
 import { getPlatform } from './registry';
 
 export type {
+  ClipboardPort,
   AppStatePort,
   AppStateStatus,
   AppUpdatePort,

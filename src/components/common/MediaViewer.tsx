@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, { useSharedValue } from 'react-native-reanimated';
 
 import { ZoomableImage, type ZoomableImageHandle } from './ZoomableImage';
+import { copyImageUri } from '@/services/files/attachment-copy.service';
+import { MediaViewerContextMenu } from '@/components/media/MediaViewerContextMenu';
 import { MediaPager } from '@/components/media/MediaPager';
 import { MediaViewerTopBar } from '@/components/media/MediaViewerTopBar';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
@@ -85,7 +87,10 @@ export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: ()
   }
 
   return (
-    <View
+    <MediaViewerContextMenu
+      onCopy={() => copyImageUri(uri)}
+      onSave={save}
+      disabled={saving || isClosing}
       style={[
         StyleSheet.absoluteFill,
         {
@@ -122,6 +127,6 @@ export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: ()
           }}
         />
       </Animated.View>
-    </View>
+    </MediaViewerContextMenu>
   );
 }

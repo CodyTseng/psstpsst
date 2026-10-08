@@ -253,6 +253,7 @@
     "account_changed_history": "近距離通訊帳號已變更，此對話僅供瀏覽。"
   },
   "common": {
+    "copied": "已複製",
     "resize_sidebar": "調整側欄寬度",
     "cancel": "取消",
     "delete": "刪除",
@@ -381,6 +382,7 @@
     "save": "儲存",
     "saved": "已儲存至照片。",
     "save_permission": "儲存至圖庫需要照片存取權。請在「設定」中啟用。",
+    "copy_failed": "複製失敗，請重試。",
     "save_failed": "無法儲存，請再試一次。",
     "download_failed": "下載失敗",
     "transfer_bluetooth": "藍牙",

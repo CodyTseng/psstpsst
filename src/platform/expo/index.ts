@@ -1,3 +1,4 @@
+import { clipboardAdapter } from './clipboard';
 import { imageCacheAdapter } from './image-cache';
 import type { FileSystemPort } from '../ports/file-system';
 import type { FileSaverPort } from '../ports/file-saver';
@@ -217,6 +218,7 @@ export function createExpoAdapters(): PlatformAdapters {
     zipArchive: zipArchiveAdapter,
     localAuth: localAuthAdapter,
     mediaLibrary: mediaLibraryAdapter,
+    clipboard: clipboardAdapter,
     sharing: sharingAdapter,
     networkState: networkStateAdapter,
     noise: lazyNoiseAdapter(),

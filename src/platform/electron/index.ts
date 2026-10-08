@@ -156,6 +156,10 @@ export function createElectronAdapters(): PlatformAdapters {
       requestWritePermission: () => Promise.resolve(true),
       saveToLibrary: (uri) => bridge.dialogs.saveMedia(uri),
     },
+    clipboard: {
+      canCopyAttachment: () => true,
+      copyAttachment: (uri, options) => bridge.clipboard.copyAttachment(uri, options),
+    },
     sharing: {
       isAvailable: () => Promise.resolve(true),
       async share(uri) {

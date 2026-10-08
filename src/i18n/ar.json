@@ -181,6 +181,7 @@
     "invoice_preview_sent": "[تم إرسال طلب دفع] {{amount}}"
   },
   "common": {
+    "copied": "تم النسخ",
     "resize_sidebar": "تغيير عرض الشريط الجانبي",
     "cancel": "إلغاء",
     "delete": "حذف",
@@ -491,6 +492,7 @@
     "save": "حفظ",
     "saved": "تم الحفظ في صورك.",
     "save_permission": "يلزم الوصول إلى الصور للحفظ في مكتبتك. فعّله في الإعدادات.",
+    "copy_failed": "تعذّر النسخ. حاول مرة أخرى.",
     "save_failed": "تعذر الحفظ. حاول مرة أخرى.",
     "download_failed": "فشل التنزيل",
     "transfer_bluetooth": "Bluetooth",

@@ -113,6 +113,7 @@ import {
   customEmojisFromMessageTags,
   type CustomEmoji,
 } from '@/lib/nostr/custom-emoji';
+import { copyAttachment, copyLocalAttachment } from '@/services/files/attachment-copy.service';
 import { nearbyFileUploadService } from '@/services/files/nearby-file-upload.service';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
 import {
@@ -130,6 +131,7 @@ import { shareContactContent } from '@/lib/share/contact-card';
 import type { ShareTarget } from '@/lib/share/share-target';
 import { conversationRemoteContentMode } from '@/components/chat/remote-content-policy';
 import { resolvePeerRelationship, type PeerRelationship } from '@/lib/chat/peer-relationship';
+import { reconcileRenderedPendingAttachments } from '@/lib/chat/pending-attachment-cleanup';
 import { PendingComposerSends } from '@/lib/chat/pending-composer-sends';
 import { platform } from '@/platform';
 import { buildSigner } from '@/services/account/account.service';
@@ -1176,6 +1178,10 @@ function ChatPageContent({
   // the menu's modal is still dismissing freezes the app, same hazard as the
   // emoji picker above).
   const [pendingDetailId, setPendingDetailId] = useState<string | null>(null);
+  const [copyingPendingCounts, setCopyingPendingCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const [pendingCopyAttachment, setPendingCopyAttachment] = useState<
+    FileAttachmentMeta | PendingAttachment | null
+  >(null);
   const [pendingSaveUpload, setPendingSaveUpload] = useState<PendingAttachment | null>(null);
   // Enter selection mode only *after* the action menu has fully closed, so the
   // bubble's selection shift doesn't animate while the lifted copy is still
@@ -1373,12 +1379,15 @@ function ChatPageContent({
   // drop the in-memory bubble. MessageList already hides it this same frame,
   // so this is just store cleanup.
   useEffect(() => {
-    const sentReal = inFlight.filter(
-      (p) => p.status === 'sent' && p.sentRumorId && messageIds.has(p.sentRumorId),
-    );
-    for (const p of sentReal) removeOnePending(p.tempId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageIds, inFlight]);
+    // Keep the staged source alive while an existing menu or clipboard request
+    // owns it. The list already hides sent placeholders, so this adds no row.
+    const retained = new Set(copyingPendingCounts.keys());
+    if (pendingMenuTarget) retained.add(pendingMenuTarget.tempId);
+    if (pendingCopyAttachment && 'localUri' in pendingCopyAttachment) {
+      retained.add(pendingCopyAttachment.tempId);
+    }
+    reconcileRenderedPendingAttachments(inFlight, messageIds, retained, removeOnePending);
+  }, [messageIds, inFlight, pendingMenuTarget, pendingCopyAttachment, copyingPendingCounts, removeOnePending]);
 
   function recoverProximityDelivery() {
     if (!isProximity || !accountPubkey || proximityHistoryReadOnly) return;
@@ -2119,7 +2128,8 @@ function ChatPageContent({
       !pendingSelectId &&
       !pendingForwardMessages &&
       !pendingPackPickerEmoji &&
-      !pendingSaveUpload;
+      !pendingSaveUpload &&
+      !pendingCopyAttachment;
     restoreKeyboardAfterMenuRef.current = false;
     if (pendingReplyTarget) {
       const target = pendingReplyTarget;
@@ -2162,6 +2172,43 @@ function ChatPageContent({
       pendingPackEditorRef.current = null;
       setPackPickerEmoji(emoji);
       setPackPickerVisible(true);
+    }
+    if (pendingCopyAttachment) {
+      const attachment = pendingCopyAttachment;
+      const pendingId = 'localUri' in attachment ? attachment.tempId : null;
+      if (pendingId) {
+        setCopyingPendingCounts((counts) => {
+          const next = new Map(counts);
+          next.set(pendingId, (next.get(pendingId) ?? 0) + 1);
+          return next;
+        });
+      }
+      setPendingCopyAttachment(null);
+      const operation = 'localUri' in attachment
+        ? (async () => {
+            // The menu may retain a pre-staging blob URL that has since been
+            // revoked. The cleanup lease retains this durable pending source.
+            await attachmentStagingRef.current.get(attachment.tempId);
+            const current = usePendingAttachmentsStore.getState().items.find(
+              (item) => item.tempId === attachment.tempId,
+            );
+            if (!current) throw new Error('Pending attachment unavailable');
+            await copyLocalAttachment({ uri: current.localUri, mime: current.mime, name: current.name });
+          })()
+        : copyAttachment(attachment, { accountPubkey });
+      void operation.then(
+        () => showToast(t('common.copied')),
+        () => showToast(t('attach.copy_failed')),
+      ).finally(() => {
+        if (!pendingId) return;
+        setCopyingPendingCounts((counts) => {
+          const next = new Map(counts);
+          const remaining = (next.get(pendingId) ?? 1) - 1;
+          if (remaining > 0) next.set(pendingId, remaining);
+          else next.delete(pendingId);
+          return next;
+        });
+      });
     }
     if (pendingSaveUpload) {
       const upload = pendingSaveUpload;
@@ -2237,10 +2284,24 @@ function ChatPageContent({
   const menuSingleCustomEmoji = menuTarget ? singleCustomEmojiFromMessage(menuTarget) : null;
 
   // Action-menu rows for the long-pressed message. Reply is unavailable for
-  // read-only Nearby history. Copy is text-only, Save is attachment-only, and
-  // Info is available for every message.
+  // read-only Nearby history. Copy follows platform content capabilities; Save
+  // is attachment-only, and Info is available for every message.
+  const attachmentCopyAction: MessageMenuAction[] =
+    (pendingMenuTarget || targetAttachment) &&
+    platform.clipboard.canCopyAttachment((pendingMenuTarget || targetAttachment)?.mime)
+      ? [{
+          key: 'copy',
+          label: t('chat.actions.copy'),
+          icon: <Copy size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
+          onPress: () => {
+            setPendingCopyAttachment(pendingMenuTarget || targetAttachment);
+            closeMenu();
+          },
+        }]
+      : [];
   const menuActions: MessageMenuAction[] = pendingMenuTarget
     ? [
+        ...attachmentCopyAction,
         {
           key: 'save',
           label: t('chat.actions.save'),
@@ -2284,6 +2345,7 @@ function ChatPageContent({
                 } as MessageMenuAction,
               ]
             : []),
+          ...attachmentCopyAction,
           ...(targetAttachment
             ? [
                 {

@@ -253,6 +253,7 @@
     "account_changed_history": "近距离通信账号已变更，此会话仅可浏览。"
   },
   "common": {
+    "copied": "已复制",
     "resize_sidebar": "调整侧栏宽度",
     "cancel": "取消",
     "delete": "删除",
@@ -381,6 +382,7 @@
     "save": "保存",
     "saved": "已保存到相册。",
     "save_permission": "保存到相册需要相册权限，请在系统设置中开启。",
+    "copy_failed": "复制失败，请重试。",
     "save_failed": "保存失败，请重试。",
     "download_failed": "下载失败",
     "transfer_bluetooth": "蓝牙",

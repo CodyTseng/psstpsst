@@ -1,4 +1,5 @@
 export const IPC = {
+  clipboardCopyAttachment: 'psstpsst:clipboard:copy-attachment',
   appUpdateCheck: 'psstpsst:app-update:check',
   appUpdateGetStatus: 'psstpsst:app-update:get-status',
   appUpdateDownload: 'psstpsst:app-update:download',

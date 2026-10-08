@@ -17,6 +17,8 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 import Animated, { useSharedValue } from 'react-native-reanimated';
 
 import { ZoomableImage, type ZoomableImageHandle } from '@/components/common/ZoomableImage';
+import { MediaViewerContextMenu } from './MediaViewerContextMenu';
+import { copyAttachment, copyImageUri } from '@/services/files/attachment-copy.service';
 import { MediaViewerTopBar } from '@/components/media/MediaViewerTopBar';
 import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
@@ -187,7 +189,15 @@ export function MediaPager({
   }, [preview, ready, currentIndex, width]);
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 50, elevation: 50, overflow: 'hidden' }]}>
+    <MediaViewerContextMenu
+      disabled={saving || isClosing || !currentItem || (currentItem.source === 'embedded' && !!currentItem.meta.streaming)}
+      onSave={async () => { if (currentItem) await save(currentItem); }}
+      onCopy={!currentItem || currentItem.isVideo ? undefined : () =>
+        currentItem.source === 'attachment'
+          ? copyAttachment(currentItem.meta, { accountPubkey })
+          : copyImageUri(currentItem.meta.url)}
+      style={[StyleSheet.absoluteFill, { zIndex: 50, elevation: 50, overflow: 'hidden' }]}
+    >
       <Animated.View
         style={[StyleSheet.absoluteFill, { backgroundColor: c.lightboxBackdrop }, animatedStyle]}
       />
@@ -274,7 +284,7 @@ export function MediaPager({
           )}
         />
       </Animated.View>
-    </View>
+    </MediaViewerContextMenu>
   );
 }
 

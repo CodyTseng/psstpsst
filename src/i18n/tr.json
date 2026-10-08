@@ -253,6 +253,7 @@
     "account_changed_history": "Yakındaki iletişim hesabı değişti. Bu geçmiş salt okunurdur."
   },
   "common": {
+    "copied": "Kopyalandı",
     "resize_sidebar": "Kenar çubuğunu yeniden boyutlandır",
     "cancel": "İptal",
     "delete": "Sil",
@@ -381,6 +382,7 @@
     "save": "Kaydet",
     "saved": "Fotoğraflarına kaydedildi.",
     "save_permission": "Galeriye kaydetmek için fotoğraf erişimi gerekir. Ayarlar'dan etkinleştir.",
+    "copy_failed": "Kopyalanamadı. Tekrar deneyin.",
     "save_failed": "Kaydedilemedi. Tekrar dene.",
     "download_failed": "İndirme başarısız",
     "transfer_bluetooth": "Bluetooth",

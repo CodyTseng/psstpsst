@@ -179,3 +179,11 @@ it('does not release deferred work if dismissal overtakes entrance completion', 
   act(() => { transition().requestClose(); finish(true); });
   expect(transition().entered).toBe(false);
 });
+
+jest.mock('../MediaViewerContextMenu', () => ({
+  MediaViewerContextMenu: ({ children }: { children: import('react').ReactNode }) => children,
+}));
+
+jest.mock('@/services/files/attachment-copy.service', () => ({
+  copyAttachment: jest.fn(), copyImageUri: jest.fn(),
+}));

@@ -253,6 +253,7 @@
     "account_changed_history": "Le compte à proximité a changé. Cet historique est en lecture seule."
   },
   "common": {
+    "copied": "Copié",
     "resize_sidebar": "Redimensionner la barre latérale",
     "cancel": "Annuler",
     "delete": "Supprimer",
@@ -384,6 +385,7 @@
     "save": "Enregistrer",
     "saved": "Enregistré dans vos photos.",
     "save_permission": "L'accès aux photos est nécessaire pour enregistrer dans votre photothèque. Activez-le dans les réglages.",
+    "copy_failed": "Impossible de copier. Réessayez.",
     "save_failed": "Impossible d'enregistrer. Réessayez.",
     "download_failed": "Échec du téléchargement",
     "transfer_bluetooth": "Bluetooth",

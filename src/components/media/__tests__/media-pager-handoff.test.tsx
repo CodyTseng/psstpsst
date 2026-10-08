@@ -154,3 +154,11 @@ it('does not mount neighbouring remote images until the user selects their page'
     'https://media.test/newer',
   ]);
 });
+
+jest.mock('../MediaViewerContextMenu', () => ({
+  MediaViewerContextMenu: ({ children }: { children: import('react').ReactNode }) => children,
+}));
+
+jest.mock('@/services/files/attachment-copy.service', () => ({
+  copyAttachment: jest.fn(), copyImageUri: jest.fn(),
+}));

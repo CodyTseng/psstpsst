@@ -1,14 +1,17 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { autoUpdater } from 'electron-updater';
 import sharp from 'sharp';
 import writeFileAtomic from 'write-file-atomic';
 import {
   app,
+  clipboard,
   BrowserWindow,
   dialog,
   ipcMain,
@@ -35,6 +38,7 @@ import { DesktopNotificationPermissions, type MacNotificationPermissions } from 
 import { BackgroundScheduler } from './background-scheduler';
 import { DatabaseService } from './database-service';
 import { FileService } from './file-service';
+import { ClipboardSnapshots } from './clipboard-snapshots';
 import { EXTERNAL_SCHEMES, openExternalUrl } from './external-url';
 import { NoiseService } from './noise-service';
 import { IPC } from './ipc-channels';
@@ -79,6 +83,7 @@ let windowStateStore: WindowStateStore | null = null;
 const screenshotPreviewWindow = new ScreenshotPreviewWindow();
 let databaseService: DatabaseService | null = null;
 let fileService: FileService | null = null;
+let clipboardSnapshots: ClipboardSnapshots | null = null;
 let secureStorageService: SecureStorageService | null = null;
 let proximityService: ProximityService | null = null;
 let noiseService: NoiseService | null = null;
@@ -615,6 +620,26 @@ function registerIpcHandlers(): void {
     services().files.cancelUpload(
       event.sender.id,
       validateString(operationId, 'upload operation ID'),
+    );
+  });
+  handle(IPC.clipboardCopyAttachment, async (_event, uri, options) => {
+    const source = services().files.resolve(validateString(uri, 'file URI'));
+    const stat = await fs.stat(source);
+    if (!stat.isFile()) throw new Error('Clipboard source is not a file');
+    if (options?.mimeType?.startsWith('image/')) {
+      // Decode/re-encode off-thread; do not send image bytes through the renderer.
+      const png = await sharp(source).rotate().png().toBuffer();
+      const image = nativeImage.createFromBuffer(png);
+      if (image.isEmpty()) throw new Error('Clipboard image unavailable');
+      clipboard.writeImage(image);
+      await clipboardSnapshots?.cleanup();
+      return;
+    }
+    if (!clipboardSnapshots) throw new Error('Clipboard storage unavailable');
+    await clipboardSnapshots.copy(
+      source,
+      typeof options?.name === 'string' ? options.name : path.basename(source),
+      publishClipboardFile,
     );
   });
   handle(IPC.fsRevealInFolder, async (_event, uri) => {
@@ -1157,6 +1182,45 @@ async function openWindow(): Promise<void> {
   }
 }
 
+async function runClipboardPowerShell(script: string): Promise<string> {
+  const { stdout } = await promisify(execFile)('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-STA', '-EncodedCommand',
+    Buffer.from(`$ErrorActionPreference = 'Stop'; ${script}`, 'utf16le').toString('base64'),
+  ], { windowsHide: true, timeout: 10000 });
+  return stdout;
+}
+
+async function publishClipboardFile(file: string): Promise<void> {
+  const fileUrl = pathToFileURL(file).href;
+  if (process.platform === 'darwin') {
+    clipboard.writeBuffer('public.file-url', Buffer.from(fileUrl));
+  } else if (process.platform === 'win32') {
+    // CF_HDROP is a predefined Windows format, not an Electron custom buffer.
+    await runClipboardPowerShell(`Add-Type -AssemblyName System.Windows.Forms; $files = New-Object System.Collections.Specialized.StringCollection; [void]$files.Add('${file.replace(/'/g, "''")}'); [System.Windows.Forms.Clipboard]::SetFileDropList($files)`);
+  } else {
+    clipboard.writeBuffer('text/uri-list', Buffer.from(`${fileUrl}\r\n`));
+  }
+}
+
+async function readClipboardFilePaths(): Promise<string[]> {
+  if (process.platform === 'win32') {
+    const result = await runClipboardPowerShell('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; ConvertTo-Json -Compress -InputObject @([System.Windows.Forms.Clipboard]::GetFileDropList())');
+    const paths: unknown = JSON.parse(result.replace(/^\uFEFF/, '').trim());
+    if (!Array.isArray(paths) || paths.some((file) => typeof file !== 'string')) {
+      throw new Error('Invalid clipboard file list');
+    }
+    return paths as string[];
+  }
+  const formats = process.platform === 'darwin'
+    ? ['public.file-url'] : ['text/uri-list', 'x-special/gnome-copied-files'];
+  return formats.flatMap((format) => clipboard.readBuffer(format).toString('utf8')
+    .replace(/\0/g, '').split(/\r?\n/).flatMap((url) => {
+      if (!url.startsWith('file://')) return [];
+      // Malformed clipboard references are not evidence that a file is unused.
+      return [fileURLToPath(url)];
+    }));
+}
+
 async function start(): Promise<void> {
   app.setAppUserModelId(APP_IDENTITY.id);
   const userDataPath = app.getPath('userData');
@@ -1165,6 +1229,11 @@ async function start(): Promise<void> {
   backgroundConfigPath = path.join(userDataPath, 'background-task.json');
   fileService = new FileService(userDataPath);
   await fileService.initialize();
+  clipboardSnapshots = new ClipboardSnapshots(
+    fileService.resolve(`${fileService.directoryUri('cache')}psstpsst-clipboard/`),
+    readClipboardFilePaths,
+  );
+  await clipboardSnapshots.start();
   secureStorageService = new SecureStorageService(userDataPath);
   proximityService = new ProximityService(
     ProximityService.executable(process.resourcesPath, path.resolve(__dirname, '..')),
@@ -1300,6 +1369,7 @@ app.on('before-quit', (event) => {
   backgroundScheduler.stop();
   proximityService?.close();
   const closeServices = Promise.allSettled([
+    clipboardSnapshots?.stop() ?? Promise.resolve(),
     windowStateStore?.flush() ?? Promise.resolve(),
     databaseService?.close() ?? Promise.resolve(),
     noiseService?.close() ?? Promise.resolve(),

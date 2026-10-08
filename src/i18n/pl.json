@@ -253,6 +253,7 @@
     "account_changed_history": "Konto komunikacji w pobliżu uległo zmianie. Ta historia jest tylko do odczytu."
   },
   "common": {
+    "copied": "Skopiowano",
     "resize_sidebar": "Zmień szerokość panelu bocznego",
     "cancel": "Anuluj",
     "delete": "Usuń",
@@ -387,6 +388,7 @@
     "save": "Zapisz",
     "saved": "Zapisano w zdjęciach.",
     "save_permission": "Do zapisania w bibliotece wymagany jest dostęp do zdjęć. Włącz go w Ustawieniach.",
+    "copy_failed": "Nie udało się skopiować. Spróbuj ponownie.",
     "save_failed": "Nie udało się zapisać. Spróbuj ponownie.",
     "download_failed": "Pobieranie nie powiodło się",
     "transfer_bluetooth": "Bluetooth",
