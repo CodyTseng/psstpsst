@@ -11,15 +11,17 @@ import type { RemoteContentMode } from './remote-content-policy';
 export function DeferredRemoteContent({ mode, url, children }: {
   mode: RemoteContentMode;
   url: string;
-  children: (localUri: string | null) => ReactNode;
+  children: (localUri: string | null, loading: boolean) => ReactNode;
 }) {
   const { t } = useTranslation();
   const [openedUrl, setOpenedUrl] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [image] = useCachedImages([url], mode === 'auto' || (mode !== 'hold' && openedUrl === url), attempt);
+  const loading = !image.uri && !image.failed &&
+    (mode === 'auto' || (mode !== 'hold' && openedUrl === url));
   return (
     <View style={{ alignSelf: 'flex-start' }}>
-      {children(image.uri)}
+      {children(image.uri, loading)}
       {mode === 'request' && image.checked && !image.uri && (openedUrl !== url || image.failed) ? (
         <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
           <AppButton

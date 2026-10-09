@@ -129,7 +129,13 @@ export function EmojiPackReferenceCard({ authorPubkey, identifier, metaSlot, loa
                     return (
                       <View key={columnIndex} style={styles.previewCell}>
                         {emoji ? (
-                          <CustomEmojiImage sourceUri={previewImages[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex]?.uri ?? null} emoji={emoji} size="100%" clickable={false} />
+                          <CustomEmojiImage
+                            sourceUri={previewImages[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex]?.uri ?? null}
+                            loadRemote={downloadAllowed && !previewImages[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex]?.failed}
+                            emoji={emoji}
+                            size="100%"
+                            clickable={false}
+                          />
                         ) : null}
                       </View>
                     );

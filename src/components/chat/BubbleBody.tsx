@@ -370,8 +370,9 @@ function BubbleBodyBase({
                     mode={remoteContentMode}
                     url={part.emoji.url}
                   >
-                    {(localUri) => (
+                    {(localUri, loading) => (
                       <CustomEmojiImage
+                        loadRemote={loading}
                         sourceUri={localUri}
                         emoji={part.emoji}
                         size={emojiSize.inlineImage}
@@ -574,8 +575,9 @@ function BubbleBodyBase({
               mode={remoteContentMode}
               url={emoji.url}
             >
-              {(localUri) => (
+              {(localUri, loading) => (
                 <CustomEmojiImage
+                  loadRemote={loading}
                   sourceUri={localUri}
                   emoji={emoji}
                   size={emojiSize.messageImage}

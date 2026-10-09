@@ -571,6 +571,9 @@ the page themselves.
 ## 11. States, copy, and accessibility
 
 Loading, empty, error, and disabled are distinct states.
+Custom emoji retain their frame with a neutral grey placeholder until the image
+is displayed. Active loading shows a centred muted spinner; failed or deferred
+downloads keep a static placeholder.
 Profile avatars with a remote picture keep a quiet surface while loading and
 show their pubkey-derived gradient only if the picture fails. Without a picture,
 they show the gradient immediately.

@@ -300,7 +300,7 @@ export const emojiSize = {
   /** Custom-emoji thumbnail in a pack row, matching a conversation avatar. */
   listImage: 44,
   /** Bubble-free custom-emoji message image. */
-  messageImage: 132,
+  messageImage: 150,
   /** Emoji tile in pack previews and management grids. */
   packImage: 48,
   /** Selected emoji shown at the top of the detail sheet. */
