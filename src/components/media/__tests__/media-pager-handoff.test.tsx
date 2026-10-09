@@ -6,8 +6,16 @@ import { useAttachment } from '@/hooks/use-attachment';
 import { useConversationMedia, type ConversationMediaItem } from '@/hooks/use-conversation-media';
 import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { MediaPager } from '../MediaPager';
+import { MediaTouchPager } from '../MediaTouchPager';
+import { MediaVideoPage } from '../MediaVideoPage';
+import { platform } from '@/platform';
 import { MediaDismissSurface } from '../MediaDismissSurface';
 
+let mockWidth = 390;
+let mockHeight = 844;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true, default: () => ({ width: mockWidth, height: mockHeight, scale: 1, fontScale: 1 }),
+}));
 let mockEntered = false;
 let mockElectron = false;
 let mockLoaded = false;
@@ -25,11 +33,15 @@ jest.mock('@solar-icons/react-native/category/video/Linear/GalleryWide', () => (
 jest.mock('lucide-react-native/icons/download', () => ({ __esModule: true, default: () => null }), { virtual: true });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } }));
-jest.mock('@/platform', () => ({ platform: {} }));
+jest.mock('@/platform', () => ({ platform: { screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) } } }));
 jest.mock('@/services/files/media-save.service', () => ({ saveAttachmentToLibrary: jest.fn(), saveRemoteMediaToLibrary: jest.fn() }));
 jest.mock('@/lib/attachments/failure', () => ({ revealOrRetry: jest.fn() }));
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: () => 'account' }));
 jest.mock('@/theme', () => ({ useThemeColors: () => ({}), desktopChrome: { titlebarHeight: 32 }, uiDensity: {} }));
+jest.mock('../MediaTouchPager', () => ({ MediaTouchPager: ({ pageKey, children }: { pageKey: string; children: ReactNode }) => {
+  const React = jest.requireActual('react') as typeof import('react');
+  return React.createElement(React.Fragment, { key: pageKey }, children);
+} }));
 jest.mock('../MediaVideoPage', () => ({ MediaVideoPage: () => null }));
 jest.mock('../MediaDismissSurface', () => ({
   MediaDismissSurface: ({ children }: { children: ReactNode }) => children,
@@ -53,6 +65,11 @@ jest.mock('@/hooks/use-attachment', () => ({
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual('react') as typeof import('react');
   return { __esModule: true, default: { View: jest.requireActual('react-native').View },
+    Easing: { out: () => (value: number) => value },
+    ReduceMotion: { System: 'system' },
+    LinearTransition: {
+      duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },
+    },
     useSharedValue: (value: number) => React.useRef({ value }).current };
 });
 jest.mock('@/components/common/ZoomableImage', () => {
@@ -96,14 +113,14 @@ function render() {
 const image = () => renderer!.root.findByProps({ uri: preview.uri });
 
 beforeEach(() => {
-  jest.clearAllMocks(); mockEntered = false; mockElectron = false; mockLoaded = false; mockItems = []; mockInstance = 0;
+  jest.clearAllMocks(); mockWidth = 390; mockHeight = 844; mockEntered = false; mockElectron = false; mockLoaded = false; mockItems = []; mockInstance = 0;
 });
 afterEach(() => { act(() => renderer?.unmount()); renderer = undefined; });
 
 it('keeps the exact decoded image instance as deferred neighbouring pages arrive', () => {
   render();
   const instance = image().props.instance;
-  expect(renderer!.root.findByType(FlatList).props.data.map((item: { mediaKey: string }) => item.mediaKey)).toEqual([focusKey]);
+  expect(renderer!.root.findByType(MediaTouchPager).props.pageKey).toBe(focusKey);
   expect(jest.mocked(useConversationMedia).mock.calls.at(-1)?.[3]).toBe(false);
   mockEntered = true;
   render();
@@ -116,8 +133,8 @@ it('keeps the exact decoded image instance as deferred neighbouring pages arrive
   expect(image().props.thumbhash).toBeUndefined();
   expect(mockUnmounted).not.toHaveBeenCalledWith(preview.uri, instance);
   expect(useAttachment).not.toHaveBeenCalled();
-  expect(renderer!.root.findByType(FlatList).props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 });
-  expect(renderer!.root.findByType(FlatList).props.initialScrollIndex).toBe(0);
+  expect(renderer!.root.findByType(MediaTouchPager).props.pageKey).toBe(focusKey);
+  expect(renderer!.root.findAllByType(FlatList)).toHaveLength(0);
 });
 
 it('retains the source when older pages are prepended again', () => {
@@ -148,12 +165,7 @@ it('does not mount neighbouring remote images until the user selects their page'
   render();
   expect(mockMounted.mock.calls.map(([uri]) => uri)).toEqual([preview.uri]);
 
-  const list = renderer!.root.findByType(FlatList);
-  act(() => {
-    list.props.onMomentumScrollEnd({
-      nativeEvent: { contentOffset: { x: list.props.getItemLayout(null, 2).offset } },
-    });
-  });
+  act(() => { renderer!.root.findByType(MediaTouchPager).props.onPage(1); });
   expect(mockMounted.mock.calls.map(([uri]) => uri)).toEqual([
     preview.uri,
     'https://media.test/newer',
@@ -167,14 +179,9 @@ it('connects video dismissal to the viewer transition only on the selected page'
     ...neighbour(id), isVideo: true,
   }))];
   render();
-  const list = renderer!.root.findByType(FlatList);
-  act(() => {
-    list.props.onMomentumScrollEnd({
-      nativeEvent: { contentOffset: { x: list.props.getItemLayout(null, 1).offset } },
-    });
-  });
+  act(() => { renderer!.root.findByType(MediaTouchPager).props.onPage(1); });
   const surfaces = renderer!.root.findAllByType(MediaDismissSurface);
-  expect(surfaces.map((surface) => surface.props.active)).toEqual([true, false]);
+  expect(surfaces.map((surface) => surface.props.active)).toEqual([true]);
   act(() => { surfaces[0].props.onRequestClose(); });
   expect(mockRequestClose).toHaveBeenCalledTimes(1);
 });
@@ -186,3 +193,24 @@ jest.mock('../MediaViewerContextMenu', () => ({
 jest.mock('@/services/files/attachment-copy.service', () => ({
   copyAttachment: jest.fn(), copyImageUri: jest.fn(),
 }));
+
+
+it('keeps the selected video and rotation policy through viewport changes without scroll realignment', () => {
+  mockLoaded = true;
+  mockItems = [neighbour('older'), { ...focus, isVideo: true }, neighbour('newer')];
+  render();
+  expect(platform.screenOrientation.setVideoActive).toHaveBeenLastCalledWith(true);
+  const video = () => renderer!.root.findByType(MediaVideoPage);
+  expect(video().props.active).toBe(true);
+  mockWidth = 844; mockHeight = 390;
+  render();
+  expect(renderer!.root.findByType(MediaTouchPager).props.pageKey).toBe(focusKey);
+  expect(renderer!.root.findAllByType(FlatList)).toHaveLength(0);
+  expect(mockScrollToOffset).not.toHaveBeenCalled();
+  expect(video().props.active).toBe(true);
+  expect(platform.screenOrientation.setVideoActive).toHaveBeenCalledTimes(1);
+  expect(platform.screenOrientation.setVideoActive).toHaveBeenLastCalledWith(true);
+  act(() => renderer!.unmount());
+  renderer = undefined;
+  expect(platform.screenOrientation.setVideoActive).toHaveBeenLastCalledWith(false);
+});

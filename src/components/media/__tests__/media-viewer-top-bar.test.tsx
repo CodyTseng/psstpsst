@@ -7,6 +7,15 @@ import { spacing, uiDensity } from '@/theme';
 import { MediaViewerTopBar } from '../MediaViewerTopBar';
 
 jest.mock('@/components/common/ZoomableImage', () => ({ IMAGE_MAX_SCALE: 4 }));
+jest.mock('react-native-reanimated', () => ({
+  __esModule: true,
+  default: { View: jest.requireActual('react-native').View },
+  Easing: { out: () => (value: number) => value },
+  ReduceMotion: { System: 'system' },
+  LinearTransition: {
+    duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },
+  },
+}));
 jest.mock('lucide-react-native/icons/minus', () => ({ __esModule: true, default: () => null }), { virtual: true });
 jest.mock('lucide-react-native/icons/plus', () => ({ __esModule: true, default: () => null }), { virtual: true });
 

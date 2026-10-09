@@ -151,6 +151,9 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    if (!IS_ELECTRON) void platform.screenOrientation.setVideoActive(false).catch(() => {});
+  }, []);
   const direction = useLanguageDirection();
   const webDirectionProps = { dir: direction } as unknown as ViewProps;
   // The desktop frame (theme-matched window title bar) wraps every branch of

@@ -455,6 +455,15 @@ through system fullscreen; exiting restores the application's previous window.
 Mobile media viewers already fill the screen and omit the player's fullscreen control.
 Touch video previews stay immersive, with a separate progress rail above the
 bottom playback, mute, and speed actions. Do not enclose them in a card.
+Touch video viewers hide top and bottom actions together after inactivity during
+playback and toggle both when the canvas is tapped; scrubbing keeps them visible.
+Playback speed opens a choice menu marking the current rate; controls remain
+visible until the menu closes.
+The speaker toggles mute. Active mobile videos allow device rotation; leaving restores
+the normal phone/tablet orientation policy. Rotation retains the selected media
+surface and playback position without revealing neighbouring previews.
+Visible playback chrome adapts smoothly to viewport changes while actions retain
+their size; Reduce Motion removes the layout transition.
 Playback chrome shares the media action styling and stays clear of window safe areas.
 Top and bottom media actions align to the same horizontal gutters.
 Scrubbing previews the video frame, retains touch ownership outside the rail,

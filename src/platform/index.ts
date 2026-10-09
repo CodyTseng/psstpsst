@@ -49,6 +49,7 @@ export type {
   ProximityTransportPort,
   ProximityTransportSubscription,
   RenderedImage,
+  ScreenOrientationPort,
   SecureStoragePort,
   SharingPort,
   UrlOpenerPort,

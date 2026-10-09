@@ -6,7 +6,11 @@ const POLICY_END = `// @generated end ${PLUGIN_NAME}`;
 const ON_CREATE_START = `// @generated begin ${PLUGIN_NAME} on-create`;
 const ON_CREATE_END = `// @generated end ${PLUGIN_NAME} on-create`;
 
-const PHONE_ORIENTATIONS = ['UIInterfaceOrientationPortrait'];
+const PHONE_ORIENTATIONS = [
+  'UIInterfaceOrientationPortrait',
+  'UIInterfaceOrientationLandscapeLeft',
+  'UIInterfaceOrientationLandscapeRight',
+];
 const LARGE_DISPLAY_ORIENTATIONS = [
   'UIInterfaceOrientationPortrait',
   'UIInterfaceOrientationPortraitUpsideDown',
@@ -37,8 +41,13 @@ const ANDROID_POLICY = [
   '    return smallestWidthDp >= LARGE_DISPLAY_SMALLEST_WIDTH_DP',
   '  }',
   '',
+  '  private var lastLargeDisplay: Boolean? = null',
+  '',
   '  private fun applyDisplayOrientationPolicy() {',
-  '    requestedOrientation = if (isLargeDisplay()) {',
+  '    val largeDisplay = isLargeDisplay()',
+  '    if (lastLargeDisplay == largeDisplay) return',
+  '    lastLargeDisplay = largeDisplay',
+  '    requestedOrientation = if (largeDisplay) {',
   '      ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED',
   '    } else {',
   '      ActivityInfo.SCREEN_ORIENTATION_PORTRAIT',
@@ -87,7 +96,11 @@ function ensureAndroidImports(contents) {
 function applyAndroidOrientationPolicy(contents) {
   let next = ensureAndroidImports(contents);
 
-  if (!next.includes(POLICY_START)) {
+  if (next.includes(POLICY_START)) {
+    const start = next.indexOf(`  ${POLICY_START}`);
+    const end = next.indexOf(POLICY_END, start) + POLICY_END.length;
+    next = next.slice(0, start) + ANDROID_POLICY + next.slice(end);
+  } else {
     const classDeclaration = /class MainActivity\s*:\s*ReactActivity\(\)\s*\{\n/;
     if (!classDeclaration.test(next)) {
       throw new Error(`${PLUGIN_NAME}: unable to find the Kotlin MainActivity class`);

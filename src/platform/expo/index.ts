@@ -1,3 +1,4 @@
+import { screenOrientationAdapter } from './screen-orientation';
 import { clipboardAdapter } from './clipboard';
 import { imageCacheAdapter } from './image-cache';
 import type { FileSystemPort } from '../ports/file-system';
@@ -199,6 +200,7 @@ function lazyNoiseAdapter(): NoisePort {
 /** The default adapter set for the Expo runtime. */
 export function createExpoAdapters(): PlatformAdapters {
   return {
+    screenOrientation: screenOrientationAdapter,
     bundledNotices: bundledNoticesAdapter,
     appUpdate: appUpdateAdapter,
     confirmationDialog: confirmationDialogAdapter,

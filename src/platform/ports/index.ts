@@ -1,3 +1,4 @@
+import type { ScreenOrientationPort } from './screen-orientation';
 import type { ClipboardPort } from './clipboard';
 import type { ImageCachePort } from './image-cache';
 import type { AppStatePort } from './app-state';
@@ -31,6 +32,7 @@ import type { WindowChromePort } from './window-chrome';
 import type { VideoThumbnailPort } from './video-thumbnail';
 import type { ZipArchivePort } from './zip-archive';
 
+export type { ScreenOrientationPort } from './screen-orientation';
 export type { ClipboardPort } from './clipboard';
 export type { ImageCachePort } from './image-cache';
 export type { AppStatePort, AppStateStatus } from './app-state';
@@ -142,4 +144,5 @@ export interface PlatformAdapters {
   unreadIndicator: UnreadIndicatorPort;
   windowChrome: WindowChromePort;
   videoThumbnail: VideoThumbnailPort;
+  screenOrientation: ScreenOrientationPort;
 }

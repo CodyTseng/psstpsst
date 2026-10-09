@@ -4,14 +4,15 @@ import Minus from 'lucide-react-native/icons/minus';
 import Plus from 'lucide-react-native/icons/plus';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated from 'react-native-reanimated';
 
 import { IconButton } from '@/components/common/IconButton';
 import { IMAGE_MAX_SCALE, type ZoomableImageHandle } from '@/components/common/ZoomableImage';
 import { IS_ELECTRON } from '@/lib/platform';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
+import { mediaChromeLayout } from './MediaChrome';
 
 type ExtraAction = {
   accessibilityLabel: string;
@@ -34,7 +35,8 @@ export function MediaViewerTopBar({ disabled, extraAction, imageZoom, onClose, o
   const insets = useSafeAreaInsets();
 
   return (
-    <View
+    <Animated.View
+      layout={mediaChromeLayout}
       style={{
         position: 'absolute',
         top: insets.top + spacing.sm,
@@ -55,7 +57,7 @@ export function MediaViewerTopBar({ disabled, extraAction, imageZoom, onClose, o
         icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.onOverlay} />}
         accessibilityLabel={t('common.close')}
       />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+      <Animated.View layout={mediaChromeLayout} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
         {IS_ELECTRON && imageZoom ? (
           <>
             <IconButton
@@ -97,7 +99,7 @@ export function MediaViewerTopBar({ disabled, extraAction, imageZoom, onClose, o
           icon={<Download size={uiDensity.headerActionIconSize} color={c.onOverlay} />}
           accessibilityLabel={t('attach.save')}
         />
-      </View>
-    </View>
+      </Animated.View>
+    </Animated.View>
   );
 }

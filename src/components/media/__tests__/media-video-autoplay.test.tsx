@@ -29,7 +29,7 @@ jest.mock('expo', () => ({ useEvent: () => ({ status: mockStatus }) }));
 jest.mock('../MediaPlaybackControls', () => ({ MediaPlaybackControls: () => null }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } }));
-jest.mock('@/platform', () => ({ platform: { confirmationDialog: { notify: jest.fn() } } }));
+jest.mock('@/platform', () => ({ platform: { screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) }, confirmationDialog: { notify: jest.fn() } } }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('@/services/files/file-attachment.service', () => ({

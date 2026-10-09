@@ -18,11 +18,13 @@ class MainActivity : ReactActivity() {
 `;
 
 describe('with-device-orientation-policy', () => {
-  it('limits iPhone to portrait while leaving every iPad orientation available', () => {
+  it('allows video landscape on iPhone while leaving every iPad orientation available', () => {
     const infoPlist = applyIosOrientationPolicy({});
 
     expect(infoPlist.UISupportedInterfaceOrientations).toEqual([
       'UIInterfaceOrientationPortrait',
+      'UIInterfaceOrientationLandscapeLeft',
+      'UIInterfaceOrientationLandscapeRight',
     ]);
     expect(infoPlist['UISupportedInterfaceOrientations~ipad']).toEqual([
       'UIInterfaceOrientationPortrait',
@@ -30,6 +32,19 @@ describe('with-device-orientation-policy', () => {
       'UIInterfaceOrientationLandscapeLeft',
       'UIInterfaceOrientationLandscapeRight',
     ]);
+  });
+
+  it('updates a previously generated policy that relocked on every rotation', () => {
+    const legacy = MAIN_ACTIVITY.replace('class MainActivity : ReactActivity() {', `class MainActivity : ReactActivity() {
+  // @generated begin with-device-orientation-policy
+  private fun applyDisplayOrientationPolicy() {
+    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+  }
+  // @generated end with-device-orientation-policy`);
+    const updated = applyAndroidOrientationPolicy(legacy);
+    expect(updated).toContain('if (lastLargeDisplay == largeDisplay) return');
+    expect(updated.match(/private fun applyDisplayOrientationPolicy/g)).toHaveLength(1);
+    expect(applyAndroidOrientationPolicy(updated)).toBe(updated);
   });
 
   it('adds an idempotent Android display-size policy', () => {
@@ -42,6 +57,7 @@ describe('with-device-orientation-policy', () => {
     expect(once).toContain('ActivityInfo.SCREEN_ORIENTATION_PORTRAIT');
     expect(once).toContain('ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED');
     expect(once).toContain('override fun onConfigurationChanged');
+    expect(once).toContain('if (lastLargeDisplay == largeDisplay) return');
     expect(once.match(/applyDisplayOrientationPolicy\(\)/g)).toHaveLength(3);
   });
 });

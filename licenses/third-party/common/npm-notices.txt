@@ -3176,6 +3176,13 @@ vendor/react-helmet-async/LICENSE
   Text: c358ea82eed53098b2ee0913e1de8243c69d45862e11c48614db47fd5889d947
 ========================================
 
+expo-screen-orientation@57.0.2
+License: MIT
+Source: https://github.com/expo/expo.git
+LICENSE
+  Text: fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4
+========================================
+
 expo-secure-store@57.0.4
 License: MIT
 Source: https://github.com/expo/expo.git

@@ -4,10 +4,21 @@ import { StyleSheet, View } from 'react-native';
 
 import { AppButton } from '@/components/common/AppButton';
 import { IconButton } from '@/components/common/IconButton';
+import { ContextMenu } from '@/components/common/ContextMenu';
 import { MediaSlider } from '../MediaSlider';
 import { MediaPlaybackControls } from '../MediaPlaybackControls';
+import { MediaChromeProvider, MediaTopChrome } from '../MediaChrome';
 
 const mockListeners = new Map<string, (event: Record<string, number>) => void>();
+jest.mock('react-native-reanimated', () => ({
+  __esModule: true,
+  default: { View: jest.requireActual('react-native').View },
+  Easing: { out: () => (value: number) => value },
+  ReduceMotion: { System: 'system' },
+  LinearTransition: {
+    duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },
+  },
+}));
 jest.mock('expo', () => ({
   useEvent: (_player: unknown, _name: string, initial: unknown) => initial,
   useEventListener: (_player: unknown, name: string, listener: (event: Record<string, number>) => void) => {
@@ -19,6 +30,8 @@ jest.mock('expo', () => ({
   },
 }));
 jest.mock('../MediaSlider', () => ({ MediaSlider: () => null }));
+jest.mock('@/components/common/ContextMenu', () => ({ ContextMenu: () => null, CONTEXT_MENU_ICON_SIZE: { touch: 20 } }));
+jest.mock('lucide-react-native/icons/check', () => ({ __esModule: true, default: () => null }), { virtual: true });
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
 jest.mock('@/components/common/AppText', () => ({ AppText: jest.requireActual('react-native').Text }));
@@ -55,7 +68,12 @@ const player = {
   play: jest.fn(() => { player.playing = true; }),
   pause: jest.fn(() => { player.playing = false; }),
 };
-const element = () => <MediaPlaybackControls player={player as unknown as VideoPlayer} />;
+const element = () => (
+  <MediaChromeProvider>
+    <MediaTopChrome><View /></MediaTopChrome>
+    <MediaPlaybackControls player={player as unknown as VideoPlayer} />
+  </MediaChromeProvider>
+);
 function mount() { act(() => { renderer = create(element()); }); }
 function press(label: string) {
   act(() => { renderer.root.findAllByType(IconButton).find((button) => button.props.accessibilityLabel === label)!.props.onPress(); });
@@ -63,6 +81,7 @@ function press(label: string) {
 const progress = () => renderer.root.findAllByType(MediaSlider)[0];
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(View.prototype.measureInWindow).mockImplementation((callback) => callback(200, 600, 40, 40));
   mockListeners.clear();
   mockDark = false;
   position = 10;
@@ -169,17 +188,41 @@ it('keeps live streams unseekable', () => {
   expect(progress().props.disabled).toBe(true);
 });
 
-it('cycles all playback rates while preserving the player', () => {
+it('opens all rate choices without changing playback, then applies the selected rate', () => {
   mount();
-  for (const next of [1.25, 1.5, 2, 0.5, 1]) {
+  for (const next of [2, 0.5, 1.5, 1.25, 1]) {
+    const preceding = player.playbackRate;
     act(() => { renderer.root.findByType(AppButton).props.onPress(); });
+    expect(player.playbackRate).toBe(preceding);
+    const menu = renderer.root.findByType(ContextMenu);
+    expect(menu.props.items.map((item: { key: string }) => item.key)).toEqual(['0.5', '1', '1.25', '1.5', '2']);
+    expect(menu.props.items.filter((item: { selected: boolean }) => item.selected).map((item: { key: string }) => item.key)).toEqual([String(preceding)]);
+    act(() => {
+      menu.props.items.find((item: { key: string }) => item.key === String(next)).onPress();
+      menu.props.onClose();
+    });
     expect(player.playbackRate).toBe(next);
     act(() => renderer.update(element()));
     expect(renderer.root.findByType(AppButton).props.label).toBe(`media.speed_value:${next}`);
   }
 });
 
-it('toggles mute directly without a volume slider', () => {
+it('keeps controls visible while selecting speed and restarts the idle timer on dismissal', () => {
+  jest.useFakeTimers();
+  try {
+    player.playing = true;
+    mount();
+    act(() => { renderer.root.findByType(AppButton).props.onPress(); });
+    act(() => { jest.advanceTimersByTime(5000); });
+    expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(1);
+    act(() => { renderer.root.findByType(ContextMenu).props.onClose(); });
+    expect(player.playbackRate).toBe(1);
+    act(() => { jest.advanceTimersByTime(3000); });
+    expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(0);
+  } finally { jest.useRealTimers(); }
+});
+
+it('toggles mute without adding a volume slider', () => {
   mount();
   expect(renderer.root.findAllByType(MediaSlider)).toHaveLength(1);
   press('media.mute');
@@ -194,7 +237,7 @@ it('toggles mute directly without a volume slider', () => {
 it.each([false, true])('keeps overlay controls readable and inside safe areas (dark=%s)', (dark) => {
   mockDark = dark;
   mount();
-  const panel = StyleSheet.flatten(renderer.root.findAllByType(View)[0].props.style);
+  const panel = StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-playback-panel' }).props.style);
   expect(panel).toMatchObject({ start: 60, end: 60, bottom: 42 });
   expect(panel.backgroundColor).toBeUndefined();
   expect(renderer.root.findByType(AppButton).props.variant).toBe('overlay');
@@ -214,4 +257,55 @@ it('allows seeking an ended Android clip and keeps seeking enabled while bufferi
   act(() => { progress().props.onValueChange(40); progress().props.onSlidingComplete(40); });
   expect(seek).toHaveBeenLastCalledWith(40);
   expect(player.scrubbingModeOptions.scrubbingModeEnabled).toBe(false);
+});
+
+
+it('hides idle playback controls and toggles them from the video canvas', () => {
+  jest.useFakeTimers();
+  player.playing = true;
+  mount();
+  const panel = () => StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-playback-panel' }).props.style);
+  act(() => { jest.advanceTimersByTime(3000); });
+  expect(panel().opacity).toBe(0);
+  expect(panel().pointerEvents).toBe('none');
+  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(0);
+  act(() => { renderer.root.findByProps({ testID: 'media-controls-toggle' }).props.onPress(); });
+  expect(panel().opacity).toBe(1);
+  expect(panel().pointerEvents).toBe('box-none');
+  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(1);
+  act(() => { renderer.root.findByProps({ testID: 'media-controls-toggle' }).props.onPress(); });
+  expect(panel().opacity).toBe(0);
+  act(() => renderer.unmount());
+  jest.useRealTimers();
+});
+
+it('keeps all controls visible during scrubbing and restarts the idle timer on release', () => {
+  jest.useFakeTimers();
+  player.playing = true;
+  mount();
+  const volume = progress();
+  const panel = () => StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-playback-panel' }).props.style);
+  act(() => { volume.props.onSlidingStart(); });
+  act(() => { jest.advanceTimersByTime(10000); });
+  expect(panel().opacity).toBe(1);
+  act(() => { volume.props.onSlidingComplete(0.3); });
+  act(() => { jest.advanceTimersByTime(3000); });
+  expect(panel().opacity).toBe(0);
+  act(() => renderer.unmount());
+  jest.useRealTimers();
+});
+
+
+it('refreshes the shared idle timer when interacting with top actions', () => {
+  jest.useFakeTimers();
+  player.playing = true;
+  mount();
+  act(() => { jest.advanceTimersByTime(2500); });
+  act(() => { renderer.root.findByProps({ testID: 'media-top-chrome' }).props.onTouchStart(); });
+  act(() => { jest.advanceTimersByTime(1000); });
+  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(1);
+  act(() => { jest.advanceTimersByTime(2000); });
+  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(0);
+  act(() => renderer.unmount());
+  jest.useRealTimers();
 });

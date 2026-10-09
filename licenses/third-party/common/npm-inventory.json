@@ -1,6 +1,6 @@
 {
-  "reviewed": "2026-09-14",
-  "lockfileSha256": "f2bed3c0abf53f8ad9831ab0997f25a077713dd36e21193ec155177bf58aa450",
+  "reviewed": "2026-10-09",
+  "lockfileSha256": "27d9a720159b334fc1f5426ab063e226e6af71939d9f0a53676c963547aaaf29",
   "scope": "All locked non-development npm packages on all platforms, plus the shipped Electron runtime. Includes build utilities; not an exact binary inventory.",
   "packages": [
     {
@@ -5982,6 +5982,20 @@
         {
           "source": "vendor/react-helmet-async/LICENSE",
           "sha256": "c358ea82eed53098b2ee0913e1de8243c69d45862e11c48614db47fd5889d947"
+        }
+      ]
+    },
+    {
+      "name": "expo-screen-orientation",
+      "version": "57.0.2",
+      "license": "MIT",
+      "integrity": "sha512-9wIa/dU561fidHYChkg6LIDAcYr8uMBa8fOws1Km9/slaF3N/a2kgcy0TUZWvNIe7at3r4g2kVva9vRBJBkaEQ==",
+      "repository": "https://github.com/expo/expo.git",
+      "homepage": "https://docs.expo.dev/versions/latest/sdk/screen-orientation/",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
         }
       ]
     },

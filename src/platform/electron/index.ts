@@ -24,6 +24,7 @@ export function createElectronAdapters(): PlatformAdapters {
     listener({ isConnected: navigator.onLine });
 
   return {
+    screenOrientation: { setVideoActive: async () => {} },
     bundledNotices: electronBundledNoticesAdapter,
     appUpdate: {
       check: () => bridge.appUpdate.check(),

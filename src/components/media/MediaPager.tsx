@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { ChatRound as MessageCircle } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
 import { GalleryWide as Images } from '@solar-icons/react-native/category/video/Linear/GalleryWide';
 import DownloadIcon from 'lucide-react-native/icons/download';
-import { useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -23,6 +23,8 @@ import { MediaViewerTopBar } from '@/components/media/MediaViewerTopBar';
 import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
 import { MediaVideoPage } from '@/components/media/MediaVideoPage';
+import { MediaTouchPager } from './MediaTouchPager';
+import { MediaChromeProvider, MediaTopChrome } from './MediaChrome';
 import { MediaDismissSurface } from '@/components/media/MediaDismissSurface';
 import { useAttachment } from '@/hooks/use-attachment';
 import {
@@ -66,11 +68,14 @@ type MediaPageItem = ConversationMediaItem | {
  * Swipeable full-screen pager over a conversation's indexed images/videos,
  * **windowed** around the tapped item (`useConversationMedia` anchored) — it
  * loads a page each side and extends as you swipe, never the whole history.
- * Zooming an image disables paging (the pan then moves within it). New older
- * media prepended on paging keep the current page put via
- * `maintainVisibleContentPosition`.
+ * Zooming an image disables paging. Selection uses media identity so prepends
+ * and viewport changes retain the selected surface and playback session.
  */
-export function MediaPager({
+export function MediaPager(props: Props) {
+  return <MediaChromeProvider><MediaPagerContent {...props} /></MediaChromeProvider>;
+}
+
+function MediaPagerContent({
   preview,
   conversationKey,
   focusMessageId,
@@ -133,6 +138,9 @@ export function MediaPager({
   const [imageScale, setImageScale] = useState(0);
   const listRef = useRef<FlatList<MediaPageItem>>(null);
   const desktopPositioned = useRef(false);
+  const previousWidth = useRef(width);
+  const resizing = useRef(false);
+  const dragWidth = useRef<number | null>(null);
 
   const [saving, setSaving] = useState(false);
   async function save(item: (typeof items)[number]) {
@@ -189,6 +197,63 @@ export function MediaPager({
     desktopPositioned.current = true;
   }, [preview, ready, currentIndex, width]);
 
+  useLayoutEffect(() => {
+    if (previousWidth.current === width) return;
+    previousWidth.current = width;
+    resizing.current = true;
+    dragWidth.current = null;
+  }, [width]);
+
+  const videoActive = !IS_ELECTRON && !!currentItem?.isVideo && !isClosing;
+  useEffect(() => {
+    if (IS_ELECTRON) return;
+    void platform.screenOrientation.setVideoActive(videoActive).catch(() => {});
+  }, [videoActive]);
+  useEffect(() => () => {
+    if (!IS_ELECTRON) void platform.screenOrientation.setVideoActive(false).catch(() => {});
+  }, []);
+
+  function alignResizedPage() {
+    if (resizing.current && ready) {
+      listRef.current?.scrollToOffset({ offset: currentIndex * width, animated: false });
+    }
+  }
+
+  function selectPage(index: number) {
+    const item = pages[index];
+    if (item && item.mediaKey !== currentId) {
+      setImageScale(0);
+      setZoomed(false);
+      setCurrentId(item.mediaKey);
+    }
+    if (index <= EDGE && hasMore) loadOlder();
+    if (index >= pages.length - 1 - EDGE && hasMoreNewer) loadNewer();
+  }
+
+  function renderPage(item: MediaPageItem, active: boolean) {
+    if (item.isVideo) {
+      return (
+        <MediaDismissSurface active={active} backdrop={backdrop} onRequestClose={() => requestClose()}>
+          <MediaVideoPage item={item} active={active} />
+        </MediaDismissSurface>
+      );
+    }
+    return active ? (
+      <MediaImagePage
+        preview={item.mediaKey === focusMediaKey ? preview : undefined}
+        imageRef={imageRef}
+        onScaleChange={setImageScale}
+        item={item}
+        onRequestClose={() => requestClose()}
+        onZoomedChange={setZoomed}
+        onDragProgress={(p) => { backdrop.value = 1 - p * 0.6; }}
+      />
+    ) : null;
+  }
+
+  const selectedPage = ready ? currentIndex : 0;
+  const touchPage = pages[selectedPage];
+
   return (
     <MediaViewerContextMenu
       disabled={saving || isClosing || !currentItem}
@@ -207,6 +272,18 @@ export function MediaPager({
       <Animated.View style={[{ flex: 1 }, contentStyle]} pointerEvents={isClosing || (!IS_ELECTRON && !ready) ? 'none' : 'auto'}>
         {!ready && !preview ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.onOverlay} /></View>
+        ) : !IS_ELECTRON && touchPage ? (
+          <MediaTouchPager
+            width={width}
+            height={pageHeight}
+            pageKey={touchPage.mediaKey}
+            enabled={!zoomed && !isClosing}
+            previous={selectedPage > 0 ? <MediaPagePreview item={pages[selectedPage - 1]} /> : undefined}
+            next={selectedPage < pages.length - 1 ? <MediaPagePreview item={pages[selectedPage + 1]} /> : undefined}
+            onPage={(step) => selectPage(selectedPage + step)}
+          >
+            {renderPage(touchPage, true)}
+          </MediaTouchPager>
         ) : (
           <FlatList<MediaPageItem>
             ref={listRef}
@@ -225,75 +302,74 @@ export function MediaPager({
             scrollEnabled={!zoomed}
             // Older media paged in at the front mustn't shift the current page.
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            onLayout={(e) => {
+              if (Math.abs(e.nativeEvent.layout.width - width) < 1) alignResizedPage();
+            }}
+            onContentSizeChange={(contentWidth) => {
+              if (Math.abs(contentWidth - pages.length * width) < 1) alignResizedPage();
+            }}
+            onScrollBeginDrag={() => {
+              resizing.current = false;
+              dragWidth.current = width;
+            }}
             onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-              const item = pages[idx];
-              if (item && item.mediaKey !== currentId) {
-                setImageScale(0);
-                setCurrentId(item.mediaKey);
-              }
-              if (idx <= EDGE && hasMore) loadOlder();
-              if (idx >= pages.length - 1 - EDGE && hasMoreNewer) loadNewer();
+              // Rotation/programmatic alignment is not a user's page selection.
+              if (resizing.current || dragWidth.current !== width) return;
+              dragWidth.current = null;
+              selectPage(Math.round(e.nativeEvent.contentOffset.x / width));
             }}
             // Only the selected image mounts below: paging must not download
             // neighbouring non-contact resources as a side effect.
             windowSize={3}
             renderItem={({ item, index }) => (
               <View style={{ width, height: pageHeight }}>
-                {item.isVideo ? (
-                  <MediaDismissSurface
-                    active={index === currentIndex}
-                    backdrop={backdrop}
-                    onRequestClose={() => requestClose()}
-                  >
-                    <MediaVideoPage item={item} active={index === currentIndex} />
-                  </MediaDismissSurface>
-                ) : index === currentIndex ? (
-                  <MediaImagePage
-                    preview={item.mediaKey === focusMediaKey ? preview : undefined}
-                    imageRef={index === currentIndex ? imageRef : undefined}
-                    onScaleChange={index === currentIndex ? setImageScale : undefined}
-                    item={item}
-                    onRequestClose={() => requestClose()}
-                    onZoomedChange={setZoomed}
-                    onDragProgress={(p) => {
-                      backdrop.value = 1 - p * 0.6;
-                    }}
-                  />
-                ) : null}
+                {renderPage(item, index === currentIndex)}
               </View>
             )}
           />
         )}
       </Animated.View>
       <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]} pointerEvents={isClosing ? 'none' : 'box-none'}>
-        <MediaViewerTopBar
-          imageZoom={!currentItem || currentItem.isVideo ? undefined : {
-            scale: imageScale,
-            zoomIn: () => imageRef.current?.zoomIn(),
-            zoomOut: () => imageRef.current?.zoomOut(),
-          }}
-          onClose={() => requestClose()}
-          onSave={() => { if (currentItem) void save(currentItem); }}
-          disabled={saving || !currentItem || (currentItem.source === 'embedded' && !!currentItem.meta.streaming)}
-          extraAction={!currentItem ? undefined : (
-            showGrid
-              ? {
-                  onPress: () => openGrid(currentItem),
-                  icon: <Images size={uiDensity.headerActionIconSize} color={c.onOverlay} />,
-                  accessibilityLabel: t('media.show_all'),
-                }
-              : {
-                  onPress: () => jumpToChat(currentItem),
-                  icon: (
-                    <MessageCircle size={uiDensity.headerActionIconSize} color={c.onOverlay} />
-                  ),
-                  accessibilityLabel: t('media.go_to_message'),
-                }
-          )}
-        />
+        <MediaTopChrome>
+          <MediaViewerTopBar
+            imageZoom={!currentItem || currentItem.isVideo ? undefined : {
+              scale: imageScale,
+              zoomIn: () => imageRef.current?.zoomIn(),
+              zoomOut: () => imageRef.current?.zoomOut(),
+            }}
+            onClose={() => requestClose()}
+            onSave={() => { if (currentItem) void save(currentItem); }}
+            disabled={saving || !currentItem || (currentItem.source === 'embedded' && !!currentItem.meta.streaming)}
+            extraAction={!currentItem ? undefined : (
+              showGrid
+                ? {
+                    onPress: () => openGrid(currentItem),
+                    icon: <Images size={uiDensity.headerActionIconSize} color={c.onOverlay} />,
+                    accessibilityLabel: t('media.show_all'),
+                  }
+                : {
+                    onPress: () => jumpToChat(currentItem),
+                    icon: (
+                      <MessageCircle size={uiDensity.headerActionIconSize} color={c.onOverlay} />
+                    ),
+                    accessibilityLabel: t('media.go_to_message'),
+                  }
+            )}
+          />
+        </MediaTopChrome>
       </Animated.View>
     </MediaViewerContextMenu>
+  );
+}
+
+/** Neighbours never allocate players or fetch full attachments just for paging. */
+function MediaPagePreview({ item }: { item: MediaPageItem }) {
+  const c = useThemeColors();
+  const thumbhash = item.source === 'preview' ? undefined : item.meta.thumbhash;
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: c.lightboxBackdrop }]}>
+      {thumbhash ? <Image placeholder={{ thumbhash }} placeholderContentFit="contain" style={StyleSheet.absoluteFill} /> : null}
+    </View>
   );
 }
 

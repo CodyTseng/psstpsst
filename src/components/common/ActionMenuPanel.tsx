@@ -18,6 +18,7 @@ export type ActionMenuItem = {
   icon: ReactNode;
   onPress: () => void;
   tone?: 'default' | 'danger';
+  selected?: boolean;
   /** Start a new semantic action group above this item in pointer density. */
   separatorBefore?: boolean;
 };
@@ -113,6 +114,7 @@ export function ActionMenuPanel({
           ) : null}
           <Pressable
             accessibilityRole="button"
+            accessibilityState={item.selected === undefined ? undefined : { selected: item.selected }}
             onPress={() => (onSelect ? onSelect(item) : item.onPress())}
             onHoverIn={() => setHoveredKey(item.key)}
             onHoverOut={() => setHoveredKey(null)}
