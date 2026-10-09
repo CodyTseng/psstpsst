@@ -15,6 +15,6 @@ it('isolates durable list revisions by account and list, and cascades account re
     sqlite.prepare('DELETE FROM accounts WHERE pubkey = ?').run('a');
     expect(sqlite.prepare('SELECT account_pubkey, d_tag, revision, dirty FROM private_list_sync_state').all())
       .toEqual([{ account_pubkey: 'b', d_tag: 'psstpsst-muted', revision: 4, dirty: 1 }]);
-    expect(migrations.journal.entries.at(-1)?.tag).toBe('0056_private-list-sync-state');
+    expect(migrations.journal.entries[56]?.tag).toBe('0056_private-list-sync-state');
   } finally { sqlite.close(); }
 });

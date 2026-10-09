@@ -9,7 +9,7 @@ import { relayPool, type SubscribeOpts } from '../../relay/relay-pool';
 import { selfEventStream } from '../../self-events/self-event-stream.service';
 import {
   getProcessedGiftWrapIds,
-  getSyncCursor,
+  getRelaySyncCursor,
   markGiftWrapProcessed,
   setBackwardUntil,
   setForwardSince,
@@ -65,7 +65,8 @@ jest.mock('../observed-peer-key.service', () => ({
 }));
 jest.mock('../block.service', () => ({ loadBlockedIntoCache: jest.fn(), isBlocked: () => false }));
 jest.mock('../sync-store', () => ({
-  getSyncCursor: jest.fn(), isGiftWrapProcessed: async (id: string) => mockProcessedIds.has(id),
+  configureSyncRelays: jest.fn(),
+  getRelaySyncCursor: jest.fn(), isGiftWrapProcessed: async (id: string) => mockProcessedIds.has(id),
   peekSyncCursor: jest.fn(() => undefined),
   getProcessedGiftWrapIds: jest.fn(async (ids: string[]) =>
     new Set(ids.filter((id) => mockProcessedIds.has(id)))),
@@ -126,7 +127,7 @@ beforeEach(() => {
     })) });
     return [];
   });
-  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: null, backwardUntil: 0 });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: null, backwardUntil: 0 });
   jest.mocked(unwrapGiftWrapWithKeys).mockResolvedValue({ status: 'failed' });
 });
 afterEach(() => dmService.destroy());
@@ -137,7 +138,7 @@ it('opens no message intake before metadata resolves, then uses fresh relays', a
   const starting = dmService.init(options);
   await flush();
   expect(relayPool.subscribe).not.toHaveBeenCalled();
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
   pending.resolve(metadata());
   await starting;
   expect(live().relays).toEqual(['wss://fresh.example']);
@@ -147,7 +148,7 @@ it('waits for the missing key and only opens intake after a new init with that k
   resolveMetadata.mockResolvedValue(metadata(newKey));
   await expect(dmService.init(options)).rejects.toThrow('must be synchronized');
   expect(relayPool.subscribe).not.toHaveBeenCalled();
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
   jest.mocked(loadEncryptionKeys).mockResolvedValue([{ pubkey: newKey, privkey: new Uint8Array(32), createdAt: 2 }]);
   await dmService.init(options);
   expect(live().relays).toEqual(['wss://fresh.example']);
@@ -200,7 +201,7 @@ it('does not mark an in-flight failed decryption processed after rotation', asyn
 
 it('cancels pending backfill without advancing its cursor', async () => {
   mockAppState = 'active';
-  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
   const queried = deferred<Event[]>();
   jest.mocked(relayPool.query).mockReturnValueOnce(queried.promise);
   await dmService.init(options);
@@ -215,7 +216,7 @@ it('cancels pending backfill without advancing its cursor', async () => {
 
 it('checks an already-processed backfill page in one batch', async () => {
   mockAppState = 'active';
-  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
   const page = [
     { id: 'seen-1', kind: 1059, created_at: 3 },
     { id: 'seen-2', kind: 1059, created_at: 2 },
@@ -250,7 +251,7 @@ it.each([24, 48])('backfills a new wrap backdated %i hours before the previous c
   const missing = { id: 'backdated-wrap', kind: 1059, created_at: previousCutoff - hours * 60 * 60 } as Event;
   const seen = { id: 'seen-boundary', kind: 1059, created_at: previousCutoff } as Event;
   mockProcessedIds.add(seen.id);
-  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: previousCutoff, backwardUntil: 0 });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: previousCutoff, backwardUntil: 0 });
   jest.mocked(setForwardSince).mockImplementationOnce(async () => { completed.resolve(); });
   jest.mocked(relayPool.query).mockImplementation(async (opts) => {
     const events = [seen, missing].filter((event) => event.created_at <= opts.filter!.until!).slice(0, 1);
@@ -264,7 +265,7 @@ it.each([24, 48])('backfills a new wrap backdated %i hours before the previous c
     await completed.promise;
     expect(jest.mocked(unwrapGiftWrapWithKeys).mock.calls[0]?.[0]).toEqual(missing);
     expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(1);
-    expect(setForwardSince).toHaveBeenCalledWith(self, cutoff);
+    expect(setForwardSince).toHaveBeenCalledWith(self, 'wss://fresh.example', cutoff);
     expect(setBackwardUntil).not.toHaveBeenCalled();
   } finally {
     clock.mockRestore();
@@ -296,7 +297,7 @@ it('pages recent notification messages without reading or advancing history curs
   await dmService.pollForNotifications(self);
   expect(markGiftWrapProcessed).toHaveBeenCalledTimes(450);
   expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(450);
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
   expect(setForwardSince).not.toHaveBeenCalled();
   expect(setBackwardUntil).not.toHaveBeenCalled();
   expect(unsubscribe).toHaveBeenCalledTimes(1);
@@ -358,7 +359,7 @@ it('reports key sync when an announcement races the opening of self-event subscr
   jest.mocked(selfEventStream.start).mockImplementationOnce(async () => { rotate(); });
   await expect(dmService.init(options)).rejects.toThrow('must be synchronized');
   expect(relayPool.subscribe).not.toHaveBeenCalled();
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
 });
 
 it('cancels a cold poll query when a new session takes over', async () => {
@@ -419,7 +420,7 @@ it('skips the recovery poll only after backfill with a healthy uninterrupted liv
 
 it('retains recovery polling while history is still draining', async () => {
   mockAppState = 'active';
-  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
   const backfill = deferred<Event[]>();
   jest.mocked(relayPool.query).mockReturnValueOnce(backfill.promise);
   await dmService.init(options);
@@ -450,17 +451,17 @@ it('opens background live intake and polls without starting history, then starts
   await dmService.init(options);
   await flush();
   expect(relayPool.subscribe).toHaveBeenCalled();
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
   await dmService.pollForNotifications(self);
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
   expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => opts.label))
     .toEqual(['dm.notification-poll']);
   changeAppState('active');
   await flush();
-  expect(getSyncCursor).toHaveBeenCalledTimes(1);
+  expect(getRelaySyncCursor).toHaveBeenCalledTimes(1);
   changeAppState('active');
   await flush();
-  expect(getSyncCursor).toHaveBeenCalledTimes(1);
+  expect(getRelaySyncCursor).toHaveBeenCalledTimes(1);
 });
 
 it('marks the open conversation read when the app returns to the foreground', async () => {
@@ -488,18 +489,22 @@ it('defers history if initialization finishes after the user backgrounds the app
   changeAppState('background');
   pending.resolve(metadata());
   await starting;
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
   changeAppState('active');
   await flush();
-  expect(getSyncCursor).toHaveBeenCalledTimes(1);
+  expect(getRelaySyncCursor).toHaveBeenCalledTimes(1);
 });
 
 it('lets a foreground history pass continue paging after backgrounding', async () => {
   mockAppState = 'active';
-  jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
   const page = deferred<Event[]>();
-  jest.mocked(relayPool.query).mockReturnValueOnce(page.promise).mockImplementationOnce(async (opts) => {
-    opts.onComplete?.({ eosed: true, status: 'complete', relays: [] });
+  jest.mocked(relayPool.query).mockImplementationOnce(async (opts) => {
+    const events = await page.promise;
+    opts.onComplete?.({ eosed: true, status: 'complete', relays: opts.relays.map(url => ({ url, status: 'eose', received: events.length })) });
+    return events;
+  }).mockImplementationOnce(async (opts) => {
+    opts.onComplete?.({ eosed: true, status: 'complete', relays: opts.relays.map(url => ({ url, status: 'eose', received: 0 })) });
     return [];
   });
   await dmService.init(options);
@@ -512,14 +517,14 @@ it('lets a foreground history pass continue paging after backgrounding', async (
   await flush();
   expect(relayPool.query).toHaveBeenCalledTimes(2);
   expect(jest.mocked(relayPool.query).mock.calls[1][0].filter?.until).toBe(cutoff - 10);
-  expect(setForwardSince).toHaveBeenCalledWith(self, cutoff);
+  expect(setForwardSince).toHaveBeenCalledWith(self, 'wss://fresh.example', cutoff);
 });
 
 it('does not overlap history passes and uses the latest foreground cutoff on the next pass', async () => {
   mockAppState = 'active';
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
   try {
-    jest.mocked(getSyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
     const page = deferred<Event[]>();
     jest.mocked(relayPool.query).mockReturnValueOnce(page.promise);
     await dmService.init(options);
@@ -527,7 +532,7 @@ it('does not overlap history passes and uses the latest foreground cutoff on the
     changeAppState('background');
     changeAppState('active');
     await flush();
-    expect(getSyncCursor).toHaveBeenCalledTimes(1);
+    expect(getRelaySyncCursor).toHaveBeenCalledTimes(1);
     expect(relayPool.query).toHaveBeenCalledTimes(1);
     page.resolve([]);
     await flush();
@@ -535,7 +540,7 @@ it('does not overlap history passes and uses the latest foreground cutoff on the
     changeAppState('background');
     changeAppState('active');
     await flush();
-    expect(getSyncCursor).toHaveBeenCalledTimes(2);
+    expect(getRelaySyncCursor).toHaveBeenCalledTimes(2);
     expect(jest.mocked(relayPool.query).mock.calls[1][0].filter?.until).toBe(2_000);
   } finally {
     clock.mockRestore();
@@ -555,7 +560,7 @@ it('removes user-return listeners when a receive session ends', async () => {
   staleListener('active');
   staleUserReturnedListener();
   await flush();
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
 });
 
 
@@ -609,11 +614,132 @@ it('starts a fresh local identity from supplied metadata without a lookup or ini
   changeAppState('active');
   await dmService.init({ ...options, metadata: metadata(), skipInitialHistory: true });
   expect(resolveMetadata).not.toHaveBeenCalled();
-  expect(getSyncCursor).not.toHaveBeenCalled();
+  expect(getRelaySyncCursor).not.toHaveBeenCalled();
   expect(relayPool.subscribe).toHaveBeenCalled();
   expect(receiveSessionStore.getState().status).toBe('ready');
   changeAppState('background');
   changeAppState('active');
   await flush();
-  expect(getSyncCursor).toHaveBeenCalledTimes(1);
+  expect(getRelaySyncCursor).toHaveBeenCalledTimes(1);
+});
+
+it('runs relay tasks independently and never overlaps a pending task on foreground re-entry', async () => {
+  mockAppState = 'active';
+  const slow = 'wss://slow.example';
+  const fast = 'wss://fast.example';
+  resolveMetadata.mockResolvedValue({ ...metadata(), dmRelays: [slow, fast] });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+  const pending = deferred<Event[]>();
+  jest.mocked(relayPool.query).mockImplementation(async opts => {
+    const events = opts.relays[0] === slow ? await pending.promise : [];
+    opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: opts.relays[0], status: 'eose', received: events.length }] });
+    return events;
+  });
+  try {
+    await dmService.init(options);
+    await flush();
+    expect(setForwardSince).toHaveBeenCalledWith(self, fast, expect.any(Number));
+    expect(jest.mocked(setForwardSince).mock.calls.some(([, url]) => url === slow)).toBe(false);
+    changeAppState('background');
+    changeAppState('active');
+    await flush();
+    expect(jest.mocked(getRelaySyncCursor).mock.calls.filter(([, url]) => url === slow)).toHaveLength(1);
+    expect(jest.mocked(getRelaySyncCursor).mock.calls.filter(([, url]) => url === fast)).toHaveLength(2);
+    expect(jest.mocked(relayPool.query).mock.calls.every(([opts]) => opts.relays.length === 1)).toBe(true);
+  } finally {
+    dmService.destroy();
+    pending.resolve([]);
+    await flush();
+  }
+});
+
+it.each(['timeout', 'connection-failed', 'auth-failed'])('retries only the relay with %s without sealing its gap', async failure => {
+  jest.useFakeTimers();
+  try {
+    mockAppState = 'active';
+    const broken = 'wss://broken.example';
+    const healthy = 'wss://healthy.example';
+    resolveMetadata.mockResolvedValue({ ...metadata(), dmRelays: [broken, healthy] });
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+    const alreadySeen = { id: 'old-replica-event', kind: 1059, created_at: 1 } as Event;
+    mockProcessedIds.add(alreadySeen.id);
+    let recovered = false;
+    jest.mocked(relayPool.query).mockImplementation(async opts => {
+      const interrupted = opts.relays[0] === broken && !recovered;
+      const events = interrupted ? [alreadySeen] : [];
+      opts.onComplete?.({ eosed: true, status: 'complete', relays: [{
+        url: opts.relays[0], status: failure === 'connection-failed' && interrupted ? 'connection-failed' : 'eose',
+        received: events.length, reason: interrupted ? failure === 'timeout' ? 'query timed out' : failure : undefined,
+      }] });
+      return events;
+    });
+    await dmService.init(options);
+    await flush();
+    expect(setForwardSince).toHaveBeenCalledWith(self, healthy, expect.any(Number));
+    expect(jest.mocked(setForwardSince).mock.calls.some(([, url]) => url === broken)).toBe(false);
+    expect(setBackwardUntil).not.toHaveBeenCalled();
+    recovered = true;
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(setForwardSince).toHaveBeenCalledWith(self, broken, expect.any(Number));
+    expect(jest.mocked(getRelaySyncCursor).mock.calls.filter(([, url]) => url === healthy)).toHaveLength(1);
+    expect(jest.mocked(getRelaySyncCursor).mock.calls.filter(([, url]) => url === broken)).toHaveLength(2);
+  } finally {
+    dmService.destroy();
+    jest.useRealTimers();
+  }
+});
+
+it('expands a full boundary second before advancing the relay cursor', async () => {
+  mockAppState = 'active';
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  try {
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+    const events = Array.from({ length: 201 }, (_, i) => ({ id: `boundary-${i}`, kind: 1059, created_at: 1000 } as Event));
+    for (const event of events) mockProcessedIds.add(event.id);
+    jest.mocked(relayPool.query).mockImplementation(async opts => {
+      const page = opts.filter!.until! < 1000 ? [] : events.slice(0, opts.filter!.limit!);
+      opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: opts.relays[0], status: 'eose', received: page.length }] });
+      return page;
+    });
+    await dmService.init(options);
+    await flush();
+    expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => [opts.filter?.until, opts.filter?.limit]))
+      .toEqual([[1000, 200], [1000, 400], [999, 200]]);
+    expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(events.map(event => event.id));
+    expect(setForwardSince).toHaveBeenCalledWith(self, 'wss://fresh.example', 1000);
+  } finally { clock.mockRestore(); }
+});
+
+it('resumes deep history from the last wire-confirmed page after an interrupted page', async () => {
+  mockAppState = 'active';
+  const relay = 'wss://fresh.example';
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(10_000_000);
+  try {
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 9000, backwardUntil: 1000 });
+    for (const id of ['confirmed-page', 'partial-page']) mockProcessedIds.add(id);
+    jest.mocked(relayPool.query)
+      .mockImplementationOnce(async opts => {
+        opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: relay, status: 'eose', received: 0 }] });
+        return [];
+      })
+      .mockImplementationOnce(async opts => {
+        opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: relay, status: 'eose', received: 1 }] });
+        return [{ id: 'confirmed-page', kind: 1059, created_at: 900 } as Event];
+      })
+      .mockImplementationOnce(async opts => {
+        opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: relay, status: 'eose', received: 1, reason: 'query timed out' }] });
+        return [{ id: 'partial-page', kind: 1059, created_at: 800 } as Event];
+      });
+    await dmService.init(options);
+    await flush();
+    expect(setBackwardUntil).toHaveBeenCalledTimes(1);
+    expect(setBackwardUntil).toHaveBeenCalledWith(self, relay, 900);
+    expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(['partial-page']);
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 10_000, backwardUntil: 900 });
+    changeAppState('background');
+    changeAppState('active');
+    await flush();
+    expect(jest.mocked(relayPool.query).mock.calls[4][0].filter?.until).toBe(900);
+    expect(setBackwardUntil).toHaveBeenCalledWith(self, relay, 0);
+  } finally { clock.mockRestore(); }
 });

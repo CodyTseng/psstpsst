@@ -400,6 +400,13 @@
       "when": 1791504000000,
       "tag": "0056_private-list-sync-state",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1791558000000,
+      "tag": "0057_per-relay-sync-cursors",
+      "breakpoints": true
     }
   ]
 }

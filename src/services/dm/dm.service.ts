@@ -74,7 +74,8 @@ import {
   type EncryptionKeypair,
 } from './encryption-key.service';
 import {
-  getSyncCursor,
+  configureSyncRelays,
+  getRelaySyncCursor,
   getProcessedGiftWrapIds,
   isGiftWrapProcessed,
   isSyncRequestProcessed,
@@ -108,8 +109,9 @@ import {
 const FORWARD_OVERLAP_SECONDS = 2 * 24 * 60 * 60 + 60 * 60; // 2 days + 1h margin
 /** History backfill page size (per relay, per round). */
 const BACKFILL_PAGE = 200;
+const BACKFILL_MAX_BOUNDARY_PAGE = 3200;
 /** Backfill round query timeout. */
-const BACKFILL_QUERY_TIMEOUT_MS = 8000;
+const BACKFILL_QUERY_TIMEOUT_MS = 25_000;
 /** `backwardUntil` sentinel meaning history is fully backfilled. */
 const BACKFILL_DONE = 0;
 function yieldToUi(): Promise<void> {
@@ -293,7 +295,11 @@ class DmService {
   private initializing = false;
   /** Only a complete backfill plus uninterrupted live intake can replace a recovery poll. */
   private historyBackfillComplete = false;
-  private historyBackfillTask: Promise<void> | null = null;
+  private historyBackfillTasks = new Map<string, Promise<void>>();
+  private inFlightHistoryTasks = new Set<Promise<void>>();
+  private historyCompletedRelays = new Set<string>();
+  private historyRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private historyRetryAttempts = new Map<string, number>();
   private removeHistoryAppStateListener: (() => void) | null = null;
   private removeUserReturnedListener: (() => void) | null = null;
   private liveCoverageBroken = false;
@@ -400,6 +406,8 @@ class DmService {
       await profileAsync(profile, 'relay.startSelfEventStream', () => selfEventStream.start());
       checkCurrent();
 
+      configureSyncRelays(opts.accountPubkey, this.dmRelays);
+
       // The live tail only needs *new* wraps, not the whole history nor the gap
       // since we were last open — both are the paged backfill's job (a relay caps
       // each filter at `limit`, so a `since`-only sub can't be trusted to backfill
@@ -497,7 +505,11 @@ class DmService {
     this.removeHistoryAppStateListener = null;
     this.removeUserReturnedListener?.();
     this.removeUserReturnedListener = null;
-    this.historyBackfillTask = null;
+    this.historyBackfillTasks.clear();
+    this.historyCompletedRelays.clear();
+    for (const timer of this.historyRetryTimers.values()) clearTimeout(timer);
+    this.historyRetryTimers.clear();
+    this.historyRetryAttempts.clear();
     this.historyBackfillComplete = false;
     this.liveCoverageBroken = false;
     this.liveStatus = null;
@@ -533,6 +545,7 @@ class DmService {
     this.destroy();
     await Promise.all([
       relayMessageOutbox.waitForIdle(),
+      Promise.allSettled(Array.from(this.inFlightHistoryTasks)),
       (async () => {
         while (this.inFlightGiftWrapTasks.size > 0) {
           await Promise.allSettled(Array.from(this.inFlightGiftWrapTasks));
@@ -1432,6 +1445,7 @@ class DmService {
       if (keys.length === 0) return [];
       await loadBlockedIntoCache(accountPubkey);
       if (!isCurrent()) return [];
+      configureSyncRelays(accountPubkey, metadata.dmRelays);
       receiver.accountPubkey = accountPubkey;
       receiver.encryptionKeys = keys;
       receiver.activeConversation = this.activeConversation;
@@ -1566,185 +1580,161 @@ class DmService {
     return entry ? Array.from(entry.relays) : [];
   }
 
-  /** Foreground owns starting/retrying history; leaving the foreground does
-   * not abort an admitted pass. Account/key changes still cancel the receiver. */
+  /** Every relay owns a task, durable frontiers, and retry backoff. Foreground
+   * starts work; an admitted pass may finish after backgrounding. */
   private startHistoryBackfill(): void {
+    if (platform.appState.currentState() !== 'active' || !this.accountPubkey || !this.dmLiveSubUnsub) return;
+    for (const relayUrl of this.dmRelays) this.startRelayHistoryBackfill(relayUrl);
+  }
+
+  private startRelayHistoryBackfill(relayUrl: string): void {
     if (
-      platform.appState.currentState() !== 'active' || this.historyBackfillTask ||
-      !this.accountPubkey || !this.dmLiveSubUnsub
+      platform.appState.currentState() !== 'active' || !this.accountPubkey ||
+      !this.dmLiveSubUnsub || this.historyBackfillTasks.has(relayUrl)
     ) return;
+    const retry = this.historyRetryTimers.get(relayUrl);
+    if (retry) clearTimeout(retry);
+    this.historyRetryTimers.delete(relayUrl);
+    const accountPubkey = this.accountPubkey;
     const epoch = this.syncEpoch;
     const through = Math.floor(Date.now() / 1000);
-    const task = this.backfillHistory(this.accountPubkey, epoch, through)
+    this.historyCompletedRelays.delete(relayUrl);
+    this.historyBackfillComplete = false;
+    syncStatusStore.getState().setBackfilling(true);
+    const task = this.backfillRelayHistory(accountPubkey, relayUrl, epoch, through)
+      .then((complete) => {
+        if (this.syncEpoch !== epoch) return;
+        if (complete) {
+          this.historyCompletedRelays.add(relayUrl);
+          this.historyRetryAttempts.delete(relayUrl);
+        } else {
+          this.scheduleHistoryRetry(relayUrl, epoch);
+        }
+      })
       .catch((error: unknown) => {
-        console.warn(
-          '[dm] History backfill failed; progress will resume on the next foreground entry.',
-          error,
-          'cause:',
-          error instanceof Error ? error.cause : undefined,
-        );
+        if (this.syncEpoch !== epoch) return;
+        console.warn('[dm] Relay history backfill failed; its cursor will resume.', relayUrl, error);
+        this.scheduleHistoryRetry(relayUrl, epoch);
       })
       .finally(() => {
-        if (this.historyBackfillTask === task) this.historyBackfillTask = null;
+        this.inFlightHistoryTasks.delete(task);
+        if (this.syncEpoch !== epoch || this.historyBackfillTasks.get(relayUrl) !== task) return;
+        this.historyBackfillTasks.delete(relayUrl);
+        syncStatusStore.getState().setBackfilling(this.historyBackfillTasks.size > 0);
+        this.historyBackfillComplete = this.dmRelays.every(url => this.historyCompletedRelays.has(url));
+        const coverage = peekSyncCursor(accountPubkey);
+        if (this.historyBackfillComplete && coverage?.backwardUntil === BACKFILL_DONE && coverage.forwardSince !== null) {
+          return groupReceiveService.finalizeCoveredHistory(accountPubkey, coverage.forwardSince)
+            .catch(error => console.warn('[dm] Failed to finalize covered group history.', error));
+        }
       });
-    this.historyBackfillTask = task;
+    this.historyBackfillTasks.set(relayUrl, task);
+    this.inFlightHistoryTasks.add(task);
   }
 
-  /**
-   * Bring the account's gift-wrap history up to date asynchronously, across
-   * the two paged frontiers (see `sync-store`): the forward gap first (newest —
-   * what the user is waiting for), then deep history.
-   *
-   *  - Forward gap: drain `(forwardSince - overlap, through]` page by page, then
-   *    advance `forwardSince` to its cutoff. Not persisted mid-drain — a kill
-   *    re-drains the gap on the next foreground entry, skipping processed ids.
-   *    First pass (`forwardSince` null) → floor = through → an
-   *    empty drain that simply records the pass cutoff. No special case.
-   *  - Deep history: page `backwardUntil` down to the beginning of time,
-   *    persisting after every page so a kill resumes on the next foreground
-   *    entry; `BACKFILL_DONE` (0) means complete and is skipped thereafter.
-   *
-   * Both yield between pages while the UI is active (see {@link drainWindow}),
-   * so even a huge history never blocks UI rendering.
-   */
-  private async backfillHistory(accountPubkey: string, epoch: number, through: number): Promise<void> {
-    const cursor = await getSyncCursor(accountPubkey);
-    if (this.syncEpoch !== epoch) return;
+  private scheduleHistoryRetry(relayUrl: string, epoch: number): void {
+    const attempt = this.historyRetryAttempts.get(relayUrl) ?? 0;
+    this.historyRetryAttempts.set(relayUrl, Math.min(attempt + 1, 6));
+    const timer = setTimeout(() => {
+      this.historyRetryTimers.delete(relayUrl);
+      if (this.syncEpoch === epoch) this.startRelayHistoryBackfill(relayUrl);
+    }, Math.min(60_000, 1000 * 2 ** attempt));
+    this.historyRetryTimers.set(relayUrl, timer);
+  }
 
-    // Surface "Updating…" in the Chats title while either frontier is draining.
-    // Epoch-guard the reset so a stale loop (after an account switch) can't clear
-    // the flag the new session just set.
-    syncStatusStore.getState().setBackfilling(true);
-    try {
-      // Forward gap: everything that arrived (or was `limit`-truncated off the
-      // live tail) since we were last fully synced up to `forwardSince`.
-      // New wraps can be backdated before that wall-clock cutoff. Re-read the
-      // same bounded overlap as live intake, even after a long offline gap.
-      // The first pass leaves this range to deep history instead.
-      const forwardFloor = cursor.forwardSince === null
-        ? through
-        : Math.max(BACKFILL_DONE, cursor.forwardSince - FORWARD_OVERLAP_SECONDS);
-      const forward = await this.drainWindow(
-        accountPubkey,
-        through,
-        forwardFloor,
-        epoch,
-      );
-      // Claim the recent side complete up to this foreground pass only once fully drained.
-      if (this.syncEpoch !== epoch) return;
-      if (forward === 'drained') await setForwardSince(accountPubkey, through);
-
-      let backwardComplete = cursor.backwardUntil === BACKFILL_DONE;
-      // Deep history: page toward the beginning of time, resuming from the cursor.
-      if (cursor.backwardUntil !== BACKFILL_DONE) {
-        const backwardFrom = cursor.backwardUntil ?? through;
-        const backward = await this.drainWindow(
-          accountPubkey,
-          backwardFrom,
-          BACKFILL_DONE,
-          epoch,
-          (u) => setBackwardUntil(accountPubkey, u),
-        );
-        if (this.syncEpoch !== epoch) return;
-        if (backward === 'drained') {
-          await setBackwardUntil(accountPubkey, BACKFILL_DONE);
-          backwardComplete = true;
-        }
-      }
-      if (this.syncEpoch === epoch) {
-        this.historyBackfillComplete = forward === 'drained' && backwardComplete;
-        if (this.historyBackfillComplete) {
-          await groupReceiveService.finalizeCoveredHistory(accountPubkey, through);
-        }
-      }
-    } finally {
-      if (this.syncEpoch === epoch) syncStatusStore.getState().setBackfilling(false);
+  /** Recover this relay's recent gap before its deep history. Another relay's
+   * successes never advance either frontier. Unknown legacy coverage is scanned
+   * once from the start; persisted processed IDs skip redundant decryption. */
+  private async backfillRelayHistory(
+    accountPubkey: string, relayUrl: string, epoch: number, through: number,
+  ): Promise<boolean> {
+    const cursor = await getRelaySyncCursor(accountPubkey, relayUrl);
+    if (this.syncEpoch !== epoch) return false;
+    const forwardFloor = cursor.forwardSince === null
+      ? through : Math.max(BACKFILL_DONE, cursor.forwardSince - FORWARD_OVERLAP_SECONDS);
+    const forward = await this.drainWindow(accountPubkey, relayUrl, through, forwardFloor, epoch);
+    if (this.syncEpoch !== epoch) return false;
+    // The first cutoff anchors future recent-gap scans while deep history owns
+    // the earlier range. A partial deep scan must not lose that anchor on restart.
+    if (forward === 'drained') {
+      await setForwardSince(accountPubkey, relayUrl, through);
     }
+    let backwardComplete = cursor.backwardUntil === BACKFILL_DONE;
+    if (!backwardComplete) {
+      const backward = await this.drainWindow(
+        accountPubkey, relayUrl, cursor.backwardUntil ?? through, BACKFILL_DONE, epoch,
+        until => setBackwardUntil(accountPubkey, relayUrl, until),
+      );
+      if (this.syncEpoch !== epoch) return false;
+      if (backward === 'drained') {
+        await setBackwardUntil(accountPubkey, relayUrl, BACKFILL_DONE);
+        backwardComplete = true;
+      }
+    }
+    if (this.syncEpoch !== epoch) return false;
+    return forward === 'drained' && backwardComplete;
   }
 
-  /**
-   * Page gift wraps newest-first from `until` down to `floor`, decrypting and
-   * storing each. The shared primitive behind both backfill frontiers.
-   *
-   * Single-cursor paging is mandatory: a relay caps each filter at its default
-   * `limit`, so a `since`+`until` range query can silently drop the older events
-   * in a busy window. We only ever pass `until` (+ `limit`) and walk it down a
-   * page at a time; `floor` is purely the loop's stop line — it never goes into
-   * the filter.
-   *
-   * Multi-relay pitfall handled: each relay holds a different subset, so we don't
-   * advance by the merged set's oldest — a sparse relay would yank the cursor far
-   * back and skip events others hold in between. Instead we **merge, sort, keep
-   * only PAGE events**, and advance to that slice's oldest; everything beyond is
-   * re-fetched next round (cheap via dedup).
-   *
-   * Yields between pages so even a huge history never blocks UI rendering.
-   * `onPageAdvance` (awaited) persists progress after each page for resumable
-   * frontiers. Returns:
-   *  - 'drained'     — reached the floor, or any relay EOSE'd on an empty round;
-   *  - 'interrupted' — no relay completed the query. Do not seal the frontier (mark backfill
-   *                    done / advance `forwardSince`); the cursor stays put and
-   *                    next launch retries — otherwise one network blip would end
-   *                    history forever;
-   *  - 'aborted'     — the epoch went stale (account switch / destroy) mid-run.
-   */
+  /** Page only one replica, with bounded memory and a UI yield per new envelope.
+   * A deadline, CLOSED, or failed connection can supply useful events but cannot
+   * confirm page coverage. Re-read a timestamp boundary before crossing it;
+   * saturated boundaries stay unconfirmed instead of silently losing messages. */
   private async drainWindow(
     accountPubkey: string,
+    relayUrl: string,
     until: number,
     floor: number,
     epoch: number,
     onPageAdvance?: (until: number) => void | Promise<void>,
   ): Promise<'drained' | 'interrupted' | 'aborted'> {
+    let limit = BACKFILL_PAGE;
     while (this.syncEpoch === epoch && until > floor) {
-      let eosed = false;
+      let wireEose = false;
       const events = await relayPool.query({
         label: 'dm.backfill',
         abort: this.receiveAbort?.signal,
-        relays: this.dmRelays,
-        filter: { kinds: [KIND_GIFT_WRAP], '#p': [accountPubkey], until, limit: BACKFILL_PAGE },
+        relays: [relayUrl],
+        filter: { kinds: [KIND_GIFT_WRAP], '#p': [accountPubkey], until, limit },
         timeoutMs: BACKFILL_QUERY_TIMEOUT_MS,
         signAuth: this.signAuth ?? undefined,
-        onReceived: (relayUrl, id) => this.recordGiftWrapSeen(id, relayUrl),
+        onReceived: (url, id) => this.recordGiftWrapSeen(id, url),
         onComplete: (info) => {
-          eosed = info.eosed;
+          wireEose = info.relays.length === 1 && info.relays[0].status === 'eose' &&
+            info.relays[0].reason == null;
         },
       }).catch((error: unknown) => {
         if (this.syncEpoch !== epoch || error instanceof RelayQueryError) return [];
         throw error;
       });
-      if (this.syncEpoch !== epoch) return 'aborted'; // account switched / destroyed
-
-      // Dedup this round across relays, newest-first.
-      const unique = Array.from(new Map(events.map((e) => [e.id, e])).values()).sort(
-        (a, b) => b.created_at - a.created_at,
-      );
-
-      // All relays settle before the round completes. Failed queries must leave
-      // the frontier unsealed so a later attempt can resume.
-      if (unique.length === 0) return eosed ? 'drained' : 'interrupted';
-
-      // Keep only the newest PAGE and advance to *its* oldest (see above).
-      const page = unique.slice(0, BACKFILL_PAGE);
-      // Relay overlap commonly returns a full page that is already stored. Check
-      // the page at once instead of issuing one SQLite query per duplicate.
-      const processedIds = await getProcessedGiftWrapIds(page.map((event) => event.id));
-      for (const e of page) {
+      if (this.syncEpoch !== epoch) return 'aborted';
+      const page = Array.from(new Map(events
+        .filter(event => event.created_at <= until)
+        .map(event => [event.id, event])).values()).sort((a, b) => b.created_at - a.created_at);
+      const processedIds = await getProcessedGiftWrapIds(page.map(event => event.id));
+      for (const event of page) {
         if (this.syncEpoch !== epoch) return 'aborted';
-        if (processedIds.has(e.id)) continue;
-        await this.processGiftWrap(e, 'history');
-        // Yield after every message; a single unwrap/store is the largest unit
-        // of synchronous work left on this path.
+        if (processedIds.has(event.id)) continue;
+        await this.processGiftWrap(event, 'history');
         await yieldToUi();
       }
-
       if (this.syncEpoch !== epoch) return 'aborted';
+      if (!wireEose) return 'interrupted';
+      if (page.length === 0) return 'drained';
       const oldest = page[page.length - 1].created_at;
-      // Re-include the boundary timestamp next round (dedup skips re-seen ids);
-      // force progress if a whole page shares one timestamp.
-      until = oldest < until ? oldest : until - 1;
+      if (oldest < until) {
+        until = oldest;
+        limit = BACKFILL_PAGE;
+      } else if (page.length >= limit) {
+        if (limit === BACKFILL_MAX_BOUNDARY_PAGE) return 'interrupted';
+        limit = Math.min(limit * 2, BACKFILL_MAX_BOUNDARY_PAGE);
+        continue;
+      } else {
+        until--;
+        limit = BACKFILL_PAGE;
+      }
       await onPageAdvance?.(until);
     }
-    return 'drained';
+    return this.syncEpoch === epoch ? 'drained' : 'aborted';
   }
 
   private async handleClientKeyAnnouncement(event: Event): Promise<void> {

@@ -1,82 +1,153 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '@/db/client';
+import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { processedGiftWraps, processedSyncRequests, syncCursors } from '@/db/schema';
 
-/**
- * Persistence for the gift-wrap sync engine: the per-account sync cursors and
- * the set of already-unwrapped gift-wrap ids. Kept apart from `dm.service` so
- * the service holds only orchestration, not SQL.
- *
- * Cursors (`sync_cursors`) — two paging frontiers, each advanced only by the
- * paged backfill. Never by a single `since`/`until` query: a relay caps each
- * filter at its default `limit`, so one query can't be trusted to return a whole
- * time range — only page-by-page walking can.
- *   - `backwardUntil` — how far back history backfill has paged. `null` = not
- *     started; `0` = fully backfilled to the beginning of time.
- *   - `forwardSince`  — wall-clock time the *recent* side has been fully paged up
- *     to. Forward backfill starts at the foreground cutoff and pages back past
- *     this watermark by the gift-wrap randomization overlap, then advances it
- *     to that pass's cutoff. It is NOT the live-subscription
- *     anchor (the live tail is a fixed `now - overlap` window) and is NOT advanced
- *     by background notification polling (which only scans a recent overlap window).
- */
+/** Durable paging frontiers belong to one account and one normalized relay.
+ * Account-wide coverage is only a conservative read model for group admission;
+ * it never drives relay paging or prevents another relay from progressing. */
 export type SyncCursor = {
   forwardSince: number | null;
   backwardUntil: number | null;
 };
 
-const cursorCache = new Map<string, SyncCursor>();
+const cursorCache = new Map<string, Map<string, SyncCursor>>();
+const cursorLoads = new Map<string, Promise<Map<string, SyncCursor>>>();
+const cursorSeeds = new Map<string, Map<string, Promise<SyncCursor>>>();
+const activeRelays = new Map<string, string[]>();
+const emptyCursor = (): SyncCursor => ({ forwardSince: null, backwardUntil: null });
 
-export function peekSyncCursor(accountPubkey: string): SyncCursor | undefined {
-  return cursorCache.get(accountPubkey);
+/** Invalidate coverage before live intake when routing adds an unseen relay. */
+export function configureSyncRelays(accountPubkey: string, relays: string[]): void {
+  activeRelays.set(accountPubkey, Array.from(new Set(relays.map(normalizeRelayUrl))));
 }
 
-export async function getSyncCursor(accountPubkey: string): Promise<SyncCursor> {
+export function peekSyncCursor(accountPubkey: string): SyncCursor | undefined {
+  const cached = cursorCache.get(accountPubkey);
+  if (!cached) return undefined;
+  const relays = activeRelays.get(accountPubkey) ?? Array.from(cached.keys());
+  if (relays.length === 0) return emptyCursor();
+  let forwardSince: number | null = Infinity;
+  let backwardUntil: number | null = 0;
+  for (const relay of relays) {
+    const cursor = cached.get(relay) ?? emptyCursor();
+    forwardSince = forwardSince === null || cursor.forwardSince === null
+      ? null : Math.min(forwardSince, cursor.forwardSince);
+    backwardUntil = backwardUntil === null || cursor.backwardUntil === null
+      ? null : Math.max(backwardUntil, cursor.backwardUntil);
+  }
+  return { forwardSince, backwardUntil };
+}
+
+async function loadCursors(accountPubkey: string): Promise<Map<string, SyncCursor>> {
   const cached = cursorCache.get(accountPubkey);
   if (cached) return cached;
-  const [row] = await db
-    .select()
-    .from(syncCursors)
+  const pending = cursorLoads.get(accountPubkey);
+  if (pending) return pending;
+  const task = db.select().from(syncCursors)
     .where(eq(syncCursors.accountPubkey, accountPubkey))
-    .limit(1);
-  const cursor = {
-    forwardSince: row?.forwardSince ?? null,
-    backwardUntil: row?.backwardUntil ?? null,
-  };
-  cursorCache.set(accountPubkey, cursor);
-  return cursor;
+    .then(rows => {
+      const cursors = new Map(rows.map(row => [row.relayUrl, {
+        forwardSince: row.forwardSince, backwardUntil: row.backwardUntil,
+      }]));
+      if (cursorLoads.get(accountPubkey) === task) cursorCache.set(accountPubkey, cursors);
+      return cursors;
+    });
+  cursorLoads.set(accountPubkey, task);
+  try { return await task; }
+  finally { if (cursorLoads.get(accountPubkey) === task) cursorLoads.delete(accountPubkey); }
+}
+
+/** Shared conservative coverage for group membership finalization. */
+export async function getSyncCursor(accountPubkey: string): Promise<SyncCursor> {
+  await loadCursors(accountPubkey);
+  return peekSyncCursor(accountPubkey) ?? emptyCursor();
+}
+
+export async function getRelaySyncCursor(accountPubkey: string, relayUrl: string): Promise<SyncCursor> {
+  relayUrl = normalizeRelayUrl(relayUrl);
+  const cursors = await loadCursors(accountPubkey);
+  const existing = cursors.get(relayUrl);
+  if (existing) return existing;
+  let seeds = cursorSeeds.get(accountPubkey);
+  if (!seeds) {
+    seeds = new Map();
+    cursorSeeds.set(accountPubkey, seeds);
+  }
+  const pending = seeds.get(relayUrl);
+  if (pending) return pending;
+  const inherited = inheritLeastCoveredCursor(accountPubkey, cursors);
+  const task = db.insert(syncCursors).values({
+    accountPubkey, relayUrl, ...inherited, updatedAt: Math.floor(Date.now() / 1000),
+  }).onConflictDoNothing().then(() => {
+    const cursor = cursors.get(relayUrl) ?? inherited;
+    if (cursorCache.get(accountPubkey) === cursors) cursors.set(relayUrl, cursor);
+    return cursor;
+  }).finally(() => {
+    if (seeds.get(relayUrl) === task) seeds.delete(relayUrl);
+    if (seeds.size === 0 && cursorSeeds.get(accountPubkey) === seeds) cursorSeeds.delete(accountPubkey);
+  });
+  seeds.set(relayUrl, task);
+  return task;
+}
+
+/** Copy one complete cursor pair, prioritizing existing configured replicas.
+ * Unknown coverage is smallest; otherwise compare the covered interval length.
+ * Stored replicas remain a fallback when the entire DM relay set is replaced. */
+function inheritLeastCoveredCursor(accountPubkey: string, cursors: Map<string, SyncCursor>): SyncCursor {
+  const configured = activeRelays.get(accountPubkey);
+  const hasConfiguredCursor = configured?.some(url => cursors.has(url));
+  const candidates = hasConfiguredCursor ? new Set(configured) : undefined;
+  let source: SyncCursor | undefined;
+  let sourceUrl = '';
+  let smallest = Infinity;
+  for (const [url, cursor] of cursors) {
+    if (candidates && !candidates.has(url)) continue;
+    const coverage = cursor.forwardSince === null || cursor.backwardUntil === null
+      ? -Infinity : Math.max(0, cursor.forwardSince - cursor.backwardUntil);
+    const forward = cursor.forwardSince ?? -Infinity;
+    const sourceForward = source?.forwardSince ?? -Infinity;
+    if (!source || coverage < smallest || (coverage === smallest &&
+      (forward < sourceForward || (forward === sourceForward && url < sourceUrl)))) {
+      source = cursor;
+      sourceUrl = url;
+      smallest = coverage;
+    }
+  }
+  return source ? { ...source } : emptyCursor();
 }
 
 async function upsertCursor(
   accountPubkey: string,
-  patch: Partial<Pick<SyncCursor, 'forwardSince' | 'backwardUntil'>>,
+  relayUrl: string,
+  patch: Partial<SyncCursor>,
 ): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-  await db
-    .insert(syncCursors)
-    .values({ accountPubkey, ...patch, updatedAt: now })
-    .onConflictDoUpdate({
-      target: syncCursors.accountPubkey,
-      set: { ...patch, updatedAt: now },
-    });
-  const previous = cursorCache.get(accountPubkey) ?? {
-    forwardSince: null,
-    backwardUntil: null,
-  };
-  cursorCache.set(accountPubkey, { ...previous, ...patch });
+  relayUrl = normalizeRelayUrl(relayUrl);
+  const cursors = await loadCursors(accountPubkey);
+  const updatedAt = Math.floor(Date.now() / 1000);
+  await db.insert(syncCursors).values({
+    accountPubkey, relayUrl, ...patch, updatedAt,
+  }).onConflictDoUpdate({
+    target: [syncCursors.accountPubkey, syncCursors.relayUrl],
+    set: { ...patch, updatedAt },
+  });
+  cursors.set(relayUrl, { ...(cursors.get(relayUrl) ?? emptyCursor()), ...patch });
 }
 
 export function clearSyncCursorCache(accountPubkey: string): void {
   cursorCache.delete(accountPubkey);
+  cursorLoads.delete(accountPubkey);
+  cursorSeeds.delete(accountPubkey);
+  activeRelays.delete(accountPubkey);
 }
 
-export function setForwardSince(accountPubkey: string, since: number): Promise<void> {
-  return upsertCursor(accountPubkey, { forwardSince: since });
+export function setForwardSince(accountPubkey: string, relayUrl: string, since: number): Promise<void> {
+  return upsertCursor(accountPubkey, relayUrl, { forwardSince: since });
 }
 
-export function setBackwardUntil(accountPubkey: string, until: number): Promise<void> {
-  return upsertCursor(accountPubkey, { backwardUntil: until });
+export function setBackwardUntil(accountPubkey: string, relayUrl: string, until: number): Promise<void> {
+  return upsertCursor(accountPubkey, relayUrl, { backwardUntil: until });
 }
 
 /** True if this gift-wrap id was already unwrapped (so we can skip decryption). */

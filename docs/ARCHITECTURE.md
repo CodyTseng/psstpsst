@@ -260,13 +260,20 @@ and state-machine details.
    Metadata refresh waits for all routing targets to settle, then selects the
    newest known events. At least one effective EOSE is required despite failed replicas.
    With no completed response, startup retries without enabling message intake.
-2. Backfill uses persisted cursors to recover history and starts only while the
-   app is active, including foreground re-entry. Forward recovery re-reads the
+2. Each DM relay owns an independent backfill task and persisted account/relay
+   cursors. A newly added relay inherits both frontiers from the existing relay
+   with the smallest covered interval; an existing relay retains its own progress.
+   Failed relays retain their gaps and retry with bounded backoff without
+   blocking healthy replicas. Only a wire EOSE confirms page coverage; deadlines
+   and relay closures never advance a frontier. Tasks start only while the app
+   is active, including foreground re-entry. Forward recovery re-reads the
    gift-wrap randomization window before its previous wall-clock watermark;
    processed envelope IDs deduplicate the overlap. An already-started pass may
    continue after backgrounding; foreground transitions do not start overlapping
-   passes. Background polls, socket recovery, and background session reinitialization
-   never start history backfill. Account/key changes still cancel stale work.
+   passes for the same relay. Group history finalization uses the conservative
+   coverage intersection of the currently configured DM relays. Background polls,
+   socket recovery, and background session reinitialization never start history
+   backfill. Account/key changes still cancel stale work.
    Notification polls page only a fixed recent overlap window, independently per
    relay, and never advance the persisted history cursors. Timeouts and saturated
    timestamp boundaries leave coverage unconfirmed. See
