@@ -456,3 +456,106 @@ it('does not reconcile a private-list echo while a newer local snapshot is still
   finish(); await preparing;
   expect(await service.canApplyConfigurationEvent(SELF, 30000, MUTED_D, event(30000, MUTED_D))).toBe(true);
 });
+
+
+it('publishes raw h ids for muted groups and reconciles them without re-publishing', async () => {
+  const { setConversationMuted, applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
+  const { groupConversationKey } = jest.requireActual('@/lib/nostr/group-messaging') as typeof import('@/lib/nostr/group-messaging');
+  const groupId = 'room/皇上';
+  const key = groupConversationKey(groupId);
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, group_id) VALUES (?, ?, ?)')
+    .run(SELF, key, groupId);
+  const saving = setConversationMuted(SELF, key, true);
+  await jest.runAllTimersAsync(); await saving;
+  expect((await pending(30000, MUTED_D))?.event.content)
+    .toBe(`encrypted:${JSON.stringify([['h', groupId]])}`);
+  sqlite.exec('DELETE FROM configuration_outbox; DELETE FROM replaceable_events; UPDATE conversations SET muted = 0;');
+  mockSigner.signEvent.mockClear();
+  await applyMutedEvent(SELF, {
+    ...event(30000, MUTED_D), content: `encrypted:${JSON.stringify([['h', groupId]])}`,
+  }, mockSigner);
+  expect(sqlite.prepare('SELECT muted FROM conversations').get()).toEqual({ muted: 1 });
+  expect(await pending(30000, MUTED_D)).toBeNull();
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+});
+
+it('converts discovered g tags into h and durably queues a newer encrypted snapshot', async () => {
+  const { applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
+  const { groupConversationKey } = jest.requireActual('@/lib/nostr/group-messaging') as typeof import('@/lib/nostr/group-messaging');
+  const groupId = 'legacy-room';
+  const key = groupConversationKey(groupId);
+  const peer = 'b'.repeat(64);
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, group_id) VALUES (?, ?, ?)')
+    .run(SELF, key, groupId);
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, muted) VALUES (?, ?, 1)')
+    .run('other', 'untouched');
+  const old = {
+    ...event(30000, MUTED_D),
+    content: `encrypted:${JSON.stringify([['p', peer], ['g', key], ['h', groupId], ['custom', 'keep']])}`,
+  };
+  await service.enqueueConfigurationEvent(old);
+  sqlite.exec('DELETE FROM configuration_outbox;');
+  const applying = applyMutedEvent(SELF, old, mockSigner);
+  await jest.runAllTimersAsync(); await applying;
+  const migrated = (await pending(30000, MUTED_D))!.event;
+  expect(migrated.content).toBe(`encrypted:${JSON.stringify([
+    ['p', peer], ['h', groupId], ['h', groupId], ['custom', 'keep'],
+  ])}`);
+  expect(migrated.tags).toEqual(old.tags);
+  expect(migrated.created_at).toBeGreaterThan(old.created_at);
+  expect(sqlite.prepare('SELECT muted FROM conversations WHERE account_pubkey = ? AND conversation_key = ?')
+    .get(SELF, key)).toEqual({ muted: 1 });
+  expect(sqlite.prepare('SELECT muted FROM conversations WHERE account_pubkey = ? AND conversation_key = ?')
+    .get(SELF, peer)).toEqual({ muted: 1 });
+  expect(sqlite.prepare('SELECT muted FROM conversations WHERE account_pubkey = ?').get('other'))
+    .toEqual({ muted: 1 });
+  const cache = sqlite.prepare('SELECT event FROM replaceable_events WHERE pubkey = ? AND d_tag = ?')
+    .get(SELF, MUTED_D) as { event: string };
+  expect(JSON.parse(cache.event).id).toBe(migrated.id);
+  mockSigner.signEvent.mockClear();
+  await applyMutedEvent(SELF, old, mockSigner);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  expect((await pending(30000, MUTED_D))?.eventId).toBe(migrated.id);
+});
+
+it('leaves an unresolved legacy group snapshot intact until its raw id is available', async () => {
+  const { applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
+  const { groupConversationKey } = jest.requireActual('@/lib/nostr/group-messaging') as typeof import('@/lib/nostr/group-messaging');
+  const groupId = 'not-yet-known';
+  const key = groupConversationKey(groupId);
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, muted) VALUES (?, ?, 1)')
+    .run(SELF, 'local-peer');
+  // A different account's group id must not resolve this account's legacy tag.
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, group_id) VALUES (?, ?, ?)')
+    .run('other', key, groupId);
+  const old = { ...event(30000, MUTED_D), content: `encrypted:${JSON.stringify([['g', key]])}` };
+  await applyMutedEvent(SELF, old, mockSigner);
+  expect(sqlite.prepare('SELECT muted FROM conversations WHERE account_pubkey = ?').get(SELF))
+    .toEqual({ muted: 1 });
+  expect(await pending(30000, MUTED_D)).toBeNull();
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, group_id) VALUES (?, ?, ?)')
+    .run(SELF, key, groupId);
+  const retry = applyMutedEvent(SELF, old, mockSigner);
+  await jest.runAllTimersAsync(); await retry;
+  expect((await pending(30000, MUTED_D))?.event.content)
+    .toBe(`encrypted:${JSON.stringify([['h', groupId]])}`);
+});
+
+it('does not let legacy migration overwrite a newer snapshot received during encryption', async () => {
+  const { applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
+  const { groupConversationKey } = jest.requireActual('@/lib/nostr/group-messaging') as typeof import('@/lib/nostr/group-messaging');
+  const key = groupConversationKey('room');
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, group_id) VALUES (?, ?, ?)')
+    .run(SELF, key, 'room');
+  const old = { ...event(30000, MUTED_D), content: `encrypted:${JSON.stringify([['g', key]])}` };
+  const newer = { ...event(30000, MUTED_D, 200), content: 'encrypted:[]' };
+  mockSigner.nip44Encrypt.mockImplementationOnce(async (_pubkey, plaintext) => {
+    await service.enqueueConfigurationEvent(newer);
+    return `encrypted:${plaintext}`;
+  });
+  const applying = applyMutedEvent(SELF, old, mockSigner);
+  const rejected = expect(applying).rejects.toThrow('Configuration changed');
+  await jest.runAllTimersAsync(); await rejected;
+  expect((await pending(30000, MUTED_D))?.eventId).toBe(newer.id);
+});

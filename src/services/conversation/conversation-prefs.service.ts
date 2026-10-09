@@ -3,8 +3,15 @@ import type { Event } from 'nostr-tools';
 
 import { db } from '@/db/client';
 import { conversations } from '@/db/schema';
+import { groupConversationKey, isValidGroupId } from '@/lib/nostr/group-messaging';
 import { buildSigner } from '../account/account.service';
-import { canApplyConfigurationEvent, prepareConfiguration, publishConfiguration } from '../relay/configuration-publish.service';
+import {
+  canApplyConfigurationEvent,
+  getPendingConfiguration,
+  prepareConfiguration,
+  publishConfiguration,
+} from '../relay/configuration-publish.service';
+import { getReplaceableEvent } from '../relay/replaceable-events.service';
 import type { Signer } from '../signer/signer.interface';
 
 /**
@@ -12,7 +19,7 @@ import type { Signer } from '../signer/signer.interface';
  *
  * - **`muted`** is synced across the user's own devices as a private kind-30000
  *   set. Its NIP-44-encrypted content uses `p` for direct counterparties and
- *   `g` for hashed group conversation keys, so mute membership is never public.
+ *   `h` for raw group ids, so mute membership is never public.
  * - **`pinned`** is a **device-local** sort preference only — it floats the row
  *   to the top of *this* device's inbox. It is intentionally **not** synced:
  *   pinning is about how this inbox is arranged, not a property of the peer.
@@ -28,7 +35,7 @@ const MUTED_TITLE = 'PsstPsst Muted';
 /** Stable keys and identity kind for every muted conversation. */
 async function collectMutedConversations(
   accountPubkey: string,
-): Promise<{ conversationKey: string; group: boolean }[]> {
+): Promise<{ conversationKey: string; groupId: string | null }[]> {
   const rows = await db
     .select({
       conversationKey: conversations.conversationKey,
@@ -41,10 +48,7 @@ async function collectMutedConversations(
         eq(conversations.muted, true),
       ),
     );
-  return rows.map((row) => ({
-    conversationKey: row.conversationKey,
-    group: row.groupId != null,
-  }));
+  return rows;
 }
 
 /** Commit the current encrypted snapshot after the optimistic local write can
@@ -60,7 +64,9 @@ function persistMutedSet(accountPubkey: string, signer?: Signer): Promise<void> 
 async function publishMutedSet(accountPubkey: string, signer: Signer): Promise<void> {
   if (!signer.nip44Encrypt) return; // remote signers without NIP-44 can't sync
   const muted = await collectMutedConversations(accountPubkey);
-  const privateTags = muted.map((item) => [item.group ? 'g' : 'p', item.conversationKey]);
+  const privateTags = muted.map((item) =>
+    item.groupId != null ? ['h', item.groupId] : ['p', item.conversationKey],
+  );
   const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(privateTags));
   await publishConfiguration(accountPubkey, signer, {
     kind: KIND_FOLLOW_SET,
@@ -135,13 +141,37 @@ export async function setConversationPinned(
     );
 }
 
+/** Resolve legacy hashes only against this account's known raw group ids.
+ * If any id is unavailable, leave the old snapshot intact and retry on sync. */
+async function migrateMutedTags(accountPubkey: string, tags: string[][]): Promise<string[][] | null> {
+  const legacyKeys = [...new Set(tags.filter((tag) => tag[0] === 'g').map((tag) => tag[1]))];
+  if (!legacyKeys.length) return tags;
+  const groupIds = new Map<string, string>();
+  // Bound SQLite parameters; migration never scans message history.
+  for (let offset = 0; offset < legacyKeys.length; offset += 400) {
+    const rows = await db.select({
+      conversationKey: conversations.conversationKey,
+      groupId: conversations.groupId,
+    }).from(conversations).where(and(
+      eq(conversations.accountPubkey, accountPubkey),
+      inArray(conversations.conversationKey, legacyKeys.slice(offset, offset + 400)),
+    ));
+    for (const row of rows) {
+      if (isValidGroupId(row.groupId)) groupIds.set(row.conversationKey, row.groupId);
+    }
+  }
+  if (legacyKeys.some((key) => !groupIds.has(key))) return null;
+  return tags.map((tag) => tag[0] === 'g' ? ['h', groupIds.get(tag[1])!, ...tag.slice(2)] : tag);
+}
+
 /**
  * Apply a muted-set event read from the replaceable-events cache to the local
- * 1:1 rows: true for members, false for the rest. Pending local work and the
- * latest cached snapshot guard against delayed relay echoes after decryption.
+ * conversation rows: true for members, false for the rest. Pending local work
+ * and the latest cache guard against delayed relay echoes after decryption.
  * A missing or undecryptable event leaves local state
  * untouched (no wipe on a miss). Called by `syncPersonalConfigs` after it has
- * merged the current/legacy d-tag rows.
+ * loaded the current snapshot. Legacy g tags are converted to h before
+ * reconciliation and re-published as a newer encrypted event.
  */
 export async function applyMutedEvent(
   accountPubkey: string,
@@ -152,20 +182,30 @@ export async function applyMutedEvent(
   if (!(await canApplyConfigurationEvent(accountPubkey, KIND_FOLLOW_SET, MUTED_D, event))) return;
   let directKeys: string[];
   let groupKeys: string[];
+  let privateTags: string[][];
+  let migrated: boolean;
   try {
     const json = await signer.nip44Decrypt(accountPubkey, event.content);
-    const tags = JSON.parse(json) as string[][];
-    directKeys = tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1]);
-    groupKeys = tags
-      .filter((tag) => tag[0] === 'g' && tag[1]?.startsWith('group:'))
-      .map((tag) => tag[1]);
+    const decoded: unknown = JSON.parse(json);
+    if (!Array.isArray(decoded) || decoded.some((tag) =>
+      !Array.isArray(tag) || tag.some((part) => typeof part !== 'string'),
+    )) return;
+    const tags = decoded as string[][];
+    migrated = tags.some((tag) => tag[0] === 'g');
+    const converted = await migrateMutedTags(accountPubkey, tags);
+    if (!converted) return;
+    privateTags = converted;
+    directKeys = privateTags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1]);
+    groupKeys = privateTags
+      .filter((tag) => tag[0] === 'h' && isValidGroupId(tag[1]))
+      .map((tag) => groupConversationKey(tag[1]));
   } catch {
     return; // undecryptable / malformed — leave local state untouched
   }
-  // Both private p/g values are already stable conversation keys.
+  // Only p values are conversation keys; h values become hashed local keys.
   const keys = Array.from(new Set([...directKeys, ...groupKeys]));
-  await db.transaction(async (tx) => {
-    if (!(await canApplyConfigurationEvent(accountPubkey, KIND_FOLLOW_SET, MUTED_D, event, tx))) return;
+  const applied = await db.transaction(async (tx) => {
+    if (!(await canApplyConfigurationEvent(accountPubkey, KIND_FOLLOW_SET, MUTED_D, event, tx))) return false;
     // Clear mute on every row not in the remote set (an empty set clears all).
     await tx
       .update(conversations)
@@ -212,5 +252,21 @@ export async function applyMutedEvent(
         )
         .run();
     }
+    return true;
+  });
+  const encrypt = signer.nip44Encrypt?.bind(signer);
+  if (!applied || !migrated || !encrypt) return;
+  await prepareConfiguration(accountPubkey, KIND_FOLLOW_SET, MUTED_D, async () => {
+    const cached = await getReplaceableEvent({ pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: MUTED_D });
+    if (cached && cached.id !== event.id) return;
+    if (await getPendingConfiguration(accountPubkey, KIND_FOLLOW_SET, MUTED_D)) return;
+    const content = await encrypt(accountPubkey, JSON.stringify(privateTags));
+    // The atomic base-id check also protects against updates during encryption.
+    await publishConfiguration(accountPubkey, signer, {
+      kind: KIND_FOLLOW_SET,
+      content,
+      tags: event.tags,
+      created_at: event.created_at + 1,
+    }, undefined, cached?.id ?? null);
   });
 }

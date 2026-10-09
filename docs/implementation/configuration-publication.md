@@ -89,3 +89,18 @@ The UI becomes ready after local setup. The first live messaging session uses
 the persisted local metadata and skips its initial history pass; subscriptions
 and queued publication start asynchronously. Later foreground entries and
 ordinary launches use normal synchronization and remote key reconciliation.
+
+## Muted group snapshot migration
+
+The private `kind 30000`, `d = psstpsst-muted` snapshot uses `p` for direct
+counterparty pubkeys and `h` for raw group ids. Reconciliation hashes `h` into
+the local conversation key. On discovering legacy `g` tags, resolve their hashed
+conversation keys against the account's conversations, convert them to `h`,
+and enqueue a newer encrypted event while retaining the other private tags.
+Normal publication writes only `p` and `h`.
+
+If a legacy hash cannot be resolved, leave the snapshot and local mute flags
+untouched and retry during a later sync. Migration observes the same pending
+local work and cached-event guards as reconciliation; an atomic base-event
+check prevents it from replacing a snapshot changed during encryption/signing.
+The outbox persists the migrated event before retrying relay delivery.
