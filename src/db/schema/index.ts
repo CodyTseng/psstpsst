@@ -35,3 +35,4 @@ export * from './sync-cursors';
 export * from './stored-files';
 export * from './types';
 export * from './wallets';
+export * from './private-list-sync-state';

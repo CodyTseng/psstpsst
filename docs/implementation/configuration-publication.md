@@ -2,14 +2,15 @@
 
 Configuration saves hand signed events to `configuration-publish.service.ts`.
 The SQLite transaction stores both the replaceable cache and a pending outbox
-row before relay delivery starts. A successful save means locally persisted;
-network failure does not turn it into a failed save. Signing and storage errors
-still reject the handoff. Private sets remain encrypted to the identity before
+row before relay delivery starts. Private-list actions (contacts with saved
+groups, mute, and block) complete once plaintext and their durable revision are
+committed; their background handoff does not affect the local result. Other configuration APIs may await
+the signed handoff. Signing and storage errors still reject that handoff. Private sets remain encrypted to the identity before
 entering the queue; plaintext lists and signing secrets are not outbox payloads.
 
 The queue covers key announcements (10044), inbox relays (10050), read/write
-relays (10002), profiles (0), private contacts/mute/block sets (30000), saved
-groups (30078), emoji collections (10030), emoji packs (30030), and Blossom
+relays (10002), profiles (0), private contacts (including saved groups), mute,
+and block sets (30000), emoji collections (10030), emoji packs (30030), and Blossom
 server lists (10063).
 Messages, key-transfer exchanges, and wallet requests retain their own delivery
 semantics and do not enter this queue.
@@ -25,6 +26,10 @@ semantics and do not enter this queue.
   **and event ID**, so a late response cannot delete or delay a replacement.
   Bytes already handed to a relay cannot be recalled; replaceable-event ordering
   ensures the newer snapshot wins there too.
+- Private lists treat relay failure as a failed background attempt:
+  remove only that pending event and mark its plaintext revision dirty. The next
+  local edit generates a new complete event; stale failures cannot discard newer
+  pending work.
 - Completion requires `floor(current_target_count / 2) + 1` successful relay
   acknowledgements. Zero targets never succeeds. Receipts accumulate across
   attempts but count only toward the current target set. Removed targets cannot
@@ -54,7 +59,9 @@ The active account's worker processes at most four events per batch and reads
 only the earliest indexed deadlines. Connection and publish attempts have bounded
 timeouts. Failures persist the receipts, last error, attempt count, and next
 deadline. Retry waits are 1, 2, 5, 10, 30, then 60 seconds, capped at 60 seconds
-without a retry limit. A failed destination never requires re-signing an event.
+without a retry limit for configuration events other than private lists.
+Contact, mute, and block failures retire the pending snapshot and leave
+plaintext for the next local edit instead of scheduling another delivery attempt.
 
 Account activation resumes the queue before messaging metadata lookup. Network
 recovery and foreground entry wake retries early; backgrounding pauses scheduled
@@ -103,4 +110,50 @@ If a legacy hash cannot be resolved, leave the snapshot and local mute flags
 untouched and retry during a later sync. Migration observes the same pending
 local work and cached-event guards as reconciliation; an atomic base-event
 check prevents it from replacing a snapshot changed during encryption/signing.
-The outbox persists the migrated event before retrying relay delivery.
+The migration marks its local mute revision dirty and queues converted tags for
+background publication. Crypto/cache/storage failure leaves local flags intact;
+relay failure retires the pending event for regeneration on the next edit.
+
+## Contacts and saved groups
+
+Both domains share `kind 30000`, `d = psstpsst-contacts`: encrypted `p` tags
+carry contact pubkeys and optional petnames, and encrypted `h` tags carry raw
+saved group ids. Local edits commit with the same durable revision and return
+before crypto begins. One background job per account coalesces queued edits,
+reads both plaintext tables in a transaction, encrypts/signs, and queues the
+complete snapshot. Crypto, cache conflicts, and delivery failures never reject
+the local action. A failed attempt leaves its dirty revision until the next
+local edit; queued subsequent edits still run using fresh plaintext. Remote
+reconciliation updates both domains atomically and respects unsigned local work,
+pending publication, and the cached event watermark.
+
+Personal-config sync schedules migration independently of other refreshes and
+reconciliation. Existing local `kind 30078`,
+`d = psstpsst-saved-groups` cache/outbox rows trigger migration of the local
+`saved_groups` read model. Reconcile locally cached contacts first, preserving
+local saved membership while those legacy rows remain. The new complete list
+is signed and durably queued; deleting the old cache and outbox rows commits
+in the same transaction. Failure preserves the old rows and the shared dirty
+revision for a future background publication. Removing those rows makes migration idempotent without a
+wire-format version marker.
+
+The old coordinate is never fetched or subscribed to, and its encrypted payload
+is no longer decoded. After migration, ordinary snapshots replace both sets;
+no `h` entries means no saved groups. Migration can run offline and a slow or
+failed migration cannot prevent unrelated configurations from syncing.
+
+## Block and mute synchronization
+
+`private_list_sync_state` holds account/list revisions, dirty flags, and the
+last signed event id for `psstpsst-blocked` and `psstpsst-muted`. Each local
+edit commits its plaintext and dirty revision atomically, then queues a
+background attempt. Block/unblock also updates the ingestion mirror immediately
+after the transaction; crypto never delays the local action.
+
+One job per account/list coalesces queued edits and reads the latest local set
+inside a transaction. Revision and cached-event checks prevent a stale signed
+snapshot from replacing newer work. Successful handoff clears that revision in
+the same transaction as caching/queuing the event. Failure retains the durable
+dirty flag, including across restarts, so remote reconciliation cannot erase
+unsynced local state. No failure requests an immediate retry; subsequent queued
+edits still run, and a later edit generates a new event from current plaintext.

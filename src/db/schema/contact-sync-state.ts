@@ -2,7 +2,7 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { accounts } from './accounts';
 
-/** Durable local revision and reconciliation watermark for the private contact set. */
+/** Durable local revision and reconciliation watermark for the shared private contacts/saved-groups set. */
 export const contactSyncState = sqliteTable('contact_sync_state', {
   accountPubkey: text('account_pubkey')
     .primaryKey()

@@ -1,17 +1,11 @@
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
-import { db } from '@/db/client';
+import { db, type Database } from '@/db/client';
 import { conversations } from '@/db/schema';
 import { groupConversationKey, isValidGroupId } from '@/lib/nostr/group-messaging';
-import { buildSigner } from '../account/account.service';
-import {
-  canApplyConfigurationEvent,
-  getPendingConfiguration,
-  prepareConfiguration,
-  publishConfiguration,
-} from '../relay/configuration-publish.service';
-import { getReplaceableEvent } from '../relay/replaceable-events.service';
+import { canApplyConfigurationEvent } from '../relay/configuration-publish.service';
+import { markPrivateListDirty, queuePrivateListPublication } from '../relay/private-list-sync.service';
 import type { Signer } from '../signer/signer.interface';
 
 /**
@@ -35,8 +29,9 @@ const MUTED_TITLE = 'PsstPsst Muted';
 /** Stable keys and identity kind for every muted conversation. */
 async function collectMutedConversations(
   accountPubkey: string,
+  tx: Database,
 ): Promise<{ conversationKey: string; groupId: string | null }[]> {
-  const rows = await db
+  const rows = await tx
     .select({
       conversationKey: conversations.conversationKey,
       groupId: conversations.groupId,
@@ -51,31 +46,12 @@ async function collectMutedConversations(
   return rows;
 }
 
-/** Commit the current encrypted snapshot after the optimistic local write can
- * paint. Only persistence is awaited; the shared worker owns relay delivery. */
-function persistMutedSet(accountPubkey: string, signer?: Signer): Promise<void> {
-  return prepareConfiguration(accountPubkey, KIND_FOLLOW_SET, MUTED_D, async () => {
-    const s = signer ?? (await buildSigner(accountPubkey));
-    await publishMutedSet(accountPubkey, s);
-  });
-}
-
-/** Re-publish the private muted set from current local state (replaceable). */
-async function publishMutedSet(accountPubkey: string, signer: Signer): Promise<void> {
-  if (!signer.nip44Encrypt) return; // remote signers without NIP-44 can't sync
-  const muted = await collectMutedConversations(accountPubkey);
-  const privateTags = muted.map((item) =>
-    item.groupId != null ? ['h', item.groupId] : ['p', item.conversationKey],
-  );
-  const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(privateTags));
-  await publishConfiguration(accountPubkey, signer, {
-    kind: KIND_FOLLOW_SET,
-    content,
-    tags: [
-      ['d', MUTED_D],
-      ['title', MUTED_TITLE],
-    ],
-    created_at: Math.floor(Date.now() / 1000),
+function queueMutedSet(accountPubkey: string, signer?: Signer): void {
+  queuePrivateListPublication({
+    accountPubkey, dTag: MUTED_D, title: MUTED_TITLE, signer,
+    readTags: async (tx) => (await collectMutedConversations(accountPubkey, tx)).map((item) =>
+      item.groupId != null ? ['h', item.groupId] : ['p', item.conversationKey],
+    ),
   });
 }
 
@@ -86,38 +62,40 @@ export async function setConversationMuted(
   muted: boolean,
   opts: { signer?: Signer } = {},
 ): Promise<void> {
-  if (muted) {
-    const now = Math.floor(Date.now() / 1000);
-    await db
-      .insert(conversations)
-      .values({
-        accountPubkey,
-        conversationKey,
-        createdAt: now,
-        createdOrderAt: now * 1000,
-        updatedAt: now,
-        updatedOrderAt: now * 1000,
-        lastMessageAt: null,
-        deleted: true,
-        muted: true,
-      })
-      .onConflictDoUpdate({
-        target: [conversations.accountPubkey, conversations.conversationKey],
-        set: { muted: true },
-      });
-  } else {
-    await db
-      .update(conversations)
-      .set({ muted: false })
-      .where(
-        and(
-          eq(conversations.accountPubkey, accountPubkey),
-          eq(conversations.conversationKey, conversationKey),
-        ),
-      );
-  }
-  // Local state is already visible; wait only for the durable encrypted snapshot.
-  await persistMutedSet(accountPubkey, opts.signer);
+  await db.transaction(async (tx) => {
+    await markPrivateListDirty(accountPubkey, MUTED_D, tx);
+    if (muted) {
+      const now = Math.floor(Date.now() / 1000);
+      await tx
+        .insert(conversations)
+        .values({
+          accountPubkey,
+          conversationKey,
+          createdAt: now,
+          createdOrderAt: now * 1000,
+          updatedAt: now,
+          updatedOrderAt: now * 1000,
+          lastMessageAt: null,
+          deleted: true,
+          muted: true,
+        })
+        .onConflictDoUpdate({
+          target: [conversations.accountPubkey, conversations.conversationKey],
+          set: { muted: true },
+        });
+    } else {
+      await tx
+        .update(conversations)
+        .set({ muted: false })
+        .where(
+          and(
+            eq(conversations.accountPubkey, accountPubkey),
+            eq(conversations.conversationKey, conversationKey),
+          ),
+        );
+    }
+  });
+  queueMutedSet(accountPubkey, opts.signer);
 }
 
 /**
@@ -252,21 +230,17 @@ export async function applyMutedEvent(
         )
         .run();
     }
+    if (migrated) await markPrivateListDirty(accountPubkey, MUTED_D, tx);
     return true;
   });
-  const encrypt = signer.nip44Encrypt?.bind(signer);
-  if (!applied || !migrated || !encrypt) return;
-  await prepareConfiguration(accountPubkey, KIND_FOLLOW_SET, MUTED_D, async () => {
-    const cached = await getReplaceableEvent({ pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: MUTED_D });
-    if (cached && cached.id !== event.id) return;
-    if (await getPendingConfiguration(accountPubkey, KIND_FOLLOW_SET, MUTED_D)) return;
-    const content = await encrypt(accountPubkey, JSON.stringify(privateTags));
-    // The atomic base-id check also protects against updates during encryption.
-    await publishConfiguration(accountPubkey, signer, {
-      kind: KIND_FOLLOW_SET,
-      content,
-      tags: event.tags,
-      created_at: event.created_at + 1,
-    }, undefined, cached?.id ?? null);
-  });
+  if (applied && migrated) {
+    // Converted tags are already plaintext; their publication is independent of
+    // reconciliation. Subsequent user edits read the current local mute model.
+    queuePrivateListPublication({
+      accountPubkey, dTag: MUTED_D, title: MUTED_TITLE, signer,
+      readTags: async () => privateTags,
+      eventTags: event.tags,
+      sourceEventId: event.id,
+    });
+  }
 }

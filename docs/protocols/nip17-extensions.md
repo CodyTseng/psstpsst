@@ -230,6 +230,19 @@ ordinary message, `create`, or `invite`; it invalidates a `rename` action.
 
 This extension does not deliver earlier rumors to a newly invited member.
 
+## Private saved groups
+
+PsstPsst stores explicit saved-group membership in the NIP-44 encrypt-to-self
+`kind 30000`, `d = psstpsst-contacts` list. Its encrypted content is a JSON tag
+array: `p` entries identify contacts (with an optional petname in slot 3), and
+`h` entries identify saved groups by their raw group id. This is an
+application-specific extension of the NIP-51 follow-set format.
+
+Each snapshot replaces both sets, including an empty `h` set. No format version
+tag is required. Saved membership does not alter group roster or message
+encryption. PsstPsst no longer queries or subscribes to the old `kind 30078`,
+`d = psstpsst-saved-groups` coordinate; migration uses local saved membership.
+
 ## Compatibility
 
 Clients that ignore `h` and `action` can still decrypt ordinary NIP-17 content,

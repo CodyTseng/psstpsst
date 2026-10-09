@@ -44,7 +44,6 @@ let mockGetSigner: jest.Mock;
 let mockApplyMutedEvent: jest.Mock;
 let mockApplyContactsEvent: jest.Mock;
 let mockApplyBlockedEvent: jest.Mock;
-let mockApplySavedGroupsEvent: jest.Mock;
 let mockApplyMediaServersEvent: jest.Mock;
 let mockApplyUserEmojiListEvent: jest.Mock;
 const mockHealthySubscriptions = new Set<string>();
@@ -161,12 +160,6 @@ jest.mock('../../dm/block.service', () => ({
   applyBlockedEvent: jest.fn((...args: unknown[]) => mockApplyBlockedEvent(...args)),
 }));
 
-jest.mock('../../group/saved-groups.service', () => ({
-  KIND_APP_DATA: 30078,
-  SAVED_GROUPS_D: 'psstpsst-saved-groups',
-  applySavedGroupsEvent: jest.fn((...args: unknown[]) => mockApplySavedGroupsEvent(...args)),
-}));
-
 jest.mock('../../files/media-server.service', () => ({
   KIND_BLOSSOM_SERVER_LIST: 10063,
   applyMediaServersEvent: jest.fn((...args: unknown[]) =>
@@ -262,7 +255,6 @@ describe('selfEventStream', () => {
     mockApplyMutedEvent = jest.fn(async () => {});
     mockApplyContactsEvent = jest.fn(async () => {});
     mockApplyBlockedEvent = jest.fn(async () => {});
-    mockApplySavedGroupsEvent = jest.fn(async () => {});
     mockApplyMediaServersEvent = jest.fn(async () => {});
     mockApplyUserEmojiListEvent = jest.fn(async () => {});
     mockAppState = 'active';
@@ -333,7 +325,6 @@ describe('selfEventStream', () => {
       { kinds: [4454], authors: [SELF], since: expect.any(Number) },
       { kinds: [4455], authors: [SELF], '#p': [SELF], since: expect.any(Number) },
       { kinds: [30000], authors: [SELF], '#d': PRIVATE_SET_D_TAGS },
-      { kinds: [30078], authors: [SELF], '#d': ['psstpsst-saved-groups'] },
       { kinds: [10030], authors: [SELF] },
       { kinds: [10063], authors: [SELF] },
       { kinds: [10002, 10050], authors: [SELF] },
@@ -344,7 +335,6 @@ describe('selfEventStream', () => {
     expect(discovery.filters).toEqual([
       { kinds: [10044], authors: [SELF] },
       { kinds: [30000], authors: [SELF], '#d': PRIVATE_SET_D_TAGS },
-      { kinds: [30078], authors: [SELF], '#d': ['psstpsst-saved-groups'] },
       { kinds: [10030], authors: [SELF] },
       { kinds: [10063], authors: [SELF] },
       { kinds: [10002, 10050], authors: [SELF] },
@@ -423,7 +413,8 @@ describe('selfEventStream', () => {
     expect(mockApplyMutedEvent).toHaveBeenCalledWith(SELF, muted, fakeSigner);
     expect(mockApplyContactsEvent).toHaveBeenCalledWith(SELF, contacts, fakeSigner);
     expect(mockApplyBlockedEvent).toHaveBeenCalledWith(SELF, blocked, fakeSigner);
-    expect(mockApplySavedGroupsEvent).toHaveBeenCalledWith(SELF, savedGroups, fakeSigner);
+    expect(mockApplyContactsEvent).toHaveBeenCalledTimes(1);
+    expect(mockReplStore.has(JSON.stringify([SELF, 30078, 'psstpsst-saved-groups']))).toBe(false);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith(SELF, emoji);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith(SELF, media);
   });

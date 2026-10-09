@@ -57,6 +57,7 @@ import m0052 from './0052_observed-peer-encryption-keys.sql';
 import m0053 from './0053_peer-key-announcement-checked-at.sql';
 import m0054 from './0054_conversation-updated-time.sql';
 import m0055 from './0055_conversation-list-index.sql';
+import m0056 from './0056_private-list-sync-state.sql';
 
   export default {
     journal,
@@ -116,6 +117,7 @@ m0051,
 m0052,
 m0053,
 m0054,
-m0055
+m0055,
+m0056
     }
   }

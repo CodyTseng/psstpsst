@@ -2,7 +2,7 @@ import { and, asc, eq, lte } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
 import { db, type Database } from '@/db/client';
-import { configurationOutbox, replaceableEvents } from '@/db/schema';
+import { configurationOutbox, contactSyncState, privateListSyncState, replaceableEvents } from '@/db/schema';
 import { platform } from '@/platform';
 
 import type { Signer } from '../signer/signer.interface';
@@ -147,6 +147,12 @@ export async function getPendingConfiguration(accountPubkey: string, kind: numbe
 export async function canApplyConfigurationEvent(
   accountPubkey: string, kind: number, dTag: string, event: Event, tx: Database = db,
 ): Promise<boolean> {
+  if (kind === 30000 && (dTag === 'psstpsst-muted' || dTag === 'psstpsst-blocked')) {
+    const [state] = await tx.select({ dirty: privateListSyncState.dirty }).from(privateListSyncState)
+      .where(and(eq(privateListSyncState.accountPubkey, accountPubkey), eq(privateListSyncState.dTag, dTag)))
+      .limit(1);
+    if (state?.dirty) return false;
+  }
   if (preparationJobs.has(JSON.stringify([accountPubkey, kind, dTag]))) return false;
   const key = { accountPubkey, kind, dTag };
   if (await readPending(key, tx)) return false;
@@ -287,6 +293,29 @@ export class ConfigurationPublisher {
       failure = error instanceof Error ? error.message : String(error);
     }
     if (!current()) return;
+    if (row.kind === 30000 && ['psstpsst-contacts', 'psstpsst-muted', 'psstpsst-blocked'].includes(row.dTag)) {
+      // This list can always be rebuilt from local plaintext. Retire a failed
+      // delivery; the next edit creates a new event instead of retrying ciphertext.
+      await db.transaction(async (tx) => {
+        if ((await readPending(row, tx))?.eventId !== row.eventId) return;
+        await tx.delete(configurationOutbox).where(exact(row));
+        if (row.dTag === 'psstpsst-contacts') {
+          await tx.update(contactSyncState).set({ dirty: true }).where(and(
+            eq(contactSyncState.accountPubkey, row.accountPubkey),
+            eq(contactSyncState.eventId, row.eventId),
+          ));
+        } else {
+          await tx.insert(privateListSyncState).values({
+            accountPubkey: row.accountPubkey, dTag: row.dTag, dirty: true, eventId: row.eventId,
+          }).onConflictDoUpdate({
+            target: [privateListSyncState.accountPubkey, privateListSyncState.dTag],
+            set: { dirty: true },
+            setWhere: eq(privateListSyncState.eventId, row.eventId),
+          });
+        }
+      });
+      return;
+    }
     const delay = RETRY_DELAYS_MS[Math.min(row.attempts, RETRY_DELAYS_MS.length - 1)];
     await db.update(configurationOutbox).set({
       acknowledgedRelays: [...acknowledged], attempts: row.attempts + 1,

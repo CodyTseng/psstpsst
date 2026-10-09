@@ -49,7 +49,11 @@ jest.mock('@/db/client', () => {
       PRIMARY KEY (account_pubkey, pubkey)
     );
     CREATE TABLE conversations (
-      account_pubkey TEXT, conversation_key TEXT, has_replied INTEGER
+      account_pubkey TEXT, conversation_key TEXT, has_replied INTEGER,
+      group_id TEXT, deleted INTEGER DEFAULT 0, deleted_at INTEGER, deleted_order_at INTEGER
+    );
+    CREATE TABLE saved_groups (
+      account_pubkey TEXT, group_id TEXT, PRIMARY KEY (account_pubkey, group_id)
     );
     CREATE TABLE replaceable_events (
       pubkey TEXT, kind INTEGER, d_tag TEXT, event TEXT, created_at INTEGER, fetched_at INTEGER,
@@ -179,7 +183,7 @@ it('discards a delayed decryption after a local edit has already been published'
   expect(saved()).toEqual([{ pubkey: ALICE, petname: null }]);
 });
 
-it('preserves pending imports after signer failure and retries from persisted state', async () => {
+it('preserves pending imports after signer failure until the next local edit', async () => {
   mockSigner.nip44Encrypt.mockRejectedValueOnce(new Error('signer unavailable'));
   await service.importNostrFollowContacts(SELF, [ALICE]);
   await flushPublish();
@@ -196,20 +200,30 @@ it('preserves pending imports after signer failure and retries from persisted st
   await service.applyContactsEvent(SELF, remote([]), mockSigner);
   expect(saved()).toHaveLength(1);
   await flushPublish();
+  expect(dirty()).toBe(true);
+  await service.addContact(SELF, BOB);
+  await flushPublish();
   expect(dirty()).toBe(false);
+  expect(saved()).toHaveLength(2);
 });
 
-it('hands a failed publish to the durable queue without re-signing on a remote miss', async () => {
+it('retains plaintext after a failed delivery and publishes a new snapshot on the next edit', async () => {
   mockPublish.mockResolvedValueOnce([{ url: 'wss://relay.example', outcome: { ok: false } }]);
   await service.addContact(SELF, ALICE);
   await jest.advanceTimersByTimeAsync(1);
   await flushMicrotasks();
-  expect(dirty()).toBe(false);
-  expect(sqlite.prepare('SELECT attempts FROM configuration_outbox').get()).toEqual({ attempts: 1 });
+  expect(dirty()).toBe(true);
+  expect(sqlite.prepare('SELECT * FROM configuration_outbox').all()).toEqual([]);
   await service.applyContactsEvent(SELF, null, mockSigner);
   await flushPublish();
   expect(mockSigner.signEvent).toHaveBeenCalledTimes(1);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  await service.setPetname(SELF, ALICE, 'Alice');
+  await flushPublish();
+  expect(mockSigner.signEvent).toHaveBeenCalledTimes(2);
   expect(mockPublish).toHaveBeenCalledTimes(2);
+  expect(dirty()).toBe(false);
+  expect(saved()).toEqual([{ pubkey: ALICE, petname: 'Alice' }]);
 });
 
 it('publishes strictly newer snapshots for consecutive edits within one second', async () => {

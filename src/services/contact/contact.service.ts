@@ -2,7 +2,8 @@ import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
 import { db, type Database } from '@/db/client';
-import { contacts, contactSyncState, conversations } from '@/db/schema';
+import { configurationOutbox, contacts, contactSyncState, conversations, replaceableEvents, savedGroups } from '@/db/schema';
+import { isValidGroupId } from '@/lib/nostr/group-messaging';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 
 import { buildSigner } from '../account/account.service';
@@ -11,11 +12,12 @@ import { enqueueConfigurationEvent, getPendingConfiguration } from '../relay/con
 import {
   ensureReplaceableFresh,
   getReplaceableEvent,
+  invalidateReplaceableEvent,
   REPLACEABLE_DEFAULT_TTL_SECONDS,
 } from '../relay/replaceable-events.service';
 import type { Signer } from '../signer/signer.interface';
 
-/** NIP-51 follow set (kind 30000) reserved for PsstPsst's private contact list.
+/** NIP-51 follow set (kind 30000) reserved for PsstPsst's private contacts and saved-group list.
  * A private self-only list lives on our own outbox (`ownMetaRelays` = write ∪
  * discovery) — never a peer's relays. */
 const KIND_FOLLOW_SET = 30000;
@@ -23,6 +25,61 @@ const KIND_NOSTR_CONTACT_LIST = 3;
 /** d-tag of the private contact set. */
 export const CONTACTS_D = 'psstpsst-contacts';
 const CONTACTS_TITLE = 'PsstPsst Contacts';
+
+const LEGACY_SAVED_GROUPS_KIND = 30078;
+const LEGACY_SAVED_GROUPS_D = 'psstpsst-saved-groups';
+
+/** Only local legacy rows trigger migration; this coordinate is never fetched. */
+async function hasLegacySavedGroups(accountPubkey: string, tx: Database = db): Promise<boolean> {
+  const cached = await tx.select({ kind: replaceableEvents.kind }).from(replaceableEvents).where(and(
+    eq(replaceableEvents.pubkey, accountPubkey),
+    eq(replaceableEvents.kind, LEGACY_SAVED_GROUPS_KIND),
+    eq(replaceableEvents.dTag, LEGACY_SAVED_GROUPS_D),
+  )).limit(1);
+  if (cached.length) return true;
+  return (await tx.select({ kind: configurationOutbox.kind }).from(configurationOutbox).where(and(
+    eq(configurationOutbox.accountPubkey, accountPubkey),
+    eq(configurationOutbox.kind, LEGACY_SAVED_GROUPS_KIND),
+    eq(configurationOutbox.dTag, LEGACY_SAVED_GROUPS_D),
+  )).limit(1)).length > 0;
+}
+
+async function deleteLegacySavedGroups(accountPubkey: string, tx: Database): Promise<void> {
+  await tx.delete(replaceableEvents).where(and(
+    eq(replaceableEvents.pubkey, accountPubkey),
+    eq(replaceableEvents.kind, LEGACY_SAVED_GROUPS_KIND),
+    eq(replaceableEvents.dTag, LEGACY_SAVED_GROUPS_D),
+  )).run();
+  await tx.delete(configurationOutbox).where(and(
+    eq(configurationOutbox.accountPubkey, accountPubkey),
+    eq(configurationOutbox.kind, LEGACY_SAVED_GROUPS_KIND),
+    eq(configurationOutbox.dTag, LEGACY_SAVED_GROUPS_D),
+  )).run();
+}
+
+async function readContactSnapshot(accountPubkey: string, tx: Database = db): Promise<Event | null> {
+  return (await tx.select({ event: replaceableEvents.event }).from(replaceableEvents).where(and(
+    eq(replaceableEvents.pubkey, accountPubkey),
+    eq(replaceableEvents.kind, KIND_FOLLOW_SET),
+    eq(replaceableEvents.dTag, CONTACTS_D),
+  )).limit(1))[0]?.event ?? null;
+}
+
+/** Update only saved membership and acceptance, never inferred group metadata. */
+async function reconcileSavedGroups(accountPubkey: string, groupIds: string[], tx: Database): Promise<void> {
+  await tx.delete(savedGroups).where(eq(savedGroups.accountPubkey, accountPubkey)).run();
+  for (let offset = 0; offset < groupIds.length; offset += 400) {
+    const chunk = groupIds.slice(offset, offset + 400);
+    await tx.insert(savedGroups).values(chunk.map((groupId) => ({ accountPubkey, groupId })))
+      .onConflictDoNothing().run();
+    await tx.update(conversations).set({
+      deleted: false, deletedAt: null, deletedOrderAt: null, hasReplied: true,
+    }).where(and(
+      eq(conversations.accountPubkey, accountPubkey),
+      inArray(conversations.groupId, chunk),
+    )).run();
+  }
+}
 
 async function readSyncState(accountPubkey: string, tx: Database = db) {
   const [state] = await tx
@@ -33,7 +90,7 @@ async function readSyncState(accountPubkey: string, tx: Database = db) {
 }
 
 /** Commit the pending revision in the same transaction as the contact edit. */
-async function markContactsDirty(accountPubkey: string, tx: Database): Promise<void> {
+export async function markContactsDirty(accountPubkey: string, tx: Database): Promise<void> {
   await tx
     .insert(contactSyncState)
     .values({ accountPubkey, revision: 1, dirty: true })
@@ -187,12 +244,12 @@ export async function importNostrFollowContacts(
       .run();
   });
 
-  publishContactSetInBackground(accountPubkey);
+  queueContactSetPublication(accountPubkey);
   return { imported: toImport.length };
 }
 
 /**
- * Re-publish the entire contact list as a private NIP-51 follow set. All
+ * Re-publish contacts and saved groups together as one private list. All
  * entries live in `.content`, NIP-44-encrypted to self with the identity key,
  * so the social graph is never exposed — only the user's own devices can read
  * it. Replaceable: the latest event always reflects the latest local state.
@@ -200,23 +257,29 @@ export async function importNostrFollowContacts(
 async function publishContactSet(
   accountPubkey: string,
   signer: Signer,
-): Promise<'done' | 'superseded'> {
-  if (!signer.nip44Encrypt) return 'done';
-  const { state, entries } = await db.transaction(async (tx) => ({
-    state: await readSyncState(accountPubkey, tx),
-    entries: await tx
-      .select({ pubkey: contacts.pubkey, petname: contacts.petname })
-      .from(contacts)
-      .where(eq(contacts.accountPubkey, accountPubkey)),
-  }));
-  if (!state?.dirty) return 'done';
+): Promise<void> {
+  if (!signer.nip44Encrypt) return;
+  const snapshot = await db.transaction(async (tx) => {
+    const state = await readSyncState(accountPubkey, tx);
+    if (!state?.dirty) return null;
+    return {
+      state,
+      entries: await tx.select({ pubkey: contacts.pubkey, petname: contacts.petname })
+        .from(contacts).where(eq(contacts.accountPubkey, accountPubkey)),
+      groupIds: await tx.select({ groupId: savedGroups.groupId }).from(savedGroups)
+        .where(eq(savedGroups.accountPubkey, accountPubkey)),
+    };
+  });
+  if (!snapshot) return;
+  const { state, entries, groupIds } = snapshot;
   const key = { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: CONTACTS_D };
   const previous = await getReplaceableEvent(key);
   // NIP-51 / NIP-02 p-tag shape: ["p", pubkey, relay, petname]. We don't pin a
   // relay, so slot 2 stays empty; the petname rides in slot 3 when set.
-  const privateTags = entries.map((e) =>
-    e.petname ? ['p', e.pubkey, '', e.petname] : ['p', e.pubkey],
-  );
+  const privateTags = [
+    ...entries.map((e) => e.petname ? ['p', e.pubkey, '', e.petname] : ['p', e.pubkey]),
+    ...groupIds.map(({ groupId }) => groupId).sort().map((groupId) => ['h', groupId]),
+  ];
   const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(privateTags));
   const event = await signer.signEvent({
     kind: KIND_FOLLOW_SET,
@@ -233,31 +296,37 @@ async function publishContactSet(
       (state.eventCreatedAt ?? 0) + 1,
     ),
   });
-  if ((await readSyncState(accountPubkey))?.revision !== state.revision) return 'superseded';
+  if ((await readSyncState(accountPubkey))?.revision !== state.revision) return;
   const latest = await getReplaceableEvent(key);
-  if (latest && latest.created_at >= event.created_at) return 'superseded';
+  if ((latest?.id ?? null) !== (previous?.id ?? null)) return;
   // Atomically cache and enqueue the signed snapshot before clearing its dirty
   // revision. The pending queue protects this snapshot until a relay quorum accepts it.
   const accepted = await enqueueConfigurationEvent(event, async (_event, tx) => {
-    // The queue now owns delivery. A newer local revision still needs signing.
+    if ((await readSyncState(accountPubkey, tx))?.revision !== state.revision) {
+      throw new Error('Local contact revision changed while signing.');
+    }
+    // Cleanup commits with the new snapshot, so failure keeps the legacy rows.
+    await deleteLegacySavedGroups(accountPubkey, tx);
     await tx.update(contactSyncState).set({
       eventCreatedAt: event.created_at, eventId: event.id, dirty: false,
     }).where(and(
       eq(contactSyncState.accountPubkey, accountPubkey),
       eq(contactSyncState.revision, state.revision),
     ));
+  }, previous?.id ?? null);
+  if (!accepted) return;
+  invalidateReplaceableEvent({
+    pubkey: accountPubkey, kind: LEGACY_SAVED_GROUPS_KIND, dTag: LEGACY_SAVED_GROUPS_D,
   });
-  if (!accepted) return 'superseded';
-  return 'done';
+  return;
 }
 
 type PublishJob = { requested: boolean; signer?: Signer };
 const publishJobs = new Map<string, PublishJob>();
 
-/** Coalesce edits and serialize signing/publication per account. A failed job
- * leaves its durable dirty revision for the next edit or personal-config sync.
- * Crypto starts on a later macrotask so the local result can paint first. */
-function publishContactSetInBackground(accountPubkey: string, signer?: Signer): void {
+/** Queue synchronization after the local edit returns. Coalesce queued edits,
+ * read the latest plaintext tables per attempt, and never reject the UI action. */
+export function queueContactSetPublication(accountPubkey: string, signer?: Signer): void {
   const existing = publishJobs.get(accountPubkey);
   if (existing) {
     existing.requested = true;
@@ -273,9 +342,10 @@ function publishContactSetInBackground(accountPubkey: string, signer?: Signer): 
           job.requested = false;
           try {
             const s = job.signer ?? (await buildSigner(accountPubkey));
-            if ((await publishContactSet(accountPubkey, s)) === 'superseded') job.requested = true;
+            await publishContactSet(accountPubkey, s);
           } catch {
-            // Keep the pending revision even if encryption, signing, or publication fails.
+            // Leave plaintext and its dirty revision intact. Only another queued
+            // edit starts a new attempt; failure does not request a retry.
           }
           if (job.requested) await new Promise((resolve) => setTimeout(resolve, 0));
         }
@@ -284,6 +354,23 @@ function publishContactSetInBackground(accountPubkey: string, signer?: Signer): 
       }
     })();
   }, 0);
+}
+
+/** Re-publish the local saved-group read model, then retire its old local
+ * event/cache coordinate atomically with the new signed snapshot. */
+export async function migrateLocalSavedGroups(accountPubkey: string, signer: Signer): Promise<void> {
+  if (!(await hasLegacySavedGroups(accountPubkey))) return;
+  await applyContactsEvent(accountPubkey, await readContactSnapshot(accountPubkey), signer);
+  const migrated = await db.transaction(async (tx) => {
+    if (!(await hasLegacySavedGroups(accountPubkey, tx))) return false;
+    const state = await readSyncState(accountPubkey, tx);
+    const current = await readContactSnapshot(accountPubkey, tx);
+    // Never replace contacts that could not yet be reconciled/decrypted.
+    if (current && !state?.dirty && state?.eventId !== current.id) return false;
+    await markContactsDirty(accountPubkey, tx);
+    return true;
+  });
+  if (migrated) queueContactSetPublication(accountPubkey, signer);
 }
 
 /** Add a contact locally then re-publish the synced set. Idempotent. */
@@ -319,7 +406,7 @@ export async function addContact(
         ),
       );
   });
-  publishContactSetInBackground(accountPubkey, opts.signer);
+  queueContactSetPublication(accountPubkey, opts.signer);
 }
 
 /**
@@ -349,7 +436,7 @@ export async function setPetname(
         set: { petname: value },
       });
   });
-  publishContactSetInBackground(accountPubkey, opts.signer);
+  queueContactSetPublication(accountPubkey, opts.signer);
 }
 
 /** Remove a contact locally then re-publish the synced set. */
@@ -368,7 +455,7 @@ export async function removeContact(
     // inbox sort preference — neither is touched here. Only the contact delete is
     // awaited; the re-publish runs in the background.
   });
-  publishContactSetInBackground(accountPubkey, opts.signer);
+  queueContactSetPublication(accountPubkey, opts.signer);
 }
 
 /** Reconcile a remote snapshot only when there are no unpublished local edits.
@@ -381,8 +468,7 @@ export async function applyContactsEvent(
 ): Promise<void> {
   const state = await readSyncState(accountPubkey);
   if (state?.dirty) {
-    // A relay echo must not turn an in-flight publish into a retry loop.
-    if (!publishJobs.has(accountPubkey)) publishContactSetInBackground(accountPubkey, signer);
+    // Unsynced plaintext is authoritative until the next local edit publishes it.
     return;
   }
   if (await getPendingConfiguration(accountPubkey, KIND_FOLLOW_SET, CONTACTS_D)) return;
@@ -398,9 +484,17 @@ export async function applyContactsEvent(
     (latest.created_at === event.created_at && latest.id !== event.id)
   )) return;
   let remote: { pubkey: string; petname: string | null }[];
+  let groupIds: string[];
   try {
     const json = await signer.nip44Decrypt(accountPubkey, event.content);
-    const tags = JSON.parse(json) as string[][];
+    const value: unknown = JSON.parse(json);
+    if (!Array.isArray(value) || value.some((tag) =>
+      !Array.isArray(tag) || tag.some((part) => typeof part !== 'string'),
+    )) return;
+    const tags = value as string[][];
+    const groupTags = tags.filter((tag) => tag[0] === 'h');
+    if (groupTags.some((tag) => !isValidGroupId(tag[1]))) return;
+    groupIds = [...new Set(groupTags.map((tag) => tag[1]))];
     remote = tags
       .filter((t) => t[0] === 'p' && t[1])
       .map((t) => ({ pubkey: t[1], petname: t[3]?.trim() || null }));
@@ -415,6 +509,15 @@ export async function applyContactsEvent(
     if (state?.dirty) return;
     if (await getPendingConfiguration(accountPubkey, KIND_FOLLOW_SET, CONTACTS_D, tx)) return;
     if (state?.eventCreatedAt != null && state.eventCreatedAt >= event.created_at) return;
+    const cached = await readContactSnapshot(accountPubkey, tx);
+    if (cached && (cached.created_at > event.created_at ||
+      (cached.created_at === event.created_at && cached.id !== event.id))) return;
+    if (await hasLegacySavedGroups(accountPubkey, tx)) {
+      const localGroups = await tx.select({ groupId: savedGroups.groupId }).from(savedGroups)
+        .where(eq(savedGroups.accountPubkey, accountPubkey));
+      groupIds = [...new Set([...localGroups.map(({ groupId }) => groupId), ...groupIds])];
+    }
+    await reconcileSavedGroups(accountPubkey, groupIds, tx);
     await tx
       .insert(contactSyncState)
       .values({ accountPubkey, eventCreatedAt: event.created_at, eventId: event.id })

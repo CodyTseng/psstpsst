@@ -1,7 +1,7 @@
 import { KIND_USER_EMOJI_LIST } from '@/lib/nostr/custom-emoji';
 
 import { buildSigner } from '../account/account.service';
-import { applyContactsEvent, CONTACTS_D } from '../contact/contact.service';
+import { applyContactsEvent, CONTACTS_D, migrateLocalSavedGroups } from '../contact/contact.service';
 import { applyMutedEvent, MUTED_D } from '../conversation/conversation-prefs.service';
 import { applyBlockedEvent, BLOCKED_D } from '../dm/block.service';
 import { applyUserEmojiListEvent } from '../emoji/custom-emoji.service';
@@ -9,11 +9,6 @@ import {
   applyMediaServersEvent,
   KIND_BLOSSOM_SERVER_LIST,
 } from '../files/media-server.service';
-import {
-  applySavedGroupsEvent,
-  KIND_APP_DATA,
-  SAVED_GROUPS_D,
-} from '../group/saved-groups.service';
 import type { Signer } from '../signer/signer.interface';
 import { loadAccountWriteRelays } from './relay-list.service';
 import {
@@ -29,7 +24,8 @@ const KIND_FOLLOW_SET = 30000;
 /**
  * One-shot sync of the account's personal configuration lists: preferred emojis
  * (kind 10030), Blossom media servers (kind 10063), the private NIP-51
- * muted/contacts/blocked sets (kind 30000), and saved groups (kind 30078). All keys
+ * muted/contacts/blocked sets (kind 30000, including saved groups). Local legacy
+ * saved-group rows are migrated without fetching their old coordinate. All keys
  * share one relay set, so a stale batch goes out as a single multi-filter REQ
  * and a fully fresh cache costs zero network. After the freshness pass the
  * stored events are dispatched to each domain reconciler. Best-effort: safe to
@@ -42,21 +38,27 @@ export async function syncPersonalConfigs(accountPubkey: string): Promise<void> 
     { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: MUTED_D },
     { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: CONTACTS_D },
     { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: BLOCKED_D },
-    { pubkey: accountPubkey, kind: KIND_APP_DATA, dTag: SAVED_GROUPS_D },
   ];
+  // The private sets need the account's decryption key; without it (unknown
+  // account, or a remote signer mid-teardown) skip them but still apply the
+  // public lists.
+  const signer: Signer | null = await buildSigner(accountPubkey).catch(() => null);
+  if (signer) {
+    // Migration decryption/signing is independent of normal configuration sync.
+    setTimeout(() => {
+      void migrateLocalSavedGroups(accountPubkey, signer).catch(() => {});
+    }, 0);
+  }
+
   const relays = await loadAccountWriteRelays(accountPubkey);
   await ensureReplaceableFresh(keys, {
     ttlSeconds: REPLACEABLE_DEFAULT_TTL_SECONDS,
     relays,
   });
 
-  const [userEmojiList, mediaServers, muted, contacts, blocked, savedGroups] =
+  const [userEmojiList, mediaServers, muted, contacts, blocked] =
     await getReplaceableEvents(keys);
 
-  // The private sets need the account's decryption key; without it (unknown
-  // account, or a remote signer mid-teardown) skip them but still apply the
-  // public lists.
-  const signer: Signer | null = await buildSigner(accountPubkey).catch(() => null);
   await Promise.all([
     applyMediaServersEvent(accountPubkey, mediaServers),
     applyUserEmojiListEvent(accountPubkey, userEmojiList),
@@ -65,7 +67,6 @@ export async function syncPersonalConfigs(accountPubkey: string): Promise<void> 
           applyMutedEvent(accountPubkey, muted, signer),
           applyContactsEvent(accountPubkey, contacts, signer),
           applyBlockedEvent(accountPubkey, blocked, signer),
-          applySavedGroupsEvent(accountPubkey, savedGroups, signer),
         ]
       : []),
   ]);

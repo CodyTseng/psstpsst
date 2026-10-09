@@ -74,10 +74,11 @@ the renderer's perspective on every runtime.
   timestamps when that cursor is empty. Message writes maintain both pairs
   atomically; drafts and metadata edits do not change them.
 - The group directory is an explicit account-scoped saved set, mirrored across
-  devices as an encrypted application-data snapshot. Saved membership accepts
-  the group into the main inbox; an explicit local leave removes it from the set.
+  devices in the private contact snapshot (`p` contacts, `h` raw group ids).
+  Both domains share one durable revision and atomic reconciliation. Saving
+  accepts the group into the main inbox; an explicit local leave removes it.
 - Relay groups use `group:<sha256(h)>` conversation keys, retain the raw `h`
-  value only in the conversation and rumor, and materialize a sorted roster
+  value separately for rumors and private lists, and materialize a sorted roster
   from an ordered membership-action log. Unknown-group rumors wait in a bounded
   account-scoped quarantine outside hot message queries.
 - Device preferences stay in SQLite; private keys and wallet secrets stay in
@@ -85,9 +86,12 @@ the renderer's perspective on every runtime.
   process owns atomic local files for window geometry and update-check timing,
   independently of renderer startup and database migrations.
 - Attachment bytes live in managed files, not database blobs.
-- Local contact edits and their pending sync revision commit atomically. Remote
-  contact snapshots cannot overwrite unsigned edits or queued publications;
-  reconciliation checks pending work and a durable watermark after decryption.
+- Private-list edits commit atomically with durable sync revisions and complete
+  independently of background encryption, signing, and publication. Contacts and
+  saved groups share a revision; mute and block have separate account/list
+  revisions. Failed sync leaves plaintext authoritative across restarts until
+  the next local edit. Reconciliation rechecks dirty revisions, pending work,
+  and the cached event after decryption.
 - Live queries subscribe through `src/db/use-live-query.ts`; UI never imports
   the Expo SQLite binding.
 

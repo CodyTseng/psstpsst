@@ -22,7 +22,7 @@ let mockBuildSigner: jest.Mock;
 let mockApplyMutedEvent: jest.Mock;
 let mockApplyContactsEvent: jest.Mock;
 let mockApplyBlockedEvent: jest.Mock;
-let mockApplySavedGroupsEvent: jest.Mock;
+let mockMigrateLocalSavedGroups: jest.Mock;
 let mockApplyMediaServersEvent: jest.Mock;
 let mockApplyUserEmojiListEvent: jest.Mock;
 
@@ -71,18 +71,13 @@ jest.mock('../../conversation/conversation-prefs.service', () => ({
 
 jest.mock('../../contact/contact.service', () => ({
   CONTACTS_D: 'psstpsst-contacts',
+  migrateLocalSavedGroups: jest.fn((...args: unknown[]) => mockMigrateLocalSavedGroups(...args)),
   applyContactsEvent: jest.fn((...args: unknown[]) => mockApplyContactsEvent(...args)),
 }));
 
 jest.mock('../../dm/block.service', () => ({
   BLOCKED_D: 'psstpsst-blocked',
   applyBlockedEvent: jest.fn((...args: unknown[]) => mockApplyBlockedEvent(...args)),
-}));
-
-jest.mock('../../group/saved-groups.service', () => ({
-  KIND_APP_DATA: 30078,
-  SAVED_GROUPS_D: 'psstpsst-saved-groups',
-  applySavedGroupsEvent: jest.fn((...args: unknown[]) => mockApplySavedGroupsEvent(...args)),
 }));
 
 jest.mock('../../files/media-server.service', () => ({
@@ -154,6 +149,7 @@ describe('syncPersonalConfigs', () => {
   const fakeSigner = { nip44Encrypt: jest.fn(), nip44Decrypt: jest.fn() };
 
   beforeEach(() => {
+    jest.useFakeTimers();
     mockStore.clear();
     mockQuery = jest.fn(async (_opts: QueryCall) => []);
     mockLoadAccountWriteRelays = jest.fn(async (_pubkey: string) => ['wss://relay.example']);
@@ -161,21 +157,46 @@ describe('syncPersonalConfigs', () => {
     mockApplyMutedEvent = jest.fn(async () => {});
     mockApplyContactsEvent = jest.fn(async () => {});
     mockApplyBlockedEvent = jest.fn(async () => {});
-    mockApplySavedGroupsEvent = jest.fn(async () => {});
+    mockMigrateLocalSavedGroups = jest.fn(async () => {});
     mockApplyMediaServersEvent = jest.fn(async () => {});
     mockApplyUserEmojiListEvent = jest.fn(async () => {});
     jest.resetModules();
+  });
+
+  afterEach(() => { jest.clearAllTimers(); jest.useRealTimers(); });
+
+  it('continues normal configuration sync while migration is still pending', async () => {
+    const service = loadService();
+    mockMigrateLocalSavedGroups.mockReturnValueOnce(new Promise(() => {}));
+    await service.syncPersonalConfigs('self');
+    expect(mockApplyMediaServersEvent).toHaveBeenCalled();
+    expect(mockApplyUserEmojiListEvent).toHaveBeenCalled();
+    expect(mockApplyMutedEvent).toHaveBeenCalled();
+    expect(mockApplyBlockedEvent).toHaveBeenCalled();
+    await jest.runAllTimersAsync();
+    expect(mockMigrateLocalSavedGroups).toHaveBeenCalledWith('self', fakeSigner);
+  });
+
+  it('continues normal configuration sync when migration rejects', async () => {
+    const service = loadService();
+    mockMigrateLocalSavedGroups.mockRejectedValueOnce(new Error('signer unavailable'));
+    await service.syncPersonalConfigs('self');
+    await jest.runAllTimersAsync();
+    expect(mockApplyMediaServersEvent).toHaveBeenCalled();
+    expect(mockApplyUserEmojiListEvent).toHaveBeenCalled();
+    expect(mockApplyMutedEvent).toHaveBeenCalled();
+    expect(mockApplyBlockedEvent).toHaveBeenCalled();
   });
 
   it('refreshes every personal-config key in one multi-filter REQ and dispatches reconciles', async () => {
     const service = loadService();
     const muted = makeEvent('self', 30000, 100, 'psstpsst-muted');
     const contacts = makeEvent('self', 30000, 100, 'psstpsst-contacts');
-    const savedGroups = makeEvent('self', 30078, 100, 'psstpsst-saved-groups');
     const media = makeEvent('self', 10063, 100);
-    mockQuery.mockResolvedValue([muted, contacts, savedGroups, media]);
+    mockQuery.mockResolvedValue([muted, contacts, media]);
 
     await service.syncPersonalConfigs('self');
+    await jest.runAllTimersAsync();
 
     expect(mockLoadAccountWriteRelays).toHaveBeenCalledWith('self');
     expect(mockQuery).toHaveBeenCalledTimes(1);
@@ -184,7 +205,6 @@ describe('syncPersonalConfigs', () => {
     expect(call.filters).toEqual([
       { kinds: [10030, 10063], authors: ['self'] },
       { kinds: [30000], authors: ['self'], '#d': ALL_D_TAGS },
-      { kinds: [30078], authors: ['self'], '#d': ['psstpsst-saved-groups'] },
     ]);
 
     // Received events are persisted; missed keys get a negative-cache mark.
@@ -196,7 +216,7 @@ describe('syncPersonalConfigs', () => {
     expect(mockApplyMutedEvent).toHaveBeenCalledWith('self', muted, fakeSigner);
     expect(mockApplyContactsEvent).toHaveBeenCalledWith('self', contacts, fakeSigner);
     expect(mockApplyBlockedEvent).toHaveBeenCalledWith('self', null, fakeSigner);
-    expect(mockApplySavedGroupsEvent).toHaveBeenCalledWith('self', savedGroups, fakeSigner);
+    expect(mockMigrateLocalSavedGroups).toHaveBeenCalledWith('self', fakeSigner);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith('self', media);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith('self', null);
   });
@@ -208,21 +228,20 @@ describe('syncPersonalConfigs', () => {
     const muted = makeEvent('self', 30000, 100, 'psstpsst-muted');
     const contacts = makeEvent('self', 30000, 100, 'psstpsst-contacts');
     const blocked = makeEvent('self', 30000, 100, 'psstpsst-blocked');
-    const savedGroups = makeEvent('self', 30078, 100, 'psstpsst-saved-groups');
     seedFresh(emojiList);
     seedFresh(media);
     seedFresh(muted, 'psstpsst-muted');
     seedFresh(contacts, 'psstpsst-contacts');
     seedFresh(blocked, 'psstpsst-blocked');
-    seedFresh(savedGroups, 'psstpsst-saved-groups');
 
     await service.syncPersonalConfigs('self');
+    await jest.runAllTimersAsync();
 
     expect(mockQuery).not.toHaveBeenCalled();
     expect(mockApplyMutedEvent).toHaveBeenCalledWith('self', muted, fakeSigner);
     expect(mockApplyContactsEvent).toHaveBeenCalledWith('self', contacts, fakeSigner);
     expect(mockApplyBlockedEvent).toHaveBeenCalledWith('self', blocked, fakeSigner);
-    expect(mockApplySavedGroupsEvent).toHaveBeenCalledWith('self', savedGroups, fakeSigner);
+    expect(mockMigrateLocalSavedGroups).toHaveBeenCalledWith('self', fakeSigner);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith('self', media);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith('self', emojiList);
   });
@@ -234,11 +253,12 @@ describe('syncPersonalConfigs', () => {
     seedFresh(media);
 
     await service.syncPersonalConfigs('self');
+    await jest.runAllTimersAsync();
 
     expect(mockApplyMutedEvent).not.toHaveBeenCalled();
     expect(mockApplyContactsEvent).not.toHaveBeenCalled();
     expect(mockApplyBlockedEvent).not.toHaveBeenCalled();
-    expect(mockApplySavedGroupsEvent).not.toHaveBeenCalled();
+    expect(mockMigrateLocalSavedGroups).not.toHaveBeenCalled();
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith('self', media);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith('self', null);
   });

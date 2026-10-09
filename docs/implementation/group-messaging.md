@@ -869,9 +869,11 @@ Read `docs/DESIGN.md`, especially section 12, before implementation.
   accepts the group into the main inbox; every later message restores a deleted
   saved conversation there. An explicit local leave removes the saved state and
   publishes the replacement snapshot after the leave commits locally.
-- Saved group ids sync as a NIP-44 encrypt-to-self `kind 30078` snapshot at
-  `d=psstpsst-saved-groups`. The encrypted versioned payload contains only raw
-  `h` values; names, rosters, and presentation remain derived from group state.
+- Saved group ids sync as private `h` tags alongside `p` contacts in the
+  NIP-44 encrypt-to-self `kind 30000`, `d=psstpsst-contacts` snapshot. Names,
+  rosters, and presentation remain derived from group state. Local saved
+  membership is migrated into the contact set before the old local `kind 30078`
+  cache and outbox rows are deleted. The old coordinate is never queried or watched.
 - Keep every membership operation on group info: add-member controls, per-member
   removal controls, and the local user's leave action all live there. An
   individual profile opened from the member list remains the ordinary global
@@ -1205,7 +1207,7 @@ At minimum, cover:
 - contact versus Requests routing;
 - group request acceptance is persisted explicitly from the bootstrap or
   resurrecting author rather than inferred from the hashed conversation key;
-- saved groups use raw `h` values in an encrypted `kind 30078` snapshot,
+- saved groups use raw `h` values in the encrypted private contact snapshot,
   reconcile across devices, accept incoming activity into the main inbox, and
   are removed by an explicit local leave;
 - group soft-delete preserves messages and group state, ignores older events for

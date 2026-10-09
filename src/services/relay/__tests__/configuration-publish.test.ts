@@ -24,8 +24,9 @@ jest.mock('@/platform', () => ({ platform: {
   networkState: { addStateListener: (fn: typeof mockNetwork) => { mockNetwork = fn; } },
 } }));
 jest.mock('../../account/account.service', () => ({ buildSigner: async () => mockSigner }));
+jest.mock('../relay-list.service', () => ({ ownMetaRelays: async () => mockTargets }));
 jest.mock('../relay-router', () => ({ configurationPublishRelays: async () => mockTargets }));
-jest.mock('../relay-pool', () => ({ relayPool: { publishEvent: (...args: unknown[]) => mockPublish(...args) } }));
+jest.mock('../relay-pool', () => ({ relayPool: { publishEvent: (...args: unknown[]) => mockPublish(...args), query: async () => [] } }));
 
 jest.mock('@/db/client', () => {
   if (mockDatabase) return mockDatabase;
@@ -78,6 +79,8 @@ jest.mock('@/db/client', () => {
       PRIMARY KEY (pubkey, kind, d_tag)
     );
   `);
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0056_private-list-sync-state.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0044_contact-sync-state.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0045_configuration-outbox.sql`, 'utf8'));
   const execute = async (query: string, params: unknown[], method: string) => {
     const statement = sqlite.prepare(query);
@@ -324,10 +327,10 @@ it('saves emoji packs and their collection offline, replacing only the edited pa
   expect(mockPublish).not.toHaveBeenCalled();
 });
 
-it('persists private snapshots before returning and protects them from stale remote lists', async () => {
+it('queues complete private snapshots after local writes and protects them from stale remote lists', async () => {
   const { setConversationMuted, applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
   const { blockUser, unblockUser, applyBlockedEvent, BLOCKED_D, getBlockedPubkeys } = jest.requireActual('../../dm/block.service') as typeof import('../../dm/block.service');
-  const { setGroupSaved, applySavedGroupsEvent, KIND_APP_DATA, SAVED_GROUPS_D } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  const { setGroupSaved } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
   const peer = 'b'.repeat(64);
   const groupId = 'private-group-id';
   sqlite.prepare(`
@@ -343,20 +346,15 @@ it('persists private snapshots before returning and protects them from stale rem
   await jest.runAllTimersAsync(); await Promise.all(saves);
   expect((await pending(30000, MUTED_D))?.event.content).toBe(`encrypted:${JSON.stringify([['p', peer]])}`);
   expect((await pending(30000, BLOCKED_D))?.event.content).toBe(`encrypted:${JSON.stringify([['p', peer]])}`);
-  expect((await pending(KIND_APP_DATA, SAVED_GROUPS_D))?.event.content).toBe(
-    `encrypted:${JSON.stringify({ version: 1, groups: [groupId] })}`,
+  expect((await pending(30000, 'psstpsst-contacts'))?.event.content).toBe(
+    `encrypted:${JSON.stringify([['h', groupId]])}`,
   );
+  expect(await pending(30078, 'psstpsst-saved-groups')).toBeNull();
   const empty = { ...event(30000), content: 'encrypted:[]' };
   await applyMutedEvent(SELF, empty, mockSigner);
   await applyBlockedEvent(SELF, empty, mockSigner);
-  await applySavedGroupsEvent(
-    SELF,
-    {
-      ...event(KIND_APP_DATA, SAVED_GROUPS_D),
-      content: 'encrypted:{"version":1,"groups":[]}',
-    },
-    mockSigner,
-  );
+  const { applyContactsEvent } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  await applyContactsEvent(SELF, { ...empty, tags: [['d', 'psstpsst-contacts']] }, mockSigner);
   expect(sqlite.prepare(
     'SELECT muted FROM conversations WHERE conversation_key = ?',
   ).get(peer)).toEqual({ muted: 1 });
@@ -412,39 +410,26 @@ it('ignores a delayed private-list echo after a newer local snapshot is already 
   expect(sqlite.prepare('SELECT muted FROM conversations').get()).toEqual({ muted: 1 });
 });
 
-it('reconciles a valid encrypted saved-group snapshot and ignores malformed payloads', async () => {
-  const { applySavedGroupsEvent, KIND_APP_DATA, SAVED_GROUPS_D } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
-  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)')
-    .run(SELF, 'old-group');
-  sqlite.prepare(`
-    INSERT INTO conversations (
-      account_pubkey, conversation_key, group_id, deleted, has_replied
-    ) VALUES (?, ?, ?, 1, 0)
-  `).run(SELF, 'group:new', 'new-group');
-  const remote = {
-    ...event(KIND_APP_DATA, SAVED_GROUPS_D),
-    content: `encrypted:${JSON.stringify({
-      version: 1,
-      groups: ['new-group', 'new-group'],
-    })}`,
-  };
-
-  await applySavedGroupsEvent(SELF, remote, mockSigner);
-  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([
-    { group_id: 'new-group' },
-  ]);
-  expect(sqlite.prepare(
-    'SELECT deleted, has_replied FROM conversations WHERE group_id = ?',
-  ).get('new-group')).toEqual({ deleted: 0, has_replied: 1 });
-
-  await applySavedGroupsEvent(
-    SELF,
-    { ...event(KIND_APP_DATA, SAVED_GROUPS_D), content: 'encrypted:{"version":2}' },
-    mockSigner,
-  );
-  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([
-    { group_id: 'new-group' },
-  ]);
+it('migrates local saved groups and atomically removes only their old account coordinate', async () => {
+  const { migrateLocalSavedGroups, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)').run(SELF, 'local-room');
+  // Legacy encrypted payload is no longer decoded; the saved table is authoritative.
+  const old = { ...event(30078, 'psstpsst-saved-groups'), content: 'opaque-legacy-content' };
+  await service.enqueueConfigurationEvent(old);
+  await service.enqueueConfigurationEvent(event(30078, 'unrelated'));
+  await service.enqueueConfigurationEvent(event(30078, 'psstpsst-saved-groups', 100, 'other'));
+  const migrating = migrateLocalSavedGroups(SELF, mockSigner);
+  await jest.runAllTimersAsync(); await migrating;
+  expect((await pending(30000, CONTACTS_D))?.event.content).toBe('encrypted:[["h","local-room"]]');
+  expect((await pending(30000, CONTACTS_D))?.event.tags.some((tag) => tag[0] === 'version')).toBe(false);
+  expect(await pending(30078, 'psstpsst-saved-groups')).toBeNull();
+  expect(sqlite.prepare('SELECT event FROM replaceable_events WHERE pubkey = ? AND kind = 30078 AND d_tag = ?')
+    .get(SELF, 'psstpsst-saved-groups')).toBeUndefined();
+  expect(await pending(30078, 'unrelated')).not.toBeNull();
+  expect(sqlite.prepare('SELECT event_id FROM configuration_outbox WHERE account_pubkey = ?').get('other')).toBeDefined();
+  mockSigner.signEvent.mockClear();
+  await migrateLocalSavedGroups(SELF, mockSigner);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
 });
 
 it('does not reconcile a private-list echo while a newer local snapshot is still being prepared', async () => {
@@ -542,7 +527,7 @@ it('leaves an unresolved legacy group snapshot intact until its raw id is availa
     .toBe(`encrypted:${JSON.stringify([['h', groupId]])}`);
 });
 
-it('does not let legacy migration overwrite a newer snapshot received during encryption', async () => {
+it('keeps a failed legacy mute migration in the background when encryption races with a newer snapshot', async () => {
   const { applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
   const { groupConversationKey } = jest.requireActual('@/lib/nostr/group-messaging') as typeof import('@/lib/nostr/group-messaging');
   const key = groupConversationKey('room');
@@ -555,7 +540,346 @@ it('does not let legacy migration overwrite a newer snapshot received during enc
     return `encrypted:${plaintext}`;
   });
   const applying = applyMutedEvent(SELF, old, mockSigner);
-  const rejected = expect(applying).rejects.toThrow('Configuration changed');
-  await jest.runAllTimersAsync(); await rejected;
+  await applying;
+  await jest.runAllTimersAsync();
   expect((await pending(30000, MUTED_D))?.eventId).toBe(newer.id);
+});
+
+
+it('preserves contacts and group membership when either domain publishes an edit', async () => {
+  const { addContact, removeContact, setPetname, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  const { setGroupSaved } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  const peer = 'b'.repeat(64);
+  await addContact(SELF, peer);
+  await jest.runAllTimersAsync();
+  const saving = setGroupSaved(SELF, 'room', true);
+  await jest.runAllTimersAsync(); await saving;
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe(`encrypted:${JSON.stringify([['p', peer], ['h', 'room']])}`);
+  expect(await pending(30078, 'psstpsst-saved-groups')).toBeNull();
+  await setPetname(SELF, peer, 'Friend'); await jest.runAllTimersAsync();
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe(`encrypted:${JSON.stringify([['p', peer, '', 'Friend'], ['h', 'room']])}`);
+  const removing = setGroupSaved(SELF, 'room', false);
+  await jest.runAllTimersAsync(); await removing;
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe(`encrypted:${JSON.stringify([['p', peer, '', 'Friend']])}`);
+  const restoring = setGroupSaved(SELF, 'room', true);
+  await jest.runAllTimersAsync(); await restoring;
+  await removeContact(SELF, peer); await jest.runAllTimersAsync();
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe(`encrypted:${JSON.stringify([['h', 'room']])}`);
+});
+
+it('reconciles p and h together and treats an empty group list as authoritative', async () => {
+  const { applyContactsEvent, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  const peer = 'b'.repeat(64);
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, group_id, deleted) VALUES (?, ?, ?, 1)')
+    .run(SELF, 'group:room', 'room');
+  const combined = {
+    ...event(30000, CONTACTS_D), tags: [['d', CONTACTS_D]],
+    content: `encrypted:${JSON.stringify([['p', peer, '', 'Friend'], ['h', 'room']])}`,
+  };
+  await service.enqueueConfigurationEvent(combined); sqlite.exec('DELETE FROM configuration_outbox;');
+  await applyContactsEvent(SELF, combined, mockSigner);
+  expect(sqlite.prepare('SELECT pubkey, petname FROM contacts').all()).toEqual([{ pubkey: peer, petname: 'Friend' }]);
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([{ group_id: 'room' }]);
+  expect(sqlite.prepare('SELECT deleted, has_replied FROM conversations WHERE group_id = ?').get('room'))
+    .toEqual({ deleted: 0, has_replied: 1 });
+  const empty = { ...combined, id: 'combined-empty', created_at: 101, content: 'encrypted:[]' };
+  await service.enqueueConfigurationEvent(empty); sqlite.exec('DELETE FROM configuration_outbox;');
+  await applyContactsEvent(SELF, empty, mockSigner);
+  expect(sqlite.prepare('SELECT * FROM contacts').all()).toEqual([]);
+  expect(sqlite.prepare('SELECT * FROM saved_groups').all()).toEqual([]);
+  expect(await pending(30000, CONTACTS_D)).toBeNull();
+});
+
+it('preserves contacts and nicknames when migrating local saved-group rows', async () => {
+  const { migrateLocalSavedGroups, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  const peer = 'b'.repeat(64);
+  const contacts = { ...event(30000, CONTACTS_D), content: `encrypted:${JSON.stringify([['p', peer, '', 'Friend']])}` };
+  await service.enqueueConfigurationEvent(contacts); sqlite.exec('DELETE FROM configuration_outbox;');
+  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)').run(SELF, 'room');
+  await service.enqueueConfigurationEvent(event(30078, 'psstpsst-saved-groups'));
+  const migrating = migrateLocalSavedGroups(SELF, mockSigner);
+  await jest.runAllTimersAsync(); await migrating;
+  const result = (await pending(30000, CONTACTS_D))!.event;
+  expect(result.content).toBe(`encrypted:${JSON.stringify([['p', peer, '', 'Friend'], ['h', 'room']])}`);
+  expect(result.tags.some((tag) => tag[0] === 'version')).toBe(false);
+  expect(result.created_at).toBeGreaterThan(contacts.created_at);
+  expect(await pending(30078, 'psstpsst-saved-groups')).toBeNull();
+});
+
+it('coalesces concurrent contact and group edits into the latest complete snapshot', async () => {
+  const { addContact, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  const { setGroupSaved } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  const peer = 'b'.repeat(64);
+  let resolve!: (value: string) => void;
+  let started!: () => void;
+  const encrypting = new Promise<void>((done) => { started = done; });
+  mockSigner.nip44Encrypt.mockImplementationOnce(async () => {
+    started();
+    return new Promise<string>((done) => { resolve = done; });
+  });
+  await addContact(SELF, peer);
+  await jest.advanceTimersByTimeAsync(0); await encrypting;
+  const saving = setGroupSaved(SELF, 'room', true);
+  await settle();
+  resolve(`encrypted:${JSON.stringify([['p', peer]])}`);
+  await jest.runAllTimersAsync(); await saving;
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe(`encrypted:${JSON.stringify([['p', peer], ['h', 'room']])}`);
+  expect(sqlite.prepare('SELECT dirty FROM contact_sync_state').get()).toEqual({ dirty: 0 });
+});
+
+it('completes group saves locally before crypto and retains failed plaintext for the next edit', async () => {
+  const { applyContactsEvent, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  const { setGroupSaved } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  mockSigner.nip44Encrypt.mockRejectedValueOnce(new Error('signer unavailable'));
+  await setGroupSaved(SELF, 'room', true);
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([{ group_id: 'room' }]);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  await jest.runAllTimersAsync();
+  expect(sqlite.prepare('SELECT dirty FROM contact_sync_state').get()).toEqual({ dirty: 1 });
+  await applyContactsEvent(SELF, { ...event(30000, CONTACTS_D), content: 'encrypted:[]' }, mockSigner);
+  await jest.runAllTimersAsync();
+  expect(await pending(30000, CONTACTS_D)).toBeNull();
+  await setGroupSaved(SELF, 'another-room', true);
+  await jest.runAllTimersAsync();
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe('encrypted:[["h","another-room"],["h","room"]]');
+});
+
+it('clears saved groups absent from the contact list and rejects malformed h entries', async () => {
+  const { applyContactsEvent, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  const peer = 'b'.repeat(64);
+  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)').run(SELF, 'room');
+  await applyContactsEvent(SELF, {
+    ...event(30000, CONTACTS_D), content: `encrypted:${JSON.stringify([['p', peer]])}`,
+  }, mockSigner);
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([]);
+  await applyContactsEvent(SELF, {
+    ...event(30000, CONTACTS_D, 101), tags: [['d', CONTACTS_D]],
+    content: 'encrypted:[["h",""]]',
+  }, mockSigner);
+  expect(sqlite.prepare('SELECT pubkey FROM contacts').all()).toEqual([{ pubkey: peer }]);
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([]);
+});
+
+it('keeps old local cache and pending rows when migration signing fails, then retries safely', async () => {
+  const { migrateLocalSavedGroups, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)').run(SELF, 'room');
+  const old = event(30078, 'psstpsst-saved-groups');
+  await service.enqueueConfigurationEvent(old);
+  mockSigner.nip44Encrypt.mockRejectedValueOnce(new Error('signer unavailable'));
+  const migrating = migrateLocalSavedGroups(SELF, mockSigner);
+  await migrating;
+  await jest.runAllTimersAsync();
+  expect((await pending(30078, 'psstpsst-saved-groups'))?.eventId).toBe(old.id);
+  expect(sqlite.prepare('SELECT event FROM replaceable_events WHERE kind = 30078').get()).toBeDefined();
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([{ group_id: 'room' }]);
+  const retrying = migrateLocalSavedGroups(SELF, mockSigner);
+  await jest.runAllTimersAsync(); await retrying;
+  expect((await pending(30000, CONTACTS_D))?.event.content).toBe('encrypted:[["h","room"]]');
+  expect(await pending(30078, 'psstpsst-saved-groups')).toBeNull();
+  expect(sqlite.prepare('SELECT event FROM replaceable_events WHERE kind = 30078').get()).toBeUndefined();
+});
+
+
+it('rolls back legacy cleanup when storing the migrated list fails', async () => {
+  const { migrateLocalSavedGroups, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)').run(SELF, 'room');
+  const old = event(30078, 'psstpsst-saved-groups');
+  await service.enqueueConfigurationEvent(old);
+  sqlite.exec("CREATE TRIGGER fail_migration BEFORE UPDATE ON contact_sync_state WHEN NEW.dirty = 0 BEGIN SELECT RAISE(ABORT, 'disk failure'); END;");
+  const migrating = migrateLocalSavedGroups(SELF, mockSigner);
+  await migrating;
+  await jest.runAllTimersAsync();
+  expect((await pending(30078, 'psstpsst-saved-groups'))?.eventId).toBe(old.id);
+  expect(sqlite.prepare('SELECT event FROM replaceable_events WHERE kind = 30078').get()).toBeDefined();
+  expect(await pending(30000, CONTACTS_D)).toBeNull();
+  sqlite.exec('DROP TRIGGER fail_migration;');
+  const retrying = migrateLocalSavedGroups(SELF, mockSigner);
+  await jest.runAllTimersAsync(); await retrying;
+  expect((await pending(30000, CONTACTS_D))?.event.content).toBe('encrypted:[["h","room"]]');
+  expect(await pending(30078, 'psstpsst-saved-groups')).toBeNull();
+});
+
+
+it.each(['cache', 'outbox'])('migrates when only the local legacy %s row remains', async (remaining) => {
+  const { migrateLocalSavedGroups, CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  sqlite.prepare('INSERT INTO saved_groups (account_pubkey, group_id) VALUES (?, ?)').run(SELF, 'room');
+  await service.enqueueConfigurationEvent(event(30078, 'psstpsst-saved-groups'));
+  if (remaining === 'cache') sqlite.exec('DELETE FROM configuration_outbox;');
+  else sqlite.exec('DELETE FROM replaceable_events;');
+  const migrating = migrateLocalSavedGroups(SELF, mockSigner);
+  await jest.runAllTimersAsync(); await migrating;
+  expect((await pending(30000, CONTACTS_D))?.event.content).toBe('encrypted:[["h","room"]]');
+  expect(await pending(30078, 'psstpsst-saved-groups')).toBeNull();
+  expect(sqlite.prepare('SELECT * FROM replaceable_events WHERE kind = 30078').all()).toEqual([]);
+});
+
+
+it('keeps a cache conflict in the background and builds from fresh plaintext on the next edit', async () => {
+  const { setGroupSaved } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  const { CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  const enqueue = service.enqueueConfigurationEvent;
+  const arriving = { ...event(30000, CONTACTS_D), content: 'encrypted:[]' };
+  const spy = jest.spyOn(service, 'enqueueConfigurationEvent').mockImplementationOnce(async (...args) => {
+    // Arrive after the publisher's final cache read, before its enqueue transaction.
+    await enqueue(arriving);
+    return enqueue(...args);
+  });
+  await setGroupSaved(SELF, 'room', true);
+  await jest.runAllTimersAsync();
+  expect(sqlite.prepare('SELECT dirty FROM contact_sync_state').get()).toEqual({ dirty: 1 });
+  expect(sqlite.prepare('SELECT group_id FROM saved_groups').all()).toEqual([{ group_id: 'room' }]);
+  expect((await pending(30000, CONTACTS_D))?.eventId).toBe(arriving.id);
+  spy.mockRestore();
+  await setGroupSaved(SELF, 'new-room', true);
+  await jest.runAllTimersAsync();
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe('encrypted:[["h","new-room"],["h","room"]]');
+  expect(sqlite.prepare('SELECT dirty FROM contact_sync_state').get()).toEqual({ dirty: 0 });
+});
+
+
+it('continues a queued later edit after an earlier encryption fails', async () => {
+  const { setGroupSaved } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  const { CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  let reject!: (reason: Error) => void;
+  mockSigner.nip44Encrypt.mockImplementationOnce(async () => new Promise<string>((_resolve, fail) => { reject = fail; }));
+  await setGroupSaved(SELF, 'first-room', true);
+  await jest.advanceTimersByTimeAsync(0); await settle();
+  await setGroupSaved(SELF, 'second-room', true);
+  reject(new Error('signer unavailable'));
+  await jest.runAllTimersAsync();
+  expect((await pending(30000, CONTACTS_D))?.event.content)
+    .toBe('encrypted:[["h","first-room"],["h","second-room"]]');
+  expect(sqlite.prepare('SELECT dirty FROM contact_sync_state').get()).toEqual({ dirty: 0 });
+});
+
+it('does not discard a newer contact snapshot when an old delivery fails', async () => {
+  const { setGroupSaved } = jest.requireActual('../../group/saved-groups.service') as typeof import('../../group/saved-groups.service');
+  const { CONTACTS_D } = jest.requireActual('../../contact/contact.service') as typeof import('../../contact/contact.service');
+  await setGroupSaved(SELF, 'first-room', true);
+  await jest.runAllTimersAsync();
+  let resolve!: (value: ReturnType<typeof results>) => void;
+  mockPublish.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+  await start();
+  const delivering = worker.flush(); await settle();
+  await setGroupSaved(SELF, 'second-room', true);
+  await jest.runAllTimersAsync();
+  const newer = (await pending(30000, CONTACTS_D))!;
+  resolve(results(0)); await delivering;
+  expect((await pending(30000, CONTACTS_D))?.eventId).toBe(newer.eventId);
+  expect(sqlite.prepare('SELECT dirty FROM contact_sync_state').get()).toEqual({ dirty: 0 });
+});
+
+
+function privateList(kind: 'muted' | 'blocked') {
+  if (kind === 'muted') {
+    const prefs = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
+    return {
+      dTag: prefs.MUTED_D,
+      set: (pubkey: string, enabled: boolean) => prefs.setConversationMuted(SELF, pubkey, enabled),
+      apply: (remote: Event) => prefs.applyMutedEvent(SELF, remote, mockSigner),
+      members: async () => sqlite.prepare('SELECT conversation_key AS pubkey FROM conversations WHERE account_pubkey = ? AND muted = 1 ORDER BY conversation_key').all(SELF),
+    };
+  }
+  const block = jest.requireActual('../../dm/block.service') as typeof import('../../dm/block.service');
+  return {
+    dTag: block.BLOCKED_D,
+    set: (pubkey: string, enabled: boolean) => enabled ? block.blockUser(SELF, pubkey) : block.unblockUser(SELF, pubkey),
+    apply: (remote: Event) => block.applyBlockedEvent(SELF, remote, mockSigner),
+    members: async () => (await block.getBlockedPubkeys(SELF)).sort().map((pubkey) => ({ pubkey })),
+  };
+}
+
+it.each(['muted', 'blocked'] as const)('keeps failed %s plaintext authoritative after restart until the next edit', async (kind) => {
+  const list = privateList(kind);
+  const peer = 'b'.repeat(64);
+  mockSigner.nip44Encrypt.mockRejectedValueOnce(new Error('signer unavailable'));
+  await list.set(peer, true);
+  expect(await list.members()).toEqual([{ pubkey: peer }]);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  if (kind === 'blocked') {
+    const block = jest.requireActual('../../dm/block.service') as typeof import('../../dm/block.service');
+    expect(block.isBlocked(SELF, peer)).toBe(true);
+  }
+  await jest.runAllTimersAsync();
+  expect(await pending(30000, list.dTag)).toBeNull();
+  expect(sqlite.prepare('SELECT dirty FROM private_list_sync_state WHERE d_tag = ?').get(list.dTag)).toEqual({ dirty: 1 });
+  jest.resetModules();
+  const restored = privateList(kind);
+  await restored.apply({ ...event(30000, restored.dTag), content: 'encrypted:[]' });
+  expect(await restored.members()).toEqual([{ pubkey: peer }]);
+  await restored.set(peer, false);
+  await jest.runAllTimersAsync();
+  expect(await restored.members()).toEqual([]);
+  expect((await pending(30000, restored.dTag))?.event.content).toBe('encrypted:[]');
+});
+
+it.each(['muted', 'blocked'] as const)('does not fail the local %s action when signing fails', async (kind) => {
+  const list = privateList(kind);
+  const peer = 'b'.repeat(64);
+  mockSigner.signEvent.mockRejectedValueOnce(new Error('remote signer unavailable'));
+  await list.set(peer, true);
+  await jest.runAllTimersAsync();
+  expect(await list.members()).toEqual([{ pubkey: peer }]);
+  expect(await pending(30000, list.dTag)).toBeNull();
+  await list.set(peer, false);
+  await jest.runAllTimersAsync();
+  expect((await pending(30000, list.dTag))?.event.content).toBe('encrypted:[]');
+});
+
+it.each(['muted', 'blocked'] as const)('retires failed %s delivery and generates a fresh event on the next edit', async (kind) => {
+  const list = privateList(kind);
+  const first = 'b'.repeat(64);
+  const second = 'c'.repeat(64);
+  await list.set(first, true);
+  await jest.runAllTimersAsync();
+  const old = (await pending(30000, list.dTag))!.event;
+  await start(); await worker.flush(); worker.stop();
+  expect(await pending(30000, list.dTag)).toBeNull();
+  expect(sqlite.prepare('SELECT dirty FROM private_list_sync_state WHERE d_tag = ?').get(list.dTag)).toEqual({ dirty: 1 });
+  await list.apply({ ...event(30000, list.dTag, old.created_at + 1), content: 'encrypted:[]' });
+  expect(await list.members()).toEqual([{ pubkey: first }]);
+  await list.set(second, true);
+  await jest.runAllTimersAsync();
+  const fresh = (await pending(30000, list.dTag))!.event;
+  expect(fresh.id).not.toBe(old.id);
+  expect(fresh.content).toBe(`encrypted:${JSON.stringify([['p', first], ['p', second]])}`);
+});
+
+it.each(['muted', 'blocked'] as const)('preserves a newer %s snapshot when an old delivery fails', async (kind) => {
+  const list = privateList(kind);
+  await list.set('b'.repeat(64), true);
+  await jest.runAllTimersAsync();
+  let resolve!: (value: ReturnType<typeof results>) => void;
+  mockPublish.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+  await start();
+  const delivering = worker.flush(); await settle();
+  await list.set('c'.repeat(64), true);
+  await jest.runAllTimersAsync();
+  const newer = (await pending(30000, list.dTag))!;
+  resolve(results(0)); await delivering;
+  expect((await pending(30000, list.dTag))?.eventId).toBe(newer.eventId);
+  expect(sqlite.prepare('SELECT dirty FROM private_list_sync_state WHERE d_tag = ?').get(list.dTag)).toEqual({ dirty: 0 });
+});
+
+
+it('does not publish a converted legacy mute snapshot superseded before its background job starts', async () => {
+  const { applyMutedEvent, MUTED_D } = jest.requireActual('../../conversation/conversation-prefs.service') as typeof import('../../conversation/conversation-prefs.service');
+  const { groupConversationKey } = jest.requireActual('@/lib/nostr/group-messaging') as typeof import('@/lib/nostr/group-messaging');
+  const key = groupConversationKey('room');
+  sqlite.prepare('INSERT INTO conversations (account_pubkey, conversation_key, group_id) VALUES (?, ?, ?)').run(SELF, key, 'room');
+  const old = { ...event(30000, MUTED_D), content: `encrypted:${JSON.stringify([['g', key]])}` };
+  await service.enqueueConfigurationEvent(old); sqlite.exec('DELETE FROM configuration_outbox;');
+  await applyMutedEvent(SELF, old, mockSigner);
+  const newer = { ...event(30000, MUTED_D, 101), content: 'encrypted:[]' };
+  await service.enqueueConfigurationEvent(newer); sqlite.exec('DELETE FROM configuration_outbox;');
+  await jest.runAllTimersAsync();
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  expect(await pending(30000, MUTED_D)).toBeNull();
 });

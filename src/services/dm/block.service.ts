@@ -1,11 +1,11 @@
 import { and, eq, notInArray } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
-import { db } from '@/db/client';
+import { db, type Database } from '@/db/client';
 import { blockedUsers } from '@/db/schema';
 
-import { buildSigner } from '../account/account.service';
-import { canApplyConfigurationEvent, prepareConfiguration, publishConfiguration } from '../relay/configuration-publish.service';
+import { canApplyConfigurationEvent } from '../relay/configuration-publish.service';
+import { markPrivateListDirty, queuePrivateListPublication } from '../relay/private-list-sync.service';
 import type { Signer } from '../signer/signer.interface';
 
 /**
@@ -67,41 +67,18 @@ export async function loadBlockedIntoCache(accountPubkey: string): Promise<void>
 }
 
 /** Live-table read of the account's blocked pubkeys (newest first not needed). */
-export async function getBlockedPubkeys(accountPubkey: string): Promise<string[]> {
-  const rows = await db
+export async function getBlockedPubkeys(accountPubkey: string, tx: Database = db): Promise<string[]> {
+  const rows = await tx
     .select({ pubkey: blockedUsers.pubkey })
     .from(blockedUsers)
     .where(eq(blockedUsers.accountPubkey, accountPubkey));
   return rows.map((r) => r.pubkey);
 }
 
-/**
- * Re-publish the whole block list as a private NIP-51 follow set: all members
- * live in `.content`, NIP-44-encrypted to self, so who you blocked is never
- * exposed. Replaceable — the latest event always reflects the latest local state.
- */
-async function publishBlockedSet(accountPubkey: string, signer: Signer): Promise<void> {
-  if (!signer.nip44Encrypt) return; // remote signers without NIP-44 can't sync
-  const pubkeys = await getBlockedPubkeys(accountPubkey);
-  const privateTags = pubkeys.map((pk) => ['p', pk]);
-  const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(privateTags));
-  await publishConfiguration(accountPubkey, signer, {
-    kind: KIND_FOLLOW_SET,
-    content,
-    tags: [
-      ['d', BLOCKED_D],
-      ['title', BLOCKED_TITLE],
-    ],
-    created_at: Math.floor(Date.now() / 1000),
-  });
-}
-
-/** Commit the current encrypted snapshot after the optimistic local write can
- * paint. Only persistence is awaited; the shared worker owns relay delivery. */
-function persistBlockedSet(accountPubkey: string, signer?: Signer): Promise<void> {
-  return prepareConfiguration(accountPubkey, KIND_FOLLOW_SET, BLOCKED_D, async () => {
-    const s = signer ?? (await buildSigner(accountPubkey));
-    await publishBlockedSet(accountPubkey, s);
+function queueBlockedSet(accountPubkey: string, signer?: Signer): void {
+  queuePrivateListPublication({
+    accountPubkey, dTag: BLOCKED_D, title: BLOCKED_TITLE, signer,
+    readTags: async (tx) => (await getBlockedPubkeys(accountPubkey, tx)).map((pubkey) => ['p', pubkey]),
   });
 }
 
@@ -113,12 +90,14 @@ export async function blockUser(
   pubkey: string,
   opts: { signer?: Signer } = {},
 ): Promise<void> {
-  await db
-    .insert(blockedUsers)
-    .values({ accountPubkey, pubkey, blockedAt: Math.floor(Date.now() / 1000) })
-    .onConflictDoNothing();
+  await db.transaction(async (tx) => {
+    await markPrivateListDirty(accountPubkey, BLOCKED_D, tx);
+    await tx.insert(blockedUsers)
+      .values({ accountPubkey, pubkey, blockedAt: Math.floor(Date.now() / 1000) })
+      .onConflictDoNothing();
+  });
   cacheFor(accountPubkey).add(pubkey);
-  await persistBlockedSet(accountPubkey, opts.signer);
+  queueBlockedSet(accountPubkey, opts.signer);
 }
 
 /** Unblock a user: remove locally, update the mirror, then re-publish the set. */
@@ -127,11 +106,13 @@ export async function unblockUser(
   pubkey: string,
   opts: { signer?: Signer } = {},
 ): Promise<void> {
-  await db
-    .delete(blockedUsers)
-    .where(and(eq(blockedUsers.accountPubkey, accountPubkey), eq(blockedUsers.pubkey, pubkey)));
+  await db.transaction(async (tx) => {
+    await markPrivateListDirty(accountPubkey, BLOCKED_D, tx);
+    await tx.delete(blockedUsers)
+      .where(and(eq(blockedUsers.accountPubkey, accountPubkey), eq(blockedUsers.pubkey, pubkey)));
+  });
   blockedByAccount.get(accountPubkey)?.delete(pubkey);
-  await persistBlockedSet(accountPubkey, opts.signer);
+  queueBlockedSet(accountPubkey, opts.signer);
 }
 
 /**
