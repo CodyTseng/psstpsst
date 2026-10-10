@@ -296,6 +296,8 @@
     "title": "Paylaş",
     "send": "Gönder",
     "sending": "Gönderiliyor…",
+    "sent": "Gönderildi",
+    "enter_conversation": "Sohbeti aç",
     "send_failed": "Her şey gönderilemedi. Yeniden paylaşmayı dene.",
     "receive_failed_title": "PsstPsst ile paylaşılamıyor",
     "receive_failed": "Paylaşılan içerik artık kullanılamıyor. Yeniden paylaşmayı dene.",

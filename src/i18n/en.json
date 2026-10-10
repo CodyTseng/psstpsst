@@ -296,6 +296,8 @@
     "title": "Share",
     "send": "Send",
     "sending": "Sending…",
+    "sent": "Sent",
+    "enter_conversation": "Enter chat",
     "send_failed": "Couldn't send everything. Try sharing again.",
     "receive_failed_title": "Can't share to PsstPsst",
     "receive_failed": "The shared content is no longer available. Try sharing it again.",

@@ -37,9 +37,9 @@ export async function pendingAttachmentFileExists(localName: string): Promise<bo
   return !!(info.exists && info.size && info.size > 0);
 }
 
-export async function deletePendingAttachmentFile(localName?: string): Promise<void> {
+export async function deletePendingAttachmentFile(localName?: string, strict = false): Promise<void> {
   if (!localName) return;
-  await platform.fileSystem
-    .delete(await pendingAttachmentUri(localName), { idempotent: true })
-    .catch(() => {});
+  const deletion = platform.fileSystem.delete(await pendingAttachmentUri(localName), { idempotent: true });
+  if (strict) await deletion;
+  else await deletion.catch(() => {});
 }

@@ -207,7 +207,18 @@ resume pending work independently of messaging readiness. See
 
 ### Sending
 
-1. The UI inserts the outgoing message optimistically.
+1. The UI inserts the outgoing message optimistically. Attachment pending state
+   and upload attempts are service-owned and shared by in-chat sends and external
+   shares. External file placeholders are enqueued before destination navigation;
+   persistent staging preserves retry bytes independently of the OS share grant.
+   Confirmed uploads survive route changes; pause and cancellation are explicit.
+   Recipients control their own pending message independently. A shared upload
+   continues while any recipient needs it; pausing a recipient suppresses its
+   message and preserves prepared file data for resume. Stored messages release
+   staging files immediately, independently of presentation. Visible placeholders
+   use the permanent local mirror for handoff; unopened chats retain no placeholder.
+   Terminal cleanup metadata survives interrupted deletion and is never restored
+   as a retryable send.
 2. The service creates the immutable rumor and stores it with a durable,
    account-scoped FIFO outbox job in one transaction. A job row means unfinished
    work; completion deletes it.

@@ -28,6 +28,7 @@ export const pendingAttachments = sqliteTable(
         'paused',
         'stopped',
         'failed',
+        'sent',
       ],
     }).notNull(),
     startedAt: integer('started_at'),

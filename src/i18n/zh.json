@@ -296,6 +296,8 @@
     "title": "分享",
     "send": "发送",
     "sending": "发送中…",
+    "sent": "已发送",
+    "enter_conversation": "进入会话",
     "send_failed": "部分内容发送失败，请重新分享。",
     "receive_failed_title": "无法分享到 PsstPsst",
     "receive_failed": "分享的内容已不可用，请重新分享。",

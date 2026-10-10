@@ -296,6 +296,8 @@
     "title": "Compartilhar",
     "send": "Enviar",
     "sending": "Enviando…",
+    "sent": "Enviado",
+    "enter_conversation": "Abrir conversa",
     "send_failed": "Não foi possível enviar tudo. Tente compartilhar novamente.",
     "receive_failed_title": "Não é possível compartilhar com o PsstPsst",
     "receive_failed": "O conteúdo compartilhado não está mais disponível. Tente compartilhá-lo novamente.",

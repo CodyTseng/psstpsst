@@ -1,5 +1,5 @@
 import Plus from 'lucide-react-native/icons/plus';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, View } from 'react-native';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
@@ -61,6 +61,7 @@ export function ForwardRecipientScreen({
   const [creatingConversation, setCreatingConversation] = useState(false);
   const { scrolled, scrollProps } = useScrolled({ resetKey: creatingConversation });
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const pendingSend = useRef<ShareTarget[] | null>(null);
   const selectProgress = useSharedValue(0);
 
   const contacts = useMemo(
@@ -282,7 +283,16 @@ export function ForwardRecipientScreen({
         preview={preview}
         recipients={selectedTargets}
         sending={sending}
-        onConfirm={() => onConfirm(selectedTargets)}
+        onConfirm={() => {
+          if (sending || pendingSend.current) return;
+          pendingSend.current = selectedTargets;
+          setConfirmOpen(false);
+        }}
+        onClosed={() => {
+          const targets = pendingSend.current;
+          pendingSend.current = null;
+          if (targets) onConfirm(targets);
+        }}
       />
     </AppScreen>
   );

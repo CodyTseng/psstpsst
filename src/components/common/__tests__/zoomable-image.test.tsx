@@ -46,6 +46,9 @@ jest.mock('react-native-reanimated', () => {
     cancelAnimation: jest.fn(),
     Easing: { cubic: (x: number) => x * x * x, out: (ease: (x: number) => number) => (x: number) => 1 - ease(1 - x) },
     ReduceMotion: { System: 'system' },
+    LinearTransition: {
+      duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },
+    },
   };
 });
 

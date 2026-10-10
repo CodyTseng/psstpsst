@@ -296,6 +296,8 @@
     "title": "Condividi",
     "send": "Invia",
     "sending": "Invio…",
+    "sent": "Inviato",
+    "enter_conversation": "Apri chat",
     "send_failed": "Impossibile inviare tutto. Prova a condividere di nuovo.",
     "receive_failed_title": "Impossibile condividere con PsstPsst",
     "receive_failed": "Il contenuto condiviso non è più disponibile. Prova a condividerlo di nuovo.",

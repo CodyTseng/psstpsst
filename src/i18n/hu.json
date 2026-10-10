@@ -296,6 +296,8 @@
     "title": "Megosztás",
     "send": "Küldés",
     "sending": "Küldés…",
+    "sent": "Elküldve",
+    "enter_conversation": "Beszélgetés megnyitása",
     "send_failed": "Nem sikerült mindent elküldeni. Próbáld újra megosztani.",
     "receive_failed_title": "Nem osztható meg a PsstPssttel",
     "receive_failed": "A megosztott tartalom már nem érhető el. Próbáld újra megosztani.",

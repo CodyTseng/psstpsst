@@ -296,6 +296,8 @@
     "title": "分享",
     "send": "傳送",
     "sending": "正在傳送…",
+    "sent": "已傳送",
+    "enter_conversation": "進入對話",
     "send_failed": "無法傳送所有內容，請重新分享。",
     "receive_failed_title": "無法分享到 PsstPsst",
     "receive_failed": "分享的內容已無法使用，請重新分享。",

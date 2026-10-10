@@ -1,3 +1,4 @@
+import { Image as ExpoImage } from 'expo-image';
 import Download from 'lucide-react-native/icons/download';
 import { useIncomingShare } from 'expo-sharing';
 import { router, useNavigation } from 'expo-router';
@@ -14,69 +15,18 @@ import {
 import {
   MAX_INCOMING_SHARE_ITEMS,
   normalizeIncomingShare,
-  type IncomingShareItem,
 } from '@/lib/share/incoming-share';
 import type { ShareTarget } from '@/lib/share/share-target';
 import { platform } from '@/platform';
-import { buildSigner } from '@/services/account/account.service';
-import { conversationSendService } from '@/services/conversation/conversation-send.service';
+import { prepareIncomingShareSend } from '@/services/conversation/incoming-share-send.service';
+import { openSharedConversation } from '@/components/navigation/open-shared-conversation';
 import { incomingBackupCandidate } from '@/services/dm/incoming-backup';
-import { nextRumorTimestamp } from '@/services/dm/rumor-clock';
 import { stageIncomingShare } from '@/services/files/incoming-share-file.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useBackupTaskStore } from '@/stores/backup-task.store';
 import { showToast } from '@/stores/toast.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { useThemeColors } from '@/theme';
-
-function yieldToUi(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-async function sendIncomingShare(
-  accountPubkey: string,
-  targets: ShareTarget[],
-  items: IncomingShareItem[],
-): Promise<boolean> {
-  let failed = false;
-  let signer: Awaited<ReturnType<typeof buildSigner>> | null = null;
-
-  for (const item of items) {
-    if (item.kind === 'text') {
-      for (const target of targets) {
-        try {
-          await conversationSendService.sendMessage({
-            accountPubkey,
-            target,
-            content: item.content,
-            timestamp: nextRumorTimestamp(),
-          });
-        } catch {
-          failed = true;
-        }
-        await yieldToUi();
-      }
-      continue;
-    }
-
-    try {
-      signer ??= await buildSigner(accountPubkey);
-      await conversationSendService.sendFile({
-        accountPubkey,
-        signer,
-        targets,
-        localUri: item.localUri,
-        mime: item.mime,
-        name: item.name,
-      });
-    } catch {
-      failed = true;
-    }
-    await yieldToUi();
-  }
-
-  return failed;
-}
 
 /** Handles the OS payload while presenting the common `/forward` recipient UI. */
 export function IncomingShareForwardScreen() {
@@ -124,7 +74,7 @@ export function IncomingShareForwardScreen() {
   ]);
 
   useEffect(() => {
-    if (isResolving || alertShown.current) return;
+    if (isResolving || alertShown.current || sending || stagingImport) return;
     const tooMany = sharedPayloads.length > MAX_INCOMING_SHARE_ITEMS;
     if (sharedPayloads.length > 0 && !tooMany) return;
     alertShown.current = true;
@@ -138,7 +88,7 @@ export function IncomingShareForwardScreen() {
         clearIncomingShare();
         leaveForward();
       });
-  }, [clearIncomingShare, isResolving, leaveForward, sharedPayloads.length, t]);
+  }, [clearIncomingShare, isResolving, leaveForward, sending, sharedPayloads.length, stagingImport, t]);
 
   const send = useCallback(
     (targets: ShareTarget[]) => {
@@ -150,16 +100,22 @@ export function IncomingShareForwardScreen() {
           // The native share payload owns these URIs. Copy them before clearing
           // it or navigating away so uploads never depend on an expiring grant.
           const staged = await stageIncomingShare(items);
+          if (useActiveAccount.getState().activePubkey !== accountPubkey) {
+            await staged.cleanup();
+            return;
+          }
+          const task = prepareIncomingShareSend(accountPubkey, targets, staged.items, async ({ uri, mime }) => {
+            if (mime.startsWith('image/')) await ExpoImage.prefetch(uri, 'memory-disk');
+          });
           clearIncomingShare();
-          showToast(t('share.sending'));
-          leaveForward();
+          openSharedConversation(targets[0]);
 
           setTimeout(() => {
-            void sendIncomingShare(accountPubkey, targets, staged.items)
+            void task.run()
               .then((failed) => {
                 if (failed) showToast(t('share.send_failed'));
-              })
-              .finally(staged.cleanup);
+              }, () => showToast(t('share.send_failed')))
+              .finally(() => task.releaseSource(staged.cleanup));
           }, 0);
         } catch {
           setSending(false);
@@ -171,7 +127,7 @@ export function IncomingShareForwardScreen() {
         }
       })();
     },
-    [accountPubkey, clearIncomingShare, items, leaveForward, sending, t],
+    [accountPubkey, clearIncomingShare, items, sending, t],
   );
 
   const importBackup = useCallback(() => {

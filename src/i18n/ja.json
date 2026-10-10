@@ -296,6 +296,8 @@
     "title": "共有",
     "send": "送信",
     "sending": "送信中…",
+    "sent": "送信済み",
+    "enter_conversation": "会話を開く",
     "send_failed": "すべてを送信できませんでした。もう一度共有してください。",
     "receive_failed_title": "PsstPsst に共有できません",
     "receive_failed": "共有されたコンテンツは利用できなくなりました。もう一度共有してください。",

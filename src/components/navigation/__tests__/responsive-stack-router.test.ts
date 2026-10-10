@@ -163,3 +163,18 @@ describe('responsive stack router', () => {
     ]);
   });
 });
+
+it('clears earlier chats even when the shared destination is already active', () => {
+  const router = responsiveStackRouter({ initialRouteName: PRIMARY_ROUTE_NAME });
+  const options = { routeNames: [PRIMARY_ROUTE_NAME, 'chat/[key]'], routeParamList: {}, routeGetIdList: {} };
+  type State = Parameters<typeof router.getStateForAction>[0];
+  type Action = Parameters<typeof router.getStateForAction>[1];
+  let state = router.getInitialState(options) as State;
+  state = router.getStateForAction(state, { type: 'PUSH', payload: { name: 'chat/[key]', params: { key: 'old' } } }, options) as State;
+  state = router.getStateForAction(state, { type: 'PUSH', payload: { name: 'chat/[key]', params: { key: 'target' } } }, options) as State;
+  state = router.getStateForAction(state, {
+    type: 'PUSH', payload: { name: 'chat/[key]', params: { key: 'target' }, singular: PRIMARY_PANE_RESET_MARKER },
+  } as Action, options) as State;
+  expect(state.routes.map((route) => route.name)).toEqual([PRIMARY_ROUTE_NAME, 'chat/[key]']);
+  expect(state.routes[1].params).toEqual({ key: 'target' });
+});

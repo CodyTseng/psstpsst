@@ -113,7 +113,6 @@ export const responsiveStackRouter: typeof StackRouter = (options) => {
       };
     },
     getStateForAction(state, action, routerOptions) {
-      if (isDuplicateActivePush(state, action)) return state;
       if (isPrimaryPaneResetAction(action)) {
         return router.getStateForAction(
           getPrimaryPaneBaseState(state),
@@ -121,6 +120,7 @@ export const responsiveStackRouter: typeof StackRouter = (options) => {
           routerOptions,
         );
       }
+      if (isDuplicateActivePush(state, action)) return state;
       return router.getStateForAction(state, action, routerOptions);
     },
     getStateForRouteFocus(state, key) {

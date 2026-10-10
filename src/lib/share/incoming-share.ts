@@ -40,6 +40,8 @@ export type IncomingShareFile = {
   mime: string;
   name?: string;
   size?: number;
+  width?: number;
+  height?: number;
 };
 
 export type IncomingShareItem = IncomingShareText | IncomingShareFile;

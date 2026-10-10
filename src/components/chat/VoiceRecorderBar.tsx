@@ -12,11 +12,12 @@ import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
 import { Stop as Square } from '@solar-icons/react-native/category/video/Linear/Stop';
 import { TrashBinTrash as Trash2 } from '@solar-icons/react-native/category/ui/Linear/TrashBinTrash';
 import X from 'lucide-react-native/icons/x';
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ChatComposerFeedbackSlot } from '@/components/chat/ChatComposerFeedbackSlot';
 import { AppText } from "@/components/common/AppText";
 import { IconButton } from "@/components/common/IconButton";
 import { ChromeBackdrop } from "@/components/common/ChromeBackdrop";
@@ -55,6 +56,7 @@ const NATIVE_VOICE_MIME: VoiceMime = "audio/mp4";
 const WEB_VOICE_MIME: VoiceMime = 'audio/webm';
 
 type Props = {
+  aboveInput?: ReactNode;
   /** Hand off the finished recording to the send pipeline. */
   onSendVoice: (payload: VoicePayload) => void;
   /** Discard and return to the text composer. */
@@ -68,10 +70,11 @@ type Props = {
  * be auditioned and scrubbed, then sent or deleted. Owns the recorder/player and
  * cleans up the temp file unless it's handed off on send. (DESIGN §8)
  */
-export function VoiceRecorderBar({ onSendVoice, onCancel }: Props) {
+export function VoiceRecorderBar({ onSendVoice, onCancel, aboveInput }: Props) {
   const c = useThemeColors();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const [feedbackHeight, setFeedbackHeight] = useState(0);
 
   const recorder = useAudioRecorder({
     ...RecordingPresets.HIGH_QUALITY,
@@ -282,8 +285,14 @@ export function VoiceRecorderBar({ onSendVoice, onCancel }: Props) {
 
   if (phase === "recording") {
     return (
-      <View style={{ marginTop: -(bottomBarHeight + safe), zIndex: 1 }}>
-        <ChromeBackdrop scrollbarOcclusion="bottom" />
+      <View pointerEvents="box-none" style={{ marginTop: -(bottomBarHeight + safe + feedbackHeight), zIndex: 1 }}>
+        <View pointerEvents="none" style={{ position: 'absolute', top: feedbackHeight, bottom: 0, start: 0, end: 0 }}>
+          <ChromeBackdrop scrollbarOcclusion="bottom" />
+        </View>
+        <ChatComposerFeedbackSlot
+          height={feedbackHeight}
+          onHeightChange={(height) => setFeedbackHeight((current) => Math.max(current, height))}
+        >{aboveInput}</ChatComposerFeedbackSlot>
         <View style={bar}>
           <IconButton
             variant="surface"
@@ -349,8 +358,14 @@ export function VoiceRecorderBar({ onSendVoice, onCancel }: Props) {
   }
 
   return (
-    <View style={{ marginTop: -(bottomBarHeight + safe), zIndex: 1 }}>
-      <ChromeBackdrop scrollbarOcclusion="bottom" />
+    <View pointerEvents="box-none" style={{ marginTop: -(bottomBarHeight + safe + feedbackHeight), zIndex: 1 }}>
+      <View pointerEvents="none" style={{ position: 'absolute', top: feedbackHeight, bottom: 0, start: 0, end: 0 }}>
+        <ChromeBackdrop scrollbarOcclusion="bottom" />
+      </View>
+      <ChatComposerFeedbackSlot
+        height={feedbackHeight}
+        onHeightChange={(height) => setFeedbackHeight((current) => Math.max(current, height))}
+      >{aboveInput}</ChatComposerFeedbackSlot>
       <View style={bar}>
         <IconButton
           variant="surface"

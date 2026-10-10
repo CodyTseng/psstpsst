@@ -296,6 +296,8 @@
     "title": "Teilen",
     "send": "Senden",
     "sending": "Wird gesendet…",
+    "sent": "Gesendet",
+    "enter_conversation": "Chat öffnen",
     "send_failed": "Es konnte nicht alles gesendet werden. Versuche erneut zu teilen.",
     "receive_failed_title": "Teilen mit PsstPsst nicht möglich",
     "receive_failed": "Der geteilte Inhalt ist nicht mehr verfügbar. Versuche erneut, ihn zu teilen.",

@@ -12,3 +12,11 @@ export type ShareTarget = {
 export function shareTargetId(target: Pick<ShareTarget, 'conversationKey' | 'deliveryKind'>): string {
   return `${target.deliveryKind}:${target.conversationKey}`;
 }
+
+/** Route identifiers only; the share payload stays outside navigation state. */
+export function shareTargetHref(target: ShareTarget): `/chat/${string}` {
+  const path: `/chat/${string}` = `/chat/${encodeURIComponent(target.conversationKey)}`;
+  return target.deliveryKind === 'proximity'
+    ? `${path}?transport=proximity&name=${encodeURIComponent(target.name ?? '')}`
+    : path;
+}

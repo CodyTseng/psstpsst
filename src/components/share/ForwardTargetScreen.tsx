@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openSharedConversation } from '@/components/navigation/open-shared-conversation';
 import { AppScreen } from '@/components/common/AppScreen';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { ForwardPreview } from '@/components/share/ForwardPreview';
@@ -10,6 +11,7 @@ import type { ConversationDeliveryKind } from '@/lib/conversation/capabilities';
 import { conversationSupportsMessage } from '@/lib/conversation/capabilities';
 import { forwardableTags } from '@/lib/nostr/tags';
 import type { ShareTarget } from '@/lib/share/share-target';
+import { showForwardNotice } from '@/services/conversation/forward-notice';
 import { conversationSendService } from '@/services/conversation/conversation-send.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
@@ -62,11 +64,18 @@ export function ForwardTargetScreen() {
       const account = validDraft.accountPubkey;
 
       complete(validDraft.id);
-      showToast(t('share.sending'));
-      leaveForward();
+      if (validDraft.sourceConversationKey) {
+        showForwardNotice(validDraft.id, account, validDraft.sourceConversationKey, targets);
+        leaveForward();
+      } else if (targets.length > 1) {
+        openSharedConversation(targets[0]);
+      } else {
+        showToast(t('share.sending'));
+        leaveForward();
+      }
 
-      // Let the route pop and its source paint before synchronous SQLite and
-      // crypto work begins. Yield between each message for longer forwards.
+      // Let the route pop and its source paint before synchronous crypto
+      // work begins. Yield between each message for longer forwards.
       setTimeout(() => {
         void (async () => {
           let failureShown = false;

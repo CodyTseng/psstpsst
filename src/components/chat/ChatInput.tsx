@@ -7,6 +7,7 @@ import {
   useKeyboardHandler,
 } from "react-native-keyboard-controller";
 import {
+  type ReactNode,
   lazy,
   Suspense,
   useCallback,
@@ -40,6 +41,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
+import { ChatComposerFeedbackSlot } from '@/components/chat/ChatComposerFeedbackSlot';
 import { IconButton } from "@/components/common/IconButton";
 import { ChromeBackdrop } from "@/components/common/ChromeBackdrop";
 import { InteractivePressable as Pressable } from "@/components/common/InteractivePressable";
@@ -106,6 +108,8 @@ const LazyEmojiPickerSheet = lazy(() =>
 );
 
 type Props = {
+  /** Non-blocking feedback above the composer, inside its keyboard-safe bounds. */
+  aboveInput?: ReactNode;
   /** Called with trimmed, non-empty message text. Relay mode also normalizes bare NIP-19 identifiers. */
   onSend: (text: string, customEmojis: CustomEmoji[]) => Promise<void> | void;
   /** Pick an attachment source from the inline tray; absent hides the `+`. */
@@ -170,6 +174,7 @@ const SUGGESTION_STRIP_HEIGHT =
 const COMPOSER_PANEL_EASE = Easing.out(Easing.cubic);
 
 export function ChatInput({
+  aboveInput,
   onSend,
   onPickAttachment,
   onPasteFiles,
@@ -189,6 +194,7 @@ export function ChatInput({
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const [aboveInputHeight, setAboveInputHeight] = useState(0);
   const [panelWidth, setPanelWidth] = useState(screenWidth);
   // Track every native keyboard-move event ourselves. The provider-level shared
   // values jump to the target at keyboard-start on iOS; per-frame handler values
@@ -875,6 +881,7 @@ export function ChatInput({
   if (recording && onSendVoice) {
     return (
       <VoiceRecorderBar
+        aboveInput={aboveInput}
         onSendVoice={(p) => {
           setRecording(false);
           onSendVoice(p);
@@ -886,6 +893,7 @@ export function ChatInput({
 
   return (
     <View
+      pointerEvents="box-none"
       onLayout={(event) => {
         const nextWidth = event.nativeEvent.layout.width;
         setPanelWidth((current) => (current === nextWidth ? current : nextWidth));
@@ -894,6 +902,7 @@ export function ChatInput({
         marginTop: -(
           bottomBarHeight +
           SAFE +
+          aboveInputHeight +
           (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0)
         ),
         zIndex: 1,
@@ -902,7 +911,7 @@ export function ChatInput({
       <View
         style={{
           position: "absolute",
-          top: suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0,
+          top: aboveInputHeight + (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0),
           start: 0,
           end: 0,
           bottom: 0,
@@ -911,6 +920,12 @@ export function ChatInput({
       >
         <ChromeBackdrop scrollbarOcclusion="bottom" />
       </View>
+      <ChatComposerFeedbackSlot
+        height={aboveInputHeight}
+        onHeightChange={(height) => setAboveInputHeight((current) => Math.max(current, height))}
+      >
+        {aboveInput}
+      </ChatComposerFeedbackSlot>
       {suggestionsVisible ? (
         // Shortcode suggestions: a floating `surfaceElevated` card above the
         // input bar's top hairline, hugging its content with its leading

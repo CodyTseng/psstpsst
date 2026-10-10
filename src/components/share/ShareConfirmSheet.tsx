@@ -10,6 +10,7 @@ import type { ShareTarget } from '@/lib/share/share-target';
 type Props = {
   visible: boolean;
   onClose: () => void;
+  onClosed?: () => void;
   /** Intent-specific content rendered with the app's real outgoing bubbles. */
   preview: ReactNode;
   /** Chosen conversations shown above the preview and used by the Send label. */
@@ -29,6 +30,7 @@ type Props = {
 export function ShareConfirmSheet({
   visible,
   onClose,
+  onClosed,
   preview,
   recipients,
   sending,
@@ -45,6 +47,7 @@ export function ShareConfirmSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
+      onClosed={onClosed}
       title={t('share.title')}
       fixedSubheader={<RecipientSummary label={t('share.send_to')} targets={recipients} />}
       fixedFooter={

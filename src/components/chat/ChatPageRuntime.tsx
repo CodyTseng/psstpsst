@@ -46,6 +46,7 @@ import { ChatBlockedNotice } from '@/components/chat/ChatBlockedNotice';
 import { ChatContactPrompt } from '@/components/chat/ChatContactPrompt';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { ForwardConversationBanner } from '@/components/chat/ForwardConversationBanner';
 import { IncomingMessageBanner } from '@/components/chat/IncomingMessageBanner';
 import { NearbyReconnectNotice } from '@/components/chat/NearbyReconnectNotice';
 import {
@@ -90,7 +91,6 @@ import { useProximityIdentity, useProximityPeer } from '@/hooks/use-proximity';
 import { useCustomEmojis } from '@/hooks/use-custom-emojis';
 import { useWallets } from '@/hooks/use-wallets';
 import { useClipboard } from '@/hooks/use-clipboard';
-import { isAbortError } from '@/lib/async/abort';
 import type { ImageSendQuality } from '@/lib/attachments/image-quality';
 import { IS_ELECTRON } from '@/lib/platform';
 import {
@@ -115,7 +115,6 @@ import {
   type CustomEmoji,
 } from '@/lib/nostr/custom-emoji';
 import { copyAttachment, copyLocalAttachment } from '@/services/files/attachment-copy.service';
-import { nearbyFileUploadService } from '@/services/files/nearby-file-upload.service';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
 import {
   attachmentTransferKey,
@@ -135,17 +134,14 @@ import { resolvePeerRelationship, type PeerRelationship } from '@/lib/chat/peer-
 import { reconcileRenderedPendingAttachments } from '@/lib/chat/pending-attachment-cleanup';
 import { PendingComposerSends } from '@/lib/chat/pending-composer-sends';
 import { platform } from '@/platform';
-import { buildSigner } from '@/services/account/account.service';
 import { conversationSendService } from '@/services/conversation/conversation-send.service';
 import { addContact } from '@/services/contact/contact.service';
 import { unreadCountService } from '@/services/conversation/unread-count.service';
 import { blockUser, getSessionCachedBlockedStatus, unblockUser } from '@/services/dm/block.service';
 import { buildRumor, KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
 import { dmService } from '@/services/dm/dm.service';
-import {
-  nextRumorTimestamp,
-  rumorTimestampFromOrderAt,
-} from '@/services/dm/rumor-clock';
+import { nextRumorTimestamp } from '@/services/dm/rumor-clock';
+import { pendingAttachmentSendService, UPLOAD_PREPARING_PERCENT } from '@/services/files/pending-attachment-send.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useComposerFileHandoffStore } from '@/stores/composer-file-handoff.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
@@ -176,21 +172,7 @@ const LazyEmojiPickerSheet = lazy(() =>
 );
 
 const BASE_ATTACHMENT_SOURCES = conversationAttachmentSources(false);
-const UPLOAD_PREPARING_PERCENT = 5;
-const UPLOAD_ENCRYPTING_PERCENT = 15;
-const UPLOAD_BYTES_START_PERCENT = 20;
-// Reserve the final point for the atomic pending-to-sent handoff. Rendering a
-// transient 100% frame immediately before removing the overlay causes a flash.
-const UPLOAD_BYTES_END_PERCENT = 99;
 
-function uploadByteProgress(sentBytes: number, totalBytes: number): number {
-  if (totalBytes <= 0) return UPLOAD_BYTES_START_PERCENT;
-  const fraction = Math.max(0, Math.min(1, sentBytes / totalBytes));
-  return Math.floor(
-    UPLOAD_BYTES_START_PERCENT +
-      fraction * (UPLOAD_BYTES_END_PERCENT - UPLOAD_BYTES_START_PERCENT),
-  );
-}
 // Layout animations on web can serialize bezier factories but not composed
 // easing functions such as Easing.out(Easing.quad).
 const CHAT_ENTER_EASE_OUT = Easing.bezier(1 / 3, 2 / 3, 2 / 3, 1);
@@ -755,6 +737,8 @@ export default function ChatPageRuntime() {
           {!selectionMode ? (
             composerModel.mode === 'input' ? (
               <ChatInput
+                aboveInput={<ForwardConversationBanner accountPubkey={accountPubkey}
+                  sourceConversationKey={conversationKey} />}
                 draftKey={conversationKey}
                 liveDataEnabled={secondaryDataReady && routeActive}
                 disabled={composerModel.disabled}
@@ -772,6 +756,8 @@ export default function ChatPageRuntime() {
               />
             ) : composerModel.gateStatus ? (
               <ChatComposerGate
+                aboveInput={<ForwardConversationBanner accountPubkey={accountPubkey}
+                  sourceConversationKey={conversationKey} />}
                 status={composerModel.gateStatus}
                 onPressDetails={openComposerGateDetails}
               />
@@ -1101,30 +1087,12 @@ function ChatPageContent({
   const enqueuePending = usePendingAttachmentsStore((s) => s.enqueue);
   const removeOnePending = usePendingAttachmentsStore((s) => s.removeOne);
   const markSendingPending = usePendingAttachmentsStore((s) => s.markSending);
-  const setStatusPending = usePendingAttachmentsStore((s) => s.setStatus);
-  const markPausedPending = usePendingAttachmentsStore((s) => s.markPaused);
-  const markUploadedPending = usePendingAttachmentsStore((s) => s.markUploaded);
-  const setPendingDimensions = usePendingAttachmentsStore((s) => s.setDimensions);
-  const markSentPending = usePendingAttachmentsStore((s) => s.markSent);
-  const markFailedPending = usePendingAttachmentsStore((s) => s.markFailed);
   // Explicit UI events for MessageList. Store hydration must never be mistaken
   // for a new send/failure when reopening a conversation.
   const [pendingTailVersion, setPendingTailVersion] = useState(0);
   const [pendingFailureVersion, setPendingFailureVersion] = useState(0);
-  const attachmentAbortControllersRef = useRef(new Map<string, AbortController>());
-  const nearbyUploadKeysRef = useRef(new Map<string, string>());
-  const attachmentStagingRef = useRef(
-    new Map<string, Promise<PendingAttachment | null>>(),
-  );
-  useEffect(
-    () => () => {
-      for (const controller of attachmentAbortControllersRef.current.values()) {
-        controller.abort();
-      }
-      attachmentAbortControllersRef.current.clear();
-    },
-    [],
-  );
+  const attachmentAbortControllersRef = useRef(pendingAttachmentSendService.controllers);
+  const attachmentStagingRef = useRef(pendingAttachmentSendService.staging);
 
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
   const messageListRef = useRef<MessageListHandle | null>(null);
@@ -1382,7 +1350,7 @@ function ChatPageContent({
   // drop the in-memory bubble. MessageList already hides it this same frame,
   // so this is just store cleanup.
   useEffect(() => {
-    // Keep the staged source alive while an existing menu or clipboard request
+    // Keep the permanent-mirror handoff row while a menu or clipboard request
     // owns it. The list already hides sent placeholders, so this adds no row.
     const retained = new Set(copyingPendingCounts.keys());
     if (pendingMenuTarget) retained.add(pendingMenuTarget.tempId);
@@ -1399,121 +1367,20 @@ function ChatPageContent({
       .catch(() => showToast(t('nearby.request_failed')));
   }
 
-  /** Encrypt + upload + store one attachment. Owns the pending-store
-   * lifecycle for that item. */
-  async function uploadOnePending(
-    item: PendingAttachment,
-    controller: AbortController,
-  ): Promise<void> {
-    if (!accountPubkey) return;
-    try {
-      const signer = await buildSigner(accountPubkey);
-      if (controller.signal.aborted) {
-        const error = new Error('Attachment send stopped');
-        error.name = 'AbortError';
-        throw error;
-      }
-      const dim = item.width && item.height ? `${item.width}x${item.height}` : undefined;
-
-      const { rumorIds } = await conversationSendService.sendFile({
-        accountPubkey,
-        signer,
-        targets: [{ deliveryKind, conversationKey, group: isGroup }],
-        localUri: item.localUri,
-        mime: item.mime,
-        name: item.name,
-        dim,
-        durationSec: item.durationSec,
-        waveform: item.waveform,
-        imageQuality: item.imageQuality,
-        timestamp:
-          item.messageOrderAt == null
-            ? undefined
-            : rumorTimestampFromOrderAt(item.messageOrderAt),
-        replyToId: item.replyToId,
+  /** Chat and external shares use the same pending-bubble upload lifecycle. */
+  async function uploadOnePending(item: PendingAttachment, controller: AbortController): Promise<void> {
+    await pendingAttachmentSendService.upload(
+      [{ item, target: { deliveryKind, conversationKey, group: isGroup } }],
+      controller,
+      {
         subject: conversation?.name ?? undefined,
-        onStep: (step) => {
-          const percent =
-            step === 'encrypting'
-              ? UPLOAD_ENCRYPTING_PERCENT
-              : step === 'uploading'
-                ? UPLOAD_BYTES_START_PERCENT
-                : null;
-          if (percent != null) {
-            attachmentTransferStore
-              .getState()
-              .update(attachmentTransferKey(accountPubkey, item.tempId), 'upload', percent, 100);
-          }
-          setStatusPending(item.tempId, step);
-        },
-        onUploadProgress: (sentBytes, totalBytes) =>
-          attachmentTransferStore
-            .getState()
-            .update(
-              attachmentTransferKey(accountPubkey, item.tempId),
-              'upload',
-              uploadByteProgress(sentBytes, totalBytes),
-              100,
-            ),
-        onMediaDimensions: (dimensions) => {
-          if (controller.signal.aborted ||
-            attachmentAbortControllersRef.current.get(item.tempId) !== controller) return;
-          setPendingDimensions(item.tempId, dimensions);
-        },
-        onUploadPrepared: ({ cipherSha256Hex }) => {
-          if (!isProximity) return;
-          const current = usePendingAttachmentsStore
-            .getState()
-            .items.find((candidate) => candidate.tempId === item.tempId);
-          if (!current) {
-            void nearbyFileUploadService.discard(accountPubkey, cipherSha256Hex);
-            return;
-          }
-          nearbyUploadKeysRef.current.set(item.tempId, cipherSha256Hex);
-          if (current.status === 'paused') {
-            void nearbyFileUploadService.pause(accountPubkey, cipherSha256Hex);
-          }
-        },
         onLocalFileReady: async ({ uri, mime }) => {
-          if (mime.startsWith('image/')) {
-            await ExpoImage.prefetch(uri, 'memory-disk');
-          }
+          if (mime.startsWith('image/')) await ExpoImage.prefetch(uri, 'memory-disk');
         },
-        onUploadReady: ({ url }) => markUploadedPending(item.tempId, url),
-        signal: controller.signal,
-      });
-      // Success — keep the local bubble visible (status 'sent') until the
-      // live-query bubble for this rumor renders, then a cleanup effect drops
-      // it. Avoids a gap/flicker during the swap.
-      const rumorId = rumorIds[0];
-      if (!rumorId) throw new Error('Attachment message was not stored');
-      markSentPending(item.tempId, rumorId);
-      nearbyUploadKeysRef.current.delete(item.tempId);
-      recoverProximityDelivery();
-    } catch (err) {
-      if (isAbortError(err)) {
-        const current = usePendingAttachmentsStore
-          .getState()
-          .items.find((candidate) => candidate.tempId === item.tempId);
-        if (
-          attachmentAbortControllersRef.current.get(item.tempId) === controller &&
-          current &&
-          current.status !== 'paused'
-        ) {
-          markPausedPending(item.tempId);
-        }
-        return;
-      }
-      markFailedPending(item.tempId, err instanceof Error ? err.message : String(err));
-      setPendingFailureVersion((version) => version + 1);
-    } finally {
-      attachmentTransferStore
-        .getState()
-        .clear(attachmentTransferKey(accountPubkey, item.tempId));
-      if (attachmentAbortControllersRef.current.get(item.tempId) === controller) {
-        attachmentAbortControllersRef.current.delete(item.tempId);
-      }
-    }
+        onSent: recoverProximityDelivery,
+        onFailed: () => setPendingFailureVersion((version) => version + 1),
+      },
+    );
   }
 
   function handleSend(text: string, customEmojis: CustomEmoji[]) {
@@ -1879,11 +1746,7 @@ function ChatPageContent({
     setPendingTailVersion((version) => version + 1);
     const controller = new AbortController();
     attachmentAbortControllersRef.current.set(tempId, controller);
-    const nearbyUploadKey = nearbyUploadKeysRef.current.get(tempId);
-    if (nearbyUploadKey) {
-      nearbyUploadKeysRef.current.delete(tempId);
-      await nearbyFileUploadService.discard(accountPubkey, nearbyUploadKey).catch(() => {});
-    }
+    await pendingAttachmentSendService.prepareRetry(accountPubkey, tempId);
     const staged = await attachmentStagingRef.current.get(tempId);
     item =
       staged ??
@@ -1906,37 +1769,13 @@ function ChatPageContent({
   }
 
   function handleStopPending(tempId: string) {
-    const item = usePendingAttachmentsStore
-      .getState()
-      .items.find((candidate) => candidate.tempId === tempId);
-    if (
-      !item ||
-      !['preparing', 'encrypting', 'uploading'].includes(item.status)
-    ) {
-      return;
-    }
-    markPausedPending(tempId);
-    attachmentAbortControllersRef.current.get(tempId)?.abort();
-    const nearbyUploadKey = nearbyUploadKeysRef.current.get(tempId);
-    if (nearbyUploadKey && accountPubkey) {
-      void nearbyFileUploadService.pause(accountPubkey, nearbyUploadKey);
-    }
+    pendingAttachmentSendService.pause(tempId);
   }
 
   function handleCancelPending(tempId: string) {
-    attachmentAbortControllersRef.current.get(tempId)?.abort();
-    if (accountPubkey) {
-      attachmentTransferStore
-        .getState()
-        .clear(attachmentTransferKey(accountPubkey, tempId));
-      const nearbyUploadKey = nearbyUploadKeysRef.current.get(tempId);
-      if (nearbyUploadKey) {
-        nearbyUploadKeysRef.current.delete(tempId);
-        void nearbyFileUploadService.discard(accountPubkey, nearbyUploadKey);
-      }
-    }
-    removeOnePending(tempId);
+    pendingAttachmentSendService.cancel(tempId);
   }
+
 
   async function reportSaveResult(result: SaveResult, savesToLibrary: boolean) {
     if (result === 'denied') {
@@ -1969,8 +1808,9 @@ function ChatPageContent({
   async function handleSavePendingUpload(pending: PendingAttachment) {
     const savesToLibrary =
       pending.mime.startsWith('image/') || pending.mime.startsWith('video/');
+    const current = usePendingAttachmentsStore.getState().items.find((item) => item.tempId === pending.tempId) ?? pending;
     const result = await saveLocalAttachment({
-      uri: pending.localUri,
+      uri: current.localUri,
       name: pending.name,
       mime: pending.mime,
     });

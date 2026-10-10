@@ -234,6 +234,7 @@ describe('conversation send service', () => {
       'correlate',
       'publishing',
       'publish-nearby',
+      'publishing',
       'publish-relay',
     ]);
     expect(result.rumorIds).toEqual(['nearby-forward', 'relay-forward']);
@@ -369,4 +370,19 @@ describe('conversation send service', () => {
     expect(mockDmService.forwardMessage).toHaveBeenCalledTimes(1);
     expect(mockProximityService.forwardMessage).not.toHaveBeenCalled();
   });
+  it('reports each stored target and omits a target paused during a shared upload', async () => {
+    mockLoadAccountMediaServers.mockResolvedValue(['https://media.example']);
+    mockUploadAttachment.mockResolvedValue({ url: 'https://media.example/blob', tags: [], meta: {}, localSize: 1, storedLocally: false });
+    const onTargetStored = jest.fn();
+    const active = { deliveryKind: 'relay' as const, conversationKey: 'active' };
+    const paused = { deliveryKind: 'relay' as const, conversationKey: 'paused' };
+    const result = await conversationSendService.sendFile({
+      accountPubkey: 'account', signer: {} as never, targets: [active, paused], localUri: 'file:///photo.jpg',
+      shouldSendTarget: (target) => target.conversationKey !== 'paused', onTargetStored,
+    });
+    expect(result.rumorIds).toEqual(['relay-forward']);
+    expect(mockDmService.forwardMessage).toHaveBeenCalledTimes(1);
+    expect(onTargetStored).toHaveBeenCalledWith(active, 'relay-forward');
+  });
+
 });

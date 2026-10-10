@@ -296,6 +296,8 @@
     "title": "공유",
     "send": "전송",
     "sending": "전송 중…",
+    "sent": "전송됨",
+    "enter_conversation": "대화 열기",
     "send_failed": "모두 전송할 수 없습니다. 다시 공유하세요.",
     "receive_failed_title": "PsstPsst에 공유할 수 없음",
     "receive_failed": "공유된 콘텐츠를 더 이상 사용할 수 없습니다. 다시 공유하세요.",

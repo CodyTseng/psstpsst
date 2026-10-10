@@ -1,7 +1,26 @@
 import { platform } from "@/platform";
 import type { IncomingShareItem } from "@/lib/share/incoming-share";
+import { validMediaDimensions, type MediaDimensions } from "@/lib/attachments/media-dim";
 
 import { extFromName, mimeToExt } from "./attachment-store";
+import { getVideoMetadata } from "./video-poster.service";
+
+/** Resolve preview geometry once per file before its pending bubble is mounted. */
+async function readPreviewDimensions(localUri: string, mime: string): Promise<MediaDimensions | undefined> {
+  try {
+    const dimensions = mime.startsWith("image/")
+      ? await platform.imageManipulator.getDimensions(localUri)
+      : mime.startsWith("video/")
+        ? await getVideoMetadata(localUri, { includeThumbhash: false })
+        : undefined;
+    return dimensions && validMediaDimensions(dimensions)
+      ? { width: dimensions.width, height: dimensions.height }
+      : undefined;
+  } catch {
+    // Optional preview metadata must not prevent sharing an unsupported file.
+    return undefined;
+  }
+}
 
 async function incomingShareDir(): Promise<string> {
   const base = await platform.fileSystem.cacheDirectoryUri();
@@ -36,7 +55,8 @@ export async function stageIncomingShare(
       const localUri = `${shareDir}${await platform.deviceCrypto.randomUUID()}${extension}`;
       await platform.fileSystem.copy(item.localUri, localUri);
       copiedUris.push(localUri);
-      staged.push({ ...item, localUri });
+      const dimensions = await readPreviewDimensions(localUri, item.mime);
+      staged.push({ ...item, localUri, ...dimensions });
     }
   } catch (error) {
     await Promise.all(

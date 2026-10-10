@@ -296,6 +296,8 @@
     "title": "แชร์",
     "send": "ส่ง",
     "sending": "กำลังส่ง…",
+    "sent": "ส่งแล้ว",
+    "enter_conversation": "เปิดแชท",
     "send_failed": "ส่งทั้งหมดไม่ได้ ลองแชร์อีกครั้ง",
     "receive_failed_title": "แชร์ไปยัง PsstPsst ไม่ได้",
     "receive_failed": "เนื้อหาที่แชร์ไม่พร้อมใช้งานแล้ว ลองแชร์อีกครั้ง",

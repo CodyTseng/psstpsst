@@ -6,7 +6,7 @@ import { throwIfAborted } from '@/lib/async/abort';
 import { dmService } from '../dm/dm.service';
 import type { RumorTimestamp } from '../dm/rumor-clock';
 import { markDownloaded } from '../files/attachment-index.service';
-import { stageNearbyAttachment, uploadAttachment } from '../files/file-attachment.service';
+import { stageNearbyAttachment, uploadAttachment, type UploadAttachmentResult } from '../files/file-attachment.service';
 import { loadAccountMediaServers } from '../files/media-server.service';
 import {
   ensureNearbyFileRemotelyAvailable,
@@ -71,6 +71,14 @@ type SendFileOptions = {
   /** Announces the final blob URL before any target stores its rumor, allowing
    * an optimistic row to correlate with the live DB row atomically. */
   onUploadReady?: (file: { url: string }) => void;
+  /** Correlate each stored rumor with its target, including partial batch success. */
+  onTargetStored?: (target: ConversationSendTarget, rumorId: string) => void;
+  onTargetPublishing?: (target: ConversationSendTarget) => void;
+  /** Reuse a shared file when only a recipient's message was paused. */
+  preparedFile?: UploadAttachmentResult;
+  onFileReady?: (file: UploadAttachmentResult) => void;
+  /** A shared upload may outlive one target's pause or cancellation. */
+  shouldSendTarget?: (target: ConversationSendTarget) => boolean;
   signal?: AbortSignal;
 };
 
@@ -211,7 +219,7 @@ class ConversationSendService {
       }
     }
     if (uniqueTargets.size === 0 && firstError) throw firstError;
-    const servers = await loadAccountMediaServers(opts.accountPubkey);
+    const servers = opts.preparedFile ? [] : await loadAccountMediaServers(opts.accountPubkey);
     const hasProximityTarget = Array.from(uniqueTargets.values()).some(
       (target) => target.deliveryKind === 'proximity',
     );
@@ -229,16 +237,18 @@ class ConversationSendService {
       onMediaDimensions: opts.onMediaDimensions,
       signal: opts.signal,
     };
-    const uploaded = hasProximityTarget
+    const uploaded = opts.preparedFile ?? (hasProximityTarget
       ? await stageNearbyAttachment({
           ...attachmentInput,
           accountPubkey: opts.accountPubkey,
         })
-      : await uploadAttachment({ ...attachmentInput, signer: opts.signer });
+      : await uploadAttachment({ ...attachmentInput, signer: opts.signer }));
+    opts.onFileReady?.(uploaded);
     opts.onUploadPrepared?.({ cipherSha256Hex: uploaded.meta.cipherSha256Hex });
     throwIfAborted(opts.signal);
-    let remoteAvailable = !hasProximityTarget;
-    if (hasProximityTarget) {
+    const nearbyFile = hasProximityTarget || !!parseNearbyFileOffer(uploaded.url, uploaded.tags);
+    let remoteAvailable = !nearbyFile;
+    if (nearbyFile) {
       opts.onStep?.('uploading');
       remoteAvailable = await nearbyFileUploadService.preferUntilAvailable(
         opts.accountPubkey,
@@ -265,15 +275,14 @@ class ConversationSendService {
       // UI correlation is best-effort and must never block message delivery.
     }
     throwIfAborted(opts.signal);
-    // Cancellation closes here. From this callback onward, at least one
-    // gift-wrapped event may be persisted and queued for delivery.
-    opts.onStep?.('publishing');
+    // Each target closes its own cancellation window immediately before storage.
     const contentTags = uploaded.tags;
     const rumorIds: string[] = [];
     const orderedTargets = Array.from(uniqueTargets.values()).sort((a, b) =>
       a.deliveryKind === b.deliveryKind ? 0 : a.deliveryKind === 'proximity' ? -1 : 1,
     );
     for (const target of orderedTargets) {
+      if (opts.shouldSendTarget?.(target) === false) continue;
       try {
         if (target.deliveryKind === 'relay' && !remoteAvailable) {
           opts.onStep?.('uploading');
@@ -283,8 +292,10 @@ class ConversationSendService {
             opts.signal,
           );
           remoteAvailable = true;
-          opts.onStep?.('publishing');
         }
+        if (opts.shouldSendTarget?.(target) === false) continue;
+        opts.onTargetPublishing?.(target);
+        opts.onStep?.('publishing');
         const sent = await this.forwardMessage({
           accountPubkey: opts.accountPubkey,
           target,
@@ -296,6 +307,11 @@ class ConversationSendService {
           timestamp: opts.timestamp,
         });
         rumorIds.push(sent.rumorId);
+        try {
+          opts.onTargetStored?.(target, sent.rumorId);
+        } catch {
+          // Presentation callbacks must not change a successful send's outcome.
+        }
       } catch (error) {
         firstError ??= error;
       }

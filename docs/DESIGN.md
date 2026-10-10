@@ -286,6 +286,10 @@ Disabled or busy actions keep their disabled appearance on hover and press.
 Image and video message surfaces keep their original appearance on pointer
 hover; hovering must not dim or recolour the media.
 
+Rounded framed surfaces use one full-size hover/pressed overlay clipped by the
+outer container. Do not give an inset content layer its own rounded hover fill;
+independent rounded contours leave visible gaps between feedback and the border.
+
 Surface tokens describe resting or dragged containers, not hover or pressed
 states. Text-only actions use opacity feedback without introducing a shape.
 
@@ -428,6 +432,8 @@ and metadata remain visible. Media keeps its aspect ratio without cropping;
 unused space uses the theme's muted grey surface, including pending previews.
 Local video previews use cached frame images in chat and media lists. Players
 are mounted only for playback; unavailable posters retain the ThumbHash or neutral fallback.
+Local media sends resolve available preview dimensions before showing the pending
+bubble, so upload progress does not replace a guessed aspect ratio mid-send.
 Conversation media galleries keep compact square thumbnails and derive their
 column count from the available pane width instead of using a fixed grid.
 Custom-emoji grids keep artwork bounded and derive their column count from the
@@ -503,6 +509,22 @@ unmuted conversation uses one small floating notice directly below the title
 bar. It fits the avatar, single-line name, and single-line message preview in
 one row; tapping it switches chats. Wide split layouts rely on the visible
 conversation list instead of duplicating this notice.
+
+Chat-originated forwards keep the source conversation open and offer a brief
+shortcut above the composer to enter each target conversation. The notice shows
+a check icon and fixed Sent confirmation at the logical start and the conversation action at
+the logical end. It omits conversation names and close buttons, expires two
+seconds after appearing, pauses expiry while hovered, and restarts the two-second
+window when the pointer leaves. It does not support swipe dismissal. Composer
+feedback uses a transparent envelope that remains stable when content disappears,
+so the message viewport and input never shift during dismissal. Detailed delivery
+status belongs to the target conversation. Multi-target forwards use one passive
+Sent notice without a conversation action. External shares reuse the recipient
+and confirmation flow and open the first selected target conversation without
+an additional Sent notice. Multi-target forwarding notices do not support clicking. External images, videos, and files use the
+same pending bubbles, upload progress, and pause, retry, and discard controls as
+attachments sent inside a conversation. Opening a shared destination resets the
+detail history so Back returns to the primary pane instead of a previous chat.
 
 Use the shared, state-driven `BottomSheet` for task flows. Do not use
 `@gorhom/bottom-sheet` or introduce another overlay system.

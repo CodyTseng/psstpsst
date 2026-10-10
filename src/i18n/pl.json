@@ -296,6 +296,8 @@
     "title": "Udostępnij",
     "send": "Wyślij",
     "sending": "Wysyłanie…",
+    "sent": "Wysłano",
+    "enter_conversation": "Otwórz czat",
     "send_failed": "Nie udało się wysłać wszystkiego. Spróbuj udostępnić ponownie.",
     "receive_failed_title": "Nie można udostępnić w PsstPsst",
     "receive_failed": "Udostępniona zawartość nie jest już dostępna. Spróbuj udostępnić ją ponownie.",
