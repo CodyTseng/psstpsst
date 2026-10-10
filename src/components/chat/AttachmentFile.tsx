@@ -1,3 +1,4 @@
+import { useAttachmentDownloadUri } from '@/hooks/use-attachment-download-uri';
 import * as Sharing from 'expo-sharing';
 import { FileText } from '@solar-icons/react-native/category/files/Linear/FileText';
 import Download from 'lucide-react-native/icons/download';
@@ -22,8 +23,9 @@ import {
   getCachedAttachmentUri,
   getSessionCachedUri,
 } from '@/services/files/file-attachment.service';
-import { useActiveAccount } from '@/stores/active-account.store';
+import { pauseAttachmentDownload } from '@/services/files/attachment-download-task';
 import { useAttachmentTransfer } from '@/stores/attachment-transfer.store';
+import { useActiveAccount } from '@/stores/active-account.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { radius, spacing, useThemeColors } from '@/theme';
 
@@ -64,16 +66,23 @@ export function AttachmentFile({
   const { t } = useTranslation();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
-  const activeTransfer = useAttachmentTransfer(accountPubkey, messageId);
   const [busy, setBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [paused, setPaused] = useState(false);
   const downloadController = useRef<AbortController | null>(null);
   const pausedAllowIntegrityMismatch = useRef(false);
+
   // Whether the decrypted blob is already on disk (drives download-vs-file glyph).
-  const [local, setLocal] = useState<boolean>(() => !!getSessionCachedUri(meta));
+  const [ownLocal, setLocal] = useState<boolean>(() => !!getSessionCachedUri(meta));
+  const sharedUri = useAttachmentDownloadUri(meta);
+  const local = ownLocal || !!sharedUri;
   const [cacheChecked, setCacheChecked] = useState(() => !!getSessionCachedUri(meta));
   const [failKind, setFailKind] = useState<AttachmentErrorKind | null>(null);
+
+  const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
+  const sharedActive = !!transfer && !transfer.paused && !local;
+  const isDownloading = !local && !transfer?.paused && (downloading || sharedActive);
+  const isPaused = !isDownloading && (paused || !!transfer?.paused) && !local;
 
   const name = meta.name || t('attach.file');
   const size = formatFileSize(meta.plainSize ?? meta.size);
@@ -97,7 +106,7 @@ export function AttachmentFile({
   }, [meta.cipherSha256Hex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function open(allowIntegrityMismatch = false) {
-    if (busy) return;
+    if (busy && !transfer?.paused) return;
     pausedAllowIntegrityMismatch.current = allowIntegrityMismatch;
     const controller = new AbortController();
     downloadController.current = controller;
@@ -153,7 +162,9 @@ export function AttachmentFile({
   }
 
   function pauseDownload() {
+    if (sharedActive) pauseAttachmentDownload(accountPubkey, meta.url);
     downloadController.current?.abort();
+    downloadController.current = null;
     setPaused(true);
     setBusy(false);
     setDownloading(false);
@@ -162,12 +173,12 @@ export function AttachmentFile({
   // Tap the card: open / retry a failed download / confirm-then-open past an
   // integrity failure.
   function onTap() {
-    if (downloading && activeTransfer) {
+    if (isDownloading) {
       pauseDownload();
       return;
     }
-    if (busy) return;
-    if (paused) {
+    if (busy && !transfer?.paused) return;
+    if (isPaused) {
       void open(pausedAllowIntegrityMismatch.current);
       return;
     }
@@ -184,9 +195,9 @@ export function AttachmentFile({
       <Pressable
         onPress={onTap}
         accessibilityLabel={
-          downloading && activeTransfer
+          isDownloading
             ? t('common.pause')
-            : paused
+            : isPaused
               ? t('common.resume')
               : undefined
         }
@@ -203,7 +214,7 @@ export function AttachmentFile({
         }}
       >
         {/* Left circle doubles as the action/state slot (like the voice bubble's
-            play button): a spinner while fetching, a download glyph when the blob
+            play button): a progress ring while fetching, a download glyph when the blob
             isn't local yet (tap to fetch), the file glyph once it's here. */}
         <View
           style={{
@@ -215,11 +226,14 @@ export function AttachmentFile({
             justifyContent: 'center',
           }}
         >
-          {busy ? (
+          {isDownloading ? (
             <AttachmentTransferProgress
-              messageId={messageId}
+              url={meta.url}
+              fallbackPercent={0}
               fallback={<ActivityIndicator color={c.accent} />}
             />
+          ) : busy ? (
+            <ActivityIndicator color={c.accent} />
           ) : local ? (
             <FileText size={ATTACHMENT_FILE_ICON_SIZE} color={c.accent} />
           ) : cacheChecked ? (

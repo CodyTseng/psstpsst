@@ -665,7 +665,11 @@ tapping it switches the per-batch choice to original quality. The same preview
 provides one optional message field paired with its send icon below the
 attachment controls, and closes from the header instead of a footer action row.
 
-An active attachment transfer shows its progress ring around a pause glyph.
+An active attachment transfer shows its progress ring around a pause glyph,
+including ordinary network downloads. The ring appears before byte progress is
+available, and the primary control can pause the request. Messages and viewer
+pages referencing the same attachment URL show the same download progress and
+pause/resume state, including controls that did not start the task.
 Image and video uploads use the prepared file's aspect ratio before transfer
 begins; upload metadata keeps the pending-to-sent geometry consistent.
 Pausing a download replaces it with a download glyph; pausing an upload uses an

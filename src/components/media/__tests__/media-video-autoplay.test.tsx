@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { InteractivePressable } from '@/components/common/InteractivePressable';
-import { fetchAndDecryptAttachment, copyForShare } from '@/services/files/file-attachment.service';
+import { copyForShare } from '@/services/files/file-attachment.service';
 import type { ConversationMediaItem } from '@/hooks/use-conversation-media';
 import { MediaVideoPage } from '../MediaVideoPage';
 import { StyleSheet } from 'react-native';
@@ -32,8 +32,16 @@ jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } 
 jest.mock('@/platform', () => ({ platform: { screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) }, confirmationDialog: { notify: jest.fn() } } }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
+const mockFetchVideo = jest.fn();
+
 jest.mock('@/services/files/file-attachment.service', () => ({
-  fetchAndDecryptAttachment: jest.fn(),
+  fetchAndDecryptAttachment: jest.fn((meta, options = {}) => {
+    const task = jest.requireActual('@/services/files/attachment-download-task');
+    return task.runAttachmentDownload(
+      task.attachmentDownloadTaskKey(options.accountPubkey ?? null, meta, options.allowIntegrityMismatch),
+      options.signal, () => mockFetchVideo(meta, options),
+    );
+  }),
   getSessionCachedUri: jest.fn(() => mockCached),
   getCachedAttachmentUri: jest.fn(async () => mockCached),
   attachmentErrorKind: (error: { kind?: string }) => error.kind ?? 'download',
@@ -64,7 +72,7 @@ const remote: ConversationMediaItem = {
   ...attachment, source: 'embedded', meta: { url: 'https://remote.example/video.mp4', kind: 'video' },
 };
 let renderer: ReactTestRenderer;
-const fetchVideo = fetchAndDecryptAttachment as jest.Mock;
+const fetchVideo = mockFetchVideo;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -188,3 +196,6 @@ it('shows unsupported status for direct video failures instead of a blank player
   expect(renderer.root.findByType(AppText).props.children).toBe('attach.video_unsupported_desktop');
   expect(renderer.root.findAllByType(VideoView)).toHaveLength(0);
 });
+
+jest.mock('@/components/chat/AttachmentTransferProgress', () => ({ AttachmentTransferProgress: () => null }));
+jest.mock('lucide-react-native/icons/download', () => ({ __esModule: true, default: () => null }));

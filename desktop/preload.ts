@@ -26,6 +26,16 @@ ipcRenderer.on(IPC.zipProgress, (_event, value: number) => {
   for (const listener of zipProgressListeners) listener(value);
 });
 
+const remoteProgressListeners = new Set<
+  (value: { operationId: string; receivedBytes: number; totalBytes: number }) => void
+>();
+ipcRenderer.on(
+  IPC.fsRemoteProgress,
+  (_event, value: { operationId: string; receivedBytes: number; totalBytes: number }) => {
+    for (const listener of remoteProgressListeners) listener(value);
+  },
+);
+
 const uploadProgressListeners = new Set<
   (value: { operationId: string; sentBytes: number; totalBytes: number }) => void
 >();
@@ -134,6 +144,10 @@ const bridge: ElectronBridge = {
       invoke(IPC.fsDownload, url, toUri, overwrite),
     requestRemoteFile: (url, options, operationId) =>
       invoke(IPC.fsRequestRemote, url, options, operationId),
+    addRemoteProgressListener(listener) {
+      remoteProgressListeners.add(listener);
+      return () => remoteProgressListeners.delete(listener);
+    },
     cancelRemoteFileRequest: (operationId) =>
       invoke(IPC.fsCancelRemoteRequest, operationId),
     uploadFile: (url, fileUri, options, operationId) =>

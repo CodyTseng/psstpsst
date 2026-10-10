@@ -374,7 +374,7 @@ export async function downloadBlob(url: string): Promise<Uint8Array> {
  * resource — it can't be re-fetched by hash on another server. Mirrors
  * blossom-client-sdk's `getHashFromURL`.
  */
-function getHashFromURL(url: string): string | null {
+export function getHashFromURL(url: string): string | null {
   try {
     const hashes = Array.from(new URL(url).pathname.matchAll(/[0-9a-f]{64}/gi));
     return hashes.length > 0 ? hashes[hashes.length - 1][0] : null;

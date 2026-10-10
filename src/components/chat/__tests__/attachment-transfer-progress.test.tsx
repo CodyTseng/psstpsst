@@ -4,6 +4,7 @@ import { Circle } from 'react-native-svg';
 
 import {
   attachmentTransferKey,
+  attachmentDownloadKey,
   attachmentTransferStore,
 } from '@/services/files/attachment-transfer-state';
 
@@ -39,7 +40,8 @@ jest.mock('react-i18next', () => ({
 }));
 
 describe('AttachmentTransferProgress', () => {
-  const key = attachmentTransferKey('account', 'rumor');
+  const url = 'https://media.example/attachment';
+  const key = attachmentDownloadKey('account', url);
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
@@ -51,7 +53,7 @@ describe('AttachmentTransferProgress', () => {
   it('centres pause inside a circular Bluetooth progress ring', () => {
     attachmentTransferStore.getState().update(key, 'bluetooth', 50, 100);
     act(() => {
-      renderer = create(<AttachmentTransferProgress messageId="rumor" size="media" />);
+      renderer = create(<AttachmentTransferProgress url={url} size="media" />);
     });
 
     const root = renderer!.root
@@ -72,13 +74,41 @@ describe('AttachmentTransferProgress', () => {
   it('centres pause inside a circular network progress ring', () => {
     attachmentTransferStore.getState().update(key, 'network', 25, 100);
     act(() => {
-      renderer = create(<AttachmentTransferProgress messageId="rumor" />);
+      renderer = create(<AttachmentTransferProgress url={url} />);
     });
 
     expect(renderer!.root.findAllByType(Circle)).toHaveLength(2);
     expect(
       renderer!.root.findAllByType(View).filter((node) => node.props.testID === 'pause-action'),
     ).toHaveLength(1);
+  });
+
+  it.each(['network', 'bluetooth'] as const)('shares %s progress across different messages and viewers', (source) => {
+    act(() => {
+      renderer = create(<>
+        <AttachmentTransferProgress messageId="first" url={url} fallbackPercent={0} />
+        <AttachmentTransferProgress messageId="second" url={url} fallbackPercent={0} />
+        <AttachmentTransferProgress url={url} size="media" fallbackPercent={0} />
+      </>);
+    });
+    const values = () => renderer!.root.findAllByType(View)
+      .filter((node) => node.props.accessibilityRole === 'progressbar')
+      .map((node) => node.props.accessibilityValue.now);
+    act(() => { attachmentTransferStore.getState().update(key, source, 25, 100); });
+    expect(values()).toEqual([25, 25, 25]);
+    act(() => { attachmentTransferStore.getState().update(key, source, 75, 100); });
+    expect(values()).toEqual([75, 75, 75]);
+    act(() => { attachmentTransferStore.getState().clear(key); });
+    expect(values()).toEqual([0, 0, 0]);
+  });
+
+  it('retains pending upload progress by temporary message ID', () => {
+    const uploadKey = attachmentTransferKey('account', 'pending');
+    attachmentTransferStore.getState().update(uploadKey, 'upload', 60, 100);
+    act(() => { renderer = create(<AttachmentTransferProgress messageId="pending" />); });
+    const bar = renderer!.root.findAllByType(View).find((node) => node.props.accessibilityRole === 'progressbar')!;
+    expect(bar.props.accessibilityValue.now).toBe(60);
+    attachmentTransferStore.getState().clear(uploadKey);
   });
 
   it('renders preparation as a centred ring before byte progress exists', () => {

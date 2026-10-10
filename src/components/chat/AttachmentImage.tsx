@@ -12,6 +12,7 @@ import { useAttachment } from '@/hooks/use-attachment';
 import { revealOrRetry } from '@/lib/attachments/failure';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import type { NearbyAttachmentFetchContext } from '@/services/files/file-attachment.service';
+import { pauseAttachmentDownload } from '@/services/files/attachment-download-task';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useAttachmentTransfer } from '@/stores/attachment-transfer.store';
 import { mediaViewer } from '@/stores/media-viewer.store';
@@ -67,12 +68,15 @@ export function AttachmentImage({
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const accountPubkey = useActiveAccount((state) => state.activePubkey);
-  const activeTransfer = useAttachmentTransfer(accountPubkey, messageId);
   const { state, load, pause, resume, retry, reveal } = useAttachment(meta, {
     autoLoad: autoDownload,
     nearby,
   });
+  const accountPubkey = useActiveAccount((s) => s.activePubkey);
+  const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
+  const sharedActive = !!transfer && !transfer.paused && state.status !== 'ready';
+  const isDownloading = !transfer?.paused && (state.status === 'loading' || sharedActive);
+  const isPaused = !isDownloading && state.status !== 'ready' && (state.status === 'paused' || !!transfer?.paused);
   const canPromptLoad = !autoDownload && showLoadPrompt && state.status === 'idle';
   // Cache-warmed route and long-press copies must not show the placeholder again.
   const localUri = state.status === 'ready' ? state.localUri : undefined;
@@ -114,22 +118,20 @@ export function AttachmentImage({
         <Pressable
           hoverFeedback={false}
           onPress={() => {
+            if (isDownloading) {
+              if (sharedActive) pauseAttachmentDownload(accountPubkey, meta.url);
+              pause();
+              return;
+            }
+            if (isPaused) { resume(); return; }
             if (state.status === 'error') {
               void revealOrRetry(state.kind, t, 'show', (allow) =>
                 allow ? reveal() : retry(),
               );
               return;
             }
-            if (state.status === 'loading') {
-              if (activeTransfer) pause();
-              return;
-            }
             if (state.status === 'idle') {
               if (canPromptLoad) load();
-              return;
-            }
-            if (state.status === 'paused') {
-              resume();
               return;
             }
             if (state.status !== 'ready') return;
@@ -145,24 +147,21 @@ export function AttachmentImage({
               mediaViewer.open(state.localUri);
             }
           }}
-          disabled={
-            (state.status === 'loading' && !activeTransfer) ||
-            (state.status === 'idle' && !canPromptLoad)
-          }
+          disabled={state.status === 'idle' && !canPromptLoad && !isDownloading && !isPaused}
           style={{ width: '100%', height: '100%' }}
           accessibilityRole={
             state.status === 'error' ||
             state.status === 'ready' ||
-            (state.status === 'loading' && !!activeTransfer) ||
-            state.status === 'paused' ||
+            isDownloading ||
+            isPaused ||
             canPromptLoad
               ? 'button'
               : undefined
           }
           accessibilityLabel={
-            state.status === 'loading' && activeTransfer
+            isDownloading
               ? t('common.pause')
-              : state.status === 'paused'
+              : isPaused
                 ? t('common.resume')
                 : canPromptLoad
                   ? t('attach.tap_to_load')
@@ -194,7 +193,7 @@ export function AttachmentImage({
             cachePolicy="memory-disk"
             recyclingKey={localUri}
           />
-          {state.status === 'loading' ? (
+          {isDownloading ? (
             <View
               style={[
                 StyleSheet.absoluteFill,
@@ -206,7 +205,8 @@ export function AttachmentImage({
               ]}
             >
               <AttachmentTransferProgress
-                messageId={messageId}
+                url={meta.url}
+                fallbackPercent={0}
                 size="media"
                 tone="media"
                 fallback={!placeholder ? <ActivityIndicator color={c.textMuted} /> : null}
@@ -226,7 +226,7 @@ export function AttachmentImage({
               ]}
             />
           ) : null}
-          {state.status === 'paused' ? (
+          {isPaused ? (
             <View
               style={[
                 StyleSheet.absoluteFill,

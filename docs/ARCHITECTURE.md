@@ -420,6 +420,16 @@ Media servers store ciphertext and are not trusted with plaintext. The message
 carries authenticated URL, key, nonce, MIME, size, and optional integrity
 metadata inside the encrypted rumor.
 
+- Attachment download tasks and progress are shared by the original attachment URL
+  within an account, across message bubbles and media viewers. Nearby message IDs
+  remain authorization and partial-file references; upload progress uses pending IDs.
+  Mounted consumers follow replacement tasks and verified completion without
+  initiating additional remote downloads.
+- Network attachment downloads expose byte progress and cancellation through the
+  file-system port. Completed ranges stay in the evictable cache for continuation;
+  mutable resources require a server validator, and servers ignoring Range restart
+  the representation. Completed ciphertext remains available through verification
+  and decryption until plaintext publication succeeds; integrity failures discard it.
 - Verify ciphertext and plaintext hashes when supplied.
 - Strip image metadata before upload when re-encoding will not destroy content.
 - Store downloaded plaintext in a content-addressed managed-file pool.

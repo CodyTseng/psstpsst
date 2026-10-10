@@ -1,7 +1,7 @@
 import { base64 } from '@scure/base';
 
 import { platform } from '@/platform';
-import { throwIfAborted } from '@/lib/async/abort';
+import { isAbortError, throwIfAborted } from '@/lib/async/abort';
 import { resolveVoiceMime } from '@/lib/audio/voice';
 import {
   DEFAULT_IMAGE_SEND_QUALITY,
@@ -30,8 +30,10 @@ import {
   resolveAttachmentPath,
   sniffMime,
 } from './attachment-store';
-import { downloadBlob, downloadBlobWithFallback, uploadEncryptedBlob } from './blossom.service';
+import { getHashFromURL, uploadEncryptedBlob } from './blossom.service';
 import { decryptBytes, encryptBytes, sha256Hex } from './file-crypto';
+import { attachmentDownloadTaskKey, runAttachmentDownload } from './attachment-download-task';
+import { downloadAttachmentBytes, type DownloadedAttachment } from './attachment-download.service';
 import { loadAccountMediaServers } from './media-server.service';
 import { stageNearbyUpload } from './nearby-file-upload.service';
 import { prepareAttachmentImage } from './strip-metadata';
@@ -47,7 +49,7 @@ import {
 import { parseNearbyFileOffer } from '../proximity/proximity-file-offer';
 import { ProximityFileCancelReason } from '../proximity/proximity-protocol';
 import {
-  attachmentTransferKey,
+  attachmentDownloadKey,
   attachmentTransferStore,
 } from './attachment-transfer-state';
 
@@ -434,19 +436,53 @@ async function resolvePath(meta: FileAttachmentMeta): Promise<string | null> {
  * hash mismatch (caller warns + confirms). Pass `allowIntegrityMismatch` to
  * proceed past a known mismatch once the user has accepted the risk.
  */
+export type AttachmentFetchOptions = {
+  accountPubkey?: string | null;
+  allowIntegrityMismatch?: boolean;
+  signal?: AbortSignal;
+  nearby?: NearbyAttachmentFetchContext;
+};
+
+const activeDownloadAttempts = new Map<string, symbol>();
+
 export async function fetchAndDecryptAttachment(
   meta: FileAttachmentMeta,
-  opts?: {
-    accountPubkey?: string | null;
-    allowIntegrityMismatch?: boolean;
-    signal?: AbortSignal;
-    nearby?: NearbyAttachmentFetchContext;
-  },
+  opts?: AttachmentFetchOptions,
 ): Promise<string> {
+  const key = attachmentDownloadKey(opts?.accountPubkey ?? null, meta.url);
+  // Integrity overrides cannot share the verified task's decision.
+  const taskKey = attachmentDownloadTaskKey(opts?.accountPubkey ?? null, meta, opts?.allowIntegrityMismatch);
+  return runAttachmentDownload(taskKey, opts?.signal, async (signal) => {
+    const attempt = Symbol();
+    activeDownloadAttempts.set(key, attempt);
+    const paused = () => {
+      if (activeDownloadAttempts.get(key) === attempt) attachmentTransferStore.getState().pause(key);
+    };
+    signal.addEventListener('abort', paused, { once: true });
+    try {
+      return await fetchAndDecryptAttachmentInternal(meta, { ...opts, signal }, key);
+    } finally {
+      signal.removeEventListener('abort', paused);
+      if (activeDownloadAttempts.get(key) === attempt) {
+        activeDownloadAttempts.delete(key);
+        if (signal.aborted) attachmentTransferStore.getState().pause(key);
+        else attachmentTransferStore.getState().clear(key);
+      }
+    }
+  }, key);
+}
+
+async function fetchAndDecryptAttachmentInternal(
+  meta: FileAttachmentMeta,
+  opts: AttachmentFetchOptions | undefined,
+  progressKey: string | null,
+): Promise<string> {
+  throwIfAborted(opts?.signal);
   await ensureAttachmentDir();
 
   // Fast path: already downloaded + on disk (resolved by ox, or by url).
   const cached = await resolvePath(meta);
+  throwIfAborted(opts?.signal);
   if (cached) {
     sessionCache.set(meta.url, cached);
     return cached;
@@ -458,98 +494,117 @@ export async function fetchAndDecryptAttachment(
   if (nearbyOffer && opts?.accountPubkey && opts.nearby) {
     const accountPubkey = opts.accountPubkey;
     const nearby = opts.nearby;
-    const progressKey = attachmentTransferKey(accountPubkey, nearby.rumorId);
-    try {
-      throwIfAborted(opts.signal);
-      const result = await fetchNearbyNetworkFirst({
-        signal: opts.signal,
-        network: async () => {
-          attachmentTransferStore.getState().update(progressKey, 'network', 0, nearbyOffer.size);
-          return fetchNearbyAttachmentFromBlossom({
-            accountPubkey,
-            peerPubkey: nearby.peerPubkey,
-            rumorId: nearby.rumorId,
-            offer: nearbyOffer,
-            signal: opts.signal,
-            onProgress: (receivedBytes, totalBytes) =>
-              attachmentTransferStore
-                .getState()
-                .update(progressKey, 'network', receivedBytes, totalBytes),
-          });
-        },
-        bluetooth: async () => {
-          attachmentTransferStore
-            .getState()
-            .update(progressKey, 'bluetooth', 0, nearbyOffer.plainSize);
-          return proximityService.fetchAttachmentDirect({
-            accountPubkey,
-            peerPubkey: nearby.peerPubkey,
-            rumorId: nearby.rumorId,
-            signal: opts.signal,
-            onProgress: (receivedBytes, totalBytes) =>
-              attachmentTransferStore
-                .getState()
-                .update(progressKey, 'bluetooth', receivedBytes, totalBytes),
-          });
-        },
-      });
-      if (result.ok) {
-        sessionCache.set(meta.url, result.value);
-        return result.value;
-      }
-      if (
-        result.bluetoothError instanceof ProximityFileTransferError &&
-        !result.bluetoothError.retryable &&
-        result.bluetoothError.reason === ProximityFileCancelReason.IntegrityFailure
-      ) {
-        throw new AttachmentError('integrity', result.bluetoothError.message);
-      }
-      if (result.networkError instanceof NearbyRemoteIntegrityError) {
-        throw new AttachmentError('integrity', result.networkError.message);
-      }
-      if (
-        result.bluetoothError instanceof ProximityFileTransferError &&
-        !result.bluetoothError.retryable
-      ) {
-        throw new AttachmentError('download', result.bluetoothError.message);
-      }
-      const errors = [result.networkError, result.bluetoothError]
-        .map((error) => (error instanceof Error ? error.message : String(error)))
-        .filter(Boolean);
-      throw new AttachmentError('download', errors.join('\n') || 'Attachment is unavailable');
-    } finally {
-      attachmentTransferStore.getState().clear(progressKey);
+    const progressKey = attachmentDownloadKey(accountPubkey, meta.url);
+    throwIfAborted(opts.signal);
+    const result = await fetchNearbyNetworkFirst({
+      signal: opts.signal,
+      network: async () => {
+        attachmentTransferStore.getState().update(progressKey, 'network', 0, nearbyOffer.size);
+        return fetchNearbyAttachmentFromBlossom({
+          accountPubkey,
+          peerPubkey: nearby.peerPubkey,
+          rumorId: nearby.rumorId,
+          offer: nearbyOffer,
+          signal: opts.signal,
+          onProgress: (receivedBytes, totalBytes) =>
+            attachmentTransferStore
+              .getState()
+              .update(progressKey, 'network', receivedBytes, totalBytes),
+        });
+      },
+      bluetooth: async () => {
+        attachmentTransferStore
+          .getState()
+          .update(progressKey, 'bluetooth', 0, nearbyOffer.plainSize);
+        return proximityService.fetchAttachmentDirect({
+          accountPubkey,
+          peerPubkey: nearby.peerPubkey,
+          rumorId: nearby.rumorId,
+          signal: opts.signal,
+          onProgress: (receivedBytes, totalBytes) =>
+            attachmentTransferStore
+              .getState()
+              .update(progressKey, 'bluetooth', receivedBytes, totalBytes),
+        });
+      },
+    });
+    if (result.ok) {
+      sessionCache.set(meta.url, result.value);
+      return result.value;
     }
+    if (
+      result.bluetoothError instanceof ProximityFileTransferError &&
+      !result.bluetoothError.retryable &&
+      result.bluetoothError.reason === ProximityFileCancelReason.IntegrityFailure
+    ) {
+      throw new AttachmentError('integrity', result.bluetoothError.message);
+    }
+    if (result.networkError instanceof NearbyRemoteIntegrityError) {
+      throw new AttachmentError('integrity', result.networkError.message);
+    }
+    if (
+      result.bluetoothError instanceof ProximityFileTransferError &&
+      !result.bluetoothError.retryable
+    ) {
+      throw new AttachmentError('download', result.bluetoothError.message);
+    }
+    const errors = [result.networkError, result.bluetoothError]
+      .map((error) => (error instanceof Error ? error.message : String(error)))
+      .filter(Boolean);
+    throw new AttachmentError('download', errors.join('\n') || 'Attachment is unavailable');
   }
 
   // With an account, fall back across its configured media servers (kind 10063)
   // if the embedded URL is dead/rotated — the blob is mirrored there (BUD-04).
   // A fetch failure is operational (network/dead server) → `download` kind.
   let cipher: Uint8Array;
+  let downloadedCipher!: DownloadedAttachment;
   try {
-    const blossom = parseBlossomUri(meta.url);
-    if (blossom) {
-      const errors: string[] = [];
-      let downloaded: Uint8Array | null = null;
-      for (const url of blossomDownloadUrls(blossom)) {
-        try {
-          downloaded = await downloadBlob(url);
-          break;
-        } catch (error) {
-          errors.push(error instanceof Error ? error.message : String(error));
-        }
-      }
-      if (!downloaded) throw new Error(errors.join('\n') || 'No media server is available');
-      cipher = downloaded;
-    } else {
-      cipher = opts?.accountPubkey
-        ? await downloadBlobWithFallback({
-            url: meta.url,
-            servers: await loadAccountMediaServers(opts.accountPubkey),
-          })
-        : await downloadBlob(meta.url);
+    if (progressKey) {
+      attachmentTransferStore.getState().update(progressKey, 'network', 0, meta.size ?? 0);
     }
+    const blossom = parseBlossomUri(meta.url);
+    const candidates = blossom ? blossomDownloadUrls(blossom) : [meta.url];
+    const hash = getHashFromURL(meta.url);
+    if (!blossom && hash && opts?.accountPubkey) {
+      const extension = new URL(meta.url).pathname.match(/\.\w+$/)?.[0] ?? '';
+      for (const server of await loadAccountMediaServers(opts.accountPubkey)) {
+        candidates.push(`${server.replace(/\/+$/, '')}/${hash}${extension}`);
+      }
+    }
+    const errors: string[] = [];
+    let downloaded: DownloadedAttachment | null = null;
+    for (const url of new Set(candidates)) {
+      throwIfAborted(opts?.signal);
+      try {
+        downloaded = await downloadAttachmentBytes({
+          url,
+          identity: `${meta.cipherSha256Hex}:${meta.decryptionKeyHex}:${meta.decryptionNonceHex}`,
+          expectedSize: meta.size,
+          immutable: /^[0-9a-f]{64}$/i.test(meta.cipherSha256Hex),
+          signal: opts?.signal,
+          onProgress: progressKey
+            ? (received, total) => {
+                if (!opts?.signal?.aborted) {
+                  attachmentTransferStore.getState().update(progressKey, 'network', received, total);
+                }
+              }
+            : undefined,
+        });
+        break;
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        throwIfAborted(opts?.signal);
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    if (!downloaded) throw new Error(errors.join('\n') || 'No media server is available');
+    downloadedCipher = downloaded;
+    cipher = downloaded.bytes;
+    throwIfAborted(opts?.signal);
   } catch (err) {
+    if (isAbortError(err)) throw err;
+    throwIfAborted(opts?.signal);
     throw new AttachmentError('download', (err as Error).message);
   }
 
@@ -563,8 +618,10 @@ export async function fetchAndDecryptAttachment(
   // non-hex value (a plain URL slug) carries no hash to check against.
   if (/^[0-9a-f]{64}$/i.test(meta.cipherSha256Hex)) {
     const cipherHash = await sha256Hex(cipher);
+    throwIfAborted(opts?.signal);
     if (cipherHash !== meta.cipherSha256Hex.toLowerCase()) {
       if (!opts?.allowIntegrityMismatch) {
+        await downloadedCipher.discard();
         throw new AttachmentError('integrity', 'ciphertext hash mismatch');
       }
       mismatched = true;
@@ -582,14 +639,20 @@ export async function fetchAndDecryptAttachment(
       nonceHex: meta.decryptionNonceHex,
     });
   } catch (err) {
+    throwIfAborted(opts?.signal);
+    await downloadedCipher.discard();
     throw new AttachmentError('download', (err as Error).message);
   }
+
+  throwIfAborted(opts?.signal);
 
   // Plaintext hash names the file (content address → dedup) and, when the sender
   // gave an `ox`, verifies it (guards corruption + a spoofed `ox`).
   const plainHash = await sha256Hex(plain);
+  throwIfAborted(opts?.signal);
   if (meta.plainSha256Hex && meta.plainSha256Hex.toLowerCase() !== plainHash) {
     if (!opts?.allowIntegrityMismatch) {
+      await downloadedCipher.discard();
       throw new AttachmentError('integrity', 'plaintext hash mismatch');
     }
     mismatched = true;
@@ -607,13 +670,16 @@ export async function fetchAndDecryptAttachment(
   // container sniff; legacy `video/*` declarations remain video.
   const mime = isDeclaredVoice ? resolveVoiceMime(meta.mime, undefined) : detectedMime;
   const target = await attachmentPath(attachmentName(plainHash, mime));
+  throwIfAborted(opts?.signal);
   await writeDedup(target, plain);
-  sessionCache.set(meta.url, target);
+  throwIfAborted(opts?.signal);
   // Mark this content downloaded for every message that references it (so a
   // sibling message resolves it without re-downloading) — but NOT when the user
   // bypassed a hash mismatch: a tampered/corrupt blob must never be recorded as
   // the canonical attachment, so it re-checks (and re-warns) on the next view.
   if (!mismatched) await markDownloaded(meta.url, plainHash, mime, plain.byteLength);
+  sessionCache.set(meta.url, target);
+  await downloadedCipher.discard().catch(() => {});
   return target;
 }
 

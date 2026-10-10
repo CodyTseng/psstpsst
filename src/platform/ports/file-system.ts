@@ -155,6 +155,8 @@ export interface FileSystemPort {
       headers?: Record<string, string>;
       readBody?: boolean;
       signal?: AbortSignal;
+      /** Byte positions in the complete representation, including any Range offset. */
+      onProgress?: (receivedBytes: number, totalBytes: number) => void;
     },
   ): Promise<RemoteFileResponse>;
   /**

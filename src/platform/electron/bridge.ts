@@ -97,6 +97,9 @@ export type ElectronBridge = {
       },
       operationId: string,
     ): Promise<{ status: number; headers: Record<string, string>; body: Uint8Array }>;
+    addRemoteProgressListener?(
+      listener: (value: { operationId: string; receivedBytes: number; totalBytes: number }) => void,
+    ): () => void;
     cancelRemoteFileRequest(operationId: string): Promise<void>;
     uploadFile(
       url: string,

@@ -7,6 +7,7 @@ export type AttachmentTransferProgress = {
   receivedBytes: number;
   totalBytes: number;
   percent: number;
+  paused?: boolean;
 };
 
 type AttachmentTransferState = {
@@ -18,10 +19,16 @@ type AttachmentTransferState = {
     totalBytes: number,
   ): void;
   clear(key: string): void;
+  pause(key: string): void;
 };
 
 export function attachmentTransferKey(accountPubkey: string, rumorId: string): string {
   return `${accountPubkey}:${rumorId}`;
+}
+
+/** Downloads share progress by the attachment URL within the active account. */
+export function attachmentDownloadKey(accountPubkey: string | null, url: string): string {
+  return JSON.stringify([accountPubkey, 'download', url]);
 }
 
 export const attachmentTransferStore = createStore<AttachmentTransferState>()((set) => ({
@@ -37,7 +44,7 @@ export const attachmentTransferStore = createStore<AttachmentTransferState>()((s
       if (source === 'upload' && current?.source === 'upload' && percent < current.percent) {
         return state;
       }
-      if (current?.source === source && current.percent === percent) return state;
+      if (current?.source === source && current.percent === percent && !current.paused) return state;
       return {
         byKey: {
           ...state.byKey,
@@ -50,6 +57,14 @@ export const attachmentTransferStore = createStore<AttachmentTransferState>()((s
         },
       };
     }),
+  pause: (key) => set((state) => {
+    const current = state.byKey[key];
+    if (current?.paused) return state;
+    return { byKey: { ...state.byKey, [key]: {
+      ...(current ?? { source: 'network' as const, receivedBytes: 0, totalBytes: 0, percent: 0 }),
+      paused: true,
+    } } };
+  }),
   clear: (key) =>
     set((state) => {
       if (!state.byKey[key]) return state;

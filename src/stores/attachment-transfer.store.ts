@@ -2,15 +2,19 @@ import { useStore } from 'zustand';
 
 import {
   attachmentTransferKey,
+  attachmentDownloadKey,
   attachmentTransferStore,
   type AttachmentTransferProgress,
 } from '@/services/files/attachment-transfer-state';
 
-/** Subscribe one attachment bubble to only its own active transfer. */
+/** Download bubbles share a URL subscription; pending uploads use their message key. */
 export function useAttachmentTransfer(
   accountPubkey: string | null,
   rumorId?: string,
+  url?: string,
 ): AttachmentTransferProgress | null {
-  const key = accountPubkey && rumorId ? attachmentTransferKey(accountPubkey, rumorId) : '';
+  const key = url
+    ? attachmentDownloadKey(accountPubkey, url)
+    : accountPubkey && rumorId ? attachmentTransferKey(accountPubkey, rumorId) : '';
   return useStore(attachmentTransferStore, (state) => state.byKey[key] ?? null);
 }

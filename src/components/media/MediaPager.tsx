@@ -16,6 +16,8 @@ import {
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import Animated, { useSharedValue } from 'react-native-reanimated';
 
+import { IconButton } from '@/components/common/IconButton';
+import { AttachmentTransferProgress } from '@/components/chat/AttachmentTransferProgress';
 import { ZoomableImage, type ZoomableImageHandle } from '@/components/common/ZoomableImage';
 import { MediaViewerContextMenu } from './MediaViewerContextMenu';
 import { copyAttachment, copyImageUri } from '@/services/files/attachment-copy.service';
@@ -403,7 +405,7 @@ function AttachmentMediaImagePage({ meta, imageRef, ...imageProps }: ImagePagePr
 }) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const { state, resume, retry, reveal } = useAttachment(meta);
+  const { state, pause, resume, retry, reveal } = useAttachment(meta);
 
   if (state.status === 'ready') {
     return (
@@ -450,7 +452,14 @@ function AttachmentMediaImagePage({ meta, imageRef, ...imageProps }: ImagePagePr
           contentFit="contain"
         />
       ) : null}
-      <ActivityIndicator color={c.onOverlay} />
+      {state.status === 'loading' ? (
+        <IconButton
+          onPress={pause}
+          accessibilityLabel={t('common.pause')}
+          size={56}
+          icon={<AttachmentTransferProgress url={meta.url} size="media" tone="media" fallbackPercent={0} />}
+        />
+      ) : <ActivityIndicator color={c.onOverlay} />}
     </View>
   );
 }

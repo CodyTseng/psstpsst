@@ -8,6 +8,9 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
+import Download from 'lucide-react-native/icons/download';
+import { AttachmentTransferProgress } from '@/components/chat/AttachmentTransferProgress';
+import { iconStrokeWidth } from '@/theme/icons';
 import { AttachmentFailure } from '@/components/chat/AttachmentFailure';
 import { AppText } from '@/components/common/AppText';
 import { AppButton } from '@/components/common/AppButton';
@@ -58,7 +61,8 @@ function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
   const onPlaybackError = useCallback(() => setPlaybackFailed(true), []);
 
   function onTap() {
-    if (state.status === 'loading' || state.status === 'checking') return;
+    if (state.status === 'loading') { attachment.pause(); return; }
+    if (state.status === 'checking') return;
     if (state.status === 'paused') attachment.resume();
     else void revealOrRetry(state.status === 'error' ? state.kind : null, t, 'play', (allow) => {
       if (allow) attachment.reveal();
@@ -75,13 +79,18 @@ function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
   return (
     <Pressable
       onPress={onTap}
+      accessibilityLabel={state.status === 'loading' ? t('common.pause') : state.status === 'paused' ? t('common.resume') : undefined}
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
     >
       {meta.thumbhash ? (
         <Image placeholder={{ thumbhash: meta.thumbhash }} placeholderContentFit="contain" style={StyleSheet.absoluteFill} />
       ) : null}
-      {state.status === 'loading' || state.status === 'checking' ? (
+      {state.status === 'loading' ? (
+        <AttachmentTransferProgress url={meta.url} size="media" tone="media" fallbackPercent={0} />
+      ) : state.status === 'checking' ? (
         <ActivityIndicator color={c.onOverlay} />
+      ) : state.status === 'paused' ? (
+        <Download strokeWidth={iconStrokeWidth.default} size={28} color={c.onOverlay} />
       ) : state.status === 'error' ? (
         <AttachmentFailure kind={state.kind} action="play" iconSize={28} />
       ) : (

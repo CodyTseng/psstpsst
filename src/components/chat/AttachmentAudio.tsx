@@ -1,3 +1,4 @@
+import { useAttachmentDownloadUri } from '@/hooks/use-attachment-download-uri';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Pause } from '@solar-icons/react-native/category/video/Linear/Pause';
 import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
@@ -19,8 +20,9 @@ import {
   getCachedAttachmentUri,
   getSessionCachedUri,
 } from '@/services/files/file-attachment.service';
-import { useActiveAccount } from '@/stores/active-account.store';
+import { pauseAttachmentDownload } from '@/services/files/attachment-download-task';
 import { useAttachmentTransfer } from '@/stores/attachment-transfer.store';
+import { useActiveAccount } from '@/stores/active-account.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { radius, spacing, useThemeColors } from '@/theme';
 
@@ -74,14 +76,19 @@ export function AttachmentAudio({
   const { t } = useTranslation();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
-  const activeTransfer = useAttachmentTransfer(accountPubkey, messageId);
-  const [uri, setUri] = useState<string | null>(() => getSessionCachedUri(meta));
+  const [ownUri, setUri] = useState<string | null>(() => getSessionCachedUri(meta));
+  const sharedUri = useAttachmentDownloadUri(meta);
+  const uri = ownUri ?? sharedUri;
   const [loading, setLoading] = useState(false);
   const [cacheChecked, setCacheChecked] = useState(() => !!getSessionCachedUri(meta));
   const [paused, setPaused] = useState(false);
   const [failKind, setFailKind] = useState<AttachmentErrorKind | null>(null);
   const downloadController = useRef<AbortController | null>(null);
   const pausedAllowIntegrityMismatch = useRef(false);
+  const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
+  const sharedActive = !!transfer && !transfer.paused && !uri;
+  const isDownloading = !uri && !transfer?.paused && (loading || sharedActive);
+  const isPaused = !isDownloading && (paused || !!transfer?.paused) && !uri;
   // Set when the user taps play before the blob is ready; an effect starts
   // playback once the freshly-fetched source has loaded.
   const [wantPlay, setWantPlay] = useState(false);
@@ -124,7 +131,7 @@ export function AttachmentAudio({
   }, [wantPlay, uri, status.isLoaded, player]);
 
   async function ensureLoaded(allowIntegrityMismatch = false) {
-    if (uri || loading) return;
+    if (uri || (loading && !transfer?.paused)) return;
     pausedAllowIntegrityMismatch.current = allowIntegrityMismatch;
     const controller = new AbortController();
     downloadController.current = controller;
@@ -154,7 +161,9 @@ export function AttachmentAudio({
   }
 
   function pauseDownload() {
+    if (sharedActive) pauseAttachmentDownload(accountPubkey, meta.url);
     downloadController.current?.abort();
+    downloadController.current = null;
     setWantPlay(false);
     setPaused(true);
     setLoading(false);
@@ -186,11 +195,10 @@ export function AttachmentAudio({
   }, [meta.cipherSha256Hex, autoDownload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onToggle() {
-    if (loading && activeTransfer) {
+    if (isDownloading) {
       pauseDownload();
       return;
     }
-    if (loading) return;
     // A failed clip: retry a download, or confirm before fetching past an
     // integrity mismatch — then (either way) play once loaded.
     if (failKind) {
@@ -200,7 +208,7 @@ export function AttachmentAudio({
       });
       return;
     }
-    if (paused) {
+    if (isPaused) {
       setWantPlay(true);
       void ensureLoaded(pausedAllowIntegrityMismatch.current);
       return;
@@ -257,9 +265,9 @@ export function AttachmentAudio({
         <Pressable
           onPress={() => void onToggle()}
           accessibilityLabel={
-            loading && activeTransfer
+            isDownloading
               ? t('common.pause')
-              : paused
+              : isPaused
                 ? t('common.resume')
                 : waitingForExplicitLoad
                   ? t('attach.tap_to_load')
@@ -278,13 +286,14 @@ export function AttachmentAudio({
             justifyContent: 'center',
           }}
         >
-          {loading ? (
+          {isDownloading ? (
             <AttachmentTransferProgress
-              messageId={messageId}
+              url={meta.url}
+              fallbackPercent={0}
               tone={isSelf ? 'onAccent' : 'neutral'}
               fallback={<ActivityIndicator color={palette.icon} />}
             />
-          ) : paused || waitingForExplicitLoad ? (
+          ) : isPaused || waitingForExplicitLoad ? (
             <Download strokeWidth={iconStrokeWidth.default} size={ATTACHMENT_VOICE_ICON_SIZE} color={palette.icon} />
           ) : playing ? (
             <Pause size={ATTACHMENT_VOICE_ICON_SIZE} color={palette.icon} fill={palette.icon} />

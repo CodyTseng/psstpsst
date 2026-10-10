@@ -214,3 +214,5 @@ it('keeps the selected video and rotation policy through viewport changes withou
   renderer = undefined;
   expect(platform.screenOrientation.setVideoActive).toHaveBeenLastCalledWith(false);
 });
+
+jest.mock('@/components/chat/AttachmentTransferProgress', () => ({ AttachmentTransferProgress: () => null }));

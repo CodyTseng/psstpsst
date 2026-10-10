@@ -119,12 +119,17 @@ export const electronFileSystemAdapter: FileSystemPort = {
     }
     remoteRequestSequence += 1;
     const operationId = `renderer-remote-${Date.now()}-${remoteRequestSequence}`;
+    const removeProgress = getElectronBridge().fileSystem.addRemoteProgressListener?.((progress) => {
+      if (progress.operationId === operationId) {
+        options.onProgress?.(progress.receivedBytes, progress.totalBytes);
+      }
+    });
     const cancel = () => {
       void getElectronBridge().fileSystem.cancelRemoteFileRequest(operationId);
     };
     options.signal?.addEventListener('abort', cancel, { once: true });
     try {
-      return await getElectronBridge().fileSystem.requestRemoteFile(
+      const result = await getElectronBridge().fileSystem.requestRemoteFile(
         url,
         {
           method: options.method,
@@ -133,6 +138,8 @@ export const electronFileSystemAdapter: FileSystemPort = {
         },
         operationId,
       );
+      if (options.signal?.aborted) throw createAbortError('Download cancelled');
+      return result;
     } catch (error) {
       if (options.signal?.aborted) {
         const cancelled = new Error('Download cancelled');
@@ -142,6 +149,7 @@ export const electronFileSystemAdapter: FileSystemPort = {
       throw error;
     } finally {
       options.signal?.removeEventListener('abort', cancel);
+      removeProgress?.();
     }
   },
   async uploadFile(url, fileUri, options) {

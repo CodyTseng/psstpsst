@@ -591,6 +591,11 @@ function registerIpcHandlers(): void {
         readBody: options.readBody,
       },
       validateString(operationId, 'remote file operation ID', 100),
+      (receivedBytes, totalBytes) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(IPC.fsRemoteProgress, { operationId, receivedBytes, totalBytes });
+        }
+      },
     );
   });
   handle(IPC.fsCancelRemoteRequest, (event, operationId) => {

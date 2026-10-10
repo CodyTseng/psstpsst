@@ -1,3 +1,4 @@
+import { useAttachmentDownloadUri } from '@/hooks/use-attachment-download-uri';
 import { useEvent } from 'expo';
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
@@ -28,8 +29,9 @@ import {
   getCachedAttachmentUri,
   getSessionCachedUri,
 } from '@/services/files/file-attachment.service';
-import { useActiveAccount } from '@/stores/active-account.store';
+import { pauseAttachmentDownload } from '@/services/files/attachment-download-task';
 import { useAttachmentTransfer } from '@/stores/attachment-transfer.store';
+import { useActiveAccount } from '@/stores/active-account.store';
 import { mediaViewer } from '@/stores/media-viewer.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { radius, spacing, useThemeColors } from '@/theme';
@@ -107,10 +109,11 @@ export function AttachmentVideo({
   const { t } = useTranslation();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
-  const activeTransfer = useAttachmentTransfer(accountPubkey, messageId);
   // The on-disk path once available (session cache or resolved on mount). Knowing
   // it lets a tap skip the download — but it is NOT the player's source.
-  const [localUri, setLocalUri] = useState<string | null>(() => getSessionCachedUri(meta));
+  const [ownLocalUri, setLocalUri] = useState<string | null>(() => getSessionCachedUri(meta));
+  const sharedUri = useAttachmentDownloadUri(meta);
+  const localUri = ownLocalUri ?? sharedUri;
   // Inline playback starts only after a tap; list previews use cached images.
   const [started, setStarted] = useState(false);
   const posterUri = useVideoPoster(started ? null : localUri);
@@ -121,6 +124,10 @@ export function AttachmentVideo({
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const downloadController = useRef<AbortController | null>(null);
   const pausedAllowIntegrityMismatch = useRef(false);
+  const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
+  const sharedActive = !!transfer && !transfer.paused && !localUri;
+  const isDownloading = !localUri && !transfer?.paused && (loading || sharedActive);
+  const isPaused = !isDownloading && (paused || !!transfer?.paused) && !localUri;
 
   useEffect(() => () => {
     downloadController.current?.abort();
@@ -154,7 +161,7 @@ export function AttachmentVideo({
   }, [meta.cipherSha256Hex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load(allowIntegrityMismatch = false) {
-    if (loading || started) return;
+    if ((loading && !transfer?.paused) || started) return;
     pausedAllowIntegrityMismatch.current = allowIntegrityMismatch;
     // Already on disk → just attach it to the player.
     if (localUri) {
@@ -190,7 +197,9 @@ export function AttachmentVideo({
   }
 
   function pauseDownload() {
+    if (sharedActive) pauseAttachmentDownload(accountPubkey, meta.url);
     downloadController.current?.abort();
+    downloadController.current = null;
     setPaused(true);
     setLoading(false);
   }
@@ -198,12 +207,11 @@ export function AttachmentVideo({
   // Tap the poster: first play / retry a download / confirm-then-play past an
   // integrity failure.
   function onTap() {
-    if (loading && activeTransfer) {
+    if (isDownloading) {
       pauseDownload();
       return;
     }
-    if (loading) return;
-    if (paused) {
+    if (isPaused) {
       void load(pausedAllowIntegrityMismatch.current);
       return;
     }
@@ -308,9 +316,9 @@ export function AttachmentVideo({
             hoverFeedback={false}
             onPress={onTap}
             accessibilityLabel={
-              loading && activeTransfer
+              isDownloading
                 ? t('common.pause')
-                : paused
+                : isPaused
                   ? t('common.resume')
                   : t('voice.play')
             }
@@ -327,9 +335,10 @@ export function AttachmentVideo({
                 style={{ position: 'absolute', inset: 0 }}
               />
             ) : null}
-            {loading ? (
+            {isDownloading ? (
               <AttachmentTransferProgress
-                messageId={messageId}
+                url={meta.url}
+                fallbackPercent={0}
                 size="media"
                 tone="media"
                 fallback={<ActivityIndicator color={c.textMuted} />}
@@ -344,7 +353,7 @@ export function AttachmentVideo({
                   backgroundColor: posterUri || meta.thumbhash ? c.overlay : undefined,
                 }}
               />
-            ) : paused ? (
+            ) : isPaused ? (
               <View
                 style={{
                   width: ATTACHMENT_VIDEO_ACTION_SIZE,

@@ -16,6 +16,11 @@ import { useVideoPoster } from '@/hooks/use-video-poster';
 import { Image } from 'expo-image';
 
 import { AudioClock } from '../audio-clock';
+import { attachmentDownloadTaskKey, runAttachmentDownload } from '@/services/files/attachment-download-task';
+import { attachmentDownloadKey, attachmentTransferStore } from '@/services/files/attachment-transfer-state';
+import { createAbortError } from '@/lib/async/abort';
+import { AttachmentTransferProgress } from '../AttachmentTransferProgress';
+
 import { VoiceWaveform } from '../VoiceWaveform';
 
 jest.mock('@/hooks/use-video-poster', () => ({ useVideoPoster: jest.fn() }));
@@ -34,7 +39,6 @@ jest.mock('@/stores/active-account.store', () => ({
   useActiveAccount: (selector: (state: { activePubkey: string }) => unknown) =>
     selector({ activePubkey: 'account' }),
 }));
-jest.mock('@/stores/attachment-transfer.store', () => ({ useAttachmentTransfer: () => null }));
 
 let mockThemePreference: 'light' | 'dark' = 'light';
 jest.mock('@/stores/theme.store', () => ({
@@ -83,6 +87,7 @@ let renderer: ReactTestRenderer;
 afterEach(() => {
   act(() => renderer?.unmount());
   mockThemePreference = 'light';
+  attachmentTransferStore.setState({ byKey: {} });
   jest.clearAllMocks();
 });
 
@@ -173,6 +178,77 @@ describe.each(['audio', 'file', 'video'] as const)('%s download failure', (mediu
       renderer.root.findByType(InteractivePressable).props.onPress();
     });
   }
+
+  it('pauses before byte progress arrives and ignores late completion after continuing', async () => {
+    let finishOld!: (uri: string) => void;
+    let finishNew!: (uri: string) => void;
+    jest.mocked(fetchAndDecryptAttachment)
+      .mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishNew = resolve; }));
+    await act(async () => {
+      renderer = create(medium === 'audio'
+        ? <AttachmentAudio meta={META} isSelf={false} messageId="message" autoDownload={false} />
+        : medium === 'file'
+          ? <AttachmentFile meta={META} messageId="message" />
+          : <AttachmentVideo meta={META} messageId="message" />);
+    });
+    const press = () => renderer.root.findByType(InteractivePressable).props.onPress();
+    await act(async () => { press(); });
+    expect(renderer.root.findByType(InteractivePressable).props.accessibilityLabel).toBe('common.pause');
+    const oldSignal = jest.mocked(fetchAndDecryptAttachment).mock.calls[0][1]!.signal!;
+    await act(async () => { press(); });
+    expect(oldSignal.aborted).toBe(true);
+    expect(renderer.root.findByType(InteractivePressable).props.accessibilityLabel).toBe('common.resume');
+    await act(async () => { press(); });
+    await act(async () => { finishOld('file:///old'); });
+    expect(renderer.root.findByType(InteractivePressable).props.accessibilityLabel).toBe('common.pause');
+    expect(fetchAndDecryptAttachment).toHaveBeenLastCalledWith(META, expect.objectContaining({ accountPubkey: 'account' }));
+    await act(async () => { finishNew('file:///new'); });
+    expect(renderer.root.findAllByType(InteractivePressable).some((node) => node.props.accessibilityLabel === 'common.pause')).toBe(false);
+  });
+
+  it.each(['light', 'dark'] as const)('lets an idle sibling show progress, pause and continue in %s mode', async (scheme) => {
+    mockThemePreference = scheme;
+    const key = attachmentDownloadKey('account', META.url);
+    let finish!: (uri: string) => void;
+    jest.mocked(fetchAndDecryptAttachment).mockImplementation((_meta, opts) =>
+      runAttachmentDownload(attachmentDownloadTaskKey('account', META), opts?.signal, (signal) => {
+        attachmentTransferStore.getState().update(key, 'network', 25, 100);
+        return new Promise<string>((resolve, reject) => {
+          finish = resolve;
+          signal.addEventListener('abort', () => {
+            attachmentTransferStore.getState().pause(key);
+            reject(createAbortError());
+          }, { once: true });
+        }).finally(() => {
+          if (!signal.aborted) attachmentTransferStore.getState().clear(key);
+        });
+      }, key),
+    );
+    const bubble = () => medium === 'audio'
+      ? <AttachmentAudio meta={META} isSelf={false} autoDownload={false} />
+      : medium === 'file' ? <AttachmentFile meta={META} /> : <AttachmentVideo meta={META} />;
+    await act(async () => {
+      renderer = create(<><View testID="first">{bubble()}</View><View testID="second">{bubble()}</View></>);
+    });
+    const control = (id: string) => renderer.root.findByProps({ testID: id }).findByType(InteractivePressable);
+    await act(async () => { control('first').props.onPress(); });
+    expect(fetchAndDecryptAttachment).toHaveBeenCalledTimes(1);
+    for (const id of ['first', 'second']) {
+      expect(control(id).props.accessibilityLabel).toBe('common.pause');
+      expect(renderer.root.findByProps({ testID: id }).findByType(AttachmentTransferProgress).props.url).toBe(META.url);
+    }
+    await act(async () => { control('second').props.onPress(); });
+    for (const id of ['first', 'second']) expect(control(id).props.accessibilityLabel).toBe('common.resume');
+    expect(fetchAndDecryptAttachment).toHaveBeenCalledTimes(1);
+    await act(async () => { control('second').props.onPress(); });
+    expect(fetchAndDecryptAttachment).toHaveBeenCalledTimes(2);
+    for (const id of ['first', 'second']) expect(control(id).props.accessibilityLabel).toBe('common.pause');
+    await act(async () => { finish('file:///shared'); });
+    expect(control('first').props.accessibilityLabel).not.toBe('common.resume');
+    expect(control('first').props.accessibilityLabel).not.toBe('common.pause');
+    expect(renderer.root.findByProps({ testID: 'first' }).findAllByType(AttachmentTransferProgress)).toHaveLength(0);
+  });
 
   it('keeps content visible and retries from the side action', async () => {
     await renderFailure('download');

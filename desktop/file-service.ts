@@ -17,6 +17,8 @@ import {
 import sharp from 'sharp';
 import yauzl from 'yauzl';
 
+import { readRemoteBody } from '../src/platform/shared/read-remote-body';
+
 import { createUploadProgressTransform } from './upload-progress';
 
 type OwnedReadHandle = { ownerId: number; handle: FileHandle; offset: number; size: number };
@@ -347,6 +349,7 @@ export class FileService {
       readBody?: boolean;
     },
     operationId: string,
+    onProgress?: (receivedBytes: number, totalBytes: number) => void,
   ): Promise<{ status: number; headers: Record<string, string>; body: Uint8Array }> {
     const controller = new AbortController();
     this.remoteRequests.set(operationId, { ownerId, controller });
@@ -364,7 +367,7 @@ export class FileService {
       return {
         status: response.status,
         headers,
-        body: new Uint8Array(await response.arrayBuffer()),
+        body: await readRemoteBody(response, onProgress),
       };
     } finally {
       this.remoteRequests.delete(operationId);

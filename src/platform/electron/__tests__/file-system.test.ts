@@ -139,3 +139,23 @@ describe('Electron file-system adapter', () => {
     );
   });
 });
+
+it('forwards matching remote-download progress and removes the listener', async () => {
+  let listener: ((value: { operationId: string; receivedBytes: number; totalBytes: number }) => void) | undefined;
+  const remove = jest.fn();
+  const onProgress = jest.fn();
+  installBridge({
+    addRemoteProgressListener: (next) => { listener = next; return remove; },
+    requestRemoteFile: async (_url, _opts, operationId) => {
+      listener?.({ operationId: 'other', receivedBytes: 1, totalBytes: 10 });
+      listener?.({ operationId, receivedBytes: 5, totalBytes: 10 });
+      return { status: 200, headers: {}, body: new Uint8Array() };
+    },
+  });
+  try {
+    await electronFileSystemAdapter.requestRemoteFile('https://media.example/blob', { method: 'GET', onProgress });
+    expect(onProgress).toHaveBeenCalledTimes(1);
+    expect(onProgress).toHaveBeenCalledWith(5, 10);
+    expect(remove).toHaveBeenCalledTimes(1);
+  } finally { delete window.psstpsstDesktop; }
+});

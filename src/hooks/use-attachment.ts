@@ -10,6 +10,7 @@ import {
   getCachedAttachmentUri,
   getSessionCachedUri,
 } from '@/services/files/file-attachment.service';
+import { attachmentDownloadTaskKey, subscribeAttachmentDownload, type DownloadTask } from '@/services/files/attachment-download-task';
 import { useActiveAccount } from '@/stores/active-account.store';
 
 export type AttachmentState =
@@ -40,24 +41,16 @@ export type UseAttachment = {
  * decrypt. `autoLoad: false` stops after the local check until `load()` is
  * called, which keeps message-request bytes behind explicit user intent.
  *
- * In-flight downloads are deduped per-cipher-hash via a module-level map so
- * scrolling past a bubble and back doesn't redownload. A failure carries its
- * {@link AttachmentErrorKind} so the bubble can offer retry (download) or a
- * confirm-to-reveal (integrity); `reveal()` re-runs the fetch bypassing the
- * hash check.
+ * Shared tasks notify every mounted consumer when an attempt starts or is
+ * replaced, and publish the resulting URI. Integrity overrides remain separate
+ * from verified downloads.
  */
-type InFlightAttachment = {
-  controller: AbortController;
-  promise: Promise<string>;
-};
-
-const inFlight = new Map<string, InFlightAttachment>();
-
 export function useAttachment(
   meta: FileAttachmentMeta | null | undefined,
   options?: { autoLoad?: boolean; nearby?: NearbyAttachmentFetchContext },
 ): UseAttachment {
   const cipherSha = meta?.cipherSha256Hex ?? null;
+  const url = meta?.url ?? null;
   const autoLoad = options?.autoLoad ?? true;
   const nearby = options?.nearby;
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
@@ -82,92 +75,79 @@ export function useAttachment(
       return;
     }
     let cancelled = false;
-    let controllerForAttempt: AbortController | null = null;
+    let observed: DownloadTask | null = null;
+    let detachAbort: (() => void) | undefined;
 
-    if (resolvedUri.current?.cipherSha === cipherSha) return;
     function setReady(localUri: string) {
       resolvedUri.current = { cipherSha, uri: localUri };
       setState({ status: 'ready', localUri });
     }
-
-    // First-frame sync hit: nothing async needed.
+    if (resolvedUri.current?.cipherSha === cipherSha) return;
     const sync = getSessionCachedUri(meta);
     if (sync) {
       setReady(sync);
       return;
     }
-    const deferred = !autoLoad && attempt === 0;
-    setState((current) => current.status === 'ready' ? current : { status: 'checking' });
 
+    function observe(task: DownloadTask) {
+      detachAbort?.();
+      observed = task;
+      activeController.current = task.controller;
+      setState({ status: 'loading' });
+      const paused = () => {
+        if (!cancelled && observed === task) setState({ status: 'paused' });
+      };
+      task.controller.signal.addEventListener('abort', paused, { once: true });
+      detachAbort = () => task.controller.signal.removeEventListener('abort', paused);
+      void task.promise.then(
+        (uri) => {
+          if (cancelled || observed !== task) return;
+          if (task.controller.signal.aborted) paused();
+          else setReady(uri);
+        },
+        (error) => {
+          if (cancelled || observed !== task) return;
+          setState(task.controller.signal.aborted || isAbortError(error)
+            ? { status: 'paused' }
+            : { status: 'error', kind: attachmentErrorKind(error) });
+        },
+      );
+    }
+    // Subscribe by crypto metadata as well as URL: an integrity override must
+    // never reveal unverified bytes to consumers that did not approve it.
+    const unsubscribe = subscribeAttachmentDownload(
+      attachmentDownloadTaskKey(accountPubkey, meta, allowMismatch.current), observe,
+    );
+    const deferred = !autoLoad && attempt === 0;
+    if (!observed) setState({ status: 'checking' });
     void (async () => {
       try {
         const cached = await getCachedAttachmentUri(meta);
-        if (cancelled) return;
+        if (cancelled || observed) return;
         if (cached) {
           setReady(cached);
           return;
         }
-        // Message requests must not fetch remote bytes just because a bubble
-        // mounted. Still resolve the local store above, then wait for an
-        // explicit tap before starting the normal verified download path.
         if (deferred) {
           setState({ status: 'idle' });
           return;
         }
-        setState({ status: 'loading' });
-        // A reveal must bypass the hash check, so it can't share the dedup map
-        // (that promise was a normal, checking fetch). Plain loads still dedup.
-        const bypass = allowMismatch.current;
-        let active = bypass ? undefined : inFlight.get(cipherSha);
-        if (active?.controller.signal.aborted) {
-          inFlight.delete(cipherSha);
-          active = undefined;
-        }
-        if (!active) {
-          const controller = new AbortController();
-          if (bypass) {
-            active = {
-              controller,
-              promise: fetchAndDecryptAttachment(meta, {
-                accountPubkey,
-                allowIntegrityMismatch: true,
-                nearby,
-                signal: controller.signal,
-              }),
-            };
-          } else {
-            const promise = fetchAndDecryptAttachment(meta, {
-              accountPubkey,
-              nearby,
-              signal: controller.signal,
-            }).finally(() => {
-              if (inFlight.get(cipherSha)?.controller === controller) inFlight.delete(cipherSha);
-            });
-            active = { controller, promise };
-            inFlight.set(cipherSha, active);
-          }
-        }
-        controllerForAttempt = active.controller;
-        activeController.current = active.controller;
-        const localUri = await active.promise;
-        if (cancelled) return;
-        setReady(localUri);
-      } catch (err) {
-        if (cancelled) return;
-        setState(
-          isAbortError(err)
-            ? { status: 'paused' }
-            : { status: 'error', kind: attachmentErrorKind(err) },
-        );
-      } finally {
-        if (activeController.current === controllerForAttempt) activeController.current = null;
+        // The service starts and publishes the task synchronously; its observer
+        // owns state transitions, including replacement attempts from siblings.
+        void fetchAndDecryptAttachment(meta, {
+          accountPubkey, nearby, allowIntegrityMismatch: allowMismatch.current,
+        }).catch(() => {});
+      } catch (error) {
+        if (!cancelled && !observed) setState({ status: 'error', kind: attachmentErrorKind(error) });
       }
     })();
-
     return () => {
       cancelled = true;
+      unsubscribe();
+      detachAbort?.();
+      if (activeController.current === observed?.controller) activeController.current = null;
     };
-  }, [cipherSha, accountPubkey, autoLoad, attempt, nearby?.rumorId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cipherSha, url, accountPubkey, autoLoad, attempt, nearby?.rumorId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(() => {
     allowMismatch.current = false;

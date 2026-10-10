@@ -18,6 +18,7 @@ const MEDIA_ICON_SIZE = 22;
 
 export function AttachmentTransferProgress({
   messageId,
+  url,
   size = 'compact',
   tone = 'neutral',
   fallback = null,
@@ -25,7 +26,9 @@ export function AttachmentTransferProgress({
   showPause = true,
   pauseAvailable = showPause,
 }: {
+  /** Pending uploads use their temporary message ID; downloads use the attachment URL. */
   messageId?: string;
+  url?: string;
   size?: 'compact' | 'media';
   tone?: 'neutral' | 'media' | 'onAccent';
   fallback?: ReactNode;
@@ -39,7 +42,7 @@ export function AttachmentTransferProgress({
   const { t } = useTranslation();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((state) => state.activePubkey);
-  const transfer = useAttachmentTransfer(accountPubkey, messageId);
+  const transfer = useAttachmentTransfer(accountPubkey, messageId, url);
   const rawPercent = transfer?.percent ?? fallbackPercent;
   if (rawPercent == null) return fallback;
   const percent = Math.max(0, Math.min(100, rawPercent));

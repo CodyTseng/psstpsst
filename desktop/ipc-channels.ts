@@ -44,6 +44,7 @@ export const IPC = {
   fsMove: 'psstpsst:fs:move',
   fsDelete: 'psstpsst:fs:delete',
   fsDownload: 'psstpsst:fs:download',
+  fsRemoteProgress: 'psstpsst:fs:remote-progress',
   fsRequestRemote: 'psstpsst:fs:request-remote',
   fsCancelRemoteRequest: 'psstpsst:fs:cancel-remote-request',
   fsUpload: 'psstpsst:fs:upload',

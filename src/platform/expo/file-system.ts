@@ -1,5 +1,8 @@
+import { fetch } from 'expo/fetch';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
+
+import { readRemoteBody } from '../shared/read-remote-body';
 
 import type {
   DirectoryEntry,
@@ -182,7 +185,7 @@ export const fileSystemAdapter: FileSystemPort = {
       body:
         options.readBody === false || options.method === 'HEAD'
           ? new Uint8Array()
-          : new Uint8Array(await response.arrayBuffer()),
+          : await readRemoteBody(response, options.onProgress),
     };
   },
 
