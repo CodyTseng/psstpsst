@@ -227,9 +227,10 @@ use equal logical-end and bottom insets near the avatar edge without obscuring
 its centre. The selected tab uses an accent ring around an accent-soft surface;
 the ring uses nested fills instead of a platform border stroke so its curved
 and straight segments stay visually even. Its frame, hover region, and tap
-region share one fixed geometry. The delivery summary row owns one retry-all
-action for every failed relay across all copies and keeps the same single-line
-height whether that action is present or absent. Failed relay rows expand in
+region share one fixed geometry. Own messages always expose Resend in their
+detail summary and long-press or pointer context menu, regardless of delivery
+status or originating device. Read-only Nearby history retains its identity
+ownership restriction. The summary keeps a single-line height. Failed relay rows expand in
 place to show their failure reason. Targets stay in stable
 identity order while statuses update, with the user's own copy labelled as
 themselves and kept last. Avatar tabs use a compact gap and sit close to the

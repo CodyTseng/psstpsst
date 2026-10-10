@@ -1176,6 +1176,11 @@ class DmService {
     await relayMessageOutbox.enqueueRetryAll(opts.accountPubkey, opts.rumorId);
   }
 
+  /** Resend an own rumor from any device without creating another message. */
+  async resendMessage(opts: { accountPubkey: string; rumorId: string }): Promise<void> {
+    await relayMessageOutbox.enqueueResend(opts.accountPubkey, opts.rumorId);
+  }
+
   private enqueueGiftWrap(
     giftWrap: Event,
     intake: RumorIntake,

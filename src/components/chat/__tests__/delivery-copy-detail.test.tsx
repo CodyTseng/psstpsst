@@ -5,7 +5,8 @@ import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { Avatar } from '@/components/common/Avatar';
 import { EdgeFade } from '@/components/common/EdgeFade';
-import type { DeliveryCopy } from '@/stores/delivery-status.store';
+import type { DeliveryCopy, MessageDelivery } from '@/stores/delivery-status.store';
+import { useMessageDelivery } from '@/hooks/use-message-deliveries';
 import { spacing, uiDensity } from '@/theme';
 
 import {
@@ -14,6 +15,7 @@ import {
   DeliveryCopyTabs,
   DeliverySummaryRow,
   orderDeliveryCopies,
+  MessageDetailSheet,
 } from '../MessageDetailSheet';
 
 jest.mock('lucide-react-native/icons/chevron-down', () => ({
@@ -44,10 +46,15 @@ jest.mock('@solar-icons/react-native/category/messages/Linear/Pen2', () => ({
   Pen2: () => null,
 }), { virtual: true });
 jest.mock('@/components/common/Avatar', () => ({ Avatar: () => null }));
-jest.mock('@/components/common/BottomSheet', () => ({ BottomSheet: () => null }));
+jest.mock('@/components/common/BottomSheet', () => ({
+  BottomSheet: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('@/components/common/EdgeFade', () => ({ EdgeFade: () => null }));
 jest.mock('@/hooks/use-message-deliveries', () => ({
-  useMessageDelivery: () => null,
+  useMessageDelivery: jest.fn(() => null),
+}));
+jest.mock('@/hooks/use-clipboard', () => ({
+  useClipboard: () => ({ copyText: jest.fn(), copied: false, resetCopied: jest.fn() }),
 }));
 jest.mock('@/lib/time', () => ({ formatDetailTimestamp: () => '' }));
 jest.mock('@/stores/theme.store', () => ({
@@ -161,6 +168,43 @@ describe('DeliverySummaryRow', () => {
         .findAllByType(AppButton)
         .some((button) => button.props.label === 'delivery.resend'),
     ).toBe(false);
+  });
+});
+
+describe('persistent message resend', () => {
+  it.each([null, 'queued', 'signing', 'sending', 'sent', 'partial', 'failed'] as const)(
+    'offers exactly one resend for an own message with %s delivery', (phase) => {
+      jest.mocked(useMessageDelivery).mockReturnValue(phase ? {
+        rumorId: 'rumor', phase, copies: [],
+      } as MessageDelivery : null);
+      const onRetryAll = jest.fn();
+      let renderer: ReactTestRenderer;
+      act(() => {
+        renderer = create(<MessageDetailSheet
+          accountPubkey="self" rumorId="rumor" isSelf
+          onRetryAll={onRetryAll} onClose={jest.fn()}
+        />);
+      });
+      const actions = renderer!.root.findAllByType(AppButton)
+        .filter((button) => button.props.label === 'delivery.resend');
+      expect(actions).toHaveLength(1);
+      act(() => { void actions[0].props.onPress(); });
+      expect(onRetryAll).toHaveBeenCalledTimes(1);
+      act(() => renderer!.unmount());
+    },
+  );
+
+  it('does not expose resend for a received message', () => {
+    let renderer: ReactTestRenderer;
+    act(() => {
+      renderer = create(<MessageDetailSheet
+        accountPubkey="self" rumorId="rumor" isSelf={false}
+        onRetryAll={jest.fn()} onClose={jest.fn()}
+      />);
+    });
+    expect(renderer!.root.findAllByType(AppButton)
+      .filter((button) => button.props.label === 'delivery.resend')).toHaveLength(0);
+    act(() => renderer!.unmount());
   });
 });
 

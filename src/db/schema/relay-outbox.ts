@@ -10,7 +10,7 @@ export const relayOutboxJobs = sqliteTable(
     accountPubkey: text('account_pubkey').notNull(),
     messageId: text('message_id').notNull(),
     scope: text('scope', {
-      enum: ['all_recipient_relays', 'selected_targets', 'selected_copy'],
+      enum: ['all_recipient_relays', 'selected_targets', 'selected_copy', 'resend_all'],
     }).notNull(),
     recipientPubkey: text('recipient_pubkey'),
     createdAt: integer('created_at').notNull(),

@@ -227,7 +227,9 @@ Recipient relay attempts settle independently under a hard deadline. At least
 half of the recipient relays must acknowledge the message, with at least one
 acknowledgement required. Failed relays remain individually retryable even after
 the message is considered sent, and retries do not target relays that already
-acknowledged it.
+acknowledged it. Explicit whole-message resend republishes to all current relays
+for the original recipients, including acknowledged targets, without changing
+the rumor identity. It also supports own rumors received from other devices.
 
 Each frozen recipient copy resolves metadata, wraps, publishes, and settles
 independently. The message-level verdict is derived from every copy, including

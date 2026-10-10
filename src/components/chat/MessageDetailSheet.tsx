@@ -28,7 +28,6 @@ import { formatDetailTimestamp } from '@/lib/time';
 import {
   deliveryCopyVerdict,
   deliveryCounts,
-  retryableRelayUrls,
   useDelivery,
   type DeliveryCopy,
   type MessageDelivery,
@@ -439,7 +438,7 @@ export function DeliverySummaryRow({
 
 /**
  * Per-message detail drawer. For our own messages it shows the per-relay
- * delivery breakdown (with a resend for failed relays); for a peer's message it
+ * delivery breakdown with a persistent resend action; for a peer's message it
  * shows which relays we received it from. Both also show the message time and
  * the raw rumor JSON (collapsed by default, with a copy button).
  */
@@ -497,7 +496,6 @@ export function MessageDetailSheet({
     (snap?.transport ?? delivery?.transport) === 'proximity';
 
   const counts = delivery ? deliveryCounts(delivery) : { ok: 0, total: 0 };
-  const retryUrls = delivery ? retryableRelayUrls(delivery) : null;
   const signing =
     delivery?.phase === 'signing' ||
     (delivery?.phase === 'queued' && delivery.copies.length === 0);
@@ -601,9 +599,7 @@ export function MessageDetailSheet({
                       : t('message_detail.delivered_to')
               }
               onRetry={
-                !isProximityDelivery && retryUrls !== null && onRetryAll
-                  ? onRetryAll
-                  : undefined
+                onRetryAll
               }
             />
           </View>
@@ -657,15 +653,6 @@ export function MessageDetailSheet({
                 label={delivery?.error || t('delivery.failed')}
                 tone="danger"
               />
-              {onRetryAll ? (
-                <AppButton
-                  label={t('delivery.resend')}
-                  variant="accentText"
-                  size="sm"
-                  fullWidth={false}
-                  onPress={onRetryAll}
-                />
-              ) : null}
             </View>
           ) : !delivery ? (
             // No local delivery record (e.g. imported history, or a message

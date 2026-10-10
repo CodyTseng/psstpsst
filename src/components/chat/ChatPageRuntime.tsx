@@ -3,6 +3,7 @@ import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Reply } from '@solar-icons/react-native/category/arrows-action/Linear/Reply';
+import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import { DownloadMinimalistic as Download } from '@solar-icons/react-native/category/arrows-action/Linear/DownloadMinimalistic';
 import { Forward } from '@solar-icons/react-native/category/arrows-action/Linear/Forward';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
@@ -2269,6 +2270,14 @@ function ChatPageContent({
     [detailRumorId, messages],
   );
 
+  function resendMessage(rumorId: string) {
+    if (!accountPubkey) return;
+    const operation = isProximity
+      ? proximityService.resendMessage({ accountPubkey, peerPubkey: conversationKey, rumorId })
+      : dmService.resendMessage({ accountPubkey, rumorId });
+    void operation.catch(() => showToast(t('delivery.failed')));
+  }
+
   if (!accountPubkey) return null;
 
   const replySenderDisplayName = replyingTo
@@ -2353,6 +2362,18 @@ function ChatPageContent({
               ]
             : []),
           ...attachmentCopyAction,
+          ...(menuTarget.senderPubkey === messageSelfPubkey && !proximityHistoryReadOnly
+            ? [{
+                key: 'resend',
+                label: t('delivery.resend'),
+                icon: <RotateCw size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
+                onPress: () => {
+                  const id = menuTarget.id;
+                  closeMenu();
+                  resendMessage(id);
+                },
+              } as MessageMenuAction]
+            : []),
           ...(targetAttachment
             ? [
                 {
@@ -2696,14 +2717,11 @@ function ChatPageContent({
             }
             transport={isProximity ? 'proximity' : 'relay'}
             onRetryAll={
-              isProximity
+              proximityHistoryReadOnly
                 ? undefined
                 : () => {
                     if (detailRumorId) {
-                      void dmService.retryMessage({
-                        accountPubkey,
-                        rumorId: detailRumorId,
-                      });
+                      resendMessage(detailRumorId);
                     }
                   }
             }

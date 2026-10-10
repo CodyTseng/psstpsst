@@ -188,17 +188,44 @@ class RelayMessageOutbox {
   }
 
   async enqueueRetryAll(accountPubkey: string, messageId: string): Promise<void> {
+    await this.enqueueAll(accountPubkey, messageId, 'all_recipient_relays');
+  }
+
+  /** Republish the immutable rumor, including previously acknowledged targets. */
+  async enqueueResend(accountPubkey: string, messageId: string): Promise<void> {
+    await this.enqueueAll(accountPubkey, messageId, 'resend_all');
+  }
+
+  private async enqueueAll(
+    accountPubkey: string,
+    messageId: string,
+    scope: 'all_recipient_relays' | 'resend_all',
+  ): Promise<void> {
     await db.transaction(async (tx) => {
       const message = await tx
-        .select({ deliveryStatus: messages.deliveryStatus })
+        .select({ deliveryStatus: messages.deliveryStatus, rumor: messages.rumor })
         .from(messages)
         .where(and(eq(messages.accountPubkey, accountPubkey), eq(messages.id, messageId)))
         .get();
       if (!message) throw new Error('Message not found');
+      if (message.rumor.pubkey !== accountPubkey) {
+        throw new Error('Cannot resend another author\'s message');
+      }
+      const pending = await tx
+        .select({ id: relayOutboxJobs.id })
+        .from(relayOutboxJobs)
+        .where(and(
+          eq(relayOutboxJobs.accountPubkey, accountPubkey),
+          eq(relayOutboxJobs.messageId, messageId),
+          eq(relayOutboxJobs.scope, scope),
+        ))
+        .limit(1)
+        .get();
+      if (pending) return;
       await tx.insert(relayOutboxJobs).values({
         accountPubkey,
         messageId,
-        scope: 'all_recipient_relays',
+        scope,
         createdAt: nowSeconds(),
       });
       if (message.deliveryStatus !== 'sent') {
@@ -332,7 +359,8 @@ class RelayMessageOutbox {
     let targets = await this.loadTargets(job.id);
     if (
       targets.length === 0 &&
-      (job.scope === 'all_recipient_relays' || job.scope === 'selected_copy')
+      (job.scope === 'all_recipient_relays' || job.scope === 'selected_copy' ||
+        job.scope === 'resend_all')
     ) {
       try {
         targets = await this.prepareAllTargets(job, rumor, durable, session, generation);
@@ -573,7 +601,7 @@ class RelayMessageOutbox {
     targets: RelayTarget[],
     durable: boolean,
   ): Promise<RelayTarget[]> {
-    if (!durable) return targets;
+    if (!durable || job.scope === 'resend_all') return targets;
     const copies = await db
       .select()
       .from(messageDeliveryCopies)

@@ -10,7 +10,10 @@ Each job owns a fixed set of recipient/relay targets once preparation succeeds.
 It persists one gift wrap per recipient and reuses that wrap for every relay and
 after interruption. A new user retry is a new job and therefore creates a fresh
 gift wrap. Multiple jobs may reference one message; before publishing, each job
-skips targets whose durable result is already `ok`.
+skips targets whose durable result is already `ok`, except for an explicit
+`resend_all` job. That job republishes even acknowledged targets while preserving
+the original rumor and prior successful delivery results. Repeated requests
+coalesce while a resend job for that account and message remains unfinished.
 
 A target row means unfinished work. Recipient metadata is prepared with bounded
 parallelism and committed as one complete result: successful recipients gain
@@ -35,12 +38,15 @@ delivered while an optional failed-relay retry is pending.
 
 Manual retry selects one recipient copy, including self. Failed relay rows retry
 only those URLs; a pre-relay copy error re-resolves that recipient's metadata.
-Every manual retry creates a fresh gift wrap. Whole-message retry remains only
-for failures before any copy state could be materialized.
+Every manual retry creates a fresh gift wrap. Whole-message resend works for any
+own stored rumor, including messages received from another device with no local
+delivery records. It resolves current relay metadata for the rumor's original
+recipients, including self; it never creates a new timeline entry.
 
 The UI reads the coarse status from `messages` and reads compact recipient copies
 only while message details are open. Detail rows remain in recipient-pubkey
-order and expose per-copy relay results and retry. The UI never derives display
+order and expose per-copy relay results with a persistent summary resend action.
+The UI never derives display
 state from queue rows. Whole-message failures before copy materialization live
 on the message; pre-relay failures live on the copy; relay failure strings live
 with the corresponding relay result.

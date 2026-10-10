@@ -3257,6 +3257,62 @@ class ProximityService {
     });
   }
 
+  /** Requeue the original rumor without changing its identity or timeline position. */
+  async resendMessage(opts: {
+    accountPubkey: string;
+    peerPubkey: string;
+    rumorId: string;
+  }): Promise<void> {
+    const identity = await this.assertConversationWritable(opts.accountPubkey, opts.peerPubkey);
+    if (this.accountPubkey && this.accountPubkey !== opts.accountPubkey) await this.stop(true);
+    this.accountPubkey = opts.accountPubkey;
+    this.identity = identity;
+    const now = Math.floor(Date.now() / 1000);
+    const queued = await db.transaction(async (tx) => {
+      const message = await tx.select({ rumor: messages.rumor }).from(messages).where(and(
+        eq(messages.accountPubkey, opts.accountPubkey),
+        eq(messages.conversationKey, opts.peerPubkey),
+        eq(messages.id, opts.rumorId),
+      )).get();
+      if (!message || message.rumor.pubkey !== identity.proximityPubkey) {
+        throw new Error('Own Nearby message not found');
+      }
+      const pendingPayload: PendingPublishPayload = {
+        version: 1,
+        deliveryKind: 'proximity',
+        rumor: message.rumor,
+      };
+      const pending = await tx.select({ status: outbox.status }).from(outbox).where(and(
+        eq(outbox.accountPubkey, opts.accountPubkey),
+        eq(outbox.messageId, opts.rumorId),
+      )).get();
+      if (pending && pending.status !== 'sent' && pending.status !== 'failed') return false;
+      const entry = {
+        messageId: opts.rumorId,
+        accountPubkey: opts.accountPubkey,
+        conversationKey: opts.peerPubkey,
+        deliveryKind: 'proximity' as const,
+        status: 'queued' as const,
+        attempts: 0,
+        nextAttemptAt: now,
+        lastError: null,
+        pendingPayload,
+        updatedAt: now,
+      };
+      await tx.insert(outbox).values(entry).onConflictDoUpdate({
+        target: outbox.messageId,
+        set: entry,
+      });
+      await tx.update(messages).set({ deliveryStatus: 'queued', deliveryError: null }).where(and(
+        eq(messages.accountPubkey, opts.accountPubkey),
+        eq(messages.id, opts.rumorId),
+      ));
+      return true;
+    });
+    if (queued) deliveryStatusStore.getState().setProximityPhase(opts.rumorId, 'queued');
+    void this.drain();
+  }
+
   private async sendRumor(
     accountPubkey: string,
     peerPubkey: string,
