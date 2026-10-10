@@ -144,17 +144,19 @@ export function EmojiPackReferenceCard({ authorPubkey, identifier, metaSlot, loa
               ))}
               {showLoadPrompt ? (
                 <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <AppButton
-                    variant="ghost"
-                    size="sm"
-                    fullWidth={false}
-                    label={t('attach.tap_to_load')}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      setOpenedCoordinate(coordinate);
-                      setDownloadAttempt((value) => value + 1);
-                    }}
-                  />
+                  <View style={{ maxWidth: '100%' }}>
+                    <AppButton
+                      variant="ghost"
+                      size="sm"
+                      fullWidth={false}
+                      label={t('attach.tap_to_load')}
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        setOpenedCoordinate(coordinate);
+                        setDownloadAttempt((value) => value + 1);
+                      }}
+                    />
+                  </View>
                 </View>
               ) : null}
             </View>

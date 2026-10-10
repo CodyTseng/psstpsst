@@ -24,13 +24,15 @@ export function DeferredRemoteContent({ mode, url, children }: {
       {children(image.uri, loading)}
       {mode === 'request' && image.checked && !image.uri && (openedUrl !== url || image.failed) ? (
         <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-          <AppButton
-            variant="ghost"
-            size="sm"
-            fullWidth={false}
-            label={t('attach.tap_to_load')}
-            onPress={() => { setOpenedUrl(url); setAttempt((value) => value + 1); }}
-          />
+          <View style={{ maxWidth: '100%' }}>
+            <AppButton
+              variant="ghost"
+              size="sm"
+              fullWidth={false}
+              label={t('attach.tap_to_load')}
+              onPress={() => { setOpenedUrl(url); setAttempt((value) => value + 1); }}
+            />
+          </View>
         </View>
       ) : null}
     </View>
