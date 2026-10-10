@@ -27,7 +27,10 @@ jest.mock('expo-image', () => ({
     const React = require('react') as typeof import('react');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const NativeView = (require('react-native') as typeof import('react-native')).View;
-    return React.createElement(NativeView, { ...props, testID: 'attachment-image' });
+    return React.createElement(NativeView, {
+      ...props,
+      testID: props.contentFit === 'fill' ? 'attachment-placeholder' : 'attachment-image',
+    });
   },
 }));
 
@@ -136,7 +139,7 @@ describe('AttachmentImage transfer states', () => {
 
     const image = renderer.root
       .findAllByType(View)
-      .find((node) => node.props.testID === 'attachment-image')!;
+      .find((node) => node.props.testID === 'attachment-placeholder')!;
     expect(image.props.placeholder).toEqual({ thumbhash: 'thumbhash-data' });
     expect(fullImageScrims(renderer)).toHaveLength(1);
     expect(fullImageScrims(renderer)[0].props.children).toBeUndefined();
@@ -154,6 +157,42 @@ describe('AttachmentImage transfer states', () => {
 
     expect(fullImageScrims(renderer)).toHaveLength(0);
     expect(renderer.root.findAllByProps({ testID: 'attachment-progress' })).not.toHaveLength(0);
+  });
+
+  it('fills the preview and keeps it until the decoded image is displayed', () => {
+    renderer = renderWithState({ status: 'loading' });
+    const preview = renderer.root.findByProps({ testID: 'attachment-placeholder' });
+    expect(preview.props.contentFit).toBe('fill');
+    expect(preview.props.placeholderContentFit).toBe('fill');
+    expect(StyleSheet.flatten(preview.props.style)).toEqual({
+      position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+    });
+
+    jest.mocked(useAttachment).mockReturnValue({
+      state: { status: 'ready', localUri: 'file:///downloaded-image.jpg' },
+      ...controls,
+    });
+    act(() => {
+      renderer!.update(<AttachmentImage meta={META} messageId="rumor" />);
+    });
+
+    const readyImage = renderer.root.findByProps({ testID: 'attachment-image' });
+    expect(readyImage.props.transition).toBe(0);
+    expect(readyImage.props.source).toEqual({ uri: 'file:///downloaded-image.jpg' });
+    expect(renderer.root.findByProps({ testID: 'attachment-placeholder' })).toBe(preview);
+    expect(readyImage.props.contentFit).toBe('contain');
+    expect(readyImage.props.placeholder).toBeUndefined();
+
+    act(() => { readyImage.props.onDisplay(); });
+    expect(renderer.root.findAllByProps({ testID: 'attachment-placeholder' })).toHaveLength(0);
+  });
+
+  it('skips the placeholder for a cache-warmed image', () => {
+    renderer = renderWithState({ status: 'ready', localUri: 'file:///cached-image.jpg' });
+    const image = renderer.root.findByProps({ testID: 'attachment-image' });
+    expect(image.props.placeholder).toBeUndefined();
+    expect(image.props.transition).toBe(0);
+    expect(renderer.root.findAllByProps({ testID: 'attachment-placeholder' })).toHaveLength(0);
   });
 
   it.each(['download', 'integrity'] as const)('retries a %s failure from the side action', async (kind) => {

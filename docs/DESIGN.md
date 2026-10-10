@@ -716,6 +716,10 @@ only the fallback when poster extraction is unavailable. Message metadata is
 hidden while the inline video player is active so native playback controls stay
 unobstructed.
 
+Image attachment previews fill their container without cropping or letterboxing.
+The decoded image preserves its aspect ratio and replaces the preview only when
+displayed, without a crossfade.
+
 Every attachment context menu includes Save. Images and videos save to the
 photo library on mobile and a user-selected location on Electron; audio and
 other files use the system file destination picker. Unsupported video on

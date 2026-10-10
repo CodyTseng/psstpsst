@@ -74,22 +74,18 @@ export function AttachmentImage({
     nearby,
   });
   const canPromptLoad = !autoDownload && showLoadPrompt && state.status === 'idle';
-  // A transition is useful only when this mounted instance actually waits for
-  // download/decryption. The route preview warms both our URI session cache and
-  // expo-image's bitmap cache; the full message row therefore starts ready and
-  // must not cross-dissolve the same bitmap in a second time during handoff.
-  const [readyOnMount] = useState(() => state.status === 'ready');
+  // Cache-warmed route and long-press copies must not show the placeholder again.
+  const localUri = state.status === 'ready' ? state.localUri : undefined;
+  const [displayedUri, setDisplayedUri] = useState(localUri);
 
   const dim = parseDim(meta.dim);
   const aspect = dim ? dim.w / dim.h : ATTACHMENT_IMAGE_DEFAULT_ASPECT;
   const box = fitAttachmentMediaBox(aspect);
 
-  // Blurred placeholder shown while the real (encrypted) blob downloads +
-  // decrypts, then the image cross-fades in over it (`expo-image` decodes both
-  // natively). Prefer ThumbHash (richer, carries colour + aspect); fall back to
-  // a BlurHash if that's all the sender provided; neither → the spinner below.
-  // `placeholderContentFit` matches `contentFit` so the blur doesn't jump when
-  // the image replaces it.
+  // Prefer ThumbHash, then BlurHash, while downloading and decoding the image.
+  // Hash aspect ratios are approximate. Render the preview in its own fill-fit
+  // view: iOS overrides hash placeholderContentFit with that view's contentFit.
+  // The full image keeps contain-fit and replaces the preview only on display.
   const placeholder = meta.thumbhash
     ? { thumbhash: meta.thumbhash }
     : meta.blurhash
@@ -173,25 +169,30 @@ export function AttachmentImage({
                   : undefined
           }
         >
+          {placeholder && (!localUri || displayedUri !== localUri) ? (
+            <Image
+              placeholder={placeholder}
+              placeholderContentFit="fill"
+              contentFit="fill"
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+          ) : null}
           <Image
-            source={state.status === 'ready' ? { uri: state.localUri } : undefined}
-            // A cache-warmed local image must never paint its ThumbHash again.
-            // Even with a zero-duration transition, a newly mounted native
-            // image view may draw the supplied placeholder for one frame.
-            placeholder={readyOnMount ? undefined : placeholder}
-            placeholderContentFit="contain"
+            source={localUri ? { uri: localUri } : undefined}
             style={{ width: '100%', height: '100%' }}
             contentFit="contain"
-            transition={readyOnMount ? 0 : 150}
+            transition={0}
+            onDisplay={() => {
+              if (localUri) setDisplayedUri(localUri);
+            }}
             // Keep the decoded bitmap in memory (default is disk-only). A
             // long-press lifts a fresh `BubbleBody` copy over the backdrop, which
             // re-mounts this `Image`; without the memory cache it re-decodes from
-            // disk and flashes the blur placeholder. A ready-on-mount instance
-            // also skips the transition above, so cached route/long-press copies
-            // render directly instead of fading in again. Also spares a re-decode
-            // when a row is recycled while scrolling.
+            // disk. Cache-warmed copies render directly without a placeholder.
+            // Also spares a re-decode when a row is recycled while scrolling.
             cachePolicy="memory-disk"
-            recyclingKey={state.status === 'ready' ? state.localUri : undefined}
+            recyclingKey={localUri}
           />
           {state.status === 'loading' ? (
             <View
