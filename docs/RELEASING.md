@@ -455,8 +455,9 @@ Changelog conventions:
   the same type together without type headings.
 - Within each group, list the most important changes first, prioritizing message
   reliability and data integrity over smaller usability or visual changes.
-- Use short bullets, combine related changes, and keep the entire changelog
-  within 500 characters, including the version title.
+- Use short bullets and combine only related changes. Keep unrelated changes
+  in separate bullets; never combine them just to save characters.
+- Keep the entire changelog within 500 characters, including the version title.
 
 Shared screenshots live in
 `images/phoneScreenshots/1.png` through `4.png`. For the first release, the

@@ -1,0 +1,10 @@
+PsstPsst 26.10.4
+
+- Added download progress with pause and resume for attachments.
+- Added resending for any of your messages.
+- Improved background sync of contacts and private lists.
+- Improved mobile video controls and rotation.
+- Improved forwarding and attachment sharing.
+- Improved emoji display.
+- Fixed missing messages during history sync.
+- Fixed cropped attachment placeholders.
