@@ -100,7 +100,7 @@
     "@types/yauzl": "^3.4.0",
     "babel-plugin-inline-import": "^3.0.0",
     "drizzle-kit": "^0.31.10",
-    "electron": "43.4.0",
+    "electron": "43.5.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "eslint": "^9.0.0",
