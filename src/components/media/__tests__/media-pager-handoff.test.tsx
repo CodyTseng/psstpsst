@@ -23,7 +23,7 @@ let mockElectron = false;
 let mockLoaded = false;
 let mockItems: ConversationMediaItem[] = [];
 let mockInstance = 0;
-let mockCachedImages = new Map<string, ImageRef | null>();
+let mockCachedImages = new Map<string, ImageRef | string | null>();
 const mockMounted = jest.fn();
 const mockUnmounted = jest.fn();
 const mockScrollToOffset = jest.fn();
@@ -119,7 +119,8 @@ function render() {
   const element = <MediaPager preview={preview} conversationKey="chat" focusMessageId="focus" focusOrderAt={2} focusUrl={focusUrl} showGrid onClose={jest.fn()} />;
   act(() => { if (renderer) renderer.update(element); else renderer = create(element); });
 }
-const image = () => renderer!.root.findByProps({ uri: preview.uri });
+const image = () => renderer!.root.findAllByType('image').find((image) => image.props.uri === preview.uri)!;
+const selectedImage = () => renderer!.root.findAllByType('image').find((image) => image.props.interactionEnabled)!;
 
 beforeEach(() => {
   jest.clearAllMocks(); mockWidth = 390; mockHeight = 844; mockEntered = false; mockElectron = false; mockLoaded = false; mockItems = []; mockInstance = 0; mockCachedImages = new Map();
@@ -166,6 +167,116 @@ it('positions the retained source on Electron before paint without remounting it
   const expectedOffset = list.props.getItemLayout(null, 1).offset;
   expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: expectedOffset, animated: false });
   expect(image().props.instance).toBe(instance);
+});
+
+function scrollDesktop(offset: number, width = mockWidth) {
+  act(() => { renderer!.root.findByType(FlatList).props.onScroll({
+    nativeEvent: { contentOffset: { x: offset, y: 0 }, layoutMeasurement: { width } },
+  }); });
+}
+
+it('selects Electron images in both directions using only web scroll events', () => {
+  mockElectron = true; mockLoaded = true;
+  mockItems = [focus, neighbour('newer')];
+  render();
+  scrollDesktop(mockWidth * 0.6);
+  expect(mockMounted.mock.calls.map(([uri]) => uri)).toEqual([preview.uri]);
+  scrollDesktop(mockWidth);
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+  scrollDesktop(0);
+  expect(selectedImage().props.uri).toBe(preview.uri);
+});
+
+it('ignores Electron positioning events and retains selection after prepends', () => {
+  mockElectron = true;
+  render();
+  const instance = image().props.instance;
+  mockLoaded = true; mockItems = [neighbour('older'), focus, neighbour('newer')];
+  render();
+  scrollDesktop(0);
+  expect(image().props.instance).toBe(instance);
+  scrollDesktop(mockWidth);
+  mockItems = [neighbour('oldest'), ...mockItems];
+  render();
+  expect(mockScrollToOffset).toHaveBeenLastCalledWith({ offset: mockWidth * 2, animated: false });
+  scrollDesktop(mockWidth);
+  expect(image().props.instance).toBe(instance);
+  scrollDesktop(mockWidth * 2);
+  scrollDesktop(mockWidth * 3);
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+});
+
+it('retains the Electron selection during resizing and resumes web paging', () => {
+  mockElectron = true; mockLoaded = true;
+  mockItems = [focus, neighbour('newer'), neighbour('newest')];
+  render();
+  scrollDesktop(mockWidth);
+  mockWidth = 780;
+  render();
+  scrollDesktop(390, 390);
+  scrollDesktop(0);
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+  act(() => { renderer!.root.findByType(FlatList).props.onLayout({ nativeEvent: { layout: { width: mockWidth } } }); });
+  expect(mockScrollToOffset).toHaveBeenLastCalledWith({ offset: mockWidth, animated: false });
+  scrollDesktop(mockWidth);
+  scrollDesktop(mockWidth * 2);
+  expect(selectedImage().props.uri).toBe('https://media.test/newest');
+});
+
+it('resumes Electron paging after resizing at offset zero without a scroll event', () => {
+  mockElectron = true; mockLoaded = true;
+  mockItems = [focus, neighbour('newer')];
+  render();
+  mockWidth = 780;
+  render();
+  act(() => { renderer!.root.findByType(FlatList).props.onLayout({ nativeEvent: { layout: { width: mockWidth } } }); });
+  scrollDesktop(mockWidth);
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+});
+
+it('retains decoded Electron neighbour surfaces through selection without fetching remote bytes', () => {
+  mockElectron = true; mockLoaded = true;
+  const next = neighbour('newer');
+  mockItems = [focus, next, neighbour('outside')];
+  mockCachedImages.set(next.mediaKey, 'file:///cached-neighbour.jpg');
+  render();
+  const neighbourImage = renderer!.root.findAllByType('image').find((image) => image.props.uri === 'file:///cached-neighbour.jpg')!;
+  const instance = neighbourImage.props.instance;
+  expect(neighbourImage.props.interactionEnabled).toBe(false);
+  expect(mockMounted.mock.calls.map(([uri]) => uri)).toEqual([preview.uri, 'file:///cached-neighbour.jpg']);
+  scrollDesktop(mockWidth);
+  expect(selectedImage().props.uri).toBe('file:///cached-neighbour.jpg');
+  expect(selectedImage().props.instance).toBe(instance);
+  scrollDesktop(0);
+  expect(image().props.instance).toBe(mockMounted.mock.calls[0][1]);
+});
+
+it('prepares cached Electron attachments without downloading and retains their surface when selected', () => {
+  mockElectron = true; mockLoaded = true;
+  const next = { ...focus, mediaKey: 'next-attachment', messageId: 'next' };
+  mockItems = [focus, next];
+  mockCachedImages.set(next.mediaKey, 'file:///cached-attachment.jpg');
+  render();
+  const instance = renderer!.root.findAllByType('image').find((image) => image.props.uri === 'file:///cached-attachment.jpg')!.props.instance;
+  expect(useAttachment).toHaveBeenLastCalledWith(next.meta, { autoLoad: false });
+  scrollDesktop(mockWidth);
+  expect(selectedImage().props.uri).toBe('file:///cached-attachment.jpg');
+  expect(selectedImage().props.instance).toBe(instance);
+  expect(useAttachment).toHaveBeenLastCalledWith(next.meta, { autoLoad: true });
+});
+
+it('shows Electron neighbour previews during scrolling and local cache checks', () => {
+  mockElectron = true; mockLoaded = true;
+  const next = { ...focus, mediaKey: 'next-attachment', messageId: 'next',
+    meta: { ...focus.meta, thumbhash: undefined, blurhash: 'fallback-preview' } } as ConversationMediaItem;
+  mockItems = [focus, next];
+  jest.mocked(useAttachment).mockReturnValue({ state: { status: 'checking' } } as ReturnType<typeof useAttachment>);
+  render();
+  expect(renderer!.root.findByType(MediaImagePlaceholder).props.blurhash).toBe('fallback-preview');
+  expect(useAttachment).not.toHaveBeenCalled();
+  scrollDesktop(mockWidth);
+  expect(renderer!.root.findByType(MediaImagePlaceholder).props.blurhash).toBe('fallback-preview');
+  expect(useAttachment).toHaveBeenLastCalledWith(next.meta, { autoLoad: true });
 });
 
 it('does not mount neighbouring remote images until the user selects their page', () => {

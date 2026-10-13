@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { ConversationMediaItem } from '@/hooks/use-conversation-media';
 import { IS_ELECTRON } from '@/lib/platform';
+import { platform } from '@/platform';
 import { getCachedAttachmentUri } from '@/services/files/file-attachment.service';
 
-/** Decode only cached bytes in the three-page window; never start a download. */
+/** Prepare only cached bytes in the three-page window; never start a download. */
 export function useCachedMediaImages(
   previous: ConversationMediaItem | undefined,
   current: ConversationMediaItem | undefined,
@@ -16,7 +17,7 @@ export function useCachedMediaImages(
   ), [previous, current, next]);
   const [cache, setCache] = useState<{
     window: typeof window;
-    images: ReadonlyMap<string, ImageRef | null>;
+    images: ReadonlyMap<string, ImageRef | string | null>;
   }>(() => ({ window, images: new Map() }));
   if (cache.window !== window) {
     // Retain only successful decodes in the new window before it is painted.
@@ -27,15 +28,23 @@ export function useCachedMediaImages(
   }
 
   useEffect(() => {
-    if (IS_ELECTRON) return;
     let cancelled = false;
-    function publish(key: string, image: ImageRef | null) {
+    function publish(key: string, image: ImageRef | string | null) {
       if (!cancelled) setCache((existing) => existing.window === window
         ? { window, images: new Map(existing.images).set(key, image) } : existing);
     }
     for (const item of window) {
       if (cache.images.get(item.mediaKey)) continue;
       void (async () => {
+        // Web has no native ImageRef cache API. Mounted neighbour surfaces
+        // decode these local URIs ahead of selection and retain their DOM image.
+        if (IS_ELECTRON) {
+          const uri = item.source === 'embedded'
+            ? await platform.imageCache.getCachedUri(item.meta.url)
+            : await getCachedAttachmentUri(item.meta);
+          publish(item.mediaKey, uri);
+          return;
+        }
         const image = item.source === 'embedded'
           ? await Image.readFromCacheAsync(item.meta.sha256 ?? item.meta.url)
           : await (async () => {

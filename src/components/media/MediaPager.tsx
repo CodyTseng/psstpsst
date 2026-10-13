@@ -141,7 +141,7 @@ function MediaPagerContent({
   const imageRef = useRef<ZoomableImageHandle>(null);
   const [imageScale, setImageScale] = useState(0);
   const listRef = useRef<FlatList<MediaPageItem>>(null);
-  const desktopPositioned = useRef(false);
+  const desktopPosition = useRef<{ mediaKey: string; index: number } | null>(null);
   const previousWidth = useRef(width);
   const resizing = useRef(false);
   const dragWidth = useRef<number | null>(null);
@@ -194,12 +194,16 @@ function MediaPagerContent({
   const pages: MediaPageItem[] = ready ? items : initialPages;
 
   useLayoutEffect(() => {
-    if (!IS_ELECTRON || !preview || !ready || desktopPositioned.current) return;
+    if (!IS_ELECTRON || !ready) return;
+    const previous = desktopPosition.current;
+    desktopPosition.current = { mediaKey: currentId, index: currentIndex };
+    if (!(preview && !previous) &&
+      !(previous?.mediaKey === currentId && previous.index !== currentIndex)) return;
     // React Native Web does not implement native visible-position anchoring.
-    // Align the retained source cell before paint when its neighbours arrive.
+    // Retain selection when the initial window or older neighbours arrive.
+    resizing.current = currentIndex !== 0;
     listRef.current?.scrollToOffset({ offset: currentIndex * width, animated: false });
-    desktopPositioned.current = true;
-  }, [preview, ready, currentIndex, width]);
+  }, [preview, ready, currentId, currentIndex, width]);
 
   useLayoutEffect(() => {
     if (previousWidth.current === width) return;
@@ -220,6 +224,8 @@ function MediaPagerContent({
   function alignResizedPage() {
     if (resizing.current && ready) {
       listRef.current?.scrollToOffset({ offset: currentIndex * width, animated: false });
+      // At offset zero, a resize may not produce any browser scroll event.
+      if (IS_ELECTRON && currentIndex === 0) resizing.current = false;
     }
   }
 
@@ -249,12 +255,13 @@ function MediaPagerContent({
         </MediaDismissSurface>
       );
     }
-    if (!active && IS_ELECTRON) return null;
+    const cachedImage = cachedImages.get(item.mediaKey);
     return (
       <MediaImagePage
         active={active}
         preview={item.mediaKey === focusMediaKey ? preview : undefined}
-        decodedImage={cachedImages.get(item.mediaKey) ?? undefined}
+        decodedImage={typeof cachedImage === 'string' ? undefined : cachedImage ?? undefined}
+        cachedUri={typeof cachedImage === 'string' ? cachedImage : undefined}
         cachePending={!IS_ELECTRON && !cachedImages.has(item.mediaKey)}
         imageRef={active ? imageRef : undefined}
         onScaleChange={active ? setImageScale : undefined}
@@ -325,6 +332,21 @@ function MediaPagerContent({
             onContentSizeChange={(contentWidth) => {
               if (Math.abs(contentWidth - pages.length * width) < 1) alignResizedPage();
             }}
+            scrollEventThrottle={16}
+            onScroll={IS_ELECTRON ? (e) => {
+              // Web emits scroll events, not native drag/momentum callbacks.
+              // Commit only snapped pages so passing a neighbour cannot fetch it.
+              if (!ready || zoomed || isClosing || width <= 0 ||
+                Math.abs(e.nativeEvent.layoutMeasurement.width - width) >= 1) return;
+              const offset = e.nativeEvent.contentOffset.x;
+              if (resizing.current) {
+                if (Math.abs(offset - currentIndex * width) < 1) resizing.current = false;
+                return;
+              }
+              const index = Math.round(offset / width);
+              if (index !== currentIndex && index >= 0 && index < pages.length &&
+                Math.abs(offset - index * width) < 1) selectPage(index);
+            } : undefined}
             onScrollBeginDrag={() => {
               resizing.current = false;
               dragWidth.current = width;
@@ -335,12 +357,13 @@ function MediaPagerContent({
               dragWidth.current = null;
               selectPage(Math.round(e.nativeEvent.contentOffset.x / width));
             }}
-            // Only the selected image mounts below: paging must not download
-            // neighbouring non-contact resources as a side effect.
+            // Retain cached neighbour images without starting remote downloads.
             windowSize={3}
             renderItem={({ item, index }) => (
               <View style={{ width, height: pageHeight }}>
-                {renderPage(item, index === currentIndex)}
+                {Math.abs(index - currentIndex) <= 1
+                  ? renderPage(item, index === currentIndex)
+                  : <MediaPagePreview item={item} />}
               </View>
             )}
           />
@@ -383,16 +406,18 @@ function MediaPagerContent({
 function MediaPagePreview({ item, showPlaceholder = true }: { item: MediaPageItem; showPlaceholder?: boolean }) {
   const c = useThemeColors();
   const thumbhash = item.source === 'preview' ? undefined : item.meta.thumbhash;
+  const blurhash = item.source === 'preview' ? undefined : item.meta.blurhash;
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: c.lightboxBackdrop }]}>
       {showPlaceholder ? (
-        <MediaImagePlaceholder thumbhash={thumbhash} aspectRatio={mediaAspectRatio(item)} />
+        <MediaImagePlaceholder thumbhash={thumbhash} blurhash={blurhash} aspectRatio={mediaAspectRatio(item)} />
       ) : null}
     </View>
   );
 }
 
 type ImagePageProps = {
+  cachedUri?: string;
   decodedImage?: ImageRef;
   imageRef?: Ref<ZoomableImageHandle>;
   onScaleChange?: (scale: number) => void;
@@ -402,7 +427,7 @@ type ImagePageProps = {
 };
 
 /** Retain the decoded preview; resolve other attachments only when needed. */
-function MediaImagePage({ item, preview, active, cachePending, imageRef, ...imageProps }: ImagePageProps & {
+function MediaImagePage({ item, preview, active, cachePending, imageRef, cachedUri, ...imageProps }: ImagePageProps & {
   item: MediaPageItem;
   preview?: MediaViewerPreview;
   cachePending: boolean;
@@ -410,14 +435,14 @@ function MediaImagePage({ item, preview, active, cachePending, imageRef, ...imag
 }) {
   const [visited, setVisited] = useState(active);
   if (active && !visited) setVisited(true);
-  if (!active && !visited && !imageProps.decodedImage) {
+  if (!active && !visited && !imageProps.decodedImage && !cachedUri && !preview) {
     return <MediaPagePreview item={item} showPlaceholder={!cachePending} />;
   }
   if (!preview && item.source === 'attachment') {
-    return <AttachmentMediaImagePage {...imageProps} active={active} imageRef={imageRef} meta={item.meta} />;
+    return <AttachmentMediaImagePage {...imageProps} cachedUri={cachedUri} active={active} imageRef={imageRef} meta={item.meta} />;
   }
   const image = preview ?? (item.source === 'embedded' ? {
-    uri: item.meta.url,
+    uri: cachedUri ?? item.meta.url,
     cacheKey: item.meta.sha256 ?? item.meta.url,
     thumbhash: cachePending ? undefined : item.meta.thumbhash,
     blurhash: cachePending ? undefined : item.meta.blurhash,
@@ -425,7 +450,7 @@ function MediaImagePage({ item, preview, active, cachePending, imageRef, ...imag
   return image ? <ZoomableImage interactionEnabled={active} {...imageProps} {...image} aspectRatio={mediaAspectRatio(item)} ref={imageRef} dismissAxis="vertical" /> : null;
 }
 
-function AttachmentMediaImagePage({ meta, active, imageRef, ...imageProps }: ImagePageProps & {
+function AttachmentMediaImagePage({ meta, active, imageRef, cachedUri, ...imageProps }: ImagePageProps & {
   meta: FileAttachmentMeta;
   active: boolean;
 }) {
@@ -435,7 +460,7 @@ function AttachmentMediaImagePage({ meta, active, imageRef, ...imageProps }: Ima
   const [preparedImage] = useState(imageProps.decodedImage);
   const { state, pause, resume, retry, reveal } = useAttachment(meta, { autoLoad: active });
 
-  if (state.status === 'ready' || preparedImage) {
+  if (state.status === 'ready' || preparedImage || cachedUri) {
     return (
       <ZoomableImage
         interactionEnabled={active}
@@ -444,7 +469,7 @@ function AttachmentMediaImagePage({ meta, active, imageRef, ...imageProps }: Ima
         decodedImage={preparedImage}
         thumbhash={meta.thumbhash}
         blurhash={meta.blurhash}
-        uri={preparedImage ? meta.url : state.status === 'ready' ? state.localUri : meta.url}
+        uri={preparedImage ? meta.url : cachedUri ?? (state.status === 'ready' ? state.localUri : meta.url)}
         aspectRatio={attachmentAspectRatio(meta)}
         dismissAxis="vertical"
       />
@@ -476,7 +501,7 @@ function AttachmentMediaImagePage({ meta, active, imageRef, ...imageProps }: Ima
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      {state.status !== 'checking' ? (
+      {IS_ELECTRON || state.status !== 'checking' ? (
         <MediaImagePlaceholder thumbhash={meta.thumbhash} blurhash={meta.blurhash} aspectRatio={attachmentAspectRatio(meta)} />
       ) : null}
       {state.status === 'loading' ? (
