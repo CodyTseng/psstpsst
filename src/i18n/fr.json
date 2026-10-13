@@ -404,6 +404,8 @@
     "verify_failed_open": "Ouvrir quand même"
   },
   "media": {
+    "previous": "Média précédent",
+    "next": "Média suivant",
     "title": "Médias",
     "empty": "Aucune photo ni vidéo pour le moment",
     "show_all": "Tous les médias",

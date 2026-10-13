@@ -8,6 +8,8 @@ import { useConversationMedia, type ConversationMediaItem } from '@/hooks/use-co
 import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { MediaPager } from '../MediaPager';
 import { MediaTouchPager } from '../MediaTouchPager';
+import { MediaPagerNavigation } from '../MediaPagerNavigation';
+import { MediaPageFrame } from '../MediaPageFrame';
 import { MediaVideoPage } from '../MediaVideoPage';
 import { platform } from '@/platform';
 import { MediaImagePlaceholder } from '@/components/common/MediaImagePlaceholder';
@@ -20,6 +22,7 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
 }));
 let mockEntered = false;
 let mockElectron = false;
+let mockFrameReadyEffects = false;
 let mockLoaded = false;
 let mockItems: ConversationMediaItem[] = [];
 let mockInstance = 0;
@@ -29,7 +32,15 @@ const mockUnmounted = jest.fn();
 const mockScrollToOffset = jest.fn();
 const mockRequestClose = jest.fn();
 
-jest.mock('@/hooks/use-cached-media-images', () => ({ useCachedMediaImages: () => mockCachedImages }));
+jest.mock('../MediaPageFrame', () => {
+  const React = jest.requireActual('react') as typeof import('react');
+  const native = jest.requireActual('../MediaPageFrame') as typeof import('../MediaPageFrame');
+  const web = jest.requireActual('../MediaPageFrame.web') as typeof import('../MediaPageFrame.web');
+  return { MediaPageFrame: (props: ComponentProps<typeof native.MediaPageFrame>) =>
+    React.createElement(mockFrameReadyEffects ? web.MediaPageFrame : native.MediaPageFrame, props) };
+});
+
+jest.mock('@/hooks/use-cached-media-images', () => ({ useCachedMediaImages: jest.fn(() => mockCachedImages) }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('react-native-gesture-handler', () => ({
   ...jest.requireActual('react-native-gesture-handler'),
@@ -39,13 +50,16 @@ jest.mock('expo-router', () => ({ router: { navigate: jest.fn() } }));
 jest.mock('@solar-icons/react-native/category/messages/Linear/ChatRound', () => ({ ChatRound: () => null }), { virtual: true });
 jest.mock('@solar-icons/react-native/category/video/Linear/GalleryWide', () => ({ GalleryWide: () => null }), { virtual: true });
 jest.mock('lucide-react-native/icons/download', () => ({ __esModule: true, default: () => null }), { virtual: true });
+jest.mock('lucide-react-native/icons/chevron-left', () => ({ __esModule: true, default: () => null }), { virtual: true });
+jest.mock('lucide-react-native/icons/chevron-right', () => ({ __esModule: true, default: () => null }), { virtual: true });
+jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } }));
 jest.mock('@/platform', () => ({ platform: { screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) } } }));
 jest.mock('@/services/files/media-save.service', () => ({ saveAttachmentToLibrary: jest.fn(), saveRemoteMediaToLibrary: jest.fn() }));
 jest.mock('@/lib/attachments/failure', () => ({ revealOrRetry: jest.fn() }));
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: () => 'account' }));
-jest.mock('@/theme', () => ({ useThemeColors: () => ({}), desktopChrome: { titlebarHeight: 32 }, uiDensity: {} }));
+jest.mock('@/theme', () => ({ useThemeColors: () => ({}), desktopChrome: { titlebarHeight: 32 }, uiDensity: {}, spacing: { lg: 16 } }));
 jest.mock('../MediaTouchPager', () => ({ MediaTouchPager: ({ pageKey, children }: { pageKey: string; children: ReactNode }) => {
   const React = jest.requireActual('react') as typeof import('react');
   return React.createElement(React.Fragment, { key: pageKey }, children);
@@ -123,6 +137,7 @@ const image = () => renderer!.root.findAllByType('image').find((image) => image.
 const selectedImage = () => renderer!.root.findAllByType('image').find((image) => image.props.interactionEnabled)!;
 
 beforeEach(() => {
+  mockFrameReadyEffects = false;
   jest.clearAllMocks(); mockWidth = 390; mockHeight = 844; mockEntered = false; mockElectron = false; mockLoaded = false; mockItems = []; mockInstance = 0; mockCachedImages = new Map();
   jest.mocked(useAttachment).mockReturnValue({ state: { status: 'loading' } } as ReturnType<typeof useAttachment>);
 });
@@ -169,6 +184,38 @@ it('positions the retained source on Electron before paint without remounting it
   expect(image().props.instance).toBe(instance);
 });
 
+it.each([false, true])('enables desktop snapping only after the distant clicked image is mounted (already loaded: %s)', (alreadyLoaded) => {
+  mockElectron = true;
+  const older = Array.from({ length: 50 }, (_, index) => neighbour(`older-${index}`));
+  if (alreadyLoaded) { mockLoaded = true; mockItems = [...older, focus, neighbour('newer')]; }
+  render();
+  if (!alreadyLoaded) {
+    mockLoaded = true; mockItems = [...older, focus, neighbour('newer')]; render();
+  }
+  const list = () => renderer!.root.findByType(FlatList);
+  expect(list().props.initialScrollIndex).toBe(50);
+  expect(list().props.pagingEnabled).toBe(true);
+  expect(list().props.style).toEqual({ scrollSnapType: 'none' });
+  expect(mockScrollToOffset).toHaveBeenLastCalledWith({ offset: mockWidth * 50, animated: false });
+  const selectedFrame = renderer!.root.findAllByType(MediaPageFrame).find((frame) => frame.props.onReady)!;
+  act(() => { selectedFrame.props.onReady(); });
+  expect(list().props.pagingEnabled).toBe(true);
+  expect(list().props.style).toBeUndefined();
+  expect(selectedImage().props.uri).toBe(preview.uri);
+});
+
+it('repositions a gallery target before enabling desktop snapping without a chat preview', () => {
+  mockElectron = true; mockLoaded = true;
+  mockItems = [neighbour('older'), focus, neighbour('newer')];
+  act(() => { renderer = create(<MediaPager conversationKey="chat" focusMessageId="focus" focusOrderAt={2}
+    focusUrl={focusUrl} showGrid={false} onClose={jest.fn()} />); });
+  expect(renderer!.root.findByType(FlatList).props.style).toEqual({ scrollSnapType: 'none' });
+  expect(mockScrollToOffset).toHaveBeenLastCalledWith({ offset: mockWidth, animated: false });
+  act(() => { renderer!.root.findAllByType(MediaPageFrame).find((frame) => frame.props.onReady)!.props.onReady(); });
+  expect(renderer!.root.findByType(FlatList).props.pagingEnabled).toBe(true);
+  expect(renderer!.root.findByType(FlatList).props.style).toBeUndefined();
+});
+
 function scrollDesktop(offset: number, width = mockWidth) {
   act(() => { renderer!.root.findByType(FlatList).props.onScroll({
     nativeEvent: { contentOffset: { x: offset, y: 0 }, layoutMeasurement: { width } },
@@ -185,6 +232,59 @@ it('selects Electron images in both directions using only web scroll events', ()
   expect(selectedImage().props.uri).toBe('https://media.test/newer');
   scrollDesktop(0);
   expect(selectedImage().props.uri).toBe(preview.uri);
+});
+
+it('keeps consecutive desktop swipes active after the real web readiness effect without another scroll event', () => {
+  mockElectron = true; mockFrameReadyEffects = true; mockLoaded = true;
+  mockItems = [focus, neighbour('newer'), neighbour('newest')];
+  render();
+  expect(renderer!.root.findByType(FlatList).props.style).toBeUndefined();
+  mockScrollToOffset.mockClear();
+  // Each event represents RN Web's final debounced callback. The selected
+  // frame then runs its actual layout effect; an aligned scroll emits nothing.
+  scrollDesktop(mockWidth);
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+  expect(mockScrollToOffset).not.toHaveBeenCalled();
+  scrollDesktop(mockWidth * 2);
+  expect(selectedImage().props.uri).toBe('https://media.test/newest');
+  scrollDesktop(mockWidth);
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+  scrollDesktop(0);
+  expect(selectedImage().props.uri).toBe(preview.uri);
+  expect(mockScrollToOffset).not.toHaveBeenCalled();
+  expect(renderer!.root.findByType(FlatList).props.style).toBeUndefined();
+});
+
+it('selects and positions Electron pages immediately with repeated arrow actions', () => {
+  mockElectron = true; mockLoaded = true;
+  mockItems = [focus, neighbour('newer'), neighbour('newest')];
+  render();
+  const navigation = () => renderer!.root.findByType(MediaPagerNavigation);
+  expect(navigation().props.hasPrevious).toBe(false);
+  act(() => { navigation().props.onPage(1); });
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+  expect(mockScrollToOffset).toHaveBeenLastCalledWith({ offset: mockWidth, animated: false });
+  // No scroll event is required before the next key press.
+  act(() => { navigation().props.onPage(1); });
+  expect(selectedImage().props.uri).toBe('https://media.test/newest');
+  expect(navigation().props.hasNext).toBe(false);
+  scrollDesktop(mockWidth);
+  expect(selectedImage().props.uri).toBe('https://media.test/newest');
+  scrollDesktop(mockWidth * 2);
+  act(() => { navigation().props.onPage(-1); });
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+  act(() => { navigation().props.onPage(-1); });
+  expect(selectedImage().props.uri).toBe(preview.uri);
+  expect(mockScrollToOffset).toHaveBeenLastCalledWith({ offset: 0, animated: false });
+});
+
+it('keeps desktop arrow paging aligned after prepending older media', () => {
+  mockElectron = true; mockLoaded = true;
+  mockItems = [focus, neighbour('newer')]; render();
+  mockItems = [neighbour('older'), ...mockItems]; render();
+  act(() => { renderer!.root.findByType(MediaPagerNavigation).props.onPage(1); });
+  expect(selectedImage().props.uri).toBe('https://media.test/newer');
+  expect(mockScrollToOffset).toHaveBeenLastCalledWith({ offset: mockWidth * 2, animated: false });
 });
 
 it('ignores Electron positioning events and retains selection after prepends', () => {
@@ -263,6 +363,24 @@ it('prepares cached Electron attachments without downloading and retains their s
   expect(selectedImage().props.uri).toBe('file:///cached-attachment.jpg');
   expect(selectedImage().props.instance).toBe(instance);
   expect(useAttachment).toHaveBeenLastCalledWith(next.meta, { autoLoad: true });
+});
+
+it('retains a second cached desktop neighbour through consecutive snapped page selections', () => {
+  mockElectron = true; mockLoaded = true;
+  const next = neighbour('newer');
+  const outer = neighbour('newest');
+  mockItems = [focus, next, outer, neighbour('outside')];
+  mockCachedImages.set(next.mediaKey, 'file:///next.jpg');
+  mockCachedImages.set(outer.mediaKey, 'file:///outer.jpg');
+  render();
+  const instance = renderer!.root.findAllByType('image').find((image) => image.props.uri === 'file:///outer.jpg')!.props.instance;
+  expect(renderer!.root.findByType(FlatList).props.windowSize).toBe(5);
+  expect(renderer!.root.findAllByType(MediaPageFrame)).toHaveLength(mockItems.length);
+  scrollDesktop(mockWidth);
+  scrollDesktop(mockWidth * 2);
+  expect(selectedImage().props.uri).toBe('file:///outer.jpg');
+  expect(selectedImage().props.instance).toBe(instance);
+  expect(mockUnmounted).not.toHaveBeenCalledWith('file:///outer.jpg', instance);
 });
 
 it('shows Electron neighbour previews during scrolling and local cache checks', () => {

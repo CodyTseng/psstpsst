@@ -401,6 +401,8 @@
     "verify_failed_open": "Megnyitás mégis"
   },
   "media": {
+    "previous": "Előző média",
+    "next": "Következő média",
     "title": "Média",
     "empty": "Még nincsenek fényképek vagy videók",
     "show_all": "Összes média",

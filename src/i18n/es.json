@@ -404,6 +404,8 @@
     "verify_failed_open": "Abrir de todos modos"
   },
   "media": {
+    "previous": "Contenido anterior",
+    "next": "Contenido siguiente",
     "title": "Contenido multimedia",
     "empty": "Aún no hay fotos ni vídeos",
     "show_all": "Todo el contenido multimedia",

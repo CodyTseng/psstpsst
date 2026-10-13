@@ -401,6 +401,8 @@
     "verify_failed_open": "Trotzdem öffnen"
   },
   "media": {
+    "previous": "Vorheriges Medium",
+    "next": "Nächstes Medium",
     "title": "Medien",
     "empty": "Noch keine Fotos oder Videos",
     "show_all": "Alle Medien",

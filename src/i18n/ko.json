@@ -401,6 +401,8 @@
     "verify_failed_open": "그래도 열기"
   },
   "media": {
+    "previous": "이전 미디어",
+    "next": "다음 미디어",
     "title": "미디어",
     "empty": "아직 사진이나 동영상이 없습니다",
     "show_all": "모든 미디어",

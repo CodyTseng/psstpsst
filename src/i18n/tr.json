@@ -401,6 +401,8 @@
     "verify_failed_open": "Yine de aç"
   },
   "media": {
+    "previous": "Önceki medya",
+    "next": "Sonraki medya",
     "title": "Medya",
     "empty": "Henüz fotoğraf veya video yok",
     "show_all": "Tüm medya",

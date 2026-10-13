@@ -401,6 +401,8 @@
     "verify_failed_open": "仍要打开"
   },
   "media": {
+    "previous": "上一个媒体",
+    "next": "下一个媒体",
     "title": "媒体",
     "empty": "暂无图片或视频",
     "show_all": "全部媒体",

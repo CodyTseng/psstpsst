@@ -317,6 +317,9 @@ export function ZoomableImage({
               contentFit="contain"
               // Replace the fitted preview on display without a crossfade.
               cachePolicy="memory-disk"
+              // Cached viewer neighbours must load before sliding into view.
+              loading={IS_ELECTRON ? 'eager' : undefined}
+              priority={IS_ELECTRON ? (interactionEnabled ? 'high' : 'low') : undefined}
               recyclingKey={cacheKey ?? uri}
               autoplay
               draggable={false}

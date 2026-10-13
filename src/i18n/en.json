@@ -401,6 +401,8 @@
     "verify_failed_open": "Open anyway"
   },
   "media": {
+    "previous": "Previous media",
+    "next": "Next media",
     "title": "Media",
     "empty": "No photos or videos yet",
     "show_all": "All media",

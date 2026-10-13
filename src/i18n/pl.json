@@ -407,6 +407,8 @@
     "verify_failed_open": "Otwórz mimo to"
   },
   "media": {
+    "previous": "Poprzednie multimedia",
+    "next": "Następne multimedia",
     "title": "Multimedia",
     "empty": "Brak zdjęć i filmów",
     "show_all": "Wszystkie multimedia",

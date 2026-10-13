@@ -484,7 +484,12 @@ Top and bottom media actions align to the same horizontal gutters.
 Scrubbing previews the video frame, retains touch ownership outside the rail,
 and restores the preceding playback intent when released.
 Full-screen image neighbours display cached images without starting downloads.
+Full-screen media viewers hide native and Electron overlay scrollbars.
 Cached image surfaces remain mounted when they become the selected page.
+Desktop viewers prepare a bounded set of further cached neighbours before
+consecutive swipes and retain their image surfaces through selection.
+Cached desktop neighbours load before entering the viewport, with the selected
+image taking priority over offscreen preparation.
 Undownloaded images use previews fitted to the media's declared aspect ratio;
 previews fill that rectangle rather than the viewport.
 Full-screen media viewers use opacity-only entrance and dismissal. Dismissal
@@ -493,6 +498,15 @@ Reduce Motion is respected.
 On touch devices, images at fit size and videos support vertical drag or flick
 to dismiss while horizontal swipes page through media. Video playback controls
 remain interactive.
+On Electron, full-screen media paging also exposes side arrows for available
+neighbours and accepts Left/Right keys in the same visual direction. Paging
+pauses while an image is zoomed; text entry retains its own arrow-key handling.
+Left/Right keys prioritize media paging even when native video controls have focus.
+Desktop swipes retain direct scrolling and the system's settling animation;
+inertial scrolling stops at the next page instead of skipping media. Subsequent
+swipes remain available without moving the pointer or waiting for a paging lock.
+Opening, resizing, or extending a media window retains the selected image;
+scroll snapping starts only after its surface is mounted and positioned.
 
 At the responsive split threshold, tablets and Electron present a persistent
 primary pane and a detail pane using the same navigation state. Narrow windows

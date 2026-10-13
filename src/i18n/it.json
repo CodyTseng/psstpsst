@@ -404,6 +404,8 @@
     "verify_failed_open": "Apri comunque"
   },
   "media": {
+    "previous": "Contenuto precedente",
+    "next": "Contenuto successivo",
     "title": "Media",
     "empty": "Ancora nessuna foto o video",
     "show_all": "Tutti i media",

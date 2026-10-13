@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { ChatRound as MessageCircle } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
 import { GalleryWide as Images } from '@solar-icons/react-native/category/video/Linear/GalleryWide';
 import DownloadIcon from 'lucide-react-native/icons/download';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -11,6 +11,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
@@ -26,6 +27,8 @@ import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
 import { MediaVideoPage } from '@/components/media/MediaVideoPage';
 import { MediaTouchPager } from './MediaTouchPager';
+import { MediaPagerNavigation } from './MediaPagerNavigation';
+import { MediaPageFrame } from './MediaPageFrame';
 import { MediaChromeProvider, MediaTopChrome } from './MediaChrome';
 import { MediaDismissSurface } from '@/components/media/MediaDismissSurface';
 import { MediaImagePlaceholder } from '@/components/common/MediaImagePlaceholder';
@@ -61,6 +64,9 @@ type Props = {
 
 // Within this many cells of an end, page in the next window of media.
 const EDGE = 3;
+// React Native Web supports this CSS property on the underlying scroll view.
+// Keep pagingEnabled stable: toggling it replaces the list's child wrappers.
+const DESKTOP_SNAP_DISABLED: ViewStyle & { scrollSnapType: 'none' } = { scrollSnapType: 'none' };
 
 type MediaPageItem = ConversationMediaItem | {
   source: 'preview';
@@ -90,6 +96,9 @@ function MediaPagerContent({
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
+  // A second cached desktop neighbour is ready for consecutive swipes. Native
+  // paging retains its smaller window; neither path prefetches downloads.
+  const imageWindowRadius = IS_ELECTRON ? 2 : 1;
   const { width, height: windowHeight } = useWindowDimensions();
   // Page height is the viewer's container height, not the window's: on desktop
   // the window frame's title bar takes a row above the viewer (DesktopWindowFrame);
@@ -142,11 +151,17 @@ function MediaPagerContent({
   const [imageScale, setImageScale] = useState(0);
   const listRef = useRef<FlatList<MediaPageItem>>(null);
   const desktopPosition = useRef<{ mediaKey: string; index: number } | null>(null);
+  const desktopScrollPosition = useRef<{ offset: number; width: number } | null>(null);
   const previousWidth = useRef(width);
   const resizing = useRef(false);
   const dragWidth = useRef<number | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [desktopSnapAnchor, setDesktopSnapAnchor] = useState<{
+    mediaKey: string;
+    index: number;
+    width: number;
+  } | null>(null);
   async function save(item: (typeof items)[number]) {
     if (saving) return;
     setSaving(true);
@@ -192,25 +207,51 @@ function MediaPagerContent({
   const ready = loaded && initialIndex !== null && items.length > 0;
   const currentItem = ready ? (items[currentIndex] ?? items[0]) : undefined;
   const pages: MediaPageItem[] = ready ? items : initialPages;
+  const desktopSnappingReady = desktopSnapAnchor?.mediaKey === currentId &&
+    desktopSnapAnchor.index === currentIndex && desktopSnapAnchor.width === width;
+
+  const positionDesktopPage = useCallback((index: number) => {
+    const offset = index * width;
+    const observed = desktopScrollPosition.current;
+    // A no-op scroll emits no event. Do not wait for another event when the
+    // final swipe callback has already reported this page's aligned position.
+    resizing.current = observed
+      ? observed.width !== width || Math.abs(observed.offset - offset) >= 1
+      : index !== 0;
+    dragWidth.current = null;
+    if (!observed || resizing.current) {
+      listRef.current?.scrollToOffset({ offset, animated: false });
+    }
+  }, [width]);
+
+  const onDesktopPageReady = useCallback(() => {
+    if (!IS_ELECTRON || !ready) return;
+    // Snap points for a distant target may not exist until virtualization mounts
+    // it. Position without snapping first, then enable snapping at that surface.
+    positionDesktopPage(currentIndex);
+    setDesktopSnapAnchor((previous) =>
+      previous?.mediaKey === currentId && previous.index === currentIndex && previous.width === width
+        ? previous : { mediaKey: currentId, index: currentIndex, width });
+  }, [ready, currentId, currentIndex, width, positionDesktopPage]);
 
   useLayoutEffect(() => {
     if (!IS_ELECTRON || !ready) return;
     const previous = desktopPosition.current;
     desktopPosition.current = { mediaKey: currentId, index: currentIndex };
-    if (!(preview && !previous) &&
-      !(previous?.mediaKey === currentId && previous.index !== currentIndex)) return;
+    if (previous &&
+      !(previous.mediaKey === currentId && previous.index !== currentIndex)) return;
     // React Native Web does not implement native visible-position anchoring.
     // Retain selection when the initial window or older neighbours arrive.
-    resizing.current = currentIndex !== 0;
-    listRef.current?.scrollToOffset({ offset: currentIndex * width, animated: false });
-  }, [preview, ready, currentId, currentIndex, width]);
+    positionDesktopPage(currentIndex);
+  }, [ready, currentId, currentIndex, width, positionDesktopPage]);
 
   useLayoutEffect(() => {
     if (previousWidth.current === width) return;
     previousWidth.current = width;
-    resizing.current = true;
+    if (IS_ELECTRON && ready) positionDesktopPage(currentIndex);
+    else resizing.current = true;
     dragWidth.current = null;
-  }, [width]);
+  }, [width, ready, currentIndex, positionDesktopPage]);
 
   const videoActive = !IS_ELECTRON && !!currentItem?.isVideo && !isClosing;
   useEffect(() => {
@@ -223,9 +264,8 @@ function MediaPagerContent({
 
   function alignResizedPage() {
     if (resizing.current && ready) {
-      listRef.current?.scrollToOffset({ offset: currentIndex * width, animated: false });
-      // At offset zero, a resize may not produce any browser scroll event.
-      if (IS_ELECTRON && currentIndex === 0) resizing.current = false;
+      if (IS_ELECTRON) positionDesktopPage(currentIndex);
+      else listRef.current?.scrollToOffset({ offset: currentIndex * width, animated: false });
     }
   }
 
@@ -244,6 +284,8 @@ function MediaPagerContent({
     ready ? items[currentIndex - 1] : undefined,
     currentItem,
     ready ? items[currentIndex + 1] : undefined,
+    IS_ELECTRON && ready ? items[currentIndex - 2] : undefined,
+    IS_ELECTRON && ready ? items[currentIndex + 2] : undefined,
   );
 
   function renderPage(item: MediaPageItem, active: boolean) {
@@ -275,6 +317,15 @@ function MediaPagerContent({
 
   const selectedPage = ready ? currentIndex : 0;
   const touchPage = pages[selectedPage];
+
+  function navigateDesktopPage(step: -1 | 1) {
+    const index = currentIndex + step;
+    if (!ready || zoomed || isClosing || index < 0 || index >= pages.length) return;
+    // Select immediately so repeated keys use the latest page. Ignore positioning
+    // events until the list reaches it, just as with prepend/resize alignment.
+    positionDesktopPage(index);
+    selectPage(index);
+  }
 
   return (
     <MediaViewerContextMenu
@@ -311,16 +362,19 @@ function MediaPagerContent({
         ) : (
           <FlatList<MediaPageItem>
             ref={listRef}
+            {...(IS_ELECTRON ? { dataSet: { psstpsstScrollbarHidden: 'true' } } : {})}
             data={pages}
             horizontal
             pagingEnabled
+            style={IS_ELECTRON && !desktopSnappingReady ? DESKTOP_SNAP_DISABLED : undefined}
             showsHorizontalScrollIndicator={false}
-            initialNumToRender={1}
-            maxToRenderPerBatch={3}
+            initialNumToRender={IS_ELECTRON ? imageWindowRadius * 2 + 1 : 1}
+            maxToRenderPerBatch={imageWindowRadius * 2 + 1}
+            updateCellsBatchingPeriod={IS_ELECTRON ? 0 : undefined}
             // The small virtualized window bounds memory. Native clipping can
             // detach the retained bitmap before prepend anchoring catches up.
             removeClippedSubviews={false}
-            initialScrollIndex={preview ? 0 : initialIndex ?? 0}
+            initialScrollIndex={preview && !ready ? 0 : initialIndex ?? 0}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
             keyExtractor={(it) => it.mediaKey}
             scrollEnabled={!zoomed}
@@ -334,6 +388,10 @@ function MediaPagerContent({
             }}
             scrollEventThrottle={16}
             onScroll={IS_ELECTRON ? (e) => {
+              desktopScrollPosition.current = {
+                offset: e.nativeEvent.contentOffset.x,
+                width: e.nativeEvent.layoutMeasurement.width,
+              };
               // Web emits scroll events, not native drag/momentum callbacks.
               // Commit only snapped pages so passing a neighbour cannot fetch it.
               if (!ready || zoomed || isClosing || width <= 0 ||
@@ -358,18 +416,25 @@ function MediaPagerContent({
               selectPage(Math.round(e.nativeEvent.contentOffset.x / width));
             }}
             // Retain cached neighbour images without starting remote downloads.
-            windowSize={3}
+            windowSize={imageWindowRadius * 2 + 1}
             renderItem={({ item, index }) => (
-              <View style={{ width, height: pageHeight }}>
-                {Math.abs(index - currentIndex) <= 1
+              <MediaPageFrame width={width} height={pageHeight}
+                onReady={IS_ELECTRON && index === currentIndex ? onDesktopPageReady : undefined}>
+                {Math.abs(index - currentIndex) <= imageWindowRadius
                   ? renderPage(item, index === currentIndex)
                   : <MediaPagePreview item={item} />}
-              </View>
+              </MediaPageFrame>
             )}
           />
         )}
       </Animated.View>
       <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]} pointerEvents={isClosing ? 'none' : 'box-none'}>
+        <MediaPagerNavigation
+          hasPrevious={ready && currentIndex > 0}
+          hasNext={ready && currentIndex < pages.length - 1}
+          disabled={!ready || zoomed || isClosing}
+          onPage={navigateDesktopPage}
+        />
         <MediaTopChrome>
           <MediaViewerTopBar
             imageZoom={!currentItem || currentItem.isVideo ? undefined : {

@@ -404,6 +404,8 @@
     "verify_failed_open": "Abrir mesmo assim"
   },
   "media": {
+    "previous": "Mídia anterior",
+    "next": "Próxima mídia",
     "title": "Mídia",
     "empty": "Nenhuma foto ou vídeo ainda",
     "show_all": "Todas as mídias",

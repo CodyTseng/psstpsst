@@ -404,6 +404,8 @@
     "verify_failed_open": "Abrir mesmo assim"
   },
   "media": {
+    "previous": "Multimédia anterior",
+    "next": "Multimédia seguinte",
     "title": "Multimédia",
     "empty": "Ainda não há fotografias nem vídeos",
     "show_all": "Todos os conteúdos multimédia",

@@ -294,3 +294,17 @@ it('keeps inactive cached neighbours visible with every touch gesture disabled',
     expect(gesture(name).config.enabled).toBe(false);
   }
 });
+
+it('loads desktop neighbours eagerly and promotes the same image when selected', () => {
+  const props = { uri: 'file:///cached.jpg', thumbhash: 'preview', onRequestClose: close };
+  act(() => { renderer = create(<ZoomableImage {...props} interactionEnabled={false} />); });
+  const image = renderer.root.findByType(Image);
+  expect(image.props.loading).toBe('eager');
+  expect(image.props.priority).toBe('low');
+  act(() => { image.props.onDisplay(); });
+  expect(renderer.root.findAllByType(MediaImagePlaceholder)).toHaveLength(0);
+  act(() => { renderer.update(<ZoomableImage {...props} interactionEnabled />); });
+  expect(renderer.root.findByType(Image)).toBe(image);
+  expect(image.props.priority).toBe('high');
+  expect(renderer.root.findAllByType(MediaImagePlaceholder)).toHaveLength(0);
+});
