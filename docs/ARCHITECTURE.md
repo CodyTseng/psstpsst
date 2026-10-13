@@ -297,8 +297,11 @@ and state-machine details.
    and relay closures never advance a frontier. Tasks start only while the app
    is active, including foreground re-entry. Forward recovery re-reads the
    gift-wrap randomization window before its previous wall-clock watermark;
-   processed envelope IDs deduplicate the overlap. An already-started pass may
-   continue after backgrounding; foreground transitions do not start overlapping
+   processed envelope IDs deduplicate the overlap. Each account/relay persists
+   a fixed pending forward window and its last wire-confirmed page checkpoint.
+   Recovery finishes that window before scanning a newer gap; only completion
+   atomically advances the watermark and clears the checkpoint. An already-started
+   pass may continue after backgrounding; foreground transitions do not start overlapping
    passes for the same relay. Group history finalization uses the conservative
    coverage intersection of the currently configured DM relays. Background polls,
    socket recovery, and background session reinitialization never start history

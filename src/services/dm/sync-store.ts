@@ -4,6 +4,7 @@ import { db } from '@/db/client';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { canReceiveForAccount } from '../account/account-receive-guard';
 import { processedGiftWraps, processedSyncRequests, syncCursors } from '@/db/schema';
+import type { ForwardSyncScan } from '@/db/schema/sync-cursors';
 
 /** Durable paging frontiers belong to one account and one normalized relay.
  * Account-wide coverage is only a conservative read model for group admission;
@@ -13,8 +14,9 @@ export type SyncCursor = {
   backwardUntil: number | null;
 };
 
-const cursorCache = new Map<string, Map<string, SyncCursor>>();
-const cursorLoads = new Map<string, Promise<Map<string, SyncCursor>>>();
+type StoredSyncCursor = SyncCursor & { pendingForward: ForwardSyncScan | null };
+const cursorCache = new Map<string, Map<string, StoredSyncCursor>>();
+const cursorLoads = new Map<string, Promise<Map<string, StoredSyncCursor>>>();
 const cursorSeeds = new Map<string, Map<string, Promise<SyncCursor>>>();
 const activeRelays = new Map<string, string[]>();
 const emptyCursor = (): SyncCursor => ({ forwardSince: null, backwardUntil: null });
@@ -41,7 +43,7 @@ export function peekSyncCursor(accountPubkey: string): SyncCursor | undefined {
   return { forwardSince, backwardUntil };
 }
 
-async function loadCursors(accountPubkey: string): Promise<Map<string, SyncCursor>> {
+async function loadCursors(accountPubkey: string): Promise<Map<string, StoredSyncCursor>> {
   const cached = cursorCache.get(accountPubkey);
   if (cached) return cached;
   const pending = cursorLoads.get(accountPubkey);
@@ -62,6 +64,8 @@ async function loadCursors(accountPubkey: string): Promise<Map<string, SyncCurso
             ? null : Math.min(previous.forwardSince, row.forwardSince),
           backwardUntil: previous.backwardUntil === null || row.backwardUntil === null
             ? null : Math.max(previous.backwardUntil, row.backwardUntil),
+          // A merged frontier may have a different floor; safely restart its scan.
+          pendingForward: null,
           updatedAt: Math.max(previous.updatedAt, row.updatedAt),
         } : { ...row, relayUrl: url });
       }
@@ -71,7 +75,8 @@ async function loadCursors(accountPubkey: string): Promise<Map<string, SyncCurso
         for (const row of normalized.values()) {
           await tx.insert(syncCursors).values(row).onConflictDoUpdate({
             target: [syncCursors.accountPubkey, syncCursors.relayUrl],
-            set: { forwardSince: row.forwardSince, backwardUntil: row.backwardUntil, updatedAt: row.updatedAt },
+            set: { forwardSince: row.forwardSince, backwardUntil: row.backwardUntil,
+              pendingForward: row.pendingForward, updatedAt: row.updatedAt },
           });
         }
         await tx.delete(syncCursors).where(and(
@@ -80,6 +85,7 @@ async function loadCursors(accountPubkey: string): Promise<Map<string, SyncCurso
       });
       const cursors = new Map([...normalized].map(([url, row]) => [url, {
         forwardSince: row.forwardSince, backwardUntil: row.backwardUntil,
+        pendingForward: row.pendingForward,
       }]));
       if (cursorLoads.get(accountPubkey) === task) cursorCache.set(accountPubkey, cursors);
       return cursors;
@@ -99,7 +105,7 @@ export async function getRelaySyncCursor(accountPubkey: string, relayUrl: string
   relayUrl = normalizeRelayUrl(relayUrl);
   const cursors = await loadCursors(accountPubkey);
   const existing = cursors.get(relayUrl);
-  if (existing) return existing;
+  if (existing) return { forwardSince: existing.forwardSince, backwardUntil: existing.backwardUntil };
   let seeds = cursorSeeds.get(accountPubkey);
   if (!seeds) {
     seeds = new Map();
@@ -112,8 +118,10 @@ export async function getRelaySyncCursor(accountPubkey: string, relayUrl: string
     accountPubkey, relayUrl, ...inherited, updatedAt: Math.floor(Date.now() / 1000),
   }).onConflictDoNothing().then(() => {
     const cursor = cursors.get(relayUrl) ?? inherited;
-    if (cursorCache.get(accountPubkey) === cursors) cursors.set(relayUrl, cursor);
-    return cursor;
+    if (cursorCache.get(accountPubkey) === cursors && !cursors.has(relayUrl)) {
+      cursors.set(relayUrl, { ...cursor, pendingForward: null });
+    }
+    return { forwardSince: cursor.forwardSince, backwardUntil: cursor.backwardUntil };
   }).finally(() => {
     if (seeds.get(relayUrl) === task) seeds.delete(relayUrl);
     if (seeds.size === 0 && cursorSeeds.get(accountPubkey) === seeds) cursorSeeds.delete(accountPubkey);
@@ -145,13 +153,13 @@ function inheritLeastCoveredCursor(accountPubkey: string, cursors: Map<string, S
       smallest = coverage;
     }
   }
-  return source ? { ...source } : emptyCursor();
+  return source ? { forwardSince: source.forwardSince, backwardUntil: source.backwardUntil } : emptyCursor();
 }
 
 async function upsertCursor(
   accountPubkey: string,
   relayUrl: string,
-  patch: Partial<SyncCursor>,
+  patch: Partial<StoredSyncCursor>,
 ): Promise<void> {
   relayUrl = normalizeRelayUrl(relayUrl);
   const cursors = await loadCursors(accountPubkey);
@@ -162,7 +170,7 @@ async function upsertCursor(
     target: [syncCursors.accountPubkey, syncCursors.relayUrl],
     set: { ...patch, updatedAt },
   });
-  cursors.set(relayUrl, { ...(cursors.get(relayUrl) ?? emptyCursor()), ...patch });
+  cursors.set(relayUrl, { ...(cursors.get(relayUrl) ?? { ...emptyCursor(), pendingForward: null }), ...patch });
 }
 
 export function clearSyncCursorCache(accountPubkey: string): void {
@@ -173,7 +181,20 @@ export function clearSyncCursorCache(accountPubkey: string): void {
 }
 
 export function setForwardSince(accountPubkey: string, relayUrl: string, since: number): Promise<void> {
-  return upsertCursor(accountPubkey, relayUrl, { forwardSince: since });
+  // Commit coverage and clear its checkpoint in the same atomic row write.
+  return upsertCursor(accountPubkey, relayUrl, { forwardSince: since, pendingForward: null });
+}
+
+export async function getPendingForwardScan(accountPubkey: string, relayUrl: string): Promise<ForwardSyncScan | null> {
+  const cursors = await loadCursors(accountPubkey);
+  return cursors.get(normalizeRelayUrl(relayUrl))?.pendingForward ?? null;
+}
+
+/** Persist only after the page's intake has finished and wire EOSE confirms it. */
+export function setPendingForwardScan(
+  accountPubkey: string, relayUrl: string, scan: ForwardSyncScan,
+): Promise<void> {
+  return upsertCursor(accountPubkey, relayUrl, { pendingForward: scan });
 }
 
 export function setBackwardUntil(accountPubkey: string, relayUrl: string, until: number): Promise<void> {

@@ -77,6 +77,7 @@ import {
 } from './encryption-key.service';
 import {
   configureSyncRelays,
+  getPendingForwardScan,
   getRelaySyncCursor,
   getProcessedGiftWrapIds,
   isGiftWrapProcessed,
@@ -86,6 +87,7 @@ import {
   peekSyncCursor,
   setBackwardUntil,
   setForwardSince,
+  setPendingForwardScan,
 } from './sync-store';
 import { isActiveConversationVisible } from './active-conversation';
 import { receiveSessionStore } from './receive-session';
@@ -110,7 +112,7 @@ import {
  * re-received overlap is cheap — already-seen ids skip decryption. */
 const FORWARD_OVERLAP_SECONDS = 2 * 24 * 60 * 60 + 60 * 60; // 2 days + 1h margin
 /** History backfill page size (per relay, per round). */
-const BACKFILL_PAGE = 200;
+const BACKFILL_PAGE = 500;
 const BACKFILL_MAX_BOUNDARY_PAGE = 3200;
 /** Backfill round query timeout. */
 const BACKFILL_QUERY_TIMEOUT_MS = 25_000;
@@ -1725,15 +1727,10 @@ export class DmService {
   ): Promise<boolean> {
     const cursor = await getRelaySyncCursor(accountPubkey, relayUrl);
     if (this.syncEpoch !== epoch) return false;
-    const forwardFloor = cursor.forwardSince === null
-      ? through : Math.max(BACKFILL_DONE, cursor.forwardSince - FORWARD_OVERLAP_SECONDS);
-    const forward = await this.drainWindow(accountPubkey, relayUrl, through, forwardFloor, epoch);
+    const forwardComplete = await this.recoverForwardHistory(
+      accountPubkey, relayUrl, cursor.forwardSince, through, epoch,
+    );
     if (this.syncEpoch !== epoch) return false;
-    // The first cutoff anchors future recent-gap scans while deep history owns
-    // the earlier range. A partial deep scan must not lose that anchor on restart.
-    if (forward === 'drained') {
-      await setForwardSince(accountPubkey, relayUrl, through);
-    }
     let backwardComplete = cursor.backwardUntil === BACKFILL_DONE;
     if (!backwardComplete) {
       const backward = await this.drainWindow(
@@ -1747,7 +1744,45 @@ export class DmService {
       }
     }
     if (this.syncEpoch !== epoch) return false;
-    return forward === 'drained' && backwardComplete;
+    return forwardComplete && backwardComplete;
+  }
+
+  /** Finish a durable fixed window before admitting the next recent gap.
+   * Checkpoints never claim complete coverage; only the final atomic commit
+   * moves the watermark. Live intake remains independent of this scan. */
+  private async recoverForwardHistory(
+    accountPubkey: string, relayUrl: string, forwardSince: number | null,
+    through: number, epoch: number,
+  ): Promise<boolean> {
+    let scan = await getPendingForwardScan(accountPubkey, relayUrl);
+    while (this.syncEpoch === epoch) {
+      if (!scan) {
+        scan = {
+          through,
+          floor: forwardSince === null
+            ? through : Math.max(BACKFILL_DONE, forwardSince - FORWARD_OVERLAP_SECONDS),
+          nextUntil: through,
+        };
+        // Persist the fixed bounds before the first request, including the
+        // initial anchor whose earlier range belongs to deep history.
+        await setPendingForwardScan(accountPubkey, relayUrl, scan);
+        if (this.syncEpoch !== epoch) return false;
+      }
+      const window = scan;
+      const result = await this.drainWindow(
+        accountPubkey, relayUrl, window.nextUntil, window.floor, epoch,
+        nextUntil => setPendingForwardScan(accountPubkey, relayUrl, { ...window, nextUntil }),
+      );
+      if (this.syncEpoch !== epoch || result !== 'drained') return false;
+      await setForwardSince(accountPubkey, relayUrl, window.through);
+      if (this.syncEpoch !== epoch) return false;
+      if (window.through >= through) return true;
+      // Catch up only to this pass's fixed cutoff, so a busy relay cannot keep
+      // extending the task indefinitely and starve deep history.
+      forwardSince = window.through;
+      scan = null;
+    }
+    return false;
   }
 
   /** Page only one replica, with bounded memory and a UI yield per new envelope.

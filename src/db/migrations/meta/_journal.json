@@ -407,6 +407,13 @@
       "when": 1791558000000,
       "tag": "0057_per-relay-sync-cursors",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1791900851111,
+      "tag": "0058_forward-sync-checkpoints",
+      "breakpoints": true
     }
   ]
 }

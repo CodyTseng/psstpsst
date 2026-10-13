@@ -1,0 +1,1 @@
+ALTER TABLE `sync_cursors` ADD `pending_forward` text;

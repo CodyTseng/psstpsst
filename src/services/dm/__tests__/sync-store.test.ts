@@ -4,10 +4,12 @@ import {
   clearSyncCursorCache,
   configureSyncRelays,
   getRelaySyncCursor,
+  getPendingForwardScan,
   getSyncCursor,
   peekSyncCursor,
   setBackwardUntil,
   setForwardSince,
+  setPendingForwardScan,
 } from '../sync-store';
 
 let mockSqlite: DatabaseSync;
@@ -19,7 +21,7 @@ jest.mock('@/db/client', () => {
   mockSqlite = new DatabaseSync(':memory:');
   mockSqlite.exec(`CREATE TABLE sync_cursors (
     account_pubkey TEXT NOT NULL, relay_url TEXT NOT NULL,
-    forward_since INTEGER, backward_until INTEGER, updated_at INTEGER NOT NULL,
+    forward_since INTEGER, backward_until INTEGER, pending_forward TEXT, updated_at INTEGER NOT NULL,
     PRIMARY KEY (account_pubkey, relay_url)
   );`);
   return { db: createAsyncDatabase({
@@ -54,7 +56,7 @@ beforeEach(() => {
 afterAll(() => mockSqlite.close());
 
 it('migrates a root relay cursor without a trailing slash and preserves its progress', async () => {
-  mockSqlite.prepare('INSERT INTO sync_cursors VALUES (?, ?, ?, ?, ?)')
+  mockSqlite.prepare('INSERT INTO sync_cursors (account_pubkey, relay_url, forward_since, backward_until, updated_at) VALUES (?, ?, ?, ?, ?)')
     .run('a', 'wss://first.example', 100, 20, 1);
   configureSyncRelays('a', ['wss://first.example/']);
   expect(await getRelaySyncCursor('a', 'wss://first.example'))
@@ -67,7 +69,7 @@ it('migrates a root relay cursor without a trailing slash and preserves its prog
 });
 
 it('merges legacy relay aliases conservatively and persists one canonical cursor', async () => {
-  const insert = mockSqlite.prepare('INSERT INTO sync_cursors VALUES (?, ?, ?, ?, ?)');
+  const insert = mockSqlite.prepare('INSERT INTO sync_cursors (account_pubkey, relay_url, forward_since, backward_until, updated_at) VALUES (?, ?, ?, ?, ?)');
   insert.run('a', 'wss://FIRST.example//?b=2&a=1#fragment', 200, 50, 1);
   insert.run('a', 'wss://first.example?a=1&b=2', 100, 0, 2);
   configureSyncRelays('a', ['https://first.example/?b=2&a=1']);
@@ -175,4 +177,54 @@ it('preserves unknown frontiers when the least-covered relay has not completed i
   const third = 'wss://third.example';
   configureSyncRelays('a', [first, second, third]);
   expect(await getRelaySyncCursor('a', third)).toEqual({ forwardSince: 100, backwardUntil: null });
+});
+
+it('restores fixed forward scans independently per account and normalized relay without claiming coverage', async () => {
+  const scan = { through: 300, floor: 0, nextUntil: 200 };
+  await setForwardSince('a', first, 100);
+  await setPendingForwardScan('a', first, scan);
+  await setPendingForwardScan('a', second, { ...scan, nextUntil: 150 });
+  await setPendingForwardScan('b', first, { ...scan, through: 400 });
+  clearSyncCursorCache('a');
+  clearSyncCursorCache('b');
+  expect(await getPendingForwardScan('a', `${first}/`)).toEqual(scan);
+  expect(await getPendingForwardScan('a', second)).toEqual({ ...scan, nextUntil: 150 });
+  expect(await getPendingForwardScan('b', first)).toEqual({ ...scan, through: 400 });
+  expect(await getRelaySyncCursor('a', first)).toEqual({ forwardSince: 100, backwardUntil: null });
+  configureSyncRelays('a', [first, 'wss://new.example']);
+  expect(await getRelaySyncCursor('a', 'wss://new.example')).toEqual({ forwardSince: 100, backwardUntil: null });
+  expect(await getPendingForwardScan('a', 'wss://new.example')).toBeNull();
+});
+
+it('keeps the checkpoint and watermark intact if the atomic completion write fails', async () => {
+  const scan = { through: 300, floor: 0, nextUntil: 0 };
+  await setForwardSince('a', first, 100);
+  await setBackwardUntil('a', first, 20);
+  await setPendingForwardScan('a', first, scan);
+  mockSqlite.exec(`CREATE TRIGGER fail_completion BEFORE UPDATE ON sync_cursors
+    WHEN NEW.pending_forward IS NULL BEGIN SELECT RAISE(ABORT, 'write failed'); END;`);
+  try {
+    await expect(setForwardSince('a', first, 300)).rejects.toThrow();
+    expect(await getPendingForwardScan('a', first)).toEqual(scan);
+    clearSyncCursorCache('a');
+    expect(await getRelaySyncCursor('a', first)).toEqual({ forwardSince: 100, backwardUntil: 20 });
+    expect(await getPendingForwardScan('a', first)).toEqual(scan);
+  } finally {
+    mockSqlite.exec('DROP TRIGGER fail_completion');
+  }
+  await setForwardSince('a', first, 300);
+  clearSyncCursorCache('a');
+  expect(await getRelaySyncCursor('a', first)).toEqual({ forwardSince: 300, backwardUntil: 20 });
+  expect(await getPendingForwardScan('a', first)).toBeNull();
+});
+
+it('preserves an alias checkpoint but discards it when conservative frontier merging changes its bounds', async () => {
+  const scan = { through: 300, floor: 0, nextUntil: 200 };
+  const insert = mockSqlite.prepare('INSERT INTO sync_cursors VALUES (?, ?, ?, ?, ?, ?)');
+  insert.run('a', first, 100, 0, JSON.stringify(scan), 1);
+  expect(await getPendingForwardScan('a', `${first}/`)).toEqual(scan);
+  clearSyncCursorCache('a');
+  insert.run('a', first, 50, 0, JSON.stringify(scan), 1);
+  expect(await getRelaySyncCursor('a', first)).toEqual({ forwardSince: 50, backwardUntil: 0 });
+  expect(await getPendingForwardScan('a', first)).toBeNull();
 });

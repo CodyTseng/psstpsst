@@ -9,10 +9,12 @@ import { relayPool, type SubscribeOpts } from '../../relay/relay-pool';
 import { selfEventStream } from '../../self-events/self-event-stream.service';
 import {
   getProcessedGiftWrapIds,
+  getPendingForwardScan,
   getRelaySyncCursor,
   markGiftWrapProcessed,
   setBackwardUntil,
   setForwardSince,
+  setPendingForwardScan,
 } from '../sync-store';
 import { unwrapGiftWrapWithKeys, type GiftWrapUnwrapOutcome } from '../../crypto/nip17-gift-wrap';
 
@@ -68,6 +70,7 @@ jest.mock('../block.service', () => ({ loadBlockedIntoCache: jest.fn(), isBlocke
 jest.mock('../sync-store', () => ({
   configureSyncRelays: jest.fn(),
   getRelaySyncCursor: jest.fn(), isGiftWrapProcessed: async (id: string) => mockProcessedIds.has(id),
+  getPendingForwardScan: jest.fn(), setPendingForwardScan: jest.fn(),
   peekSyncCursor: jest.fn(() => undefined),
   getProcessedGiftWrapIds: jest.fn(async (ids: string[]) =>
     new Set(ids.filter((id) => mockProcessedIds.has(id)))),
@@ -129,6 +132,7 @@ beforeEach(() => {
     return [];
   });
   jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: null, backwardUntil: 0 });
+  jest.mocked(getPendingForwardScan).mockResolvedValue(null);
   jest.mocked(unwrapGiftWrapWithKeys).mockResolvedValue({ status: 'failed' });
 });
 afterEach(() => dmService.destroy());
@@ -695,7 +699,7 @@ it('expands a full boundary second before advancing the relay cursor', async () 
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
   try {
     jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
-    const events = Array.from({ length: 201 }, (_, i) => ({ id: `boundary-${i}`, tags: [['p', self]], kind: 1059, created_at: 1000 } as Event));
+    const events = Array.from({ length: 501 }, (_, i) => ({ id: `boundary-${i}`, tags: [['p', self]], kind: 1059, created_at: 1000 } as Event));
     for (const event of events) mockProcessedIds.add(event.id);
     jest.mocked(relayPool.query).mockImplementation(async opts => {
       const page = opts.filter!.until! < 1000 ? [] : events.slice(0, opts.filter!.limit!);
@@ -705,9 +709,74 @@ it('expands a full boundary second before advancing the relay cursor', async () 
     await dmService.init(options);
     await flush();
     expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => [opts.filter?.until, opts.filter?.limit]))
-      .toEqual([[1000, 200], [1000, 400], [999, 200]]);
+      .toEqual([[1000, 500], [1000, 1000], [999, 500]]);
     expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(events.map(event => event.id));
     expect(setForwardSince).toHaveBeenCalledWith(self, 'wss://fresh.example', 1000);
+    expect(jest.mocked(setPendingForwardScan).mock.calls.map(([, , scan]) => scan.nextUntil))
+      .toEqual([1000, 999]);
+  } finally { clock.mockRestore(); }
+});
+
+it('resumes a fixed forward window after interruption, then catches up to the new pass cutoff', async () => {
+  mockAppState = 'active';
+  const relay = 'wss://fresh.example';
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  try {
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+    for (const id of ['confirmed-forward', 'partial-forward']) mockProcessedIds.add(id);
+    jest.mocked(relayPool.query)
+      .mockImplementationOnce(async opts => {
+        opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: relay, status: 'eose', received: 1 }] });
+        return [{ id: 'confirmed-forward', created_at: 900 } as Event];
+      })
+      .mockImplementationOnce(async opts => {
+        opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: relay, status: 'eose', received: 1, reason: 'query timed out' }] });
+        return [{ id: 'partial-forward', created_at: 800 } as Event];
+      });
+    await dmService.init(options);
+    await flush();
+    const checkpoint = { through: 1000, floor: 0, nextUntil: 900 };
+    expect(jest.mocked(setPendingForwardScan).mock.calls.map(([, , scan]) => scan))
+      .toEqual([{ ...checkpoint, nextUntil: 1000 }, checkpoint]);
+    expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(['partial-forward']);
+    expect(setForwardSince).not.toHaveBeenCalled();
+
+    // Restart with a later clock and the persisted page checkpoint.
+    dmService.destroy();
+    clock.mockReturnValue(2_000_000);
+    jest.mocked(getPendingForwardScan).mockResolvedValue(checkpoint);
+    await dmService.init(options);
+    await flush();
+    expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => opts.filter?.until))
+      .toEqual([1000, 900, 900, 2000]);
+    expect(jest.mocked(setForwardSince).mock.calls)
+      .toEqual([[self, relay, 1000], [self, relay, 2000]]);
+    expect(jest.mocked(setPendingForwardScan).mock.calls.at(-1)?.[2])
+      .toEqual({ through: 2000, floor: 0, nextUntil: 2000 });
+  } finally { clock.mockRestore(); }
+});
+
+it('does not checkpoint a full saturated timestamp boundary or claim its forward coverage', async () => {
+  mockAppState = 'active';
+  const relay = 'wss://fresh.example';
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  try {
+    const checkpoint = { through: 1000, floor: 0, nextUntil: 900 };
+    jest.mocked(getPendingForwardScan).mockResolvedValue(checkpoint);
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+    const events = Array.from({ length: 3200 }, (_, i) => ({ id: `saturated-${i}`, created_at: 900 } as Event));
+    for (const event of events) mockProcessedIds.add(event.id);
+    jest.mocked(relayPool.query).mockImplementation(async opts => {
+      const page = events.slice(0, opts.filter!.limit!);
+      opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: relay, status: 'eose', received: page.length }] });
+      return page;
+    });
+    await dmService.init(options);
+    await flush();
+    expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => [opts.filter?.until, opts.filter?.limit]))
+      .toEqual([[900, 500], [900, 1000], [900, 2000], [900, 3200]]);
+    expect(setPendingForwardScan).not.toHaveBeenCalled();
+    expect(setForwardSince).not.toHaveBeenCalled();
   } finally { clock.mockRestore(); }
 });
 

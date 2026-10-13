@@ -59,6 +59,7 @@ import m0054 from './0054_conversation-updated-time.sql';
 import m0055 from './0055_conversation-list-index.sql';
 import m0056 from './0056_private-list-sync-state.sql';
 import m0057 from './0057_per-relay-sync-cursors.sql';
+import m0058 from './0058_forward-sync-checkpoints.sql';
 
   export default {
     journal,
@@ -120,6 +121,7 @@ m0053,
 m0054,
 m0055,
 m0056,
-m0057
+m0057,
+m0058
     }
   }
