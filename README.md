@@ -29,13 +29,13 @@ notes will be available on
 [GitHub Releases](https://github.com/codytseng/psstpsst/releases).
 Until then, use the source-build instructions below.
 
-| Platform | Distribution target |
-| --- | --- |
-| Android | Universal APK |
-| macOS | Apple Silicon DMG and ZIP |
-| Windows | x64 and arm64 installers |
-| Linux | x64 and arm64 AppImage and DEB |
-| iOS | Build with Xcode; public distribution details will accompany a release |
+| Platform | Distribution target                                                    |
+| -------- | ---------------------------------------------------------------------- |
+| Android  | Universal APK                                                          |
+| macOS    | Apple Silicon DMG and ZIP                                              |
+| Windows  | x64 and arm64 installers                                               |
+| Linux    | x64 and arm64 AppImage and DEB                                         |
+| iOS      | Build with Xcode; public distribution details will accompany a release |
 
 This table describes the configured release targets, not store availability.
 Check each release's notes for tested OS versions and known issues.
@@ -200,6 +200,13 @@ with the maintainer before implementation. Report vulnerabilities through the
   publication, groups, and client behavior
 - [Android QR scanner maintenance](docs/ANDROID_QR_SCANNER.md)
 - [Third-party notice maintenance](docs/OPEN_SOURCE_NOTICES.md)
+
+## Donate
+
+If you like this project, you can buy me a coffee :)
+
+- **Lightning:** [codytseng@getalby.com](https://bitcointipjar.com/cody)
+- **Bitcoin:** bc1qwp2uqjd2dy32qfe39kehnlgx3hyey0h502fvht
 
 ## License
 
