@@ -241,6 +241,17 @@ test('missing keys remain retryable once secure storage becomes available', asyn
 });
 
 
+test('native presence lock releases for suspension, recovers from contention and cancels stale retries', { skip: process.platform !== 'darwin' }, () => {
+  const executable = join(directory, 'presence-lock-harness');
+  execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-module-cache-path', join(directory, 'swift-cache'),
+    'modules/expo-local-notifications/ios/SharedNotificationContext.swift',
+    'scripts/notification-extension/PresenceLockHarness.swift', '-o', executable,
+  ], { timeout: 60000, stdio: 'pipe' });
+  assert.equal(execFileSync(executable, [join(directory, 'app-presence.lock')], {
+    timeout: 25000, encoding: 'utf8',
+  }).trim(), 'ok');
+});
+
 test('shipping Swift bridge executes the same processor in JavaScriptCore', { skip: process.platform !== 'darwin' }, async () => {
   const executable = join(directory, 'runtime-harness');
   execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-module-cache-path', join(directory, 'swift-cache'),

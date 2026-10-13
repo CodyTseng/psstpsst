@@ -347,6 +347,11 @@ owns notification eligibility; duplicate envelopes or rumor IDs never produce a
 second alert attempt. Missing keys and failed decryption remain retryable after
 key reload, with bounded failure deduplication within a receive session.
 
+iOS notification presence holds its App Group file lock only while the main app
+is active, releasing it before background suspension. Transient probe contention
+retries asynchronously only while active. Extensions treat an absent
+lock as no foreground user, regardless of stale shared lifecycle preferences.
+
 On macOS, an in-process Node-API bridge queries and requests notification
 authorization asynchronously for the app's own identity. Capability probes must
 not request permission or stand in for an OS grant. Notification settings refresh
