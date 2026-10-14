@@ -1,5 +1,21 @@
 # Changelog
 
+## [26.10.6]
+
+- Improved message history sync to resume after interruptions.
+- Improved new message banners and arrival feedback.
+- Changed the unread message request badge in Contacts from a count to a dot.
+- Fixed banners appearing for muted chats and message requests.
+
+### iOS
+
+- Fixed a crash when the app moves to the background.
+
+### Desktop
+
+- Added media navigation arrows and keyboard paging.
+- Fixed cached images disappearing when browsing media.
+
 ## [26.10.5]
 
 - Added brief feedback for common actions.
