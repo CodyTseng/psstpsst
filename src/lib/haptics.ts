@@ -28,6 +28,11 @@ export function impact(style: keyof typeof IMPACT = 'medium') {
   safe(() => Haptics.impactAsync(IMPACT[style]));
 }
 
+/** Notification-style feedback for an incoming in-app message notice. */
+export function messageArrivalFeedback() {
+  safe(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+}
+
 /** A confirmation tick for rare, completed success states. */
 export function successFeedback() {
   if (process.env.EXPO_OS === 'android') {

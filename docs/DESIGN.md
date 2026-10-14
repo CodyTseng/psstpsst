@@ -29,7 +29,7 @@ must never contain raw hex or rgba values.
 | Token family | Role |
 | --- | --- |
 | `background` | App and navigation canvas |
-| `surface*`, `insetFill` | Cards, controls, bubbles, and inset content |
+| `surface*`, `insetFill` | Cards, controls, bubbles, floating notices, and inset content |
 | `interactionOverlay` | Shared theme-aware hover and pressed overlay |
 | `border` | Hairlines and outlines |
 | `text`, `textMuted` | Primary and secondary information |
@@ -252,8 +252,9 @@ On-page cards are shadowless. Use surface contrast and a hairline border.
 Frosted chrome and floating capsules share a mostly opaque, strongly blurred
 material: underlying content supplies a faint wash without competing with text.
 `shadow.float` is reserved for content that physically floats over another
-surface, such as a menu. `shadow.mediaText` is only for text over unpredictable
-media.
+surface, such as a menu. Transient arrival notices use `surfaceFloating` and
+`shadow.notice` for quiet separation from changing page content.
+`shadow.mediaText` is only for text over unpredictable media.
 
 ## 6. Motion and feedback
 
@@ -272,8 +273,8 @@ top corners, without a separate rounded card.
 - Avoid decorative bounce, looping motion, and layout jumps.
 - Keep gesture-driven animation on the UI thread.
 - Honour Reduce Motion by removing displacement while preserving state clarity.
-- Use haptics only for committed actions, destructive warnings, or a threshold
-  crossing; never for routine navigation.
+- Use haptics only for committed actions, destructive warnings, a threshold
+  crossing, or a new-message notice; never for routine navigation.
 
 Connection and media-server settings acknowledge successful saves in place and
 retain the form for further edits.
@@ -530,11 +531,17 @@ Electron renderer implementation detail.
 
 ## 10. Overlays and focus
 
-While a compact-layout chat is open, a new incoming message from another
-unmuted conversation uses one small floating notice directly below the title
-bar. It fits the avatar, single-line name, and single-line message preview in
-one row; tapping it switches chats. Wide split layouts rely on the visible
-conversation list instead of duplicating this notice.
+New incoming messages from eligible conversations use one small floating notice
+directly below the title bar whenever neither Chats nor the message's conversation
+is visible. In split layouts, check the selected primary tab and the active detail
+together. The notice fits the avatar, single-line name, and single-line message
+preview in one row; tapping it opens that conversation.
+Arrival uses a brief fade with slight downward movement and no bounce; Reduce
+Motion keeps only the fade. Message updates within a visible notice do not
+repeat its entrance.
+Each appearance gives one notification-style haptic. Notices track upward dragging; release
+past the dismissal threshold carries the notice fully offscreen, otherwise it
+settles back. Touch interaction pauses expiry, and dragging never opens the chat.
 
 Chat-originated forwards keep the source conversation open and offer a brief
 shortcut above the composer to enter each target conversation. The notice shows
@@ -643,6 +650,8 @@ Disabled notification controls use muted labels and icons; missing relay guidanc
 uses the danger tone while its settings destination remains available.
 Disabling new-message indicators hides unread counts, dots, dividers, arrival
 banners, and manual read/unread actions without disabling system notifications.
+In-app arrival banners and system notifications share conversation eligibility:
+only accepted, unmuted conversations qualify; message requests never notify.
 
 Electron application updates require separate download and install
 confirmations. Declining either action must not start it implicitly later.

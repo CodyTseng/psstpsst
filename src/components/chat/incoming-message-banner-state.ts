@@ -1,4 +1,5 @@
 import type { ConversationWithLast } from '@/hooks/use-conversations';
+import { isNotifiableConversation } from '@/lib/conversation/notification-eligibility';
 
 export type ConversationMessageBaseline = ReadonlyMap<
   string,
@@ -24,7 +25,7 @@ export function findIncomingConversation(
   previous: ConversationMessageBaseline,
   items: ConversationWithLast[],
   accountPubkey: string,
-  activeConversationKey: string,
+  activeConversationKey: string | null,
 ): ConversationWithLast | null {
   let newest: ConversationWithLast | null = null;
 
@@ -42,7 +43,8 @@ export function findIncomingConversation(
 
     if (
       conversation.conversationKey === activeConversationKey ||
-      conversation.muted ||
+      !isNotifiableConversation(conversation) ||
+      item.lastMessageKind === 7 ||
       !messageChanged ||
       !unreadIncreased ||
       !incoming

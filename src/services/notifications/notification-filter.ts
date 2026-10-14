@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { conversations } from '@/db/schema';
 import type { Rumor } from '@/db/schema/types';
+import { isNotifiableConversation } from '@/lib/conversation/notification-eligibility';
 import { deriveConversationKey } from '@/lib/nostr/conversation-key';
 import { firstGroupId, groupConversationKey } from '@/lib/nostr/group-messaging';
 import { getPTags } from '@/lib/nostr/tags';
@@ -53,7 +54,7 @@ export async function filterNotifiableMessages(
         ),
       );
     for (const row of rows) {
-      if (row.hasReplied && !row.muted) allowed.add(row.conversationKey);
+      if (isNotifiableConversation(row)) allowed.add(row.conversationKey);
     }
   }
 

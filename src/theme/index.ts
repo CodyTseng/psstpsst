@@ -26,6 +26,8 @@ export type ThemeColors = {
   background: string;
   surface: string;
   surfaceElevated: string;
+  /** Highest neutral surface for transient notices above page content. */
+  surfaceFloating: string;
   surfaceMuted: string;
   /** Theme-aware neutral overlay shared by hover and pressed states. It is
    * composited above each control's resting fill instead of replacing it. */
@@ -91,6 +93,7 @@ export const lightPalette: ThemeColors = {
   background: '#F2F2F7',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
+  surfaceFloating: '#FFFFFF',
   surfaceMuted: '#E5E5EA',
   interactionOverlay: 'rgba(15,15,16,0.08)',
   insetFill: 'rgba(15,15,16,0.05)',
@@ -124,6 +127,7 @@ export const darkPalette: ThemeColors = {
   background: '#09090B',
   surface: '#141416',
   surfaceElevated: '#1A1A1D',
+  surfaceFloating: '#232327',
   surfaceMuted: '#101013',
   interactionOverlay: 'rgba(255,255,255,0.08)',
   insetFill: 'rgba(255,255,255,0.06)',
@@ -246,6 +250,11 @@ export const shadow = {
   float: {
     boxShadow: '0px 6px 16px rgba(0, 0, 0, 0.12)',
     elevation: 8,
+  },
+  /** Slightly deeper definition for brief notices over changing page content. */
+  notice: {
+    boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.18)',
+    elevation: 10,
   },
   /** Keeps light text legible when it is painted over user-controlled media
    * whose luminance is unknown. This is a text shadow, not surface elevation.

@@ -10,6 +10,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { NativeStackView } from 'expo-router/build/fork/native-stack/NativeStackView';
 
 import { PrimaryPane } from './PrimaryPane';
+import { IncomingMessageBannerHost } from './incoming-message-banner-host';
 import { NATIVE_SWIPE_BACK_SCREEN_OPTIONS } from './native-stack-options';
 
 import { AppScreenHorizontalSafeArea } from '@/components/common/AppScreen';
@@ -60,26 +61,19 @@ function ResponsiveNavigatorView({ wide, width }: { wide: boolean; width: number
   const navigationContext = Navigator.useContext();
   const { state, descriptors, describe, navigation, NavigationContent } = navigationContext;
 
-  if (!wide) {
-    // `Navigator` deliberately exposes router-agnostic descriptor types. Its
-    // default router is Expo Router's StackRouter, so this is the same concrete
-    // prop set used by Stack even though the public generic cannot express it.
-    const nativeStackProps = {
-      state,
-      descriptors,
-      describe,
-      navigation,
-    } as unknown as ComponentProps<typeof NativeStackView>;
-    return (
-      <NavigationContent>
-        <NativeStackView {...nativeStackProps} />
-      </NavigationContent>
-    );
-  }
-
+  // `Navigator` deliberately exposes router-agnostic descriptor types. Its
+  // default router is Expo Router's StackRouter, so this is the same concrete
+  // prop set used by Stack even though the public generic cannot express it.
+  const nativeStackProps = {
+    state,
+    descriptors,
+    describe,
+    navigation,
+  } as unknown as ComponentProps<typeof NativeStackView>;
   return (
     <NavigationContent>
-      <WideNavigatorView width={width} />
+      {wide ? <WideNavigatorView width={width} /> : <NativeStackView {...nativeStackProps} />}
+      <IncomingMessageBannerHost wide={wide} />
     </NavigationContent>
   );
 }

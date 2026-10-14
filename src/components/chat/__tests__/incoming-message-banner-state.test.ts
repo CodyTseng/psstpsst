@@ -12,6 +12,7 @@ function item({
   unreadCount = 1,
   orderAt = 1,
   muted = false,
+  hasReplied = true,
   deliveryKind = 'relay',
 }: {
   key: string;
@@ -20,6 +21,7 @@ function item({
   unreadCount?: number;
   orderAt?: number;
   muted?: boolean;
+  hasReplied?: boolean;
   deliveryKind?: 'relay' | 'proximity';
 }): ConversationWithLast {
   return {
@@ -40,7 +42,7 @@ function item({
       lastReadOrderAt: 0,
       lastReadMessageId: null,
       unreadCount,
-      hasReplied: true,
+      hasReplied,
       muted,
       pinned: false,
       deleted: false,
@@ -97,6 +99,45 @@ describe('incoming message banner state', () => {
     const current = [item({ key: 'alice', messageId: 'm1', unreadCount: 1 })];
 
     expect(findIncomingConversation(previous, current, 'self', 'bob')).toBeNull();
+  });
+
+  it('ignores new messages in both new and existing unaccepted requests', () => {
+    const previous = conversationMessageBaseline([
+      item({ key: 'existing-request', messageId: 'old', hasReplied: false }),
+    ]);
+    const current = [
+      item({ key: 'new-request', messageId: 'new', hasReplied: false }),
+      item({ key: 'existing-request', messageId: 'newer', unreadCount: 2, hasReplied: false }),
+    ];
+
+    expect(findIncomingConversation(previous, current, 'self', 'bob')).toBeNull();
+  });
+
+  it('does not let a newer request hide an eligible incoming message', () => {
+    const accepted = item({ key: 'alice', messageId: 'accepted', orderAt: 1 });
+    const request = item({ key: 'stranger', messageId: 'request', orderAt: 2, hasReplied: false });
+
+    expect(findIncomingConversation(new Map(), [accepted, request], 'self', 'bob')).toBe(accepted);
+  });
+
+  it('does not notify for an old request when it is accepted, but notifies for its next message', () => {
+    const request = item({ key: 'alice', messageId: 'old', hasReplied: false });
+    const accepted = item({ key: 'alice', messageId: 'old' });
+
+    expect(findIncomingConversation(
+      conversationMessageBaseline([request]), [accepted], 'self', 'bob',
+    )).toBeNull();
+
+    const next = item({ key: 'alice', messageId: 'new', unreadCount: 2 });
+    expect(findIncomingConversation(
+      conversationMessageBaseline([accepted]), [next], 'self', 'bob',
+    )).toBe(next);
+  });
+
+  it('ignores reactions like system notifications', () => {
+    const reaction = { ...item({ key: 'alice', messageId: 'reaction' }), lastMessageKind: 7 };
+
+    expect(findIncomingConversation(new Map(), [reaction], 'self', 'bob')).toBeNull();
   });
 
   it('ignores the active chat, muted chats, and outgoing messages', () => {

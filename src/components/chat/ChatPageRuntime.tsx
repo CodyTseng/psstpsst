@@ -47,7 +47,6 @@ import { ChatContactPrompt } from '@/components/chat/ChatContactPrompt';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ForwardConversationBanner } from '@/components/chat/ForwardConversationBanner';
-import { IncomingMessageBanner } from '@/components/chat/IncomingMessageBanner';
 import { NearbyReconnectNotice } from '@/components/chat/NearbyReconnectNotice';
 import {
   ChatComposerPanelBackHandler,
@@ -785,13 +784,6 @@ export default function ChatPageRuntime() {
               liveDataEnabled={secondaryDataReady && routeActive}
             />
           )}
-          {unreadIndicatorsEnabled && liveDataReady && routeActive && !wide && !selectionMode ? (
-            <IncomingMessageBanner
-              key={conversationKey}
-              accountPubkey={accountPubkey}
-              activeConversationKey={conversationKey}
-            />
-          ) : null}
       </ChatFileDropZone>
     </AppScreen>
   );
