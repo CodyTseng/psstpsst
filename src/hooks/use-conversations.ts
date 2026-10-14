@@ -249,15 +249,16 @@ export function useRequestCount(accountPubkey: string): number {
 }
 
 /**
- * Count of pending requests that still have unread messages — drives the
- * Contacts **tab badge**. A request the user has opened (read) but not yet
- * replied to stays in the Requests list, but no longer pings the badge.
+ * Whether pending requests still have unread messages — drives Contacts dots.
+ * Stop at the first match rather than counting every unread request. Opened
+ * requests stay listed but no longer light the indicator.
  */
-export function useUnreadRequestCount(accountPubkey: string): number {
+export function useHasUnreadRequests(accountPubkey: string): boolean {
   const indicatorsEnabled = useUnreadIndicatorsEnabled();
-  const { data } = useLiveQuery(
+  const enabled = indicatorsEnabled && accountPubkey.length > 0;
+  const { data, isResolved } = useLiveQuery(
     db
-      .select({ n: count() })
+      .select({ accountPubkey: conversations.accountPubkey })
       .from(conversations)
       .where(
         and(
@@ -266,10 +267,12 @@ export function useUnreadRequestCount(accountPubkey: string): number {
           eq(conversations.hasReplied, false),
           gt(conversations.unreadCount, 0),
         ),
-      ),
-    [accountPubkey],
+      )
+      .limit(1),
+    [accountPubkey, enabled],
+    { enabled },
   );
-  return indicatorsEnabled ? (data?.[0]?.n ?? 0) : 0;
+  return enabled && isResolved && data.length > 0;
 }
 
 export function useConversation(

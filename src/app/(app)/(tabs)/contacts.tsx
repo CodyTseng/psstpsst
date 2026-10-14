@@ -22,7 +22,7 @@ import { SearchBar, SEARCH_BAR_SCREEN_GUTTER } from '@/components/search/SearchB
 import { SearchTransition } from '@/components/search/SearchTransition';
 import { SEARCH_ACTIVATION_SHORTCUT_LABEL } from '@/components/search/search-shortcut';
 import { useContactEntries } from '@/hooks/use-contact-entries';
-import { useUnreadRequestCount } from '@/hooks/use-conversations';
+import { useHasUnreadRequests } from '@/hooks/use-conversations';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { syncPersonalConfigs } from '@/services/relay/personal-configs.service';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -43,7 +43,7 @@ export default function Contacts() {
   const topClearance = headerHeight + insets.top;
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { entries, loaded } = useContactEntries(accountPubkey);
-  const unreadRequestCount = useUnreadRequestCount(accountPubkey ?? '');
+  const hasUnreadRequests = useHasUnreadRequests(accountPubkey ?? '');
   const focused = useIsFocused();
   const navigation = useNavigation();
   const groupedListRef = useRef<ContactSectionListHandle>(null);
@@ -242,7 +242,7 @@ export default function Contacts() {
               icon={<UserPlus size={uiDensity.headerActionIconSize} color={c.text} />}
               accessibilityLabel={t('contacts.add')}
             />
-            {unreadRequestCount > 0 ? (
+            {hasUnreadRequests ? (
               <NotificationDot style={{ position: 'absolute', top: 5, end: 5 }} />
             ) : null}
           </View>

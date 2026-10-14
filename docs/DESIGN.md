@@ -57,6 +57,8 @@ do not change with the accent.
 Use accent sparingly. It is not a page background or default icon colour. Use
 danger for destructive actions and blocking prerequisites that require user action. Use `notification`,
 not danger, for unread state.
+The Contacts tab shows a small dot when unread message requests exist, without
+a number. The Chats tab retains its unread message count.
 
 Muted conversation unread counts and disconnected Nearby radar markers use the
 shared neutral overlay colour with `textMuted` foregrounds. Conversation-list

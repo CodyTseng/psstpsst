@@ -16,7 +16,7 @@ import { ChromeBackdrop } from '@/components/common/ChromeBackdrop';
 import { SCREENSHOT_UNREAD_COUNT } from '@/components/marketing/screenshot-preview-data';
 import { TabIconWithBadge } from '@/components/navigation/tab-icon-with-badge';
 import { PrimaryPaneNavigationProvider } from '@/components/navigation/primary-pane-navigation';
-import { useTotalUnread, useUnreadRequestCount } from '@/hooks/use-conversations';
+import { useTotalUnread, useHasUnreadRequests } from '@/hooks/use-conversations';
 import { getBottomChromeInset } from '@/lib/layout/bottom-chrome';
 import { isWideLayoutSize } from '@/lib/layout/wide-layout';
 import { useIsRTL } from '@/i18n/direction';
@@ -43,14 +43,13 @@ export default function TabsLayout() {
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
   const screenshotPreviewEnabled = useScreenshotPreviewStore((state) => state.enabled);
   const screenshotReadUnreadCount = useScreenshotPreviewStore((state) => state.readUnreadCount);
-  // Chats badge = total unread messages; Contacts badge = people with unread
-  // pending requests (a read-but-unanswered request stays listed but no longer
-  // contributes to the badge).
+  // Chats shows the unread message count; Contacts shows a dot while any
+  // pending request is unread. Opened requests remain listed without a dot.
   const totalUnread = useTotalUnread(accountPubkey);
   const displayedTotalUnread = screenshotPreviewEnabled
     ? Math.max(0, SCREENSHOT_UNREAD_COUNT - screenshotReadUnreadCount)
     : totalUnread;
-  const unreadRequestCount = useUnreadRequestCount(accountPubkey);
+  const hasUnreadRequests = useHasUnreadRequests(accountPubkey);
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   return (
@@ -125,7 +124,7 @@ export default function TabsLayout() {
               const Icon = focused ? UserCircleBold : UserCircleLinear;
               const iconSize = IS_ELECTRON ? uiDensity.tabIconSize : size;
               return (
-                <TabIconWithBadge count={unreadRequestCount}>
+                <TabIconWithBadge dot={hasUnreadRequests}>
                   <Icon
                     color={color as string}
                     size={iconSize}
