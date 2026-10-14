@@ -107,6 +107,17 @@ jobs:
             exit 1
           fi
 
+          version="${GITHUB_REF_NAME#v}"
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          awk -v version="$version" '
+            /^## / { if (found) exit; if ($0 == "## [" version "]") found = 1; next }
+            found { print }
+          ' CHANGELOG.md > "$notes_file"
+          if [[ ! -s "$notes_file" ]] || ! grep -q '[^[:space:]]' "$notes_file"; then
+            echo "::error::Release notes are missing or empty in CHANGELOG.md for $version."
+            exit 1
+          fi
+
           version_code="$(node -p "require('./app.json').expo.android.versionCode")"
           notes_file="fastlane/metadata/android/en-US/changelogs/${version_code}.txt"
           if [[ ! -s "$notes_file" ]]; then
@@ -349,8 +360,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          version_code="$(node -p "require('./app.json').expo.android.versionCode")"
-          notes_file="fastlane/metadata/android/en-US/changelogs/${version_code}.txt"
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          awk -v version="$version" '
+            /^## / { if (found) exit; if ($0 == "## [" version "]") found = 1; next }
+            found { print }
+          ' CHANGELOG.md > "$notes_file"
+          if [[ ! -s "$notes_file" ]] || ! grep -q '[^[:space:]]' "$notes_file"; then
+            echo "::error::Release notes are missing or empty in CHANGELOG.md for $version."
+            exit 1
+          fi
           if draft_state="$(
             gh release view "$GITHUB_REF_NAME" \
               --repo "$RELEASE_REPOSITORY" \

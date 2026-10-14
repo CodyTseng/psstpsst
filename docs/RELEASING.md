@@ -444,10 +444,18 @@ and [Play App Signing guide](https://developer.android.com/studio/publish/app-si
 Store copy and the icon live in `fastlane/metadata/android/en-US/`. Keep
 `title.txt`, `short_description.txt` (under 80 characters),
 `full_description.txt`, and `changelogs/<versionCode>.txt` (at most 500
-characters) up to date before each release tag. The tag workflow also uses that
-changelog as the GitHub draft release notes.
+characters) up to date before each release tag. GitHub draft release notes use
+the matching version section from the root [CHANGELOG.md](../CHANGELOG.md).
 
 Changelog conventions:
+
+- Maintain `CHANGELOG.md` and the Android Fastlane summary manually. Keep
+  versions in reverse chronological order, using `## [<version>]` headings.
+  Before tagging, add the matching release version section.
+- In `CHANGELOG.md`, write shared changes directly under the version heading.
+  Put platform-specific changes under level-three headings such as `Android`,
+  `iOS`, `Desktop`, or an individual desktop OS. Omit empty platform headings.
+  The complete changelog has no store character limit.
 
 - Android Fastlane changelogs include only changes that affect Android users.
   Omit iOS-only, Electron-only, and other platform-specific changes.
@@ -459,7 +467,8 @@ Changelog conventions:
   reliability and data integrity over smaller usability or visual changes.
 - Use short bullets and combine only related changes. Keep unrelated changes
   in separate bullets; never combine them just to save characters.
-- Keep the entire changelog within 500 characters, including the version title.
+- Keep the entire Android Fastlane summary within 500 characters, including
+  the version title.
 
 Shared screenshots live in
 `images/phoneScreenshots/1.png` through `4.png`. For the first release, the
@@ -720,6 +729,8 @@ month starting at 1. For example, the first release in September 2026 is
    neither is derived from CI run numbers. Use the same Android version code
    across channels for the same release. Update the F-Droid recipe and its build
    command example, and name the Fastlane changelog after that version code.
+   Update `CHANGELOG.md` for the release version and the Android Fastlane
+   summary for Android users.
 3. Configure all five macOS and all four Android secrets before the first tag
    run. Windows signing remains separately configured through `WIN_CSC_LINK`
    and `WIN_CSC_KEY_PASSWORD`.
