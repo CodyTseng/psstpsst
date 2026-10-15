@@ -1,3 +1,4 @@
+import { nappletLifecycle } from '@/services/napplet/lifecycle';
 import { create } from 'zustand';
 
 import { createPerfSpan, profileAsync } from '@/lib/perf/profiler';
@@ -424,6 +425,7 @@ export const useActiveAccount = create<State>((set, get) => ({
   },
 
   async setActive(pubkey) {
+    nappletLifecycle.deactivate();
     // Switching identities (this also serves the very first sign-in and adding a
     // second account): tear the whole session down before bringing the target
     // online. Relays especially must be closed — a socket already
@@ -471,6 +473,7 @@ export const useActiveAccount = create<State>((set, get) => ({
   },
 
   async signOut() {
+    nappletLifecycle.deactivate();
     // Clear the durable pointer before changing the in-memory session so a
     // failed write cannot appear to sign out and then restore the account on
     // the next launch. Account rows and key material remain intact.
@@ -491,6 +494,7 @@ export const useActiveAccount = create<State>((set, get) => ({
   },
 
   async removeAccount(pubkey) {
+    nappletLifecycle.removing(pubkey);
     configurationPublisher.stop(pubkey);
     const wasActive = get().activePubkey === pubkey;
     if (wasActive) {

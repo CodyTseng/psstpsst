@@ -1,3 +1,4 @@
+import { nappletLifecycle } from '../napplet/lifecycle';
 import { eq } from 'drizzle-orm';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
 import type { BunkerPointer } from 'nostr-tools/nip46';
@@ -5,6 +6,7 @@ import type { BunkerPointer } from 'nostr-tools/nip46';
 import { db } from '@/db/client';
 import {
   accounts,
+  nappletInstallations, nappletData, nappletUsage,
   blockedUsers,
   contacts,
   conversations,
@@ -195,6 +197,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
     .where(eq(pendingAttachments.accountPubkey, pubkey));
   await Promise.all(pendingFiles.map((row) => deletePendingAttachmentFile(row.localName)));
   const scoped = [
+    nappletData, nappletUsage, nappletInstallations,
     messages,
     groupMemberActions,
     pendingGroupRumors,
@@ -222,6 +225,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
 }
 
 export async function removeAccount(pubkey: string): Promise<void> {
+  nappletLifecycle.removing(pubkey);
   // Revoke while identity signing is still possible. Offline failure preserves
   // the account and a durable pending revocation for a later retry.
   await pushRegistrationService.revokeAccount(pubkey);

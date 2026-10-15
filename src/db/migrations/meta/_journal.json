@@ -414,6 +414,13 @@
       "when": 1791900851111,
       "tag": "0058_forward-sync-checkpoints",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1792022400000,
+      "tag": "0059_napplets",
+      "breakpoints": true
     }
   ]
 }

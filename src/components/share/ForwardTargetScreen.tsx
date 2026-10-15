@@ -18,7 +18,7 @@ import { useForwardDraftStore } from '@/stores/forward-draft.store';
 import { showToast } from '@/stores/toast.store';
 
 /** Full-page recipient picker for message drafts handed to `/forward`. */
-export function ForwardTargetScreen() {
+export function ForwardTargetScreen({ onClose, stayInSource = false }: { onClose?: () => void; stayInSource?: boolean } = {}) {
   const { t } = useTranslation();
   const accountPubkey = useActiveAccount((state) => state.activePubkey) ?? '';
   const draft = useForwardDraftStore((state) => state.draft);
@@ -36,9 +36,10 @@ export function ForwardTargetScreen() {
   }, [validDraft]);
 
   const leaveForward = useCallback(() => {
+    if (onClose) { onClose(); return; }
     if (router.canGoBack()) router.back();
     else router.replace('/');
-  }, []);
+  }, [onClose]);
 
   useEffect(() => {
     if (validDraft || completedRef.current) return;
@@ -64,7 +65,10 @@ export function ForwardTargetScreen() {
       const account = validDraft.accountPubkey;
 
       complete(validDraft.id);
-      if (validDraft.sourceConversationKey) {
+      if (stayInSource) {
+        showToast(t('share.sending'), { target: 'detail' });
+        leaveForward();
+      } else if (validDraft.sourceConversationKey) {
         showForwardNotice(validDraft.id, account, validDraft.sourceConversationKey, targets);
         leaveForward();
       } else if (targets.length > 1) {
@@ -101,13 +105,13 @@ export function ForwardTargetScreen() {
         })();
       }, 0);
     },
-    [complete, leaveForward, sending, t, validDraft],
+    [complete, leaveForward, sending, stayInSource, t, validDraft],
   );
 
   if (!validDraft) {
     return (
       <AppScreen edges={[]}>
-        <ScreenHeader title={t('chat.actions.forward')} />
+        <ScreenHeader title={t(stayInSource ? 'share.title' : 'chat.actions.forward')} />
       </AppScreen>
     );
   }
@@ -115,12 +119,13 @@ export function ForwardTargetScreen() {
   return (
     <ForwardRecipientScreen
       accountPubkey={accountPubkey}
-      title={t('chat.actions.forward')}
+      title={t(stayInSource ? 'share.title' : 'chat.actions.forward')}
       preview={<ForwardPreview messages={validDraft.messages} />}
       supportedDeliveryKinds={supportedDeliveryKinds}
       excludedRelayPubkey={validDraft.excludedRelayPubkey}
       sending={sending}
       onConfirm={send}
+      onBack={onClose}
     />
   );
 }

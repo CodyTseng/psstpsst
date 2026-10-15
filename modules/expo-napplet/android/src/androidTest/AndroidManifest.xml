@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application android:hardwareAccelerated="true">
+    <activity
+      android:name="chat.psstpsst.app.napplet.NappletTestActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+  </application>
+</manifest>

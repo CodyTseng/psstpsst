@@ -76,6 +76,17 @@ ipcRenderer.on(
 );
 
 const bridge: ElectronBridge = {
+  napplet: {
+    open: (html) => invoke(IPC.nappletOpen, html), close: (id) => invoke(IPC.nappletClose, id),
+    send: (id, message) => invoke(IPC.nappletSend, id, message),
+    setBounds: (id, bounds, visible) => invoke(IPC.nappletBounds, id, bounds, visible),
+    fetch: (id, url, max) => invoke(IPC.nappletFetch, id, url, max), cancel: (id) => invoke(IPC.nappletCancel, id),
+    onMessage: (listener) => {
+      const handler = (_event: unknown, id: string, message: string) => listener(id, message);
+      ipcRenderer.on(IPC.nappletMessage, handler);
+      return () => { ipcRenderer.removeListener(IPC.nappletMessage, handler); };
+    },
+  },
   appUpdate: {
     check: () => invoke(IPC.appUpdateCheck),
     getStatus: () => invoke(IPC.appUpdateGetStatus),

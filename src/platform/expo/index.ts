@@ -1,3 +1,4 @@
+import { nappletAdapter } from './napplet';
 import { screenOrientationAdapter } from './screen-orientation';
 import { clipboardAdapter } from './clipboard';
 import { imageCacheAdapter } from './image-cache';
@@ -203,6 +204,7 @@ export function createExpoAdapters(): PlatformAdapters {
   return {
     pushNotifications: pushNotificationsAdapter,
     screenOrientation: screenOrientationAdapter,
+    napplet: nappletAdapter,
     bundledNotices: bundledNoticesAdapter,
     appUpdate: appUpdateAdapter,
     confirmationDialog: confirmationDialogAdapter,

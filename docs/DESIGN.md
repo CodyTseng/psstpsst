@@ -338,6 +338,9 @@ Personal identifiers use an unframed `@` glyph so the symbol stays recognizable.
 
 Every icon-only action uses `IconButton` and has an accessibility label.
 
+Human avatars are circular. Mini-app icons are rounded squares at every size,
+including compact identity rows and loading or fallback artwork.
+
 ## 8. Component vocabulary
 
 Build screens from shared components. Component source and props are the API;
@@ -571,7 +574,9 @@ bottom; Reduce Motion removes that displacement.
 A short, self-explanatory action sheet may use handle-only chrome. Every task
 or detail sheet uses the shared fixed sheet header: a close action at the start,
 a truly centred single-line title, and at most one task-scoped action at the end.
-Both sheet-header actions use Lucide icons only, with localized accessibility labels.
+Sheet-header action buttons use Lucide icons only, with localized accessibility
+labels. The trailing slot may instead contain a passive circular account avatar
+with the same outer diameter as the close control.
 They reuse the title bar's icon size and circular control shape, with equal
 insets from the sheet's top and side edges, using the standard sheet gutter.
 The title clears the grabber and stays vertically centred with both actions.
@@ -591,6 +596,13 @@ keeps the resting content visible; search results replace it only after the
 query contains non-whitespace text.
 Dragging a tab's resting list during an empty search exits search mode so its
 search field scrolls with the list.
+
+A sheet body gesture that starts below the scroll origin remains a scroll until
+release, even after reaching the top. Only a fresh downward gesture begun at the
+top can drag the sheet; fixed chrome remains directly draggable.
+
+A closing sheet retains its last presented content and geometry until its exit
+transition completes, including automatic timeout dismissal.
 
 Only one native modal may be presented at a time. Close the current modal and
 start the next action from `onClosed`. Do not coordinate modal sequencing with
@@ -817,6 +829,38 @@ About, available before sign-in and during everyday use.
 Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
+
+Mini-app recents use an icon-and-name grid. Holding an icon reveals an accent
+pin target above and a danger remove target below; actions commit only on release
+inside a target. Pointer context menus and accessibility actions expose the same
+operations. Pins precede recents, and removing a recent item preserves app data.
+
+Mini-app runtime headers place More and Close at the trailing edge. More opens
+app information with Share, Settings and Reload actions. Host settings expose
+app access and remembered signing decisions, including per-rule revocation.
+Settings lead with concise action, event kind, decision and Revoke rows. Account
+identity stays in the header; protocol hashes and history stay out of the default
+permission view. Sharing keeps the current app mounted and returns to it after
+confirmation or cancellation.
+
+Signing confirmations lead with the action, its consequences and readable content.
+Keep the requesting app icon and name in a compact body row with balanced
+space between the header controls and the following content. Show the signing
+account only as a circular avatar in the trailing title-bar slot, with an
+accessible account-name label. Keep the event kind visible before disclosure;
+replaceable and addressable events also show the full d-tag value from the event,
+with empty and missing values distinguishable. A centred disclosure with
+a directional chevron expands directly into the event JSON, followed by relay
+destinations. All signing content, including previews, event JSON, identities
+and relay addresses, disables text selection to preserve scrolling and gestures.
+Event JSON provides an explicit Copy action. Authentication keeps the server identity visible for the decision.
+A fixed footer contains a single-level duration menu showing the current choice
+above two horizontal Allow/Reject actions. The menu floats above its trigger
+without changing sheet layout. Duration applies to either decision and defaults
+to one request; remembered decisions retain the displayed operation's scope.
+Signing approvals show the remaining seconds in the Reject button, based on
+a fresh review deadline when each request becomes visible. Adding queued requests
+never restarts the active countdown.
 
 ## 12. Hard Rules
 

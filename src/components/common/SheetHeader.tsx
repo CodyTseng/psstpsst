@@ -12,7 +12,7 @@ type Props = {
   title: string;
   onClose: () => void;
   showHandle?: boolean;
-  /** One optional secondary IconButton (accent for Done), with title-bar sizing. */
+  /** One optional title-bar action or passive account identity indicator. */
   action?: React.ReactNode;
 };
 

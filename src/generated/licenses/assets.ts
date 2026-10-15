@@ -532,6 +532,7 @@ export const noticeAssets: Readonly<Record<string, () => number>> = {
   'e1925845017bf307c7d465af432e8bb20cbb6ce17b10cd323af59da717753075': () => require('../../../assets/licenses/e1925845017bf307c7d465af432e8bb20cbb6ce17b10cd323af59da717753075.txt'),
   'e21b0992cd8a2e8bf3e5f2f1b392daccab5d27386fcf2bc25e336c4161b5d1f9': () => require('../../../assets/licenses/e21b0992cd8a2e8bf3e5f2f1b392daccab5d27386fcf2bc25e336c4161b5d1f9.txt'),
   'e2508dfb295e2c2710bfc6bd57ad05b0a59f3877100328cb52a6e1f2d2060fba': () => require('../../../assets/licenses/e2508dfb295e2c2710bfc6bd57ad05b0a59f3877100328cb52a6e1f2d2060fba.txt'),
+  'e265646fbf221d880f97c342bd648c50e431d42162a370d155616b6c7114f97c': () => require('../../../assets/licenses/e265646fbf221d880f97c342bd648c50e431d42162a370d155616b6c7114f97c.txt'),
   'e2eaa4603c14cb26f301e88648c12a853fa3f0f5da6d4b0972958c666e7f2ab8': () => require('../../../assets/licenses/e2eaa4603c14cb26f301e88648c12a853fa3f0f5da6d4b0972958c666e7f2ab8.txt'),
   'e364c8cbb6ee6acb11b094b9fe20b416e8ce5105f0573c53ab298ff158de872b': () => require('../../../assets/licenses/e364c8cbb6ee6acb11b094b9fe20b416e8ce5105f0573c53ab298ff158de872b.txt'),
   'e368bc4263b466cf98c225af15e300549e00da8859416a4536109e9654d434a8': () => require('../../../assets/licenses/e368bc4263b466cf98c225af15e300549e00da8859416a4536109e9654d434a8.txt'),

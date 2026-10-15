@@ -1,3 +1,4 @@
+import { registerNappletHandlers } from './napplet-service';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -302,6 +303,7 @@ async function loadNotificationIcon(value: unknown): Promise<NativeImage | undef
 }
 
 function registerIpcHandlers(): void {
+  registerNappletHandlers(isTrustedSender, () => mainWindow);
   handle(IPC.appUpdateCheck, async () => {
     if (!appUpdateService || !app.isPackaged || IS_DEVELOPMENT_APP) {
       throw new Error('Application updates are unavailable');

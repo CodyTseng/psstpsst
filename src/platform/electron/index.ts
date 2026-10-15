@@ -1,3 +1,4 @@
+import { electronNappletAdapter } from './napplet';
 import { electronImageCacheAdapter } from './image-cache';
 import { getDialogPresenter } from '../dialog-presenter';
 import { electronBundledNoticesAdapter } from './bundled-notices';
@@ -31,6 +32,7 @@ export function createElectronAdapters(): PlatformAdapters {
       addTokenChangedListener: () => () => {},
     },
     screenOrientation: { setVideoActive: async () => {} },
+    napplet: electronNappletAdapter,
     bundledNotices: electronBundledNoticesAdapter,
     appUpdate: {
       check: () => bridge.appUpdate.check(),

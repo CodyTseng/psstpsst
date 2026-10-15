@@ -147,6 +147,8 @@ export function Avatar({ pubkey, picture, size = 44 }: Props) {
       style={{
         width: size,
         height: size,
+        borderRadius: size / 2,
+        overflow: 'hidden',
       }}
     >
       <View

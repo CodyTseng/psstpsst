@@ -1,4 +1,5 @@
 import type { BunkerPointer } from 'nostr-tools/nip46';
+import type { AbstractSimplePool } from 'nostr-tools/abstract-pool';
 
 import { hexToBytes, privkeyToNsec } from '@/lib/nostr/keys';
 import { platform } from '@/platform';
@@ -18,6 +19,7 @@ const SECURE_KEY_NIP46_BUNKER_SECRET = (accountPubkey: string) =>
   `nip46_bunker_secret_${accountPubkey}`;
 
 export type CreateSignerOpts = {
+  transport?: AbstractSimplePool;
   accountPubkey: string;
   signerType: 'nsec' | 'nip46' | 'generated';
   signerPayload?: string | null;
@@ -48,7 +50,7 @@ export async function createSigner(opts: CreateSignerOpts): Promise<Signer> {
       await storeNip46BunkerSecret(opts.accountPubkey, bunkerSecret);
     }
     const pointer: BunkerPointer = { ...storedPointer, secret: bunkerSecret };
-    return new Nip46Signer(hexToBytes(clientHex), pointer);
+    return new Nip46Signer(hexToBytes(clientHex), pointer, opts.transport);
   }
   throw new Error(`Unknown signer type: ${opts.signerType}`);
 }

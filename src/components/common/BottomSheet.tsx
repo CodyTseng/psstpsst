@@ -38,6 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IS_ELECTRON } from '@/lib/platform';
 import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
 
+import { createSheetContentPan, type SheetContentPanState } from './bottom-sheet-content-gesture';
 import { scheduleBottomSheetInputFocus } from './bottom-sheet-input-focus';
 import { scheduleBottomSheetOpenAnimation } from './bottom-sheet-open-animation';
 import { SheetHeader } from './SheetHeader';
@@ -63,7 +64,7 @@ type Props<ItemT = never> = {
    * close/title/action header below the grabber. Omit only for a short,
    * self-explanatory action sheet. */
   title?: string;
-  /** One optional secondary IconButton (accent for Done), with title-bar sizing. */
+  /** One optional title-bar action or passive account identity indicator. */
   headerAction?: ReactNode;
   /** Optional non-scrolling business content below the standard header. It
    * receives the same ungated pull-to-dismiss gesture as the grabber. */
@@ -142,8 +143,9 @@ if (IS_ELECTRON) {
  * is enabled only when it actually overflows (measured), so short sheets behave
  * like a plain card. The drag and the scroll are coordinated on the **UI thread**
  * via reanimated worklets + a shared scroll offset: the *content* pan follows the
- * finger (and dismisses past a threshold) only while the content is at its top,
- * otherwise the content scrolls. Running this on the UI thread (not JS callbacks)
+ * finger (and dismisses past a threshold) only for a downward gesture begun at
+ * the top; a gesture begun in scrolled content remains a scroll until release.
+ * Running this on the UI thread (not JS callbacks)
  * is what keeps the two gestures from wedging the touch system.
  *
  * **The grabber and fixed chrome regions have their own *ungated* dismiss
@@ -153,7 +155,21 @@ if (IS_ELECTRON) {
  * The body remains the sheet's single coordinated vertical ScrollView, so fixed
  * chrome never creates a nested-scroll gesture race.
  */
-export function BottomSheet<ItemT = never>({
+export function BottomSheet<ItemT = never>(props: Props<ItemT>) {
+  const [snapshot, setSnapshot] = useState<Props<ItemT> | null>(props.visible ? props : null);
+  // Retain the last presented content while the native Modal animates out.
+  // Conditional render-time state adjustment avoids an empty committed frame.
+  if (props.visible && snapshot !== props) setSnapshot(props);
+  const notifyClosed = props.onClosed;
+  const onClosed = useCallback(() => {
+    setSnapshot(null);
+    notifyClosed?.();
+  }, [notifyClosed]);
+  return <BottomSheetSurface {...(props.visible ? props : snapshot ?? props)}
+    visible={props.visible} onClose={props.onClose} onClosed={onClosed} modalOverlay={props.modalOverlay} />;
+}
+
+function BottomSheetSurface<ItemT = never>({
   visible,
   onClose,
   inputFocusRef,
@@ -184,6 +200,7 @@ export function BottomSheet<ItemT = never>({
   const translateY = useSharedValue(height);
   const backdrop = useSharedValue(0);
   const scrollY = useSharedValue(0);
+  const contentPanState = useSharedValue<SheetContentPanState>({ phase: 'pending', x: 0, y: 0 });
   // Keyboard movement on the reanimated timeline (`height` 0 → -keyboardHeight,
   // `progress` 0 → 1) so the card rides above a keyboard raised by a field inside
   // it — on the UI thread (smoother than RN's `KeyboardAvoidingView`), and so we
@@ -282,8 +299,8 @@ export function BottomSheet<ItemT = never>({
   //     subheader, and footer. A downward drag there always follows the finger
   //     and dismisses past the threshold, regardless of the body scroll offset.
   //   • the content pan — coordinated with the ScrollView's native gesture (both run
-  //     *simultaneously*): moves the card only while the content is at its top
-  //     (scrollY <= 0) and the drag is downward, otherwise the content scrolls.
+  //     *simultaneously*): only a downward gesture begun at the top can move
+  //     the card. Reaching the top during a scroll never transfers ownership.
   // Coordinating on the UI thread (not JS callbacks) is what stops the two from
   // wedging the touch system.
   const {
@@ -295,7 +312,7 @@ export function BottomSheet<ItemT = never>({
   } = useMemo(() => {
     const settleBack = () => {
       'worklet';
-      translateY.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) });
+      translateY.set(withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) }));
     };
     const dismissFromDrag = () => {
       'worklet';
@@ -334,22 +351,11 @@ export function BottomSheet<ItemT = never>({
           else settleBack();
         });
     const native = Gesture.Native();
-    const content = Gesture.Pan()
-      .activeOffsetY(10)
-      .simultaneousWithExternalGesture(native)
-      .onUpdate((e) => {
-        'worklet';
-        if (scrollY.value <= 0 && e.translationY > 0) translateY.value = e.translationY;
-      })
-      .onEnd((e) => {
-        'worklet';
-        const atTop = scrollY.value <= 0;
-        if (atTop && (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY)) {
-          dismissFromDrag();
-        } else {
-          settleBack();
-        }
-      });
+    const content = createSheetContentPan({
+      native, scrollY, translateY, state: contentPanState,
+      settle: settleBack, dismiss: dismissFromDrag,
+      dismissDistance: DISMISS_DISTANCE, dismissVelocity: DISMISS_VELOCITY,
+    });
     native.simultaneousWithExternalGesture(content);
     return {
       grabberPan: makeUngated(),
@@ -358,10 +364,11 @@ export function BottomSheet<ItemT = never>({
       fixedFooterPan: makeUngated(),
       listGesture: Gesture.Simultaneous(content, native),
     };
-  }, [backdrop, beginDragClose, finishClose, height, scrollY, translateY]);
+  }, [backdrop, beginDragClose, contentPanState, finishClose, height, scrollY, translateY]);
 
   useEffect(() => {
     if (visible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Presentation state outlives visible during the exit animation.
       setMounted(true);
       if (dragClosing) setDragClosing(false);
       // A newly mounted body starts at offset zero; keep the UI-thread gate in

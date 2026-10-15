@@ -16,6 +16,7 @@ import { IS_ANDROID } from '@/lib/platform';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { platform, type AppStateStatus, type NetworkStateSnapshot } from '@/platform';
 
+import { LifecycleRelay } from './lifecycle-relay';
 import { RelayQueryError } from './relay-query-error';
 
 const CONNECTION_TIMEOUT_MS = 5_000;
@@ -196,7 +197,7 @@ export class ManagedRelayPool {
   constructor(options: ManagedRelayPoolOptions) {
     this.verifyEvent = options.verifyEvent;
     this.relayFactory =
-      options.relayFactory ?? ((url, relayOptions) => new AbstractRelay(url, relayOptions));
+      options.relayFactory ?? ((url, relayOptions) => new LifecycleRelay(url, relayOptions));
     this.random = options.random ?? Math.random;
     this.maxConcurrentQueriesPerRelay = normalizeQueryConcurrency(
       options.maxConcurrentQueriesPerRelay,
@@ -511,11 +512,7 @@ export class ManagedRelayPool {
   }
 
   private observeLifecycle(): void {
-    platform.appState.addChangeListener((nextState) => {
-      const previous = this.appState;
-      this.appState = nextState;
-      if (nextState === 'active' && previous !== 'active') this.recoverConnections();
-    });
+    platform.appState.addChangeListener((nextState) => this.updateAppState(nextState));
 
     platform.networkState.addStateListener((state) => this.handleNetworkState(state));
     void platform.networkState
@@ -525,6 +522,17 @@ export class ManagedRelayPool {
         // The socket remains the source of truth when the OS network hint is
         // unavailable.
       });
+  }
+
+  /** Disposable clients can share one process observer without retaining closed pools. */
+  updateAppState(nextState: AppStateStatus): void {
+    const previous = this.appState;
+    this.appState = nextState;
+    if (nextState === 'active' && previous !== 'active') this.recoverConnections();
+  }
+
+  updateNetworkState(state: NetworkStateSnapshot, initial = false): void {
+    this.handleNetworkState(state, initial);
   }
 
   private handleNetworkState(state: NetworkStateSnapshot, initial = false): void {

@@ -1,4 +1,5 @@
 import { SquareArrowRightUp as ExternalLink } from '@solar-icons/react-native/category/arrows/Linear/SquareArrowRightUp';
+import { router } from 'expo-router';
 import type { Event } from 'nostr-tools';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -98,6 +99,7 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
   const resolvable = canResolveReferencedEvent(reference);
   const urlTemplate = useChatPrefsStore((s) => s.nostrEventUrl);
   const href = nostrEventUrl(reference, urlTemplate);
+  const app = reference.kind === 5129 || reference.kind === 15129 || reference.kind === 35129;
   const fallbackLabel =
     reference.kind == null
       ? t('chat.event_reference.event')
@@ -111,9 +113,12 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
     <Pressable
       disabled={!loadRemote}
       accessibilityRole="link"
-      accessibilityLabel={t('chat.event_reference.open_external')}
+      accessibilityLabel={t(app ? 'napplets.details' : 'chat.event_reference.open_external')}
       fallbackHoverOpacity={false}
-      onPress={() => void platform.urlOpener.openExternalUrl(href).catch(() => {})}
+      onPress={() => {
+        if (app) router.push({ pathname: '/napplet/[id]', params: { id: reference.bech32 } });
+        else void platform.urlOpener.openExternalUrl(href).catch(() => {});
+      }}
       style={{
         width: 280,
         maxWidth: '100%',

@@ -216,4 +216,12 @@ describe('ListRow layout', () => {
     expect(row.props.accessibilityRole).toBe('radio');
     expect(row.props.accessibilityState).toEqual({ checked: true });
   });
+  it('keeps trailing controls enabled when the row itself is not tappable', () => {
+    act(() => { renderer = create(<ListRow title="Permission" trailing={<View />} />); });
+    const row = renderer!.root.findByType(InteractivePressable);
+    expect(row.props.onPress).toBeUndefined();
+    expect(row.props.accessible).toBe(false);
+    expect(row.props.disabled).toBe(false);
+    expect(row.props.hoverFeedback).toBe(false);
+  });
 });

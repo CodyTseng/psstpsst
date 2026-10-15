@@ -171,7 +171,7 @@ class RelayPool {
   }
 }
 
-function verifyEventNativeFirst(event: Event, _relayUrl: string): boolean {
+export function verifyEventNativeFirst(event: Event, _relayUrl: string): boolean {
   const cached = event[verifiedSymbol];
   if (typeof cached === 'boolean') return cached;
 

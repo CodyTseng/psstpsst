@@ -1,3 +1,5 @@
+import { Widget as WidgetBold } from '@solar-icons/react-native/category/settings/Bold/Widget';
+import { Widget as WidgetLinear } from '@solar-icons/react-native/category/settings/Linear/Widget';
 import { router, Tabs } from 'expo-router';
 import { PlatformPressable } from 'expo-router/build/react-navigation/elements';
 import { ChatRound as ChatRoundBold } from '@solar-icons/react-native/category/messages/Bold/ChatRound';
@@ -134,6 +136,10 @@ export default function TabsLayout() {
               );
             },
           }}
+        />
+        <Tabs.Screen
+          name="napplets"
+          options={{ title: t('napplets.title'), tabBarIcon: ({ color, focused, size }) => { const Icon = focused ? WidgetBold : WidgetLinear; return <Icon color={color as string} size={IS_ELECTRON ? uiDensity.tabIconSize : size} style={focused ? styles.selectedTabIcon : undefined} />; } }}
         />
         <Tabs.Screen
           name="me"

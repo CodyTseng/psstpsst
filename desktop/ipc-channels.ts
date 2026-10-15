@@ -1,4 +1,6 @@
 export const IPC = {
+  nappletOpen: 'napplet:open', nappletClose: 'napplet:close', nappletSend: 'napplet:send', nappletBounds: 'napplet:bounds',
+  nappletMessage: 'napplet:message', nappletReply: 'napplet:reply', nappletFetch: 'napplet:fetch', nappletCancel: 'napplet:cancel',
   clipboardWriteText: 'psstpsst:clipboard:write-text',
   clipboardReadText: 'psstpsst:clipboard:read-text',
   clipboardCopyAttachment: 'psstpsst:clipboard:copy-attachment',

@@ -657,3 +657,24 @@ account's wallet PIN immediately before the request is sent.
   `docs/protocols/`. Product, persistence, runtime, and delivery details belong
   under `docs/implementation/`, in code, or in tests.
 - Visual conventions belong in [`DESIGN.md`](./DESIGN.md), not here.
+
+## Napplet isolation
+
+Napplets run under the current persisted account in a separate platform container.
+Changing accounts or locking the application invalidates the execution session
+before new work can start. App storage, grants and settings are scoped by account,
+verified manifest identity and artifact hash. Runtime relay AUTH connections and
+remote-signer transport never borrow the chat session. Only hash-verified immutable
+artifacts are shared across accounts. See [napplet runtime](implementation/napplet-runtime.md).
+Signing grants additionally bind the operation, event kind and applicable record,
+recipient. Publication grants are independent of relay destinations; relay AUTH
+grants remain server-specific. Older relay-bound publication grants require new
+consent rather than being widened implicitly. Host-owned approval IDs bind responses to one
+request; cancellation invalidates queued approvals before a session is replaced.
+Signing revocation invalidates cached approvals and in-flight signatures, then
+serializes persistent removal without stopping unrelated executions. App access
+changes restart the affected container. Native app surfaces stay hidden until
+the single host sheet finishes exiting, including management and consent flows.
+Sharing is an embedded host flow: the execution container remains mounted but
+hidden, background consent waits until the picker closes, and sending never
+navigates to a destination conversation.

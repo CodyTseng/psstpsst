@@ -159,12 +159,12 @@ export function ListRow({
       onPress={onPress}
       accessible={onPress != null}
       accessibilityRole={selectionMode === 'single' ? 'radio' : undefined}
-      hoverFeedback={trailingOnHover == null ? undefined : false}
+      hoverFeedback={onPress && trailingOnHover == null ? undefined : false}
       onHoverIn={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(true)}
       onHoverOut={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(false)}
       pressFeedback="delayed"
       fallbackHoverOpacity={false}
-      disabled={disabled || (!onPress && trailingOnHover == null)}
+      disabled={disabled || (!onPress && trailingOnHover == null && trailing == null)}
       accessibilityState={
         selectionMode === 'single' ? { checked: active } : { selected: active }
       }

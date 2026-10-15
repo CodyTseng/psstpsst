@@ -1,5 +1,6 @@
 // This file is required for Expo/React Native SQLite migrations - https://orm.drizzle.team/quick-sqlite/expo
 
+import m0059 from './0059_napplets.sql';
 import journal from './meta/_journal.json';
 import m0000 from './0000_init.sql';
 import m0001 from './0001_tricky_shard.sql';
@@ -122,6 +123,7 @@ m0054,
 m0055,
 m0056,
 m0057,
-m0058
+m0058,
+m0059
     }
   }

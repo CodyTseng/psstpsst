@@ -157,6 +157,7 @@ export function AppButton({
 
   return (
     <Pressable
+      accessibilityRole="button"
       {...rest}
       hitSlop={resolvedHitSlop}
       disabled={isDisabled}

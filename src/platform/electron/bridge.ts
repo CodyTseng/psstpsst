@@ -1,3 +1,4 @@
+import type { NappletBounds } from '../ports/napplet';
 import type { SqlBindValue, SqliteQueryMethod } from '../ports/database';
 import type { AppUpdateStatus } from '../ports/app-update';
 import type {
@@ -22,6 +23,14 @@ export type ElectronDirectoryEntry = {
 };
 
 export type ElectronBridge = {
+  napplet: {
+    open(html: string): Promise<string>; close(id: string): Promise<void>;
+    send(id: string, message: string): Promise<void>;
+    setBounds(id: string, bounds: NappletBounds, visible: boolean): Promise<void>;
+    fetch(id: string, url: string, maxBytes: number): Promise<string>;
+    cancel(id: string): Promise<void>;
+    onMessage(listener: (id: string, message: string) => void): () => void;
+  };
   appUpdate: {
     check(): Promise<AppUpdateStatus>;
     getStatus(): Promise<AppUpdateStatus>;
