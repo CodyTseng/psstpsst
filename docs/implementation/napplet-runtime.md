@@ -33,7 +33,9 @@ late results; their connections, signer, INC endpoint and native container close
 
 Entry points synchronously prepare an account-bound launch and navigate to its
 container before starting installation, authorization or artifact loading. The
-container starts that work after committing. Verified local code loads on a blank
+details page uses Open for both cached and first-time apps, with required access
+expanded above a fixed bottom action. Optional access is omitted from app details.
+The container starts that work after committing. Verified local code loads on a blank
 themed canvas; a missing or corrupt artifact enables the icon and loading state
 only when a network download is needed, retaining it until the first frame.
 The container presents recoverable errors with retry,

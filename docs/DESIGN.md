@@ -847,10 +847,13 @@ inside a target. Pointer context menus and accessibility actions expose the same
 operations. Pins precede recents; removing an app preserves its data and clears
 its default task-handler choices for the current account.
 
-Mini-app details prioritize app identity, a readable description and one primary
-open/install action. Permission controls live in a dedicated management view;
-maintenance uses concise grouped rows. Protocol hashes stay out of ordinary app
-information surfaces.
+Mini-app details prioritize app identity, a readable description and expanded
+required access. The primary action is always Open, fixed above the bottom safe
+area while information scrolls. Optional access is omitted from app details.
+Details have the same layout regardless of installation state, without maintenance
+actions or a separate permissions entry. Permission controls live in the management
+view reached from the app menu. Protocol hashes stay out of ordinary app information
+surfaces.
 
 Mini-app More opens app information with Share, Permissions and Reload actions.
 Permissions closes the menu before navigating to the dedicated management page.

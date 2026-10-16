@@ -298,16 +298,30 @@ test(
         await publisher.click();
         assert.equal(await page.evaluate(() => window.lastRoute), `/profile/${'b'.repeat(64)}`);
         const text = await page.locator('body').innerText();
-        assert(!text.includes('Requested access') && !text.includes('Verified version') && !text.includes('c'.repeat(64)), 'app information omits capability dumps and hashes');
+        assert(!text.includes('Verified version') && !text.includes('c'.repeat(64)), 'app information omits protocol hashes');
+        await page.getByText('Required access', { exact: true }).waitFor();
+        assert(text.includes('Public account information'), 'required access is expanded on the information page');
+        assert(!text.includes('Upload files'), 'optional access is omitted from app details');
         assert(!text.includes('Reset permissions') && !text.includes('Clear defaults'), 'permissions actions live on the management page');
-        const check = page.getByText('Check updates', { exact: true });
-        const box = await check.boundingBox();
-        assert(box.y + box.height < 840, 'routine actions fit on the first mobile screen');
+        for (const label of ['Permissions', 'Check updates', 'Update', 'Restore version', 'Import data']) {
+          assert.equal(await page.getByText(label, { exact: true }).count(), 0, 'app details omit permission and maintenance actions');
+        }
+        const open = page.getByRole('button', { name: 'Open', exact: true });
+        const openBox = await open.boundingBox();
+        assert(openBox.y > 700 && openBox.y + openBox.height <= 840, 'Open stays above the bottom safe area');
         if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-app-detail.png` });
-        await check.click();
-        await page.getByText('This app is up to date.', { exact: true }).waitFor();
-        await page.getByText('Permissions', { exact: true }).click();
-        assert.deepEqual(await page.evaluate(() => window.lastRoute), { pathname: '/napplet-permissions/[id]', params: { id: 'd'.repeat(64) } });
+        await page.getByText('Required access', { exact: true }).evaluate((node) => {
+          for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+            if (['auto', 'scroll'].includes(getComputedStyle(parent).overflowY) && parent.scrollHeight > parent.clientHeight) {
+              parent.scrollTop = parent.scrollHeight; return;
+            }
+          }
+          throw new Error('Scrollable application information not found');
+        });
+        assert(Math.abs((await open.boundingBox()).y - openBox.y) < 1, 'scrolling permissions does not move Open');
+        await page.goto(`${address}/?scenario=detail&surface=touch&theme=${theme}&uninstalled=1`);
+        await page.getByRole('button', { name: 'Open', exact: true }).waitFor();
+        assert.equal(await page.locator('body').innerText(), text, 'installed and first-time apps show the same details');
         await page.goto(`${address}/?scenario=permissions&surface=touch&theme=${theme}`);
         await page.getByText(/Kind 1/).waitFor();
         const heading = await page.getByText('Signing rules', { exact: true }).boundingBox();
@@ -382,8 +396,13 @@ test(
         assert.equal(await page.getByText('Clear defaults', { exact: true }).count(), 0, 'default handlers are cleared automatically on removal');
       }
       await page.goto(`${address}/?scenario=detail&surface=touch&uninstalled=1&empty=1`);
-      await page.getByRole('button', { name: 'Install', exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Open', exact: true }).waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Install', exact: true }).count(), 0, 'first-time apps also use Open');
       assert.equal(await page.getByText('Check updates', { exact: true }).count(), 0);
+      await page.goto(`${address}/?scenario=detail&surface=touch&uninstalled=1&long=1`);
+      await page.getByRole('button', { name: 'Open', exact: true }).waitFor();
+      const longOpen = await page.getByRole('button', { name: 'Open', exact: true }).boundingBox();
+      assert(longOpen.y > 700 && longOpen.y + longOpen.height <= 840, 'long descriptions cannot push Open offscreen');
       await page.goto(`${address}/?scenario=permissions&surface=touch&uninstalled=1`);
       await page.getByText('Requested access', { exact: true }).waitFor();
       assert.equal(await page.getByText('Reset permissions', { exact: true }).count(), 0);

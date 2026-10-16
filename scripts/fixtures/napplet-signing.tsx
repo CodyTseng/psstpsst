@@ -65,7 +65,7 @@ const menu = params.get('scenario') === 'menu';
 let RuntimeScreen: React.ComponentType | undefined;
 if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
   const release: NappletRelease = { title: 'Composer', key: '35129:publisher:composer', hash: 'c'.repeat(64),
-    description: params.get('empty') ? '' : 'Compose and publish posts with your Nostr account.',
+    description: params.get('empty') ? '' : 'Compose and publish posts with your Nostr account.'.repeat(params.get('long') ? 30 : 1),
     required: ['identity', 'outbox', 'relay', 'resource', 'theme', 'inc', 'intent', 'link', 'storage'],
     optional: ['upload'], servers: [], intents: [],
     event: { id: 'd'.repeat(64), pubkey: 'b'.repeat(64), kind: 35129, tags: [['d', 'composer']] } as NappletRelease['event'],
