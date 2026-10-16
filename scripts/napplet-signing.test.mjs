@@ -222,10 +222,13 @@ test(
         await page.goto(`${address}/?scenario=menu&theme=${theme}`);
         await page.getByRole('button', { name: 'App menu', exact: true }).click();
         const dialog = page.getByRole('dialog');
-        await dialog.getByText('A small game for your account.', { exact: true }).waitFor();
-        await page.waitForFunction(() => window.nappletVisible === false);
+        await dialog.getByText('A small game for your account.', { exact: true }).waitFor({ timeout: 5000 }).catch(async (error) => {
+          throw new Error(`${error.message}\n${errors.join('\n')}\n${await page.locator('body').innerText()}`);
+        });
+        // Input is blocked immediately, including while a renderer preview is prepared.
+        await page.waitForFunction(() => window.nappletInputEnabled === false);
         await page.waitForFunction(() => {
-          const button = [...document.querySelectorAll('[role="dialog"] [role="button"]')].find((node) => node.textContent === 'Share');
+          const button = [...document.querySelectorAll('[role="dialog"] [role="button"]')].find((node) => node.getAttribute('aria-label') === 'Share');
           if (!button) return false;
           const box = button.getBoundingClientRect();
           const previous = window.__menuY;
@@ -234,18 +237,38 @@ test(
           return window.__menuStable >= 4 && box.bottom <= innerHeight;
         });
         assert.equal(await page.getByRole('dialog').count(), 1);
+        let previousX = -1;
+        for (const label of ['Share', 'Permissions', 'Reload']) {
+          const button = dialog.getByRole('button', { name: label, exact: true });
+          const box = await button.boundingBox();
+          const caption = await dialog.getByText(label, { exact: true }).boundingBox();
+          assert(Math.abs(box.width - box.height) < 1, 'menu icons use square controls');
+          assert(box.x > previousX, 'actions retain their defined order');
+          assert(caption.y >= box.y + box.height, 'action captions sit below the icon control');
+          assert(box.width >= 64, 'menu controls retain their enlarged touch target');
+          assert(await dialog.getByText(label, { exact: true }).evaluate((node) =>
+            node.clientHeight <= parseFloat(getComputedStyle(node).lineHeight) + 1 && node.scrollWidth <= node.clientWidth + 1),
+          'captions stay on one line without truncation');
+          previousX = box.x;
+        }
         if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-app-menu.png` });
-        await dialog.getByRole('button', { name: 'Settings', exact: true }).click();
-        await dialog.getByText(/Kind 1/).waitFor();
-        assert.equal(await page.getByRole('dialog').count(), 1, 'settings reuse the host sheet');
-        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-app-permissions.png` });
-        await dialog.getByRole('button', { name: 'Revoke', exact: true }).click();
-        await dialog.getByText(/Kind 1/).waitFor({ state: 'hidden' });
-        await dialog.getByRole('switch').click();
-        await dialog.getByRole('button', { name: 'Save and reload', exact: true }).click();
-        await page.waitForFunction(() => window.savedDomains?.includes('identity'));
-        await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+        await page.setViewportSize({ width: 250, height: 840 });
+        const rail = await dialog.getByRole('button', { name: 'Share', exact: true }).evaluateHandle((node) => {
+          for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+            if (['auto', 'scroll'].includes(getComputedStyle(parent).overflowX) && parent.scrollWidth > parent.clientWidth) return parent;
+          }
+          throw new Error('Overflowing action rail not found');
+        });
+        await rail.evaluate((node) => { node.scrollLeft = node.scrollWidth; });
+        assert(await rail.evaluate((node) => node.scrollLeft > 0), 'overflow actions can be scrolled into view');
+        await rail.dispose();
+        await page.setViewportSize({ width: 390, height: 840 });
+        await dialog.getByRole('button', { name: 'Permissions', exact: true }).click();
         await dialog.waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => window.lastRoute?.pathname === '/napplet-permissions/[id]');
+        assert.deepEqual(await page.evaluate(() => window.lastRoute), { pathname: '/napplet-permissions/[id]', params: { id: 'd'.repeat(64) } });
+        assert.equal(await page.getByText('Signing rules', { exact: true }).count(), 0, 'permissions do not open inside the app sheet');
+        await page.evaluate(() => { delete window.lastRoute; });
         await page.waitForFunction(() => window.nappletVisible === true);
         await page.getByRole('button', { name: 'App menu', exact: true }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Reload', exact: true }).click();
@@ -265,6 +288,106 @@ test(
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         await page.waitForFunction(() => document.title === 'closed');
       }
+      for (const theme of ['light', 'dark']) {
+        await page.goto(`${address}/?scenario=detail&surface=touch&theme=${theme}`);
+        await page.getByRole('button', { name: 'Open', exact: true }).waitFor();
+        const publisher = page.getByRole('button', { name: 'Publisher: Arjen', exact: true });
+        const publisherBox = await publisher.boundingBox();
+        const appName = await page.getByText('Composer', { exact: true }).last().boundingBox();
+        assert(Math.abs(publisherBox.x - appName.x) < 1, 'publisher avatar aligns with the application name');
+        await publisher.click();
+        assert.equal(await page.evaluate(() => window.lastRoute), `/profile/${'b'.repeat(64)}`);
+        const text = await page.locator('body').innerText();
+        assert(!text.includes('Requested access') && !text.includes('Verified version') && !text.includes('c'.repeat(64)), 'app information omits capability dumps and hashes');
+        assert(!text.includes('Reset permissions') && !text.includes('Clear defaults'), 'permissions actions live on the management page');
+        const check = page.getByText('Check updates', { exact: true });
+        const box = await check.boundingBox();
+        assert(box.y + box.height < 840, 'routine actions fit on the first mobile screen');
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-app-detail.png` });
+        await check.click();
+        await page.getByText('This app is up to date.', { exact: true }).waitFor();
+        await page.getByText('Permissions', { exact: true }).click();
+        assert.deepEqual(await page.evaluate(() => window.lastRoute), { pathname: '/napplet-permissions/[id]', params: { id: 'd'.repeat(64) } });
+        await page.goto(`${address}/?scenario=permissions&surface=touch&theme=${theme}`);
+        await page.getByText(/Kind 1/).waitFor();
+        const heading = await page.getByText('Signing rules', { exact: true }).boundingBox();
+        assert.equal(await page.getByRole('img', { name: /^Signing account:/ }).count(), 0, 'permission management omits the account avatar');
+        for (const label of ['Recent permission decisions', 'Required access']) {
+          const disclosure = await page.getByRole('button', { name: label, exact: true }).boundingBox();
+          assert(Math.abs(disclosure.x - heading.x) < 1, 'disclosures align with section headings');
+        }
+        const metadata = page.getByText('Kind 1 · Always', { exact: true });
+        assert(await metadata.evaluate((node) => node.clientHeight <= parseFloat(getComputedStyle(node).lineHeight) + 1), 'ordinary permission metadata occupies one line');
+        const allow = page.getByText('Allow', { exact: true }), deny = page.getByText('Reject', { exact: true });
+        const allowColor = await allow.evaluate((node) => getComputedStyle(node).color);
+        const denyColor = await deny.evaluate((node) => getComputedStyle(node).color);
+        assert.notEqual(allowColor, denyColor, 'allow and reject have distinct semantic colours');
+        const reset = page.getByRole('button', { name: 'Reset permissions', exact: true });
+        assert.equal(await page.getByText('Reset permissions', { exact: true }).evaluate((node) => getComputedStyle(node).color), denyColor, 'reset uses the shared danger text colour');
+        const denyBox = await deny.boundingBox(), titleBox = await page.getByText('Publish a reaction', { exact: true }).boundingBox();
+        const kindBox = await page.getByText('Kind 7 · Always', { exact: true }).boundingBox();
+        assert(denyBox.x >= titleBox.x + titleBox.width && Math.abs(denyBox.y + denyBox.height / 2 - titleBox.y - titleBox.height / 2) < 2, 'explicit status follows the permission title');
+        assert(Math.abs(kindBox.x - titleBox.x) < 1, 'metadata aligns with the permission title');
+        assert.equal(await page.getByRole('button', { name: 'Revoke', exact: true }).count(), 0, 'rules have one editing target');
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-permissions-page.png` });
+        await page.setViewportSize({ width: 280, height: 840 });
+        const narrowTitle = await page.getByText('Publish a reaction', { exact: true }).boundingBox();
+        const narrowStatus = await deny.boundingBox();
+        assert(narrowTitle.x + narrowTitle.width <= narrowStatus.x, 'long titles yield space to status');
+        assert(await deny.evaluate((node) => node.scrollWidth <= node.clientWidth + 1), 'the complete decision remains readable on narrow screens');
+        await page.setViewportSize({ width: 390, height: 840 });
+        await page.evaluate(() => { window.confirmationResult = false; });
+        await reset.click();
+        await page.waitForFunction(() => window.lastConfirmation?.destructive === true);
+        assert.notEqual(await page.title(), 'permissions-reset', 'cancelling the confirmation leaves permissions intact');
+        await metadata.waitFor();
+        await page.evaluate(() => { window.confirmationResult = true; });
+        await page.getByText('Publish a post', { exact: true }).click();
+        const editor = page.getByRole('dialog');
+        await editor.getByRole('radio', { name: 'Ask every time', exact: true }).click();
+        await editor.getByRole('button', { name: 'Save', exact: true }).click();
+        await editor.waitFor({ state: 'hidden' });
+        await page.getByText('Ask every time', { exact: true }).waitFor();
+        await page.getByText('Kind 1', { exact: true }).waitFor();
+        assert.equal(await page.getByText('Publish a post', { exact: true }).count(), 1, 'cleared rules stay visible for this visit');
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-permissions-asked.png` });
+        await page.getByText('Publish a post', { exact: true }).click();
+        await editor.getByRole('radio', { name: 'Automatically allow', exact: true }).click();
+        await editor.getByText('Duration', { exact: true }).click();
+        await page.getByText('10 min', { exact: true }).click();
+        await editor.getByText('10 min', { exact: true }).waitFor();
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-rule-editor.png` });
+        await editor.getByRole('button', { name: 'Save', exact: true }).click();
+        await editor.waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => window.savedRuleChange?.duration === 'timed');
+        assert(await page.evaluate(() => Math.abs(window.savedRuleChange.expiresAt - Date.now() - 600000) < 5000));
+        await page.getByText('Publish a post', { exact: true }).click();
+        await editor.getByRole('radio', { name: 'Automatically reject', exact: true }).click();
+        await editor.getByRole('button', { name: 'Save', exact: true }).click();
+        await editor.waitFor({ state: 'hidden' });
+        await page.waitForFunction(() => window.savedRuleChange?.decision === 'deny');
+        await page.getByText('Publish a post', { exact: true }).click();
+        await editor.getByRole('radio', { name: 'Ask every time', exact: true }).click();
+        await editor.getByRole('button', { name: 'Save', exact: true }).click();
+        await editor.waitFor({ state: 'hidden' });
+        await page.getByText('Ask every time', { exact: true }).waitFor();
+        await page.goto(`${address}/?scenario=permissions&surface=touch&theme=${theme}`);
+        await page.getByText('Publish a reaction', { exact: true }).waitFor();
+        assert.equal(await page.getByText('Publish a post', { exact: true }).count(), 0, 'asking rows disappear on the next visit');
+        await page.getByRole('switch').click();
+        await page.getByRole('button', { name: 'Save and reload', exact: true }).click();
+        await page.waitForFunction(() => window.savedDomains?.includes('upload'));
+        await page.getByText('Reset permissions', { exact: true }).click();
+        await page.getByText(/Kind 1/).waitFor({ state: 'hidden' });
+        assert.equal(await page.getByText('Clear defaults', { exact: true }).count(), 0, 'default handlers are cleared automatically on removal');
+      }
+      await page.goto(`${address}/?scenario=detail&surface=touch&uninstalled=1&empty=1`);
+      await page.getByRole('button', { name: 'Install', exact: true }).waitFor();
+      assert.equal(await page.getByText('Check updates', { exact: true }).count(), 0);
+      await page.goto(`${address}/?scenario=permissions&surface=touch&uninstalled=1`);
+      await page.getByText('Requested access', { exact: true }).waitFor();
+      assert.equal(await page.getByText('Reset permissions', { exact: true }).count(), 0);
+      assert.equal(await page.getByRole('switch').count(), 0, 'uninstalled access is informational');
       await page.clock.install();
       await page.goto(`${address}/?scenario=timeout`);
       await page.getByRole('button', { name: 'Allow', exact: true }).waitFor();

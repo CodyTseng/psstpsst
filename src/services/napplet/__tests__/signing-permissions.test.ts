@@ -1,4 +1,4 @@
-import { SigningPermissions, type SigningRequest } from '../signing-permissions';
+import { SigningPermissions, signingRuleKey, type SigningRequest } from '../signing-permissions';
 import { getData, setData, type AppScope } from '../repository';
 import type { NappletRelease } from '../protocol';
 
@@ -23,6 +23,71 @@ beforeEach(() => {
   jest.mocked(setData).mockImplementation(async (scope, bucket, name, value) => {
     if (value == null) stored.delete(key(scope, bucket, name)); else stored.set(key(scope, bucket, name), value);
   });
+});
+
+test('editing a saved rule changes its decision immediately and asking removes all automatic authority', async () => {
+  const value = create();
+  await value.permissions.authorize(request);
+  const rule = (await value.permissions.snapshot()).rules[0];
+  await value.permissions.edit(rule, { decision: 'deny', duration: 'always' });
+  await expect(value.permissions.authorize(request)).rejects.toThrow('permission-denied');
+  expect(value.confirm).toHaveBeenCalledTimes(1);
+  await value.permissions.edit(rule, { decision: 'ask', duration: 'always' });
+  expect((await value.permissions.snapshot()).rules).toHaveLength(0);
+  await value.permissions.authorize(request);
+  expect(value.confirm).toHaveBeenCalledTimes(2);
+});
+
+test('edited expiry is persisted without widening the record or recipient scope', async () => {
+  const value = create();
+  await value.permissions.authorize(request);
+  const rule = (await value.permissions.snapshot()).rules[0];
+  const expiresAt = Date.now() + 600000;
+  await value.permissions.edit(rule, { decision: 'allow', duration: 'timed', expiresAt });
+  const reopened = create();
+  expect((await reopened.permissions.snapshot()).rules[0]).toMatchObject({ scope: rule.scope, duration: 'timed', expiresAt });
+  await reopened.permissions.authorize({ ...request, identifier: 'another-record' });
+  expect(reopened.confirm).toHaveBeenCalledTimes(1);
+});
+
+test('invalid scopes or expired edits cannot install permissions', async () => {
+  const value = create();
+  const source = { key: signingRuleKey(request), scope: request };
+  await expect(value.permissions.edit({ ...source, key: 'different' }, { decision: 'allow', duration: 'always' })).rejects.toThrow();
+  await expect(value.permissions.edit(source, { decision: 'allow', duration: 'timed', expiresAt: Date.now() - 1 })).rejects.toThrow();
+  const protectedScope = { ...request, kind: 24242 };
+  await expect(value.permissions.edit({ key: signingRuleKey(protectedScope), scope: protectedScope }, { decision: 'allow', duration: 'always' })).rejects.toThrow();
+  expect(setData).not.toHaveBeenCalled();
+});
+
+test('an edit invalidates consent that was already waiting', async () => {
+  let finish!: (answer: string) => void;
+  const value = create(jest.fn(() => new Promise<string>((resolve) => { finish = resolve; })));
+  const pending = value.permissions.authorize(request);
+  while (!finish) await Promise.resolve();
+  await value.permissions.edit({ key: signingRuleKey(request), scope: request }, { decision: 'deny', duration: 'always' });
+  finish('allow-always');
+  await expect(pending).rejects.toThrow('permission-denied');
+  expect((await value.permissions.snapshot()).rules[0].decision).toBe('deny');
+});
+
+test('a failed write never activates an edited automatic allowance', async () => {
+  const value = create();
+  jest.mocked(setData).mockRejectedValueOnce(new Error('disk-full'));
+  await expect(value.permissions.edit({ key: signingRuleKey(request), scope: request }, { decision: 'allow', duration: 'always' })).rejects.toThrow('disk-full');
+  await value.permissions.authorize(request);
+  expect(value.confirm).toHaveBeenCalledTimes(1);
+});
+
+test('a failed edit retains the previously saved permission for future requests', async () => {
+  const value = create();
+  await value.permissions.authorize(request);
+  const rule = (await value.permissions.snapshot()).rules[0];
+  jest.mocked(setData).mockRejectedValueOnce(new Error('disk-full'));
+  await expect(value.permissions.edit(rule, { decision: 'deny', duration: 'always' })).rejects.toThrow('disk-full');
+  await value.permissions.authorize(request);
+  expect(value.confirm).toHaveBeenCalledTimes(1);
+  expect((await value.permissions.snapshot()).rules[0].decision).toBe('allow');
 });
 
 test('persistent rules are narrow and never cross accounts, artifacts or records', async () => {

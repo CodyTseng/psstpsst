@@ -844,13 +844,28 @@ the newly selected language.
 Mini-app recents use an icon-and-name grid. Holding an icon reveals an accent
 pin target above and a danger remove target below; actions commit only on release
 inside a target. Pointer context menus and accessibility actions expose the same
-operations. Pins precede recents, and removing a recent item preserves app data.
+operations. Pins precede recents; removing an app preserves its data and clears
+its default task-handler choices for the current account.
 
-Mini-app More opens app information with Share, Settings and Reload actions. Host settings expose
-app access and remembered signing decisions, including per-rule revocation.
-Settings lead with concise action, event kind, decision and Revoke rows. Account
-identity stays in the header; protocol hashes and history stay out of the default
-permission view. Sharing keeps the current app mounted and returns to it after
+Mini-app details prioritize app identity, a readable description and one primary
+open/install action. Permission controls live in a dedicated management view;
+maintenance uses concise grouped rows. Protocol hashes stay out of ordinary app
+information surfaces.
+
+Mini-app More opens app information with Share, Permissions and Reload actions.
+Permissions closes the menu before navigating to the dedicated management page.
+Menu actions use square icon controls with single-line captions below. Slots grow
+to fit longer labels in an ordered horizontal rail that scrolls when needed
+rather than stretching actions across the available width. Host permissions expose
+app access and remembered signing decisions. Each rule is one editing target,
+with Ask every time, Automatically allow and Automatically reject choices and
+an independent duration. Saved changes take effect immediately. Choosing Ask
+deletes the persisted decision but keeps its row visible for the current visit;
+the next visit omits it. Status follows the title with semantic colour; long
+titles yield space to it, and Kind/duration shares the title's start edge. Disclosures align
+with section headings. Permission management omits account chrome; protocol hashes
+and history stay out of its default view. Permission reset uses the shared danger
+button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
 confirmation or cancellation.
 
 Signing confirmations lead with the action, its consequences and readable content.

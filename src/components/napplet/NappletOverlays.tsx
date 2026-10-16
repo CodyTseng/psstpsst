@@ -33,12 +33,12 @@ export function NappletOverlays() {
   const showingPanel = prompt || configuration ? null : panel;
   function panelAction(action: NappletPanelAction | 'settings') {
     if (!panel || !accountPubkey) return;
-    if (action === 'settings') { nappletService.openPanel('settings'); return; }
     const release = panel.release;
     const account = accountPubkey;
     pending.current = () => {
       if (getNappletAccountPubkey() !== account) return;
-      if (action === 'publisher') router.push(`/profile/${release.event.pubkey}`);
+      if (action === 'settings') router.push({ pathname: '/napplet-permissions/[id]', params: { id: release.event.id } });
+      else if (action === 'publisher') router.push(`/profile/${release.event.pubkey}`);
       else if (action === 'share') {
         const draftId = useForwardDraftStore.getState().start({ accountPubkey: account, sourceConversationKey: null,
           messages: [{ kind: KIND_CHAT, content: `${release.title}\n${appShareAddress(release)}`, tags: [] }] });
@@ -51,7 +51,7 @@ export function NappletOverlays() {
   return (
     <BottomSheet
       visible={!!prompt || !!configuration || !!panel}
-      title={prompt?.signing ? signingAction(prompt.signing, t) : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : t('napplets.settings'))}
+      title={prompt?.signing ? signingAction(prompt.signing, t) : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
       headerAction={prompt?.signing ? <SigningAccountAvatar pubkey={prompt.signing.accountPubkey} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
       contentStyle={{ gap: spacing.lg }}

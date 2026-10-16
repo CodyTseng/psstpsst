@@ -6,15 +6,22 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initPlatformAdapters } from '../../src/platform/registry';
 import type { PlatformAdapters } from '../../src/platform/ports';
-import { NavigationContext } from 'expo-router/react-navigation';
+import { NavigationContext, NavigationRouteContext, PreventRemoveContext } from 'expo-router/react-navigation';
+import { LocalRouteParamsContext } from 'expo-router/build/Route';
 import type { NappletRelease } from '../../src/services/napplet/protocol';
 
 // This fixture renders the shipped approval UI without user data or signer access.
 initPlatformAdapters({
-  napplet: { setBounds: async (_id: string, _bounds: unknown, visible: boolean) => {
+  napplet: { capture: async () => null, setBounds: async (_id: string, _bounds: unknown, visible: boolean, interactive = true) => {
     (window as unknown as { nappletVisible: boolean }).nappletVisible = visible;
+    (window as unknown as { nappletInputEnabled: boolean }).nappletInputEnabled = visible && interactive;
   } },
   clipboard: { writeText: async (text: string) => { (window as unknown as { copiedEvent: string }).copiedEvent = text; } },
+  confirmationDialog: { confirm: async (options: unknown) => {
+    const state = window as unknown as { lastConfirmation: unknown; confirmationResult?: boolean };
+    state.lastConfirmation = options;
+    return state.confirmationResult ?? true;
+  }, notify: async () => {} },
   database: { drizzle: () => ({}) },
   localization: { preferredLanguageTag: () => 'en' },
   appState: { currentState: () => 'active', addChangeListener: () => () => {} },
@@ -56,6 +63,60 @@ if (params.get('scenario') === 'timeout') {
 }
 const menu = params.get('scenario') === 'menu';
 let RuntimeScreen: React.ComponentType | undefined;
+if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
+  const release: NappletRelease = { title: 'Composer', key: '35129:publisher:composer', hash: 'c'.repeat(64),
+    description: params.get('empty') ? '' : 'Compose and publish posts with your Nostr account.',
+    required: ['identity', 'outbox', 'relay', 'resource', 'theme', 'inc', 'intent', 'link', 'storage'],
+    optional: ['upload'], servers: [], intents: [],
+    event: { id: 'd'.repeat(64), pubkey: 'b'.repeat(64), kind: 35129, tags: [['d', 'composer']] } as NappletRelease['event'],
+  };
+  profile.useDisplayName = () => ({ name: 'Arjen', profile: null });
+  nappletStore.setState({ accountPubkey: 'a'.repeat(64), loaded: true, prompt: null, market: [release],
+    installed: params.get('uninstalled') ? [] : [{ ...release, pinnedAt: null, lastUsedAt: null, previousManifest: null }],
+  });
+  const { nappletPermissionStore } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
+  const { signingRuleKey, replaceSigningRule } = require('../../src/services/napplet/signing-permissions') as typeof import('../../src/services/napplet/signing-permissions');
+  const storageKey = `fixture-signing-rules-${params.get('theme') ?? 'light'}`;
+  let rules: import('../../src/services/napplet/signing-permissions').SigningRule[] = [{
+    key: 'post', decision: 'allow', duration: 'always', createdAt: 100,
+    scope: { operation: 'publish', kind: 1, relays: [] },
+  }, {
+    key: 'reaction', decision: 'deny', duration: 'always', createdAt: 100,
+    scope: { operation: 'publish', kind: 7, relays: [] },
+  }];
+  rules = rules.map((rule) => ({ ...rule, key: signingRuleKey(rule.scope) }));
+  const persisted = sessionStorage.getItem(storageKey);
+  if (persisted) rules = JSON.parse(persisted);
+  nappletService.updateSigningRule = async (_release, source, change) => {
+    rules = replaceSigningRule(rules, source, change);
+    sessionStorage.setItem(storageKey, JSON.stringify(rules));
+    (window as unknown as { savedRuleChange: unknown }).savedRuleChange = change;
+    nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
+  };
+  nappletService.signingPermissions = async () => ({ rules, activity: [
+    { scope: { operation: 'publish', kind: 1 }, decision: 'allowed', at: 100000 },
+  ] });
+  nappletService.revokeSigningRule = async (_release, key) => {
+    rules = rules.filter((rule) => rule.key !== key); nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
+  };
+  nappletService.domainPermissions = async () => ['shell', ...release.required];
+  nappletService.setDomainPermissions = async (_release, domains) => {
+    (window as unknown as { savedDomains: string[] }).savedDomains = domains;
+  };
+  nappletService.revoke = async () => {
+    rules = []; sessionStorage.setItem(storageKey, '[]');
+    nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
+    document.title = 'permissions-reset';
+  };
+  nappletService.resolve = async () => { document.title = 'updates-checked'; return release; };
+  const { router } = require('expo-router') as typeof import('expo-router');
+  router.canGoBack = () => true;
+  router.push = (route) => { (window as unknown as { lastRoute: unknown }).lastRoute = route; };
+  require('expo-router/build/global-state/store').storeRef.current.navigationRef = { current: {} };
+  RuntimeScreen = params.get('scenario') === 'detail'
+    ? require('../../src/app/(app)/napplet/[id]').default
+    : require('../../src/app/(app)/napplet-permissions/[id]').default;
+}
 if (menu) {
   const release: NappletRelease = { ...nappletStore.getState().prompt!.app!,
     description: 'A small game for your account.', required: ['storage'], optional: ['identity'], servers: [], intents: [],
@@ -93,9 +154,15 @@ if (menu) {
 }
 function Fixture() {
   return <SafeAreaProvider><NavigationContext.Provider value={{ isFocused: () => true, addListener: () => () => {} } as never}>
+    <NavigationRouteContext.Provider value={{ key: 'fixture', name: 'fixture' }}>
+    <PreventRemoveContext.Provider value={{ preventedRoutes: {}, setPreventRemove: () => {} }}>
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {RuntimeScreen ? <RuntimeScreen /> : null}<NappletOverlays />
+      <LocalRouteParamsContext.Provider value={{ id: 'd'.repeat(64) }}>
+        {RuntimeScreen ? <RuntimeScreen /> : null}
+      </LocalRouteParamsContext.Provider><NappletOverlays />
     </GestureHandlerRootView>
+    </PreventRemoveContext.Provider>
+    </NavigationRouteContext.Provider>
   </NavigationContext.Provider></SafeAreaProvider>;
 }
 AppRegistry.registerComponent('NappletSigningFixture', () => Fixture);

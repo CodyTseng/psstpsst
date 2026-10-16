@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { nappletData, nappletInstallations, nappletUsage } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
@@ -122,19 +122,23 @@ export async function changeRecent(
   appKey: string,
   action: 'pin' | 'unpin' | 'remove',
 ): Promise<void> {
-  await db
-    .update(nappletInstallations)
-    .set(
-      action === 'remove'
-        ? { lastUsedAt: null, pinnedAt: null }
-        : { pinnedAt: action === 'pin' ? Date.now() : null },
-    )
-    .where(
-      and(
-        eq(nappletInstallations.accountPubkey, accountPubkey),
-        eq(nappletInstallations.appKey, appKey),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    if (!(await canReceiveForAccount(accountPubkey, tx))) throw new Error('account-unavailable');
+    await tx.update(nappletInstallations)
+      .set(action === 'remove' ? { lastUsedAt: null, pinnedAt: null } : { pinnedAt: action === 'pin' ? Date.now() : null })
+      .where(and(eq(nappletInstallations.accountPubkey, accountPubkey), eq(nappletInstallations.appKey, appKey)));
+    if (action !== 'remove') return;
+    const defaults = { accountPubkey, appKey: 'host:intent-defaults', artifactHash: 'host' };
+    const removed = await tx.delete(nappletData)
+      .where(and(scopeWhere(defaults, 'defaults'), eq(nappletData.value, appKey)))
+      .returning({ bytes: nappletData.bytes });
+    if (!removed.length) return;
+    const bytes = removed.reduce((total, row) => total + row.bytes, 0);
+    await tx.update(nappletUsage)
+      .set({ bytes: sql`${nappletUsage.bytes} - ${bytes}`, count: sql`${nappletUsage.count} - ${removed.length}` })
+      .where(and(eq(nappletUsage.accountPubkey, accountPubkey), eq(nappletUsage.appKey, defaults.appKey),
+        eq(nappletUsage.artifactHash, defaults.artifactHash), eq(nappletUsage.bucket, 'defaults')));
+  });
 }
 export async function getData(
   scope: AppScope,

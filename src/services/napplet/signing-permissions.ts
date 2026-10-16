@@ -27,6 +27,12 @@ export type SigningRule = {
 };
 export type SigningActivity = { scope: Pick<SigningScope, 'operation' | 'kind'>; at: number; decision: 'allowed' | 'automatic' | 'denied' };
 export type SigningSnapshot = { rules: SigningRule[]; activity: SigningActivity[] };
+export type SigningRuleChange = {
+  decision: 'allow' | 'deny' | 'ask';
+  duration: SigningRule['duration'];
+  expiresAt?: number;
+};
+export type SigningRuleTarget = Pick<SigningRule, 'key' | 'scope'>;
 const MAX_RULES = 64;
 export const PROTECTED_EVENT_KINDS = new Set([
   0, 3, 4, 5, 13, 14, 15, 1059, 10000, 10002, 10044, 10050, 10063, 22242, 24133, 24242, 27235,
@@ -56,6 +62,23 @@ export function canRememberSigning(request: SigningScope): boolean {
 /** An older reader must fail closed instead of treating timed grants as permanent. */
 export function encodeSigningRules(rules: SigningRule[]): string {
   return JSON.stringify({ version: 3, rules });
+}
+
+/** Management changes keep the original canonical scope and never broaden it. */
+export function replaceSigningRule(rules: SigningRule[], source: SigningRuleTarget, change: SigningRuleChange): SigningRule[] {
+  const scope = signingScope(source.scope);
+  const key = signingRuleKey(scope);
+  if (source.key !== key || !['allow', 'deny', 'ask'].includes(change.decision)) throw new Error('invalid-signing-permissions');
+  const next = rules.filter((rule) => rule.key !== key && activeRule(rule));
+  if (change.decision === 'ask') return next;
+  if (!canRememberSigning(scope) || !['always', 'timed', 'session'].includes(change.duration) ||
+    (change.duration === 'timed' && (!Number.isSafeInteger(change.expiresAt) || change.expiresAt! <= Date.now())))
+    throw new Error('invalid-signing-permissions');
+  if (next.length >= MAX_RULES) throw new Error('quota-exceeded');
+  next.push({ key, scope, decision: change.decision, duration: change.duration, createdAt: Date.now(),
+    ...(change.duration === 'timed' ? { expiresAt: change.expiresAt } : {}) });
+  if (JSON.stringify(next).length > 256 * 1024) throw new Error('quota-exceeded');
+  return next;
 }
 export async function readSigningSnapshot(scope: AppScope): Promise<SigningSnapshot> {
   const [rules, activity] = await Promise.all([
@@ -119,6 +142,32 @@ export class SigningPermissions {
     });
     this.writes = update;
     await update;
+  }
+
+  async edit(source: SigningRuleTarget, change: SigningRuleChange): Promise<void> {
+    const frozen = JSON.parse(JSON.stringify({ source, change })) as { source: SigningRuleTarget; change: SigningRuleChange };
+    // Validate before invalidating pending authorizations.
+    replaceSigningRule([], frozen.source, frozen.change);
+    const revision = ++this.revision;
+    const wasRevoked = this.revoked.has(frozen.source.key);
+    this.revoked.add(frozen.source.key);
+    try {
+      await this.load();
+      const update = this.writes.catch(() => {}).then(async () => {
+        assertNotAborted(this.signal);
+        const next = replaceSigningRule(this.rules, frozen.source, frozen.change);
+        await setData(this.scope, 'permissions', 'signing', encodeSigningRules(next.filter((rule) => rule.duration !== 'session')));
+        assertNotAborted(this.signal);
+        this.rules = next;
+        this.revoked.delete(frozen.source.key);
+        this.changed();
+      });
+      this.writes = update;
+      await update;
+    } catch (error) {
+      if (this.revision === revision && !wasRevoked) this.revoked.delete(frozen.source.key);
+      throw error;
+    }
   }
 
   async authorize(input: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal): Promise<void> {

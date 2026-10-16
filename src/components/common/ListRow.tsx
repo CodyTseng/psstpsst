@@ -47,7 +47,11 @@ type Props = {
    * Caller sets its size (≈22) and color (match `titleTone`). */
   icon?: React.ReactNode;
   title: string;
+  /** Non-shrinking status after the title; long titles truncate before it. */
+  titleTrailing?: React.ReactNode;
   subtitle?: string;
+  /** Supporting content with inline status or identity semantics. */
+  subtitleContent?: React.ReactNode;
   subtitleTone?: ValueTone;
   /** Lets a registered supporting description wrap instead of truncating. */
   subtitleMultiline?: boolean;
@@ -102,7 +106,9 @@ type Props = {
 export function ListRow({
   icon,
   title,
+  titleTrailing,
   subtitle,
+  subtitleContent,
   subtitleTone = 'muted',
   subtitleMultiline = false,
   titleTone = 'default',
@@ -134,7 +140,7 @@ export function ListRow({
     warning: c.warning,
     danger: c.danger,
   }[valueTone];
-  const hasSubtitle = subtitle != null && subtitle.length > 0;
+  const hasSubtitle = subtitleContent != null || (subtitle != null && subtitle.length > 0);
   const hasBelowValue =
     valuePlacement === 'below' &&
     ((value != null && value.length > 0) || belowValue != null);
@@ -153,6 +159,11 @@ export function ListRow({
   const isPlain = !grouped && variant === 'plain';
   const isEmbedded = !grouped && variant === 'embedded';
   const rowRadius = isCard || isPlain ? radius.lg : 0;
+  const titleText = <AppText
+    variant={hasBelowValue ? 'caption' : 'subtitle'} weight="regular" numberOfLines={1}
+    style={{ color: hasBelowValue ? c.textMuted : titleColor, ...(titleTrailing ? { flexShrink: 1, minWidth: 0 } : {}) }}>
+    {title}
+  </AppText>;
 
   return (
     <Pressable
@@ -232,14 +243,9 @@ export function ListRow({
                 gap: 2,
               }}
             >
-              <AppText
-                variant={hasBelowValue ? 'caption' : 'subtitle'}
-                weight="regular"
-                numberOfLines={1}
-                style={{ color: hasBelowValue ? c.textMuted : titleColor }}
-              >
-                {title}
-              </AppText>
+              {titleTrailing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                {titleText}<View style={{ flexShrink: 0 }}>{titleTrailing}</View>
+              </View> : titleText}
               {hasBelowValue ? (
                 belowValue ?? (
                   valueEllipsizeMode === 'middle' && value ? (
@@ -260,7 +266,7 @@ export function ListRow({
                     </AppText>
                   )
                 )
-              ) : hasSubtitle ? (
+              ) : hasSubtitle ? subtitleContent ?? (
                 <AppText
                   variant="caption"
                   tone={subtitleTone}

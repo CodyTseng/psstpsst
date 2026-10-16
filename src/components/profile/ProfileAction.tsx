@@ -12,31 +12,37 @@ type Props = {
   disabled?: boolean;
   /** `danger` tints the label red for destructive actions (e.g. Remove). */
   tone?: 'default' | 'danger';
+  shape?: 'circle' | 'square';
+  /** Fixed slots preserve action order in a horizontally scrolling rail. */
+  layout?: 'equal' | 'fixed';
+  /** Equal-column basis, or minimum slot width when layout is fixed. */
+  width?: number;
+  size?: number;
+  singleLineLabel?: boolean;
 };
 
 /**
- * A single profile action: a circular white (`elevated`) `IconButton` over a
- * caption label — floats on the grouped profile page. Reuses PsstPsst's own
- * button language rather than a foreign capsule/tile style. Drop several into a
- * centered row to form the action strip on profile screens (DESIGN §8).
+ * An elevated icon control above a centered caption. Profile actions default
+ * to circular controls in equal-width columns; horizontal rails can use fixed
+ * slots and square controls without changing the shared button language.
  */
-export function ProfileAction({ icon, label, onPress, disabled, tone = 'default' }: Props) {
+export function ProfileAction({ icon, label, onPress, disabled, tone = 'default', shape = 'circle', layout = 'equal', width = uiDensity.profileActionWidth, size = uiDensity.profileActionSize, singleLineLabel = false }: Props) {
   return (
     <View
       style={{
         alignItems: 'center',
         gap: spacing.sm,
-        flexBasis: uiDensity.profileActionWidth,
-        flexGrow: 1,
-        flexShrink: 1,
-        minWidth: 0,
+        flexBasis: layout === 'fixed' ? 'auto' : width,
+        flexGrow: layout === 'equal' ? 1 : 0,
+        flexShrink: layout === 'equal' ? 1 : 0,
+        minWidth: layout === 'fixed' ? width : 0,
         paddingHorizontal: spacing.xs,
       }}
     >
       <IconButton
         variant="secondary"
-        shape="circle"
-        size={uiDensity.profileActionSize}
+        shape={shape}
+        size={size}
         onPress={onPress}
         disabled={disabled}
         icon={icon}
@@ -46,6 +52,7 @@ export function ProfileAction({ icon, label, onPress, disabled, tone = 'default'
         variant="caption"
         tone={tone === 'danger' ? 'danger' : 'muted'}
         align="center"
+        numberOfLines={singleLineLabel ? 1 : undefined}
         style={{ alignSelf: 'stretch' }}
       >
         {label}

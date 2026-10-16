@@ -3,7 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import { getAccount } from '@/services/account/account-access';
 import { nappletInstallations, nappletData, nappletUsage } from '@/db/schema';
 import { db } from '@/db/client';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { matchFilters } from 'nostr-tools/filter';
 import { loadArtifact } from './artifacts';
 import { NappletNetwork } from './network';
@@ -27,7 +27,7 @@ import {
 import { NappletRuntime, type RuntimePrompt, type RuntimeTheme } from './runtime';
 import type { ConfigSchema } from './config';
 import { PromptQueue, type QueuedPrompt } from './prompt-queue';
-import { encodeSigningRules, readSigningSnapshot } from './signing-permissions';
+import { encodeSigningRules, readSigningSnapshot, replaceSigningRule, type SigningRuleTarget, type SigningRuleChange } from './signing-permissions';
 
 type State = {
   accountPubkey: string | null;
@@ -73,6 +73,7 @@ export const nappletPermissionStore = createStore(() => ({ revision: 0 }));
 let generation = 0;
 let catalog: NappletNetwork | null = null;
 const addressReaders = new Set<NappletNetwork>();
+const signingEdits = new Map<string, Promise<void>>();
 let runtime: NappletRuntime | null = null;
 const approvals = new PromptQueue((prompt) => nappletStore.setState({ prompt, ...(prompt ? { overlayActive: true } : {}) }));
 let theme: RuntimeTheme | null = null;
@@ -498,6 +499,32 @@ export const nappletService = {
     check(expectedAccount, epoch);
     permissionsChanged();
   },
+  async updateSigningRule(release: NappletRelease, source: SigningRuleTarget, change: SigningRuleChange, expectedAccount: string) {
+    const epoch = generation;
+    check(expectedAccount, epoch);
+    const frozen = JSON.parse(JSON.stringify({ source, change })) as { source: SigningRuleTarget; change: SigningRuleChange };
+    replaceSigningRule([], frozen.source, frozen.change);
+    const scope = { accountPubkey: expectedAccount, appKey: release.key, artifactHash: release.hash };
+    const key = JSON.stringify(scope);
+    const work = (signingEdits.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
+      check(expectedAccount, epoch);
+      const active = runtime;
+      if (active?.scope?.accountPubkey === expectedAccount && active.scope.appKey === release.key && active.scope.artifactHash === release.hash) {
+        await active.signingPermissions.edit(frozen.source, frozen.change);
+        check(expectedAccount, epoch);
+        return;
+      }
+      if (frozen.change.decision !== 'ask' && frozen.change.duration === 'session') throw new Error('invalid-signing-permissions');
+      const saved = await readSigningSnapshot(scope);
+      check(expectedAccount, epoch);
+      await setData(scope, 'permissions', 'signing', encodeSigningRules(replaceSigningRule(saved.rules, frozen.source, frozen.change)));
+      check(expectedAccount, epoch);
+      permissionsChanged();
+    });
+    signingEdits.set(key, work);
+    try { await work; }
+    finally { if (signingEdits.get(key) === work) signingEdits.delete(key); }
+  },
   async revoke(release: NappletRelease, expectedAccount?: string) {
     const account = nappletStore.getState().accountPubkey;
     const epoch = generation;
@@ -512,35 +539,6 @@ export const nappletService = {
     await setData(scope, 'permissions', 'signing', null);
     check(account, epoch);
     permissionsChanged();
-  },
-  async clearDefaults(appKey: string, expectedAccount?: string) {
-    const account = nappletStore.getState().accountPubkey;
-    if (!account || (expectedAccount !== undefined && account !== expectedAccount)) return;
-    const rows = await db
-      .select()
-      .from(nappletData)
-      .where(
-        and(
-          eq(nappletData.accountPubkey, account),
-          eq(nappletData.appKey, 'host:intent-defaults'),
-          eq(nappletData.bucket, 'defaults'),
-          eq(nappletData.value, appKey),
-        ),
-      )
-      .limit(256);
-    for (const row of rows)
-      if (
-        row.appKey === 'host:intent-defaults' &&
-        row.bucket === 'defaults' &&
-        row.value === appKey
-      ) {
-        await setData(
-          { accountPubkey: account, appKey: row.appKey, artifactHash: row.artifactHash },
-          'defaults',
-          row.key,
-          null,
-        );
-      }
   },
   async migrate(release: NappletInstallation, expectedAccount: string) {
     if (nappletStore.getState().accountPubkey !== expectedAccount || !release.previousManifest)

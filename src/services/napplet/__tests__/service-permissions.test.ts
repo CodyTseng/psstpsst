@@ -1,4 +1,4 @@
-import { encodeSigningRules } from '../signing-permissions';
+import { encodeSigningRules, signingRuleKey } from '../signing-permissions';
 import { NappletRuntime } from '../runtime';
 import { loadArtifact } from '../artifacts';
 import { NappletNetwork } from '../network';
@@ -18,7 +18,7 @@ jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
   scope: { accountPubkey: options.accountPubkey, appKey: options.release.key, artifactHash: options.release.hash },
   open: jest.fn(async () => 'container'), close: jest.fn(async () => {}),
   goBack: jest.fn(async () => true),
-  signingPermissions: { revoke: jest.fn(async () => {}), settled: jest.fn(async () => {}), snapshot: jest.fn(async () => ({ rules: [], activity: [] })) },
+  signingPermissions: { revoke: jest.fn(async () => {}), edit: jest.fn(async () => {}), settled: jest.fn(async () => {}), snapshot: jest.fn(async () => ({ rules: [], activity: [] })) },
 })) }));
 
 const stored = new Map<string, string>();
@@ -37,6 +37,30 @@ beforeEach(async () => {
   nappletService.updateTheme({ colors: { background: '', text: '', primary: '' } });
 });
 afterEach(() => nappletService.deactivate());
+
+it('serializes rule edits and isolates the account and installed artifact', async () => {
+  const first = { key: signingRuleKey({ operation: 'publish', kind: 1, relays: [] }), scope: { operation: 'publish' as const, kind: 1, relays: [] } };
+  const second = { key: signingRuleKey({ operation: 'publish', kind: 7, relays: [] }), scope: { operation: 'publish' as const, kind: 7, relays: [] } };
+  await Promise.all([
+    nappletService.updateSigningRule(app, first, { decision: 'allow', duration: 'always' }, 'accountA'),
+    nappletService.updateSigningRule(app, second, { decision: 'deny', duration: 'always' }, 'accountA'),
+  ]);
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'signing'))!).rules).toHaveLength(2);
+  await nappletService.updateSigningRule(app, first, { decision: 'ask', duration: 'always' }, 'accountA');
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'signing'))!).rules[0].key).toBe(second.key);
+  expect(stored.has(key({ ...scope, artifactHash: 'v2' }, 'permissions', 'signing'))).toBe(false);
+  await expect(nappletService.updateSigningRule(app, first, { decision: 'allow', duration: 'always' }, 'accountB')).rejects.toThrow('session-closed');
+});
+
+it('updates a live runtime through its permission cache', async () => {
+  stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
+  await nappletService.open(app);
+  const active = jest.mocked(NappletRuntime).mock.results.at(-1)!.value;
+  const target = { key: signingRuleKey({ operation: 'publish', kind: 1, relays: [] }), scope: { operation: 'publish' as const, kind: 1, relays: [] } };
+  await nappletService.updateSigningRule(app, target, { decision: 'deny', duration: 'always' }, 'accountA');
+  expect(active.signingPermissions.edit).toHaveBeenCalledWith(target, { decision: 'deny', duration: 'always' });
+  expect(active.close).not.toHaveBeenCalled();
+});
 
 function addressFixture(relays: string[] = []) {
   const signer = generateSecretKey();

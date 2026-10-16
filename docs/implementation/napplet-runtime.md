@@ -65,8 +65,9 @@ memory-only. A new artifact receives a separate namespace; updates do not silent
 copy data or grants. An explicit, atomic migration can copy shared application KV
 into an empty new-version namespace; it never copies grants or host settings. Previous code and data remain available for rollback.
 
-Recent removal only clears recency and pin state. Opening the app again restores
-it. Shared immutable artifact files are hash-verified before execution and kept
+Recent removal atomically clears recency, pin state and that account's default
+intent handlers targeting the app. App data and permissions remain available;
+opening it again restores its recent entry. Shared immutable artifact files are hash-verified before execution and kept
 in the managed documents directory. They contain no account credentials.
 
 ## Platform boundary
@@ -110,14 +111,20 @@ bound aggregate reply size and total request time.
 ## Runtime controls
 
 The runtime header exposes More and Close. More opens app identity and publisher
-information, with Share, Settings and Reload actions. Sharing hands a stable Nostr
+information, with Share, Permissions and Reload actions. Permissions closes the
+menu before navigating to the dedicated account-bound management page. Sharing hands a stable Nostr
 app address to an embedded instance of the existing recipient picker after the
 host sheet closes. The app container stays mounted and hidden; completion or
 cancellation returns to that container, even for multiple recipients. Background
 approvals wait without a review timer until sharing ends. App
-references in messages open the app detail flow. Settings lists required access,
+references in messages open the app detail flow. The permissions page lists required access,
 editable optional domains, and installed-artifact signing rules. Optional access
 changes reload the container; individual signing rules can be revoked live.
+Rule editing preserves the exact operation/kind/record/recipient/server scope and
+serializes changes to decisions and expiry. Selecting Ask removes automatic
+authority immediately after saving. Its row is retained only by the focused
+permission view; leaving the page, switching accounts or changing the artifact
+discards that display state. It is never persisted as a permission.
 Management, configuration and signing prompts share one host sheet, with consent
 taking priority. App input remains blocked through the host sheet's exit animation.
 
@@ -173,7 +180,8 @@ execution session. Persistent writes are serialized before grants become active.
 Per-rule revocation invalidates the active cache and any in-flight authorization
 or unpublished signature before serializing persistent removal. Resetting all
 grants still stops the session. App updates and storage migrations never transfer signing grants.
-The app details show the installed version's rules and the latest 32 permission
+The dedicated permissions page exposes the installed version's
+rules, access controls, permission reset and latest 32 permission
 decisions, storing only action type, kind, decision and time. This history does
 not store event bodies and does not claim successful signing or publication.
 
