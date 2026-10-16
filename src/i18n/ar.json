@@ -1084,6 +1084,12 @@
     "runtime_notices": "Chromium والمكونات المضمنة"
   },
   "napplets": {
+    "app_title": "تطبيق مصغر",
+    "signing_upload": "رفع ملف",
+    "signing_effect_upload": "سيكون هذا الملف متاحًا للعامة وقد يحتوي على بيانات وصفية مضمّنة.",
+    "upload_destinations": "خدمات التخزين",
+    "capability_upload": "رفع الملفات",
+    "runtime_loading": "جارٍ تحميل التطبيق…",
     "permissions_signing": "التوقيع التلقائي",
     "permissions_hint": "يسري على هذا الحساب وإصدار التطبيق. ألغِ الإذن للسؤال مجددًا.",
     "permissions_access": "ميزات التطبيق",

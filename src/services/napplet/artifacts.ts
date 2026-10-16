@@ -40,7 +40,7 @@ export async function fetchBlob(
   }
   throw new Error('napplets.download_failed', { cause: lastError });
 }
-export async function loadArtifact(release: NappletRelease, signal?: AbortSignal): Promise<string> {
+export async function loadArtifact(release: NappletRelease, signal?: AbortSignal, onDownload?: () => void): Promise<string> {
   const path = await artifactPath(release.hash);
   if ((await platform.fileSystem.stat(path)).exists) {
     const bytes = await platform.fileSystem.readBytes(path);
@@ -51,6 +51,8 @@ export async function loadArtifact(release: NappletRelease, signal?: AbortSignal
     )
       return await decodeNappletHtml(bytes, signal);
   }
+  assertNotAborted(signal);
+  onDownload?.();
   const bytes = await fetchBlob(release, release.hash, MAX_ARTIFACT_BYTES, signal).catch((error) => {
     assertNotAborted(signal);
     console.warn(

@@ -1,15 +1,18 @@
 import { NappletRuntime, type RuntimeOptions } from '../runtime';
 import { NAP_DOMAINS, type NappletRelease } from '../protocol';
 import { platform } from '@/platform';
+import { NAPPLET_FRAME_READY_MESSAGE } from '@/platform/ports/napplet';
 import { getData, setData } from '../repository';
 import { NappletNetwork } from '../network';
 
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
+jest.mock('@/services/files/media-server.service', () => ({ loadAccountMediaServers: jest.fn(async () => ['https://media.example/']) }));
 jest.mock('@/platform', () => ({
   platform: {
     napplet: {
       open: jest.fn(async () => 'container'),
       close: jest.fn(async () => {}),
+      goBack: jest.fn(async () => true),
       send: jest.fn(async () => {}),
       fetchResource: jest.fn(async (url: string) => {
         if (url.includes('bad.example')) throw new Error('network-error');
@@ -65,6 +68,72 @@ const messages = () =>
   jest.mocked(platform.napplet.send).mock.calls.map(([, raw]) => JSON.parse(raw));
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+test('reports the trusted first frame once and ignores it after endpoint closure', async () => {
+  const config = options();
+  config.presented = jest.fn();
+  const runtime = new NappletRuntime(config);
+  await runtime.open();
+  await runtime.receive(NAPPLET_FRAME_READY_MESSAGE);
+  await runtime.receive(NAPPLET_FRAME_READY_MESSAGE);
+  expect(config.presented).toHaveBeenCalledTimes(1);
+  await runtime.close();
+  await runtime.receive(NAPPLET_FRAME_READY_MESSAGE);
+  expect(config.presented).toHaveBeenCalledTimes(1);
+});
+
+test('advertises the host upload rail only to an endpoint granted the upload domain', async () => {
+  const runtime = new NappletRuntime(options());
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'upload.info', id: 'info' }));
+    expect(messages().at(-1)).toMatchObject({ type: 'upload.info.result', info: { rails: [{ rail: 'blossom', enabled: true }, { rail: 'nip96', enabled: false }] } });
+    expect(messages().at(-1)?.info).not.toHaveProperty('maxBytes');
+  } finally { await runtime.close(); }
+  jest.mocked(platform.napplet.send).mockClear();
+  const restricted = new NappletRuntime({ ...options(), domains: ['shell'] });
+  await restricted.open();
+  try {
+    await restricted.receive(JSON.stringify({ type: 'upload.info', id: 'hidden' }));
+    expect(messages()).toEqual([]);
+  } finally { await restricted.close(); }
+});
+
+test.each([24242, 27235])('blocks generic publication of HTTP authorization kind %s', async (kind) => {
+  const runtime = new NappletRuntime(options());
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'outbox.publish', id: 'auth-token', event: { kind, content: '', tags: [] } }));
+    expect(messages().at(-1)).toMatchObject({ type: 'outbox.publish.result', error: 'publication-blocked' });
+    expect(runtime.network.sign).not.toHaveBeenCalled();
+  } finally { await runtime.close(); }
+});
+
+test('updates the host canvas even when the app has not requested theme access', async () => {
+  const config = options();
+  config.domains = ['shell'];
+  const runtime = new NappletRuntime(config);
+  await runtime.open();
+  try {
+    runtime.updateTheme();
+    expect(messages()).toContainEqual({ type: 'theme.changed', theme: config.theme() });
+    expect(jest.mocked(platform.napplet.open).mock.calls.at(-1)![0]).toContain('background-color:#fff');
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('returns the container history result and rejects navigation after closing', async () => {
+  const runtime = new NappletRuntime(options());
+  await runtime.open();
+  expect(await runtime.goBack()).toBe(true);
+  expect(platform.napplet.goBack).toHaveBeenCalledWith('container');
+  jest.mocked(platform.napplet.goBack).mockResolvedValueOnce(false);
+  expect(await runtime.goBack()).toBe(false);
+  await runtime.close();
+  await expect(runtime.goBack()).rejects.toThrow();
+  expect(platform.napplet.goBack).toHaveBeenCalledTimes(2);
 });
 
 test('storage operations always use the endpoint account and verified artifact', async () => {

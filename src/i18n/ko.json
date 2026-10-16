@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium 및 포함된 구성 요소"
   },
   "napplets": {
+    "app_title": "미니 앱",
+    "signing_upload": "파일 업로드",
+    "signing_effect_upload": "이 파일은 공개적으로 접근할 수 있으며 내장 메타데이터가 포함될 수 있습니다.",
+    "upload_destinations": "저장소 서비스",
+    "capability_upload": "파일 업로드",
+    "runtime_loading": "앱 불러오는 중…",
     "permissions_signing": "자동 서명",
     "permissions_hint": "현재 계정과 앱 버전에 적용됩니다. 취소하면 다시 확인합니다.",
     "permissions_access": "앱 기능",

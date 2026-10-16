@@ -24,9 +24,11 @@ export type ElectronDirectoryEntry = {
 
 export type ElectronBridge = {
   napplet: {
+    capture(id: string): Promise<string | null>;
+    goBack(id: string): Promise<boolean>;
     open(html: string): Promise<string>; close(id: string): Promise<void>;
     send(id: string, message: string): Promise<void>;
-    setBounds(id: string, bounds: NappletBounds, visible: boolean): Promise<void>;
+    setBounds(id: string, bounds: NappletBounds, visible: boolean, interactive?: boolean): Promise<void>;
     fetch(id: string, url: string, maxBytes: number): Promise<string>;
     cancel(id: string): Promise<void>;
     onMessage(listener: (id: string, message: string) => void): () => void;

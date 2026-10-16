@@ -1074,6 +1074,12 @@
     "runtime_notices": "Chromium i dołączone komponenty"
   },
   "napplets": {
+    "app_title": "Miniaplikacja",
+    "signing_upload": "Prześlij plik",
+    "signing_effect_upload": "Ten plik będzie publicznie dostępny i może zawierać osadzone metadane.",
+    "upload_destinations": "Usługi przechowywania",
+    "capability_upload": "Przesyłanie plików",
+    "runtime_loading": "Ładowanie aplikacji…",
     "permissions_signing": "Automatyczne podpisywanie",
     "permissions_hint": "Dotyczy tego konta i wersji aplikacji. Cofnięcie przywraca pytanie.",
     "permissions_access": "Funkcje aplikacji",

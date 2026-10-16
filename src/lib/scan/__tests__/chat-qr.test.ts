@@ -1,10 +1,30 @@
 import { resolveChatQrScan } from '../chat-qr';
+import { nip19 } from 'nostr-tools';
 
 const NWC_CONNECTION =
   `nostr+walletconnect://${'1'.repeat(64)}` +
   `?relay=${encodeURIComponent('wss://relay.example.com')}&secret=${'2'.repeat(64)}`;
 
 describe('chat QR resolver', () => {
+  const address = nip19.naddrEncode({ pubkey: 'ab'.repeat(32), kind: 35129, identifier: 'type-zoo', relays: ['wss://relay.example.com'] });
+  it.each([address, `nostr:${address}`, `https://napplet.example/app/${address}`])('recognizes a mini-app address and retains relay hints: %s', async (input) => {
+    await expect(resolveChatQrScan(input)).resolves.toEqual({ kind: 'napplet', address });
+  });
+
+  it.each([15129, 35129, undefined])('recognizes a mini-app event pointer with kind %s', async (kind) => {
+    const event = nip19.neventEncode({ id: 'ab'.repeat(32), kind, relays: ['wss://relay.example.com'] });
+    await expect(resolveChatQrScan(`nostr:${event}`)).resolves.toEqual({ kind: 'napplet', address: event });
+  });
+
+  it('preserves profile scanning and does not classify other event kinds as mini-apps', async () => {
+    const pubkey = 'ab'.repeat(32);
+    await expect(resolveChatQrScan(pubkey)).resolves.toEqual({ kind: 'chat', pubkey });
+    await expect(resolveChatQrScan(`nostr:${nip19.npubEncode(pubkey)}`)).resolves.toEqual({ kind: 'chat', pubkey });
+    await expect(resolveChatQrScan(nip19.naddrEncode({ pubkey, kind: 30023, identifier: 'article' }))).resolves.toEqual({ kind: 'invalid' });
+    await expect(resolveChatQrScan(nip19.neventEncode({ id: pubkey, kind: 1 }))).resolves.toEqual({ kind: 'invalid' });
+    await expect(resolveChatQrScan('nostr:naddr1invalid')).resolves.toEqual({ kind: 'invalid' });
+  });
+
   it('recognizes an NWC connection as a wallet addition', async () => {
     await expect(resolveChatQrScan(`  ${NWC_CONNECTION}  `)).resolves.toEqual({
       kind: 'wallet',

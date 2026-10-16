@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium und enthaltene Komponenten"
   },
   "napplets": {
+    "app_title": "Mini-App",
+    "signing_upload": "Datei hochladen",
+    "signing_effect_upload": "Diese Datei wird öffentlich zugänglich und kann eingebettete Metadaten enthalten.",
+    "upload_destinations": "Speicherdienste",
+    "capability_upload": "Dateien hochladen",
+    "runtime_loading": "App wird geladen…",
     "permissions_signing": "Automatisch signieren",
     "permissions_hint": "Gilt für dieses Konto und diese App-Version. Widerrufen fragt erneut.",
     "permissions_access": "App-Funktionen",

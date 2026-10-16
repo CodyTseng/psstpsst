@@ -10,7 +10,7 @@ import {
   session,
   type IpcMainInvokeEvent,
 } from 'electron';
-import type { NappletBounds } from '../src/platform/ports/napplet';
+import { NAPPLET_FRAME_READY_MESSAGE, type NappletBounds } from '../src/platform/ports/napplet';
 import { IPC } from './ipc-channels';
 
 export function isPublicAddress(address: string): boolean {
@@ -110,6 +110,10 @@ export function registerNappletHandlers(
       owner: BrowserWindow;
       url: string;
       ready: boolean;
+      painted: boolean;
+      visible: boolean;
+      inputBlocked: boolean;
+      capture?: Promise<string | null>;
       queued: string[];
       ownerClosed: () => void;
     }
@@ -177,16 +181,24 @@ export function registerNappletHandlers(
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
-        backgroundThrottling: true,
+        // Allow the hidden startup document to paint before revealing its view.
+        backgroundThrottling: false,
       },
     });
     const ownerClosed = () => close(id);
-    views.set(id, { view, owner, url, ready: false, queued: [], ownerClosed });
+    view.setBackgroundColor('transparent');
+    views.set(id, { view, owner, url, ready: false, painted: false, visible: false, inputBlocked: true, queued: [], ownerClosed });
     owner.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     view.webContents.on('will-navigate', (event) => event.preventDefault());
     view.webContents.on('will-attach-webview', (event) => event.preventDefault());
+    const blockInput = (event: { preventDefault(): void }) => {
+      const entry = views.get(id);
+      if (!entry || !entry.painted || entry.inputBlocked) event.preventDefault();
+    };
+    view.webContents.on('before-input-event', blockInput);
+    view.webContents.on('before-mouse-event', blockInput);
     owner.once('closed', ownerClosed);
     await view.webContents.loadURL(url);
     setTimeout(() => {
@@ -199,7 +211,34 @@ export function registerNappletHandlers(
     return id;
   });
   handle(IPC.nappletClose, close);
-  handle(IPC.nappletBounds, (id: string, bounds: NappletBounds, visible: boolean) => {
+  handle(IPC.nappletCapture, async (id: string) => {
+    const entry = views.get(id);
+    if (!entry?.painted || entry.view.webContents.isDestroyed()) return null;
+    entry.inputBlocked = true;
+    if (entry.capture) return entry.capture;
+    const capture = (async () => {
+      const image = await entry.view.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+      if (views.get(id) !== entry || image.isEmpty()) return null;
+      const size = image.getSize();
+      const scale = Math.min(1, 1600 / Math.max(size.width, size.height));
+      const preview = scale < 1 ? image.resize({ width: Math.max(1, Math.round(size.width * scale)), height: Math.max(1, Math.round(size.height * scale)) }) : image;
+      return preview.toDataURL();
+    })().catch(() => null);
+    entry.capture = capture;
+    try { return await capture; }
+    finally { if (entry.capture === capture) delete entry.capture; }
+  });
+  handle(IPC.nappletGoBack, (id: string) => {
+    const entry = views.get(id);
+    if (!entry || entry.view.webContents.isDestroyed()) return false;
+    const history = entry.view.webContents.navigationHistory;
+    const index = history.getActiveIndex();
+    if (index <= 0) return false;
+    // Go to the immediate app entry, including entries created without user activation.
+    history.goToIndex(index - 1);
+    return true;
+  });
+  handle(IPC.nappletBounds, (id: string, bounds: NappletBounds, visible: boolean, interactive = true) => {
     const entry = views.get(id);
     if (!entry) return;
     if (
@@ -214,7 +253,9 @@ export function registerNappletHandlers(
       width: Math.max(0, Math.round(bounds.width * zoom)),
       height: Math.max(0, Math.round(bounds.height * zoom)),
     });
-    entry.view.setVisible(!!visible && bounds.width > 0 && bounds.height > 0);
+    entry.visible = !!visible && bounds.width > 0 && bounds.height > 0;
+    entry.inputBlocked = !entry.visible || !interactive;
+    entry.view.setVisible(entry.visible && entry.painted);
   });
   handle(IPC.nappletSend, (id: string, message: string) => {
     const entry = views.get(id);
@@ -229,6 +270,14 @@ export function registerNappletHandlers(
         event.senderFrame.url === entry.url,
     );
     if (found && typeof message === 'string' && message.length <= 1500000) {
+      if (message === NAPPLET_FRAME_READY_MESSAGE) {
+        const entry = found[1];
+        if (!entry.painted) {
+          entry.painted = true;
+          entry.view.setVisible(entry.visible);
+          entry.view.webContents.setBackgroundThrottling(true);
+        }
+      }
       if (found[1].ready) found[1].owner.webContents.send(IPC.nappletMessage, found[0], message);
       else if (found[1].queued.length < 32) found[1].queued.push(message);
     }

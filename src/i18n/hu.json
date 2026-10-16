@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium és mellékelt összetevők"
   },
   "napplets": {
+    "app_title": "Miniapp",
+    "signing_upload": "Fájl feltöltése",
+    "signing_effect_upload": "Ez a fájl nyilvánosan elérhető lesz, és beágyazott metaadatokat tartalmazhat.",
+    "upload_destinations": "Tárolási szolgáltatások",
+    "capability_upload": "Fájlok feltöltése",
+    "runtime_loading": "Alkalmazás betöltése…",
     "permissions_signing": "Automatikus aláírás",
     "permissions_hint": "Erre a fiókra és alkalmazásverzióra érvényes. Visszavonás után újra rákérdez.",
     "permissions_access": "Alkalmazásfunkciók",

@@ -1,4 +1,5 @@
 import { randomBytes, bytesToHex } from '@noble/hashes/utils.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { verifyEvent, type Event, type Filter } from 'nostr-tools';
 import { decode, naddrEncode, neventEncode } from 'nostr-tools/nip19';
 
@@ -7,6 +8,7 @@ export const NAP_DOMAINS = [
   'theme',
   'storage',
   'resource',
+  'upload',
   'link',
   'identity',
   'intent',
@@ -67,23 +69,46 @@ export function parseManifest(input: unknown): NappletRelease {
     event.tags.length > 512 ||
     typeof event.content !== 'string' ||
     event.content.length > 16000 ||
-    !event.content.trim() ||
     !verifyEvent(event)
   )
     throw new Error('napplets.invalid_manifest');
   const tags = (name: string) => event.tags.filter((tag) => tag[0] === name);
   const hashes = tags('x');
   const ds = tags('d');
-  if (
-    hashes.length !== 1 ||
-    !/^[a-f0-9]{64}$/.test(hashes[0][1]) ||
-    (event.kind === 35129 ? ds.length !== 1 || !ds[0][1] : ds.length !== 0)
-  )
+  if (event.kind === 35129 ? ds.length !== 1 || !ds[0][1] : ds.length !== 0)
     throw new Error('napplets.invalid_manifest');
-  const domains = (name: string) => [...new Set(tags(name).map((t) => t[1]))];
-  const required = domains('R');
+  // Select the signed format once; a malformed standalone listing cannot downgrade.
+  const legacy = !hashes.some((tag) => tag.length === 2) &&
+    (tags('path').length > 0 || hashes.some((tag) => tag[2] === 'aggregate'));
+  let artifactHash: string;
+  let description: string;
+  if (legacy) {
+    const paths = tags('path');
+    if (paths.length !== 1 || paths[0].length !== 3 || paths[0][1] !== '/index.html' ||
+        !/^[a-f0-9]{64}$/.test(paths[0][2]) || tags('R').length || tags('O').length ||
+        tags('description').length > 1 || hashes.length > 1 || (event.kind === 5129 && hashes.length !== 1))
+      throw new Error('napplets.invalid_manifest');
+    artifactHash = paths[0][2];
+    const aggregate = bytesToHex(sha256(new TextEncoder().encode(`${artifactHash} /index.html\n`)));
+    if (hashes.length && (hashes[0].length !== 3 || hashes[0][2] !== 'aggregate' || hashes[0][1] !== aggregate))
+      throw new Error('napplets.invalid_manifest');
+    description = tags('description')[0]?.[1] ?? '';
+    if (description.length > 16000) throw new Error('napplets.invalid_manifest');
+  } else {
+    if (hashes.length !== 1 || hashes[0].length !== 2 || !/^[a-f0-9]{64}$/.test(hashes[0][1]) ||
+        !event.content.trim() || tags('path').length || tags('requires').length || tags('description').length)
+      throw new Error('napplets.invalid_manifest');
+    artifactHash = hashes[0][1];
+    description = event.content;
+  }
+  const domains = (name: string) => [...new Set(tags(name).map((tag) => {
+    if (tag.length !== 2) throw new Error('napplets.invalid_manifest');
+    return tag[1];
+  }))];
+  const required = domains(legacy ? 'requires' : 'R');
+  const optional = legacy ? [] : domains('O');
   if (
-    [...required, ...domains('O')].some(
+    [...required, ...optional].some(
       (d) => typeof d !== 'string' || !/^[a-z][a-z0-9-]*$/.test(d),
     )
   )
@@ -95,12 +120,12 @@ export function parseManifest(input: unknown): NappletRelease {
         ? `5129:${event.id}`
         : `${event.kind}:${event.pubkey}:${ds[0]?.[1] ?? ''}`,
     event,
-    hash: hashes[0][1],
+    hash: artifactHash,
     title:
       tags('title')[0]?.[1]?.slice(0, 160) || ds[0]?.[1]?.slice(0, 160) || event.id.slice(0, 8),
-    description: event.content,
+    description,
     required,
-    optional: domains('O'),
+    optional,
     servers: tags('server')
       .map((t) => t[1])
       .filter((v) => {
@@ -166,7 +191,7 @@ export function publicUrl(value: string, websocket = false): string {
   return url.toString();
 }
 
-export function parseAppAddress(value: string): { filters: Filter[]; relays: string[] } {
+export function parseAppAddress(value: string): { filters: Filter[]; relays: string[]; author?: string } {
   if (value.length > 8192) throw new Error('napplets.invalid_manifest');
   const match = value.trim().match(/(?:naddr|nevent|note)1[023456789acdefghjklmnpqrstuvwxyz]+/i);
   const code = match?.[0] ?? value.trim().replace(/^nostr:/, '');
@@ -174,6 +199,7 @@ export function parseAppAddress(value: string): { filters: Filter[]; relays: str
   const decoded = decode(code);
   if (decoded.type === 'naddr' && [15129, 35129].includes(decoded.data.kind))
     return {
+      author: decoded.data.pubkey,
       filters: [
         {
           kinds: [decoded.data.kind],
@@ -185,6 +211,7 @@ export function parseAppAddress(value: string): { filters: Filter[]; relays: str
     };
   if (decoded.type === 'nevent')
     return {
+      author: decoded.data.author,
       filters: [{ ids: [decoded.data.id] }],
       relays: (decoded.data.relays ?? []).map((v) => publicUrl(v, true)).slice(0, 4),
     };

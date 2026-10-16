@@ -1,13 +1,26 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { NappletSurface } from '@/platform/napplet-surface';
 import { router } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
+import { useFocusedOverlayDismiss } from '@/components/common/use-focused-overlay-dismiss';
+import { ScreenHeader } from '@/components/common/ScreenHeader';
+import { nappletService } from '@/services/napplet/service';
+import { AppButton } from '@/components/common/AppButton';
+import { ActivityIndicator } from 'react-native';
+import { NappletIcon } from '@/components/napplet/NappletIcon';
 import NappletRunScreen from '../../../app/(app)/napplet-run';
 
 let mockFocused = true;
 let mockSharing = false;
+let mockOverlayActive = false;
+let mockPanel: object | null = null;
+let mockLaunching = false;
+let mockRunId = 1;
+let mockLaunch: { release: { title: string }; pending: boolean; showLoading?: boolean; error: string | null } | null = null;
 let mockRunning: object | null = { release: { title: 'App' }, containerId: 'test' };
-jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useFocusEffect: jest.fn() }));
-jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useFocusEffect: jest.fn(), useLocalSearchParams: () => ({ runId: '1' }) }));
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused, usePreventRemove: jest.fn() }));
+jest.mock('@/components/common/use-focused-overlay-dismiss', () => ({ useFocusedOverlayDismiss: jest.fn() }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('lucide-react-native/icons/x', () => () => null);
 jest.mock('lucide-react-native/icons/ellipsis', () => () => null);
@@ -15,10 +28,113 @@ jest.mock('@/components/share/ForwardTargetScreen', () => ({ ForwardTargetScreen
 jest.mock('@/components/common/AppScreen', () => ({ AppScreen: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null, useScreenHeaderClearance: () => 56 }));
 jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
+jest.mock('@/components/common/AppText', () => ({ AppText: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
+jest.mock('@/components/napplet/NappletIcon', () => ({ NappletIcon: () => null }));
 jest.mock('@/platform/napplet-surface', () => ({ NappletSurface: () => null }));
-jest.mock('@/services/napplet/service', () => ({ nappletService: { stop: jest.fn(), openPanel: jest.fn() } }));
-jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ running: mockRunning, launching: false, panel: null, sharing: mockSharing }) }));
-jest.mock('@/theme', () => ({ spacing: { xs: 4, lg: 16 }, uiDensity: { iconButtonSize: 32, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text' }) }));
+jest.mock('@/services/napplet/service', () => ({ nappletService: { stop: jest.fn(), goBack: jest.fn(async () => {}), openPanel: jest.fn(), startPreparedOpen: jest.fn(), retryOpen: jest.fn() } }));
+jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ running: mockRunning, launching: mockLaunching, launch: mockLaunch, runId: mockRunId, panel: mockPanel, overlayActive: mockOverlayActive, sharing: mockSharing }) }));
+jest.mock('@/theme', () => ({ spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { iconButtonSize: 32, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text', accent: 'accent' }) }));
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockFocused = true; mockSharing = false;
+  mockOverlayActive = false; mockPanel = null;
+  mockLaunching = false; mockLaunch = null; mockRunId = 1;
+  mockRunning = { release: { title: 'App' }, containerId: 'test' };
+});
+
+it('keeps the app visible behind a sheet and blocks it until the exit finishes', () => {
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  const surface = renderer.root.findByType(NappletSurface);
+  mockPanel = { page: 'about', release: { title: 'App' } }; mockOverlayActive = true;
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(renderer.root.findByType(NappletSurface)).toBe(surface);
+  expect(surface.props.visible).toBe(true);
+  expect(surface.props.obscured).toBe(true);
+  expect(useFocusedOverlayDismiss).toHaveBeenLastCalledWith(false, expect.any(Function));
+  mockPanel = null;
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(surface.props.visible).toBe(true);
+  expect(surface.props.obscured).toBe(true);
+  mockOverlayActive = false;
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(surface.props.visible).toBe(true);
+  expect(surface.props.obscured).toBe(false);
+  act(() => renderer.unmount());
+});
+
+it('shows a cold download until the mounted app presents its first frame', () => {
+  mockRunning = null; mockLaunching = true;
+  mockLaunch = { release: { title: 'New app' }, pending: false, showLoading: true, error: null };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  expect(renderer.root.findAllByType(NappletIcon)).toHaveLength(1);
+  mockRunning = { release: { title: 'New app' }, containerId: 'new' }; mockLaunching = false;
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(renderer.root.findAllByType(NappletSurface)).toHaveLength(1);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  mockLaunch = { ...mockLaunch, showLoading: false };
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  expect(renderer.root.findAllByType(NappletIcon)).toHaveLength(0);
+  act(() => renderer.unmount());
+});
+
+it('shows the container before starting a prepared app and cancels its startup timer on exit', () => {
+  jest.useFakeTimers();
+  let renderer!: ReactTestRenderer;
+  try {
+    mockRunning = null; mockLaunching = true;
+    mockLaunch = { release: { title: 'Loading app' }, pending: true, error: null };
+    act(() => { renderer = create(<NappletRunScreen />); });
+    expect(renderer.root.findByType(ScreenHeader).props.title).toBe('Loading app');
+    expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('napplets.runtime_loading');
+    expect(router.back).not.toHaveBeenCalled();
+    expect(nappletService.startPreparedOpen).not.toHaveBeenCalled();
+    act(() => { jest.runOnlyPendingTimers(); });
+    expect(nappletService.startPreparedOpen).toHaveBeenCalledWith(1);
+    act(() => renderer.unmount());
+    jest.mocked(nappletService.startPreparedOpen).mockClear();
+    act(() => { renderer = create(<NappletRunScreen />); });
+    act(() => renderer.unmount());
+    act(() => { jest.runOnlyPendingTimers(); });
+    expect(nappletService.startPreparedOpen).not.toHaveBeenCalled();
+  } finally { jest.useRealTimers(); }
+});
+
+it('keeps failed launches in the container and retries the same run', () => {
+  mockRunning = null;
+  mockLaunch = { release: { title: 'App' }, pending: false, error: 'napplets.download_failed' };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(router.back).not.toHaveBeenCalled();
+  const retry = renderer.root.findByType(AppButton);
+  expect(retry.props.label).toBe('common.retry');
+  act(() => { retry.props.onPress(); });
+  expect(nappletService.retryOpen).toHaveBeenCalledWith(1);
+  act(() => renderer.unmount());
+});
+
+it('places explicit close at the start and sends system back to the app', async () => {
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  const header = renderer.root.findByType(ScreenHeader);
+  expect(header.props.left.props.accessibilityLabel).toBe('common.close');
+  expect(header.props.right.props.accessibilityLabel).toBe('napplets.runtime_more');
+  const [active, back] = jest.mocked(useFocusedOverlayDismiss).mock.calls.at(-1)!;
+  expect(active).toBe(true);
+  await act(async () => { back(); });
+  expect(nappletService.goBack).toHaveBeenCalledTimes(1);
+  expect(nappletService.stop).not.toHaveBeenCalled();
+  expect(usePreventRemove).toHaveBeenLastCalledWith(true, back);
+  act(() => { header.props.left.props.onPress(); });
+  expect(nappletService.stop).toHaveBeenCalledTimes(1);
+  act(() => renderer.unmount());
+});
 
 it('does not pop the share/profile route when the background app session stops', () => {
   let renderer!: ReactTestRenderer;
@@ -43,6 +159,7 @@ it('keeps the same app surface mounted while the embedded share picker is open',
   act(() => { renderer.update(<NappletRunScreen />); });
   expect(renderer.root.findByType(NappletSurface)).toBe(original);
   expect(original.props.visible).toBe(false);
+  expect(useFocusedOverlayDismiss).toHaveBeenLastCalledWith(false, expect.any(Function));
   mockSharing = false;
   act(() => { renderer.update(<NappletRunScreen />); });
   expect(renderer.root.findByType(NappletSurface)).toBe(original);

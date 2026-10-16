@@ -22,6 +22,7 @@ class NappletWebViewTest {
     )
     val html = instrumentation.context.assets.open("napplet-fixture.html").bufferedReader().use { it.readText() }
     val completed = CountDownLatch(1)
+    val navigation = java.util.concurrent.LinkedBlockingQueue<Int>()
     var result: JSONObject? = null
     val console = java.util.concurrent.CopyOnWriteArrayList<String>()
     lateinit var web: NappletWebView
@@ -36,6 +37,7 @@ class NappletWebViewTest {
           "identity.getPublicKey" -> JSONObject().put("type", "identity.getPublicKey.result")
             .put("id", message.getString("id")).put("pubkey", "a".repeat(64))
           "test.result" -> { result = message; completed.countDown(); null }
+          "test.navigation" -> { navigation.offer(message.getInt("page")); null }
           else -> null
         }
         if (reply != null) web.post {
@@ -62,6 +64,19 @@ class NappletWebViewTest {
       assertFalse(values.getBoolean("storage"))
       assertFalse(values.getBoolean("network"))
       assertEquals("undefined", values.getString("bridge"))
+      instrumentation.runOnMainSync {
+        assertFalse("The initial wrapper must not count as app history", web.navigateBack())
+        web.evaluateJavascript("document.querySelector('iframe').contentWindow.postMessage({type:'test.push'},'*')", null)
+      }
+      assertEquals(2, navigation.poll(5, TimeUnit.SECONDS))
+      instrumentation.runOnMainSync { assertTrue(web.navigateBack()) }
+      val firstBack = navigation.poll(5, TimeUnit.SECONDS)
+      var historyIndex = -1
+      instrumentation.runOnMainSync { historyIndex = web.copyBackForwardList().currentIndex }
+      assertEquals("History index=$historyIndex, console=$console", 1, firstBack)
+      instrumentation.runOnMainSync { assertTrue(web.navigateBack()) }
+      assertEquals(0, navigation.poll(5, TimeUnit.SECONDS))
+      instrumentation.runOnMainSync { assertFalse(web.navigateBack()) }
     } finally {
       instrumentation.runOnMainSync { web.dispose(); activity.finish() }
     }

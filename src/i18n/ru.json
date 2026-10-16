@@ -1074,6 +1074,12 @@
     "runtime_notices": "Chromium и встроенные компоненты"
   },
   "napplets": {
+    "app_title": "Мини-приложение",
+    "signing_upload": "Загрузить файл",
+    "signing_effect_upload": "Этот файл будет общедоступным и может содержать встроенные метаданные.",
+    "upload_destinations": "Сервисы хранения",
+    "capability_upload": "Загрузка файлов",
+    "runtime_loading": "Загрузка приложения…",
     "permissions_signing": "Автоматическая подпись",
     "permissions_hint": "Для этого аккаунта и версии приложения. Отзыв вернёт запрос подтверждения.",
     "permissions_access": "Возможности приложения",

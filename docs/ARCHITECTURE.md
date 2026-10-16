@@ -668,13 +668,17 @@ remote-signer transport never borrow the chat session. Only hash-verified immuta
 artifacts are shared across accounts. See [napplet runtime](implementation/napplet-runtime.md).
 Signing grants additionally bind the operation, event kind and applicable record,
 recipient. Publication grants are independent of relay destinations; relay AUTH
-grants remain server-specific. Older relay-bound publication grants require new
+grants remain server-specific. Public-upload grants bind the host-selected storage
+server set independently of event publication. Upload bytes, temporary files and
+status belong to one execution session; stopping that session cancels uploads and
+cleans staged files. Older relay-bound publication grants require new
 consent rather than being widened implicitly. Host-owned approval IDs bind responses to one
 request; cancellation invalidates queued approvals before a session is replaced.
 Signing revocation invalidates cached approvals and in-flight signatures, then
 serializes persistent removal without stopping unrelated executions. App access
-changes restart the affected container. Native app surfaces stay hidden until
-the single host sheet finishes exiting, including management and consent flows.
+changes restart the affected container. Host overlays block app input through
+their full exit. Mobile modals retain the live page underneath; Electron replaces
+its elevated native view with an ephemeral renderer preview while the sheet is open.
 Sharing is an embedded host flow: the execution container remains mounted but
 hidden, background consent waits until the picker closes, and sending never
 navigates to a destination conversation.

@@ -1069,6 +1069,12 @@
     "runtime_notices": "Chromium e componentes incluídos"
   },
   "napplets": {
+    "app_title": "Miniapp",
+    "signing_upload": "Enviar um arquivo",
+    "signing_effect_upload": "Este arquivo ficará disponível publicamente e pode conter metadados incorporados.",
+    "upload_destinations": "Serviços de armazenamento",
+    "capability_upload": "Enviar arquivos",
+    "runtime_loading": "Carregando aplicativo…",
     "permissions_signing": "Assinatura automática",
     "permissions_hint": "Vale para esta conta e versão. Revogar faz perguntar novamente.",
     "permissions_access": "Recursos do aplicativo",

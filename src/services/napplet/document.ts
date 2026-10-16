@@ -1,4 +1,6 @@
 import { nappletPrelude } from './prelude.generated';
+import { NAPPLET_FRAME_READY_MESSAGE } from '@/platform/ports/napplet';
+import { renderUploadBridge } from './upload-bridge';
 
 export const NAPPLET_CSP =
   "default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data: blob:; connect-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; media-src 'none'; object-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'";
@@ -10,9 +12,15 @@ export async function buildDocument(
   html: string,
   domains: readonly string[],
   title = '',
+  background = 'transparent',
 ): Promise<string> {
-  const prelude = `${nappletPrelude}\nNappletShimPrelude.install({domains:${JSON.stringify(domains)}});`;
-  const artifact = `<!doctype html><meta http-equiv="Content-Security-Policy" content="${NAPPLET_CSP}"><meta name="referrer" content="no-referrer"><script>${prelude.replace(/<\/script/gi, '<\\/script')}</script>${html}`;
+  const canvas = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i.test(background) ? background : 'transparent';
+  const prelude = `${nappletPrelude}\nNappletShimPrelude.install({domains:${JSON.stringify(domains)}});
+window.addEventListener('message',event=>{
+ if(event.source===parent&&event.data?.type==='theme.changed'&&typeof event.data.theme?.colors?.background==='string')
+  document.documentElement.style.setProperty('--psst-host-background',event.data.theme.colors.background);
+});`;
+  const artifact = `<!doctype html><meta http-equiv="Content-Security-Policy" content="${NAPPLET_CSP}"><meta name="referrer" content="no-referrer"><style>html{--psst-host-background:${canvas};background-color:var(--psst-host-background)}</style><script>${prelude.replace(/<\/script/gi, '<\\/script')}</script>${html}`;
   const encoded: string[] = [];
   for (let offset = 0; offset < artifact.length; offset += 65536) {
     encoded.push(escape(JSON.stringify(artifact.slice(offset, offset + 65536))));
@@ -20,10 +28,19 @@ export async function buildDocument(
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   const source = `[${encoded.join(',')}].join('')`;
-  return `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; img-src data: blob:; font-src data: blob:; style-src 'unsafe-inline'; frame-src 'self' about:; connect-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body,iframe{border:0;margin:0;width:100%;height:100%;overflow:hidden}</style><iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title=""></iframe><script>
+  return `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; img-src data: blob:; font-src data: blob:; style-src 'unsafe-inline'; frame-src 'self' about:; connect-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body,iframe{border:0;margin:0;width:100%;height:100%;overflow:hidden;background-color:${canvas}}</style><iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title=""></iframe><script>
 const frame=document.querySelector('iframe');
 frame.title=${escape(JSON.stringify(title))};
 let budgetStart=Date.now(),budgetCalls=0,budgetBytes=0;
+function postHost(raw){
+ if(window.__psstNapplet)window.__psstNapplet.post(raw);
+ else if(window.__nappletHost)window.__nappletHost.postMessage(raw);
+ else if(window.webkit?.messageHandlers?.nappletHost)window.webkit.messageHandlers.nappletHost.postMessage(raw);
+}
+${renderUploadBridge(domains.includes('upload'))}
+frame.addEventListener('load',()=>{
+ requestAnimationFrame(()=>requestAnimationFrame(()=>postHost(${escape(JSON.stringify(NAPPLET_FRAME_READY_MESSAGE))})));
+},{once:true});
 async function rasterSvg(blob){
  if(blob.size>5242880)throw Error('too-large');
  const svg=await blob.text();
@@ -55,18 +72,27 @@ async function hydrate(value){
  const out=Object.create(null);for(const [k,v] of Object.entries(value))out[k]=await hydrate(v);
  if(out.blob instanceof Blob)out.mime=out.blob.type;return out;
 }
-window.__hostReceive=async function(message){try{frame.contentWindow.postMessage(await hydrate(message),'*');}catch(error){frame.contentWindow.postMessage({type:message.type.replace(/\\.result$/,'.error'),id:message.id,error:String(error.message||'decode-failed')},'*');}};
+window.__hostReceive=async function(message){
+ if(handleUploadAck(message))return;
+ if(message.type==='theme.changed'&&typeof message.theme?.colors?.background==='string'){
+  for(const element of [document.documentElement,document.body,frame])element.style.backgroundColor=message.theme.colors.background;
+ }
+ try{frame.contentWindow.postMessage(await hydrate(message),'*');}catch(error){frame.contentWindow.postMessage({type:message.type.replace(/\\.result$/,'.error'),id:message.id,error:String(error.message||'decode-failed')},'*');}
+};
 window.addEventListener('message',event=>{
  if(event.source===window && event.data?.__psstHostReply){try{window.__hostReceive(JSON.parse(event.data.__psstHostReply));}catch{}return;}
  if(event.source!==frame.contentWindow||!event.data||typeof event.data!=='object')return;
  if(typeof event.data.type!=='string'||event.data.type.length>80)return;
+ if(event.data.type.startsWith('psst.')||event.data.type.startsWith('upload.transfer.'))return;
+ if(event.data.type==='upload.upload'){
+  void bridgeUpload(event.data).catch(error=>frame.contentWindow.postMessage({type:'upload.upload.result',id:event.data.id,error:String(error.message||'upload-failed')},'*'));
+  return;
+ }
  if(Date.now()-budgetStart>=1000){budgetStart=Date.now();budgetCalls=0;budgetBytes=0;}
  if(++budgetCalls>32)return;
  let raw;try{raw=JSON.stringify(event.data);}catch{return;}
  budgetBytes+=raw.length;if(raw.length>1500000||budgetBytes>2097152)return;
- if(window.__psstNapplet)window.__psstNapplet.post(raw);
- else if(window.__nappletHost)window.__nappletHost.postMessage(raw);
- else if(window.webkit?.messageHandlers?.nappletHost)window.webkit.messageHandlers.nappletHost.postMessage(raw);
+ postHost(raw);
 });
 frame.srcdoc=${source};
 </script>`;

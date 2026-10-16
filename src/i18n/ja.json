@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium と同梱コンポーネント"
   },
   "napplets": {
+    "app_title": "ミニアプリ",
+    "signing_upload": "ファイルをアップロード",
+    "signing_effect_upload": "このファイルは公開されます。埋め込みメタデータが含まれる場合があります。",
+    "upload_destinations": "ストレージサービス",
+    "capability_upload": "ファイルのアップロード",
+    "runtime_loading": "アプリを読み込み中…",
     "permissions_signing": "自動署名",
     "permissions_hint": "このアカウントとアプリのバージョンに適用されます。取り消すと毎回確認します。",
     "permissions_access": "アプリの機能",

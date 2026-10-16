@@ -64,6 +64,18 @@ test('encrypted publication binds recipient and relay authentication has its own
   expect(confirm).toHaveBeenCalledTimes(3);
 });
 
+test('upload grants are separate from publication and remain bound to storage destinations', async () => {
+  const { permissions, confirm } = create();
+  const upload = { ...request, operation: 'upload' as const, kind: 24242, identifier: undefined, relays: ['https://storage.example/'] };
+  await permissions.authorize(upload);
+  await permissions.authorize(upload);
+  expect(confirm).toHaveBeenCalledTimes(1);
+  await permissions.authorize({ ...upload, relays: ['https://other-storage.example/'] });
+  expect(confirm).toHaveBeenCalledTimes(2);
+  await permissions.authorize({ ...upload, operation: 'publish' });
+  expect(confirm).toHaveBeenCalledTimes(3);
+});
+
 test('custom kinds remain one-time by default and support explicitly scoped permission or refusal', async () => {
   const unknown = { ...request, kind: 4567 };
   const first = create(jest.fn(async () => 'allow'));
@@ -92,6 +104,20 @@ test('closing during consent cannot persist the late approval', async () => {
   abort.abort(); resolve('allow-always');
   await expect(pending).rejects.toThrow();
   expect(setData).not.toHaveBeenCalled();
+});
+
+test('cancelling one upload review cannot persist its late approval or stop the session', async () => {
+  let resolve!: (value: string) => void;
+  const confirm = jest.fn(() => new Promise<string>((done) => { resolve = done; }));
+  const { permissions, abort } = create(confirm);
+  const upload = new AbortController();
+  const pending = permissions.authorize({ ...request, operation: 'upload', kind: 24242,
+    relays: ['https://media.example/'] }, undefined, upload.signal);
+  while (!confirm.mock.calls.length) await Promise.resolve();
+  upload.abort(); resolve('allow-always');
+  await expect(pending).rejects.toThrow();
+  expect(setData).not.toHaveBeenCalled();
+  expect(abort.signal.aborted).toBe(false);
 });
 
 test('a request that expires while being reviewed cannot create a grant', async () => {

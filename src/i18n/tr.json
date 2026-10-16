@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium ve birlikte gelen bileşenler"
   },
   "napplets": {
+    "app_title": "Mini uygulama",
+    "signing_upload": "Dosya yükle",
+    "signing_effect_upload": "Bu dosya herkese açık olacak ve gömülü meta veriler içerebilir.",
+    "upload_destinations": "Depolama hizmetleri",
+    "capability_upload": "Dosya yükleme",
+    "runtime_loading": "Uygulama yükleniyor…",
     "permissions_signing": "Otomatik imzalama",
     "permissions_hint": "Bu hesap ve uygulama sürümü için geçerlidir. İptal edince yeniden sorulur.",
     "permissions_access": "Uygulama özellikleri",

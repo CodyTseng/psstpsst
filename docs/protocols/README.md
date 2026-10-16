@@ -11,6 +11,8 @@ matches the relevant specification.
 
 ## Specifications
 
+- [`napplet-manifests.md`](./napplet-manifests.md): standalone and legacy
+  single-file app manifests and content-addressed validation.
 - [`nip4e.md`](./nip4e.md): encryption-key announcement and device
   synchronization.
 - [`nip17-extensions.md`](./nip17-extensions.md): split-key envelopes, message

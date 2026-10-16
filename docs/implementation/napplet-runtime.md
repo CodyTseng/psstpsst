@@ -15,8 +15,12 @@ apps, pins, installations, settings, permissions and default intent handlers.
 
 These proposals are drafts. Domain availability is not a declaration of complete
 conformance to every evolving proposal. The host implements shell, theme,
-storage, resource, link, identity, relay, outbox, intent, inc and config. Unknown
+storage, resource, link, identity, relay, outbox, upload, intent, inc and config. Unknown
 messages and application-supplied reply envelopes have no authority.
+
+The reader supports standalone and legacy single-file manifests; see
+[manifest formats](../protocols/napplet-manifests.md). Legacy required domains
+remain required, and an unavailable domain still prevents installation.
 
 ## Ownership and lifecycle
 
@@ -26,6 +30,33 @@ Account lifecycle invalidates the session before changing identities. Applicatio
 lock and route blur stop execution. Selecting a different account resets the
 mini-app page to Recent. Stopped sessions abort requests and discard
 late results; their connections, signer, INC endpoint and native container close.
+
+Entry points synchronously prepare an account-bound launch and navigate to its
+container before starting installation, authorization or artifact loading. The
+container starts that work after committing. Verified local code loads on a blank
+themed canvas; a missing or corrupt artifact enables the icon and loading state
+only when a network download is needed, retaining it until the first frame.
+The container presents recoverable errors with retry,
+and cancels its own run on exit. Run ownership prevents a departing route from
+stopping a newer launch selected in the persistent primary pane.
+
+The trusted wrapper signals presentation readiness after its iframe loads and
+crosses a paint boundary. Mobile and Electron keep the surface hidden until that
+signal, independently of permission overlays. This is a private container signal,
+not an application NAP capability; app messages cannot forge it. Electron permits
+painting while hidden during startup and restores background throttling afterward.
+
+On mobile, native modals already composite above the embedded WebView, so host
+sheets block app input without hiding its painted content. Electron's separate
+WebContentsView would cover renderer-owned overlays. It is replaced with an
+in-memory page preview only after that image has painted; the live view returns
+before the preview is cleared. Previews are bounded, scoped to the mounted
+container, and never persisted or exposed through application APIs.
+
+System Back first traverses the container's browser history, delivering the usual
+`popstate` navigation to the app. Only a container at its history root closes.
+Host overlays retain Back priority, and the leading Close action always exits.
+This uses browser navigation rather than introducing a NAP protocol extension.
 
 The manifest identity includes publisher and kind. Named manifests additionally
 include the opaque `d`; snapshots use their signed event ID. Permissions and shared
@@ -88,9 +119,25 @@ references in messages open the app detail flow. Settings lists required access,
 editable optional domains, and installed-artifact signing rules. Optional access
 changes reload the container; individual signing rules can be revoked live.
 Management, configuration and signing prompts share one host sheet, with consent
-taking priority. The native child surface stays hidden through its exit animation.
+taking priority. App input remains blocked through the host sheet's exit animation.
 
 ## Nostr operations
+
+Scanned addresses and manual input use the same account-bound lookup. It first
+matches verified installed and catalog manifests by exact event ID or full
+kind/publisher/identifier coordinate. Local hits do not open relay connections;
+remote hits join the bounded catalog cache. Explicit update checks bypass the
+local cache.
+
+On a local miss, app-address lookup queries embedded relay hints alongside the market relays using
+the exact kind, author and case-sensitive identifier, with a one-event limit.
+For pointers without relay hints but with an author, a miss falls back to that
+publisher's public NIP-65 write and unmarked relays. Relay-list metadata is sought
+on the market and standard discovery relays. Failed or rejected reads and invalid
+manifests are not reported as a completed lookup with no matching app.
+Each address lookup owns a bounded, disposable relay reader, so browsing different
+publishers does not exhaust a long-lived app's destination budget. Account changes
+cancel these readers before any result can reach the next account.
 
 Runtime relay clients reuse ManagedRelayPool behavior, with independent public,
 authenticated and NIP-46 transport pools. They never borrow the chat pool's AUTH
@@ -143,6 +190,31 @@ IDENTITY reads public Nostr projections. It never substitutes private PsstPsst
 contacts or blocks. Unsupported identity projections return an explicit error.
 
 ## Composition and settings
+
+UPLOAD provides `info`, `upload`, `status` and status notifications through the
+pinned SDK. Blossom is enabled; NIP-96 is explicitly unavailable. File size is
+governed by the Blossom server; the host advertises no maximum and imposes no
+per-execution byte allowance. Two transfers/jobs may run concurrently.
+The trusted wrapper accepts structured-cloned Blob/ArrayBuffer values and uses
+credited, bounded chunks across native JSON bridges. Apps cannot select local
+paths, credentials or destination servers.
+
+The host uses the current account's media-server upload plan, including its
+fallback. Public-file consent shows filename, MIME type, size and candidate
+storage services. Upload grants are separate from publication grants and bind
+the server set; they support the same expiry and revocation controls. A host-built
+kind-24242 authorization covers only the computed SHA-256 and size, expires after
+five minutes and never reaches the app. Generic publication cannot sign Blossom
+or NIP-98 authorization events.
+
+After approval, unchanged bytes are staged through the existing asynchronous
+filesystem port and sent through the shared Blossom backend, without background
+mirrors. Preserving bytes also preserves embedded metadata, which the consent
+notice explains. Results contain host-checked hash, size, MIME type, public URL
+and NIP-94 tags. Server hash/size mismatches fail. Pending/uploading/terminal
+statuses and progress are endpoint-local; completed history is bounded. Jobs time
+out after two minutes. Revocation, account changes and container closure cancel
+in-flight work, suppress late replies and delete staged files.
 
 INTENT routes exact convention identities to verified installed handlers under
 the same account. The user can choose once or save a default. Cold deliveries

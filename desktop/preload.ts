@@ -77,9 +77,11 @@ ipcRenderer.on(
 
 const bridge: ElectronBridge = {
   napplet: {
+    capture: (id) => invoke(IPC.nappletCapture, id),
+    goBack: (id) => invoke(IPC.nappletGoBack, id),
     open: (html) => invoke(IPC.nappletOpen, html), close: (id) => invoke(IPC.nappletClose, id),
     send: (id, message) => invoke(IPC.nappletSend, id, message),
-    setBounds: (id, bounds, visible) => invoke(IPC.nappletBounds, id, bounds, visible),
+    setBounds: (id, bounds, visible, interactive) => invoke(IPC.nappletBounds, id, bounds, visible, interactive),
     fetch: (id, url, max) => invoke(IPC.nappletFetch, id, url, max), cancel: (id) => invoke(IPC.nappletCancel, id),
     onMessage: (listener) => {
       const handler = (_event: unknown, id: string, message: string) => listener(id, message);

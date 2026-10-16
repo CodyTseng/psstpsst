@@ -35,7 +35,6 @@ function AccountNapplets({ account }: { account: string | null }) {
   const navigation = usePrimaryPaneNavigation();
   const [tab, setTab] = useState<'recent' | 'discovery'>('recent');
   const [error, setError] = useState<string | null>(null);
-  const [opening, setOpening] = useState(false);
   const clearance = useScreenHeaderClearance();
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   useEffect(() => {
@@ -47,17 +46,15 @@ function AccountNapplets({ account }: { account: string | null }) {
   }, [tab, state.loaded, state.market.length]);
   const open = useCallback(
     (app: NappletInstallation) => {
-      setOpening(true);
       setError(null);
-      void nappletService
-        .open(app)
-        .then(() => navigation.open('/napplet-run'))
-        .catch((e: Error) => {
-          if (!['permission-denied', 'session-closed'].includes(e.message)) setError(e.message);
-        })
-        .finally(() => setOpening(false));
+      try {
+        const runId = nappletService.prepareOpen(app, account ?? '');
+        navigation.open(`/napplet-run?runId=${runId}`);
+      } catch {
+        setError('napplets.request_failed');
+      }
     },
-    [navigation],
+    [account, navigation],
   );
   const action = useCallback(
     (app: NappletInstallation, kind: 'pin' | 'unpin' | 'remove') => {
@@ -96,7 +93,7 @@ function AccountNapplets({ account }: { account: string | null }) {
             {t(error.startsWith('napplets.') ? error : 'napplets.request_failed')}
           </AppText>
         ) : null}
-        {opening || !state.loaded || state.accountPubkey !== account ? (
+        {!state.loaded || state.accountPubkey !== account ? (
           <ActivityIndicator color={c.accent} style={{ padding: spacing.lg }} />
         ) : tab === 'recent' ? (
           state.recent.length ? (

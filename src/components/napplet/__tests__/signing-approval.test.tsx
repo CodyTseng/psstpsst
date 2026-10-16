@@ -67,6 +67,21 @@ function selectDuration(value: string) {
 }
 const button = (label: string) => renderer.root.findAllByType(AppButton).find((node) => node.props.label === label)!;
 
+it.each(['light', 'dark'] as const)('shows public-upload intent and storage identity before the technical details in %s mode', (scheme) => {
+  mockScheme = scheme;
+  const upload = { ...prompt.signing!, operation: 'upload' as const, kind: 24242, relays: ['https://storage.example/'],
+    upload: { filename: 'card.png', mimeType: 'image/png', size: 1024, sha256: 'c'.repeat(64) } };
+  act(() => { renderer = create(<SigningRequestDetails request={upload} />); });
+  const text = renderer.root.findAllByType(AppText).map((node) => node.props.children);
+  expect(text).toContain('napplets.signing_upload');
+  expect(text).toContain('napplets.signing_effect_upload');
+  expect(text).toContain('card.png');
+  expect(text).toContain('storage.example');
+  expect(text).not.toContain('napplets.signing_effect_publish');
+  for (const content of ['card.png', 'storage.example', 'napplets.signing_effect_upload'])
+    expect(renderer.root.findAllByType(AppText).find((node) => node.props.children === content)!.props.selectable).toBe(false);
+});
+
 it.each(['light', 'dark'] as const)('binds scope selection and approval to the displayed request in %s mode', (scheme) => {
   mockScheme = scheme;
   act(() => { renderer = create(<SigningApproval prompt={prompt} />); });

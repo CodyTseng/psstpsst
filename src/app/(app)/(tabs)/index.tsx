@@ -325,6 +325,10 @@ function RealConversations() {
     }
 
     setSearchActive(false);
+    if (result.kind === 'napplet') {
+      openInDetailPane(`/napplet/${encodeURIComponent(result.address)}`);
+      return;
+    }
     if (result.kind === 'wallet') {
       if (!accountPubkey) return;
       const handoffId = useWalletConnectionHandoffStore.getState().start({

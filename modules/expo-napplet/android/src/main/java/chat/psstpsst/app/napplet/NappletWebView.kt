@@ -1,6 +1,7 @@
 package chat.psstpsst.app.napplet
 
 import android.content.Context
+import android.graphics.Color
 import android.webkit.*
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -16,6 +17,7 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
   private var lastReply = 0L
   private var disposed = false
   init {
+    setBackgroundColor(Color.TRANSPARENT)
     web.settings.apply {
       javaScriptEnabled = true; domStorageEnabled = false; databaseEnabled = false
       allowFileAccess = false; allowContentAccess = false; javaScriptCanOpenWindowsAutomatically = false
@@ -25,7 +27,8 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
     web.webViewClient = object : WebViewClient() {
       override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         // srcdoc and its initial blank document stay inside the sandboxed frame.
-        return request.isForMainFrame || request.url.toString() !in setOf("about:blank", "about:srcdoc")
+        if (request.isForMainFrame) return request.url.toString() != documentUrl
+        return request.url.toString().substringBefore('#') !in setOf("about:blank", "about:srcdoc")
       }
       override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         if (request.isForMainFrame && request.method == "GET" && request.url.toString() == documentUrl) {
@@ -64,5 +67,11 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       if (!disposed) web.evaluateJavascript("window.__hostReceive && window.__hostReceive(JSON.parse(${JSONObject.quote(message)}))", null)
     }
   }
-  fun dispose() { if (disposed) return; disposed = true; web.stopLoading(); web.destroy(); html = "" }
+  fun navigateBack(): Boolean {
+    if (disposed || copyBackForwardList().currentIndex <= 0) return false
+    // Programmatic History traversal retains entries without user activation.
+    evaluateJavascript("history.back()", null)
+    return true
+  }
+  fun dispose() { if (disposed) return; disposed = true; visibility = INVISIBLE; web.stopLoading(); web.destroy(); html = "" }
 }

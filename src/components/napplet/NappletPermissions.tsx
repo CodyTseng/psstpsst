@@ -45,6 +45,7 @@ export function NappletPermissions({ release, initiallyExpanded = false }: { rel
         const scope = [t('chat.event_reference.kind', { kind: rule.scope.kind }), status];
         if (rule.scope.identifier !== undefined) scope.push(`d: ${JSON.stringify(rule.scope.identifier)}`);
         if (rule.scope.operation === 'relay-auth') scope.push(...rule.scope.relays);
+        if (rule.scope.operation === 'upload') scope.push(...rule.scope.relays.map((server) => new URL(server).host));
         return <ListRow key={rule.key} title={signingAction(rule.scope, t)} subtitle={scope.join('\n')}
           subtitleMultiline valuePlacement="below"
           belowValue={rule.scope.recipient ? <Recipient pubkey={rule.scope.recipient} /> : undefined}

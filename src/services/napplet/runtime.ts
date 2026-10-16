@@ -5,6 +5,7 @@ import { base64 } from '@scure/base';
 import { matchFilters, type Event, type EventTemplate } from 'nostr-tools';
 import { incBroker } from './inc';
 import { platform } from '@/platform';
+import { NAPPLET_FRAME_READY_MESSAGE } from '@/platform/ports/napplet';
 import { fetchBlob } from './artifacts';
 import { configDefaults, validateSchema, validateValues, type ConfigSchema } from './config';
 import { buildDocument } from './document';
@@ -20,6 +21,7 @@ import {
   type NappletRelease,
 } from './protocol';
 import { dataEntries, dataKeys, getData, setData, type AppScope } from './repository';
+import { NappletUploads } from './upload';
 
 export type RuntimePrompt = {
   title: string;
@@ -43,6 +45,7 @@ export type RuntimeOptions = {
   theme: () => RuntimeTheme;
   confirm: (prompt: RuntimePrompt, signal?: AbortSignal) => Promise<string | false>;
   permissionsChanged?: () => void;
+  presented?: () => void;
   configure: (schema: ConfigSchema, values: Record<string, unknown>) => void;
   handlers: () => Promise<NappletRelease[]>;
   invoke: (release: NappletRelease, delivery: Record<string, unknown>) => Promise<void>;
@@ -64,6 +67,7 @@ const requests: Record<string, readonly string[]> = {
     'getBadges',
   ],
   resource: ['info', 'bytes', 'bytesMany', 'cancel'],
+  upload: ['info', 'status', 'upload', 'transfer.start', 'transfer.chunk', 'transfer.end'],
   link: ['open'],
   relay: ['query', 'subscribe', 'close', 'publish', 'publishEncrypted'],
   outbox: ['getEvent', 'query', 'subscribe', 'close', 'publish', 'resolveRelays'],
@@ -90,8 +94,10 @@ export class NappletRuntime {
   readonly network: NappletNetwork;
   readonly scope: AppScope;
   readonly signingPermissions: SigningPermissions;
+  private uploads: NappletUploads;
   private life = new AbortController();
   private container: string | null = null;
+  private presented = false;
   private unsubscribe?: () => void;
   private streams = new Map<string, () => void>();
   private resources = new Map<string, AbortController>();
@@ -116,8 +122,27 @@ export class NappletRuntime {
     };
     this.signingPermissions = new SigningPermissions(
       this.scope, options.release, options.confirm, this.signal,
-      () => options.permissionsChanged?.(),
+      () => { this.uploads?.authorizationChanged(); options.permissionsChanged?.(); },
     );
+    this.uploads = new NappletUploads({
+      accountPubkey: options.accountPubkey, signal: this.signal,
+      send: (message) => this.send(message), version: () => this.signingPermissions.version,
+      authorize: async (template, metadata, servers, signal) => {
+        const version = this.signingPermissions.version;
+        const check = () => {
+          this.check(); assertNotAborted(signal);
+          if (version !== this.signingPermissions.version) throw new Error('permission-denied');
+        };
+        await this.signingPermissions.authorize({ operation: 'upload', kind: 24242, relays: servers,
+          accountPubkey: options.accountPubkey, content: template.content, tags: template.tags,
+          createdAt: template.created_at, upload: metadata,
+        }, (template.created_at + 300) * 1000, signal);
+        check();
+        const event = await this.network.sign(template);
+        check();
+        return { event, check };
+      },
+    });
   }
   get signal() {
     return this.life.signal;
@@ -136,6 +161,7 @@ export class NappletRuntime {
       this.options.html,
       this.options.domains,
       this.options.release.title,
+      this.options.theme().colors.background,
     );
     this.check();
     this.container = await platform.napplet.open(document);
@@ -149,6 +175,7 @@ export class NappletRuntime {
 
   async close(): Promise<void> {
     this.life.abort();
+    this.uploads.close();
     this.unsubscribe?.();
     for (const close of this.streams.values()) close();
     for (const request of this.resources.values()) request.abort();
@@ -166,9 +193,15 @@ export class NappletRuntime {
     if (!this.signal.aborted && this.container)
       void platform.napplet.send(this.container, JSON.stringify(message)).catch(() => {});
   }
+  async goBack(): Promise<boolean> {
+    this.check();
+    if (!this.container) return true;
+    const handled = await platform.napplet.goBack(this.container);
+    this.check();
+    return handled;
+  }
   updateTheme() {
-    if (this.options.domains.includes('theme'))
-      this.send({ type: 'theme.changed', theme: this.options.theme() });
+    this.send({ type: 'theme.changed', theme: this.options.theme() });
   }
   setDelivery(delivery: Record<string, unknown>) {
     this.delivery = delivery;
@@ -218,6 +251,10 @@ export class NappletRuntime {
   }
   async receive(raw: string): Promise<void> {
     if (this.signal.aborted || raw.length > 1500000) return;
+    if (raw === NAPPLET_FRAME_READY_MESSAGE) {
+      if (!this.presented) { this.presented = true; this.options.presented?.(); }
+      return;
+    }
     let message: Message;
     try {
       message = JSON.parse(raw);
@@ -228,6 +265,10 @@ export class NappletRuntime {
     const [domain, ...rest] = message.type.split('.');
     const operation = rest.join('.');
     if (!requests[domain]?.includes(operation) || !this.options.domains.includes(domain)) return;
+    if (domain === 'upload' && operation.startsWith('transfer.')) {
+      this.uploads.transfer(message);
+      return;
+    }
     if (domain === 'shell') {
       this.result(message, { capabilities: { domains: this.options.domains }, services: [] });
       this.send({
@@ -288,6 +329,12 @@ export class NappletRuntime {
     else this.result(message, { ok: false, error });
   }
   private async dispatch(m: Message, domain: string, op: string): Promise<void> {
+    if (domain === 'upload') {
+      if (op === 'info') this.result(m, { info: await this.uploads.info() });
+      else if (op === 'status') this.result(m, { status: this.uploads.status(m.uploadId) });
+      else throw new Error('invalid-upload-data');
+      return;
+    }
     if (domain === 'theme') {
       this.result(m, { theme: this.options.theme() });
       return;

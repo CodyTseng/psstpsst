@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium और शामिल घटक"
   },
   "napplets": {
+    "app_title": "मिनी ऐप",
+    "signing_upload": "फ़ाइल अपलोड करें",
+    "signing_effect_upload": "यह फ़ाइल सार्वजनिक रूप से उपलब्ध होगी और इसमें अंतर्निहित मेटाडेटा हो सकता है।",
+    "upload_destinations": "स्टोरेज सेवाएँ",
+    "capability_upload": "फ़ाइलें अपलोड करना",
+    "runtime_loading": "ऐप लोड हो रहा है…",
     "permissions_signing": "स्वचालित हस्ताक्षर",
     "permissions_hint": "इस खाते और ऐप संस्करण के लिए है। हटाने पर फिर पूछा जाएगा।",
     "permissions_access": "ऐप की सुविधाएँ",

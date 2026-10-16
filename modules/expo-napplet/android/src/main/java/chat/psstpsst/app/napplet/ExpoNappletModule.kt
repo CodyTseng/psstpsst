@@ -66,6 +66,7 @@ class ExpoNappletModule : Module() {
     AsyncFunction("cancelResourceAsync") { id: String -> calls[id]?.let { it.cancelled.set(true); it.call?.cancel() }; Unit }
     AsyncFunction("sendAsync") { id: String, message: String -> views[id]?.get()?.reply(message); Unit }.runOnQueue(Queues.MAIN)
     AsyncFunction("closeAsync") { id: String -> views.remove(id)?.get()?.dispose(); Unit }.runOnQueue(Queues.MAIN)
+    AsyncFunction("goBackAsync") { id: String -> views[id]?.get()?.navigateBack() ?: false }.runOnQueue(Queues.MAIN)
     View(NappletView::class) {
       Events("onMessage")
       Prop("html") { view: NappletView, html: String -> view.load(html) }
@@ -82,5 +83,6 @@ class NappletView(context: Context, appContext: AppContext) : ExpoView(context, 
   init { addView(web, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
   fun load(value: String) = web.loadDocument(value)
   fun reply(value: String) = web.reply(value)
+  fun navigateBack() = web.navigateBack()
   fun dispose() { removeView(web); web.dispose() }
 }

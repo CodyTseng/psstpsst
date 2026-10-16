@@ -6,8 +6,9 @@ import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
+import { QrScanButton } from '@/components/common/QrScanButton';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
-import { nappletService, nappletStore } from '@/services/napplet/service';
+import { nappletService } from '@/services/napplet/service';
 import { spacing, useThemeColors } from '@/theme';
 
 export default function NappletInstallScreen() {
@@ -16,7 +17,19 @@ export default function NappletInstallScreen() {
   const clearance = useScreenHeaderClearance();
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  function lookup(address: string) {
+    if (busy || !address.trim()) return;
+    setBusy(true);
+    setError(null);
+    void nappletService
+      .resolve(address)
+      .then((release) => {
+        router.replace({ pathname: '/napplet/[id]', params: { id: release.event.id } });
+      })
+      .catch((error: Error) => setError(error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed'))
+      .finally(() => setBusy(false));
+  }
   return (
     <AppScreen edges={[]}>
       <ScreenHeader title={t('napplets.install_link')} />
@@ -32,31 +45,24 @@ export default function NappletInstallScreen() {
           label={t('napplets.address')}
           maxLength={8192}
           value={value}
-          onChangeText={setValue}
+          onChangeText={(text) => { setValue(text); setError(null); }}
           autoCapitalize="none"
           autoCorrect={false}
-          multiline
+          editable={!busy}
+          returnKeyType="go"
+          onSubmitEditing={() => lookup(value)}
+          trailingAccessory={<QrScanButton onScanned={(data) => {
+            setValue(data.trim());
+            lookup(data);
+          }} />}
         />
         <AppText tone="muted">{t('napplets.address_hint')}</AppText>
-        {error ? <AppText style={{ color: c.danger }}>{t('napplets.not_found')}</AppText> : null}
+        {error ? <AppText style={{ color: c.danger }}>{t(error)}</AppText> : null}
         <AppButton
           label={t('napplets.details')}
           disabled={!value.trim()}
           loading={busy}
-          onPress={() => {
-            setBusy(true);
-            setError(false);
-            void nappletService
-              .resolve(value)
-              .then((release) => {
-                nappletStore.setState((state) => ({
-                  market: [release, ...state.market.filter((app) => app.key !== release.key)],
-                }));
-                router.replace({ pathname: '/napplet/[id]', params: { id: release.event.id } });
-              })
-              .catch(() => setError(true))
-              .finally(() => setBusy(false));
-          }}
+          onPress={() => lookup(value)}
         />
       </ScrollView>
     </AppScreen>

@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium และส่วนประกอบที่รวมอยู่"
   },
   "napplets": {
+    "app_title": "มินิแอป",
+    "signing_upload": "อัปโหลดไฟล์",
+    "signing_effect_upload": "ไฟล์นี้จะเข้าถึงได้แบบสาธารณะและอาจมีข้อมูลเมตาที่ฝังอยู่",
+    "upload_destinations": "บริการจัดเก็บข้อมูล",
+    "capability_upload": "อัปโหลดไฟล์",
+    "runtime_loading": "กำลังโหลดแอป…",
     "permissions_signing": "การลงนามอัตโนมัติ",
     "permissions_hint": "ใช้กับบัญชีและเวอร์ชันแอปนี้ การเพิกถอนจะให้ถามอีกครั้ง",
     "permissions_access": "ความสามารถของแอป",

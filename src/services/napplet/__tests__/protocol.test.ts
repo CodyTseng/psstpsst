@@ -2,8 +2,43 @@ import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { naddrEncode } from 'nostr-tools/nip19';
 import { appShareAddress, boundedFilters, parseAppAddress, parseManifest, publicUrl } from '../protocol';
 import { validateSchema, validateValues } from '../config';
+import typeZoo from './fixtures/type-zoo-legacy.json';
 
 const secret = generateSecretKey();
+function legacy(tags = typeZoo.tags) {
+  return finalizeEvent({ kind: 35129, tags, content: '', created_at: 100 }, secret);
+}
+
+test('reads the signed Type Zoo legacy manifest without rewriting its event or losing required capabilities', () => {
+  const release = parseManifest(typeZoo);
+  expect(JSON.parse(JSON.stringify(release.event))).toEqual(typeZoo);
+  expect(release.hash).toBe('c42577a0adaeefd89a8ad10ca091c7e6ee406389d541b224a609c00a4908bd4f');
+  expect(release.title).toBe('Type Zoo');
+  expect(release.description).toBe(typeZoo.tags.find((tag) => tag[0] === 'description')![1]);
+  expect(release.required).toEqual(['outbox', 'upload']);
+  expect(release.optional).toEqual([]);
+});
+
+test('rejects a signed legacy aggregate mismatch and unsupported multi-file packages', () => {
+  expect(() => parseManifest(legacy(typeZoo.tags.map((tag) => tag[0] === 'x' ? ['x', 'a'.repeat(64), 'aggregate'] : tag)))).toThrow();
+  expect(() => parseManifest(legacy([...typeZoo.tags, ['path', '/other.js', 'a'.repeat(64)]]))).toThrow();
+  expect(() => parseManifest({ ...typeZoo, content: 'tampered' })).toThrow();
+});
+
+test('does not reinterpret malformed standalone manifests as legacy or mix capability declarations', () => {
+  expect(() => parseManifest(legacy(typeZoo.tags.map((tag) => tag[0] === 'x' ? ['x', typeZoo.tags.find((tag) => tag[0] === 'path')![2]] : tag)))).toThrow();
+  expect(() => parseManifest(legacy([...typeZoo.tags, ['R', 'storage']]))).toThrow();
+  expect(() => parseManifest(legacy([...typeZoo.tags, ['O', 'storage']]))).toThrow();
+  expect(() => parseManifest(legacy([...typeZoo.tags, ['requires', 'outbox', 'upload']]))).toThrow();
+});
+
+test('requires aggregate binding for legacy snapshots and accepts signed path binding for roots', () => {
+  const tags = typeZoo.tags.filter((tag) => !['d', 'x'].includes(tag[0]));
+  const root = finalizeEvent({ kind: 15129, created_at: 100, content: '', tags }, secret);
+  expect(parseManifest(root).hash).toBe(typeZoo.tags.find((tag) => tag[0] === 'path')![2]);
+  const snapshot = finalizeEvent({ kind: 5129, created_at: 100, content: '', tags }, secret);
+  expect(() => parseManifest(snapshot)).toThrow();
+});
 function manifest(kind = 35129, tags: string[][] = [['d', 'test']]) {
   return finalizeEvent(
     {

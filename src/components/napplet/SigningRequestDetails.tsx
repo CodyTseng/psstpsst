@@ -14,6 +14,7 @@ import type { SigningRequest, SigningScope } from '@/services/napplet/signing-pe
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { isReplaceableKind, isAddressableKind } from 'nostr-tools/kinds';
 import { serializeEvent, type UnsignedEvent } from 'nostr-tools';
+import { formatFileSize } from '@/lib/nostr/file-tags';
 import { platform } from '@/platform';
 import { NappletIcon } from './NappletIcon';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
@@ -22,6 +23,7 @@ import ChevronUp from 'lucide-react-native/icons/chevron-up';
 
 export function signingAction(scope: Pick<SigningScope, 'operation' | 'kind'>, t: TFunction): string {
   if (scope.operation === 'relay-auth') return t('napplets.signing_auth');
+  if (scope.operation === 'upload') return t('napplets.signing_upload');
   if (scope.operation === 'encrypt-publish') return t('napplets.signing_encrypt');
   const known: Record<number, string> = {
     1: 'signing_post', 6: 'signing_repost', 7: 'signing_reaction',
@@ -72,7 +74,7 @@ export function SigningScopeDetails({ scope }: { scope: SigningScope }) {
       {scope.operation === 'encrypt-publish' ? <SigningText>{signingAction({ ...scope, operation: 'publish' }, t)}</SigningText> : null}
       {scope.identifier !== undefined ? <SigningText>{t('napplets.signing_record')}: {scope.identifier || t('napplets.signing_unnamed')}</SigningText> : null}
       {scope.recipient ? <SigningIdentity pubkey={scope.recipient} label={t('napplets.signing_recipient')} /> : null}
-      <SigningText variant="caption" tone="muted">{t('napplets.signing_destinations')}</SigningText>
+      <SigningText variant="caption" tone="muted">{t(scope.operation === 'upload' ? 'napplets.upload_destinations' : 'napplets.signing_destinations')}</SigningText>
       {scope.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
     </View>
   );
@@ -128,7 +130,8 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   }, [preview.repost, request]);
   const previewText = verified?.request === request ? verified.text : preview.text;
   const auth = request.operation === 'relay-auth';
-  const effect = auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
+  const upload = request.operation === 'upload' ? request.upload : undefined;
+  const effect = auth ? 'signing_effect_auth' : upload ? 'signing_effect_upload' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
   const showIdentifier = isReplaceableKind(request.kind) || isAddressableKind(request.kind);
   const dTag = request.tags.find((tag) => tag[0] === 'd');
   const title = request.kind === 30023 ? request.tags.find((tag) => tag[0] === 'title')?.[1] : undefined;
@@ -143,6 +146,11 @@ export function SigningRequestDetails({ request, showTitle = true }: {
     <SigningText>{t(`napplets.${effect}`)}</SigningText>
     {auth ? <AppCard variant="muted">
       <SigningText variant="subtitle">{new URL(request.relays[0]).host}</SigningText>
+    </AppCard> : upload ? <AppCard variant="muted" style={{ gap: spacing.sm }}>
+      <SigningText variant="subtitle">{upload.filename || t('message_detail.attachment')}</SigningText>
+      <SigningText variant="caption" tone="muted">{upload.mimeType} · {formatFileSize(upload.size)}</SigningText>
+      <SigningText variant="caption" tone="muted">{t('napplets.upload_destinations')}</SigningText>
+      {request.relays.map((server) => <SigningText key={server}>{new URL(server).host}</SigningText>)}
     </AppCard> : <>
       {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.signing_recipient')} /> : null}
       <AppCard variant="muted" style={{ gap: spacing.sm }}>

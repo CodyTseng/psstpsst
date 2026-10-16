@@ -8,7 +8,7 @@ import { build } from 'esbuild';
 import electron from 'electron';
 
 test(
-  'Electron uses a separate profile, frame-bound preload and ordered host replies',
+  'Electron isolates the app bridge and traverses app history before reaching its root',
   { timeout: 30000 },
   async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'psst-napplet-electron-'));
@@ -26,7 +26,7 @@ test(
         `const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('testHost',{invoke:(...args)=>ipcRenderer.invoke(...args)});window.addEventListener('DOMContentLoaded',()=>{});`,
       );
       const entry = `
-      import { app, BrowserWindow, webContents } from 'electron';
+      import { app, BrowserWindow, webContents, ipcMain } from 'electron';
       import { strict as assert } from 'node:assert';
       import { writeFileSync } from 'node:fs';
       import { registerNappletHandlers, fetchNappletResource } from ${JSON.stringify(path.resolve('desktop/napplet-service.ts'))};
@@ -39,10 +39,35 @@ test(
         registerNappletHandlers(event=>event.sender===owner.webContents&&event.senderFrame===owner.webContents.mainFrame,()=>owner);
         await owner.loadURL('data:text/html,<title>Owner</title>');
         const invoke = (channel,...args)=>owner.webContents.executeJavaScript('window.testHost.invoke('+[channel,...args].map(v=>JSON.stringify(v)).join(',')+')');
-        const html=await buildDocument('<script>window.result={};napplet.identity.getPublicKey().then(key=>result.key=key);try{parent.document;result.escape=true;}catch{result.escape=false;}</script>',['shell','identity']);
+        const html=(await buildDocument('<script>window.result={};napplet.identity.getPublicKey().then(key=>result.key=key);try{parent.document;result.escape=true;}catch{result.escape=false;}</script>',['shell','identity','upload']))
+          .replace('<iframe ', '<script>window.pendingFrames=[];window.requestAnimationFrame=fn=>pendingFrames.push(fn);</script><iframe ');
         const id=await invoke(IPC.nappletOpen,html);
         const guest=webContents.getAllWebContents().find(w=>w.getURL().includes('napplet.psstpsst.invalid'));
         assert(guest);assert.notEqual(guest.session,owner.webContents.session);
+        const view=owner.contentView.children.find(child=>child.webContents===guest);
+        await invoke(IPC.nappletBounds,id,{x:0,y:0,width:100,height:100},true);
+        assert.equal(view.getVisible(),false);
+        assert.equal(await guest.executeJavaScript('pendingFrames.length'),1);
+        await guest.executeJavaScript('pendingFrames.shift()(0)');
+        assert.equal(view.getVisible(),false);
+        await guest.executeJavaScript('pendingFrames.shift()(0)');
+        for(let i=0;i<100&&!view.getVisible();i++)await wait(10);
+        assert.equal(view.getVisible(),true);
+        assert.equal(guest.backgroundThrottling,true);
+        owner.showInactive();
+        const preview=await invoke(IPC.nappletCapture,id);
+        assert(preview.startsWith('data:image/png;base64,'));
+        assert.equal(view.getVisible(),true);
+        let prevented=0;
+        guest.emit('before-input-event',{preventDefault:()=>prevented++});
+        guest.emit('before-mouse-event',{preventDefault:()=>prevented++});
+        assert.equal(prevented,2);
+        await invoke(IPC.nappletBounds,id,{x:0,y:0,width:100,height:100},false);
+        assert((await invoke(IPC.nappletCapture,id)).startsWith('data:image/png;base64,'));
+        assert.equal(view.getVisible(),false);
+        await invoke(IPC.nappletBounds,id,{x:0,y:0,width:100,height:100},true);
+        guest.emit('before-input-event',{preventDefault:()=>prevented++});
+        assert.equal(prevented,2);
         await invoke(IPC.nappletSend,id,JSON.stringify({type:'identity.getPublicKey.result',id:'unused',pubkey:'unused'}));
         const frame=guest.mainFrame.frames[0];assert(frame);
         assert.equal(await frame.executeJavaScript('typeof window.__psstNapplet'),'undefined');
@@ -51,6 +76,29 @@ test(
         const keyId=await frame.executeJavaScript("(()=>{const id='test-id';window.reply=new Promise(resolve=>window.addEventListener('message',event=>{if(event.data.id===id)resolve(event.data.pubkey);}));return id;})()");
         await invoke(IPC.nappletSend,id,JSON.stringify({type:'identity.getPublicKey.result',id:keyId,pubkey:'account-A'}));
         assert.equal(await frame.executeJavaScript('window.reply'),'account-A');
+        const chunks=[];
+        const receiveUpload=async(event,raw)=>{
+          if(event.sender!==guest)return;
+          const m=JSON.parse(raw);if(!m.type.startsWith('upload.transfer.'))return;
+          if(m.type==='upload.transfer.chunk')chunks.push(Buffer.from(m.data,'base64'));
+          if(m.type==='upload.transfer.end')await invoke(IPC.nappletSend,id,JSON.stringify({type:'upload.upload.result',id:m.id,result:{ok:true,uploadId:'desktop-upload',status:'complete',rail:'blossom',url:'https://media.example/file'}}));
+          await invoke(IPC.nappletSend,id,JSON.stringify({type:'psst.upload.ack',id:m.id,seq:m.seq}));
+        };
+        ipcMain.on(IPC.nappletMessage,receiveUpload);
+        const uploaded=await frame.executeJavaScript("napplet.upload.upload({data:new Blob([new Uint8Array([1,2,3])]),filename:'desktop.bin'})");
+        assert.equal(uploaded.status,'complete');assert.deepEqual([...Buffer.concat(chunks)],[1,2,3]);
+        ipcMain.removeListener(IPC.nappletMessage,receiveUpload);
+        assert.equal(await invoke(IPC.nappletGoBack,id),false);
+        await frame.executeJavaScript("history.pushState({page:1},'');history.pushState({page:2},'');window.pops=0;addEventListener('popstate',()=>pops++);");
+        for(let i=0;i<100&&guest.navigationHistory.getActiveIndex()<2;i++)await wait(10);
+        assert.equal(await invoke(IPC.nappletGoBack,id),true);
+        for(let i=0;i<100&&await frame.executeJavaScript('window.pops')<1;i++)await wait(10);
+        assert.deepEqual(await frame.executeJavaScript('history.state'),{page:1});
+        assert.equal(await invoke(IPC.nappletGoBack,id),true);
+        for(let i=0;i<100&&await frame.executeJavaScript('window.pops')<2;i++)await wait(10);
+        assert.equal(await frame.executeJavaScript('history.state'),null);
+        assert.equal(await invoke(IPC.nappletGoBack,id),false);
+        assert.equal(guest.isDestroyed(),false);
         await assert.rejects(fetchNappletResource('https://127.0.0.1/',1024));
         await invoke(IPC.nappletClose,id);assert(guest.isDestroyed());
         writeFileSync(${JSON.stringify(path.join(dir, 'result.json'))},JSON.stringify({ok:true}));

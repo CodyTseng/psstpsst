@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium و مؤلفه‌های همراه"
   },
   "napplets": {
+    "app_title": "برنامه کوچک",
+    "signing_upload": "بارگذاری فایل",
+    "signing_effect_upload": "این فایل به‌صورت عمومی در دسترس خواهد بود و ممکن است فرادادهٔ تعبیه‌شده داشته باشد.",
+    "upload_destinations": "سرویس‌های ذخیره‌سازی",
+    "capability_upload": "بارگذاری فایل‌ها",
+    "runtime_loading": "در حال بارگیری برنامه…",
     "permissions_signing": "امضای خودکار",
     "permissions_hint": "برای این حساب و نسخه برنامه است. لغو مجوز باعث پرسش دوباره می‌شود.",
     "permissions_access": "قابلیت‌های برنامه",

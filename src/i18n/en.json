@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium and bundled components"
   },
   "napplets": {
+    "app_title": "Mini app",
+    "signing_upload": "Upload a file",
+    "signing_effect_upload": "This file will be publicly accessible and may contain embedded metadata.",
+    "upload_destinations": "Storage services",
+    "capability_upload": "Upload files",
+    "runtime_loading": "Loading app…",
     "permissions_signing": "Automatic signing",
     "permissions_hint": "Applies to this account and app version. Revoke to ask again.",
     "permissions_access": "App features",

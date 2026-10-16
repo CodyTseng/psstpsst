@@ -49,7 +49,7 @@ export default function NappletDetailScreen() {
       void nappletService
         .resolve(id)
         .then(setResolved)
-        .catch(() => setError('napplets.not_found'));
+        .catch((error: Error) => setError(error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed'));
   }, [id, release, state.loaded]);
   function run(work: () => Promise<void>) {
     setBusy(true);
@@ -65,7 +65,7 @@ export default function NappletDetailScreen() {
   );
   return (
     <AppScreen edges={[]}>
-      <ScreenHeader title={release?.title ?? t('napplets.details')} />
+      <ScreenHeader title={release?.title ?? t('napplets.app_title')} />
       <ScrollView
         contentContainerStyle={{
           padding: spacing.lg,
@@ -105,20 +105,21 @@ export default function NappletDetailScreen() {
             </AppText>
             {unsupported?.length ? (
               <AppText style={{ color: c.danger }}>
-                {t('napplets.unsupported')}: {unsupported.join(', ')}
+                {t('napplets.unsupported')}: {unsupported.map((domain) => t(`napplets.capability_${domain}`, { defaultValue: domain })).join(', ')}
               </AppText>
             ) : null}
             <AppButton
               loading={busy}
               disabled={!!unsupported?.length}
               label={t(installed ? 'napplets.open' : 'napplets.install')}
-              onPress={() =>
-                run(async () => {
-                  if (!installed) await nappletService.install(release, state.accountPubkey ?? '');
-                  await nappletService.open(installed ?? release);
-                  router.push('/napplet-run');
-                })
-              }
+              onPress={() => {
+                try {
+                  const runId = nappletService.prepareOpen(installed ?? release, state.accountPubkey ?? '');
+                  router.push({ pathname: '/napplet-run', params: { runId } });
+                } catch {
+                  setError('napplets.request_failed');
+                }
+              }}
             />
             {installed && installed.hash !== release.hash ? (
               <AppButton
@@ -234,6 +235,7 @@ export default function NappletDetailScreen() {
                         pubkey: release.event.pubkey,
                         identifier: release.event.tags.find((tag) => tag[0] === 'd')?.[1] ?? '',
                       }),
+                      { refresh: true },
                     );
                     setResolved(parseManifest(next.event));
                     if (next.hash === installed.hash) setError('napplets.up_to_date');

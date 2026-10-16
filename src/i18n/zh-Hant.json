@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium 及其內建元件"
   },
   "napplets": {
+    "app_title": "小程式",
+    "signing_upload": "上傳檔案",
+    "signing_effect_upload": "此檔案將可公開存取，並可能包含內嵌的中繼資料。",
+    "upload_destinations": "儲存服務",
+    "capability_upload": "上傳檔案",
+    "runtime_loading": "正在載入應用程式…",
     "permissions_signing": "自動簽名",
     "permissions_hint": "僅對此帳號和目前應用程式版本生效。撤銷後將恢復逐次詢問。",
     "permissions_access": "應用程式功能",

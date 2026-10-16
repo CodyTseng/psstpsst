@@ -1064,6 +1064,12 @@
     "runtime_notices": "Chromium 及其内置组件"
   },
   "napplets": {
+    "app_title": "小程序",
+    "signing_upload": "上传文件",
+    "signing_effect_upload": "此文件将公开可访问，并可能包含内嵌的元数据。",
+    "upload_destinations": "存储服务",
+    "capability_upload": "上传文件",
+    "runtime_loading": "正在加载应用…",
     "permissions_signing": "自动签名",
     "permissions_hint": "仅对此账号和当前应用版本生效。撤销后将恢复逐次询问。",
     "permissions_access": "应用功能",

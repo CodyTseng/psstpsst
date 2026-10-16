@@ -1,4 +1,5 @@
 import { parseNostrInput } from '@/lib/nostr/keys';
+import { parseNostrEventReference } from '@/lib/nostr/event-reference';
 import { normalizeNip05Identifier, queryNip05Profile } from '@/lib/nostr/nip05';
 import { parseNwcConnectionString } from '@/lib/wallet/nwc';
 import { parseBolt11Invoice } from '@/services/wallet/bolt11';
@@ -8,6 +9,7 @@ export type ChatQrScanResult =
   | { kind: 'chat'; pubkey: string }
   | { kind: 'payment'; input: string }
   | { kind: 'wallet'; connectionString: string }
+  | { kind: 'napplet'; address: string }
   | { kind: 'invalid' };
 
 export async function resolveChatQrScan(input: string): Promise<ChatQrScanResult> {
@@ -22,6 +24,14 @@ export async function resolveChatQrScan(input: string): Promise<ChatQrScanResult
   try {
     return { kind: 'chat', pubkey: parseNostrInput(raw) };
   } catch {}
+
+  if (raw.length <= 8192) {
+    const code = raw.match(/(?:naddr|nevent|note)1[023456789acdefghjklmnpqrstuvwxyz]+/i)?.[0];
+    const reference = code ? parseNostrEventReference(code) : null;
+    if (reference && (reference.kind === undefined || [15129, 35129].includes(reference.kind))) {
+      return { kind: 'napplet', address: reference.bech32 };
+    }
+  }
 
   const email = extractEmailLikeValue(raw);
   const nip05 = email ? normalizeNip05Identifier(email) : null;

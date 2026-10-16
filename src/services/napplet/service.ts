@@ -4,6 +4,7 @@ import { getAccount } from '@/services/account/account-access';
 import { nappletInstallations, nappletData, nappletUsage } from '@/db/schema';
 import { db } from '@/db/client';
 import { and, eq } from 'drizzle-orm';
+import { matchFilters } from 'nostr-tools/filter';
 import { loadArtifact } from './artifacts';
 import { NappletNetwork } from './network';
 import {
@@ -38,6 +39,8 @@ type State = {
   market: NappletRelease[];
   hasMore: boolean;
   launching: boolean;
+  runId: number;
+  launch: { release: NappletRelease; pending: boolean; showLoading: boolean; error: string | null } | null;
   running: { release: NappletRelease; containerId: string } | null;
   prompt: QueuedPrompt | null;
   overlayActive: boolean;
@@ -55,6 +58,8 @@ export const nappletStore = createStore<State>(() => ({
   market: [],
   hasMore: true,
   launching: false,
+  runId: 0,
+  launch: null,
   running: null,
   prompt: null,
   configuration: null,
@@ -67,11 +72,14 @@ export const nappletPermissionStore = createStore(() => ({ revision: 0 }));
 
 let generation = 0;
 let catalog: NappletNetwork | null = null;
+const addressReaders = new Set<NappletNetwork>();
 let runtime: NappletRuntime | null = null;
 const approvals = new PromptQueue((prompt) => nappletStore.setState({ prompt, ...(prompt ? { overlayActive: true } : {}) }));
 let theme: RuntimeTheme | null = null;
 let until: number | undefined;
 let opening = 0;
+let navigatingBack: NappletRuntime | null = null;
+let runSerial = 0;
 
 function check(account: string, epoch: number) {
   if (generation !== epoch || nappletStore.getState().accountPubkey !== account)
@@ -107,6 +115,8 @@ export const nappletService = {
     opening++;
     approvals.cancelAll();
     this.stop();
+    for (const reader of addressReaders) reader.destroy();
+    addressReaders.clear();
     catalog?.destroy();
     catalog = null;
     until = undefined;
@@ -182,25 +192,71 @@ export const nappletService = {
       if (generation === epoch) nappletStore.setState({ loading: false });
     }
   },
-  async resolve(value: string): Promise<NappletRelease> {
-    const network = catalog;
-    const account = nappletStore.getState().accountPubkey;
+  async resolve(value: string, options: { refresh?: boolean } = {}): Promise<NappletRelease> {
+    const { accountPubkey: account, installed, market } = nappletStore.getState();
     const epoch = generation;
-    if (!network || !account) throw new Error('account-unavailable');
+    if (!catalog || !account) throw new Error('account-unavailable');
     const address = parseAppAddress(value);
-    const result = await network.query(
-      [...new Set([...address.relays, ...MARKET_RELAYS])].slice(0, 8),
-      address.filters,
-    );
-    check(account, epoch);
-    for (const event of result.events.sort((a, b) => b.created_at - a.created_at)) {
-      try {
-        return parseManifest(event);
-      } catch {}
+    if (!options.refresh) {
+      let cached: NappletRelease | undefined;
+      for (const releases of [installed, market]) {
+        for (const release of releases) {
+          if (matchFilters(address.filters, release.event) && (!cached ||
+            release.event.created_at > cached.event.created_at ||
+            (release.event.created_at === cached.event.created_at && release.event.id < cached.event.id))) cached = release;
+        }
+      }
+      if (cached) return cached;
     }
-    throw new Error('napplets.not_found');
+    const network = new NappletNetwork(account);
+    addressReaders.add(network);
+    try {
+      const filters = address.filters.map((filter) => ({ ...filter, limit: 1 }));
+      const initial = [...new Set([...address.relays, ...MARKET_RELAYS])].slice(0, 8);
+      let invalid = false;
+      let failed = false;
+      const lookup = async (relays: string[]) => {
+        let result: Awaited<ReturnType<NappletNetwork['query']>>;
+        try { result = await network.query(relays, filters); }
+        catch { check(account, epoch); failed = true; return null; }
+        check(account, epoch);
+        failed ||= !!result.error || result.incomplete;
+        for (const event of result.events.sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id))) {
+          try {
+            const release = parseManifest(event);
+            nappletStore.setState((state) => {
+              const previous = state.market.find((app) => app.key === release.key);
+              if (previous && (previous.event.created_at > event.created_at ||
+                (previous.event.created_at === event.created_at && previous.event.id <= event.id))) return state;
+              return { market: [release, ...state.market.filter((app) => app.key !== release.key)].slice(0, 500) };
+            });
+            return release;
+          }
+          catch { invalid = true; }
+        }
+        return null;
+      };
+      const release = await lookup(initial);
+      if (release) return release;
+      if (!address.relays.length && address.author) {
+        let relays: string[] = [];
+        try { relays = await network.publisherRelays(address.author); }
+        catch { failed = true; }
+        check(account, epoch);
+        const extra = relays.filter((relay) => !initial.includes(relay));
+        if (extra.length) {
+          const fallback = await lookup(extra);
+          if (fallback) return fallback;
+        }
+      }
+      if (invalid) throw new Error('napplets.invalid_manifest');
+      if (failed) throw new Error('napplets.request_failed');
+      throw new Error('napplets.not_found');
+    } finally {
+      if (addressReaders.delete(network)) network.destroy();
+    }
   },
-  async install(release: NappletRelease, expectedAccount?: string) {
+  async install(release: NappletRelease, expectedAccount?: string, onDownload?: () => void) {
     const account = nappletStore.getState().accountPubkey;
     const epoch = generation;
     if (!account) throw new Error('account-unavailable');
@@ -208,17 +264,48 @@ export const nappletService = {
       throw new Error('session-closed');
     if (release.required.some((domain) => !(NAP_DOMAINS as readonly string[]).includes(domain)))
       throw new Error('napplets.unsupported');
-    await loadArtifact(release);
+    await loadArtifact(release, undefined, onDownload);
     check(account, epoch);
     await saveInstallation(account, release);
     check(account, epoch);
     await refresh(account, epoch);
+  },
+  prepareOpen(release: NappletRelease, expectedAccount: string): number {
+    check(expectedAccount, generation);
+    const state = nappletStore.getState();
+    if (state.launch?.pending && state.launch.release.key === release.key && state.launch.release.hash === release.hash) return state.runId;
+    this.stop();
+    const runId = ++runSerial;
+    nappletStore.setState({ runId, launching: true, launch: { release, pending: true, showLoading: false, error: null } });
+    return runId;
+  },
+  startPreparedOpen(runId: number) {
+    const state = nappletStore.getState();
+    if (state.runId !== runId || !state.launch?.pending) return;
+    nappletStore.setState({ launch: { ...state.launch, pending: false } });
+    // The container owns presentation; open records failures in its launch state.
+    void this.open(state.launch.release).catch(() => {});
+  },
+  retryOpen(runId: number) {
+    const state = nappletStore.getState();
+    if (state.runId !== runId || !state.launch?.error) return;
+    nappletStore.setState({ launching: true, launch: { ...state.launch, pending: true, showLoading: false, error: null } });
   },
   async open(release: NappletRelease, delivery?: Record<string, unknown>) {
     const work = this.launch(release, delivery);
     const token = opening;
     try {
       await work;
+    } catch (error) {
+      if (token === opening) {
+        const reason = error instanceof Error ? error.message : 'napplets.request_failed';
+        if (reason === 'permission-denied' || reason === 'session-closed') this.stop();
+        else {
+          approvals.cancelAll();
+          nappletStore.setState({ running: null, configuration: null, panel: null, launch: { release, pending: false, showLoading: false, error: reason } });
+        }
+      }
+      throw error;
     } finally {
       if (token === opening) nappletStore.setState({ launching: false });
     }
@@ -229,13 +316,18 @@ export const nappletService = {
     if (!account || !theme) throw new Error('account-unavailable');
     this.stop();
     const operation = ++opening;
-    nappletStore.setState({ launching: true });
+    nappletStore.setState({ launching: true, launch: { release, pending: false, showLoading: false, error: null } });
     const current = () => {
       check(account, epoch);
       if (operation !== opening) throw new Error('session-closed');
     };
     const installed = nappletStore.getState().installed.find((item) => item.key === release.key);
-    if (!installed || installed.hash !== release.hash) await this.install(release);
+    const downloading = () => {
+      current();
+      const launch = nappletStore.getState().launch;
+      if (launch && !launch.showLoading) nappletStore.setState({ launch: { ...launch, showLoading: true } });
+    };
+    if (!installed || installed.hash !== release.hash) await this.install(release, account, downloading);
     current();
     const scope = { accountPubkey: account, appKey: release.key, artifactHash: release.hash };
     const required = [...new Set(['shell', ...release.required])];
@@ -257,7 +349,7 @@ export const nappletService = {
       declared = [...required, ...optional.filter((domain) => selected.includes(domain))];
       await setData(scope, 'permissions', 'domains', JSON.stringify(declared));
     }
-    const html = await loadArtifact(release);
+    const html = await loadArtifact(release, undefined, downloading);
     current();
     const instance = new NappletRuntime({
       accountPubkey: account,
@@ -265,6 +357,10 @@ export const nappletService = {
       html,
       domains: declared,
       theme: () => theme!,
+      presented: () => {
+        const launch = nappletStore.getState().launch;
+        if (runtime === instance && launch?.showLoading) nappletStore.setState({ launch: { ...launch, showLoading: false } });
+      },
       confirm: prompt,
       permissionsChanged,
       configure: (schema, values) => {
@@ -289,18 +385,32 @@ export const nappletService = {
       nappletStore.setState({ running: { release, containerId } });
       await refresh(account, epoch);
     } catch (error) {
-      if (runtime === instance) this.stop();
-      else await instance.close();
+      if (runtime === instance) runtime = null;
+      await instance.close();
       throw error;
     }
   },
-  stop() {
+  async goBack() {
+    const active = runtime;
+    const state = nappletStore.getState();
+    if (!active || navigatingBack === active || state.sharing || state.overlayActive || state.prompt || state.panel || state.configuration) return;
+    navigatingBack = active;
+    try {
+      const handled = await active.goBack();
+      const latest = nappletStore.getState();
+      if (runtime === active && !handled && !latest.sharing && !latest.overlayActive && !latest.prompt && !latest.panel && !latest.configuration) this.stop();
+    } finally {
+      if (navigatingBack === active) navigatingBack = null;
+    }
+  },
+  stop(expectedRunId?: number) {
+    if (expectedRunId !== undefined && nappletStore.getState().runId !== expectedRunId) return;
     opening++;
     const old = runtime;
     runtime = null;
     approvals.cancelAll();
     if (old) void old.close().catch(() => {});
-    nappletStore.setState({ running: null, launching: false, configuration: null, panel: null, overlayActive: false, sharing: false });
+    nappletStore.setState({ running: null, launching: false, launch: null, configuration: null, panel: null, overlayActive: false, sharing: false });
     if (old) permissionsChanged();
   },
   async recentAction(appKey: string, action: 'pin' | 'unpin' | 'remove', expectedAccount?: string) {

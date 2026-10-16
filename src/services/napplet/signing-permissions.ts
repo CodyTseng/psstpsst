@@ -1,10 +1,10 @@
 import type { NappletRelease } from './protocol';
 import { getData, setData, type AppScope } from './repository';
 import type { RuntimePrompt } from './runtime';
-import { assertNotAborted } from '@/platform/abort';
+import { assertNotAborted, linkAbort } from '@/platform/abort';
 
 export type SigningScope = {
-  operation: 'publish' | 'encrypt-publish' | 'relay-auth';
+  operation: 'publish' | 'encrypt-publish' | 'relay-auth' | 'upload';
   kind: number;
   relays: string[];
   identifier?: string;
@@ -15,6 +15,7 @@ export type SigningRequest = SigningScope & {
   content: string;
   tags: string[][];
   createdAt: number;
+  upload?: { filename: string; mimeType: string; size: number; sha256: string };
 };
 export type SigningRule = {
   key: string;
@@ -28,7 +29,7 @@ export type SigningActivity = { scope: Pick<SigningScope, 'operation' | 'kind'>;
 export type SigningSnapshot = { rules: SigningRule[]; activity: SigningActivity[] };
 const MAX_RULES = 64;
 export const PROTECTED_EVENT_KINDS = new Set([
-  0, 3, 4, 5, 13, 14, 15, 1059, 10000, 10002, 10044, 10050, 10063, 22242, 24133,
+  0, 3, 4, 5, 13, 14, 15, 1059, 10000, 10002, 10044, 10050, 10063, 22242, 24133, 24242, 27235,
 ]);
 export const SIGNING_PERIODS = { '10m': 10 * 60000, '1h': 60 * 60000, '24h': 24 * 60 * 60000 } as const;
 const activeRule = (rule: SigningRule) => rule.duration !== 'timed' ||
@@ -38,7 +39,7 @@ export function signingScope(request: SigningScope): SigningScope {
   return {
     operation: request.operation,
     kind: request.kind,
-    relays: request.operation === 'relay-auth' ? [...new Set(request.relays)].sort() : [],
+    relays: request.operation === 'relay-auth' || request.operation === 'upload' ? [...new Set(request.relays)].sort() : [],
     ...(request.identifier !== undefined ? { identifier: request.identifier } : {}),
     ...(request.recipient ? { recipient: request.recipient } : {}),
   };
@@ -48,6 +49,7 @@ export function signingRuleKey(request: SigningScope): string {
 }
 export function canRememberSigning(request: SigningScope): boolean {
   if (request.operation === 'relay-auth') return request.kind === 22242;
+  if (request.operation === 'upload') return request.kind === 24242 && request.relays.length > 0;
   return Number.isInteger(request.kind) && request.kind >= 0 && request.kind <= 65535 &&
     !PROTECTED_EVENT_KINDS.has(request.kind) && !(request.kind >= 10000 && request.kind < 20000) && request.kind !== 30000;
 }
@@ -119,10 +121,11 @@ export class SigningPermissions {
     await update;
   }
 
-  async authorize(input: SigningRequest, expiresAt?: number): Promise<void> {
+  async authorize(input: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal): Promise<void> {
     const revision = this.revision;
     const current = () => {
       assertNotAborted(this.signal);
+      assertNotAborted(requestSignal);
       if (revision !== this.revision) throw new Error('permission-denied');
     };
     // Freeze the approval payload before any await; the caller signs this same snapshot.
@@ -142,14 +145,17 @@ export class SigningPermissions {
       if (rule.decision === 'deny') throw new Error('permission-denied');
       return;
     }
-    const answer = await this.confirm({
+    const linked = linkAbort(requestSignal ? [this.signal, requestSignal] : [this.signal]);
+    let answer: string | false;
+    try { answer = await this.confirm({
       title: this.release.title,
       detail: '',
       app: this.release,
       accountPubkey: this.scope.accountPubkey,
       signing: request,
       expiresAt,
-    }, this.signal);
+    }, linked.signal); }
+    finally { linked.dispose(); }
     assertNotAborted(this.signal);
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
     current();

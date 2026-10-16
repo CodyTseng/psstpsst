@@ -1,7 +1,7 @@
 import { assertNotAborted } from '@/platform/abort';
 import { decodeNappletBytes } from '../napplet-bytes';
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import type { NappletPort } from '../ports/napplet';
+import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort } from '../ports/napplet';
 
 type NativeModule = {
   isAvailable(): boolean;
@@ -9,8 +9,9 @@ type NativeModule = {
   cancelResourceAsync(id: string): Promise<void>;
   sendAsync(id: string, message: string): Promise<void>;
   closeAsync(id: string): Promise<void>;
+  goBackAsync(id: string): Promise<boolean>;
 };
-export type NativeSurface = { html: string };
+export type NativeSurface = { html: string; ready: boolean };
 const surfaces = new Map<string, NativeSurface>();
 const updates = new Set<() => void>();
 const messages = new Set<(id: string, raw: string) => void>();
@@ -24,7 +25,17 @@ export const nativeSurface = {
     };
   },
   message: (id: string, raw: string) => {
-    if (surfaces.has(id)) for (const listener of messages) listener(id, raw);
+    const surface = surfaces.get(id);
+    if (!surface) return;
+    if (raw === NAPPLET_FRAME_READY_MESSAGE) {
+      if (!surface.ready) {
+        surfaces.set(id, { ...surface, ready: true });
+        updates.forEach((fn) => fn());
+        for (const listener of messages) listener(id, raw);
+      }
+      return;
+    }
+    for (const listener of messages) listener(id, raw);
   },
 };
 export const nappletAdapter: NappletPort = {
@@ -49,7 +60,7 @@ export const nappletAdapter: NappletPort = {
     if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isAvailable())
       throw new Error('napplets.rebuild_required');
     const id = `surface:${Date.now()}:${++serial}`;
-    surfaces.set(id, { html });
+    surfaces.set(id, { html, ready: false });
     updates.forEach((fn) => fn());
     return id;
   },
@@ -65,7 +76,14 @@ export const nappletAdapter: NappletPort = {
       JSON.stringify([{ serial: ++serial, message }]),
     );
   },
+  async goBack(id) {
+    if (!surfaces.has(id)) return false;
+    const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
+    if (!native?.goBackAsync) throw new Error('napplets.rebuild_required');
+    return native.goBackAsync(id);
+  },
   async setBounds() {},
+  async capture() { return null; },
   addMessageListener(listener) {
     messages.add(listener);
     return () => {

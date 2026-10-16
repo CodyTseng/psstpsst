@@ -610,6 +610,17 @@ delays guessed at call sites.
 
 Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
+Mini-app chrome places Close at the start and More at the end. System Back
+traverses the embedded application's history before closing it at its root.
+Mini-app container and initial document canvases follow the host background in
+both themes, including loading and teardown. Apps may supply their own page fill.
+Opening a mini-app enters its container immediately; loading, cancellation and
+recoverable launch errors belong there rather than replacing the app grid.
+Cached apps retain a quiet themed canvas until their first frame. When local
+app code is missing or invalid, show its icon and loading state during download
+and retain that state until the first frame replaces it.
+Native sheets retain the underlying mini-app page behind their normal dimming
+backdrop and block its input through the full sheet exit transition.
 Header action menus open below their trigger on all platforms, accounting for
 each platform's modal coordinates.
 With no menu open, Electron Escape cancels an active message reply before page
@@ -835,8 +846,7 @@ pin target above and a danger remove target below; actions commit only on releas
 inside a target. Pointer context menus and accessibility actions expose the same
 operations. Pins precede recents, and removing a recent item preserves app data.
 
-Mini-app runtime headers place More and Close at the trailing edge. More opens
-app information with Share, Settings and Reload actions. Host settings expose
+Mini-app More opens app information with Share, Settings and Reload actions. Host settings expose
 app access and remembered signing decisions, including per-rule revocation.
 Settings lead with concise action, event kind, decision and Revoke rows. Account
 identity stays in the header; protocol hashes and history stay out of the default
@@ -854,6 +864,9 @@ a directional chevron expands directly into the event JSON, followed by relay
 destinations. All signing content, including previews, event JSON, identities
 and relay addresses, disables text selection to preserve scrolling and gestures.
 Event JSON provides an explicit Copy action. Authentication keeps the server identity visible for the decision.
+Public-file uploads show the filename, type, size and storage services before
+confirmation, with a plain-language public-access notice. Saved upload grants
+remain distinguishable by storage destination and revocable alongside signing grants.
 A fixed footer contains a single-level duration menu showing the current choice
 above two horizontal Allow/Reject actions. The menu floats above its trigger
 without changing sheet layout. Duration applies to either decision and defaults

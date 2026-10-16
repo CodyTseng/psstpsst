@@ -16,6 +16,12 @@ const { buildDocument } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
 );
 const fixture = `<script>
+addEventListener('message',event=>{
+ if(event.source!==parent||event.data?.type!=='test.push')return;
+ history.pushState({page:1},'');history.pushState({page:2},'');
+ parent.postMessage({type:'test.navigation',page:2},'*');
+});
+addEventListener('popstate',()=>parent.postMessage({type:'test.navigation',page:history.state?.page??0},'*'));
 (async()=>{
  const result={};
  try{parent.document;result.parentReadable=true;}catch{result.parentReadable=false;}

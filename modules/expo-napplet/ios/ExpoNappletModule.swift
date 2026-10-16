@@ -142,6 +142,9 @@ public class ExpoNappletModule: Module {
       self.lock.lock(); let request = self.requests.removeValue(forKey: id); self.lock.unlock(); request?.cancel()
     }
     AsyncFunction("sendAsync") { (id: String, message: String) in self.views.object(forKey: id as NSString)?.reply(message) }.runOnQueue(.main)
+    AsyncFunction("goBackAsync") { (id: String) -> Bool in
+      self.views.object(forKey: id as NSString)?.navigateBack() ?? false
+    }.runOnQueue(.main)
     AsyncFunction("closeAsync") { (id: String) in
       self.views.object(forKey: id as NSString)?.dispose(); self.views.removeObject(forKey: id as NSString)
     }.runOnQueue(.main)
@@ -176,6 +179,9 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     proxy.owner = self
     configuration.userContentController.add(proxy, name: "nappletHost")
     web = WKWebView(frame: .zero, configuration: configuration)
+    web.isOpaque = false
+    web.backgroundColor = .clear
+    web.scrollView.backgroundColor = .clear
     web.navigationDelegate = self; web.uiDelegate = self
     addSubview(web)
   }
@@ -194,14 +200,22 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     }
   }
 
+  func navigateBack() -> Bool {
+    guard let web, let previous = web.backForwardList.backItem else { return false }
+    web.go(to: previous)
+    return true
+  }
   func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
     let url = action.request.url?.absoluteString ?? ""
-    decisionHandler(action.navigationType == .other && (url == wrapperOrigin || url == "about:blank" || url == "about:srcdoc") ? .allow : .cancel)
+    let localURL = url.components(separatedBy: "#")[0]
+    let localNavigation = action.navigationType == .other || action.navigationType == .backForward
+    decisionHandler(localNavigation && (localURL == wrapperOrigin || localURL == "about:blank" || localURL == "about:srcdoc") ? .allow : .cancel)
   }
   func dispose() {
     guard let view = web else { return }
+    view.isHidden = true
     view.stopLoading(); view.configuration.userContentController.removeScriptMessageHandler(forName: "nappletHost")
-    view.loadHTMLString("", baseURL: nil); view.removeFromSuperview(); web = nil
+    view.removeFromSuperview(); web = nil
   }
   deinit { web?.configuration.userContentController.removeScriptMessageHandler(forName: "nappletHost") }
 }

@@ -1,5 +1,6 @@
 import { assertNotAborted, linkAbort } from '@/platform/abort';
 import { platform } from '@/platform';
+import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
 import {
   matchFilters,
   verifyEvent,
@@ -132,9 +133,9 @@ export class NappletNetwork {
               events: [...events.values()],
               incomplete:
                 !results ||
-                results.some((r) => r.status !== 'eose' || r.reason === 'query timed out'),
+                results.some((r) => r.status !== 'eose' || r.reason !== undefined),
               error:
-                !events.size && (!results || results.every((r) => r.status !== 'eose'))
+                !events.size && (!results || results.every((r) => r.status !== 'eose' || r.reason !== undefined))
                   ? 'network-error'
                   : undefined,
             });
@@ -174,7 +175,7 @@ export class NappletNetwork {
     const cached = this.metadata.get(key);
     if (cached && cached.expires > Date.now()) return cached.event;
     const result = await this.query(
-      MARKET_RELAYS,
+      kind === 10002 ? [...new Set([...MARKET_RELAYS, ...DISCOVERY_RELAYS])] : MARKET_RELAYS,
       [{ authors: [pubkey], kinds: [kind], limit: 1 }],
       signal,
     );
@@ -199,6 +200,16 @@ export class NappletNetwork {
       this.metadataBytes += bytes;
     }
     return event;
+  }
+  async publisherRelays(pubkey: string): Promise<string[]> {
+    if (!/^[a-f0-9]{64}$/.test(pubkey)) throw new Error('invalid-author');
+    const event = await this.replaceable(pubkey, 10002);
+    return [...new Set(event?.tags
+      .filter((tag) => tag[0] === 'r' && (!tag[2] || tag[2] === 'write'))
+      .flatMap((tag) => {
+        try { return [publicUrl(tag[1], true)]; }
+        catch { return []; }
+      }) ?? [])].slice(0, 4);
   }
   async routes(
     pubkeys: string[],

@@ -1,11 +1,15 @@
 import { platform } from '@/platform';
-import { fetchBlob } from '../artifacts';
+import { fetchBlob, loadArtifact } from '../artifacts';
 import type { NappletRelease } from '../protocol';
 
 jest.mock('@/platform', () => ({
   platform: {
     napplet: { fetchResource: jest.fn() },
     deviceCrypto: { sha256Hex: jest.fn() },
+    fileSystem: {
+      documentDirectoryUri: jest.fn(async () => 'file:///documents/'),
+      makeDirectory: jest.fn(async () => {}), stat: jest.fn(), readBytes: jest.fn(), writeBytes: jest.fn(async () => {}),
+    },
   },
 }));
 
@@ -18,6 +22,32 @@ const sha256Hex = jest.mocked(platform.deviceCrypto.sha256Hex);
 
 beforeEach(() => {
   jest.resetAllMocks();
+  jest.mocked(platform.fileSystem.documentDirectoryUri).mockResolvedValue('file:///documents/');
+});
+
+test.each(['missing', 'corrupt'] as const)('shows download status only after a %s local artifact needs the network', async (cache) => {
+  const bytes = new TextEncoder().encode('<main>App</main>');
+  jest.mocked(platform.fileSystem.stat).mockResolvedValue({ exists: cache === 'corrupt' } as never);
+  jest.mocked(platform.fileSystem.readBytes).mockResolvedValue(new Uint8Array([0]));
+  if (cache === 'corrupt') sha256Hex.mockResolvedValueOnce('b'.repeat(64));
+  sha256Hex.mockResolvedValue(hash);
+  const downloading = jest.fn();
+  fetchResource.mockImplementation(async () => {
+    expect(downloading).toHaveBeenCalledTimes(1);
+    return bytes;
+  });
+  await expect(loadArtifact({ ...release, hash }, undefined, downloading)).resolves.toBe('<main>App</main>');
+  expect(downloading).toHaveBeenCalledTimes(1);
+});
+
+test('keeps cached launches quiet after verifying their local bytes', async () => {
+  jest.mocked(platform.fileSystem.stat).mockResolvedValue({ exists: true } as never);
+  jest.mocked(platform.fileSystem.readBytes).mockResolvedValue(new TextEncoder().encode('<main>Cached</main>'));
+  sha256Hex.mockResolvedValue(hash);
+  const downloading = jest.fn();
+  await expect(loadArtifact({ ...release, hash }, undefined, downloading)).resolves.toBe('<main>Cached</main>');
+  expect(downloading).not.toHaveBeenCalled();
+  expect(fetchResource).not.toHaveBeenCalled();
 });
 
 test('reports a missing native runtime instead of hiding it as a network failure', async () => {
