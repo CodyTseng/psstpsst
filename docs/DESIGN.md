@@ -340,6 +340,11 @@ Every icon-only action uses `IconButton` and has an accessibility label.
 
 Human avatars are circular. Mini-app icons are rounded squares at every size,
 including compact identity rows and loading or fallback artwork.
+Mini-app publisher attribution uses a separate labelled information row between
+the app heading and description. Supporting metadata rows are compact and
+borderless, with text aligned to the surrounding content gutter. Hover and press
+feedback reduce only the identity avatar and name's opacity, without adding a
+background. Publisher rows open the profile from the whole row.
 
 ## 8. Component vocabulary
 

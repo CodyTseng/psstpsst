@@ -291,11 +291,16 @@ test(
       for (const theme of ['light', 'dark']) {
         await page.goto(`${address}/?scenario=detail&surface=touch&theme=${theme}`);
         await page.getByRole('button', { name: 'Open', exact: true }).waitFor();
-        const publisher = page.getByRole('button', { name: 'Publisher: Arjen', exact: true });
+        const publisher = page.getByText('Arjen', { exact: true });
         const publisherBox = await publisher.boundingBox();
         const appName = await page.getByText('Composer', { exact: true }).last().boundingBox();
-        assert(Math.abs(publisherBox.x - appName.x) < 1, 'publisher avatar aligns with the application name');
-        await publisher.click();
+        const publisherLabel = await page.getByText('Publisher', { exact: true }).boundingBox();
+        assert(publisherLabel.y >= appName.y + appName.height, 'publisher has a separate labelled row below the application heading');
+        const description = await page.getByText('Compose and publish posts with your Nostr account.', { exact: true }).boundingBox();
+        assert(description.y > publisherBox.y + publisherBox.height, 'publisher appears before the application description');
+        assert(Math.abs((publisherBox.y + publisherBox.height / 2) - (publisherLabel.y + publisherLabel.height / 2)) < 1,
+          'publisher identity aligns with its label');
+        await page.getByText('Publisher', { exact: true }).click();
         assert.equal(await page.evaluate(() => window.lastRoute), `/profile/${'b'.repeat(64)}`);
         const text = await page.locator('body').innerText();
         assert(!text.includes('Verified version') && !text.includes('c'.repeat(64)), 'app information omits protocol hashes');
@@ -310,6 +315,8 @@ test(
         const openBox = await open.boundingBox();
         assert(openBox.y > 700 && openBox.y + openBox.height <= 840, 'Open stays above the bottom safe area');
         if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-app-detail.png` });
+        await page.getByText('Publisher', { exact: true }).hover();
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-publisher-hover.png` });
         await page.getByText('Required access', { exact: true }).evaluate((node) => {
           for (let parent = node.parentElement; parent; parent = parent.parentElement) {
             if (['auto', 'scroll'].includes(getComputedStyle(parent).overflowY) && parent.scrollHeight > parent.clientHeight) {

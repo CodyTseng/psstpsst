@@ -35,7 +35,7 @@ const VALUE_MAX_WIDTH = '68%';
  * hairline aligns with the title and clears the icon. */
 export const ROW_CONTENT_INSET = ROW_PADDING_H + ICON_SLOT + ICON_GAP; // 60 mobile / 56 Electron
 
-type Variant = 'card' | 'plain' | 'embedded' | 'list';
+type Variant = 'card' | 'plain' | 'embedded' | 'list' | 'inline';
 type TitleTone = 'default' | 'muted' | 'danger' | 'accent';
 type ValueTone = 'default' | 'muted' | 'success' | 'warning' | 'danger';
 type ValuePlacement = 'trailing' | 'below';
@@ -59,6 +59,8 @@ type Props = {
   /** Optional factual detail. It is right-aligned by default; long identity
    * values may use `valuePlacement="below"` to span the text column. */
   value?: string;
+  /** Identity visual kept beside a trailing value while its text truncates. */
+  valueLeading?: React.ReactNode;
   /** Custom renderer for a below-placed value whose inline semantics cannot be
    * represented by one text node, such as a verified NIP-05 identifier. */
   belowValue?: React.ReactNode;
@@ -90,7 +92,8 @@ type Props = {
   /** Standalone only — ignored inside a `ListGroup`. `card` = lone bordered row;
    * `plain` = borderless sheet-option row; `embedded` = opaque content whose
    * parent owns the fixed card border/radius (for swipeable wrappers);
-   * `list` = transparent, full-width row with rectangular feedback. */
+   * `list` = transparent, full-width row with rectangular feedback;
+   * `inline` = compact metadata aligned with surrounding text. */
   variant?: Variant;
 };
 
@@ -100,8 +103,8 @@ type Props = {
  * style — no tinted icon circle, regular-weight title, fixed-height default
  * layout; factual metadata can opt into a multiline right value. Explanatory
  * copy belongs on the screen the row opens. Group ≥2 related rows with
- * {@link ListGroup}. Rows with an Avatar / swipe / unread dot (conversation &
- * contact lists) are a different component.
+ * {@link ListGroup}. Contact and conversation rows with a leading avatar,
+ * swipe actions, or unread indicators use their own identity components.
  */
 export function ListRow({
   icon,
@@ -113,6 +116,7 @@ export function ListRow({
   subtitleMultiline = false,
   titleTone = 'default',
   value,
+  valueLeading,
   belowValue,
   valueTone = 'muted',
   valuePlacement = 'trailing',
@@ -158,9 +162,11 @@ export function ListRow({
   const isCard = !grouped && variant === 'card';
   const isPlain = !grouped && variant === 'plain';
   const isEmbedded = !grouped && variant === 'embedded';
-  const rowRadius = isCard || isPlain ? radius.lg : 0;
+  const isInline = !grouped && variant === 'inline';
+  const rowHeight = isInline ? uiDensity.listRowCompactHeight : ROW_HEIGHT;
+  const rowRadius = isCard || isPlain || isInline ? radius.lg : 0;
   const titleText = <AppText
-    variant={hasBelowValue ? 'caption' : 'subtitle'} weight="regular" numberOfLines={1}
+    variant={hasBelowValue || isInline ? 'caption' : 'subtitle'} weight="regular" numberOfLines={1}
     style={{ color: hasBelowValue ? c.textMuted : titleColor, ...(titleTrailing ? { flexShrink: 1, minWidth: 0 } : {}) }}>
     {title}
   </AppText>;
@@ -186,17 +192,18 @@ export function ListRow({
         minHeight: multilineContent
           ? hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
-            : ROW_HEIGHT
+            : rowHeight
           : undefined,
         height: multilineContent
           ? undefined
           : hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
-            : ROW_HEIGHT,
+            : rowHeight,
         paddingVertical: multilineContent ? spacing.sm : 0,
-        paddingHorizontal: isPlain ? PLAIN_PADDING_H : ROW_PADDING_H,
-        marginHorizontal: isPlain ? -PLAIN_BLEED : 0,
+        paddingHorizontal: isInline ? spacing.sm : isPlain ? PLAIN_PADDING_H : ROW_PADDING_H,
+        marginHorizontal: isInline ? -spacing.sm : isPlain ? -PLAIN_BLEED : 0,
         borderRadius: rowRadius,
+        overflow: 'hidden',
         borderWidth: isCard ? 1 : 0,
         borderColor: c.border,
         backgroundColor: isCard || isEmbedded ? c.surfaceElevated : 'transparent',
@@ -220,8 +227,8 @@ export function ListRow({
             : trailing;
         return (
           <>
-            {hovered || state.pressed || active ? (
-              <InteractionOverlay borderRadius={rowRadius} />
+            {!isInline && (hovered || state.pressed || active) ? (
+              <InteractionOverlay />
             ) : null}
             {icon ? (
               <View
@@ -278,32 +285,36 @@ export function ListRow({
             </View>
 
             {value && valuePlacement === 'trailing' ? (
-              valueEllipsizeMode === 'middle' && !multilineValue ? (
-                <MiddleEllipsizedText
-                  value={value}
-                  color={valueColor}
-                  weight="semibold"
-                  style={{
-                    maxWidth: VALUE_MAX_WIDTH,
-                    flexShrink: preserveColumn === 'value' ? 0 : 1,
-                  }}
-                />
-              ) : (
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  align="end"
-                  numberOfLines={multilineValue ? undefined : 1}
-                  ellipsizeMode={valueEllipsizeMode}
-                  style={{
-                    maxWidth: VALUE_MAX_WIDTH,
-                    flexShrink: preserveColumn === 'value' ? 0 : 1,
-                    color: valueColor,
-                  }}
-                >
-                  {value}
-                </AppText>
-              )
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+                maxWidth: VALUE_MAX_WIDTH, minWidth: 0,
+                opacity: isInline && !disabled && !loading && (hovered || state.pressed) ? 0.7 : 1,
+                flexShrink: preserveColumn === 'value' ? 0 : 1 }}>
+                {valueLeading ? <View style={{ flexShrink: 0 }}>{valueLeading}</View> : null}
+                {valueEllipsizeMode === 'middle' && !multilineValue ? (
+                  <MiddleEllipsizedText
+                    value={value}
+                    color={valueColor}
+                    weight="semibold"
+                    style={{
+                      flexShrink: preserveColumn === 'value' ? 0 : 1,
+                    }}
+                  />
+                ) : (
+                  <AppText
+                    variant="body"
+                    weight="semibold"
+                    align="end"
+                    numberOfLines={multilineValue ? undefined : 1}
+                    ellipsizeMode={valueEllipsizeMode}
+                    style={{
+                      flexShrink: preserveColumn === 'value' ? 0 : 1,
+                      color: valueColor,
+                    }}
+                  >
+                    {value}
+                  </AppText>
+                )}
+              </View>
             ) : null}
 
             {visibleTrailing ? (
