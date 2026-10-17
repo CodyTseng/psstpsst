@@ -36,16 +36,21 @@ type Props = Omit<PressableProps, 'children' | 'style'> & {
   labelVariant?: 'body' | 'caption' | 'subtitle' | 'title' | 'display' | 'amount' | 'code';
   labelWeight?: FontWeight;
   labelNumberOfLines?: TextProps['numberOfLines'];
+  /** Keep label geometry while a contextual overlay temporarily hides its caption. */
+  labelHidden?: boolean;
   labelEllipsizeMode?: TextProps['ellipsizeMode'];
   /** Selected tab surface: accent-soft fill with an inset accent outline. */
   selected?: boolean;
   orientation?: 'horizontal' | 'vertical';
+  /** Artwork-led actions dim only their icons, keeping labels and canvas unchanged. */
+  interactionFeedback?: 'surface' | 'iconOpacity';
   contentAlign?: 'center' | 'baseline';
   contentJustify?: 'center' | 'start';
   fullWidth?: boolean;
   /** Corner radius: `lg` (default, the standard button) or `full` (a pill that
-   * hugs its content — pair with `fullWidth={false}`). */
-  corner?: 'lg' | 'full';
+   * hugs its content — pair with `fullWidth={false}`). Unframed artwork tiles
+   * use `none` so the icon's own rounded clipping cannot cut into its caption. */
+  corner?: 'lg' | 'full' | 'none';
   /** Icon-button parity: instead of the text-button height + wide horizontal
    * padding, hug the content with an **equal inset on all four sides** (like
    * `IconButton`). For chevron/icon (+ badge) pills — pair with
@@ -73,9 +78,11 @@ export function AppButton({
   labelVariant = 'body',
   labelWeight,
   labelNumberOfLines,
+  labelHidden = false,
   labelEllipsizeMode,
   selected = false,
   orientation = 'horizontal',
+  interactionFeedback = 'surface',
   contentAlign = 'center',
   contentJustify = 'center',
   fullWidth: fullWidthProp,
@@ -89,6 +96,7 @@ export function AppButton({
   ...rest
 }: Props) {
   const c = useThemeColors();
+  const iconOpacityFeedback = interactionFeedback === 'iconOpacity';
   const textChrome = variant === 'text' || variant === 'accentText';
   const size = sizeProp ?? 'md';
   const fullWidth = fullWidthProp ?? !textChrome;
@@ -150,7 +158,7 @@ export function AppButton({
   const quietChrome = variant === 'ghost' || variant === 'text' || variant === 'accentText';
   const textColor = largeNumericLabel ? c.text : v.text;
   const isDisabled = disabled || loading;
-  const buttonRadius = corner === 'full' ? radius.full : radius.lg;
+  const buttonRadius = corner === 'none' ? 0 : corner === 'full' ? radius.full : radius.lg;
   // Text chrome stays visually equal to its text line. Expand only the hit
   // target, so accessibility does not force a larger layout box.
   const resolvedHitSlop = hitSlop ?? (textChrome ? compactInset : undefined);
@@ -195,7 +203,7 @@ export function AppButton({
         justifyContent: contentJustify === 'start' ? 'flex-start' : 'center',
         flexDirection: orientation === 'vertical' ? 'column' : 'row',
         maxWidth: '100%',
-        opacity: isDisabled ? 0.5 : pressed ? (v.pressedOpacity ?? 1) : 1,
+        opacity: isDisabled ? 0.5 : pressed && !iconOpacityFeedback ? (v.pressedOpacity ?? 1) : 1,
         alignSelf: fullWidth ? 'stretch' : 'flex-start',
       })}
     >
@@ -218,11 +226,11 @@ export function AppButton({
                   pointerEvents: 'none',
                 }}
               />
-              {!isDisabled && pressed && !textChrome && variant !== 'overlay' ? (
+              {!isDisabled && pressed && !iconOpacityFeedback && !textChrome && variant !== 'overlay' ? (
                 <InteractionOverlay />
               ) : null}
             </>
-          ) : !isDisabled && pressed && !textChrome && variant !== 'overlay' ? (
+          ) : !isDisabled && pressed && !iconOpacityFeedback && !textChrome && variant !== 'overlay' ? (
             <InteractionOverlay />
           ) : null}
           <View
@@ -243,7 +251,7 @@ export function AppButton({
               opacity: loading ? 0 : 1,
             }}
           >
-            {iconLeft ? <View style={{ flexShrink: 0 }}>{iconLeft}</View> : null}
+            {iconLeft ? <View style={{ flexShrink: 0, opacity: !isDisabled && pressed && iconOpacityFeedback ? 0.7 : 1 }}>{iconLeft}</View> : null}
             {label != null ? (
               <AppText
                 variant={labelVariant}
@@ -274,12 +282,13 @@ export function AppButton({
                   // Android otherwise adds platform font padding outside the
                   // declared line height, making an intrinsic text action taller.
                   includeFontPadding: textChrome ? false : undefined,
+                  opacity: labelHidden ? 0 : 1,
                 }}
               >
                 {label}
               </AppText>
             ) : null}
-            {iconRight ? <View style={{ flexShrink: 0 }}>{iconRight}</View> : null}
+            {iconRight ? <View style={{ flexShrink: 0, opacity: !isDisabled && pressed && iconOpacityFeedback ? 0.7 : 1 }}>{iconRight}</View> : null}
           </View>
           {loading ? (
             <View

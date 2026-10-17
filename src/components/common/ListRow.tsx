@@ -95,6 +95,8 @@ type Props = {
    * `list` = transparent, full-width row with rectangular feedback;
    * `inline` = compact metadata aligned with surrounding text. */
   variant?: Variant;
+  /** Content-height inline metadata; expanded hit slop preserves its touch target. */
+  compact?: boolean;
 };
 
 /**
@@ -131,6 +133,7 @@ export function ListRow({
   active = false,
   selectionMode,
   variant = 'card',
+  compact = false,
 }: Props) {
   const c = useThemeColors();
   const grouped = useContext(ListGroupContext);
@@ -163,7 +166,8 @@ export function ListRow({
   const isPlain = !grouped && variant === 'plain';
   const isEmbedded = !grouped && variant === 'embedded';
   const isInline = !grouped && variant === 'inline';
-  const rowHeight = isInline ? uiDensity.listRowCompactHeight : ROW_HEIGHT;
+  const compactInline = isInline && compact;
+  const rowHeight = compactInline ? spacing.xl : isInline ? uiDensity.listRowCompactHeight : ROW_HEIGHT;
   const rowRadius = isCard || isPlain || isInline ? radius.lg : 0;
   const titleText = <AppText
     variant={hasBelowValue || isInline ? 'caption' : 'subtitle'} weight="regular" numberOfLines={1}
@@ -174,6 +178,7 @@ export function ListRow({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={compactInline ? { top: spacing.md, bottom: spacing.md } : undefined}
       accessible={onPress != null}
       accessibilityRole={selectionMode === 'single' ? 'radio' : undefined}
       hoverFeedback={onPress && trailingOnHover == null ? undefined : false}
@@ -189,7 +194,7 @@ export function ListRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: ICON_GAP,
-        minHeight: multilineContent
+        minHeight: compactInline ? rowHeight : multilineContent
           ? hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
             : rowHeight
@@ -198,7 +203,7 @@ export function ListRow({
           ? undefined
           : hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
-            : rowHeight,
+            : compactInline ? undefined : rowHeight,
         paddingVertical: multilineContent ? spacing.sm : 0,
         paddingHorizontal: isInline ? spacing.sm : isPlain ? PLAIN_PADDING_H : ROW_PADDING_H,
         marginHorizontal: isInline ? -spacing.sm : isPlain ? -PLAIN_BLEED : 0,

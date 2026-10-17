@@ -16,6 +16,7 @@ import { getEventHash, serializeEvent } from 'nostr-tools';
 import { darkPalette, lightPalette } from '@/theme';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('@/components/common/DirectionalChevron', () => ({ DirectionalChevron: () => null }));
 jest.mock('lucide-react-native/icons/chevron-down', () => () => null);
 jest.mock('lucide-react-native/icons/chevron-up', () => () => null);
 jest.mock('lucide-react-native/icons/check', () => () => null);
@@ -104,15 +105,12 @@ it('uses exactly two side-by-side decisions and applies the selected time to ref
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'deny-1h');
 });
 
-it('keeps optional capabilities off until the user explicitly selects them', () => {
+it('omits optional capabilities from launch consent and grants only required access', () => {
   const capability = { ...prompt, signing: undefined, capabilities: { required: ['shell'], optional: ['identity'] } };
-  act(() => { renderer = create(<CapabilityApproval prompt={capability} />); });
-  expect(button('napplets.capability_identity').props.accessibilityState).toEqual({ checked: false });
+  act(() => { renderer = create(<CapabilityApproval prompt={capability} onPublisher={jest.fn()} />); });
+  expect(renderer.root.findAllByType(AppButton).some((node) => node.props.label === 'napplets.capability_identity')).toBe(false);
   act(() => { void button('napplets.allow').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'domains:[]');
-  act(() => { void button('napplets.capability_identity').props.onPress(); });
-  act(() => { void button('napplets.allow').props.onPress(); });
-  expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'domains:["identity"]');
 });
 
 it('keeps the fixed footer bound to its request and resets duration before a new request is displayed', () => {

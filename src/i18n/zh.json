@@ -253,6 +253,7 @@
     "account_changed_history": "近距离通信账号已变更，此会话仅可浏览。"
   },
   "common": {
+    "reset": "重置",
     "copy": "复制",
     "copy_failed": "复制失败，请重试。",
     "paste_failed": "粘贴失败，请重试。",
@@ -1064,6 +1065,7 @@
     "runtime_notices": "Chromium 及其内置组件"
   },
   "napplets": {
+    "allow_and_open": "允许并打开",
     "permissions_ask": "每次询问",
     "permissions_duration": "有效期",
     "permissions_manage": "权限管理",
@@ -1087,13 +1089,8 @@
     "signing_reject_countdown": "拒绝({{seconds}})",
     "title": "小应用",
     "recent": "最近使用",
-    "discovery": "Discovery",
-    "discover": "发现应用",
     "empty_title": "常用应用，从这里打开",
-    "empty_description": "从 Discovery 打开应用后会显示在这里。长按并拖动图标可固定或移除。",
-    "pin": "固定",
-    "unpin": "取消固定",
-    "remove": "移除",
+    "empty_description": "通过链接打开小程序，再从最近使用的菜单添加到桌面。",
     "install_link": "添加应用",
     "address": "应用地址",
     "address_hint": "粘贴 Nostr 应用地址或分享链接。",
@@ -1107,10 +1104,6 @@
     "check_update": "检查更新",
     "up_to_date": "已是最新版本。",
     "immutable_version": "这是固定版本。请打开新的应用地址以更新。",
-    "search": "搜索已加载的应用",
-    "refresh": "刷新",
-    "load_more": "加载更多",
-    "no_results": "未找到应用，可刷新或通过地址添加。",
     "publisher": "发布者",
     "permissions": "请求的权限",
     "version": "已验证版本",
@@ -1126,7 +1119,6 @@
     "download_failed": "无法下载经过验证的应用。",
     "not_found": "未找到应用，请检查地址和网络连接。",
     "unsupported": "此应用需要暂不支持的能力。",
-    "partial_discovery": "部分中继未完成查询，结果可能不完整。",
     "rebuild_required": "当前版本未包含应用运行时，请重新构建原生应用。",
     "capability_shell": "宿主环境",
     "capability_theme": "外观",
@@ -1190,7 +1182,7 @@
     "signing_denied": "已拒绝",
     "capabilities_required": "必需能力",
     "capabilities_optional": "可选能力",
-    "capabilities_signing_notice": "签名请求将单独审核，可选能力默认关闭。",
+    "capabilities_signing_notice": "签名请求将单独审核。",
     "signing_expires": "请求将于 {{time}} 过期",
     "signing_no_rules_title": "逐次确认",
     "signing_duration_once": "仅此次",
@@ -1202,6 +1194,13 @@
     "signing_effect_auth": "向这个服务器证明你拥有此账号，让应用访问需要登录的服务。",
     "signing_effect_encrypted": "内容将为下方接收方加密，然后发送到列出的服务器。",
     "signing_effect_publish": "内容将以你的账号发布，能访问这些服务器的人可能看到它。",
-    "signing_until": "有效至 {{time}}"
+    "signing_until": "有效至 {{time}}",
+    "desktop": "我的小程序",
+    "add_to_desktop": "添加到桌面",
+    "remove_from_desktop": "从桌面移除",
+    "move_earlier": "向前移动",
+    "move_later": "向后移动",
+    "desktop_hint": "在最近使用的小程序菜单中选择添加到桌面。",
+    "more": "更多"
   }
 }

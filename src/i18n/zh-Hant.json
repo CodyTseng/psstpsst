@@ -253,6 +253,7 @@
     "account_changed_history": "近距離通訊帳號已變更，此對話僅供瀏覽。"
   },
   "common": {
+    "reset": "重置",
     "copy": "複製",
     "copy_failed": "複製失敗，請重試。",
     "paste_failed": "貼上失敗，請重試。",
@@ -1064,6 +1065,7 @@
     "runtime_notices": "Chromium 及其內建元件"
   },
   "napplets": {
+    "allow_and_open": "允許並開啟",
     "permissions_ask": "每次詢問",
     "permissions_duration": "有效期",
     "permissions_manage": "權限管理",
@@ -1087,13 +1089,8 @@
     "signing_reject_countdown": "拒絕({{seconds}})",
     "title": "小應用",
     "recent": "最近使用",
-    "discovery": "Discovery",
-    "discover": "發現應用",
     "empty_title": "常用應用，從這裡開啟",
-    "empty_description": "從 Discovery 開啟應用後會顯示在這裡。長按並拖動圖示可固定或移除。",
-    "pin": "固定",
-    "unpin": "取消固定",
-    "remove": "移除",
+    "empty_description": "透過連結開啟小程式，再從最近使用的選單加入桌面。",
     "install_link": "新增應用",
     "address": "應用地址",
     "address_hint": "貼上 Nostr 應用地址或分享連結。",
@@ -1107,10 +1104,6 @@
     "check_update": "檢查更新",
     "up_to_date": "已是最新版本。",
     "immutable_version": "這是固定版本。請開啟新的應用地址以更新。",
-    "search": "搜尋已載入的應用",
-    "refresh": "重新整理",
-    "load_more": "載入更多",
-    "no_results": "未找到應用，可重新整理或透過地址新增。",
     "publisher": "釋出者",
     "permissions": "請求的許可權",
     "version": "已驗證版本",
@@ -1126,7 +1119,6 @@
     "download_failed": "無法下載經過驗證的應用。",
     "not_found": "未找到應用，請檢查地址和網路連線。",
     "unsupported": "此應用需要暫不支援的能力。",
-    "partial_discovery": "部分中繼未完成查詢，結果可能不完整。",
     "rebuild_required": "當前版本未包含應用執行時，請重新構建原生應用。",
     "capability_shell": "宿主環境",
     "capability_theme": "外觀",
@@ -1190,7 +1182,7 @@
     "signing_denied": "已拒絕",
     "capabilities_required": "必要能力",
     "capabilities_optional": "選用能力",
-    "capabilities_signing_notice": "簽名請求將單獨審核，選用能力預設關閉。",
+    "capabilities_signing_notice": "簽名請求將單獨審核。",
     "signing_expires": "請求將於 {{time}} 到期",
     "signing_no_rules_title": "逐次確認",
     "signing_duration_once": "僅此次",
@@ -1202,6 +1194,13 @@
     "signing_effect_auth": "向這個伺服器證明你擁有此帳號，讓應用程式存取需要登入的服務。",
     "signing_effect_encrypted": "內容將為下方接收方加密，然後傳送到列出的伺服器。",
     "signing_effect_publish": "內容將以你的帳號發布，能存取這些伺服器的人可能看到它。",
-    "signing_until": "有效至 {{time}}"
+    "signing_until": "有效至 {{time}}",
+    "desktop": "我的小程式",
+    "add_to_desktop": "加入桌面",
+    "remove_from_desktop": "從桌面移除",
+    "move_earlier": "向前移動",
+    "move_later": "向後移動",
+    "desktop_hint": "在最近使用的小程式選單中選擇加入桌面。",
+    "more": "更多"
   }
 }

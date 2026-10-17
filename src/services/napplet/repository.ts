@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { nappletData, nappletInstallations, nappletUsage } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
@@ -28,8 +28,8 @@ export async function installations(
         recent ? isNotNull(nappletInstallations.lastUsedAt) : undefined,
       ),
     )
-    .orderBy(desc(nappletInstallations.pinnedAt), desc(nappletInstallations.lastUsedAt))
-    .limit(512);
+    .orderBy(recent ? desc(nappletInstallations.lastUsedAt) : asc(nappletInstallations.desktopPosition), asc(nappletInstallations.appKey))
+    .limit(recent ? 24 : 512);
   const result: NappletInstallation[] = [];
   let verified = 0;
   for (const row of rows) {
@@ -54,7 +54,7 @@ export async function installations(
       result.push({
         ...release,
         lastUsedAt: row.lastUsedAt,
-        pinnedAt: row.pinnedAt,
+        desktopPosition: row.desktopPosition,
         previousManifest: row.previousManifest,
       });
     } catch {
@@ -117,27 +117,27 @@ export async function markRecent(accountPubkey: string, appKey: string): Promise
       ),
     );
 }
-export async function changeRecent(
-  accountPubkey: string,
-  appKey: string,
-  action: 'pin' | 'unpin' | 'remove',
-): Promise<void> {
+/** Forget recent usage without changing desktop membership or application state. */
+export async function clearRecent(accountPubkey: string, appKey: string): Promise<void> {
+  await db.update(nappletInstallations).set({ lastUsedAt: null })
+    .where(and(eq(nappletInstallations.accountPubkey, accountPubkey), eq(nappletInstallations.appKey, appKey)));
+}
+/** Persist only changed slots; desktop membership never changes usage or app data. */
+export async function saveDesktopOrder(accountPubkey: string, keys: readonly string[]): Promise<void> {
+  if (keys.length > 512 || new Set(keys).size !== keys.length) throw new Error('invalid-desktop-order');
   await db.transaction(async (tx) => {
     if (!(await canReceiveForAccount(accountPubkey, tx))) throw new Error('account-unavailable');
-    await tx.update(nappletInstallations)
-      .set(action === 'remove' ? { lastUsedAt: null, pinnedAt: null } : { pinnedAt: action === 'pin' ? Date.now() : null })
-      .where(and(eq(nappletInstallations.accountPubkey, accountPubkey), eq(nappletInstallations.appKey, appKey)));
-    if (action !== 'remove') return;
-    const defaults = { accountPubkey, appKey: 'host:intent-defaults', artifactHash: 'host' };
-    const removed = await tx.delete(nappletData)
-      .where(and(scopeWhere(defaults, 'defaults'), eq(nappletData.value, appKey)))
-      .returning({ bytes: nappletData.bytes });
-    if (!removed.length) return;
-    const bytes = removed.reduce((total, row) => total + row.bytes, 0);
-    await tx.update(nappletUsage)
-      .set({ bytes: sql`${nappletUsage.bytes} - ${bytes}`, count: sql`${nappletUsage.count} - ${removed.length}` })
-      .where(and(eq(nappletUsage.accountPubkey, accountPubkey), eq(nappletUsage.appKey, defaults.appKey),
-        eq(nappletUsage.artifactHash, defaults.artifactHash), eq(nappletUsage.bucket, 'defaults')));
+    const rows = await tx.select({ key: nappletInstallations.appKey, position: nappletInstallations.desktopPosition })
+      .from(nappletInstallations).where(eq(nappletInstallations.accountPubkey, accountPubkey)).limit(512);
+    const positions = new Map(keys.map((key, index) => [key, index]));
+    const known = new Set(rows.map((row) => row.key));
+    if (keys.some((key) => !known.has(key))) throw new Error('app-not-installed');
+    for (const row of rows) {
+      const position = positions.get(row.key) ?? null;
+      if (position === row.position) continue;
+      await tx.update(nappletInstallations).set({ desktopPosition: position })
+        .where(and(eq(nappletInstallations.accountPubkey, accountPubkey), eq(nappletInstallations.appKey, row.key)));
+    }
   });
 }
 export async function getData(

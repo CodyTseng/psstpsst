@@ -86,6 +86,21 @@ test(
         assert.equal(await page.evaluate(() => window.getSelection()?.toString() ?? ''), '', 'dragging signing content must not select text');
       };
       const address = `http://127.0.0.1:${server.address().port}`;
+      const checkAppInfoSpacing = async () => {
+        const metrics = await page.getByTestId('napplet-info').evaluate((node) => {
+          const blocks = [...node.children].map((child) => child.getBoundingClientRect());
+          const access = node.lastElementChild;
+          const title = access.firstElementChild.getBoundingClientRect();
+          const list = access.lastElementChild.getBoundingClientRect();
+          return { gaps: blocks.slice(1).map((rect, index) => rect.top - blocks[index].bottom),
+            publisherHeight: blocks[1].height, permissionGap: list.top - title.bottom };
+        });
+        assert(metrics.gaps.every((gap) => Math.abs(gap - 16) < 1),
+          'identity, publisher, description and permissions have consistent 16px gaps');
+        assert.equal(metrics.publisherHeight, 24, 'publisher fits its avatar instead of adding row whitespace');
+        assert.equal(metrics.permissionGap, 12, 'permissions use the shared heading-to-list spacing');
+      };
+
       for (const [theme, surface] of [['light', 'desktop'], ['dark', 'desktop'], ['light', 'touch']]) {
         await page.goto(`${address}/?theme=${theme}&surface=${surface}`);
         const screenshot = `${theme}-${surface}`;
@@ -225,6 +240,7 @@ test(
         await dialog.getByText('A small game for your account.', { exact: true }).waitFor({ timeout: 5000 }).catch(async (error) => {
           throw new Error(`${error.message}\n${errors.join('\n')}\n${await page.locator('body').innerText()}`);
         });
+        await checkAppInfoSpacing();
         // Input is blocked immediately, including while a renderer preview is prepared.
         await page.waitForFunction(() => window.nappletInputEnabled === false);
         await page.waitForFunction(() => {
@@ -289,8 +305,45 @@ test(
         await page.waitForFunction(() => document.title === 'closed');
       }
       for (const theme of ['light', 'dark']) {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto(`${address}/?scenario=capabilities&theme=${theme}`);
+        const consent = page.getByRole('dialog');
+        await consent.getByText('Required access', { exact: true }).waitFor();
+        assert.equal(await consent.getByText('Publisher', { exact: true }).count(), 1);
+        assert.equal(await consent.getByText('A small game for your account.', { exact: true }).count(), 1);
+        assert.equal(await consent.getByLabel('Signing account: Alice', { exact: true }).count(), 0,
+          'launch consent omits the account avatar');
+        assert.equal(await consent.getByText('Host environment', { exact: true }).count(), 0,
+          'required access matches the details list without internal shell metadata');
+        assert.equal(await consent.getByText('Optional access', { exact: true }).count(), 0);
+        assert.equal(await consent.getByText('App storage', { exact: true }).count(), 0,
+          'launch consent omits optional capability controls');
+        const grant = consent.getByRole('button', { name: 'Allow', exact: true });
+        await grant.click({ trial: true });
+        await checkAppInfoSpacing();
+        const grantBox = await grant.boundingBox();
+        const cancelBox = await consent.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+        assert(Math.abs(grantBox.y - cancelBox.y) < 1 && cancelBox.x < grantBox.x,
+          'Cancel and Allow share a horizontal action row');
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-capabilities.png` });
+        await grant.click();
+        assert.equal(JSON.parse(await page.title()).value, 'domains:[]', 'launch consent grants only required access');
+        await page.goto(`${address}/?scenario=detail&theme=${theme}&needs-consent=1`);
+        const allow = page.getByRole('button', { name: 'Allow and open', exact: true });
+        await allow.waitFor();
+        assert.equal(await page.getByRole('dialog').count(), 0);
+        assert.equal(await page.evaluate(() => window.reviewedRequired), undefined, 'viewing details does not grant consent');
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-detail-consent.png` });
+        await allow.click();
+        const reviewed = await page.evaluate(() => window.reviewedRequired);
+        assert(reviewed.includes('shell') && reviewed.includes('storage'));
+        assert(!reviewed.includes('upload'), 'details consent does not enable optional access');
+        assert.equal(await page.getByRole('dialog').count(), 0, 'details consent does not open a second dialog');
+      }
+      for (const theme of ['light', 'dark']) {
         await page.goto(`${address}/?scenario=detail&surface=touch&theme=${theme}`);
         await page.getByRole('button', { name: 'Open', exact: true }).waitFor();
+        await checkAppInfoSpacing();
         const publisher = page.getByText('Arjen', { exact: true });
         const publisherBox = await publisher.boundingBox();
         const appName = await page.getByText('Composer', { exact: true }).last().boundingBox();

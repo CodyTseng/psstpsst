@@ -37,6 +37,8 @@ test(
       app.whenReady().then(async()=>{
         const owner = new BrowserWindow({show:false,webPreferences:{preload:${JSON.stringify(path.join(dir, 'owner-preload.js'))},sandbox:true,contextIsolation:true,nodeIntegration:false}});
         registerNappletHandlers(event=>event.sender===owner.webContents&&event.senderFrame===owner.webContents.mainFrame,()=>owner);
+        const presented=new Set();
+        ipcMain.on(IPC.nappletMessage,(event,raw)=>{if(raw==='{"type":"psst.frameReady"}')presented.add(event.sender.id);});
         await owner.loadURL('data:text/html,<title>Owner</title>');
         const invoke = (channel,...args)=>owner.webContents.executeJavaScript('window.testHost.invoke('+[channel,...args].map(v=>JSON.stringify(v)).join(',')+')');
         const html=(await buildDocument('<script>window.result={};napplet.identity.getPublicKey().then(key=>result.key=key);try{parent.document;result.escape=true;}catch{result.escape=false;}</script>',['shell','identity','upload']))
@@ -46,16 +48,26 @@ test(
         assert(guest);assert.notEqual(guest.session,owner.webContents.session);
         const view=owner.contentView.children.find(child=>child.webContents===guest);
         await invoke(IPC.nappletBounds,id,{x:0,y:0,width:100,height:100},true);
-        assert.equal(view.getVisible(),false);
+        assert.equal(view.getVisible(),true);
+        let startupBlocked=0;
+        guest.emit('before-input-event',{preventDefault:()=>startupBlocked++});
+        guest.emit('before-mouse-event',{preventDefault:()=>startupBlocked++});
+        assert.equal(startupBlocked,2);
         assert.equal(await guest.executeJavaScript('pendingFrames.length'),1);
         await guest.executeJavaScript('pendingFrames.shift()(0)');
-        assert.equal(view.getVisible(),false);
+        assert.equal(view.getVisible(),true);
+        assert.equal(guest.backgroundThrottling,false);
         await guest.executeJavaScript('pendingFrames.shift()(0)');
-        for(let i=0;i<100&&!view.getVisible();i++)await wait(10);
+        for(let i=0;i<100&&!presented.has(guest.id);i++)await wait(10);
+        assert(presented.has(guest.id));
         assert.equal(view.getVisible(),true);
         assert.equal(guest.backgroundThrottling,true);
         owner.showInactive();
-        const preview=await invoke(IPC.nappletCapture,id);
+        let preview=null;
+        for(let i=0;i<100&&!preview;i++){
+          preview=await invoke(IPC.nappletCapture,id);
+          if(!preview)await wait(10);
+        }
         assert(preview.startsWith('data:image/png;base64,'));
         assert.equal(view.getVisible(),true);
         let prevented=0;
@@ -101,6 +113,24 @@ test(
         assert.equal(guest.isDestroyed(),false);
         await assert.rejects(fetchNappletResource('https://127.0.0.1/',1024));
         await invoke(IPC.nappletClose,id);assert(guest.isDestroyed());
+        // Real frame callbacks must complete for module apps; mocked RAF hid a startup deadlock.
+        const realHtml=await buildDocument('<style>html,body{margin:0;background:rgb(20,80,40);color:white}</style><script type="module">await Promise.resolve();document.body.textContent="module-app-ready";</script>',['shell'],'Module app','#09090b');
+        const realId=await invoke(IPC.nappletOpen,realHtml);
+        const realGuest=webContents.getAllWebContents().find(w=>w.getURL().includes('napplet.psstpsst.invalid'));
+        const realView=owner.contentView.children.find(child=>child.webContents===realGuest);
+        await invoke(IPC.nappletBounds,realId,{x:0,y:0,width:320,height:240},true);
+        for(let i=0;i<300&&!presented.has(realGuest.id);i++)await wait(10);
+        assert(presented.has(realGuest.id));
+        assert.equal(realGuest.backgroundThrottling,true,'real paint readiness must finish without manual frame callbacks');
+        assert.equal(realView.getVisible(),true);
+        assert.equal(await realGuest.mainFrame.frames[0].executeJavaScript('document.body.innerText'),'module-app-ready');
+        let realBlocked=0;
+        realGuest.emit('before-input-event',{preventDefault:()=>realBlocked++});
+        assert.equal(realBlocked,0,'input becomes interactive after real first-paint readiness');
+        const realImage=await realGuest.capturePage(undefined,{stayHidden:true,stayAwake:true});
+        assert.equal(realImage.isEmpty(),false);
+        await invoke(IPC.nappletClose,realId);
+
         writeFileSync(${JSON.stringify(path.join(dir, 'result.json'))},JSON.stringify({ok:true}));
         owner.destroy();app.quit();
       }).catch(error=>{console.error(error);app.exit(1);});

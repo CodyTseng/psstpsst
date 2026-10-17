@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useState, type Ref } from 'react';
 import { Image, View } from 'react-native';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
 import { loadIcon } from '@/services/napplet/artifacts';
@@ -6,7 +6,7 @@ import type { NappletRelease } from '@/services/napplet/protocol';
 import { radius, spacing, useThemeColors } from '@/theme';
 
 export const NAPPLET_ICON_SIZE = spacing['3xl'] + spacing.lg;
-export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE }: { release: NappletRelease; size?: number }) {
+export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef }: { release: NappletRelease; size?: number; iconRef?: Ref<View> }) {
   const c = useThemeColors();
   const [uri, setUri] = useState<string>();
   useEffect(() => {
@@ -20,7 +20,7 @@ export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_I
     };
   }, [release]);
   return (
-    <View
+    <View ref={iconRef} testID="napplet-icon"
       style={{
         width: size,
         height: size,

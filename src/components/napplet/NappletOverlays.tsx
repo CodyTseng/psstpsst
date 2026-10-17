@@ -19,7 +19,7 @@ import { getNappletAccountPubkey, useNapplets } from '@/stores/napplet.store';
 import { contentWidth, spacing, useThemeColors } from '@/theme';
 import { SigningApproval, SigningActions, SigningDurationMenu } from './SigningApproval';
 import { SigningIdentity, SigningRequester, SigningAccountAvatar, signingAction } from './SigningRequestDetails';
-import { NappletIcon } from './NappletIcon';
+import { NappletIdentity } from './NappletIdentity';
 import { CapabilityApproval } from './CapabilityApproval';
 
 export function NappletOverlays() {
@@ -54,7 +54,7 @@ export function NappletOverlays() {
       title={prompt?.signing ? signingAction(prompt.signing, t) : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
       headerAction={prompt?.signing ? <SigningAccountAvatar pubkey={prompt.signing.accountPubkey} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
-      contentStyle={{ gap: spacing.lg }}
+      contentStyle={{ gap: spacing.lg, ...(prompt?.capabilities ? { paddingTop: spacing.sm } : {}) }}
       scrollResetKey={prompt?.requestId ?? (configuration ? 'configuration' : panel?.page ?? 'closed')}
       onClosed={() => { nappletService.overlayClosed(); const work = pending.current; pending.current = null; work?.(); }}
       onClose={() => {
@@ -71,19 +71,21 @@ export function NappletOverlays() {
       </View> : showingPanel?.page === 'about' ? <NappletPanelActions onAction={panelAction} /> : undefined}
     >
       {prompt ? <>
-        {prompt.signing ? <SigningRequester app={prompt.app} /> : <>
+        {prompt.signing ? <SigningRequester app={prompt.app} /> : !prompt.capabilities ? <>
           <AppText>{t('napplets.permission_notice')}</AppText>
-          {prompt.app ? <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
-            <NappletIcon release={prompt.app} />
-            <AppText variant="subtitle" style={{ flex: 1 }}>{prompt.app.title}</AppText>
-          </View> : null}
+          {prompt.app ? <NappletIdentity release={prompt.app} compact /> : null}
           {prompt.accountPubkey ? <SigningIdentity pubkey={prompt.accountPubkey} label={t('napplets.signing_account')} /> : null}
           {prompt.app ? <SigningIdentity pubkey={prompt.app.event.pubkey} label={t('napplets.publisher')} /> : null}
-        </>}
+        </> : null}
         {prompt.queued ? <AppText variant="caption" tone="muted">{t('napplets.signing_queued', { count: prompt.queued })}</AppText> : null}
         {prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
           onChange={(value) => setChoice({ id: prompt.requestId, value })} hideActions />
-          : prompt.capabilities ? <CapabilityApproval key={prompt.requestId} prompt={prompt} /> : <>
+          : prompt.capabilities ? <CapabilityApproval key={prompt.requestId} prompt={prompt} onPublisher={() => {
+            const pubkey = prompt.app!.event.pubkey;
+            const account = accountPubkey;
+            pending.current = () => { if (getNappletAccountPubkey() === account) router.push(`/profile/${pubkey}`); };
+            nappletService.answer(prompt.requestId, false);
+          }} /> : <>
             <AppText variant="code">{prompt.detail}</AppText>
             {prompt.choices ? <>
               {prompt.choices.map((option) => <AppButton key={option.key} variant="secondary" label={option.title}

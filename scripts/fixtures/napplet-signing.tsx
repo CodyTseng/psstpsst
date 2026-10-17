@@ -56,6 +56,15 @@ nappletStore.setState({
     },
   },
 });
+if (params.get('scenario') === 'capabilities') {
+  const release = { ...nappletStore.getState().prompt!.app!, key: '35129:publisher:arcade',
+    description: 'A small game for your account.', required: ['relay', 'upload'], optional: ['storage'], servers: [], intents: [],
+  } as NappletRelease;
+  nappletStore.setState({ accountPubkey: 'a'.repeat(64), prompt: {
+    ...nappletStore.getState().prompt!, app: release, queued: 0, signing: undefined,
+    capabilities: { required: ['shell', ...release.required], optional: release.optional },
+  } });
+}
 if (params.get('scenario') === 'timeout') {
   const { PromptQueue } = require('../../src/services/napplet/prompt-queue') as typeof import('../../src/services/napplet/prompt-queue');
   const queue = new PromptQueue((prompt) => nappletStore.setState({ prompt }));
@@ -72,7 +81,7 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
   };
   profile.useDisplayName = () => ({ name: 'Arjen', profile: null });
   nappletStore.setState({ accountPubkey: 'a'.repeat(64), loaded: true, prompt: null, market: [release],
-    installed: params.get('uninstalled') ? [] : [{ ...release, pinnedAt: null, lastUsedAt: null, previousManifest: null }],
+    installed: params.get('uninstalled') ? [] : [{ ...release, desktopPosition: null, lastUsedAt: null, previousManifest: null }],
   });
   const { nappletPermissionStore } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
   const { signingRuleKey, replaceSigningRule } = require('../../src/services/napplet/signing-permissions') as typeof import('../../src/services/napplet/signing-permissions');
@@ -99,7 +108,11 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
   nappletService.revokeSigningRule = async (_release, key) => {
     rules = rules.filter((rule) => rule.key !== key); nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
   };
-  nappletService.domainPermissions = async () => ['shell', ...release.required];
+  nappletService.domainPermissions = async () => params.has('needs-consent') ? [] : ['shell', ...release.required];
+  nappletService.prepareOpen = (_release, _account, reviewedRequired) => {
+    (window as unknown as { reviewedRequired: readonly string[] | undefined }).reviewedRequired = reviewedRequired;
+    return 1;
+  };
   nappletService.setDomainPermissions = async (_release, domains) => {
     (window as unknown as { savedDomains: string[] }).savedDomains = domains;
   };

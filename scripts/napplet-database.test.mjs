@@ -58,7 +58,7 @@ test('account and artifact scopes survive recent removal and cascade only with t
   }
 });
 
-test('removing an app atomically clears only its account-owned default handlers and adjusts usage', async () => {
+test('desktop migration and reordering preserve recent usage, data and account isolation', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'psst-napplet-repository-'));
   const sqlite = new DatabaseSync(':memory:');
   try {
@@ -93,10 +93,16 @@ test('removing an app atomically clears only its account-owned default handlers 
       },
     };
     globalThis.__nappletDatabaseTest = fixture.createAsyncDatabase(executor, fixture.schema);
-    const { changeRecent, getData, setData } = fixture.loadRepository();
+    const { saveDesktopOrder, markRecent, clearRecent, getData, setData } = fixture.loadRepository();
     const insert = sqlite.prepare('INSERT INTO napplet_installations(account_pubkey,app_key,manifest,artifact_hash,last_used_at,pinned_at) VALUES(?,?,?,?,?,?)');
     insert.run('A', 'app', '{}', 'v1', 100, 10);
     insert.run('B', 'app', '{}', 'v1', 200, 20);
+    insert.run('A', 'other-app', '{}', 'v1', 200, null);
+    insert.run('A', 'unopened-app', '{}', 'v1', null, null);
+    sqlite.exec(readFileSync('src/db/migrations/0060_napplet-desktop.sql', 'utf8'));
+    const order = (account = 'A') => sqlite.prepare('SELECT app_key FROM napplet_installations WHERE account_pubkey=? AND desktop_position IS NOT NULL ORDER BY desktop_position').all(account).map((row) => row.app_key);
+    assert.deepEqual(order(), ['app', 'other-app'], 'legacy pin order migrates once');
+    assert.deepEqual(order('B'), ['app']);
     const defaults = { accountPubkey: 'A', appKey: 'host:intent-defaults', artifactHash: 'host' };
     const otherAccount = { ...defaults, accountPubkey: 'B' };
     const storage = { accountPubkey: 'A', appKey: 'app', artifactHash: 'v1' };
@@ -106,29 +112,39 @@ test('removing an app atomically clears only its account-owned default handlers 
     await setData(otherAccount, 'defaults', 'napplet:image/edit', 'app');
     await setData(storage, 'storage', 'draft', 'keep me');
     await setData(storage, 'permissions', 'signing', 'keep grants');
-    await changeRecent('A', 'app', 'pin');
-    await changeRecent('A', 'app', 'unpin');
-    assert.equal(await getData(defaults, 'defaults', 'napplet:image/edit'), 'app', 'pin changes do not affect defaults');
-    sqlite.prepare('UPDATE napplet_installations SET pinned_at=10 WHERE account_pubkey=?').run('A');
-    sqlite.exec("CREATE TRIGGER fail_default_cleanup BEFORE DELETE ON napplet_data WHEN OLD.app_key='host:intent-defaults' BEGIN SELECT RAISE(ABORT,'cleanup failed'); END;");
-    await assert.rejects(changeRecent('A', 'app', 'remove'), (error) => error.cause?.message === 'cleanup failed');
-    assert.equal(sqlite.prepare('SELECT last_used_at FROM napplet_installations WHERE account_pubkey=?').get('A').last_used_at, 100, 'failed cleanup rolls back removal');
+    await markRecent('A', 'other-app');
+    assert.deepEqual(order(), ['app', 'other-app'], 'launching never reorders the desktop');
+    await saveDesktopOrder('A', ['other-app', 'app']);
+    assert.deepEqual(order(), ['other-app', 'app']);
+    assert.deepEqual(order('B'), ['app'], 'another account retains its own order');
+    sqlite.exec("CREATE TRIGGER fail_position BEFORE UPDATE OF desktop_position ON napplet_installations WHEN NEW.app_key='other-app' BEGIN SELECT RAISE(ABORT,'position failed'); END;");
+    await assert.rejects(saveDesktopOrder('A', ['app', 'other-app']));
+    assert.deepEqual(order(), ['other-app', 'app'], 'a failed move rolls back all changed positions');
+    sqlite.exec('DROP TRIGGER fail_position;');
+    await saveDesktopOrder('A', ['other-app']);
+    assert.deepEqual(order(), ['other-app']);
+    assert.equal(sqlite.prepare("SELECT last_used_at FROM napplet_installations WHERE account_pubkey='A' AND app_key='app'").get().last_used_at, 100, 'removing a shortcut preserves its recent usage');
     assert.equal(await getData(defaults, 'defaults', 'napplet:image/edit'), 'app');
-    sqlite.exec('DROP TRIGGER fail_default_cleanup;');
-    await changeRecent('A', 'app', 'remove');
-    assert.equal(await getData(defaults, 'defaults', 'napplet:image/edit'), null);
-    assert.equal(await getData(defaults, 'defaults', 'napplet:image/view'), null);
-    assert.equal(await getData(defaults, 'defaults', 'napplet:text/edit'), 'other-app');
     assert.equal(await getData(otherAccount, 'defaults', 'napplet:image/edit'), 'app');
     assert.equal(await getData(storage, 'storage', 'draft'), 'keep me');
     assert.equal(await getData(storage, 'permissions', 'signing'), 'keep grants');
-    const usage = sqlite.prepare("SELECT bytes,count FROM napplet_usage WHERE account_pubkey='A' AND app_key='host:intent-defaults' AND artifact_hash='host' AND bucket='defaults'").get();
-    assert.equal(usage.count, 1);
-    assert.equal(usage.bytes, new TextEncoder().encode('napplet:text/editother-app').length);
-    assert.equal(sqlite.prepare('SELECT pinned_at FROM napplet_installations WHERE account_pubkey=?').get('A').pinned_at, null);
-    assert.equal(sqlite.prepare('SELECT last_used_at FROM napplet_installations WHERE account_pubkey=?').get('B').last_used_at, 200);
-    await changeRecent('A', 'app', 'remove');
-    assert.equal(sqlite.prepare("SELECT count FROM napplet_usage WHERE account_pubkey='A' AND app_key='host:intent-defaults'").get().count, 1, 'repeated removal leaves counters intact');
+    await saveDesktopOrder('A', ['app', 'other-app', 'unopened-app']);
+    assert.deepEqual(order(), ['app', 'other-app', 'unopened-app'], 'adding and re-adding create exactly one shortcut');
+    await assert.rejects(saveDesktopOrder('A', ['app', 'app']));
+    await assert.rejects(saveDesktopOrder('A', ['missing-app']));
+    assert.deepEqual(order(), ['app', 'other-app', 'unopened-app']);
+    await clearRecent('A', 'app');
+    assert.equal(sqlite.prepare("SELECT last_used_at FROM napplet_installations WHERE account_pubkey='A' AND app_key='app'").get().last_used_at, null);
+    assert.equal(sqlite.prepare("SELECT last_used_at FROM napplet_installations WHERE account_pubkey='B' AND app_key='app'").get().last_used_at, 200);
+    assert.deepEqual(order(), ['app', 'other-app', 'unopened-app'], 'removing history preserves desktop order');
+    assert.equal(await getData(storage, 'storage', 'draft'), 'keep me');
+    assert.equal(await getData(storage, 'permissions', 'signing'), 'keep grants');
+    await markRecent('A', 'app');
+    assert(sqlite.prepare("SELECT last_used_at FROM napplet_installations WHERE account_pubkey='A' AND app_key='app'").get().last_used_at > 100,
+      'opening restores an app to recent usage');
+    sqlite.prepare("DELETE FROM accounts WHERE pubkey='A'").run();
+    await assert.rejects(saveDesktopOrder('A', []));
+    assert.deepEqual(order('B'), ['app']);
   } finally {
     delete globalThis.__nappletDatabaseTest;
     sqlite.close();

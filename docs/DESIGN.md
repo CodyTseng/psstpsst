@@ -341,8 +341,8 @@ Every icon-only action uses `IconButton` and has an accessibility label.
 Human avatars are circular. Mini-app icons are rounded squares at every size,
 including compact identity rows and loading or fallback artwork.
 Mini-app publisher attribution uses a separate labelled information row between
-the app heading and description. Supporting metadata rows are compact and
-borderless, with text aligned to the surrounding content gutter. Hover and press
+the app heading and description. Supporting metadata rows fit their visible content with expanded touch targets
+and remain borderless, with text aligned to the surrounding content gutter. Hover and press
 feedback reduce only the identity avatar and name's opacity, without adding a
 background. Publisher rows open the profile from the whole row.
 
@@ -846,15 +846,49 @@ Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
 
-Mini-app recents use an icon-and-name grid. Holding an icon reveals an accent
-pin target above and a danger remove target below; actions commit only on release
-inside a target. Pointer context menus and accessibility actions expose the same
-operations. Pins precede recents; removing an app preserves its data and clears
-its default task-handler choices for the current account.
+Mini apps use one vertically scrolling home screen, with a single-row recent-app
+preview above the fixed-order desktop. Both sections scroll together and share
+cell widths, gutters, icon sizes and label geometry. Hover and press dim only
+the icon artwork, leaving labels and the page canvas unchanged. Rounded clipping
+belongs to icon artwork, never the caption beneath it. Outer icon
+artwork aligns with the content gutter; wider interaction cells extend into that
+gutter. Responsive grids prioritize recognizable artwork over extra columns:
+icons stay at least 60px and grow to 68px when the pane allows. Column counts and
+distributed gaps adapt around that size. The preview fits the available columns
+without horizontal scrolling. Its entire heading row opens a dedicated, vertically
+scrolling history page with Back navigation and the same grid vocabulary; a
+trailing directional chevron replaces a separate More label. Launching an app updates only recency. Electron
+opens app menus with right-click and sorts desktop icons by direct dragging.
+App menus center on the icon, prefer the space above it, fall back below, and
+shift inward at pane edges. Available menu space excludes native window controls
+and safe areas, including when the overlay spans the full window. App menus follow the shared platform density, icon sizing and stroke conventions.
+The active icon caption hides without changing layout only while its menu is below
+the icon; menus above leave the caption visible. Sorting actions stay out of the visual menu.
+On mobile, holding a desktop icon first opens its menu; moving the held icon dismisses the menu
+and begins sorting. On mobile, opening an app menu by holding gives one light
+haptic at the hold threshold, without repeating during dragging. App cells remain
+unframed in every state, including sorting; other icons preview their new slots
+while dragging; only release commits the order. Released positions stay visible
+until the committed layout takes over, without restoring the old order. Recent
+apps never drag or share desktop selection feedback. Long press opens
+details, permissions and sharing, with add-to-desktop and danger-tone remove-from-history actions only
+for apps without a desktop shortcut. Removing recent usage preserves the
+desktop shortcut and application state. Cancelling a drag leaves the desktop intact.
+There is no discovery tab or pin state. Pointer menus and accessibility actions
+provide equivalent add, move and remove operations. Removing a shortcut preserves
+recent usage, app data, permissions and default task-handler choices. When the
+desktop is empty, omit its entire section, including the heading and guidance.
 
 Mini-app details prioritize app identity, a readable description and expanded
-required access. The primary action is always Open, fixed above the bottom safe
-area while information scrolls. Optional access is omitted from app details.
+required access. The primary action stays fixed above the bottom safe area while information
+scrolls. It reads Allow and open when required access needs consent, otherwise
+Open. Explicit consent on this page replaces the duplicate launch prompt;
+viewing app details alone never grants access. Details, runtime information and
+launch consent share one information block for app identity, publisher, description
+and required access. Launch consent omits the account avatar. Access confirmation uses one
+horizontal action row with Cancel at the start and Allow at the end. Optional
+access is omitted from app details and launch consent sheets; it stays off until
+enabled in permission management.
 Details have the same layout regardless of installation state, without maintenance
 actions or a separate permissions entry. Permission controls live in the management
 view reached from the app menu. Protocol hashes stay out of ordinary app information

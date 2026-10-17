@@ -253,6 +253,7 @@
     "account_changed_history": "Nearby account changed. This history is read-only."
   },
   "common": {
+    "reset": "Reset",
     "copy": "Copy",
     "copy_failed": "Couldn't copy. Try again.",
     "paste_failed": "Couldn't paste. Try again.",
@@ -1064,6 +1065,7 @@
     "runtime_notices": "Chromium and bundled components"
   },
   "napplets": {
+    "allow_and_open": "Allow and open",
     "permissions_ask": "Ask every time",
     "permissions_duration": "Duration",
     "permissions_manage": "Permissions",
@@ -1086,14 +1088,9 @@
     "runtime_access_reload": "Changing app access reloads the app.",
     "signing_reject_countdown": "Reject({{seconds}})",
     "title": "Mini apps",
-    "recent": "Recent",
-    "discovery": "Discovery",
-    "discover": "Discover apps",
+    "recent": "Recently used",
     "empty_title": "Your apps live here",
-    "empty_description": "Open an app from Discovery to add it here. Hold and drag an icon to pin or remove it.",
-    "pin": "Pin",
-    "unpin": "Unpin",
-    "remove": "Remove",
+    "empty_description": "Open an app from a link, then use its recent-app menu to add it to My apps.",
     "install_link": "Add an app",
     "address": "App address",
     "address_hint": "Paste a Nostr app address or a sharing link.",
@@ -1107,10 +1104,6 @@
     "check_update": "Check updates",
     "up_to_date": "This app is up to date.",
     "immutable_version": "This is a fixed version. Open a newer app address to update it.",
-    "search": "Search loaded apps",
-    "refresh": "Refresh",
-    "load_more": "Load more",
-    "no_results": "No apps found. Try refreshing or adding an app address.",
     "publisher": "Publisher",
     "permissions": "Requested access",
     "version": "Verified version",
@@ -1126,7 +1119,6 @@
     "download_failed": "The verified app could not be downloaded.",
     "not_found": "The app could not be found. Check the address and network connection.",
     "unsupported": "This app requires capabilities that are not available.",
-    "partial_discovery": "Some relays did not finish. The results may be incomplete.",
     "rebuild_required": "This build does not include the app runtime. Rebuild the native application.",
     "capability_shell": "Host environment",
     "capability_theme": "Appearance",
@@ -1190,7 +1182,7 @@
     "signing_denied": "Rejected",
     "capabilities_required": "Required access",
     "capabilities_optional": "Optional access",
-    "capabilities_signing_notice": "Signing requests are reviewed separately. Optional access starts off.",
+    "capabilities_signing_notice": "Signing requests are reviewed separately.",
     "signing_expires": "Request expires at {{time}}",
     "signing_no_rules_title": "No saved permissions",
     "signing_duration_once": "Only once",
@@ -1202,6 +1194,13 @@
     "signing_effect_auth": "This server will recognize your account so the app can access services that require sign-in.",
     "signing_effect_encrypted": "The content will be encrypted for the recipient below and sent to the listed servers.",
     "signing_effect_publish": "This content will be published under your account. People with access to these servers may be able to see it.",
-    "signing_until": "Expires at {{time}}"
+    "signing_until": "Expires at {{time}}",
+    "desktop": "My apps",
+    "add_to_desktop": "Add to My apps",
+    "remove_from_desktop": "Remove from My apps",
+    "move_earlier": "Move earlier",
+    "move_later": "Move later",
+    "desktop_hint": "Add apps from the Recently used menu to keep them on your home screen.",
+    "more": "More"
   }
 }

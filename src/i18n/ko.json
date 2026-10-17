@@ -253,6 +253,7 @@
     "account_changed_history": "근거리 통신 계정이 변경되었습니다. 이 기록은 읽기 전용입니다."
   },
   "common": {
+    "reset": "초기화",
     "copy": "복사",
     "copy_failed": "복사하지 못했습니다. 다시 시도해 주세요.",
     "paste_failed": "붙여넣지 못했습니다. 다시 시도해 주세요.",
@@ -1064,6 +1065,7 @@
     "runtime_notices": "Chromium 및 포함된 구성 요소"
   },
   "napplets": {
+    "allow_and_open": "허용하고 열기",
     "permissions_ask": "매번 확인",
     "permissions_duration": "기간",
     "permissions_manage": "권한",
@@ -1087,13 +1089,8 @@
     "signing_reject_countdown": "거부({{seconds}})",
     "title": "미니 앱",
     "recent": "최근 사용",
-    "discovery": "Discovery",
-    "discover": "앱 둘러보기",
     "empty_title": "앱이 여기에 표시됩니다",
-    "empty_description": "Discovery에서 앱을 열면 여기에 추가됩니다. 아이콘을 길게 누른 뒤 드래그하여 고정하거나 제거하세요.",
-    "pin": "고정",
-    "unpin": "고정 해제",
-    "remove": "제거",
+    "empty_description": "링크로 앱을 연 다음 최근 사용 메뉴에서 내 앱에 추가하세요.",
     "install_link": "앱 추가",
     "address": "앱 주소",
     "address_hint": "Nostr 앱 주소 또는 공유 링크를 붙여 넣으세요.",
@@ -1107,10 +1104,6 @@
     "check_update": "업데이트 확인",
     "up_to_date": "최신 버전입니다.",
     "immutable_version": "고정된 버전입니다. 업데이트하려면 더 최신 앱 주소를 여세요.",
-    "search": "불러온 앱 검색",
-    "refresh": "새로 고침",
-    "load_more": "더 불러오기",
-    "no_results": "앱을 찾지 못했습니다. 새로 고치거나 앱 주소를 추가하세요.",
     "publisher": "게시자",
     "permissions": "요청한 접근 권한",
     "version": "검증된 버전",
@@ -1126,7 +1119,6 @@
     "download_failed": "검증된 앱을 다운로드하지 못했습니다.",
     "not_found": "앱을 찾지 못했습니다. 주소와 네트워크 연결을 확인하세요.",
     "unsupported": "이 앱에 필요한 기능을 사용할 수 없습니다.",
-    "partial_discovery": "일부 릴레이의 조회가 완료되지 않아 결과가 불완전할 수 있습니다.",
     "rebuild_required": "이 빌드에는 앱 실행 환경이 없습니다. 네이티브 앱을 다시 빌드하세요.",
     "capability_shell": "호스트 환경",
     "capability_theme": "화면 모드",
@@ -1190,7 +1182,7 @@
     "signing_denied": "거부됨",
     "capabilities_required": "필수 기능",
     "capabilities_optional": "선택 기능",
-    "capabilities_signing_notice": "서명 요청은 별도로 검토합니다. 선택 기능은 기본적으로 꺼져 있습니다.",
+    "capabilities_signing_notice": "서명 요청은 별도로 검토합니다.",
     "signing_expires": "요청 만료 시간: {{time}}",
     "signing_no_rules_title": "매번 확인",
     "signing_duration_once": "이번만",
@@ -1202,6 +1194,13 @@
     "signing_effect_auth": "이 서버에 계정 소유를 증명하여 로그인이 필요한 서비스를 이용합니다.",
     "signing_effect_encrypted": "아래 수신자를 위해 내용을 암호화한 뒤 표시된 서버로 전송합니다.",
     "signing_effect_publish": "내 계정으로 내용이 게시됩니다. 이 서버에 접근할 수 있는 사람이 내용을 볼 수 있습니다.",
-    "signing_until": "만료 시간: {{time}}"
+    "signing_until": "만료 시간: {{time}}",
+    "desktop": "내 앱",
+    "add_to_desktop": "내 앱에 추가",
+    "remove_from_desktop": "내 앱에서 제거",
+    "move_earlier": "앞으로 이동",
+    "move_later": "뒤로 이동",
+    "desktop_hint": "최근 사용 앱의 메뉴에서 홈 화면에 추가하세요.",
+    "more": "더 보기"
   }
 }

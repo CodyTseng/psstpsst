@@ -16,7 +16,7 @@ import { isReplaceableKind, isAddressableKind } from 'nostr-tools/kinds';
 import { serializeEvent, type UnsignedEvent } from 'nostr-tools';
 import { formatFileSize } from '@/lib/nostr/file-tags';
 import { platform } from '@/platform';
-import { NappletIcon } from './NappletIcon';
+import { NappletIdentity } from './NappletIdentity';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
@@ -61,10 +61,7 @@ export function SigningAccountAvatar({ pubkey }: { pubkey: string }) {
 }
 
 export function SigningRequester({ app }: { app?: NappletRelease }) {
-  return app ? <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center', paddingTop: spacing.sm }}>
-    <NappletIcon release={app} size={spacing['2xl']} />
-    <SigningText variant="subtitle" numberOfLines={1} style={{ flex: 1 }}>{app.title}</SigningText>
-  </View> : null;
+  return app ? <View style={{ paddingTop: spacing.sm }}><NappletIdentity release={app} compact /></View> : null;
 }
 
 export function SigningScopeDetails({ scope }: { scope: SigningScope }) {

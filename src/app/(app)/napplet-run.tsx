@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useIsFocused, usePreventRemove } from 'expo-router/react-navigation';
 import { ForwardTargetScreen } from '@/components/share/ForwardTargetScreen';
 import { AppScreen } from '@/components/common/AppScreen';
@@ -12,6 +12,7 @@ import { IconButton } from '@/components/common/IconButton';
 import { AppText } from '@/components/common/AppText';
 import { AppButton } from '@/components/common/AppButton';
 import { NappletIcon } from '@/components/napplet/NappletIcon';
+import { isPrimaryPaneResetAction } from '@/components/navigation/responsive-stack-router';
 import { useFocusedOverlayDismiss } from '@/components/common/use-focused-overlay-dismiss';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 import { NappletSurface } from '@/platform/napplet-surface';
@@ -24,6 +25,7 @@ export default function NappletRunScreen() {
   const ownerRunId = params.runId === undefined ? runId : Number(params.runId);
   const ownsRun = ownerRunId === runId;
   const focused = useIsFocused();
+  const navigation = useNavigation();
   const { t } = useTranslation();
   const c = useThemeColors();
   const closeShare = useCallback(() => { if (accountPubkey && running) nappletService.closeShare(accountPubkey, running.containerId); }, [accountPubkey, running]);
@@ -34,7 +36,11 @@ export default function NappletRunScreen() {
     void nappletService.goBack().catch((error) => console.warn('[napplet] Back navigation failed', error));
   }, [running, close]);
   useFocusedOverlayDismiss(ownsRun && (!!running || launching || !!launch?.error) && !sharing && !prompt && !configuration && !panel && !overlayActive, backToApp);
-  usePreventRemove(focused && ownsRun && !!running, backToApp);
+  usePreventRemove(focused && ownsRun && !!running, ({ data }) => {
+    // A primary-pane selection replaces the host page, not the app's history.
+    if (isPrimaryPaneResetAction(data.action)) navigation.dispatch(data.action);
+    else backToApp();
+  });
   useFocusEffect(useCallback(() => () => nappletService.stop(ownerRunId), [ownerRunId]));
   useEffect(() => {
     if (!focused || !ownsRun || !launch?.pending) return;
@@ -69,7 +75,7 @@ export default function NappletRunScreen() {
         ) : launch?.error && ownsRun ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
             <AppText align="center" tone="muted">{t(launch.error.startsWith('napplets.') ? launch.error : 'napplets.request_failed')}</AppText>
-            <AppButton fullWidth={false} label={t('common.retry')} onPress={() => nappletService.retryOpen(ownerRunId)} />
+            <View><AppButton fullWidth={false} label={t('common.retry')} onPress={() => nappletService.retryOpen(ownerRunId)} /></View>
           </View>
         ) : null}
         </View>

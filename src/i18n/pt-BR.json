@@ -253,6 +253,7 @@
     "account_changed_history": "A conta de proximidade mudou. Este histórico é somente para leitura."
   },
   "common": {
+    "reset": "Redefinir",
     "copy": "Copiar",
     "copy_failed": "Não foi possível copiar. Tente novamente.",
     "paste_failed": "Não foi possível colar. Tente novamente.",
@@ -1069,6 +1070,7 @@
     "runtime_notices": "Chromium e componentes incluídos"
   },
   "napplets": {
+    "allow_and_open": "Permitir e abrir",
     "permissions_ask": "Perguntar sempre",
     "permissions_duration": "Duração",
     "permissions_manage": "Permissões",
@@ -1092,13 +1094,8 @@
     "signing_reject_countdown": "Recusar({{seconds}})",
     "title": "Miniapps",
     "recent": "Recentes",
-    "discovery": "Discovery",
-    "discover": "Descobrir apps",
     "empty_title": "Seus apps ficam aqui",
-    "empty_description": "Abra um app no Discovery para adicioná-lo aqui. Segure e arraste um ícone para fixar ou remover.",
-    "pin": "Fixar",
-    "unpin": "Desafixar",
-    "remove": "Remover",
+    "empty_description": "Abra um app por um link e adicione-o a Meus apps pelo menu em Recentes.",
     "install_link": "Adicionar app",
     "address": "Endereço do app",
     "address_hint": "Cole um endereço de app Nostr ou um link de compartilhamento.",
@@ -1112,10 +1109,6 @@
     "check_update": "Verificar atualizações",
     "up_to_date": "Este app está atualizado.",
     "immutable_version": "Esta é uma versão fixa. Abra um endereço de app mais recente para atualizar.",
-    "search": "Buscar nos apps carregados",
-    "refresh": "Atualizar",
-    "load_more": "Carregar mais",
-    "no_results": "Nenhum app encontrado. Atualize a lista ou adicione um endereço.",
     "publisher": "Publicador",
     "permissions": "Acesso solicitado",
     "version": "Versão verificada",
@@ -1131,7 +1124,6 @@
     "download_failed": "Não foi possível baixar o app verificado.",
     "not_found": "App não encontrado. Confira o endereço e a conexão de rede.",
     "unsupported": "Este app precisa de recursos que não estão disponíveis.",
-    "partial_discovery": "Alguns relays não concluíram a consulta. Os resultados podem estar incompletos.",
     "rebuild_required": "Esta compilação não inclui o ambiente dos apps. Recompile o aplicativo nativo.",
     "capability_shell": "Ambiente do host",
     "capability_theme": "Aparência",
@@ -1195,7 +1187,7 @@
     "signing_denied": "Recusado",
     "capabilities_required": "Acesso necessário",
     "capabilities_optional": "Acesso opcional",
-    "capabilities_signing_notice": "As solicitações de assinatura são analisadas separadamente. O acesso opcional começa desativado.",
+    "capabilities_signing_notice": "As solicitações de assinatura são analisadas separadamente.",
     "signing_expires": "A solicitação expira às {{time}}",
     "signing_no_rules_title": "Nenhuma permissão salva",
     "signing_duration_once": "Só desta vez",
@@ -1207,6 +1199,13 @@
     "signing_effect_auth": "Este servidor reconhecerá sua conta para o aplicativo acessar serviços que exigem login.",
     "signing_effect_encrypted": "O conteúdo será criptografado para o destinatário abaixo e enviado aos servidores indicados.",
     "signing_effect_publish": "Este conteúdo será publicado com sua conta. Pessoas com acesso a esses servidores poderão vê-lo.",
-    "signing_until": "Válido até {{time}}"
+    "signing_until": "Válido até {{time}}",
+    "desktop": "Meus apps",
+    "add_to_desktop": "Adicionar aos meus apps",
+    "remove_from_desktop": "Remover dos meus apps",
+    "move_earlier": "Mover para antes",
+    "move_later": "Mover para depois",
+    "desktop_hint": "Adicione apps à tela inicial pelo menu em Recentes.",
+    "more": "Mais"
   }
 }

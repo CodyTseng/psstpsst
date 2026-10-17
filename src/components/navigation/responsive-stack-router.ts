@@ -74,8 +74,9 @@ export function shouldKeepDetailFocused(state: RouteFocusState, targetKey: strin
   return targetRoute?.name === PRIMARY_ROUTE_NAME && activeRoute?.name !== PRIMARY_ROUTE_NAME;
 }
 
-export function isPrimaryPaneResetAction(action: RouterAction): boolean {
-  return action.type === 'PUSH' && action.payload?.singular === PRIMARY_PANE_RESET_MARKER;
+export function isPrimaryPaneResetAction(action: { type: string; payload?: object }): boolean {
+  return action.type === 'PUSH' && !!action.payload && 'singular' in action.payload
+    && action.payload.singular === PRIMARY_PANE_RESET_MARKER;
 }
 
 export function getPrimaryPaneBaseState<State extends RouteFocusState>(state: State): State {

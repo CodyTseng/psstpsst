@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { lookup } from 'node:dns';
 import { request } from 'node:https';
 import { isIP } from 'node:net';
 import path from 'node:path';
@@ -13,26 +12,8 @@ import {
 import { NAPPLET_FRAME_READY_MESSAGE, type NappletBounds } from '../src/platform/ports/napplet';
 import { IPC } from './ipc-channels';
 
-export function isPublicAddress(address: string): boolean {
-  const value = address.toLowerCase();
-  if (value.includes(':')) return /^2[0-9a-f]{3}:/.test(value) && !value.startsWith('2001:db8:');
-  const parts = value.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((v) => !Number.isInteger(v) || v < 0 || v > 255))
-    return false;
-  const [a, b] = parts;
-  return !(
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    a >= 224 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && [0, 168].includes(b)) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 198 && [18, 19, 51].includes(b)) ||
-    (a === 203 && b === 0)
-  );
-}
+import { isPublicAddress, resolvePublicAddresses } from './napplet-public-dns';
+export { isPublicAddress } from './napplet-public-dns';
 
 /** DNS validation is part of the actual TLS connection, not a check-then-fetch preflight. */
 export function fetchNappletResource(
@@ -62,13 +43,12 @@ export function fetchNappletResource(
         signal,
         headers: { Accept: '*/*', 'Accept-Encoding': 'identity' },
         lookup: (hostname, options, callback) => {
-          lookup(hostname, { all: true }, (error, addresses) => {
-            if (error) return callback(error, '', 4);
-            if (!addresses.length || addresses.some((entry) => !isPublicAddress(entry.address)))
-              return callback(new Error('blocked-by-policy'), '', 4);
+          void resolvePublicAddresses(hostname, signal).then((resolved) => {
+            const addresses = options.family ? resolved.filter((entry) => entry.family === options.family) : resolved;
+            if (!addresses.length) return callback(new Error('blocked-by-policy'), '', 4);
             if (options.all) callback(null, addresses);
             else callback(null, addresses[0].address, addresses[0].family);
-          });
+          }, (error: Error) => callback(error, '', 4));
         },
       },
       (response) => {
@@ -181,7 +161,7 @@ export function registerNappletHandlers(
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
-        // Allow the hidden startup document to paint before revealing its view.
+        // Keep startup frame callbacks unthrottled until the loaded view is presented.
         backgroundThrottling: false,
       },
     });
@@ -255,7 +235,11 @@ export function registerNappletHandlers(
     });
     entry.visible = !!visible && bounds.width > 0 && bounds.height > 0;
     entry.inputBlocked = !entry.visible || !interactive;
-    entry.view.setVisible(entry.visible && entry.painted);
+    // loadURL has completed before bounds can arrive. A hidden WebContentsView
+    // suppresses requestAnimationFrame even with background throttling disabled;
+    // reveal the loaded document so its first-paint handshake can run. Input is
+    // still blocked by blockInput until that private handshake completes.
+    entry.view.setVisible(entry.visible);
   });
   handle(IPC.nappletSend, (id: string, message: string) => {
     const entry = views.get(id);

@@ -12,11 +12,12 @@ export const nappletInstallations = sqliteTable(
     artifactHash: text('artifact_hash').notNull(),
     previousManifest: text('previous_manifest'),
     lastUsedAt: integer('last_used_at'),
-    pinnedAt: integer('pinned_at'),
+    desktopPosition: integer('desktop_position'),
   },
   (t) => [
     primaryKey({ columns: [t.accountPubkey, t.appKey] }),
     index('napplet_recent').on(t.accountPubkey, t.lastUsedAt),
+    index('napplet_desktop').on(t.accountPubkey, t.desktopPosition),
   ],
 );
 

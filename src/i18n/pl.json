@@ -253,6 +253,7 @@
     "account_changed_history": "Konto komunikacji w pobliżu uległo zmianie. Ta historia jest tylko do odczytu."
   },
   "common": {
+    "reset": "Resetuj",
     "copy": "Kopiuj",
     "copy_failed": "Nie udało się skopiować. Spróbuj ponownie.",
     "paste_failed": "Nie udało się wkleić. Spróbuj ponownie.",
@@ -1074,6 +1075,7 @@
     "runtime_notices": "Chromium i dołączone komponenty"
   },
   "napplets": {
+    "allow_and_open": "Zezwól i otwórz",
     "permissions_ask": "Pytaj za każdym razem",
     "permissions_duration": "Czas obowiązywania",
     "permissions_manage": "Uprawnienia",
@@ -1097,13 +1099,8 @@
     "signing_reject_countdown": "Odrzuć({{seconds}})",
     "title": "Miniaplikacje",
     "recent": "Ostatnie",
-    "discovery": "Discovery",
-    "discover": "Odkrywaj aplikacje",
     "empty_title": "Tutaj znajdziesz swoje aplikacje",
-    "empty_description": "Otwórz aplikację w Discovery, aby dodać ją tutaj. Przytrzymaj i przeciągnij ikonę, aby ją przypiąć lub usunąć z listy.",
-    "pin": "Przypnij",
-    "unpin": "Odepnij",
-    "remove": "Usuń",
+    "empty_description": "Otwórz aplikację z linku i dodaj ją do Moich aplikacji przez menu ostatnio używanych.",
     "install_link": "Dodaj aplikację",
     "address": "Adres aplikacji",
     "address_hint": "Wklej adres aplikacji Nostr lub link udostępniania.",
@@ -1117,10 +1114,6 @@
     "check_update": "Sprawdź aktualizacje",
     "up_to_date": "Ta aplikacja jest aktualna.",
     "immutable_version": "To stała wersja. Aby ją zaktualizować, otwórz adres nowszej aplikacji.",
-    "search": "Szukaj w załadowanych aplikacjach",
-    "refresh": "Odśwież",
-    "load_more": "Wczytaj więcej",
-    "no_results": "Nie znaleziono aplikacji. Odśwież listę lub dodaj adres.",
     "publisher": "Wydawca",
     "permissions": "Żądany dostęp",
     "version": "Zweryfikowana wersja",
@@ -1136,7 +1129,6 @@
     "download_failed": "Nie udało się pobrać zweryfikowanej aplikacji.",
     "not_found": "Nie znaleziono aplikacji. Sprawdź adres i połączenie sieciowe.",
     "unsupported": "Ta aplikacja wymaga niedostępnych funkcji.",
-    "partial_discovery": "Niektóre przekaźniki nie zakończyły pracy. Wyniki mogą być niepełne.",
     "rebuild_required": "Ta kompilacja nie zawiera środowiska aplikacji. Przebuduj aplikację natywną.",
     "capability_shell": "Środowisko hosta",
     "capability_theme": "Wygląd",
@@ -1200,7 +1192,7 @@
     "signing_denied": "Odrzucono",
     "capabilities_required": "Wymagany dostęp",
     "capabilities_optional": "Opcjonalny dostęp",
-    "capabilities_signing_notice": "Żądania podpisu są rozpatrywane oddzielnie. Opcjonalny dostęp jest początkowo wyłączony.",
+    "capabilities_signing_notice": "Żądania podpisu są rozpatrywane oddzielnie.",
     "signing_expires": "Żądanie wygasa o {{time}}",
     "signing_no_rules_title": "Brak zapisanych uprawnień",
     "signing_duration_once": "Tylko teraz",
@@ -1212,6 +1204,13 @@
     "signing_effect_auth": "Ten serwer rozpozna Twoje konto, aby aplikacja mogła korzystać z usług wymagających logowania.",
     "signing_effect_encrypted": "Treść zostanie zaszyfrowana dla wskazanego odbiorcy i wysłana na wymienione serwery.",
     "signing_effect_publish": "Treść zostanie opublikowana z Twojego konta. Osoby z dostępem do tych serwerów mogą ją zobaczyć.",
-    "signing_until": "Ważne do {{time}}"
+    "signing_until": "Ważne do {{time}}",
+    "desktop": "Moje aplikacje",
+    "add_to_desktop": "Dodaj do moich aplikacji",
+    "remove_from_desktop": "Usuń z moich aplikacji",
+    "move_earlier": "Przenieś wcześniej",
+    "move_later": "Przenieś później",
+    "desktop_hint": "Dodaj aplikacje do ekranu głównego przez menu ostatnio używanych.",
+    "more": "Więcej"
   }
 }

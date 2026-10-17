@@ -2,8 +2,9 @@
 
 PsstPsst hosts HTML napplets, including embedded single-threaded WebAssembly,
 under the currently selected account. There is no guest account or DM capability.
-The third primary tab contains Recent and Discovery. Each account owns its recent
-apps, pins, installations, settings, permissions and default intent handlers.
+The third primary tab is a home screen: a single recent-app row above an
+explicitly ordered desktop, both inside one virtualized vertical list. Each account
+owns its desktop positions, recent usage, installations, settings, permissions and default intent handlers.
 
 ## Protocol baseline
 
@@ -43,10 +44,12 @@ and cancels its own run on exit. Run ownership prevents a departing route from
 stopping a newer launch selected in the persistent primary pane.
 
 The trusted wrapper signals presentation readiness after its iframe loads and
-crosses a paint boundary. Mobile and Electron keep the surface hidden until that
-signal, independently of permission overlays. This is a private container signal,
-not an application NAP capability; app messages cannot forge it. Electron permits
-painting while hidden during startup and restores background throttling afterward.
+crosses a paint boundary. Mobile keeps the surface hidden until that signal.
+Electron reveals the loaded document at its first valid visible bounds because
+hidden WebContentsViews suppress frame callbacks, even without background
+throttling. Input stays blocked until the private readiness signal, then normal
+background throttling resumes. This signal is independent of application NAP
+capabilities and cannot be forged by app messages.
 
 On mobile, native modals already composite above the embedded WebView, so host
 sheets block app input without hiding its painted content. Electron's separate
@@ -67,9 +70,10 @@ memory-only. A new artifact receives a separate namespace; updates do not silent
 copy data or grants. An explicit, atomic migration can copy shared application KV
 into an empty new-version namespace; it never copies grants or host settings. Previous code and data remain available for rollback.
 
-Recent removal atomically clears recency, pin state and that account's default
-intent handlers targeting the app. App data and permissions remain available;
-opening it again restores its recent entry. Shared immutable artifact files are hash-verified before execution and kept
+Desktop positions are independent of last-used timestamps. New launches enter
+the recent preview; its menu adds one desktop shortcut, and moving
+it updates only changed slots in an account-scoped transaction. Shortcut removal
+preserves recency, app data, permissions and default intent handlers. Shared immutable artifact files are hash-verified before execution and kept
 in the managed documents directory. They contain no account credentials.
 
 ## Platform boundary
@@ -100,7 +104,7 @@ the existing off-thread device-crypto port; bridge codecs, UTF-8 decoding and
 document preparation yield between bounded chunks. Each transport checks
 DNS in the actual connection path; iOS pins the numeric connection target while
 retaining hostname TLS verification. Redirects are rejected.
-Android retries non-public system DNS answers through
+Android and Electron retry non-public system DNS answers through
 Cloudflare or Google DNS over HTTPS using pinned bootstrap IPs. Only independently
 resolved public addresses are admitted; TLS still verifies the original hostname.
 This supports Fake-IP VPN DNS without allowing access to private endpoints. The
@@ -263,12 +267,14 @@ cd android
 ./gradlew :expo-napplet:connectedDebugAndroidTest -PreactNativeArchitectures=arm64-v8a
 ```
 
-The host bounds installation libraries to 512 entries, loaded discovery to 500,
+The host bounds installation libraries to 512 entries, resolved metadata to 500,
+and the recent preview to one grid row. Its recent-history page derives all used apps from
+the already-loaded installation library and virtualizes their grid. It bounds
 filters to eight with at most 200 events per filter, routed authors to 16, and a
 runtime's destination set to 24. Query and live-event buffers are byte-bounded;
 live delivery yields between batches. A process-level lifecycle observer retains
 only live relay pools. Verified manifest metadata and public icons are cached so
-pinning an app does not repeat settled cryptographic work.
+reordering a shortcut does not repeat settled cryptographic work.
 
 Additional checks:
 

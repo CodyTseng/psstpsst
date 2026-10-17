@@ -253,6 +253,7 @@
     "account_changed_history": "Yakındaki iletişim hesabı değişti. Bu geçmiş salt okunurdur."
   },
   "common": {
+    "reset": "Sıfırla",
     "copy": "Kopyala",
     "copy_failed": "Kopyalanamadı. Tekrar deneyin.",
     "paste_failed": "Yapıştırılamadı. Tekrar deneyin.",
@@ -1064,6 +1065,7 @@
     "runtime_notices": "Chromium ve birlikte gelen bileşenler"
   },
   "napplets": {
+    "allow_and_open": "İzin ver ve aç",
     "permissions_ask": "Her seferinde sor",
     "permissions_duration": "Süre",
     "permissions_manage": "İzinler",
@@ -1087,13 +1089,8 @@
     "signing_reject_countdown": "Reddet({{seconds}})",
     "title": "Mini uygulamalar",
     "recent": "Son kullanılanlar",
-    "discovery": "Discovery",
-    "discover": "Uygulamaları keşfet",
     "empty_title": "Uygulamalarınız burada görünür",
-    "empty_description": "Buraya eklemek için Discovery’den bir uygulama açın. Sabitlemek veya kaldırmak için simgeyi basılı tutup sürükleyin.",
-    "pin": "Sabitle",
-    "unpin": "Sabitlemeyi kaldır",
-    "remove": "Kaldır",
+    "empty_description": "Bir uygulamayı bağlantıdan açın, ardından son kullanılanlar menüsünden Uygulamalarım’a ekleyin.",
     "install_link": "Uygulama ekle",
     "address": "Uygulama adresi",
     "address_hint": "Bir Nostr uygulama adresi veya paylaşım bağlantısı yapıştırın.",
@@ -1107,10 +1104,6 @@
     "check_update": "Güncellemeleri denetle",
     "up_to_date": "Bu uygulama güncel.",
     "immutable_version": "Bu sabit bir sürümdür. Güncellemek için daha yeni bir uygulama adresini açın.",
-    "search": "Yüklenen uygulamalarda ara",
-    "refresh": "Yenile",
-    "load_more": "Daha fazla yükle",
-    "no_results": "Uygulama bulunamadı. Listeyi yenileyin veya bir uygulama adresi ekleyin.",
     "publisher": "Yayıncı",
     "permissions": "İstenen erişim",
     "version": "Doğrulanmış sürüm",
@@ -1126,7 +1119,6 @@
     "download_failed": "Doğrulanmış uygulama indirilemedi.",
     "not_found": "Uygulama bulunamadı. Adresi ve ağ bağlantısını kontrol edin.",
     "unsupported": "Bu uygulama kullanılamayan özellikler gerektiriyor.",
-    "partial_discovery": "Bazı röleler isteği tamamlamadı. Sonuçlar eksik olabilir.",
     "rebuild_required": "Bu derleme uygulama çalışma ortamını içermiyor. Yerel uygulamayı yeniden derleyin.",
     "capability_shell": "Ana uygulama ortamı",
     "capability_theme": "Görünüm",
@@ -1190,7 +1182,7 @@
     "signing_denied": "Reddedildi",
     "capabilities_required": "Gerekli erişim",
     "capabilities_optional": "İsteğe bağlı erişim",
-    "capabilities_signing_notice": "İmza istekleri ayrıca incelenir. İsteğe bağlı erişim başlangıçta kapalıdır.",
+    "capabilities_signing_notice": "İmza istekleri ayrıca incelenir.",
     "signing_expires": "İstek {{time}} saatinde sona erer",
     "signing_no_rules_title": "Kayıtlı izin yok",
     "signing_duration_once": "Bir kez",
@@ -1202,6 +1194,13 @@
     "signing_effect_auth": "Bu sunucu hesabınızı tanıyarak uygulamanın oturum gerektiren hizmetlere erişmesini sağlar.",
     "signing_effect_encrypted": "İçerik aşağıdaki alıcı için şifrelenip belirtilen sunuculara gönderilir.",
     "signing_effect_publish": "İçerik hesabınızla yayımlanır. Bu sunuculara erişimi olan kişiler içeriği görebilir.",
-    "signing_until": "Bitiş: {{time}}"
+    "signing_until": "Bitiş: {{time}}",
+    "desktop": "Uygulamalarım",
+    "add_to_desktop": "Uygulamalarıma ekle",
+    "remove_from_desktop": "Uygulamalarımdan kaldır",
+    "move_earlier": "Öne taşı",
+    "move_later": "Arkaya taşı",
+    "desktop_hint": "Son kullanılan uygulamaların menüsünden ana ekranınıza uygulama ekleyin.",
+    "more": "Daha fazla"
   }
 }

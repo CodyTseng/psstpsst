@@ -1,4 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { PRIMARY_PANE_RESET_MARKER } from '@/components/navigation/responsive-stack-router';
 import { NappletSurface } from '@/platform/napplet-surface';
 import { router } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
@@ -10,6 +11,7 @@ import { ActivityIndicator } from 'react-native';
 import { NappletIcon } from '@/components/napplet/NappletIcon';
 import NappletRunScreen from '../../../app/(app)/napplet-run';
 
+const mockDispatch = jest.fn();
 let mockFocused = true;
 let mockSharing = false;
 let mockOverlayActive = false;
@@ -18,7 +20,7 @@ let mockLaunching = false;
 let mockRunId = 1;
 let mockLaunch: { release: { title: string }; pending: boolean; showLoading?: boolean; error: string | null } | null = null;
 let mockRunning: object | null = { release: { title: 'App' }, containerId: 'test' };
-jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useFocusEffect: jest.fn(), useLocalSearchParams: () => ({ runId: '1' }) }));
+jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useFocusEffect: jest.fn(), useLocalSearchParams: () => ({ runId: '1' }), useNavigation: () => ({ dispatch: mockDispatch }) }));
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused, usePreventRemove: jest.fn() }));
 jest.mock('@/components/common/use-focused-overlay-dismiss', () => ({ useFocusedOverlayDismiss: jest.fn() }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -130,7 +132,11 @@ it('places explicit close at the start and sends system back to the app', async 
   await act(async () => { back(); });
   expect(nappletService.goBack).toHaveBeenCalledTimes(1);
   expect(nappletService.stop).not.toHaveBeenCalled();
-  expect(usePreventRemove).toHaveBeenLastCalledWith(true, back);
+  expect(usePreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
+  const preventedBack = jest.mocked(usePreventRemove).mock.calls.at(-1)![1];
+  await act(async () => { preventedBack({ data: { action: { type: 'GO_BACK' } } }); });
+  expect(nappletService.goBack).toHaveBeenCalledTimes(2);
+  expect(mockDispatch).not.toHaveBeenCalled();
   act(() => { header.props.left.props.onPress(); });
   expect(nappletService.stop).toHaveBeenCalledTimes(1);
   act(() => renderer.unmount());
@@ -164,5 +170,17 @@ it('keeps the same app surface mounted while the embedded share picker is open',
   act(() => { renderer.update(<NappletRunScreen />); });
   expect(renderer.root.findByType(NappletSurface)).toBe(original);
   expect(original.props.visible).toBe(true);
+  act(() => renderer.unmount());
+});
+
+it('allows primary-pane selections to replace a running app instead of navigating its history', () => {
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  const handler = jest.mocked(usePreventRemove).mock.calls.at(-1)![1];
+  const action = { type: 'PUSH', payload: { name: 'napplet-recent', singular: PRIMARY_PANE_RESET_MARKER } };
+  act(() => { handler({ data: { action } }); });
+  expect(mockDispatch).toHaveBeenCalledWith(action);
+  expect(nappletService.goBack).not.toHaveBeenCalled();
+  expect(router.back).not.toHaveBeenCalled();
   act(() => renderer.unmount());
 });

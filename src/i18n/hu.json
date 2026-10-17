@@ -253,6 +253,7 @@
     "account_changed_history": "A közeli fiók megváltozott. Ez az előzmény csak olvasható."
   },
   "common": {
+    "reset": "Visszaállítás",
     "copy": "Másolás",
     "copy_failed": "Nem sikerült másolni. Próbáld újra.",
     "paste_failed": "Nem sikerült beilleszteni. Próbáld újra.",
@@ -1064,6 +1065,7 @@
     "runtime_notices": "Chromium és mellékelt összetevők"
   },
   "napplets": {
+    "allow_and_open": "Engedélyezés és megnyitás",
     "permissions_ask": "Mindig kérdezzen rá",
     "permissions_duration": "Időtartam",
     "permissions_manage": "Engedélyek",
@@ -1087,13 +1089,8 @@
     "signing_reject_countdown": "Elutasítás({{seconds}})",
     "title": "Miniappok",
     "recent": "Legutóbbiak",
-    "discovery": "Discovery",
-    "discover": "Appok felfedezése",
     "empty_title": "Itt találod az appjaidat",
-    "empty_description": "Nyiss meg egy appot a Discovery nézetben, hogy megjelenjen itt. Tartsd nyomva és húzd az ikont a rögzítéshez vagy eltávolításhoz.",
-    "pin": "Rögzítés",
-    "unpin": "Rögzítés feloldása",
-    "remove": "Eltávolítás",
+    "empty_description": "Nyiss meg egy appot hivatkozással, majd add a Saját appokhoz a legutóbb használt app menüjéből.",
     "install_link": "App hozzáadása",
     "address": "App címe",
     "address_hint": "Illessz be egy Nostr-appcímet vagy megosztási hivatkozást.",
@@ -1107,10 +1104,6 @@
     "check_update": "Frissítések keresése",
     "up_to_date": "Az app naprakész.",
     "immutable_version": "Ez egy rögzített verzió. Frissítéshez nyiss meg egy újabb appcímet.",
-    "search": "Keresés a betöltött appokban",
-    "refresh": "Frissítés",
-    "load_more": "Továbbiak betöltése",
-    "no_results": "Nem található app. Frissítsd a listát, vagy adj hozzá egy címet.",
     "publisher": "Közzétevő",
     "permissions": "Kért hozzáférés",
     "version": "Ellenőrzött verzió",
@@ -1126,7 +1119,6 @@
     "download_failed": "Az ellenőrzött app nem tölthető le.",
     "not_found": "Az app nem található. Ellenőrizd a címet és a hálózatot.",
     "unsupported": "Az app nem elérhető képességeket igényel.",
-    "partial_discovery": "Néhány relay nem fejezte be a lekérést. Az eredmények hiányosak lehetnek.",
     "rebuild_required": "Ez a build nem tartalmazza az appfuttatót. Építsd újra a natív alkalmazást.",
     "capability_shell": "Gazdakörnyezet",
     "capability_theme": "Megjelenés",
@@ -1190,7 +1182,7 @@
     "signing_denied": "Elutasítva",
     "capabilities_required": "Szükséges hozzáférés",
     "capabilities_optional": "Választható hozzáférés",
-    "capabilities_signing_notice": "Az aláírási kérések külön ellenőrzést kapnak. A választható hozzáférés kezdetben kikapcsolt.",
+    "capabilities_signing_notice": "Az aláírási kérések külön ellenőrzést kapnak.",
     "signing_expires": "A kérés lejár: {{time}}",
     "signing_no_rules_title": "Nincs mentett engedély",
     "signing_duration_once": "Csak most",
@@ -1202,6 +1194,13 @@
     "signing_effect_auth": "Ez a szerver azonosítja a fiókodat, hogy az alkalmazás bejelentkezést igénylő szolgáltatásokat használhasson.",
     "signing_effect_encrypted": "A tartalom az alábbi címzettnek titkosítva kerül a felsorolt szerverekre.",
     "signing_effect_publish": "A tartalom a fiókod nevében lesz közzétéve. A szerverekhez hozzáférő emberek láthatják.",
-    "signing_until": "Érvényes eddig: {{time}}"
+    "signing_until": "Érvényes eddig: {{time}}",
+    "desktop": "Saját alkalmazások",
+    "add_to_desktop": "Hozzáadás a saját alkalmazásokhoz",
+    "remove_from_desktop": "Eltávolítás a saját alkalmazásokból",
+    "move_earlier": "Mozgatás előrébb",
+    "move_later": "Mozgatás hátrébb",
+    "desktop_hint": "Adj appokat a kezdőképernyőhöz a legutóbb használt appok menüjéből.",
+    "more": "Továbbiak"
   }
 }

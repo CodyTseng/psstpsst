@@ -38,7 +38,7 @@ export type NappletRelease = {
 };
 export type NappletInstallation = NappletRelease & {
   lastUsedAt: number | null;
-  pinnedAt: number | null;
+  desktopPosition: number | null;
   previousManifest: string | null;
 };
 export function randomId(): string {

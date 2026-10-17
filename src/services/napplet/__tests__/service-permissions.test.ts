@@ -5,7 +5,7 @@ import { NappletNetwork } from '../network';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { naddrEncode, neventEncode, noteEncode } from 'nostr-tools/nip19';
 import { nappletService, nappletStore } from '../service';
-import { getData, setData, installations, type AppScope } from '../repository';
+import { getData, setData, installations, saveDesktopOrder, clearRecent, type AppScope } from '../repository';
 import { parseManifest, type NappletInstallation } from '../protocol';
 import typeZoo from './fixtures/type-zoo-legacy.json';
 
@@ -13,7 +13,7 @@ jest.mock('@/db/client', () => ({ db: {} }));
 jest.mock('@/services/account/account-access', () => ({ getAccount: jest.fn(async () => ({ pubkey: 'accountA' })) }));
 jest.mock('../artifacts', () => ({ loadArtifact: jest.fn(async () => '') }));
 jest.mock('../network', () => ({ NappletNetwork: jest.fn(() => ({ destroy: jest.fn(), query: jest.fn(), publisherRelays: jest.fn(async () => []) })) }));
-jest.mock('../repository', () => ({ getData: jest.fn(), setData: jest.fn(), installations: jest.fn(), saveInstallation: jest.fn(async () => {}), markRecent: jest.fn(async () => {}) }));
+jest.mock('../repository', () => ({ clearRecent: jest.fn(async () => {}), saveDesktopOrder: jest.fn(async () => {}), getData: jest.fn(), setData: jest.fn(), installations: jest.fn(), saveInstallation: jest.fn(async () => {}), markRecent: jest.fn(async () => {}) }));
 jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
   scope: { accountPubkey: options.accountPubkey, appKey: options.release.key, artifactHash: options.release.hash },
   open: jest.fn(async () => 'container'), close: jest.fn(async () => {}),
@@ -401,4 +401,105 @@ it('shares without replacing the execution container and resumes only its own se
   nappletService.closeShare('accountA', 'container');
   expect(nappletStore.getState().sharing).toBe(false);
   expect(nappletStore.getState().running?.containerId).toBe('container');
+});
+
+
+it('optimistically serializes desktop edits and persists the latest complete order', async () => {
+  const items = [{ ...app, desktopPosition: 0 }, { ...app, key: 'second', desktopPosition: null }];
+  nappletStore.setState({ installed: items, recent: items });
+  let finish!: () => void;
+  jest.mocked(saveDesktopOrder).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+  const first = nappletService.moveDesktop('second', 0, 'accountA');
+  expect(nappletStore.getState().installed.find((entry) => entry.key === 'second')?.desktopPosition).toBe(0);
+  const second = nappletService.moveDesktop('app', null, 'accountA');
+  await Promise.resolve();
+  expect(saveDesktopOrder).toHaveBeenCalledTimes(1);
+  finish();
+  await Promise.all([first, second]);
+  expect(saveDesktopOrder).toHaveBeenNthCalledWith(1, 'accountA', ['second', 'app']);
+  expect(saveDesktopOrder).toHaveBeenNthCalledWith(2, 'accountA', ['second']);
+  expect(nappletStore.getState().installed.find((entry) => entry.key === 'app')?.desktopPosition).toBeNull();
+});
+
+it('restores persisted desktop state after a failed write and rejects a stale account', async () => {
+  const persisted = [{ ...app, desktopPosition: 0 }];
+  nappletStore.setState({ installed: persisted, recent: persisted });
+  jest.mocked(installations).mockResolvedValue(persisted);
+  jest.mocked(saveDesktopOrder).mockRejectedValueOnce(new Error('disk-full'));
+  const edit = nappletService.moveDesktop('app', null, 'accountA');
+  expect(nappletStore.getState().installed[0].desktopPosition).toBeNull();
+  await expect(edit).rejects.toThrow('disk-full');
+  expect(nappletStore.getState().installed[0].desktopPosition).toBe(0);
+  await expect(nappletService.moveDesktop('app', 0, 'accountB')).rejects.toThrow('session-closed');
+  expect(saveDesktopOrder).toHaveBeenCalledTimes(1);
+});
+
+
+it('removes recent usage optimistically while preserving the desktop and guards account scope', async () => {
+  const items = [{ ...app, desktopPosition: 0, lastUsedAt: 100 }];
+  nappletStore.setState({ installed: items, recent: items });
+  const edit = nappletService.removeRecent('app', 'accountA');
+  expect(nappletStore.getState().recent).toEqual([]);
+  expect(nappletStore.getState().installed[0]).toMatchObject({ desktopPosition: 0, lastUsedAt: null });
+  await edit;
+  expect(clearRecent).toHaveBeenCalledWith('accountA', 'app');
+  await expect(nappletService.removeRecent('app', 'accountB')).rejects.toThrow('session-closed');
+});
+
+it('restores recent usage after its persistence fails', async () => {
+  const items = [{ ...app, desktopPosition: 0, lastUsedAt: 100 }];
+  nappletStore.setState({ installed: items, recent: items });
+  jest.mocked(installations).mockResolvedValue(items);
+  jest.mocked(clearRecent).mockRejectedValueOnce(new Error('disk-full'));
+  await expect(nappletService.removeRecent('app', 'accountA')).rejects.toThrow('disk-full');
+  expect(nappletStore.getState().installed[0]).toMatchObject({ desktopPosition: 0, lastUsedAt: 100 });
+  expect(nappletStore.getState().recent).toEqual(items);
+});
+
+it('uses explicit details-page consent only when that prepared run starts', async () => {
+  const reviewed = ['shell', 'storage'];
+  const runId = nappletService.prepareOpen(app, 'accountA', reviewed);
+  reviewed.push('identity');
+  expect(stored.size).toBe(0);
+  expect(NappletRuntime).not.toHaveBeenCalled();
+  nappletService.startPreparedOpen(runId);
+  await settleLaunch();
+  expect(nappletStore.getState().prompt).toBeNull();
+  expect(NappletRuntime).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['shell', 'storage']);
+  expect(stored.has(key({ ...scope, accountPubkey: 'accountB' }, 'permissions', 'domains'))).toBe(false);
+});
+
+it('asks again if the reviewed set does not match the required permissions', async () => {
+  const runId = nappletService.prepareOpen(app, 'accountA', ['shell']);
+  nappletService.startPreparedOpen(runId);
+  for (let i = 0; i < 30 && !nappletStore.getState().prompt; i++) await Promise.resolve();
+  const request = nappletStore.getState().prompt!;
+  expect(request.capabilities?.required).toEqual(['shell', 'storage']);
+  expect(stored.size).toBe(0);
+  nappletService.answer(request.requestId, false);
+  await settleLaunch();
+  expect(NappletRuntime).not.toHaveBeenCalled();
+});
+
+it('does not reuse prepared consent for a direct launch of a different artifact', async () => {
+  const runId = nappletService.prepareOpen(app, 'accountA', ['shell', 'storage']);
+  nappletService.startPreparedOpen(runId);
+  await settleLaunch();
+  const next = { ...app, hash: 'v2' };
+  const work = nappletService.open(next);
+  for (let i = 0; i < 40 && !nappletStore.getState().prompt; i++) await Promise.resolve();
+  const request = nappletStore.getState().prompt!;
+  expect(request.app?.hash).toBe('v2');
+  nappletService.answer(request.requestId, false);
+  await expect(work).rejects.toThrow('permission-denied');
+});
+
+it('discards unstarted details-page consent when the account changes', async () => {
+  const runId = nappletService.prepareOpen(app, 'accountA', ['shell', 'storage']);
+  await nappletService.activate('accountB');
+  nappletService.startPreparedOpen(runId);
+  await settleLaunch();
+  expect(stored.size).toBe(0);
+  expect(NappletRuntime).not.toHaveBeenCalled();
 });

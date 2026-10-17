@@ -18,7 +18,7 @@ import { nappletService } from '@/services/napplet/service';
 import { NAP_DOMAINS, type NappletRelease } from '@/services/napplet/protocol';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 import { iconStrokeWidth } from '@/theme/icons';
-import { NappletSummary } from './NappletSummary';
+import { NappletInfo } from './NappletInfo';
 import { NappletPermissions } from './NappletPermissions';
 import { platform } from '@/platform';
 
@@ -28,8 +28,8 @@ export function NappletPanel({ release, page, accountPubkey, onAction }: {
   release: NappletRelease; page: 'about' | 'settings'; accountPubkey: string;
   onAction: (action: NappletPanelAction) => void;
 }) {
-  return <View style={{ gap: spacing.lg, paddingTop: page === 'about' ? spacing.md : 0 }}>
-    {page === 'about' ? <NappletSummary release={release} onPublisher={() => onAction('publisher')} /> : <>
+  return <View style={{ gap: spacing.lg, paddingTop: page === 'about' ? spacing.sm : 0 }}>
+    {page === 'about' ? <NappletInfo release={release} onPublisher={() => onAction('publisher')} /> : <>
       <SigningRequester app={release} />
       <NappletSettings release={release} accountPubkey={accountPubkey} />
     </>}
@@ -46,7 +46,7 @@ export function NappletSettings({ release, accountPubkey }: { release: NappletRe
     setBusy(true); setError(false);
     try {
       if (!await platform.confirmationDialog.confirm({ title: t('napplets.revoke'), message: t('napplets.revoke_notice'),
-        confirmLabel: t('napplets.revoke'), cancelLabel: t('common.cancel'), destructive: true })) return;
+        confirmLabel: t('common.reset'), cancelLabel: t('common.cancel'), destructive: true })) return;
       await nappletService.revoke(release, accountPubkey);
       setReset((value) => value + 1);
     } catch { setError(true); }

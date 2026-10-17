@@ -666,6 +666,10 @@ before new work can start. App storage, grants and settings are scoped by accoun
 verified manifest identity and artifact hash. Runtime relay AUTH connections and
 remote-signer transport never borrow the chat session. Only hash-verified immutable
 artifacts are shared across accounts. See [napplet runtime](implementation/napplet-runtime.md).
+Mini-app desktop membership and position are explicit account-scoped state,
+independent of launch recency. Desktop edits commit atomically and never change
+app data or grants. The recent preview shows one row; full recent history derives from the bounded
+installation library.
 Signing grants additionally bind the operation, event kind and applicable record,
 recipient. Publication grants are independent of relay destinations; relay AUTH
 grants remain server-specific. Public-upload grants bind the host-selected storage
@@ -682,3 +686,7 @@ its elevated native view with an ephemeral renderer preview while the sheet is o
 Sharing is an embedded host flow: the execution container remains mounted but
 hidden, background consent waits until the picker closes, and sending never
 navigates to a destination conversation.
+
+Details-page launch consent stays in the prepared run state and applies only to
+the reviewed required-capability set for that account and artifact. It is never
+carried in route parameters; direct launches still check persisted permissions.

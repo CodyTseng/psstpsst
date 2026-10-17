@@ -253,6 +253,7 @@
     "account_changed_history": "Das Nearby-Konto hat sich geändert. Dieser Verlauf ist schreibgeschützt."
   },
   "common": {
+    "reset": "Zurücksetzen",
     "copy": "Kopieren",
     "copy_failed": "Kopieren fehlgeschlagen. Versuche es erneut.",
     "paste_failed": "Einfügen fehlgeschlagen. Versuche es erneut.",
@@ -1064,6 +1065,7 @@
     "runtime_notices": "Chromium und enthaltene Komponenten"
   },
   "napplets": {
+    "allow_and_open": "Erlauben und öffnen",
     "permissions_ask": "Jedes Mal fragen",
     "permissions_duration": "Dauer",
     "permissions_manage": "Berechtigungen",
@@ -1087,13 +1089,8 @@
     "signing_reject_countdown": "Ablehnen({{seconds}})",
     "title": "Mini-Apps",
     "recent": "Zuletzt verwendet",
-    "discovery": "Discovery",
-    "discover": "Apps entdecken",
     "empty_title": "Hier sind deine Apps",
-    "empty_description": "Öffne eine App aus Discovery, um sie hier hinzuzufügen. Halte ein Symbol gedrückt und ziehe es zum Anheften oder Entfernen.",
-    "pin": "Anheften",
-    "unpin": "Loslösen",
-    "remove": "Entfernen",
+    "empty_description": "Öffne eine App über einen Link und füge sie über ihr Menü unter Zuletzt verwendet zu Meine Apps hinzu.",
     "install_link": "App hinzufügen",
     "address": "App-Adresse",
     "address_hint": "Füge eine Nostr-App-Adresse oder einen Freigabelink ein.",
@@ -1107,10 +1104,6 @@
     "check_update": "Nach Updates suchen",
     "up_to_date": "Diese App ist aktuell.",
     "immutable_version": "Dies ist eine feste Version. Öffne zum Aktualisieren eine neuere App-Adresse.",
-    "search": "Geladene Apps suchen",
-    "refresh": "Aktualisieren",
-    "load_more": "Mehr laden",
-    "no_results": "Keine Apps gefunden. Aktualisiere die Liste oder füge eine App-Adresse hinzu.",
     "publisher": "Herausgeber",
     "permissions": "Angefragter Zugriff",
     "version": "Geprüfte Version",
@@ -1126,7 +1119,6 @@
     "download_failed": "Die geprüfte App konnte nicht heruntergeladen werden.",
     "not_found": "Die App wurde nicht gefunden. Prüfe Adresse und Netzwerkverbindung.",
     "unsupported": "Diese App benötigt nicht verfügbare Funktionen.",
-    "partial_discovery": "Einige Relays haben nicht geantwortet. Die Ergebnisse können unvollständig sein.",
     "rebuild_required": "Dieser Build enthält die App-Laufzeit nicht. Erstelle die native Anwendung neu.",
     "capability_shell": "Host-Umgebung",
     "capability_theme": "Darstellung",
@@ -1190,7 +1182,7 @@
     "signing_denied": "Abgelehnt",
     "capabilities_required": "Erforderlicher Zugriff",
     "capabilities_optional": "Optionaler Zugriff",
-    "capabilities_signing_notice": "Signaturanfragen werden separat geprüft. Optionaler Zugriff ist anfangs deaktiviert.",
+    "capabilities_signing_notice": "Signaturanfragen werden separat geprüft.",
     "signing_expires": "Anfrage läuft um {{time}} ab",
     "signing_no_rules_title": "Keine gespeicherten Berechtigungen",
     "signing_duration_once": "Nur einmal",
@@ -1202,6 +1194,13 @@
     "signing_effect_auth": "Dieser Server erkennt dein Konto, damit die App Dienste nutzen kann, die eine Anmeldung erfordern.",
     "signing_effect_encrypted": "Der Inhalt wird für den unten genannten Empfänger verschlüsselt und an die aufgeführten Server gesendet.",
     "signing_effect_publish": "Dieser Inhalt wird unter deinem Konto veröffentlicht. Personen mit Zugriff auf diese Server können ihn möglicherweise sehen.",
-    "signing_until": "Gültig bis {{time}}"
+    "signing_until": "Gültig bis {{time}}",
+    "desktop": "Meine Apps",
+    "add_to_desktop": "Zu Meine Apps hinzufügen",
+    "remove_from_desktop": "Aus Meine Apps entfernen",
+    "move_earlier": "Nach vorne verschieben",
+    "move_later": "Nach hinten verschieben",
+    "desktop_hint": "Füge Apps über ihr Menü unter Zuletzt verwendet zum Startbildschirm hinzu.",
+    "more": "Mehr"
   }
 }
