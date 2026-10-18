@@ -14,7 +14,7 @@ import type { ContextMenuAnchor, ContextMenuPlacement } from '@/components/commo
 import { useIsRTL } from '@/i18n/direction';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
 import { impact } from '@/lib/haptics';
-import type { NappletInstallation } from '@/services/napplet/protocol';
+import type { GridApp } from '@/services/explore/model';
 import { spacing, useThemeColors } from '@/theme';
 import { manipulationTiming } from '@/theme/motion';
 import { NappletAppMenu } from './NappletAppMenu';
@@ -24,17 +24,17 @@ import { NappletTile, useNappletGridMetrics } from './NappletTile';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type Source = 'recent' | 'desktop';
-type Props = {
-  items: NappletInstallation[];
-  recent: NappletInstallation[];
-  onOpen: (app: NappletInstallation) => void;
-  onMove: (app: NappletInstallation, index: number | null) => void | Promise<void>;
+type Props<T extends GridApp = GridApp> = {
+  items: T[];
+  recent: T[];
+  onOpen: (app: T) => void;
+  onMove: (app: T, index: number | null) => void | Promise<void>;
   bottomInset: number;
   onShowRecent: () => void;
-  onRemoveRecent: (app: NappletInstallation) => void;
-  onDetails: (app: NappletInstallation) => void;
-  onPermissions: (app: NappletInstallation) => void;
-  onShare: (app: NappletInstallation) => void;
+  onRemoveRecent: (app: T) => void;
+  onDetails: (app: T) => void;
+  onPermissions: (app: T) => void;
+  onShare: (app: T) => void;
   onScrollChange?: (scrolled: boolean) => void;
 };
 type Drag = {
@@ -71,20 +71,23 @@ function previewTransform(index: number, slot: number, drag: Drag) {
 }
 
 /** One virtualized page and drag surface contain the recent row and desktop. */
-export function NappletGrid({ items, recent, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
+export function NappletGrid<T extends GridApp>(props: Props<T>) {
+  return <AppGrid {...props as unknown as Props} />;
+}
+function AppGrid({ items, recent, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
   const c = useThemeColors();
   const { t } = useTranslation();
   const rtl = useIsRTL();
   const root = useRef<View>(null);
   const viewport = useRef<View>(null);
-  const list = useAnimatedRef<FlatList<NappletInstallation>>();
+  const list = useAnimatedRef<FlatList<GridApp>>();
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerSize = useSharedValue(0);
   const [width, setWidth] = useState(0);
   const [dragItems, setDragItems] = useState<Props['items'] | null>(null);
   const dropGeneration = useRef(0);
-  const [dragging, setDragging] = useState<NappletInstallation | null>(null);
-  const [menu, setMenu] = useState<{ app: NappletInstallation; source: Source; anchor: ContextMenuAnchor } | null>(null);
+  const [dragging, setDragging] = useState<GridApp | null>(null);
+  const [menu, setMenu] = useState<{ app: GridApp; source: Source; anchor: ContextMenuAnchor } | null>(null);
   const [menuPlacement, setMenuPlacement] = useState<ContextMenuPlacement>('above');
   const appsByKey = useMemo(() => new Map([...recent, ...items].map((app) => [app.key, app])), [items, recent]);
   const suppressPress = useRef(false);
@@ -163,7 +166,7 @@ export function NappletGrid({ items, recent, onOpen, onMove, bottomInset, onShow
       ],
     };
   });
-  const select = useCallback((app: NappletInstallation, icon: View | null) => {
+  const select = useCallback((app: GridApp, icon: View | null) => {
     if (releasedIndex.get() >= 0) return;
     selectedIcon.current = icon;
     suppressPress.current = false; selected.set(app.key);
@@ -190,7 +193,7 @@ export function NappletGrid({ items, recent, onOpen, onMove, bottomInset, onShow
       finishDrop();
     }
   }, [appsByKey, onMove, finishDrop]);
-  const open = useCallback((app: NappletInstallation) => {
+  const open = useCallback((app: GridApp) => {
     if (!suppressPress.current) onOpen(app);
   }, [onOpen]);
   const holdMenu = useCallback((key: string) => {
@@ -238,12 +241,12 @@ export function NappletGrid({ items, recent, onOpen, onMove, bottomInset, onShow
       active.set(false);
       scheduleOnRN(end, selected.get(), index, success);
     });
-  const showMenu = useCallback((app: NappletInstallation, source: Source, event: DesktopContextMenuEvent, icon: View | null) => {
+  const showMenu = useCallback((app: GridApp, source: Source, event: DesktopContextMenuEvent, icon: View | null) => {
     event.preventDefault?.(); event.stopPropagation?.();
     selected.set('');
     icon?.measureInWindow((x, y, width, height) => { setMenuPlacement('above'); setMenu({ app, source, anchor: { x, y, width, height } }); });
   }, [selected]);
-  const action = useCallback((app: NappletInstallation, kind: string) => {
+  const action = useCallback((app: GridApp, kind: string) => {
     const index = items.findIndex((item) => item.key === app.key);
     if (kind === 'details') onDetails(app);
     else if (kind === 'permissions') onPermissions(app);
@@ -253,7 +256,7 @@ export function NappletGrid({ items, recent, onOpen, onMove, bottomInset, onShow
     else if (kind === 'earlier' && index > 0) void onMove(app, index - 1);
     else if (kind === 'later' && index >= 0 && index < items.length - 1) void onMove(app, index + 1);
   }, [items, onMove, onDetails, onPermissions, onShare]);
-  const renderTile = (app: NappletInstallation, source: Source, index: number) => <GridItem
+  const renderTile = (app: GridApp, source: Source, index: number) => <GridItem
     key={app.key} app={app} source={source} index={index}
     width={cellWidth} height={cellHeight} iconSize={iconSize} hideLabel={menu?.app.key === app.key && menuPlacement === 'below'} drag={drag}
     onOpen={open} onSelect={select} onMenu={showMenu} onAction={action} />;
@@ -306,10 +309,10 @@ export function NappletGrid({ items, recent, onOpen, onMove, bottomInset, onShow
 }
 
 const GridItem = memo(function GridItem({ app, source, index, width, height, iconSize, hideLabel, drag, onOpen, onSelect, onMenu, onAction }: {
-  app: NappletInstallation; source: Source; index: number; width: number; height: number; iconSize: number; hideLabel: boolean; drag: Drag;
-  onOpen: Props['onOpen']; onSelect: (app: NappletInstallation, icon: View | null) => void;
-  onMenu: (app: NappletInstallation, source: Source, event: DesktopContextMenuEvent, icon: View | null) => void;
-  onAction: (app: NappletInstallation, kind: string) => void;
+  app: GridApp; source: Source; index: number; width: number; height: number; iconSize: number; hideLabel: boolean; drag: Drag;
+  onOpen: Props['onOpen']; onSelect: (app: GridApp, icon: View | null) => void;
+  onMenu: (app: GridApp, source: Source, event: DesktopContextMenuEvent, icon: View | null) => void;
+  onAction: (app: GridApp, kind: string) => void;
 }) {
   const { t } = useTranslation();
   const icon = useRef<View>(null);

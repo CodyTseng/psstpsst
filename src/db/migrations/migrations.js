@@ -1,5 +1,8 @@
+import m0063 from './0063_local-relay.sql';
 // This file is required for Expo/React Native SQLite migrations - https://orm.drizzle.team/quick-sqlite/expo
 
+import m0062 from './0062_explore.sql';
+import m0061 from './0061_signing-authorizations.sql';
 import m0060 from './0060_napplet-desktop.sql';
 import m0059 from './0059_napplets.sql';
 import journal from './meta/_journal.json';
@@ -126,6 +129,9 @@ m0056,
 m0057,
 m0058,
 m0059,
-m0060
+m0060,
+m0061,
+m0062,
+m0063
     }
   }

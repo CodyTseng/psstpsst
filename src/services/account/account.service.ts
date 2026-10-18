@@ -1,3 +1,5 @@
+import { platform } from '@/platform';
+import { invalidateSigningAccount } from '@/services/signing/changes';
 import { nappletLifecycle } from '../napplet/lifecycle';
 import { eq } from 'drizzle-orm';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
@@ -5,8 +7,8 @@ import type { BunkerPointer } from 'nostr-tools/nip46';
 
 import { db } from '@/db/client';
 import {
-  accounts,
-  nappletInstallations, nappletData, nappletUsage,
+  accounts, exploreEntries, exploreShortcuts, exploreHistory,
+  nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingAuthorizations, signingActivity,
   blockedUsers,
   contacts,
   conversations,
@@ -191,13 +193,15 @@ export async function setAccountEncryptionPubkey(
  * remain shared.
  */
 async function deleteAccountData(pubkey: string): Promise<void> {
+  invalidateSigningAccount(pubkey);
+  await platform.napplet?.clearPageData?.(pubkey);
   const pendingFiles = await db
     .select({ localName: pendingAttachments.localName })
     .from(pendingAttachments)
     .where(eq(pendingAttachments.accountPubkey, pubkey));
   await Promise.all(pendingFiles.map((row) => deletePendingAttachmentFile(row.localName)));
   const scoped = [
-    nappletData, nappletUsage, nappletInstallations,
+    exploreShortcuts, exploreHistory, exploreEntries, nappletData, nappletDataLegacy, nappletUsage, nappletInstallations, signingAuthorizations, signingActivity,
     messages,
     groupMemberActions,
     pendingGroupRumors,

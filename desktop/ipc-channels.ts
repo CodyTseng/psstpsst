@@ -1,4 +1,10 @@
 export const IPC = {
+  applicationWindowOpen: 'application-window:open', applicationWindowLaunch: 'application-window:launch',
+  applicationWindowClose: 'application-window:close', applicationWindowCloseAll: 'application-window:close-all',
+  applicationWindowAction: 'application-window:action', applicationSigningChange: 'application-window:signing-change',
+  exploreMessage: 'explore:message', exploreReply: 'explore:reply',
+  exploreClearData: 'explore:clear-data',
+  exploreOpen: 'explore:open',
   nappletCapture: 'napplet:capture',
   nappletGoBack: 'napplet:go-back',
   nappletOpen: 'napplet:open', nappletClose: 'napplet:close', nappletSend: 'napplet:send', nappletBounds: 'napplet:bounds',
@@ -102,6 +108,7 @@ export const IPC = {
   systemOpenExternal: 'psstpsst:system:open-external',
   systemOpenRuntimeNotices: 'psstpsst:system:open-runtime-notices',
   traySetUnreadCount: 'psstpsst:tray:set-unread-count',
+  windowChromeSetTitle: 'psstpsst:window-chrome:set-title',
   windowChromeSetTheme: 'psstpsst:window-chrome:set-theme',
   windowChromeSetScreenshotPreview: 'psstpsst:window-chrome:set-screenshot-preview',
 } as const;

@@ -1,6 +1,7 @@
 import { nappletPrelude } from './prelude.generated';
 import { NAPPLET_FRAME_READY_MESSAGE } from '@/platform/ports/napplet';
 import { renderUploadBridge } from './upload-bridge';
+import { nappletNip07Bridge } from './nip07-bridge';
 
 export const NAPPLET_CSP =
   "default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data: blob:; connect-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; media-src 'none'; object-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'";
@@ -16,6 +17,7 @@ export async function buildDocument(
 ): Promise<string> {
   const canvas = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i.test(background) ? background : 'transparent';
   const prelude = `${nappletPrelude}\nNappletShimPrelude.install({domains:${JSON.stringify(domains)}});
+${nappletNip07Bridge()}
 window.addEventListener('message',event=>{
  if(event.source===parent&&event.data?.type==='theme.changed'&&typeof event.data.theme?.colors?.background==='string')
   document.documentElement.style.setProperty('--psst-host-background',event.data.theme.colors.background);

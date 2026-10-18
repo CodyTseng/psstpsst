@@ -14,6 +14,8 @@ initPlatformAdapters({
   database: { drizzle: () => ({}) },
   localization: { preferredLanguageTag: () => 'en' },
 } as unknown as PlatformAdapters);
+const applicationWindows = require('../../src/services/explore/windows') as typeof import('../../src/services/explore/windows');
+applicationWindows.openApplicationWindowForKey = async (key) => { document.title = `New window ${key}`; };
 const { NappletGrid } =
   require('../../src/components/napplet/NappletGrid') as typeof import('../../src/components/napplet/NappletGrid');
 const { NappletRecentPage } = require('../../src/components/napplet/NappletRecentPage') as typeof import('../../src/components/napplet/NappletRecentPage');
@@ -108,7 +110,7 @@ function Gallery() {
             {recentPage && !opened ? <NappletRecentPage recent={currentRecent} onBack={() => setRecentPage(false)}
               onOpen={open} onAdd={addRecent} onRemove={removeRecent} onDetails={details} onPermissions={(app) => { document.title = `Permissions ${app.title}`; }} onShare={(app) => { document.title = `Share ${app.title}`; }} /> : <View style={{ flex: 1, paddingTop: 48, backgroundColor: c.background }}>
             <AppText variant="title" align="center">
-              Mini apps
+              Explore
             </AppText>
             {opened ? <AppButton label="Close app" onPress={() => setOpened(null)} /> : <NappletGrid
               items={items}

@@ -6,7 +6,7 @@ import type { NappletRelease } from '@/services/napplet/protocol';
 import { radius, spacing, useThemeColors } from '@/theme';
 
 export const NAPPLET_ICON_SIZE = spacing['3xl'] + spacing.lg;
-export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef }: { release: NappletRelease; size?: number; iconRef?: Ref<View> }) {
+export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef }: { release: Pick<NappletRelease, 'servers' | 'icon'>; size?: number; iconRef?: Ref<View> }) {
   const c = useThemeColors();
   const [uri, setUri] = useState<string>();
   useEffect(() => {

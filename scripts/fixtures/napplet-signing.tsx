@@ -12,7 +12,8 @@ import type { NappletRelease } from '../../src/services/napplet/protocol';
 
 // This fixture renders the shipped approval UI without user data or signer access.
 initPlatformAdapters({
-  napplet: { capture: async () => null, setBounds: async (_id: string, _bounds: unknown, visible: boolean, interactive = true) => {
+  windowChrome: { setTheme: async () => {}, setTitle: async (title: string) => { document.title = title; } },
+  napplet: { windows: { isHost: new URLSearchParams(location.search).get('scenario') === 'window' }, capture: async () => null, setBounds: async (_id: string, _bounds: unknown, visible: boolean, interactive = true) => {
     (window as unknown as { nappletVisible: boolean }).nappletVisible = visible;
     (window as unknown as { nappletInputEnabled: boolean }).nappletInputEnabled = visible && interactive;
   } },
@@ -33,6 +34,8 @@ initPlatformAdapters({
 } as unknown as PlatformAdapters);
 const profile = require('../../src/hooks/use-display-name') as typeof import('../../src/hooks/use-display-name');
 profile.useDisplayName = () => ({ name: 'Alice', profile: null });
+const applicationWindows = require('../../src/services/explore/windows') as typeof import('../../src/services/explore/windows');
+applicationWindows.openApplicationWindowForKey = async (key) => { document.title = `New window ${key}`; };
 const { NappletOverlays } = require('../../src/components/napplet/NappletOverlays') as typeof import('../../src/components/napplet/NappletOverlays');
 const { nappletStore, nappletService } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
 const { useThemeStore } = require('../../src/stores/theme.store') as typeof import('../../src/stores/theme.store');
@@ -56,6 +59,11 @@ nappletStore.setState({
     },
   },
 });
+if (params.get('scenario') === 'upload') {
+  nappletStore.setState({ prompt: { ...nappletStore.getState().prompt!, queued: 0, signing: undefined,
+    upload: { filename: 'report.pdf', mimeType: 'application/pdf', size: 2048, sha256: 'c'.repeat(64), servers: ['https://storage.example/'] },
+  } });
+}
 if (params.get('scenario') === 'capabilities') {
   const release = { ...nappletStore.getState().prompt!.app!, key: '35129:publisher:arcade',
     description: 'A small game for your account.', required: ['relay', 'upload'], optional: ['storage'], servers: [], intents: [],
@@ -70,8 +78,69 @@ if (params.get('scenario') === 'timeout') {
   const queue = new PromptQueue((prompt) => nappletStore.setState({ prompt }));
   void queue.ask(nappletStore.getState().prompt!);
 }
-const menu = params.get('scenario') === 'menu';
+if (params.get('scenario') === 'application-consent') {
+  const website=params.get('kind')==='website';
+  nappletStore.setState({accountPubkey:'a'.repeat(64),prompt:{
+    ...nappletStore.getState().prompt!,signing:undefined,app:undefined,queued:0,
+    title:website?'example.com':'Notifications',
+    application:{title:website?'example.com':'Notifications',description:website?'':'Your public notifications.',
+      servers:[],required:params.get('kind')==='napp'?['relay']:[],publisher:website?undefined:'b'.repeat(64)},
+    requester:website?{title:'example.com',origin:'https://example.com'}:undefined,
+  }});
+}
+const standalone = params.get('scenario') === 'window';
+const menu = params.get('scenario') === 'menu' || standalone;
 let RuntimeScreen: React.ComponentType | undefined;
+let exploreFixtureKey: string | undefined;
+if(params.get('scenario')==='explore-discovery') {
+  const {exploreService,exploreStore}=require('../../src/services/explore/service') as typeof import('../../src/services/explore/service');
+  const {discoveryStore}=require('../../src/services/explore/discovery') as typeof import('../../src/services/explore/discovery');
+  const {naddrEncode}=require('nostr-tools/nip19') as typeof import('nostr-tools/nip19');
+  const titles=['Notes','Photo Gallery','My Website'];
+  const apps=Array.from({length:params.has('long-catalog')?80:3},(_,index)=>titles[index]??`Application ${index}`).map((title,index)=>{
+    const kind=index===0?35130:index===1?35129:35128;
+    const key=naddrEncode({kind,pubkey:'b'.repeat(64),identifier:title});
+    return {key,address:key,title,kind:index===0?'napp':index===1?'napplet':'nsite',description:'A useful application for your Nostr account.',
+      required:[],servers:[],desktopPosition:null,lastUsedAt:null,manifest:{pubkey:'b'.repeat(64),kind,id:'c'.repeat(64),sig:'d'.repeat(128),created_at:1,content:'',tags:[['d',title]]}} as import('../../src/services/explore/model').ExploreEntry;
+  });
+  nappletStore.setState({accountPubkey:'a'.repeat(64),prompt:null,loaded:true});
+  exploreStore.setState({account:'a'.repeat(64),loaded:true,entries:[]});
+  discoveryStore.setState({entries:apps,loaded:true,loading:false,error:false});
+  require('../../src/services/explore/discovery').discoverApplications=async()=>{};
+  exploreService.activate=async()=>{};
+  const active=require('../../src/stores/active-account.store') as typeof import('../../src/stores/active-account.store');
+  active.useActiveAccount.setState({activePubkey:'a'.repeat(64)});
+  const navigation=require('../../src/components/navigation/primary-pane-navigation') as typeof import('../../src/components/navigation/primary-pane-navigation');
+  navigation.usePrimaryPaneNavigation=()=>({open:href=>{document.title=href;},wide:false,pendingPathname:null,selection:{conversationKey:null,profilePubkey:null,settingsItem:null,contactsItem:null}}) as ReturnType<typeof navigation.usePrimaryPaneNavigation>;
+  RuntimeScreen=require('../../src/app/(app)/(tabs)/napplets').default;
+}
+if(['explore-detail','explore-permissions','explore-menu'].includes(params.get('scenario')??'')) {
+  const {exploreService,exploreStore}=require('../../src/services/explore/service') as typeof import('../../src/services/explore/service');
+  const {naddrEncode}=require('nostr-tools/nip19') as typeof import('nostr-tools/nip19');
+  const kind=params.get('kind')==='website'?'website':params.get('kind')==='nsite'?'nsite':'napp';
+  const key=kind==='website'?'https://example.com/':naddrEncode({kind:kind==='napp'?35130:35128,pubkey:'b'.repeat(64),identifier:'composer'});
+  exploreFixtureKey=key;
+  const entry:import('../../src/services/explore/model').ExploreEntry={key,address:key,title:'Composer',kind,
+    description:kind==='website'?'':'Compose and publish posts with your Nostr account.',required:kind==='napp'?['identity','relay','storage']:[],
+    servers:[],desktopPosition:null,lastUsedAt:1,
+    manifest:kind==='website'?undefined:{pubkey:'b'.repeat(64)} as import('nostr-tools').Event};
+  nappletStore.setState({accountPubkey:'a'.repeat(64),prompt:null,loaded:true});
+  exploreStore.setState({account:'a'.repeat(64),loaded:true,entries:[entry],entry:params.get('scenario')==='explore-menu'?entry:null,
+    runId:1,containerId:params.get('scenario')==='explore-menu'?'fixture':null,loading:false,error:null});
+  exploreService.access=async()=>!params.has('needs-consent');
+  exploreService.prepare=(_entry,_account,reviewedRequired)=>{
+    (window as unknown as {reviewedRequired:readonly string[]|undefined}).reviewedRequired=reviewedRequired;return 1;
+  };
+  exploreService.reload=()=>{document.title='reloaded';};
+  exploreService.reset=async()=>{document.title='permissions-reset';};
+  const signingRepository=require('../../src/services/signing/repository') as typeof import('../../src/services/signing/repository');
+  signingRepository.readSigningSnapshot=async()=>({rules:[],activity:[]});
+  const {router}=require('expo-router') as typeof import('expo-router');
+  router.back=()=>{document.title='closed';};
+  router.push=route=>{(window as unknown as {lastRoute:unknown}).lastRoute=route;};
+  require('expo-router/build/global-state/store').storeRef.current.navigationRef={current:{}};
+  RuntimeScreen=params.get('scenario')==='explore-menu'?require('../../src/app/(app)/explore-run').default:require('../../src/app/(app)/explore-details').default;
+}
 if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
   const release: NappletRelease = { title: 'Composer', key: '35129:publisher:composer', hash: 'c'.repeat(64),
     description: params.get('empty') ? '' : 'Compose and publish posts with your Nostr account.'.repeat(params.get('long') ? 30 : 1),
@@ -84,9 +153,9 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
     installed: params.get('uninstalled') ? [] : [{ ...release, desktopPosition: null, lastUsedAt: null, previousManifest: null }],
   });
   const { nappletPermissionStore } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
-  const { signingRuleKey, replaceSigningRule } = require('../../src/services/napplet/signing-permissions') as typeof import('../../src/services/napplet/signing-permissions');
+  const { signingRuleKey, replaceSigningRule } = require('../../src/services/signing/model') as typeof import('../../src/services/signing/model');
   const storageKey = `fixture-signing-rules-${params.get('theme') ?? 'light'}`;
-  let rules: import('../../src/services/napplet/signing-permissions').SigningRule[] = [{
+  let rules: import('../../src/services/signing/model').SigningRule[] = [{
     key: 'post', decision: 'allow', duration: 'always', createdAt: 100,
     scope: { operation: 'publish', kind: 1, relays: [] },
   }, {
@@ -131,14 +200,14 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
     : require('../../src/app/(app)/napplet-permissions/[id]').default;
 }
 if (menu) {
-  const release: NappletRelease = { ...nappletStore.getState().prompt!.app!,
+  const release: NappletRelease = { ...nappletStore.getState().prompt!.app!, key: '35129:publisher:arcade',
     description: 'A small game for your account.', required: ['storage'], optional: ['identity'], servers: [], intents: [],
     event: { id: 'd'.repeat(64), pubkey: 'b'.repeat(64), kind: 35129, tags: [['d', 'arcade']] } as NappletRelease['event'],
   };
   nappletStore.setState({ accountPubkey: 'a'.repeat(64), prompt: null,
     running: { release, containerId: 'fixture' }, panel: null, overlayActive: false });
   const { nappletPermissionStore } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
-  let rules: import('../../src/services/napplet/signing-permissions').SigningRule[] = [{
+  let rules: import('../../src/services/signing/model').SigningRule[] = [{
     key: 'post', decision: 'allow', duration: 'always', createdAt: 100,
     scope: { operation: 'publish', kind: 1, relays: ['wss://relay.example/'] },
   }];
@@ -161,19 +230,23 @@ if (menu) {
   forward.ForwardTargetScreen = function EmbeddedShareFixture({ onClose }: { onClose?: () => void } = {}) {
     return <AppButton label="Finish sharing" onPress={onClose} />;
   };
-  RuntimeScreen = require('../../src/app/(app)/napplet-run').default;
+  RuntimeScreen = standalone ? function WindowRuntime() {
+    const { ApplicationRuntimePage } = require('../../src/components/napplet/ApplicationRuntimePage');
+    return <ApplicationRuntimePage windowed title="Arcade" menuEnabled onClose={() => {}} onMore={() => nappletService.openPanel('about')} onRetry={() => {}} />;
+  } : require('../../src/app/(app)/napplet-run').default;
   const { useForwardDraftStore } = require('../../src/stores/forward-draft.store') as typeof import('../../src/stores/forward-draft.store');
   Object.assign(window, { forwardDraft: () => useForwardDraftStore.getState().draft });
 }
+const WindowFrame = standalone ? require('../../src/components/common/DesktopWindowFrame').DesktopWindowFrame : React.Fragment;
 function Fixture() {
   return <SafeAreaProvider><NavigationContext.Provider value={{ isFocused: () => true, addListener: () => () => {} } as never}>
     <NavigationRouteContext.Provider value={{ key: 'fixture', name: 'fixture' }}>
     <PreventRemoveContext.Provider value={{ preventedRoutes: {}, setPreventRemove: () => {} }}>
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <LocalRouteParamsContext.Provider value={{ id: 'd'.repeat(64) }}>
+    <WindowFrame><GestureHandlerRootView style={{ flex: 1 }}>
+      <LocalRouteParamsContext.Provider value={{ id: 'd'.repeat(64),...(exploreFixtureKey?{key:exploreFixtureKey,runId:'1',permissions:params.get('scenario')==='explore-permissions'?'1':undefined}:{}) }}>
         {RuntimeScreen ? <RuntimeScreen /> : null}
       </LocalRouteParamsContext.Provider><NappletOverlays />
-    </GestureHandlerRootView>
+    </GestureHandlerRootView></WindowFrame>
     </PreventRemoveContext.Provider>
     </NavigationRouteContext.Provider>
   </NavigationContext.Provider></SafeAreaProvider>;

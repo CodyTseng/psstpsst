@@ -1,3 +1,5 @@
+import type { ApplicationWindowsPort } from '../ports/application-window';
+import type { ExplorePage } from '../ports/explore';
 import type { NappletBounds } from '../ports/napplet';
 import type { SqlBindValue, SqliteQueryMethod } from '../ports/database';
 import type { AppUpdateStatus } from '../ports/app-update';
@@ -24,8 +26,11 @@ export type ElectronDirectoryEntry = {
 
 export type ElectronBridge = {
   napplet: {
+    windows: ApplicationWindowsPort;
     capture(id: string): Promise<string | null>;
     goBack(id: string): Promise<boolean>;
+    clearPageData(storageId: string): Promise<void>;
+    openPage(page: ExplorePage): Promise<string>;
     open(html: string): Promise<string>; close(id: string): Promise<void>;
     send(id: string, message: string): Promise<void>;
     setBounds(id: string, bounds: NappletBounds, visible: boolean, interactive?: boolean): Promise<void>;
@@ -224,6 +229,7 @@ export type ElectronBridge = {
     setUnreadCount(count: number): Promise<void>;
   };
   windowChrome: {
+    setTitle(title: string): Promise<void>;
     setTheme(theme: WindowChromeTheme): Promise<void>;
     setScreenshotPreview(enabled: boolean): Promise<void>;
   };

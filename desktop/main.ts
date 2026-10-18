@@ -1,3 +1,4 @@
+import { ApplicationWindows } from './application-windows';
 import { registerNappletHandlers } from './napplet-service';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -82,6 +83,11 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow: BrowserWindow | null = null;
+const applicationWindows = new ApplicationWindows({
+  create: () => createWindow(true), parent: () => mainWindow, trusted: isTrustedSender,
+  url: () => `${(DEVELOPMENT_RENDERER_ORIGIN ?? 'app://renderer').replace(/\/$/, '')}/application-window`,
+  cleanup: owner => { void databaseService?.cleanupOwner(owner); void fileService?.cleanupOwner(owner); },
+});
 let windowStateStore: WindowStateStore | null = null;
 const screenshotPreviewWindow = new ScreenshotPreviewWindow();
 let databaseService: DatabaseService | null = null;
@@ -216,7 +222,7 @@ function scheduleBackgroundTask(minimumIntervalMinutes: number): void {
 }
 
 function isTrustedSender(event: IpcMainInvokeEvent): boolean {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return false;
+  if (event.sender !== mainWindow?.webContents && !applicationWindows.owns(event.sender)) return false;
   if (event.senderFrame !== event.sender.mainFrame) return false;
   return isTrustedRendererLocation(event.senderFrame.url);
 }
@@ -303,6 +309,7 @@ async function loadNotificationIcon(value: unknown): Promise<NativeImage | undef
 }
 
 function registerIpcHandlers(): void {
+  applicationWindows.register();
   registerNappletHandlers(isTrustedSender, () => mainWindow);
   handle(IPC.appUpdateCheck, async () => {
     if (!appUpdateService || !app.isPackaged || IS_DEVELOPMENT_APP) {
@@ -437,12 +444,16 @@ function registerIpcHandlers(): void {
     if (process.platform === 'darwin') app.setBadgeCount(count);
     return setTrayUnreadCount(count);
   });
+  handle(IPC.windowChromeSetTitle, (event, title) => {
+    BrowserWindow.fromWebContents(event.sender)?.setTitle(validateString(title, 'window title', 256));
+  });
   handle(IPC.windowChromeSetTheme, (event, theme) => {
     const value = (theme ?? {}) as {
       backgroundColor?: unknown;
       titlebarColor?: unknown;
       symbolColor?: unknown;
       transparentTitlebar?: unknown;
+      titlebarHeight?: unknown;
     };
     const backgroundColor = validateHexColor(value.backgroundColor, 'window background');
     const titlebarColor = validateHexColor(value.titlebarColor, 'title bar background');
@@ -453,17 +464,21 @@ function registerIpcHandlers(): void {
     ) {
       throw new TypeError('Invalid transparent title bar flag');
     }
+    if (value.titlebarHeight !== undefined && (!Number.isInteger(value.titlebarHeight) || Number(value.titlebarHeight) < 28 || Number(value.titlebarHeight) > 80)) throw new TypeError('Invalid title bar height');
+    const titlebarHeight = Number(value.titlebarHeight ?? TITLEBAR_OVERLAY_HEIGHT);
     const transparentTitlebar = value.transparentTitlebar === true;
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return;
     window.setBackgroundColor(backgroundColor);
     // macOS keeps its inset traffic lights over the renderer's title strip;
     // Windows/Linux draw native caption buttons onto this themed overlay.
-    if (process.platform !== 'darwin') {
+    if (process.platform === 'darwin') {
+      window.setWindowButtonPosition({ x: TRAFFIC_LIGHT_POSITION.x, y: TRAFFIC_LIGHT_POSITION.y + (titlebarHeight - TITLEBAR_OVERLAY_HEIGHT) / 2 });
+    } else {
       window.setTitleBarOverlay({
         color: transparentTitlebar ? 'rgba(0, 0, 0, 0)' : titlebarColor,
         symbolColor,
-        height: TITLEBAR_OVERLAY_HEIGHT,
+        height: titlebarHeight,
       });
     }
   });
@@ -1059,13 +1074,13 @@ async function registerProtocols(): Promise<void> {
   });
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(application = false): BrowserWindow {
   // The renderer may take a moment to report the effective theme; guess from
   // the OS scheme so the pre-paint frame and caption overlay start close.
   const initialChrome = nativeTheme.shouldUseDarkColors
     ? WINDOW_CHROME_COLORS.dark
     : WINDOW_CHROME_COLORS.light;
-  const saved = windowStateStore?.state;
+  const saved = application ? undefined : windowStateStore?.state;
   const bounds = saved
     ? fitWindowBounds(saved.bounds, screen.getDisplayMatching(saved.bounds).workArea)
     : null;
@@ -1098,7 +1113,8 @@ function createWindow(): BrowserWindow {
       webSecurity: true,
       backgroundThrottling: false,
       additionalArguments: [
-        `--psstpsst-proximity-available=${proximityService?.isAvailable() ? '1' : '0'}`,
+        `--psstpsst-proximity-available=${!application && proximityService?.isAvailable() ? '1' : '0'}`,
+        `--psstpsst-application-window=${application ? '1' : '0'}`,
       ],
     },
   });
@@ -1127,7 +1143,7 @@ function createWindow(): BrowserWindow {
     if (saved?.maximized) window.maximize();
     window.show();
     const captureState = () => {
-      if (!screenshotPreviewWindow.active) windowStateStore?.capture(window);
+      if (!application && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
     };
     window.on('resize', captureState);
     window.on('move', captureState);
@@ -1161,7 +1177,8 @@ function createWindow(): BrowserWindow {
     if (!isTrustedRendererLocation(url)) event.preventDefault();
   });
   window.on('close', (event) => {
-    if (!screenshotPreviewWindow.active) windowStateStore?.capture(window);
+    if (!application && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
+    if (application) return;
     void windowStateStore?.flush();
     if (shuttingDown) return;
     event.preventDefault();
@@ -1264,7 +1281,10 @@ async function start(): Promise<void> {
   process.env.PSSTPSST_PROXIMITY_AVAILABLE = proximityService.isAvailable() ? '1' : '0';
   databaseService = new DatabaseService(
     path.join(userDataPath, 'psstpsst.db'),
-    (owner) => owner.send(IPC.databaseChanged, {}),
+    (owner) => {
+      const recipients = new Set([owner, mainWindow?.webContents, ...applicationWindows.windows().map(window => window.webContents)]);
+      for (const recipient of recipients) if (recipient && !recipient.isDestroyed()) recipient.send(IPC.databaseChanged, {});
+    },
     (id) => webContents.fromId(id) ?? null,
   );
   const updateCheckPath = path.join(userDataPath, 'update-check.json');

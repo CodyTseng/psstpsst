@@ -34,6 +34,7 @@ class ExpoNappletModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ExpoNapplet")
     Function("isAvailable") { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) }
+    Function("isExploreAvailable") { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }
     AsyncFunction("fetchResourceAsync") { id: String, value: String, max: Int, promise: Promise ->
       val task = FetchTask()
       val admitted = synchronized(calls) { if (calls.size >= 12 || id.length > 128 || value.length > 4096) false else { calls[id] = task; true } }
@@ -41,34 +42,61 @@ class ExpoNappletModule : Module() {
       else executor.execute {
         try {
           require(!task.cancelled.get()) { "cancelled" }
-          val url = value.toHttpUrl()
-          require((!(url.host.matches(Regex("[0-9.]+")) || url.host.contains(":")) || publicAddress(InetAddress.getByName(url.host))) && url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.port == 443 && max in 1..26214400) { "blocked-by-policy" }
-          val call = client.newCall(Request.Builder().url(url).header("Accept-Encoding", "identity").build())
-          task.call = call
-          if (task.cancelled.get()) call.cancel()
-          call.execute().use { response ->
-            require(response.code == 200) { "resource-unavailable" }
-            val body = response.body ?: error("resource-unavailable")
-            require(body.contentLength() <= max) { "too-large" }
-            val output = java.io.ByteArrayOutputStream()
-            body.byteStream().use { input ->
-              val buffer = ByteArray(16384)
-              while (true) { val count = input.read(buffer); if (count < 0) break
-                require(output.size() + count <= max) { "too-large" }; output.write(buffer, 0, count)
+          var url = value.toHttpUrl()
+          var redirects = 0
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
+          var downloaded: String? = null
+          while (downloaded == null) {
+            require(!task.cancelled.get()) { "cancelled" }
+            val literalHost = url.host.matches(Regex("[0-9.]+")) || url.host.contains(":")
+            require(url.toString().length <= 4096 && (!literalHost || publicAddress(InetAddress.getByName(url.host))) &&
+              url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.port == 443 && max in 1..26214400) { "blocked-by-policy" }
+            val remaining = deadline - System.nanoTime()
+            require(remaining > 0) { "timeout" }
+            val call = client.newCall(Request.Builder().url(url).header("Accept-Encoding", "identity").build())
+            call.timeout().timeout(remaining, TimeUnit.NANOSECONDS)
+            task.call = call
+            if (task.cancelled.get()) call.cancel()
+            call.execute().use { response ->
+              if (response.code in listOf(301, 302, 303, 307, 308)) {
+                require(redirects++ < 5) { "redirect-limit" }
+                val location = response.header("Location") ?: error("resource-unavailable")
+                require(location.length <= 4096) { "blocked-by-policy" }
+                url = url.resolve(location) ?: error("resource-unavailable")
+              } else {
+                require(response.code == 200 && (response.header("Content-Encoding") == null || response.header("Content-Encoding") == "identity")) { "resource-unavailable" }
+                val body = response.body ?: error("resource-unavailable")
+                require(body.contentLength() <= max) { "too-large" }
+                val output = java.io.ByteArrayOutputStream()
+                body.byteStream().use { input ->
+                  val buffer = ByteArray(16384)
+                  while (true) { val count = input.read(buffer); if (count < 0) break
+                    require(output.size() + count <= max) { "too-large" }; output.write(buffer, 0, count)
+                  }
+                }
+                downloaded = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
               }
             }
-            promise.resolve(Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP))
           }
+          promise.resolve(downloaded)
         } catch (error: Exception) { promise.reject("ERR_RESOURCE", error.message ?: "network-error", error) }
         finally { calls.remove(id) }
       }
     }
     AsyncFunction("cancelResourceAsync") { id: String -> calls[id]?.let { it.cancelled.set(true); it.call?.cancel() }; Unit }
+    AsyncFunction("clearPageDataAsync") { storageId: String ->
+      if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+        val hash=java.security.MessageDigest.getInstance("SHA-256").digest(storageId.toByteArray()).joinToString("") { "%02x".format(it) }
+        androidx.webkit.ProfileStore.getInstance().deleteProfile("explore-$hash")
+      }
+      Unit
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("sendAsync") { id: String, message: String -> views[id]?.get()?.reply(message); Unit }.runOnQueue(Queues.MAIN)
     AsyncFunction("closeAsync") { id: String -> views.remove(id)?.get()?.dispose(); Unit }.runOnQueue(Queues.MAIN)
     AsyncFunction("goBackAsync") { id: String -> views[id]?.get()?.navigateBack() ?: false }.runOnQueue(Queues.MAIN)
     View(NappletView::class) {
       Events("onMessage")
+      Prop("page") { view: NappletView, page: String -> if (page.isNotEmpty()) view.loadPage(page) }
       Prop("html") { view: NappletView, html: String -> view.load(html) }
       Prop("surfaceId") { view: NappletView, id: String -> views[id] = WeakReference(view) }
       OnViewDestroys { view: NappletView -> views.entries.removeAll { it.value.get() === view }; view.dispose() }
@@ -81,6 +109,7 @@ class NappletView(context: Context, appContext: AppContext) : ExpoView(context, 
   val onMessage by EventDispatcher()
   private val web = NappletWebView(context) { raw -> onMessage(mapOf("message" to raw)) }
   init { addView(web, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
+  fun loadPage(value: String) = web.loadPage(value)
   fun load(value: String) = web.loadDocument(value)
   fun reply(value: String) = web.reply(value)
   fun navigateBack() = web.navigateBack()

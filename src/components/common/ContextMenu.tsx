@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { actionMenuWidth } from './action-menu-width';
+import { useMemo, useLayoutEffect, useRef, useState } from 'react';
 import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
@@ -73,16 +74,18 @@ export function ContextMenuOverlay({
   const { width, height } = viewportSize ?? window;
   const insets = useSafeAreaInsets();
   const metrics = ACTION_MENU_METRICS[density];
+  const measuredWidth = useMemo(() => actionMenuWidth(items, density), [items, density]);
+  const menuWidth = Math.min(measuredWidth, Math.max(0, width - metrics.edgeMargin * 2));
   const originY = viewportSize?.y ?? 0;
   const safeTop = IS_ELECTRON ? desktopChrome.titlebarHeight : insets.top;
   const topEdge = metrics.edgeMargin + Math.max(0, safeTop - originY);
   const bottomEdge = metrics.edgeMargin + Math.max(0, originY + height - (window.height - insets.bottom));
   const menuHeight = actionMenuHeight(items, density);
-  const anchoredLeft = align === 'center' ? anchor.x + (anchor.width ?? 0) / 2 - metrics.width / 2
-    : align === 'end' ? anchor.x - metrics.width : anchor.x;
+  const anchoredLeft = align === 'center' ? anchor.x + (anchor.width ?? 0) / 2 - menuWidth / 2
+    : align === 'end' ? anchor.x - menuWidth : anchor.x;
   const left = Math.max(
     metrics.edgeMargin,
-    Math.min(anchoredLeft, width - metrics.edgeMargin - metrics.width),
+    Math.min(anchoredLeft, width - metrics.edgeMargin - menuWidth),
   );
   const gap = placement === 'auto' ? spacing.sm : 0;
   const above = anchor.y - gap - menuHeight;
@@ -117,7 +120,7 @@ export function ContextMenuOverlay({
         density={density}
         items={items}
         onSelect={run}
-        style={{ position: 'absolute', top, left }}
+        style={{ position: 'absolute', top, left, width: menuWidth }}
       />
     </View>
   );

@@ -1,3 +1,4 @@
+export { applicationFormatColors } from './application-formats';
 import { Platform, type TextStyle } from 'react-native';
 
 import { IS_ELECTRON } from '@/lib/platform';

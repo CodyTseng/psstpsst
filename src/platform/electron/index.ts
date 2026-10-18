@@ -74,6 +74,7 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     windowChrome: {
+      setTitle: title => bridge.windowChrome.setTitle(title),
       setTheme: (theme) => bridge.windowChrome.setTheme(theme),
       setScreenshotPreview: (enabled) => bridge.windowChrome.setScreenshotPreview(enabled),
     },

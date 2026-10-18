@@ -1,8 +1,9 @@
+import { clearAccountSigningPermissions, clearSigningPermissions, deleteSigningRule, saveSigningRule } from '@/services/signing/repository';
 import { desktopApps, moveDesktopApp } from './desktop-order';
-import { registerNappletLifecycle } from './lifecycle';
+import { registerNappletLifecycle, notifyNappletTheme } from './lifecycle';
 import { createStore } from 'zustand/vanilla';
 import { getAccount } from '@/services/account/account-access';
-import { nappletInstallations, nappletData, nappletUsage } from '@/db/schema';
+import { nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingActivity } from '@/db/schema';
 import { db } from '@/db/client';
 import { eq } from 'drizzle-orm';
 import { matchFilters } from 'nostr-tools/filter';
@@ -22,14 +23,13 @@ import {
   getData,
   installations,
   markRecent,
-  migrateStorage,
   saveInstallation,
   setData,
 } from './repository';
 import { NappletRuntime, type RuntimePrompt, type RuntimeTheme } from './runtime';
 import type { ConfigSchema } from './config';
 import { PromptQueue, type QueuedPrompt } from './prompt-queue';
-import { encodeSigningRules, readSigningSnapshot, replaceSigningRule, type SigningRuleTarget, type SigningRuleChange } from './signing-permissions';
+import { appSigningScope, readSigningSnapshot, replaceSigningRule, type SigningRuleTarget, type SigningRuleChange } from './signing-permissions';
 
 type State = {
   accountPubkey: string | null;
@@ -102,6 +102,7 @@ async function refresh(account: string, epoch: number) {
   nappletStore.setState({ recent, installed, loaded: true });
 }
 export const nappletService = {
+  requestApproval: prompt,
   async activate(accountPubkey: string) {
     if (nappletStore.getState().accountPubkey === accountPubkey) return;
     this.deactivate();
@@ -134,9 +135,11 @@ export const nappletService = {
     approvals.answer(requestId, value);
   },
   rejectAllRequests() { approvals.rejectAll(); },
+  currentTheme() { return theme; },
   updateTheme(value: RuntimeTheme) {
     theme = value;
     runtime?.updateTheme();
+    notifyNappletTheme();
   },
   async resolve(value: string, options: { refresh?: boolean } = {}): Promise<NappletRelease> {
     const { accountPubkey: account, installed, market } = nappletStore.getState();
@@ -275,7 +278,7 @@ export const nappletService = {
     };
     if (!installed || installed.hash !== release.hash) await this.install(release, account, downloading);
     current();
-    const scope = { accountPubkey: account, appKey: release.key, artifactHash: release.hash };
+    const scope = { accountPubkey: account, appKey: release.key };
     const required = [...new Set(['shell', ...release.required])];
     const optional = [...new Set(release.optional.filter((domain) =>
       (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
@@ -308,6 +311,7 @@ export const nappletService = {
       release,
       html,
       domains: declared,
+      accountAccessGranted: true,
       theme: () => theme!,
       presented: () => {
         const launch = nappletStore.getState().launch;
@@ -332,7 +336,7 @@ export const nappletService = {
     try {
       const containerId = await instance.open();
       current();
-      await markRecent(account, release.key);
+      await markRecent(account, release.key, release);
       current();
       nappletStore.setState({ running: { release, containerId } });
       await refresh(account, epoch);
@@ -416,9 +420,9 @@ export const nappletService = {
     const epoch = generation;
     check(expectedAccount, epoch);
     const active = runtime;
-    const result = active?.scope?.accountPubkey === expectedAccount && active.scope.appKey === release.key && active.scope.artifactHash === release.hash
+    const result = active?.scope?.accountPubkey === expectedAccount && active.scope.appKey === release.key
       ? await active.signingPermissions.snapshot()
-      : await readSigningSnapshot({ accountPubkey: expectedAccount, appKey: release.key, artifactHash: release.hash })
+      : await readSigningSnapshot({ accountPubkey: expectedAccount, appKey: release.key })
         .then((value) => ({ ...value, activity: value.activity.reverse() }));
     check(expectedAccount, epoch);
     return result;
@@ -453,9 +457,12 @@ export const nappletService = {
   async domainPermissions(release: NappletRelease, expectedAccount: string): Promise<string[]> {
     const epoch = generation;
     check(expectedAccount, epoch);
-    const saved = await getData({ accountPubkey: expectedAccount, appKey: release.key, artifactHash: release.hash }, 'permissions', 'domains');
+    const saved = await getData({ accountPubkey: expectedAccount, appKey: release.key }, 'permissions', 'domains');
     check(expectedAccount, epoch);
-    return saved ? JSON.parse(saved) : [];
+    const granted: unknown = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(granted) || granted.some((domain) => typeof domain !== 'string')) throw new Error('invalid-permissions');
+    const allowed = new Set(['shell', ...release.required, ...release.optional]);
+    return granted.filter((domain: string) => allowed.has(domain));
   },
   async setDomainPermissions(release: NappletRelease, domains: string[], expectedAccount: string) {
     const epoch = generation;
@@ -464,12 +471,12 @@ export const nappletService = {
     if (domains.some((domain) => !allowed.has(domain))) throw new Error('invalid-permissions');
     const required = ['shell', ...release.required];
     if (required.some((domain) => !domains.includes(domain))) throw new Error('required-permission');
-    await setData({ accountPubkey: expectedAccount, appKey: release.key, artifactHash: release.hash }, 'permissions', 'domains', JSON.stringify([...new Set(domains)]));
+    await setData({ accountPubkey: expectedAccount, appKey: release.key }, 'permissions', 'domains', JSON.stringify([...new Set(domains)]));
     check(expectedAccount, epoch);
     permissionsChanged();
     const state = nappletStore.getState();
-    if (state.running?.release.key === release.key && state.running.release.hash === release.hash) {
-      const work = this.open(release);
+    if (state.running?.release.key === release.key) {
+      const work = this.open(state.running.release);
       nappletStore.setState({ panel: state.panel, overlayActive: !!state.panel });
       await work;
     }
@@ -478,15 +485,13 @@ export const nappletService = {
     const epoch = generation;
     check(expectedAccount, epoch);
     const active = runtime;
-    if (active?.scope?.accountPubkey === expectedAccount && active.scope.appKey === release.key && active.scope.artifactHash === release.hash) {
+    if (active?.scope?.accountPubkey === expectedAccount && active.scope.appKey === release.key) {
       await active.signingPermissions.revoke(key);
       check(expectedAccount, epoch);
       return;
     }
-    const scope = { accountPubkey: expectedAccount, appKey: release.key, artifactHash: release.hash };
-    const saved = await readSigningSnapshot(scope);
-    check(expectedAccount, epoch);
-    await setData(scope, 'permissions', 'signing', encodeSigningRules(saved.rules.filter((rule) => rule.key !== key)));
+    const scope = { accountPubkey: expectedAccount, appKey: release.key };
+    await deleteSigningRule(appSigningScope(scope), key);
     check(expectedAccount, epoch);
     permissionsChanged();
   },
@@ -495,12 +500,12 @@ export const nappletService = {
     check(expectedAccount, epoch);
     const frozen = JSON.parse(JSON.stringify({ source, change })) as { source: SigningRuleTarget; change: SigningRuleChange };
     replaceSigningRule([], frozen.source, frozen.change);
-    const scope = { accountPubkey: expectedAccount, appKey: release.key, artifactHash: release.hash };
+    const scope = { accountPubkey: expectedAccount, appKey: release.key };
     const key = JSON.stringify(scope);
     const work = (signingEdits.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
       check(expectedAccount, epoch);
       const active = runtime;
-      if (active?.scope?.accountPubkey === expectedAccount && active.scope.appKey === release.key && active.scope.artifactHash === release.hash) {
+      if (active?.scope?.accountPubkey === expectedAccount && active.scope.appKey === release.key) {
         await active.signingPermissions.edit(frozen.source, frozen.change);
         check(expectedAccount, epoch);
         return;
@@ -508,7 +513,10 @@ export const nappletService = {
       if (frozen.change.decision !== 'ask' && frozen.change.duration === 'session') throw new Error('invalid-signing-permissions');
       const saved = await readSigningSnapshot(scope);
       check(expectedAccount, epoch);
-      await setData(scope, 'permissions', 'signing', encodeSigningRules(replaceSigningRule(saved.rules, frozen.source, frozen.change)));
+      const next = replaceSigningRule(saved.rules, frozen.source, frozen.change);
+      const rule = next.find((entry) => entry.key === frozen.source.key);
+      if (rule) await saveSigningRule(appSigningScope(scope), rule);
+      else await deleteSigningRule(appSigningScope(scope), frozen.source.key);
       check(expectedAccount, epoch);
       permissionsChanged();
     });
@@ -520,27 +528,16 @@ export const nappletService = {
     const account = nappletStore.getState().accountPubkey;
     const epoch = generation;
     if (!account || (expectedAccount !== undefined && account !== expectedAccount)) return;
-    const active = runtime;
-    this.stop();
+    const active = runtime?.scope.appKey === release.key ? runtime : null;
+    if (active) this.stop();
     await active?.signingPermissions.settled();
     check(account, epoch);
-    const scope = { accountPubkey: account, appKey: release.key, artifactHash: release.hash };
+    const scope = { accountPubkey: account, appKey: release.key };
     await setData(scope, 'permissions', 'domains', null);
     check(account, epoch);
-    await setData(scope, 'permissions', 'signing', null);
+    await clearSigningPermissions(appSigningScope(scope));
     check(account, epoch);
     permissionsChanged();
-  },
-  async migrate(release: NappletInstallation, expectedAccount: string) {
-    if (nappletStore.getState().accountPubkey !== expectedAccount || !release.previousManifest)
-      throw new Error('session-closed');
-    this.stop();
-    const old = parseManifest(JSON.parse(release.previousManifest));
-    const scope = { accountPubkey: expectedAccount, appKey: release.key };
-    await migrateStorage(
-      { ...scope, artifactHash: old.hash },
-      { ...scope, artifactHash: release.hash },
-    );
   },
   async rollback(release: NappletInstallation, expectedAccount?: string) {
     if (!release.previousManifest) return;
@@ -556,6 +553,9 @@ export const nappletService = {
   },
   async removeAccount(account: string) {
     if (nappletStore.getState().accountPubkey === account) this.deactivate();
+    await clearAccountSigningPermissions(account);
+    await db.delete(nappletDataLegacy).where(eq(nappletDataLegacy.accountPubkey, account));
+    await db.delete(signingActivity).where(eq(signingActivity.accountPubkey, account));
     await db.delete(nappletData).where(eq(nappletData.accountPubkey, account));
     await db.delete(nappletUsage).where(eq(nappletUsage.accountPubkey, account));
     await db.delete(nappletInstallations).where(eq(nappletInstallations.accountPubkey, account));

@@ -46,6 +46,8 @@ export const bottomChrome = {
  * the two in sync. */
 export const desktopChrome = {
   titlebarHeight: DESKTOP_OS === 'darwin' ? 28 : 40,
+  applicationTitlebarHeight: 44,
+  nativeControlsWidth: DESKTOP_OS === 'darwin' ? 80 : 144,
 } as const;
 
 /** Mobile remains touch-roomy; Electron uses a tighter information density. */

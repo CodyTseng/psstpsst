@@ -34,8 +34,8 @@ late results; their connections, signer, INC endpoint and native container close
 
 Entry points synchronously prepare an account-bound launch and navigate to its
 container before starting installation, authorization or artifact loading. The
-details page uses Open for both cached and first-time apps, with required access
-expanded above a fixed bottom action. Optional access is omitted from app details.
+details page uses Allow and open when required access needs consent, otherwise
+Open, with required access expanded above a fixed bottom action. Optional access is omitted from app details.
 The container starts that work after committing. Verified local code loads on a blank
 themed canvas; a missing or corrupt artifact enables the icon and loading state
 only when a network download is needed, retaining it until the first frame.
@@ -64,11 +64,13 @@ Host overlays retain Back priority, and the leading Close action always exits.
 This uses browser navigation rather than introducing a NAP protocol extension.
 
 The manifest identity includes publisher and kind. Named manifests additionally
-include the opaque `d`; snapshots use their signed event ID. Permissions and shared
-KV namespaces include account, manifest identity and artifact hash. Instance KV is
-memory-only. A new artifact receives a separate namespace; updates do not silently
-copy data or grants. An explicit, atomic migration can copy shared application KV
-into an empty new-version namespace; it never copies grants or host settings. Previous code and data remain available for rollback.
+include the opaque `d`; snapshots use their signed event ID. Application KV,
+configuration and capability grants bind account and manifest identity across
+upgrades. Instance KV stays in memory. Migration 61 merges known current and
+previous namespaces, preserves unresolved values in a read-only backup, and
+rebuilds per-bucket quota counters. New configurations retain valid saved fields
+and apply defaults for added or incompatible fields. Code rollback retains the
+same user data.
 
 Desktop positions are independent of last-used timestamps. New launches enter
 the recent preview; its menu adds one desktop shortcut, and moving
@@ -117,14 +119,14 @@ bound aggregate reply size and total request time.
 ## Runtime controls
 
 The runtime header exposes More and Close. More opens app identity and publisher
-information, with Share, Permissions and Reload actions. Permissions closes the
-menu before navigating to the dedicated account-bound management page. Sharing hands a stable Nostr
+information, with Share, Permissions and Reload actions. Permissions replaces the
+sheet body with account-bound permission management without navigating. Sharing hands a stable Nostr
 app address to an embedded instance of the existing recipient picker after the
 host sheet closes. The app container stays mounted and hidden; completion or
 cancellation returns to that container, even for multiple recipients. Background
 approvals wait without a review timer until sharing ends. App
 references in messages open the app detail flow. The permissions page lists required access,
-editable optional domains, and installed-artifact signing rules. Optional access
+editable optional domains, and account-and-application signing rules. Optional access
 changes reload the container; individual signing rules can be revoked live.
 Rule editing preserves the exact operation/kind/record/recipient/server scope and
 serializes changes to decisions and expiry. Selecting Ask removes automatic
@@ -170,26 +172,26 @@ remote signatures are discarded without publication. The injected pinned OUTBOX
 shim extends only publication waits to 460 seconds to cover the bounded queue
 and these execution budgets.
 
-Requests default to one-time approval. The user chooses one request, a timed
-decision (10 minutes, one hour or 24 hours), or an indefinite decision for this
-version, then selects Allow or Reject. Custom event kinds use a generic event-type
-description; the host never invents an application-specific purpose. Legacy
-session grants remain valid only within their execution session. Rules match the
-operation, kind, addressable record identifier and encrypted
-recipient, within the existing account/app/artifact namespace. A change to any
-constraint requires another approval. Publication grants do not bind relays. AUTH
-grants bind the server. Version 3 storage invalidates older relay-bound publish
-grants instead of migrating them into broader permissions. Timed allow and deny rules survive reopening
-but are checked for expiry on every use and removed from the management view when
-they expire. Rules are limited to 64 and 256 KiB per
-execution session. Persistent writes are serialized before grants become active.
-Per-rule revocation invalidates the active cache and any in-flight authorization
-or unpublished signature before serializing persistent removal. Resetting all
-grants still stops the session. App updates and storage migrations never transfer signing grants.
-The dedicated permissions page exposes the installed version's
-rules, access controls, permission reset and latest 32 permission
-decisions, storing only action type, kind, decision and time. This history does
-not store event bodies and does not claim successful signing or publication.
+Requests default to one-time approval. The user can remember a timed decision
+(10 minutes, one hour or 24 hours) or a permanent decision, then Allow or Reject.
+The shared signing service owns rules independently of app KV and UI. Its source
+is the canonical naddr for an app, or a host-verified HTTP(S) website origin (scheme, host and effective port); immutable
+legacy manifests use a canonical event ID. Each durable row binds the account,
+source, event kind and addressable d tag. It has no source type, artifact version,
+recipient condition or relay condition. Only exact-scope version-3 publication
+rules are imported from the legacy KV backup. A broader migration never follows
+from dropping a legacy condition.
+
+Custom kinds retain generic descriptions. Session decisions remain in memory.
+Rules are limited to 64 per account/source and timed decisions expire on every
+use. Durable writes finish before the approval becomes effective. Revocation
+invalidates all live sessions of that account/source and any pending approval or
+unpublished signature. Resetting app access stops its container and clears its
+capability and signing rules. Upgrades preserve both data and authorizations;
+additional required capabilities need consent, and new optional capabilities stay
+off. The separate activity journal retains the latest 32 metadata-only decisions
+per account/source, without event bodies or a claim of publication success.
+Relay AUTH and host-built Blossom authentication are approved automatically.
 
 Authorized publication signs once and reports per-relay outcomes.
 Account configuration, key announcements, signer protocol traffic and
@@ -215,8 +217,9 @@ paths, credentials or destination servers.
 
 The host uses the current account's media-server upload plan, including its
 fallback. Public-file consent shows filename, MIME type, size and candidate
-storage services. Upload grants are separate from publication grants and bind
-the server set; they support the same expiry and revocation controls. A host-built
+storage services. Each file is approved through an application upload prompt,
+independently of signing rules. Upload capability access is still required;
+remembered event-signing rules never approve a file upload. A host-built
 kind-24242 authorization covers only the computed SHA-256 and size, expires after
 five minutes and never reaches the app. Generic publication cannot sign Blossom
 or NIP-98 authorization events.
@@ -227,7 +230,7 @@ mirrors. Preserving bytes also preserves embedded metadata, which the consent
 notice explains. Results contain host-checked hash, size, MIME type, public URL
 and NIP-94 tags. Server hash/size mismatches fail. Pending/uploading/terminal
 statuses and progress are endpoint-local; completed history is bounded. Jobs time
-out after two minutes. Revocation, account changes and container closure cancel
+out after two minutes. Upload-access changes, account changes and container closure cancel
 in-flight work, suppress late replies and delete staged files.
 
 INTENT routes exact convention identities to verified installed handlers under
@@ -284,3 +287,32 @@ npm run test:napplet-gallery
 npm run test:napplet-signing
 npm run test:napplet-database
 ```
+
+## Explore integration
+
+The Explore start page reuses the responsive icon grid and menu interactions for
+napplets, napps, nsites and websites. Its address entry accepts canonical Nostr
+addresses and HTTP(S) URLs without introducing a browser navigation toolbar.
+Legacy napplet routes remain valid for shared links and capability management.
+
+`explore_entries` caches verified manifests and visited URLs;
+`explore_shortcuts` owns explicit order; `explore_history` keeps one latest visit
+per address, bounded to 512 per account. This is not a chronological click log.
+Both history and shortcuts refer to the cached identity, independently of signing
+authority. Website addresses keep their path, query and fragment, whereas signing
+rules bind only their host-verified scheme, host and effective port.
+
+Napp support currently includes NIP-07 `getPublicKey` and `signEvent`, declared
+network access, origin storage, basic link/close/log helpers, public-event reads,
+metadata lookups, and publication of already-signed events. Reads use isolated
+relay pools, never the private conversation database. The reference launcher's
+UI kit, general NIP-DB mutation/subscription API, action routing, encryption bridge,
+configuration and inter-app communication APIs are not implemented. Unsupported
+required domains fail explicitly before execution; unknown methods return an
+error instead of implying that a capability was granted.
+
+The native container changed, so installed mobile development clients need a
+native rebuild. Android Explore requires document-start script injection and
+WebView multi-profile support. iOS 17 and later use named persistent account
+profiles; earlier systems use ephemeral website storage. No package dependency
+was added for this feature.

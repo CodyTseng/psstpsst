@@ -1,7 +1,7 @@
 import type { ComponentProps, Ref } from 'react';
 import { useWindowDimensions, type View } from 'react-native';
 import { AppButton } from '@/components/common/AppButton';
-import type { NappletInstallation } from '@/services/napplet/protocol';
+import type { GridApp } from '@/services/explore/model';
 import { spacing, typography } from '@/theme';
 import { NappletIcon } from './NappletIcon';
 
@@ -31,7 +31,7 @@ export function useNappletGridMetrics(width: number) {
 
 type Props = Pick<ComponentProps<typeof AppButton>,
   'onPress' | 'onLongPress' | 'accessibilityActions' | 'onAccessibilityAction'> & {
-  app: NappletInstallation;
+  app: GridApp;
   iconSize: number;
   iconRef?: Ref<View>;
   hideLabel?: boolean;

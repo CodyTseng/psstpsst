@@ -8,6 +8,7 @@ type Props = {
   /** Caller sets the icon color to match `tone`: `c.text` or `c.danger`. */
   icon: React.ReactNode;
   label: string;
+  accessibilityLabel?: string;
   onPress?: () => void;
   disabled?: boolean;
   /** `danger` tints the label red for destructive actions (e.g. Remove). */
@@ -26,7 +27,7 @@ type Props = {
  * to circular controls in equal-width columns; horizontal rails can use fixed
  * slots and square controls without changing the shared button language.
  */
-export function ProfileAction({ icon, label, onPress, disabled, tone = 'default', shape = 'circle', layout = 'equal', width = uiDensity.profileActionWidth, size = uiDensity.profileActionSize, singleLineLabel = false }: Props) {
+export function ProfileAction({ icon, label, accessibilityLabel, onPress, disabled, tone = 'default', shape = 'circle', layout = 'equal', width = uiDensity.profileActionWidth, size = uiDensity.profileActionSize, singleLineLabel = false }: Props) {
   return (
     <View
       style={{
@@ -46,7 +47,7 @@ export function ProfileAction({ icon, label, onPress, disabled, tone = 'default'
         onPress={onPress}
         disabled={disabled}
         icon={icon}
-        accessibilityLabel={label}
+        accessibilityLabel={accessibilityLabel ?? label}
       />
       <AppText
         variant="caption"

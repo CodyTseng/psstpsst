@@ -8,20 +8,20 @@ import { AppText } from '@/components/common/AppText';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useLanguageDirection } from '@/i18n/direction';
-import type { NappletInstallation } from '@/services/napplet/protocol';
+import type { GridApp } from '@/services/explore/model';
 import { spacing, useThemeColors } from '@/theme';
 import { useNappletGridMetrics } from './NappletTile';
 
 import { NappletRecentTile, type RecentAppActions } from './NappletRecentTile';
 
-type Props = RecentAppActions & {
-  recent: NappletInstallation[];
+type Props<T extends GridApp> = RecentAppActions<T> & {
+  recent: T[];
   loaded?: boolean;
   error?: string | null;
   onBack?: () => void;
 };
 
-export function NappletRecentPage({ recent, loaded = true, error, onBack, onOpen, onAdd, onRemove, onDetails, onPermissions, onShare }: Props) {
+export function NappletRecentPage<T extends GridApp>({ recent, loaded = true, error, onBack, onOpen, onAdd, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const direction = useLanguageDirection();

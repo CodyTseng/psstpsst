@@ -1,24 +1,30 @@
 import { useEffect, useState } from 'react';
+import { readPermissions } from '@/services/signing/management';
+import { subscribeSigning } from '@/services/signing/changes';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
-import type { SigningSnapshot } from '@/services/napplet/signing-permissions';
+import type { SigningSnapshot } from '@/services/signing/model';
 import { useNappletAccountPubkey, useNappletPermissionRevision } from '@/stores/napplet.store';
 import { useIsFocused } from 'expo-router/react-navigation';
 
-export function useNappletPermissions(release: NappletRelease, enabled = true) {
+export function useNappletPermissions(release: NappletRelease | undefined, enabled = true, sourceId?: string) {
   const accountPubkey = useNappletAccountPubkey();
   const permissionsRevision = useNappletPermissionRevision();
   const focused = useIsFocused();
   const [expiryTick, setExpiryTick] = useState(0);
   const [value, setValue] = useState<{ key: string; data?: SigningSnapshot; error?: boolean }>();
-  const key = JSON.stringify([accountPubkey, release.key, release.hash, permissionsRevision, focused, enabled, expiryTick]);
+  const key = JSON.stringify([accountPubkey, release?.key, release?.hash, sourceId, permissionsRevision, focused, enabled, expiryTick]);
+  useEffect(() => {
+    if(!sourceId||!accountPubkey) return;
+    return subscribeSigning({accountPubkey,sourceId},()=>setExpiryTick(tick=>tick+1));
+  },[accountPubkey,sourceId]);
   useEffect(() => {
     let active = true;
-    if (accountPubkey && focused && enabled) void nappletService.signingPermissions(release, accountPubkey)
+    if (accountPubkey && focused && enabled) void (sourceId?readPermissions({accountPubkey,sourceId}):nappletService.signingPermissions(release!, accountPubkey))
       .then((data) => { if (active) setValue({ key, data }); })
       .catch(() => { if (active) setValue({ key, error: true }); });
     return () => { active = false; };
-  }, [accountPubkey, release, key, focused, enabled]);
+  }, [accountPubkey, release, sourceId, key, focused, enabled]);
   useEffect(() => {
     if (!focused || !enabled || value?.key !== key) return;
     const expiries = value.data?.rules.flatMap((rule) => rule.duration === 'timed' && rule.expiresAt ? [rule.expiresAt] : []) ?? [];

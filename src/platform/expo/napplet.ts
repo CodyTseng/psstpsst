@@ -1,3 +1,4 @@
+import type { ExplorePage } from '../ports/explore';
 import { assertNotAborted } from '@/platform/abort';
 import { decodeNappletBytes } from '../napplet-bytes';
 import { requireOptionalNativeModule } from 'expo-modules-core';
@@ -5,13 +6,15 @@ import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort } from '../ports/napplet'
 
 type NativeModule = {
   isAvailable(): boolean;
+  isExploreAvailable?(): boolean;
+  clearPageDataAsync?(storageId: string): Promise<void>;
   fetchResourceAsync(id: string, url: string, max: number): Promise<string>;
   cancelResourceAsync(id: string): Promise<void>;
   sendAsync(id: string, message: string): Promise<void>;
   closeAsync(id: string): Promise<void>;
   goBackAsync(id: string): Promise<boolean>;
 };
-export type NativeSurface = { html: string; ready: boolean };
+export type NativeSurface = { html: string; page?: string; ready: boolean };
 const surfaces = new Map<string, NativeSurface>();
 const updates = new Set<() => void>();
 const messages = new Set<(id: string, raw: string) => void>();
@@ -27,7 +30,9 @@ export const nativeSurface = {
   message: (id: string, raw: string) => {
     const surface = surfaces.get(id);
     if (!surface) return;
-    if (raw === NAPPLET_FRAME_READY_MESSAGE) {
+    let exploreReady=false;
+    if(surface.page) {try{const envelope=JSON.parse(raw);exploreReady=envelope.type==='explore.request' && JSON.parse(envelope.raw).method==='ready';}catch{/* Ignore malformed page messages. */}}
+    if (raw === NAPPLET_FRAME_READY_MESSAGE || exploreReady) {
       if (!surface.ready) {
         surfaces.set(id, { ...surface, ready: true });
         updates.forEach((fn) => fn());
@@ -55,6 +60,12 @@ export const nappletAdapter: NappletPort = {
     } finally {
       signal?.removeEventListener('abort', abort);
     }
+  },
+  async clearPageData(storageId) { await requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.clearPageDataAsync?.(storageId); },
+  async openPage(page: ExplorePage) {
+    if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isExploreAvailable?.()) throw new Error('napplets.rebuild_required');
+    const id=`surface:${Date.now()}:${++serial}`;
+    surfaces.set(id,{html:'',page:JSON.stringify(page),ready:false});updates.forEach(fn=>fn());return id;
   },
   async open(html) {
     if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isAvailable())

@@ -10,7 +10,7 @@ import type { TFunction } from 'i18next';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Check from 'lucide-react-native/icons/check';
 import { IS_ELECTRON } from '@/lib/platform';
-import { canRememberSigning, SIGNING_PERIODS } from '@/services/napplet/signing-permissions';
+import { canRememberSigning, SIGNING_PERIODS } from '@/services/signing/model';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import { nappletService } from '@/services/napplet/service';
 import { SigningRequestDetails } from './SigningRequestDetails';

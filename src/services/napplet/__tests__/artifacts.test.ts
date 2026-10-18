@@ -1,5 +1,5 @@
 import { platform } from '@/platform';
-import { fetchBlob, loadArtifact } from '../artifacts';
+import { fetchBlob, loadArtifact, loadSiteBlob } from '../artifacts';
 import type { NappletRelease } from '../protocol';
 
 jest.mock('@/platform', () => ({
@@ -81,4 +81,13 @@ test('stops fallback immediately when the account operation is cancelled', async
   });
   await expect(fetchBlob(release, hash, 100, abort.signal)).rejects.toThrow();
   expect(fetchResource).toHaveBeenCalledTimes(1);
+});
+
+test('verifies cached multi-file assets before reusing them',async()=>{
+  const bytes=new Uint8Array([1,2,3]);
+  jest.mocked(platform.fileSystem.stat).mockResolvedValue({exists:true} as never);
+  jest.mocked(platform.fileSystem.readBytes).mockResolvedValue(bytes);
+  sha256Hex.mockResolvedValue(hash);
+  await expect(loadSiteBlob(release,hash)).resolves.toBe(bytes);
+  expect(fetchResource).not.toHaveBeenCalled();
 });

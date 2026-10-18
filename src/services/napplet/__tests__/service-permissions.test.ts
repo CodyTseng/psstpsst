@@ -1,4 +1,5 @@
-import { encodeSigningRules, signingRuleKey } from '../signing-permissions';
+import { rules as signingRules, activity as signingActivity } from '@/services/signing/testing/memory-repository';
+import { signingRuleKey } from '../signing-permissions';
 import { NappletRuntime } from '../runtime';
 import { loadArtifact } from '../artifacts';
 import { NappletNetwork } from '../network';
@@ -9,13 +10,15 @@ import { getData, setData, installations, saveDesktopOrder, clearRecent, type Ap
 import { parseManifest, type NappletInstallation } from '../protocol';
 import typeZoo from './fixtures/type-zoo-legacy.json';
 
+jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
+jest.mock('@/services/signing/source', () => ({ signingSourceFromLegacyKey: (key: string) => `${key}.example` }));
 jest.mock('@/db/client', () => ({ db: {} }));
 jest.mock('@/services/account/account-access', () => ({ getAccount: jest.fn(async () => ({ pubkey: 'accountA' })) }));
 jest.mock('../artifacts', () => ({ loadArtifact: jest.fn(async () => '') }));
 jest.mock('../network', () => ({ NappletNetwork: jest.fn(() => ({ destroy: jest.fn(), query: jest.fn(), publisherRelays: jest.fn(async () => []) })) }));
 jest.mock('../repository', () => ({ clearRecent: jest.fn(async () => {}), saveDesktopOrder: jest.fn(async () => {}), getData: jest.fn(), setData: jest.fn(), installations: jest.fn(), saveInstallation: jest.fn(async () => {}), markRecent: jest.fn(async () => {}) }));
 jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
-  scope: { accountPubkey: options.accountPubkey, appKey: options.release.key, artifactHash: options.release.hash },
+  scope: { accountPubkey: options.accountPubkey, appKey: options.release.key },
   open: jest.fn(async () => 'container'), close: jest.fn(async () => {}),
   goBack: jest.fn(async () => true),
   signingPermissions: { revoke: jest.fn(async () => {}), edit: jest.fn(async () => {}), settled: jest.fn(async () => {}), snapshot: jest.fn(async () => ({ rules: [], activity: [] })) },
@@ -24,10 +27,10 @@ jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
 const stored = new Map<string, string>();
 const key = (scope: AppScope, bucket: string, name: string) => JSON.stringify([scope, bucket, name]);
 const app = { key: 'app', hash: 'v1', title: 'App', required: ['storage'], optional: ['identity'], event: { pubkey: 'publisher' } } as NappletInstallation;
-const scope = { accountPubkey: 'accountA', appKey: app.key, artifactHash: app.hash };
+const scope = { accountPubkey: 'accountA', appKey: app.key };
 
 beforeEach(async () => {
-  nappletService.deactivate(); stored.clear(); jest.clearAllMocks();
+  nappletService.deactivate(); stored.clear(); signingRules.clear(); signingActivity.clear(); jest.clearAllMocks();
   jest.mocked(getData).mockImplementation(async (s, bucket, name) => stored.get(key(s, bucket, name)) ?? null);
   jest.mocked(setData).mockImplementation(async (s, bucket, name, value) => {
     if (value == null) stored.delete(key(s, bucket, name)); else stored.set(key(s, bucket, name), value);
@@ -38,17 +41,17 @@ beforeEach(async () => {
 });
 afterEach(() => nappletService.deactivate());
 
-it('serializes rule edits and isolates the account and installed artifact', async () => {
+it('serializes independent signing-table edits and isolates accounts', async () => {
   const first = { key: signingRuleKey({ operation: 'publish', kind: 1, relays: [] }), scope: { operation: 'publish' as const, kind: 1, relays: [] } };
   const second = { key: signingRuleKey({ operation: 'publish', kind: 7, relays: [] }), scope: { operation: 'publish' as const, kind: 7, relays: [] } };
   await Promise.all([
     nappletService.updateSigningRule(app, first, { decision: 'allow', duration: 'always' }, 'accountA'),
     nappletService.updateSigningRule(app, second, { decision: 'deny', duration: 'always' }, 'accountA'),
   ]);
-  expect(JSON.parse(stored.get(key(scope, 'permissions', 'signing'))!).rules).toHaveLength(2);
+  expect(signingRules.get(JSON.stringify({ accountPubkey: 'accountA', sourceId: 'app.example' }))).toHaveLength(2);
   await nappletService.updateSigningRule(app, first, { decision: 'ask', duration: 'always' }, 'accountA');
-  expect(JSON.parse(stored.get(key(scope, 'permissions', 'signing'))!).rules[0].key).toBe(second.key);
-  expect(stored.has(key({ ...scope, artifactHash: 'v2' }, 'permissions', 'signing'))).toBe(false);
+  expect(signingRules.get(JSON.stringify({ accountPubkey: 'accountA', sourceId: 'app.example' }))![0].key).toBe(second.key);
+  expect(stored.has(key(scope, 'permissions', 'signing'))).toBe(false);
   await expect(nappletService.updateSigningRule(app, first, { decision: 'allow', duration: 'always' }, 'accountB')).rejects.toThrow('session-closed');
 });
 
@@ -330,28 +333,22 @@ it('grants only required domains when the user leaves optional capabilities disa
   expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['shell', 'storage']);
 });
 
-it('revokes only the selected rule for the selected account and artifact', async () => {
-  const rules = [{ key: 'remove', duration: 'always' }, { key: 'keep', duration: 'always' }];
-  stored.set(key(scope, 'permissions', 'signing'), encodeSigningRules(rules as never));
-  const otherAccount = { ...scope, accountPubkey: 'accountB' };
-  const otherVersion = { ...scope, artifactHash: 'v2' };
-  stored.set(key(otherAccount, 'permissions', 'signing'), encodeSigningRules(rules as never));
-  stored.set(key(otherVersion, 'permissions', 'signing'), encodeSigningRules(rules as never));
-  await nappletService.revokeSigningRule(app, 'remove', 'accountA');
-  expect(JSON.parse(stored.get(key(scope, 'permissions', 'signing'))!).rules).toEqual([rules[1]]);
-  expect(JSON.parse(stored.get(key(otherAccount, 'permissions', 'signing'))!)).toEqual({ version: 3, rules });
-  expect(JSON.parse(stored.get(key(otherVersion, 'permissions', 'signing'))!)).toEqual({ version: 3, rules });
-});
-
-it('ignores stale account management actions and resets both access and signing grants', async () => {
+it('revokes only the selected source rule and resets access independently from application data', async () => {
+  const source = { accountPubkey: 'accountA', sourceId: 'app.example' };
+  const scopeA = { operation: 'publish' as const, kind: 1, relays: [] };
+  const scopeB = { operation: 'publish' as const, kind: 7, relays: [] };
+  const rules = [scopeA, scopeB].map((scope) => ({ key: signingRuleKey(scope), scope, decision: 'allow' as const, duration: 'always' as const, createdAt: 1 }));
+  signingRules.set(JSON.stringify(source), rules);
+  signingRules.set(JSON.stringify({ ...source, accountPubkey: 'accountB' }), rules);
+  await nappletService.revokeSigningRule(app, rules[0].key, 'accountA');
+  expect(signingRules.get(JSON.stringify(source))).toEqual([rules[1]]);
+  expect(signingRules.get(JSON.stringify({ ...source, accountPubkey: 'accountB' }))).toEqual(rules);
   stored.set(key(scope, 'permissions', 'domains'), '["shell"]');
-  stored.set(key(scope, 'permissions', 'signing'), '[]');
   stored.set(key(scope, 'storage', 'progress'), 'preserve');
-  await expect(nappletService.revokeSigningRule(app, 'remove', 'accountB')).rejects.toThrow('session-closed');
-  expect(setData).not.toHaveBeenCalled();
+  await expect(nappletService.revokeSigningRule(app, rules[0].key, 'accountB')).rejects.toThrow('session-closed');
   await nappletService.revoke(app, 'accountA');
   expect(stored.has(key(scope, 'permissions', 'domains'))).toBe(false);
-  expect(stored.has(key(scope, 'permissions', 'signing'))).toBe(false);
+  expect(signingRules.has(JSON.stringify(source))).toBe(false);
   expect(stored.get(key(scope, 'storage', 'progress'))).toBe('preserve');
 });
 
@@ -482,15 +479,16 @@ it('asks again if the reviewed set does not match the required permissions', asy
   expect(NappletRuntime).not.toHaveBeenCalled();
 });
 
-it('does not reuse prepared consent for a direct launch of a different artifact', async () => {
+it('keeps capability grants across upgrades and asks only for newly required access', async () => {
   const runId = nappletService.prepareOpen(app, 'accountA', ['shell', 'storage']);
   nappletService.startPreparedOpen(runId);
   await settleLaunch();
-  const next = { ...app, hash: 'v2' };
-  const work = nappletService.open(next);
+  await nappletService.open({ ...app, hash: 'v2' });
+  expect(nappletStore.getState().prompt).toBeNull();
+  const work = nappletService.open({ ...app, hash: 'v3', required: ['storage', 'relay'] });
   for (let i = 0; i < 40 && !nappletStore.getState().prompt; i++) await Promise.resolve();
   const request = nappletStore.getState().prompt!;
-  expect(request.app?.hash).toBe('v2');
+  expect(request.capabilities?.required).toContain('relay');
   nappletService.answer(request.requestId, false);
   await expect(work).rejects.toThrow('permission-denied');
 });

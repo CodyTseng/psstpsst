@@ -77,6 +77,27 @@ ipcRenderer.on(
 
 const bridge: ElectronBridge = {
   napplet: {
+    windows: {
+      isHost: process.argv.includes('--psstpsst-application-window=1'),
+      open: launch => invoke(IPC.applicationWindowOpen, launch),
+      launch: () => invoke(IPC.applicationWindowLaunch),
+      close: () => invoke(IPC.applicationWindowClose),
+      closeAll: account => invoke(IPC.applicationWindowCloseAll, account),
+      action: action => invoke(IPC.applicationWindowAction, action),
+      onAction: listener => {
+        const handler = (_event: unknown, value: Parameters<typeof listener>[0]) => listener(value);
+        ipcRenderer.on(IPC.applicationWindowAction, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationWindowAction, handler); };
+      },
+      broadcastSigning: change => invoke(IPC.applicationSigningChange, change),
+      onSigningChange: listener => {
+        const handler = (_event: unknown, value: Parameters<typeof listener>[0]) => listener(value);
+        ipcRenderer.on(IPC.applicationSigningChange, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationSigningChange, handler); };
+      },
+    },
+    clearPageData: (storageId) => invoke(IPC.exploreClearData, storageId),
+    openPage: (page) => invoke(IPC.exploreOpen, page),
     capture: (id) => invoke(IPC.nappletCapture, id),
     goBack: (id) => invoke(IPC.nappletGoBack, id),
     open: (html) => invoke(IPC.nappletOpen, html), close: (id) => invoke(IPC.nappletClose, id),
@@ -258,6 +279,7 @@ const bridge: ElectronBridge = {
     setUnreadCount: (count) => invoke(IPC.traySetUnreadCount, count),
   },
   windowChrome: {
+    setTitle: title => invoke(IPC.windowChromeSetTitle, title),
     setTheme: (theme) => invoke(IPC.windowChromeSetTheme, theme),
     setScreenshotPreview: (enabled) => invoke(IPC.windowChromeSetScreenshotPreview, enabled),
   },

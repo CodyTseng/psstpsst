@@ -1,7 +1,10 @@
+jest.mock('@/services/explore/windows', () => ({ openApplicationWindowForKey: jest.fn() }));
+jest.mock('lucide-react-native/icons/external-link', () => () => null);
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet, Text } from 'react-native';
 import { SigningApproval, SigningActions } from '../SigningApproval';
 import { NappletOverlays } from '../NappletOverlays';
+import { UploadApproval } from '../UploadApproval';
 import { CapabilityApproval } from '../CapabilityApproval';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
@@ -68,19 +71,19 @@ function selectDuration(value: string) {
 }
 const button = (label: string) => renderer.root.findAllByType(AppButton).find((node) => node.props.label === label)!;
 
-it.each(['light', 'dark'] as const)('shows public-upload intent and storage identity before the technical details in %s mode', (scheme) => {
+it.each(['light', 'dark'] as const)('reviews files as app consent without signing controls in %s mode', (scheme) => {
   mockScheme = scheme;
-  const upload = { ...prompt.signing!, operation: 'upload' as const, kind: 24242, relays: ['https://storage.example/'],
-    upload: { filename: 'card.png', mimeType: 'image/png', size: 1024, sha256: 'c'.repeat(64) } };
-  act(() => { renderer = create(<SigningRequestDetails request={upload} />); });
+  const file = { ...prompt, signing: undefined,
+    upload: { filename: 'card.png', mimeType: 'image/png', size: 1024, sha256: 'c'.repeat(64), servers: ['https://storage.example/'] } };
+  act(() => { renderer = create(<UploadApproval prompt={file} />); });
   const text = renderer.root.findAllByType(AppText).map((node) => node.props.children);
-  expect(text).toContain('napplets.signing_upload');
   expect(text).toContain('napplets.signing_effect_upload');
-  expect(text).toContain('card.png');
-  expect(text).toContain('storage.example');
-  expect(text).not.toContain('napplets.signing_effect_publish');
+  expect(text).toContain('card.png'); expect(text).toContain('storage.example');
+  expect(renderer.root.findAllByType(SigningActions)).toHaveLength(0);
   for (const content of ['card.png', 'storage.example', 'napplets.signing_effect_upload'])
     expect(renderer.root.findAllByType(AppText).find((node) => node.props.children === content)!.props.selectable).toBe(false);
+  act(() => { void button('napplets.allow').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'allow');
 });
 
 it.each(['light', 'dark'] as const)('binds scope selection and approval to the displayed request in %s mode', (scheme) => {

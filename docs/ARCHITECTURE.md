@@ -658,31 +658,77 @@ account's wallet PIN immediately before the request is sent.
   under `docs/implementation/`, in code, or in tests.
 - Visual conventions belong in [`DESIGN.md`](./DESIGN.md), not here.
 
+## Explore
+
+Explore opens Nostr application/site addresses and HTTP(S) URLs through isolated
+platform containers. Napplets retain their sealed NAP runtime. Napps and nsites
+load signature-verified multi-file manifests and hash-verified assets; websites
+load their actual URL and receive a bounded NIP-07 bridge. The host alone assigns
+the requesting main-frame origin and document lifetime. Navigation cancels old
+approvals, and adapters reject replies for replaced documents. Subframes never
+receive signing authority. Website signing grants bind the full origin, while
+Nostr applications and sites use canonical naddr identities.
+Protocol-specific route adapters supply data and actions to shared application
+presentation components. Details-page consent is bound to the exact displayed
+requirements; changing requirements invalidates that reviewed launch consent.
+
+Discovery queries a bounded set of public manifests from default relays, verifies
+and deduplicates them in a temporary catalogue, and shares the existing detail
+presentation. Browsing never records a visit or writes to the local relay; adding
+a favorite persists its metadata and shortcut independently of history.
+
+Cached entries, explicit shortcut positions, and distinct-address last visits use
+separate account-scoped tables. Opening changes recency only. The cache is bounded
+by 512 recent addresses plus 512 shortcuts. Existing napplet membership and recency
+migrate atomically. Platform website data uses account-specific profiles; removing
+an account clears its profile as well as its database rows. Old iOS versions without
+named profiles use nonpersistent website data instead of sharing account cookies.
+No browser-style forward/back controls are part of Explore.
+
+The in-process local relay stores explicitly submitted, signature-verified public
+events in a device-wide SQLite cache without account ownership. Only explicit
+event-store writes persist events; remote queries, metadata reads, and relay
+subscriptions do not populate it automatically. Single-letter tag lookups use a
+covering index, and bounded queries filter in SQL before decoding event payloads.
+Local subscriptions observe committed additions only and end with their document.
+Private chat tables and signer credentials never feed this cache; remote relay
+connections and AUTH remain account-bound. No WebSocket listener is opened.
+
 ## Napplet isolation
 
 Napplets run under the current persisted account in a separate platform container.
 Changing accounts or locking the application invalidates the execution session
 before new work can start. App storage, grants and settings are scoped by account,
-verified manifest identity and artifact hash. Runtime relay AUTH connections and
+verified manifest identity. Upgrades retain storage, configuration and capability
+grants; newly required capabilities need fresh consent. Artifact hashes identify
+code and cache entries. Runtime relay AUTH connections and
 remote-signer transport never borrow the chat session. Only hash-verified immutable
 artifacts are shared across accounts. See [napplet runtime](implementation/napplet-runtime.md).
 Mini-app desktop membership and position are explicit account-scoped state,
 independent of launch recency. Desktop edits commit atomically and never change
 app data or grants. The recent preview shows one row; full recent history derives from the bounded
 installation library.
-Signing grants additionally bind the operation, event kind and applicable record,
-recipient. Publication grants are independent of relay destinations; relay AUTH
-grants remain server-specific. Public-upload grants bind the host-selected storage
-server set independently of event publication. Upload bytes, temporary files and
-status belong to one execution session; stopping that session cancels uploads and
-cleans staged files. Older relay-bound publication grants require new
-consent rather than being widened implicitly. Host-owned approval IDs bind responses to one
-request; cancellation invalidates queued approvals before a session is replaced.
+Signing authorization belongs to the shared signing service, independently of app
+storage. One rule binds an account, a host-verified source, event kind and d tag.
+Sources are canonical naddr IDs or host-verified HTTP(S) website origins (scheme,
+host and effective port), without a source type or code version; immutable legacy listings use canonical event IDs. Durable rules and a
+bounded metadata-only activity journal have separate tables. Session grants stay
+in memory. Relay AUTH and Blossom authentication are automatic. File upload is
+app consent: access to the upload capability and approval of each concrete file
+precede automatic storage authentication. Upload bytes, temporary files and
+status belong to one execution session; stopping it cancels uploads and cleans
+staged files. Migration retains a read-only backup of old app namespaces and
+imports only rules whose scope can be preserved exactly. Host-owned approval IDs
+bind responses to one request; cancellation invalidates queued approvals before
+a session is replaced.
 Signing revocation invalidates cached approvals and in-flight signatures, then
 serializes persistent removal without stopping unrelated executions. App access
 changes restart the affected container. Host overlays block app input through
 their full exit. Mobile modals retain the live page underneath; Electron replaces
 its elevated native view with an ephemeral renderer preview while the sheet is open.
+Shared sheet/dialog presentation lifetime covers every embedded application,
+including overlays opened outside the application runtime. Electron hides the
+native view immediately rather than waiting for preview capture or image decoding.
 Sharing is an embedded host flow: the execution container remains mounted but
 hidden, background consent waits until the picker closes, and sending never
 navigates to a destination conversation.
@@ -690,3 +736,11 @@ navigates to a destination conversation.
 Details-page launch consent stays in the prepared run state and applies only to
 the reviewed required-capability set for that account and artifact. It is never
 carried in route parameters; direct launches still check persisted permissions.
+
+Electron application windows are trusted leaf hosts with independent runtimes and
+overlays. They share the asynchronous database and account-bound website profiles,
+without starting messaging or notification services. Container IPC belongs to its
+actual host window; closing or replacing one host never stops another. Persisted
+signing changes invalidate matching approval caches across hosts. Locking, switching
+accounts or removing their account closes these windows. Sharing and publisher
+navigation return to the main host. Session-only grants remain execution-local.

@@ -1,3 +1,4 @@
+import { applicationPresentation, type ApplicationInfo as ApplicationPresentation } from '@/services/explore/model';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -13,18 +14,22 @@ import { NappletRequiredAccess } from './NappletRequiredAccess';
 
 /** One information layout for details, runtime information and launch consent. */
 export function NappletInfo({ release, onPublisher, notice }: { release: NappletRelease; onPublisher(): void; notice?: ReactNode }) {
-  const { t } = useTranslation();
-  const c = useThemeColors();
-  const { name, profile } = useDisplayName(release.event.pubkey);
+  return <ApplicationInfo release={applicationPresentation(release)} onPublisher={onPublisher} notice={notice} />;
+}
+
+export function ApplicationInfo({release,onPublisher,notice}:{release:ApplicationPresentation;onPublisher():void;notice?:ReactNode}) {
   return <View testID="napplet-info" style={{ gap: spacing.lg }}>
     <NappletIdentity release={release} />
-    <ListRow variant="inline" compact title={t('napplets.publisher')} titleTone="muted"
-      value={name} valueTone="default"
-      valueLeading={<Avatar pubkey={release.event.pubkey} picture={profile?.picture} size={spacing.xl} />}
-      trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />}
-      onPress={onPublisher} />
+    {release.publisher?<PublisherRow pubkey={release.publisher} onPress={onPublisher}/>:null}
     {release.description.trim() ? <AppText>{release.description}</AppText> : null}
+    {release.origin?<AppText variant="caption" tone="muted" selectable>{release.origin}</AppText>:null}
     {notice}
     <NappletRequiredAccess release={release} />
   </View>;
+}
+function PublisherRow({pubkey,onPress}:{pubkey:string;onPress:()=>void}) {
+  const {t}=useTranslation();const c=useThemeColors();const {name,profile}=useDisplayName(pubkey);
+  return <ListRow variant="inline" compact title={t('napplets.publisher')} titleTone="muted"
+    value={name} valueTone="default" valueLeading={<Avatar pubkey={pubkey} picture={profile?.picture} size={spacing.xl}/>}
+    trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted}/>} onPress={onPress}/>;
 }

@@ -1,0 +1,77 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
+import { build } from 'esbuild';
+import electron from 'electron';
+
+test('Electron application hosts keep independent containers, owned IPC and shared signing invalidation', { timeout: 60000 }, async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'psst-application-windows-'));
+  try {
+    for (const entry of ['preload', 'napplet-preload']) await build({ entryPoints: [`desktop/${entry}.ts`], bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, `${entry}.js`) });
+    await build({ stdin: { contents: `import ${JSON.stringify(path.resolve('desktop/preload.ts'))};const {contextBridge,ipcRenderer}=require('electron');const events=[];for(const channel of ['napplet:message','application-window:signing-change','application-window:action'])ipcRenderer.on(channel,(_e,...args)=>events.push({channel,args}));contextBridge.exposeInMainWorld('hostTest',{invoke:(...args)=>ipcRenderer.invoke(...args),events:()=>events});`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, 'host-preload.js') });
+    const entry = `
+      import { app, BrowserWindow, webContents, ipcMain } from 'electron';
+      import { strict as assert } from 'node:assert';
+      import { ApplicationWindows } from ${JSON.stringify(path.resolve('desktop/application-windows.ts'))};
+      import { registerNappletHandlers } from ${JSON.stringify(path.resolve('desktop/napplet-service.ts'))};
+      import { IPC } from ${JSON.stringify(path.resolve('desktop/ipc-channels.ts'))};
+      app.setPath('userData', ${JSON.stringify(path.join(dir, 'profile'))});
+      const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+      app.whenReady().then(async()=>{
+        ipcMain.on(IPC.notificationSupported,event=>{event.returnValue=false;});
+        const create=(child=false)=>new BrowserWindow({show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,preload:${JSON.stringify(path.join(dir, 'host-preload.js'))},additionalArguments:['--psstpsst-application-window='+(child?'1':'0')]}});
+        const parent=create();await parent.loadURL('data:text/html,<title>Main</title>');
+        const cleaned=[];
+        const trusted=event=>(event.sender===parent.webContents||manager.owns(event.sender))&&event.senderFrame===event.sender.mainFrame;
+        const manager=new ApplicationWindows({create:()=>create(true),parent:()=>parent,url:()=> 'data:text/html,<title>Application</title>',cleanup:id=>cleaned.push(id),trusted});
+        manager.register();registerNappletHandlers(trusted,()=>parent);
+        const invoke=(owner,channel,...args)=>owner.webContents.executeJavaScript('hostTest.invoke('+[channel,...args].map(x=>JSON.stringify(x)).join(',')+')');
+        const events=owner=>owner.webContents.executeJavaScript('hostTest.events()');
+        const launch={accountPubkey:'a'.repeat(64),address:'https://example.com'};
+        await invoke(parent,IPC.applicationWindowOpen,launch);
+        const first=manager.windows()[0];assert(first);assert.equal(await first.webContents.executeJavaScript('psstpsstDesktop.napplet.windows.isHost'),true);
+        assert.deepEqual(await invoke(first,IPC.applicationWindowLaunch),launch);
+        assert.equal(await invoke(parent,IPC.applicationWindowLaunch),null);
+        await invoke(first,IPC.applicationWindowOpen,{...launch,accountPubkey:'b'.repeat(64)});
+        const second=manager.windows()[1];assert(second);
+        const bundle=title=>({sourceId:'same-app',storageId:'same-account',network:false,script:'',files:[{path:'/index.html',mime:'text/html',body:Buffer.from('<title>'+title+'</title><p>'+title+'</p>').toString('base64')}]});
+        const firstId=await invoke(first,IPC.exploreOpen,bundle('First'));
+        const secondId=await invoke(second,IPC.exploreOpen,bundle('Second'));
+        const views=()=>webContents.getAllWebContents().filter(w=>w.getURL().includes('.explore.psstpsst.invalid'));
+        assert.equal(views().length,2,'opening a second window preserves the first container');
+        await assert.rejects(invoke(first,IPC.nappletClose,secondId),/untrusted-container-owner/);
+        await assert.rejects(invoke(parent,IPC.nappletSend,firstId,'{}'),/untrusted-container-owner/);
+        await invoke(second,IPC.nappletClose,secondId);
+        assert.equal(views().length,1);
+        const firstView=views()[0];await firstView.reload();await pause(150);
+        assert.equal(await firstView.executeJavaScript('document.title'),'First','closing another host preserves this profile protocol');
+        const change={accountPubkey:launch.accountPubkey,sourceId:'https://example.com',key:'publish:1'};
+        await invoke(first,IPC.applicationSigningChange,change);await pause(40);
+        assert((await events(parent)).some(e=>e.channel===IPC.applicationSigningChange&&e.args[0].key===change.key));
+        assert.equal((await events(first)).filter(e=>e.channel===IPC.applicationSigningChange).length,0,'broadcast never echoes');
+        const share={type:'share',accountPubkey:launch.accountPubkey,title:'Example',address:launch.address};
+        await invoke(first,IPC.applicationWindowAction,share);await pause(40);
+        assert((await events(parent)).some(e=>e.channel===IPC.applicationWindowAction&&e.args[0].title==='Example'));
+        await assert.rejects(invoke(first,IPC.applicationWindowAction,{...share,accountPubkey:'b'.repeat(64)}),/invalid-window-action/);
+        await assert.rejects(invoke(first,IPC.applicationWindowCloseAll),/untrusted-window-owner/);
+        const firstOwner=first.webContents.id;
+        await invoke(parent,IPC.applicationWindowCloseAll,launch.accountPubkey);await pause(50);
+        assert(first.isDestroyed());assert(!second.isDestroyed());assert(cleaned.includes(firstOwner));assert.equal(views().length,0);
+        await invoke(parent,IPC.applicationWindowCloseAll);await pause(30);assert(second.isDestroyed());
+        const outsider=create();await outsider.loadURL('data:text/html,Outsider');
+        await assert.rejects(invoke(outsider,IPC.applicationWindowOpen,launch),/untrusted-application-host/);
+        outsider.destroy();parent.destroy();app.exit(0);
+      }).catch(error=>{console.error(error);app.exit(1);});
+    `;
+    await build({ stdin: { contents: entry, loader: 'ts', resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, 'main.js') });
+    const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+    const child = spawn(electron, [path.join(dir, 'main.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = ''; child.stdout.on('data', chunk => output += chunk); child.stderr.on('data', chunk => output += chunk);
+    const timer = setTimeout(() => child.kill('SIGKILL'), 50000);
+    const code = await new Promise(resolve => child.once('exit', resolve)); clearTimeout(timer);
+    assert.equal(code, 0, output);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

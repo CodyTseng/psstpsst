@@ -38,3 +38,6 @@ export * from './wallets';
 export * from './private-list-sync-state';
 
 export * from './napplets';
+export * from './signing-authorizations';
+export * from './explore';
+export * from './local-relay';

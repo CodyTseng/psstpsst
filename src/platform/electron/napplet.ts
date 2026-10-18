@@ -4,6 +4,7 @@ import type { NappletPort } from '../ports/napplet';
 import { getElectronBridge } from './bridge';
 
 export const electronNappletAdapter: NappletPort = {
+  get windows() { return getElectronBridge().napplet.windows; },
   async fetchResource(url, maxBytes, signal) {
     const bridge = getElectronBridge().napplet;
     const id = crypto.randomUUID();
@@ -19,6 +20,12 @@ export const electronNappletAdapter: NappletPort = {
     } finally {
       signal?.removeEventListener('abort', abort);
     }
+  },
+  async clearPageData(storageId) {await getElectronBridge().napplet.clearPageData?.(storageId);},
+  async openPage(page) {
+    const bridge=getElectronBridge().napplet;
+    if(typeof bridge.openPage!=='function') throw new Error('napplets.rebuild_required');
+    return bridge.openPage(page);
   },
   open: (html) => getElectronBridge().napplet.open(html),
   close: (id) => getElectronBridge().napplet.close(id),

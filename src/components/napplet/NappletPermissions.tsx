@@ -1,3 +1,4 @@
+import { updatePermissions } from '@/services/signing/management';
 import { useState } from 'react';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { ActivityIndicator, View } from 'react-native';
@@ -9,21 +10,20 @@ import { AppButton } from '@/components/common/AppButton';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { useNappletPermissions } from '@/hooks/use-napplet-permissions';
-import { useDisplayName } from '@/hooks/use-display-name';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { signingAction } from './SigningRequestDetails';
 import { spacing, useThemeColors } from '@/theme';
 import { useNappletAccountPubkey } from '@/stores/napplet.store';
-import type { SigningRule, SigningRuleChange } from '@/services/napplet/signing-permissions';
+import type { SigningRule, SigningRuleChange } from '@/services/signing/model';
 import { DirectionalChevron } from '@/components/common/DirectionalChevron';
 import { SigningRuleEditor, type EditableSigningRule } from './SigningRuleEditor';
 
 /** Cleared rows belong to this focused visit, never to persisted permissions. */
-export function NappletPermissions(props: { release: NappletRelease; initiallyExpanded?: boolean }) {
+export function NappletPermissions(props: { release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
   const focused = useIsFocused();
   const account = useNappletAccountPubkey();
-  return focused ? <PermissionRules key={`${account}:${props.release.key}:${props.release.hash}`} {...props} /> : null;
+  return focused ? <PermissionRules key={`${account}:${props.release?.key ?? props.sourceId}:${props.release?.hash}`} {...props} /> : null;
 }
 
 function mergeRules(previous: EditableSigningRule[], saved: SigningRule[]): EditableSigningRule[] {
@@ -38,12 +38,12 @@ function mergeRules(previous: EditableSigningRule[], saved: SigningRule[]): Edit
   return [...result, ...remaining.values()];
 }
 
-function PermissionRules({ release, initiallyExpanded = false }: { release: NappletRelease; initiallyExpanded?: boolean }) {
+function PermissionRules({ release, sourceId, initiallyExpanded = false }: { release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
   const { t, i18n } = useTranslation();
   const c = useThemeColors();
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [history, setHistory] = useState(false);
-  const { data, error, accountPubkey } = useNappletPermissions(release, expanded);
+  const { data, error, accountPubkey } = useNappletPermissions(release, expanded, sourceId);
   const [editor, setEditor] = useState<{ row: EditableSigningRule; visible: boolean }>();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -61,7 +61,7 @@ function PermissionRules({ release, initiallyExpanded = false }: { release: Napp
     const pending: EditableSigningRule = { ...row, decision: change.decision, duration: change.duration,
       expiresAt: change.duration === 'timed' ? change.expiresAt : undefined };
     setView((previous) => ({ ...previous, rows: rows.map((entry) => entry.key === row.key ? pending : entry) }));
-    try { await nappletService.updateSigningRule(release, row, change, accountPubkey); }
+    try { await (sourceId?updatePermissions({accountPubkey,sourceId},row,change):nappletService.updateSigningRule(release!, row, change, accountPubkey)); }
     catch (error) {
       setView((previous) => ({ ...previous, rows: previous.rows.map((entry) => entry.key === row.key ? row : entry) }));
       setFailed(true);
@@ -82,14 +82,11 @@ function PermissionRules({ release, initiallyExpanded = false }: { release: Napp
           : t(rule.duration === 'session' ? 'napplets.signing_session' : 'napplets.signing_duration_always');
         const scope = [t('chat.event_reference.kind', { kind: rule.scope.kind }), ...(rule.decision === 'ask' ? [] : [status])];
         if (rule.scope.identifier !== undefined) scope.push(`d: ${JSON.stringify(rule.scope.identifier)}`);
-        if (rule.scope.operation === 'relay-auth') scope.push(...rule.scope.relays);
-        if (rule.scope.operation === 'upload') scope.push(...rule.scope.relays.map((server) => new URL(server).host));
         return <ListRow key={rule.key} title={signingAction(rule.scope, t)} subtitleMultiline
           disabled={busy} onPress={() => setEditor({ row: rule, visible: true })}
           titleTrailing={<DecisionStatus decision={rule.decision} />}
           subtitleContent={<View style={{ gap: spacing.xs }}>
             <AppText variant="caption" tone="muted">{scope.join(' · ')}</AppText>
-            {rule.scope.recipient ? <Recipient pubkey={rule.scope.recipient} /> : null}
           </View>}
           trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />} />;
       })}</ListGroup> : null}
@@ -115,10 +112,4 @@ function DecisionStatus({ decision }: { decision: SigningRuleChange['decision'] 
   return <AppText variant="caption" weight="medium" tone={decision === 'ask' ? 'muted' : decision === 'allow' ? 'success' : 'danger'}>
     {t(decision === 'ask' ? 'napplets.permissions_ask' : decision === 'allow' ? 'napplets.allow' : 'napplets.signing_reject')}
   </AppText>;
-}
-
-function Recipient({ pubkey }: { pubkey: string }) {
-  const { t } = useTranslation();
-  const { name } = useDisplayName(pubkey);
-  return <AppText variant="caption" tone="muted">{t('napplets.signing_recipient')}: {name}</AppText>;
 }

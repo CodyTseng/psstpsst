@@ -4,7 +4,8 @@ import { SigningRuleEditor } from '../SigningRuleEditor';
 import { ListRow } from '@/components/common/ListRow';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
-import type { SigningSnapshot } from '@/services/napplet/signing-permissions';
+import type { SigningSnapshot } from '@/services/signing/model';
+jest.mock('@/services/signing/management',()=>({updatePermissions:jest.fn()}));
 
 let mockFocused = true;
 let mockAccount = 'accountA';

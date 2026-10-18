@@ -1,10 +1,13 @@
+import { visit } from '@/services/explore/repository';
+import { fromNapplet } from '@/services/explore/model';
+import { notifyNappletVisit } from './lifecycle';
 import { and, asc, count, desc, eq, isNotNull } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { nappletData, nappletInstallations, nappletUsage } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { parseManifest, type NappletInstallation, type NappletRelease } from './protocol';
 
-export type AppScope = { accountPubkey: string; appKey: string; artifactHash: string };
+export type AppScope = { accountPubkey: string; appKey: string };
 const byteLength = (value: string) => new TextEncoder().encode(value).length;
 const verifiedReleases = new Map<string, NappletRelease>();
 let cachedReleaseBytes = 0;
@@ -12,7 +15,6 @@ const scopeWhere = (scope: AppScope, bucket: string) =>
   and(
     eq(nappletData.accountPubkey, scope.accountPubkey),
     eq(nappletData.appKey, scope.appKey),
-    eq(nappletData.artifactHash, scope.artifactHash),
     eq(nappletData.bucket, bucket),
   );
 export async function installations(
@@ -106,7 +108,7 @@ export async function saveInstallation(
       });
   });
 }
-export async function markRecent(accountPubkey: string, appKey: string): Promise<void> {
+export async function markRecent(accountPubkey: string, appKey: string, release?: NappletRelease): Promise<void> {
   await db
     .update(nappletInstallations)
     .set({ lastUsedAt: Date.now() })
@@ -116,6 +118,10 @@ export async function markRecent(accountPubkey: string, appKey: string): Promise
         eq(nappletInstallations.appKey, appKey),
       ),
     );
+  if (release) {
+    await visit(accountPubkey, fromNapplet(release));
+    notifyNappletVisit(accountPubkey, release);
+  }
 }
 /** Forget recent usage without changing desktop membership or application state. */
 export async function clearRecent(accountPubkey: string, appKey: string): Promise<void> {
@@ -185,7 +191,6 @@ export async function setData(
     const usageWhere = and(
       eq(nappletUsage.accountPubkey, scope.accountPubkey),
       eq(nappletUsage.appKey, scope.appKey),
-      eq(nappletUsage.artifactHash, scope.artifactHash),
       eq(nappletUsage.bucket, bucket),
     );
     const usage = await tx.select().from(nappletUsage).where(usageWhere).get();
@@ -202,7 +207,6 @@ export async function setData(
           target: [
             nappletData.accountPubkey,
             nappletData.appKey,
-            nappletData.artifactHash,
             nappletData.bucket,
             nappletData.key,
           ],
@@ -215,48 +219,9 @@ export async function setData(
         target: [
           nappletUsage.accountPubkey,
           nappletUsage.appKey,
-          nappletUsage.artifactHash,
           nappletUsage.bucket,
         ],
         set: { bytes: total, count },
-      });
-  });
-}
-
-/** Explicit migration copies only shared application KV, never grants or host settings. */
-export async function migrateStorage(from: AppScope, to: AppScope): Promise<void> {
-  if (
-    from.accountPubkey !== to.accountPubkey ||
-    from.appKey !== to.appKey ||
-    from.artifactHash === to.artifactHash
-  )
-    throw new Error('invalid-migration');
-  await db.transaction(async (tx) => {
-    if (!(await canReceiveForAccount(to.accountPubkey, tx))) throw new Error('account-unavailable');
-    const existing = await tx
-      .select({ key: nappletData.key })
-      .from(nappletData)
-      .where(scopeWhere(to, 'storage'))
-      .limit(1);
-    if (existing.length) throw new Error('napplets.migration_not_empty');
-    const rows = await tx.select().from(nappletData).where(scopeWhere(from, 'storage')).limit(257);
-    const total = rows.reduce((sum, row) => sum + row.bytes, 0);
-    if (rows.length > 256 || total > 1024 * 1024) throw new Error('quota-exceeded');
-    for (let offset = 0; offset < rows.length; offset += 64)
-      await tx
-        .insert(nappletData)
-        .values(rows.slice(offset, offset + 64).map((row) => ({ ...row, ...to })));
-    await tx
-      .insert(nappletUsage)
-      .values({ ...to, bucket: 'storage', bytes: total, count: rows.length })
-      .onConflictDoUpdate({
-        target: [
-          nappletUsage.accountPubkey,
-          nappletUsage.appKey,
-          nappletUsage.artifactHash,
-          nappletUsage.bucket,
-        ],
-        set: { bytes: total, count: rows.length },
       });
   });
 }

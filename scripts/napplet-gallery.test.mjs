@@ -150,10 +150,14 @@ test(
         assert.equal(await page.getByRole('button', { name: 'Move later', exact: true }).count(), 0);
       };
       for (const source of ['desktop', 'recent']) {
-        for (const label of ['Permissions', 'Share']) {
+        for (const label of ['Permissions', 'Share', 'Open in new window']) {
           await tile(source, 'Weather').click({ button: 'right' });
+          if (label === 'Open in new window') {
+            const text = page.getByText(label, { exact: true });
+            assert(await text.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'localized app menu actions remain fully visible');
+          }
           await page.getByRole('button', { name: label, exact: true }).click();
-          await page.waitForFunction((title) => document.title === title, `${label} Weather`);
+          await page.waitForFunction((title) => document.title === title, `${label === 'Open in new window' ? 'New window' : label} Weather`);
           assert.equal(await page.getByRole('button', { name: 'View details', exact: true }).count(), 0,
             'menu actions dismiss the menu before opening their destination');
         }
@@ -174,7 +178,7 @@ test(
       assert.equal(await tile('desktop', 'Notes').count(), 0);
       await tile('recent', 'Notes').waitFor();
       await tile('recent', 'Notes').click({ button: 'right' });
-      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
+      await page.getByRole('button', { name: 'Add shortcut', exact: true }).click();
       await tile('desktop', 'Notes').waitFor();
       assert.equal((await order()).at(-1), 'Notes');
       const drag = async (source, name, destination, expected) => {
@@ -260,7 +264,7 @@ test(
       await page.getByRole('button', { name: 'View details', exact: true }).click();
       await page.waitForFunction(() => document.title === 'Details Reader');
       await openRecentMenu('Reader');
-      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
+      await page.getByRole('button', { name: 'Add shortcut', exact: true }).click();
       await tile('desktop', 'Reader').waitFor();
       assert.equal((await order()).at(-1), 'Reader', 'the recent menu adds a shortcut at the end');
       await drag('desktop', 'Reader', tile('desktop', 'Weather'), 'move:Reader:1');
@@ -278,7 +282,7 @@ test(
       for (const theme of ['light', 'dark']) {
         await page.goto(`${address}/?theme=${theme}`);
         await tile('desktop', 'Reader').waitFor();
-        const background = await page.getByText('Mini apps', { exact: true })
+        const background = await page.getByText('Explore', { exact: true })
           .evaluate((element) => getComputedStyle(element.parentElement).backgroundColor);
         assert.notEqual(background, 'rgba(0, 0, 0, 0)');
         const artworkButton = tile('desktop', 'Reader');
@@ -305,7 +309,7 @@ test(
             const first = page?.querySelector('[data-testid="napplet-icon"]')?.getBoundingClientRect();
             return page?.getBoundingClientRect().width === 900 && first?.width === 68 && Math.abs(first.x - 16) < 1;
           });
-          assert.equal(await page.getByText('Recently used', { exact: true }).count(), 1);
+          assert.equal(await page.getByText('Recently visited', { exact: true }).count(), 1);
           await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/wide-recent-page.png` });
           await page.setViewportSize({ width: 420, height: 840 });
@@ -419,7 +423,7 @@ test(
       await olderApp.click({ trial: true });
       if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/all-recent.png` });
       await olderApp.click({ button: 'right' });
-      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
+      await page.getByRole('button', { name: 'Add shortcut', exact: true }).click();
       await page.waitForFunction(() => document.title === 'move:App 80:9');
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await page.waitForFunction(() => !document.querySelector('[data-testid="napplet-recent-page"]'));

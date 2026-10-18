@@ -9,7 +9,7 @@ import { ListRow } from '@/components/common/ListRow';
 import { RadioIndicator } from '@/components/common/radio-indicator';
 import { DirectionalChevron } from '@/components/common/DirectionalChevron';
 import { ContextMenuOverlay, type ContextMenuAnchor } from '@/components/common/ContextMenu';
-import { SIGNING_PERIODS, type SigningRule, type SigningRuleChange } from '@/services/napplet/signing-permissions';
+import { SIGNING_PERIODS, type SigningRule, type SigningRuleChange } from '@/services/signing/model';
 import { IS_ELECTRON } from '@/lib/platform';
 import { spacing, useThemeColors } from '@/theme';
 import { signingAction, SigningScopeDetails } from './SigningRequestDetails';

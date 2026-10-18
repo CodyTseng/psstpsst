@@ -8,7 +8,7 @@ import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
 import { QrScanButton } from '@/components/common/QrScanButton';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
-import { nappletService } from '@/services/napplet/service';
+import { exploreService, exploreStore } from '@/services/explore/service';
 import { spacing, useThemeColors } from '@/theme';
 
 export default function NappletInstallScreen() {
@@ -22,10 +22,12 @@ export default function NappletInstallScreen() {
     if (busy || !address.trim()) return;
     setBusy(true);
     setError(null);
-    void nappletService
+    void exploreService
       .resolve(address)
       .then((release) => {
-        router.replace({ pathname: '/napplet/[id]', params: { id: release.event.id } });
+        if(release.release) router.replace({ pathname: '/napplet/[id]', params: { id: release.release.event.id } });
+        else { const account=exploreStore.getState().account;if(!account) throw new Error('account-unavailable');
+          const runId=exploreService.prepare(release,account);router.replace({pathname:'/explore-run',params:{runId}}); }
       })
       .catch((error: Error) => setError(error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed'))
       .finally(() => setBusy(false));
@@ -59,7 +61,7 @@ export default function NappletInstallScreen() {
         <AppText tone="muted">{t('napplets.address_hint')}</AppText>
         {error ? <AppText style={{ color: c.danger }}>{t(error)}</AppText> : null}
         <AppButton
-          label={t('napplets.details')}
+          label={t('napplets.open')}
           disabled={!value.trim()}
           loading={busy}
           onPress={() => lookup(value)}

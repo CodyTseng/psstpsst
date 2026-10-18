@@ -84,6 +84,19 @@ test(
         const frame=guest.mainFrame.frames[0];assert(frame);
         assert.equal(await frame.executeJavaScript('typeof window.__psstNapplet'),'undefined');
         assert.equal(await frame.executeJavaScript('typeof window.psstpsstDesktop'),'undefined');
+        assert.equal(await frame.executeJavaScript('typeof window.nostr.signEvent'),'function');
+        const signerRequests=[];
+        const receiveSigner=async(event,raw)=>{
+          if(event.sender!==guest)return;
+          const m=JSON.parse(raw);if(!m.type.startsWith('signer.'))return;
+          signerRequests.push(m);
+          await invoke(IPC.nappletSend,id,JSON.stringify({type:m.type+'.result',id:m.id,result:m.type==='signer.getPublicKey'?'account-A':{...m.event,sig:'host-signature'}}));
+        };
+        ipcMain.on(IPC.nappletMessage,receiveSigner);
+        assert.equal(await frame.executeJavaScript('window.nostr.getPublicKey()'),'account-A');
+        assert.equal((await frame.executeJavaScript('window.nostr.signEvent({kind:1,content:"note",tags:[],created_at:1})')).sig,'host-signature');
+        assert.deepEqual(signerRequests.map(m=>m.type),['signer.getPublicKey','signer.signEvent']);
+        ipcMain.removeListener(IPC.nappletMessage,receiveSigner);
         assert.equal(await frame.executeJavaScript('window.result.escape'),false);
         const keyId=await frame.executeJavaScript("(()=>{const id='test-id';window.reply=new Promise(resolve=>window.addEventListener('message',event=>{if(event.data.id===id)resolve(event.data.pubkey);}));return id;})()");
         await invoke(IPC.nappletSend,id,JSON.stringify({type:'identity.getPublicKey.result',id:keyId,pubkey:'account-A'}));

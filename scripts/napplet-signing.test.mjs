@@ -43,7 +43,7 @@ test(
         if (pathname === '/') {
           response.setHeader('Content-Type', 'text/html');
           response.end(
-            '<style>html,body,#root{height:100%;margin:0}#root{display:flex}*{box-sizing:border-box}</style><div id="root"></div><script>if(new URLSearchParams(location.search).get("surface")!=="touch")window.psstpsstDesktop={system:{platform:"darwin"}}</script><script src="/gallery.js"></script>',
+            '<style>html,body,#root{height:100%;margin:0}#root{display:flex}*{box-sizing:border-box}</style><div id="root"></div><script>if(new URLSearchParams(location.search).get("surface")!=="touch")window.psstpsstDesktop={system:{platform:new URLSearchParams(location.search).get("os")||"darwin"}}</script><script src="/gallery.js"></script>',
           );
         } else {
           const file = path.resolve(dir, `.${decodeURIComponent(pathname)}`);
@@ -74,6 +74,44 @@ test(
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+      const assertRuntimeHeader = async (surface='desktop') => {
+        const size=surface==='touch'?40:36;
+        const iconSize=surface==='touch'?24:20;
+        for(const label of surface==='touch'?['Close','App menu']:['Close','Open in new window','App menu']) {
+          const button=page.getByRole('button',{name:label,exact:true});
+          await button.waitFor();
+          const box=await button.boundingBox();
+          assert.equal(box.width,size,`${label} uses the header control width`);
+          assert.equal(box.height,size,`${label} uses the header control height`);
+          const icon=button.locator('svg').first();
+          assert.equal(Number(await icon.getAttribute('width')),iconSize);
+          assert.equal(Number(await icon.getAttribute('height')),iconSize);
+          assert.equal(Number(await icon.getAttribute('stroke-width')),1.5);
+        }
+      };
+      const address = `http://127.0.0.1:${server.address().port}`;
+      for (const os of ['darwin', 'win32', 'linux']) {
+        for (const theme of ['light', 'dark']) {
+          await page.setViewportSize({ width: 900, height: 700 });
+          await page.goto(`${address}/?scenario=window&os=${os}&theme=${theme}`);
+          const bar = page.getByTestId('desktop-window-titlebar');
+          const more = page.getByRole('button', { name: 'App menu', exact: true });
+          await more.waitFor();
+          assert.equal(await bar.count(), 1);
+          assert.equal(await page.getByText('Arcade', { exact: true }).count(), 1);
+          assert.equal(await page.getByRole('button', { name: 'Close', exact: true }).count(), 0);
+          assert.equal(await page.getByRole('button', { name: 'Open in new window', exact: true }).count(), 0);
+          const bounds = await more.boundingBox();
+          assert(bounds.y >= 0 && bounds.y + bounds.height <= 44, 'app actions stay inside the native title strip');
+          if (os !== 'darwin') assert(bounds.x + bounds.width <= 900 - 144, 'menu reserves the native caption controls at the right');
+          await more.click();
+          const sheet = page.getByRole('dialog');
+          await sheet.getByText('A small game for your account.', { exact: true }).waitFor();
+          assert.equal(await sheet.getByRole('button', { name: 'Open in new window', exact: true }).count(), 0);
+          assert.equal(await page.title(), 'Arcade');
+        }
+      }
+      await page.setViewportSize({ width: 390, height: 840 });
       const assertNotSelectable = async (locator) => {
         await locator.scrollIntoViewIfNeeded();
         assert.equal(await locator.evaluate((node) => getComputedStyle(node).userSelect), 'none');
@@ -85,7 +123,6 @@ test(
         await page.mouse.up();
         assert.equal(await page.evaluate(() => window.getSelection()?.toString() ?? ''), '', 'dragging signing content must not select text');
       };
-      const address = `http://127.0.0.1:${server.address().port}`;
       const checkAppInfoSpacing = async () => {
         const metrics = await page.getByTestId('napplet-info').evaluate((node) => {
           const blocks = [...node.children].map((child) => child.getBoundingClientRect());
@@ -192,18 +229,28 @@ test(
         await allow.click();
         await page.waitForFunction(() => document.title.includes('allow-1h'));
       }
-      await page.goto(`${address}/?scenario=auth`);
-      await page.getByText('relay.example', { exact: true }).waitFor();
-      assert.equal(await page.getByText('game-progress', { exact: true }).count(), 0);
-      await page.getByText('Kind 22242', { exact: true }).waitFor();
-      assert.equal(await page.getByText(/^d:/).count(), 0);
-      await assertNotSelectable(page.getByText('relay.example', { exact: true }));
+      for (const theme of ['light', 'dark']) {
+        await page.goto(`${address}/?scenario=upload&surface=touch&theme=${theme}`);
+        const file = page.getByRole('dialog');
+        const approve = file.getByRole('button', { name: 'Allow', exact: true });
+        await approve.click({ trial: true });
+        assert.equal(await file.getByText('report.pdf', { exact: true }).count(), 1);
+        assert.equal(await file.getByText('storage.example', { exact: true }).count(), 1);
+        assert.equal(await file.getByText('Kind 24242', { exact: true }).count(), 0);
+        assert.equal(await file.getByRole('button', { name: 'More information', exact: true }).count(), 0);
+        assert.equal(await file.getByText('Remember this decision', { exact: true }).count(), 0);
+        if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-upload.png` });
+        await file.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(JSON.parse(await page.title()).value, false);
+      }
       await page.goto(`${address}/?scenario=raw`);
       await assertNotSelectable(page.getByText('{"score":1280,"level":4,"lives":3}', { exact: true }));
       await page.goto(`${address}/?scenario=scroll`);
       await page.getByRole('button', { name: 'More information', exact: true }).click();
       const heading = page.getByText('Publish application data', { exact: true });
       const jsonBlock = page.getByText(/\"kind\": 30078/).last();
+      await page.waitForFunction(() => [...document.querySelectorAll('[role="dialog"] *')].some(node =>
+        node.scrollHeight > node.clientHeight + 10 && ['auto', 'scroll'].includes(getComputedStyle(node).overflowY)));
       const scrollBody = await jsonBlock.evaluateHandle((node) => {
         for (let parent = node.parentElement; parent; parent = parent.parentElement) {
           if (parent.scrollHeight > parent.clientHeight + 10 && ['auto', 'scroll'].includes(getComputedStyle(parent).overflowY)) return parent;
@@ -235,6 +282,9 @@ test(
       await scrollBody.dispose();
       for (const theme of ['light', 'dark']) {
         await page.goto(`${address}/?scenario=menu&theme=${theme}`);
+        await assertRuntimeHeader();
+        await page.getByRole('button', { name: 'Open in new window', exact: true }).click();
+        await page.waitForFunction(() => document.title === 'New window 35129:publisher:arcade');
         await page.getByRole('button', { name: 'App menu', exact: true }).click();
         const dialog = page.getByRole('dialog');
         await dialog.getByText('A small game for your account.', { exact: true }).waitFor({ timeout: 5000 }).catch(async (error) => {
@@ -254,15 +304,15 @@ test(
         });
         assert.equal(await page.getByRole('dialog').count(), 1);
         let previousX = -1;
-        for (const label of ['Share', 'Permissions', 'Reload']) {
+        for (const label of ['Share', 'Permissions', 'Open in new window', 'Reload']) {
           const button = dialog.getByRole('button', { name: label, exact: true });
           const box = await button.boundingBox();
-          const caption = await dialog.getByText(label, { exact: true }).boundingBox();
+          const caption = await dialog.getByText(label === 'Open in new window' ? 'New window' : label, { exact: true }).boundingBox();
           assert(Math.abs(box.width - box.height) < 1, 'menu icons use square controls');
           assert(box.x > previousX, 'actions retain their defined order');
           assert(caption.y >= box.y + box.height, 'action captions sit below the icon control');
           assert(box.width >= 64, 'menu controls retain their enlarged touch target');
-          assert(await dialog.getByText(label, { exact: true }).evaluate((node) =>
+          assert(await dialog.getByText(label === 'Open in new window' ? 'New window' : label, { exact: true }).evaluate((node) =>
             node.clientHeight <= parseFloat(getComputedStyle(node).lineHeight) + 1 && node.scrollWidth <= node.clientWidth + 1),
           'captions stay on one line without truncation');
           previousX = box.x;
@@ -279,12 +329,15 @@ test(
         assert(await rail.evaluate((node) => node.scrollLeft > 0), 'overflow actions can be scrolled into view');
         await rail.dispose();
         await page.setViewportSize({ width: 390, height: 840 });
+        await dialog.getByRole('button', { name: 'Open in new window', exact: true }).click();
+        await page.getByRole('dialog').waitFor({state:'hidden'});
+        await page.waitForFunction(() => document.title === 'New window 35129:publisher:arcade');
+        await page.getByRole('button', { name: 'App menu', exact: true }).click();
         await dialog.getByRole('button', { name: 'Permissions', exact: true }).click();
-        await dialog.waitFor({ state: 'hidden' });
-        await page.waitForFunction(() => window.lastRoute?.pathname === '/napplet-permissions/[id]');
-        assert.deepEqual(await page.evaluate(() => window.lastRoute), { pathname: '/napplet-permissions/[id]', params: { id: 'd'.repeat(64) } });
-        assert.equal(await page.getByText('Signing rules', { exact: true }).count(), 0, 'permissions do not open inside the app sheet');
-        await page.evaluate(() => { delete window.lastRoute; });
+        await dialog.getByText('Signing rules', { exact: true }).waitFor();
+        assert.equal(await page.evaluate(() => window.lastRoute), undefined, 'runtime permissions stay inside the app sheet');
+        assert.equal(await page.evaluate(() => window.nappletVisible), false, 'the container remains covered while changing sheet pages');
+        await dialog.getByRole('button', { name: 'Close', exact: true }).click();
         await page.waitForFunction(() => window.nappletVisible === true);
         await page.getByRole('button', { name: 'App menu', exact: true }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Reload', exact: true }).click();
@@ -328,6 +381,20 @@ test(
         if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-capabilities.png` });
         await grant.click();
         assert.equal(JSON.parse(await page.title()).value, 'domains:[]', 'launch consent grants only required access');
+        for(const kind of ['napp','nsite','website']) {
+          await page.goto(`${address}/?scenario=application-consent&kind=${kind}&theme=${theme}`);
+          const sheet=page.getByRole('dialog');
+          const allow=sheet.getByRole('button',{name:'Allow',exact:true});
+          await allow.click({trial:true});
+          if(kind==='napp')await checkAppInfoSpacing();
+          else assert.equal(await sheet.getByTestId('napplet-identity').count(),1);
+          assert.equal(await sheet.getByText('Signing account',{exact:true}).count(),1);
+          const allowBox=await allow.boundingBox(),cancelBox=await sheet.getByRole('button',{name:'Cancel',exact:true}).boundingBox();
+          assert(Math.abs(allowBox.y-cancelBox.y)<1&&cancelBox.x<allowBox.x);
+          if(kind==='website')assert.equal(await sheet.getByText('https://example.com',{exact:true}).count(),1);
+          if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${kind}-consent.png`});
+          await allow.click();assert.equal(JSON.parse(await page.title()).value,'allow');
+        }
         await page.goto(`${address}/?scenario=detail&theme=${theme}&needs-consent=1`);
         const allow = page.getByRole('button', { name: 'Allow and open', exact: true });
         await allow.waitFor();
@@ -467,6 +534,92 @@ test(
       await page.getByText('Requested access', { exact: true }).waitFor();
       assert.equal(await page.getByText('Reset permissions', { exact: true }).count(), 0);
       assert.equal(await page.getByRole('switch').count(), 0, 'uninstalled access is informational');
+      for(const theme of ['light','dark']) {
+        await page.goto(`${address}/?scenario=explore-discovery&theme=${theme}`);
+        await page.getByText('Your space to explore',{exact:true}).waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error.message}\n${JSON.stringify(errors)}\n${await page.locator('body').innerText()}`);});
+        await page.getByRole('tab',{name:'Discover',exact:true}).click();
+        await page.getByText('Photo Gallery',{exact:true}).waitFor();
+        assert.equal(await page.getByRole('button',{name:'Add shortcut',exact:true}).count(),0);
+        assert.equal(await page.getByText('Alice',{exact:true}).count(),3,'each app shows its publisher');
+        for(const format of ['napplet','napp','nsite'])assert.equal(await page.getByText(format,{exact:true}).count(),1,'each app shows its format');
+        const formatColors=await Promise.all(['napplet','napp','nsite'].map(format=>page.getByText(format,{exact:true}).evaluate(node=>({text:getComputedStyle(node).color,background:getComputedStyle(node).backgroundColor}))));
+        assert.equal(new Set(formatColors.map(color=>color.text)).size,3,'formats have distinct foregrounds');
+        assert.equal(new Set(formatColors.map(color=>color.background)).size,3,'formats have distinct tinted backgrounds');
+        assert.equal(await page.getByText('A useful application for your Nostr account.',{exact:true}).count(),0);
+        const appName=await page.getByText('Notes',{exact:true}).boundingBox();
+        const publisher=await page.getByText('Alice',{exact:true}).first().boundingBox();
+        assert(publisher.y>=appName.y+appName.height,'publisher appears below the application name');
+        const publisherAvatar=await page.getByTestId('discovery-publisher').first().locator(':scope > div').first().boundingBox();
+        assert(publisherAvatar.width===16 && publisherAvatar.height===16,'publisher uses a compact avatar');
+        assert(publisher.x>=publisherAvatar.x+publisherAvatar.width,'publisher name follows the avatar');
+        if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-discovery.png`});
+        await page.getByRole('tab',{name:'Favorites',exact:true}).click();
+        await page.getByText('Your space to explore',{exact:true}).waitFor();
+        assert.equal(await page.getByText('Recently visited',{exact:true}).count(),0,'browsing discovery never creates a visit');
+        if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-favorites.png`});
+        await page.getByRole('tab',{name:'Discover',exact:true}).click();
+        await page.getByText('Photo Gallery',{exact:true}).click();
+        assert.match(await page.title(),/^\/explore-details\?key=/);
+      }
+      for(const theme of ['light','dark']) {
+        await page.goto(`${address}/?scenario=explore-discovery&theme=${theme}&long-catalog=1`);
+        await page.getByRole('tab',{name:'Discover',exact:true}).click();
+        await page.getByText('Photo Gallery',{exact:true}).waitFor();
+        const tabsBefore=await page.getByRole('tablist').boundingBox();
+        await page.getByText('Photo Gallery',{exact:true}).evaluate(node=>{
+          let viewport=node.parentElement;
+          while(viewport && !(viewport.scrollHeight>viewport.clientHeight && ['auto','scroll'].includes(getComputedStyle(viewport).overflowY)))viewport=viewport.parentElement;
+          if(!viewport)throw new Error('Catalogue scroll viewport not found');
+          viewport.scrollTop=180;
+        });
+        await page.waitForFunction(()=>{
+          const tabs=document.querySelector('[role="tablist"]');
+          const header=tabs.parentElement.parentElement.parentElement;
+          return [...header.children].some(child=>getComputedStyle(child).pointerEvents==='none'&&child.getBoundingClientRect().height<=1);
+        });
+        const tabsAfter=await page.getByRole('tablist').boundingBox();
+        assert.equal(tabsAfter.y,tabsBefore.y,'tabs stay inside the fixed title bar');
+        const boundary=await page.getByRole('tablist').evaluate(tabs=>{
+          const header=tabs.parentElement.parentElement.parentElement;
+          const divider=[...header.children].find(child=>getComputedStyle(child).pointerEvents==='none'&&child.getBoundingClientRect().height<=1);
+          return {tabBottom:tabs.getBoundingClientRect().bottom,dividerTop:divider.getBoundingClientRect().top,headerBottom:header.getBoundingClientRect().bottom};
+        });
+        assert(boundary.dividerTop>=boundary.tabBottom,'title-bar divider sits below the tabs');
+        assert(Math.abs(boundary.headerBottom-boundary.dividerTop)<=1,'divider uses the complete header boundary');
+        if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-discovery-scrolled.png`});
+      }
+      for(const theme of ['light','dark'])for(const kind of ['napp','nsite','website']) {
+        await page.goto(`${address}/?scenario=explore-detail&kind=${kind}&theme=${theme}&needs-consent=1`);
+        const open=page.getByRole('button',{name:'Allow and open',exact:true});await open.click({trial:true});
+        assert.equal(await page.getByTestId('napplet-info').count(),1);
+        assert.equal(await page.getByRole('button',{name:'Share',exact:true}).count(),0);
+        assert.equal(await page.getByText('Signing rules',{exact:true}).count(),0);
+        assert.equal(await page.getByText('Reset permissions',{exact:true}).count(),0);
+        const openBox=await open.boundingBox();assert(openBox.y>700&&openBox.y+openBox.height<=840,'every format keeps Open in the same bottom footer');
+        if(kind==='napp')await checkAppInfoSpacing();
+        if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${kind}-details.png`});
+        await open.click();
+        assert.deepEqual(await page.evaluate(()=>window.reviewedRequired),kind==='napp'?['identity','relay','storage']:[]);
+        assert.equal((await page.evaluate(()=>window.lastRoute)).pathname,'/explore-run');
+        await page.goto(`${address}/?scenario=explore-permissions&kind=${kind}&theme=${theme}`);
+        await page.getByRole('button',{name:'Reset permissions',exact:true}).waitFor();
+        assert.equal(await page.getByText('Signing rules',{exact:true}).count(),1);
+        if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${kind}-permissions.png`});
+        await page.goto(`${address}/?scenario=explore-menu&kind=${kind}&theme=${theme}`);
+        await assertRuntimeHeader();
+        await page.getByRole('button',{name:'App menu',exact:true}).click();
+        const sheet=page.getByRole('dialog');await sheet.getByRole('button',{name:'Permissions',exact:true}).click();
+        await sheet.getByText('Signing rules',{exact:true}).waitFor();
+        assert.equal(await page.evaluate(()=>window.lastRoute),undefined);
+        assert.equal(await page.evaluate(()=>window.nappletVisible),false);
+        await sheet.getByRole('button',{name:'Close',exact:true}).click();
+        await page.waitForFunction(()=>window.nappletVisible===true);
+      }
+      for(const theme of ['light','dark']) {
+        await page.goto(`${address}/?scenario=explore-menu&kind=website&surface=touch&theme=${theme}`);
+        await assertRuntimeHeader('touch');
+        if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-runtime-header-touch.png`});
+      }
       await page.clock.install();
       await page.goto(`${address}/?scenario=timeout`);
       await page.getByRole('button', { name: 'Allow', exact: true }).waitFor();

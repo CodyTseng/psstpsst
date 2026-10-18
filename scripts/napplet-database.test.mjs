@@ -100,12 +100,13 @@ test('desktop migration and reordering preserve recent usage, data and account i
     insert.run('A', 'other-app', '{}', 'v1', 200, null);
     insert.run('A', 'unopened-app', '{}', 'v1', null, null);
     sqlite.exec(readFileSync('src/db/migrations/0060_napplet-desktop.sql', 'utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0061_signing-authorizations.sql', 'utf8'));
     const order = (account = 'A') => sqlite.prepare('SELECT app_key FROM napplet_installations WHERE account_pubkey=? AND desktop_position IS NOT NULL ORDER BY desktop_position').all(account).map((row) => row.app_key);
     assert.deepEqual(order(), ['app', 'other-app'], 'legacy pin order migrates once');
     assert.deepEqual(order('B'), ['app']);
-    const defaults = { accountPubkey: 'A', appKey: 'host:intent-defaults', artifactHash: 'host' };
+    const defaults = { accountPubkey: 'A', appKey: 'host:intent-defaults' };
     const otherAccount = { ...defaults, accountPubkey: 'B' };
-    const storage = { accountPubkey: 'A', appKey: 'app', artifactHash: 'v1' };
+    const storage = { accountPubkey: 'A', appKey: 'app' };
     await setData(defaults, 'defaults', 'napplet:image/edit', 'app');
     await setData(defaults, 'defaults', 'napplet:image/view', 'app');
     await setData(defaults, 'defaults', 'napplet:text/edit', 'other-app');

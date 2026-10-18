@@ -1,10 +1,15 @@
+import { rules as sharedRules, activity as sharedActivity } from '@/services/signing/testing/memory-repository';
+import type { EventTemplate } from 'nostr-tools';
 import { NappletRuntime, type RuntimeOptions } from '../runtime';
 import { NAP_DOMAINS, type NappletRelease } from '../protocol';
 import { platform } from '@/platform';
 import { NAPPLET_FRAME_READY_MESSAGE } from '@/platform/ports/napplet';
 import { getData, setData } from '../repository';
 import { NappletNetwork } from '../network';
+import { invalidateSigning } from '@/services/signing/changes';
+import { appSigningScope } from '../signing-permissions';
 
+jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('@/services/files/media-server.service', () => ({ loadAccountMediaServers: jest.fn(async () => ['https://media.example/']) }));
 jest.mock('@/platform', () => ({
@@ -21,6 +26,13 @@ jest.mock('@/platform', () => ({
       addMessageListener: jest.fn(() => () => {}),
     },
     urlOpener: { openExternalUrl: jest.fn(async () => true) },
+    deviceCrypto: { sha256Hex: jest.fn(async () => 'c'.repeat(64)) },
+    fileSystem: {
+      cacheDirectoryUri: jest.fn(async () => 'file:///cache/'), makeDirectory: jest.fn(async () => {}),
+      openWriteHandle: jest.fn(async () => ({ writeBytes: async () => {}, close: async () => {} })),
+      uploadFile: jest.fn(async () => ({ status: 200, body: JSON.stringify({ url: `https://media.example/${'c'.repeat(64)}`, sha256: 'c'.repeat(64), size: 3 }) })),
+      delete: jest.fn(async () => {}),
+    },
   },
 }));
 jest.mock('../artifacts', () => ({ fetchBlob: jest.fn() }));
@@ -42,7 +54,7 @@ jest.mock('../network', () => ({
 }));
 
 const release = {
-  key: '35129:publisher:app',
+  key: `35129:${'b'.repeat(64)}:app`,
   title: 'Fixture',
   hash: 'a'.repeat(64),
   event: {},
@@ -67,7 +79,57 @@ function options(accountPubkey = 'accountA'): RuntimeOptions {
 const messages = () =>
   jest.mocked(platform.napplet.send).mock.calls.map(([, raw]) => JSON.parse(raw));
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.clearAllMocks(); sharedRules.clear(); sharedActivity.clear();
+});
+
+test('NIP-07 works without declared domains and signs without publishing', async () => {
+  const config = { ...options(), domains: ['shell'] };
+  const runtime = new NappletRuntime(config);
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'signer.getPublicKey', id: 'key' }));
+    expect(messages().at(-1)).toMatchObject({ type: 'signer.getPublicKey.result', result: 'accountA' });
+    expect(config.confirm).toHaveBeenCalledTimes(1);
+    const event = { kind: 1, content: 'note', tags: [], created_at: 1 };
+    jest.mocked(runtime.network.sign).mockResolvedValue({ ...event, sig: 'signature' } as any);
+    await runtime.receive(JSON.stringify({ type: 'signer.signEvent', id: 'sign', event }));
+    expect(messages().at(-1)).toMatchObject({ type: 'signer.signEvent.result', result: { sig: 'signature' } });
+    expect(jest.mocked(config.confirm).mock.calls.at(-1)![0].signing?.operation).toBe('sign');
+    expect(runtime.network.publish).not.toHaveBeenCalled();
+  } finally { await runtime.close(); }
+});
+
+test('NIP-07 refuses account access and invalid events before calling the signer', async () => {
+  const config = { ...options(), domains: ['shell'] };
+  jest.mocked(config.confirm).mockResolvedValue(false);
+  const runtime = new NappletRuntime(config);
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'signer.getPublicKey', id: 'key' }));
+    expect(messages().at(-1)?.error).toBe('permission-denied');
+    await runtime.receive(JSON.stringify({ type: 'signer.signEvent', id: 'sign', event: { kind: 1 } }));
+    expect(messages().at(-1)?.error).toBe('invalid-event');
+    expect(runtime.network.sign).not.toHaveBeenCalled();
+  } finally { await runtime.close(); }
+});
+
+test.each(['close', 'revoke'])('discards a pending NIP-07 signature after %s', async (action) => {
+  const runtime = new NappletRuntime({ ...options(), domains: ['shell'] });
+  await runtime.open();
+  let finish!: (value: any) => void;
+  jest.mocked(runtime.network.sign).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const event = { kind: 1, content: 'note', tags: [], created_at: 1 };
+  const request = runtime.receive(JSON.stringify({ type: 'signer.signEvent', id: 'sign', event }));
+  try {
+    for (let i = 0; i < 20 && !finish; i++) await new Promise(resolve => setTimeout(resolve, 0));
+    expect(finish).toBeDefined();
+    if (action === 'close') await runtime.close();
+    else invalidateSigning(appSigningScope(runtime.scope));
+    finish({ ...event, sig: 'late' });
+    await request;
+    expect(messages().some(message => message.result?.sig === 'late')).toBe(false);
+    if (action === 'revoke') expect(messages().at(-1)?.error).toBe('permission-revoked');
+  } finally { await runtime.close(); }
 });
 
 test('reports the trusted first frame once and ignores it after endpoint closure', async () => {
@@ -136,7 +198,7 @@ test('returns the container history result and rejects navigation after closing'
   expect(platform.napplet.goBack).toHaveBeenCalledTimes(2);
 });
 
-test('storage operations always use the endpoint account and verified artifact', async () => {
+test('storage operations always use the endpoint account and application identity', async () => {
   const first = new NappletRuntime(options('accountA'));
   const second = new NappletRuntime(options('accountB'));
   try {
@@ -154,13 +216,13 @@ test('storage operations always use the endpoint account and verified artifact',
     );
     await second.receive(JSON.stringify({ type: 'storage.get', id: '2', key: 'state' }));
     expect(setData).toHaveBeenCalledWith(
-      { accountPubkey: 'accountA', appKey: release.key, artifactHash: release.hash },
+      { accountPubkey: 'accountA', appKey: release.key },
       'storage',
       'state',
       'A',
     );
     expect(getData).toHaveBeenCalledWith(
-      { accountPubkey: 'accountB', appKey: release.key, artifactHash: release.hash },
+      { accountPubkey: 'accountB', appKey: release.key },
       'storage',
       'state',
     );
@@ -437,4 +499,45 @@ test('revoking permission discards a signature already being computed', async ()
     expect(runtime.network.publish).not.toHaveBeenCalled();
     expect(messages()).toContainEqual(expect.objectContaining({ id: 'revoked', error: 'permission-denied' }));
   } finally { await runtime.close(); }
+});
+
+async function transferFile(runtime: NappletRuntime, id: string) {
+  await runtime.receive(JSON.stringify({ type: 'upload.transfer.start', id, seq: -1, size: 3,
+    request: { filename: 'report.txt', mimeType: 'text/plain' } }));
+  await runtime.receive(JSON.stringify({ type: 'upload.transfer.chunk', id, seq: 0, data: 'AQID' }));
+  await runtime.receive(JSON.stringify({ type: 'upload.transfer.end', id, seq: 1 }));
+}
+
+it('asks for each file as app consent and signs Blossom authentication only after approval', async () => {
+  const config = options();
+  const runtime = new NappletRuntime(config);
+  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  jest.mocked(network.sign).mockImplementation(async (template: EventTemplate) => ({ ...template, pubkey: 'a'.repeat(64), id: 'b'.repeat(64), sig: 'd'.repeat(128) }));
+  await runtime.open();
+  await transferFile(runtime, 'file-one');
+  for (let i = 0; i < 100 && !jest.mocked(platform.fileSystem.uploadFile).mock.calls.length; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ upload: expect.objectContaining({ filename: 'report.txt', size: 3 }) }), expect.any(AbortSignal));
+  expect(jest.mocked(config.confirm).mock.calls[0][0].signing).toBeUndefined();
+  expect(network.sign).toHaveBeenCalledWith(expect.objectContaining({ kind: 24242 }));
+  expect(platform.fileSystem.uploadFile).toHaveBeenCalledTimes(1);
+  await transferFile(runtime, 'file-two');
+  for (let i = 0; i < 100 && jest.mocked(config.confirm).mock.calls.length < 2; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(config.confirm).toHaveBeenCalledTimes(2);
+  expect(sharedRules.size).toBe(0);
+  await runtime.close();
+});
+
+it('denying an upload never signs its authorization or sends the file', async () => {
+  const config = options();
+  jest.mocked(config.confirm).mockResolvedValue(false);
+  const runtime = new NappletRuntime(config);
+  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  await runtime.open();
+  await transferFile(runtime, 'denied-file');
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(config.confirm).toHaveBeenCalledTimes(1);
+  expect(network.sign).not.toHaveBeenCalled();
+  expect(platform.fileSystem.uploadFile).not.toHaveBeenCalled();
+  expect(sharedRules.size).toBe(0);
+  await runtime.close();
 });

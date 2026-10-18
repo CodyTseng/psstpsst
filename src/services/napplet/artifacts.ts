@@ -12,7 +12,7 @@ async function artifactPath(hash: string): Promise<string> {
   return `${directory}/${hash}.html`;
 }
 export async function fetchBlob(
-  release: NappletRelease,
+  release: Pick<NappletRelease, 'servers'>,
   hash: string,
   maxBytes: number,
   signal?: AbortSignal,
@@ -73,7 +73,7 @@ let activeIcons = 0;
 function nextIcon() {
   if (activeIcons < 4) iconJobs.shift()?.();
 }
-export function loadIcon(release: NappletRelease): Promise<string | undefined> {
+export function loadIcon(release: Pick<NappletRelease, 'icon' | 'servers'>): Promise<string | undefined> {
   if (!release.icon) return Promise.resolve(undefined);
   const { hash, mime } = release.icon;
   const cached = icons.get(hash);
@@ -105,4 +105,17 @@ export function loadIcon(release: NappletRelease): Promise<string | undefined> {
   });
   icons.set(hash, pending);
   return pending;
+}
+
+/** Immutable site assets share the existing verified artifact cache across accounts. */
+export async function loadSiteBlob(release: Pick<NappletRelease, 'servers'>, hash: string, signal?: AbortSignal): Promise<Uint8Array> {
+  const path=(await artifactPath(hash)).replace(/\.html$/,'.blob');
+  if((await platform.fileSystem.stat(path)).exists) {
+    const bytes=await platform.fileSystem.readBytes(path);
+    await new Promise<void>(resolve=>setTimeout(resolve,0));
+    assertNotAborted(signal);
+    if(bytes.length<=MAX_ARTIFACT_BYTES && await platform.deviceCrypto.sha256Hex(bytes)===hash) return bytes;
+  }
+  const bytes=await fetchBlob(release,hash,MAX_ARTIFACT_BYTES,signal);
+  assertNotAborted(signal);await platform.fileSystem.writeBytes(path,bytes);return bytes;
 }

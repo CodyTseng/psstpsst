@@ -1,3 +1,5 @@
+import { openApplicationWindowForKey } from '@/services/explore/windows';
+import { platform } from '@/platform';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +22,7 @@ import { contentWidth, spacing, useThemeColors } from '@/theme';
 import { SigningApproval, SigningActions, SigningDurationMenu } from './SigningApproval';
 import { SigningIdentity, SigningRequester, SigningAccountAvatar, signingAction } from './SigningRequestDetails';
 import { NappletIdentity } from './NappletIdentity';
+import { UploadApproval } from './UploadApproval';
 import { CapabilityApproval } from './CapabilityApproval';
 
 export function NappletOverlays() {
@@ -33,13 +36,15 @@ export function NappletOverlays() {
   const showingPanel = prompt || configuration ? null : panel;
   function panelAction(action: NappletPanelAction | 'settings') {
     if (!panel || !accountPubkey) return;
+    if (action === 'settings') { nappletService.openPanel('settings'); return; }
     const release = panel.release;
     const account = accountPubkey;
     pending.current = () => {
       if (getNappletAccountPubkey() !== account) return;
-      if (action === 'settings') router.push({ pathname: '/napplet-permissions/[id]', params: { id: release.event.id } });
-      else if (action === 'publisher') router.push(`/profile/${release.event.pubkey}`);
+      if (action === 'window') void openApplicationWindowForKey(release.key).catch(() => showToast(t('napplets.request_failed')));
+      else if (action === 'publisher') { if (platform.napplet.windows?.isHost) void platform.napplet.windows.action({type:'profile',pubkey:release.event.pubkey}); else router.push(`/profile/${release.event.pubkey}`); }
       else if (action === 'share') {
+        if (platform.napplet.windows?.isHost) { void platform.napplet.windows.action({type:'share',accountPubkey:account,title:release.title,address:appShareAddress(release)}); return; }
         const draftId = useForwardDraftStore.getState().start({ accountPubkey: account, sourceConversationKey: null,
           messages: [{ kind: KIND_CHAT, content: `${release.title}\n${appShareAddress(release)}`, tags: [] }] });
         try { nappletService.startShare(account, release); }
@@ -51,15 +56,16 @@ export function NappletOverlays() {
   return (
     <BottomSheet
       visible={!!prompt || !!configuration || !!panel}
-      title={prompt?.signing ? signingAction(prompt.signing, t) : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
+      title={prompt?.signing ? signingAction(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
       headerAction={prompt?.signing ? <SigningAccountAvatar pubkey={prompt.signing.accountPubkey} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
-      contentStyle={{ gap: spacing.lg, ...(prompt?.capabilities ? { paddingTop: spacing.sm } : {}) }}
+      contentStyle={{ gap: spacing.lg, ...((prompt?.capabilities || prompt?.application && !prompt.signing && !prompt.upload) ? { paddingTop: spacing.sm } : {}) }}
       scrollResetKey={prompt?.requestId ?? (configuration ? 'configuration' : panel?.page ?? 'closed')}
       onClosed={() => { nappletService.overlayClosed(); const work = pending.current; pending.current = null; work?.(); }}
       onClose={() => {
         if (menuOpen) { setMenu(undefined); return; }
-        if (prompt) nappletService.rejectAllRequests();
+        if (prompt?.upload) nappletService.answer(prompt.requestId, false);
+        else if (prompt) nappletService.rejectAllRequests();
         nappletService.closeConfiguration();
         if (!prompt && !configuration) nappletService.closePanel();
       }}
@@ -71,7 +77,11 @@ export function NappletOverlays() {
       </View> : showingPanel?.page === 'about' ? <NappletPanelActions onAction={panelAction} /> : undefined}
     >
       {prompt ? <>
-        {prompt.signing ? <SigningRequester app={prompt.app} /> : !prompt.capabilities ? <>
+        {prompt.requester && !prompt.application ? <View style={{ gap: spacing.xs }}>
+          <AppText variant="subtitle">{prompt.requester.title}</AppText>
+          <AppText variant="caption" tone="muted">{prompt.requester.origin}</AppText>
+        </View> : null}
+        {prompt.signing || prompt.upload ? <SigningRequester app={prompt.app} application={prompt.application} /> : !prompt.capabilities && !prompt.application ? <>
           <AppText>{t('napplets.permission_notice')}</AppText>
           {prompt.app ? <NappletIdentity release={prompt.app} compact /> : null}
           {prompt.accountPubkey ? <SigningIdentity pubkey={prompt.accountPubkey} label={t('napplets.signing_account')} /> : null}
@@ -80,10 +90,13 @@ export function NappletOverlays() {
         {prompt.queued ? <AppText variant="caption" tone="muted">{t('napplets.signing_queued', { count: prompt.queued })}</AppText> : null}
         {prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
           onChange={(value) => setChoice({ id: prompt.requestId, value })} hideActions />
-          : prompt.capabilities ? <CapabilityApproval key={prompt.requestId} prompt={prompt} onPublisher={() => {
-            const pubkey = prompt.app!.event.pubkey;
+          : prompt.upload ? <UploadApproval prompt={prompt} /> : prompt.capabilities || prompt.application ? <CapabilityApproval key={prompt.requestId} prompt={prompt} onPublisher={() => {
+            const pubkey = prompt.application?.publisher ?? prompt.app?.event.pubkey;
+            if (!pubkey) return;
             const account = accountPubkey;
-            pending.current = () => { if (getNappletAccountPubkey() === account) router.push(`/profile/${pubkey}`); };
+            pending.current = () => { if (getNappletAccountPubkey() !== account) return;
+              if (platform.napplet.windows?.isHost) void platform.napplet.windows.action({ type: 'profile', pubkey });
+              else router.push(`/profile/${pubkey}`); };
             nappletService.answer(prompt.requestId, false);
           }} /> : <>
             <AppText variant="code">{prompt.detail}</AppText>
@@ -91,7 +104,7 @@ export function NappletOverlays() {
               {prompt.choices.map((option) => <AppButton key={option.key} variant="secondary" label={option.title}
                 onPress={() => nappletService.answer(prompt.requestId, option.key)} />)}
               <AppButton variant="ghost" label={t('common.cancel')} onPress={() => nappletService.answer(prompt.requestId, false)} />
-            </> : <ActionRow layout="vertical"
+            </> : <ActionRow layout="horizontal"
               confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
               dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} />}
           </>}

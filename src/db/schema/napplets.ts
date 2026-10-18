@@ -28,13 +28,12 @@ export const nappletData = sqliteTable(
       .notNull()
       .references(() => accounts.pubkey, { onDelete: 'cascade' }),
     appKey: text('app_key').notNull(),
-    artifactHash: text('artifact_hash').notNull(),
     bucket: text('bucket').notNull(),
     key: text('key').notNull(),
     value: text('value').notNull(),
     bytes: integer('bytes').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.accountPubkey, t.appKey, t.artifactHash, t.bucket, t.key] })],
+  (t) => [primaryKey({ columns: [t.accountPubkey, t.appKey, t.bucket, t.key] })],
 );
 
 export const nappletUsage = sqliteTable(
@@ -44,10 +43,20 @@ export const nappletUsage = sqliteTable(
       .notNull()
       .references(() => accounts.pubkey, { onDelete: 'cascade' }),
     appKey: text('app_key').notNull(),
-    artifactHash: text('artifact_hash').notNull(),
     bucket: text('bucket').notNull(),
     bytes: integer('bytes').notNull().default(0),
     count: integer('count').notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.accountPubkey, t.appKey, t.artifactHash, t.bucket] })],
+  (t) => [primaryKey({ columns: [t.accountPubkey, t.appKey, t.bucket] })],
 );
+
+/** Read-only pre-upgrade records retain values that could not be merged safely. */
+export const nappletDataLegacy = sqliteTable('napplet_data_legacy', {
+  accountPubkey: text('account_pubkey').notNull().references(() => accounts.pubkey, { onDelete: 'cascade' }),
+  appKey: text('app_key').notNull(),
+  artifactHash: text('artifact_hash').notNull(),
+  bucket: text('bucket').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull(),
+  bytes: integer('bytes').notNull(),
+}, (t) => [primaryKey({ columns: [t.accountPubkey, t.appKey, t.artifactHash, t.bucket, t.key] })]);

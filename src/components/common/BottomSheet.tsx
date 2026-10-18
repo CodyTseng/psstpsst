@@ -36,6 +36,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IS_ELECTRON } from '@/lib/platform';
+import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
 import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
 
 import { createSheetContentPan, type SheetContentPanState } from './bottom-sheet-content-gesture';
@@ -193,6 +194,7 @@ function BottomSheetSurface<ItemT = never>({
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const [mounted, setMounted] = useState(visible);
+  useOverlayPresentation(visible || mounted);
   const [dragClosing, setDragClosing] = useState(false);
   const modalPresentedRef = useRef(false);
   const cancelInputFocusRef = useRef<(() => void) | null>(null);

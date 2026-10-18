@@ -1,7 +1,11 @@
-import { useNappletShare } from '@/hooks/use-napplet-share';
+import { SegmentedControl } from '@/components/common/SegmentedControl';
+import { ExploreDiscovery } from '@/components/napplet/ExploreDiscovery';
+import { exploreService } from '@/services/explore/service';
+import { useExplore } from '@/stores/explore.store';
+import type { ExploreEntry } from '@/services/explore/model';
+import { useExploreShare } from '@/hooks/use-explore-share';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { router } from 'expo-router';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
 import Plus from 'lucide-react-native/icons/plus';
 import { useTranslation } from 'react-i18next';
@@ -14,13 +18,12 @@ import { IconButton } from '@/components/common/IconButton';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { NappletGrid } from '@/components/napplet/NappletGrid';
 import { nappletService } from '@/services/napplet/service';
-import { desktopApps, recentApps } from '@/services/napplet/desktop-order';
-import type { NappletInstallation } from '@/services/napplet/protocol';
-import { useNapplets } from '@/stores/napplet.store';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { usePrimaryPaneNavigation } from '@/components/navigation/primary-pane-navigation';
 import { iconStrokeWidth } from '@/theme/icons';
 import { bottomBarHeight, spacing, uiDensity, useThemeColors } from '@/theme';
+
+const TABS_HEIGHT = uiDensity.segmentedControlHeight + spacing.sm;
 
 export default function NappletsScreen() {
   const account = useActiveAccount((s) => s.activePubkey);
@@ -29,25 +32,30 @@ export default function NappletsScreen() {
 function AccountNapplets({ account }: { account: string | null }) {
   const c = useThemeColors();
   const { t } = useTranslation();
-  const state = useNapplets();
-  const share = useNappletShare(account);
+  const state = useExplore();
+  const share = useExploreShare(account);
   const navigation = usePrimaryPaneNavigation();
-  const desktop = useMemo(() => desktopApps(state.installed), [state.installed]);
-  const recent = useMemo(() => recentApps(state.installed), [state.installed]);
+  const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
+  const recent = useMemo(() => state.entries.filter(a=>a.lastUsedAt!==null).sort((a,b)=>b.lastUsedAt!-a.lastUsedAt!), [state.entries]);
+  const [tab, setTab] = useState<'favorites'|'discover'>('favorites');
   const [scrolled, setScrolled] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const clearance = useScreenHeaderClearance();
+  const clearance = useScreenHeaderClearance(TABS_HEIGHT);
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   useEffect(() => {
     if (account)
-      void nappletService.activate(account).catch(() => setError('napplets.request_failed'));
+      void exploreService.activate(account).catch(() => setError('napplets.request_failed'));
   }, [account]);
   const open = useCallback(
-    (app: NappletInstallation) => {
+    (app: ExploreEntry) => {
       setError(null);
       try {
-        const runId = nappletService.prepareOpen(app, account ?? '');
-        navigation.open(`/napplet-run?runId=${runId}`);
+        if(app.release) {
+          const runId=nappletService.prepareOpen(app.release,account??'');
+          navigation.open(`/napplet-run?runId=${runId}`);
+        } else {
+          const runId=exploreService.prepare(app,account??'');navigation.open(`/explore-run?runId=${runId}`);
+        }
       } catch {
         setError('napplets.request_failed');
       }
@@ -55,10 +63,10 @@ function AccountNapplets({ account }: { account: string | null }) {
     [account, navigation],
   );
   const action = useCallback(
-    (app: NappletInstallation, index: number | null) => {
+    (app: ExploreEntry, index: number | null) => {
       setError(null);
-      return nappletService
-        .moveDesktop(app.key, index, account ?? '')
+      return exploreService
+        .move(app, index, account ?? '')
         .catch(() => setError('napplets.request_failed'));
     },
     [account],
@@ -69,11 +77,19 @@ function AccountNapplets({ account }: { account: string | null }) {
         back={false}
         bordered={scrolled}
         title={t('napplets.title')}
+        belowHeight={TABS_HEIGHT}
+        below={
+          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
+            <SegmentedControl value={tab}
+              options={[{ value: 'favorites', label: t('napplets.favorites') }, { value: 'discover', label: t('napplets.discover') }]}
+              onChange={value => { setTab(value); setScrolled(false); }} />
+          </View>
+        }
         right={
           <IconButton variant="plain" size={uiDensity.headerActionSize}
             icon={<Plus strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text} />}
             accessibilityLabel={t('napplets.install_link')}
-            onPress={() => router.push('/napplet-install')}
+            onPress={() => navigation.open('/napplet-install')}
           />
         }
       />
@@ -83,14 +99,15 @@ function AccountNapplets({ account }: { account: string | null }) {
             {t(error.startsWith('napplets.') ? error : 'napplets.request_failed')}
           </AppText>
         ) : null}
-        {!state.loaded || state.accountPubkey !== account ? (
+        {!state.loaded || state.account !== account ? (
           <ActivityIndicator color={c.accent} style={{ padding: spacing.lg }} />
-        ) : desktop.length || recent.length ? (
-          <NappletGrid onPermissions={(app) => navigation.open(`/napplet-permissions/${app.event.id}`)} onShare={share}
-    onDetails={(app) => navigation.open(`/napplet/${app.event.id}`)}
-            onRemoveRecent={(app) => { void nappletService.removeRecent(app.key, account ?? '').catch(() => setError('napplets.request_failed')); }}
-            onShowRecent={() => navigation.open('/napplet-recent')} items={desktop} recent={recent} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />
-        ) : <Empty onAdd={() => router.push('/napplet-install')} />}
+        ) : tab==='discover' && account ? <ExploreDiscovery account={account} bottomInset={bottomInset} onScrollChange={setScrolled}
+          onDetails={app=>navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1`)} /> : desktop.length || recent.length ? (
+          <NappletGrid onPermissions={(app) => navigation.open(app.release?`/napplet-permissions/${app.release.event.id}`:`/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`)} onShare={share}
+    onDetails={(app) => navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`)}
+            onRemoveRecent={(app) => { void exploreService.forget(app, account ?? '').catch(() => setError('napplets.request_failed')); }}
+            onShowRecent={() => navigation.open('/explore-recent')} items={desktop} recent={recent} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />
+        ) : <Empty onAdd={() => navigation.open('/napplet-install')} />}
       </View>
     </AppScreen>
   );

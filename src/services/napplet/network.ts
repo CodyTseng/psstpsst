@@ -175,7 +175,7 @@ export class NappletNetwork {
     const cached = this.metadata.get(key);
     if (cached && cached.expires > Date.now()) return cached.event;
     const result = await this.query(
-      kind === 10002 ? [...new Set([...MARKET_RELAYS, ...DISCOVERY_RELAYS])] : MARKET_RELAYS,
+      [10002, 10063].includes(kind) ? [...new Set([...MARKET_RELAYS, ...DISCOVERY_RELAYS])] : MARKET_RELAYS,
       [{ authors: [pubkey], kinds: [kind], limit: 1 }],
       signal,
     );
@@ -200,6 +200,16 @@ export class NappletNetwork {
       this.metadataBytes += bytes;
     }
     return event;
+  }
+  async mediaServers(pubkey: string, signal?: AbortSignal): Promise<string[]> {
+    const event = await this.replaceable(pubkey, 10063, signal);
+    const servers = new Set<string>();
+    for (const tag of event?.tags ?? []) {
+      if (tag[0] !== 'server') continue;
+      try { servers.add(publicUrl(tag[1])); } catch { /* Ignore unusable public server hints. */ }
+      if (servers.size === 8) break;
+    }
+    return [...servers];
   }
   async publisherRelays(pubkey: string): Promise<string[]> {
     if (!/^[a-f0-9]{64}$/.test(pubkey)) throw new Error('invalid-author');

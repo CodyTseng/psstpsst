@@ -1,29 +1,23 @@
-import { SigningPermissions, signingRuleKey, type SigningRequest } from '../signing-permissions';
-import { getData, setData, type AppScope } from '../repository';
-import type { NappletRelease } from '../protocol';
+import { connectSigningWindows } from '../changes';
+import { SigningPermissions, signingRuleKey, type SigningRequest } from '../permissions';
+import { saveSigningRule } from '../repository';
+import { rules as stored, activity } from '../testing/memory-repository';
 
-jest.mock('../repository', () => ({ getData: jest.fn(), setData: jest.fn() }));
-const stored = new Map<string, string>();
-const key = (scope: AppScope, bucket: string, name: string) => JSON.stringify([scope, bucket, name]);
-const app = { title: 'App', key: 'app', hash: 'v1' } as NappletRelease;
+jest.mock('../repository', () => jest.requireActual('../testing/memory-repository').memoryRepository);
+const controllers: AbortController[] = [];
 const request: SigningRequest = {
   operation: 'publish', kind: 30078, relays: ['wss://one.example/'], identifier: 'progress',
   accountPubkey: 'accountA', content: 'private fixture content', tags: [['d', 'progress']], createdAt: 100,
 };
-function create(confirm = jest.fn(async () => 'allow-always' as string | false), account = 'accountA', version = 'v1') {
-  const abort = new AbortController();
+function create(confirm = jest.fn(async () => 'allow-always' as string | false), account = 'accountA', source = 'app.example') {
+  const abort = new AbortController(); controllers.push(abort);
   const permissions = new SigningPermissions(
-    { accountPubkey: account, appKey: app.key, artifactHash: version }, app, confirm, abort.signal, jest.fn(),
+    { accountPubkey: account, sourceId: source }, confirm, abort.signal, jest.fn(),
   );
   return { permissions, confirm, abort };
 }
-beforeEach(() => {
-  stored.clear(); jest.clearAllMocks();
-  jest.mocked(getData).mockImplementation(async (scope, bucket, name) => stored.get(key(scope, bucket, name)) ?? null);
-  jest.mocked(setData).mockImplementation(async (scope, bucket, name, value) => {
-    if (value == null) stored.delete(key(scope, bucket, name)); else stored.set(key(scope, bucket, name), value);
-  });
-});
+beforeEach(() => { stored.clear(); activity.clear(); jest.clearAllMocks(); });
+afterEach(() => { controllers.splice(0).forEach((value) => value.abort()); });
 
 test('editing a saved rule changes its decision immediately and asking removes all automatic authority', async () => {
   const value = create();
@@ -38,7 +32,7 @@ test('editing a saved rule changes its decision immediately and asking removes a
   expect(value.confirm).toHaveBeenCalledTimes(2);
 });
 
-test('edited expiry is persisted without widening the record or recipient scope', async () => {
+test('edited expiry preserves the exact event kind and d tag', async () => {
   const value = create();
   await value.permissions.authorize(request);
   const rule = (await value.permissions.snapshot()).rules[0];
@@ -46,7 +40,7 @@ test('edited expiry is persisted without widening the record or recipient scope'
   await value.permissions.edit(rule, { decision: 'allow', duration: 'timed', expiresAt });
   const reopened = create();
   expect((await reopened.permissions.snapshot()).rules[0]).toMatchObject({ scope: rule.scope, duration: 'timed', expiresAt });
-  await reopened.permissions.authorize({ ...request, identifier: 'another-record' });
+  await reopened.permissions.authorize({ ...request, identifier: 'another-record', tags: [['d', 'another-record']] });
   expect(reopened.confirm).toHaveBeenCalledTimes(1);
 });
 
@@ -57,7 +51,7 @@ test('invalid scopes or expired edits cannot install permissions', async () => {
   await expect(value.permissions.edit(source, { decision: 'allow', duration: 'timed', expiresAt: Date.now() - 1 })).rejects.toThrow();
   const protectedScope = { ...request, kind: 24242 };
   await expect(value.permissions.edit({ key: signingRuleKey(protectedScope), scope: protectedScope }, { decision: 'allow', duration: 'always' })).rejects.toThrow();
-  expect(setData).not.toHaveBeenCalled();
+  expect(saveSigningRule).not.toHaveBeenCalled();
 });
 
 test('an edit invalidates consent that was already waiting', async () => {
@@ -73,7 +67,7 @@ test('an edit invalidates consent that was already waiting', async () => {
 
 test('a failed write never activates an edited automatic allowance', async () => {
   const value = create();
-  jest.mocked(setData).mockRejectedValueOnce(new Error('disk-full'));
+  jest.mocked(saveSigningRule).mockRejectedValueOnce(new Error('disk-full'));
   await expect(value.permissions.edit({ key: signingRuleKey(request), scope: request }, { decision: 'allow', duration: 'always' })).rejects.toThrow('disk-full');
   await value.permissions.authorize(request);
   expect(value.confirm).toHaveBeenCalledTimes(1);
@@ -83,14 +77,14 @@ test('a failed edit retains the previously saved permission for future requests'
   const value = create();
   await value.permissions.authorize(request);
   const rule = (await value.permissions.snapshot()).rules[0];
-  jest.mocked(setData).mockRejectedValueOnce(new Error('disk-full'));
+  jest.mocked(saveSigningRule).mockRejectedValueOnce(new Error('disk-full'));
   await expect(value.permissions.edit(rule, { decision: 'deny', duration: 'always' })).rejects.toThrow('disk-full');
   await value.permissions.authorize(request);
   expect(value.confirm).toHaveBeenCalledTimes(1);
   expect((await value.permissions.snapshot()).rules[0].decision).toBe('allow');
 });
 
-test('persistent rules are narrow and never cross accounts, artifacts or records', async () => {
+test('rules survive sessions and remain isolated by account, source and d tag', async () => {
   const first = create();
   await first.permissions.authorize(request);
   const reopened = create();
@@ -99,10 +93,10 @@ test('persistent rules are narrow and never cross accounts, artifacts or records
   const account = create(undefined, 'accountB');
   await account.permissions.authorize({ ...request, accountPubkey: 'accountB' });
   expect(account.confirm).toHaveBeenCalledTimes(1);
-  const version = create(undefined, 'accountA', 'v2');
+  const version = create(undefined, 'accountA', 'other.example');
   await version.permissions.authorize(request);
   expect(version.confirm).toHaveBeenCalledTimes(1);
-  await first.permissions.authorize({ ...request, identifier: 'other' });
+  await first.permissions.authorize({ ...request, identifier: 'other', tags: [['d', 'other']] });
   await first.permissions.authorize({ ...request, relays: ['wss://two.example/'] });
   await reopened.permissions.authorize({ ...request, relays: ['wss://third.example/'] });
   expect(reopened.confirm).not.toHaveBeenCalled();
@@ -121,24 +115,12 @@ test('session grants expire when the execution session ends', async () => {
   expect(next.confirm).toHaveBeenCalledTimes(1);
 });
 
-test('encrypted publication binds recipient and relay authentication has its own grant', async () => {
+test('relay AUTH and Blossom authentication are automatic and never create grants', async () => {
   const { permissions, confirm } = create();
-  await permissions.authorize({ ...request, operation: 'encrypt-publish', recipient: 'one' });
-  await permissions.authorize({ ...request, operation: 'encrypt-publish', recipient: 'two' });
   await permissions.authorize({ ...request, operation: 'relay-auth', kind: 22242 });
-  expect(confirm).toHaveBeenCalledTimes(3);
-});
-
-test('upload grants are separate from publication and remain bound to storage destinations', async () => {
-  const { permissions, confirm } = create();
-  const upload = { ...request, operation: 'upload' as const, kind: 24242, identifier: undefined, relays: ['https://storage.example/'] };
-  await permissions.authorize(upload);
-  await permissions.authorize(upload);
-  expect(confirm).toHaveBeenCalledTimes(1);
-  await permissions.authorize({ ...upload, relays: ['https://other-storage.example/'] });
-  expect(confirm).toHaveBeenCalledTimes(2);
-  await permissions.authorize({ ...upload, operation: 'publish' });
-  expect(confirm).toHaveBeenCalledTimes(3);
+  await permissions.authorize({ ...request, operation: 'upload', kind: 24242 });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(saveSigningRule).not.toHaveBeenCalled();
 });
 
 test('custom kinds remain one-time by default and support explicitly scoped permission or refusal', async () => {
@@ -168,21 +150,7 @@ test('closing during consent cannot persist the late approval', async () => {
   while (!confirm.mock.calls.length) await Promise.resolve();
   abort.abort(); resolve('allow-always');
   await expect(pending).rejects.toThrow();
-  expect(setData).not.toHaveBeenCalled();
-});
-
-test('cancelling one upload review cannot persist its late approval or stop the session', async () => {
-  let resolve!: (value: string) => void;
-  const confirm = jest.fn(() => new Promise<string>((done) => { resolve = done; }));
-  const { permissions, abort } = create(confirm);
-  const upload = new AbortController();
-  const pending = permissions.authorize({ ...request, operation: 'upload', kind: 24242,
-    relays: ['https://media.example/'] }, undefined, upload.signal);
-  while (!confirm.mock.calls.length) await Promise.resolve();
-  upload.abort(); resolve('allow-always');
-  await expect(pending).rejects.toThrow();
-  expect(setData).not.toHaveBeenCalled();
-  expect(abort.signal.aborted).toBe(false);
+  expect(saveSigningRule).not.toHaveBeenCalled();
 });
 
 test('a request that expires while being reviewed cannot create a grant', async () => {
@@ -190,13 +158,13 @@ test('a request that expires while being reviewed cannot create a grant', async 
   try {
     const { permissions } = create(jest.fn(async () => { now.mockReturnValue(3000); return 'allow-always'; }));
     await expect(permissions.authorize(request, 2000)).rejects.toThrow('timeout');
-    expect(setData).not.toHaveBeenCalled();
+    expect(saveSigningRule).not.toHaveBeenCalled();
   } finally { now.mockRestore(); }
 });
 
 test('a failed persistence operation cannot silently activate a remembered grant', async () => {
   const { permissions, confirm } = create();
-  jest.mocked(setData).mockRejectedValueOnce(new Error('disk-full'));
+  jest.mocked(saveSigningRule).mockRejectedValueOnce(new Error('disk-full'));
   await expect(permissions.authorize(request)).rejects.toThrow('disk-full');
   await permissions.authorize(request);
   expect(confirm).toHaveBeenCalledTimes(2);
@@ -254,26 +222,38 @@ test('revocation invalidates an approval already waiting for user input', async 
   const { permissions } = create(confirm);
   const authorization = permissions.authorize(request);
   while (!confirm.mock.calls.length) await Promise.resolve();
-  await permissions.revoke('any-rule');
+  await permissions.revoke(signingRuleKey(request));
   finish('allow-always');
   await expect(authorization).rejects.toThrow('permission-denied');
   expect((await permissions.snapshot()).rules).toEqual([]);
 });
 
-test('relay authentication still requires a separate grant for each server', async () => {
-  const { permissions, confirm } = create();
-  const auth = { ...request, operation: 'relay-auth' as const, kind: 22242 };
-  await permissions.authorize(auth);
-  await permissions.authorize({ ...auth, relays: ['wss://two.example/'] });
-  expect(confirm).toHaveBeenCalledTimes(2);
+test('all live sessions lose matching authority when a shared source rule is revoked', async () => {
+  const first = create(); const second = create();
+  await first.permissions.authorize(request);
+  await second.permissions.authorize(request);
+  const rule = (await first.permissions.snapshot()).rules[0];
+  await first.permissions.revoke(rule.key);
+  await second.permissions.authorize(request);
+  expect(second.confirm).toHaveBeenCalledTimes(1);
 });
 
-test('old relay-bound publish grants never silently expand to new destinations', async () => {
-  const scope = { operation: request.operation, kind: request.kind, relays: request.relays, identifier: request.identifier };
-  stored.set(key({ accountPubkey: 'accountA', appKey: app.key, artifactHash: app.hash }, 'permissions', 'signing'), JSON.stringify({
-    version: 2, rules: [{ key: JSON.stringify(scope), scope, duration: 'always', decision: 'allow', createdAt: 100 }],
-  }));
-  const { permissions, confirm } = create();
-  await permissions.authorize({ ...request, relays: ['wss://new.example/'] });
-  expect(confirm).toHaveBeenCalledTimes(1);
+test('a remote host invalidates cached authority without rebroadcasting its message', async () => {
+  let receive!: (change: { accountPubkey: string; sourceId: string; key?: string }) => void;
+  const broadcastSigning = jest.fn(async () => {});
+  const detach = jest.fn();
+  connectSigningWindows({ broadcastSigning, onSigningChange: (listener: typeof receive) => { receive = listener; return detach; } } as unknown as import('@/platform/ports/application-window').ApplicationWindowsPort);
+  try {
+    const value = create();
+    await value.permissions.authorize(request);
+    const rule = (await value.permissions.snapshot()).rules[0];
+    const scope = { accountPubkey: 'accountA', sourceId: 'https://app.example' };
+    stored.set(JSON.stringify(scope), [{ ...rule, decision: 'deny' }]);
+    broadcastSigning.mockClear();
+    receive({ ...scope, key: rule.key });
+    await expect(value.permissions.authorize(request)).rejects.toThrow('permission-denied');
+    expect(broadcastSigning).not.toHaveBeenCalled();
+    expect(value.confirm).toHaveBeenCalledTimes(1);
+  } finally { connectSigningWindows(); }
+  expect(detach).toHaveBeenCalledTimes(1);
 });

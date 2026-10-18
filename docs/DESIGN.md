@@ -337,6 +337,9 @@ Language selection uses Lucide's `Languages` glyph.
 Personal identifiers use an unframed `@` glyph so the symbol stays recognizable.
 
 Every icon-only action uses `IconButton` and has an accessibility label.
+Title-bar icon actions use the header control and icon density tokens, including
+floating camera-close controls and task-dialog headers; generic icon-button defaults
+are reserved for body actions.
 
 Human avatars are circular. Mini-app icons are rounded squares at every size,
 including compact identity rows and loading or fallback artwork.
@@ -626,6 +629,9 @@ app code is missing or invalid, show its icon and loading state during download
 and retain that state until the first frame replaces it.
 Native sheets retain the underlying mini-app page behind their normal dimming
 backdrop and block its input through the full sheet exit transition.
+All host sheets and dialogs cover embedded application containers, including
+account switching. Runtime More opens app information and permission management
+inside a sheet for napplets, napps, nsites, and websites.
 Header action menus open below their trigger on all platforms, accounting for
 each platform's modal coordinates.
 With no menu open, Electron Escape cancels an active message reply before page
@@ -846,8 +852,14 @@ Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
 
-Mini apps use one vertically scrolling home screen, with a single-row recent-app
-preview above the fixed-order desktop. Both sections scroll together and share
+Explore switches between Favorites and Discover with the shared local mode control.
+Discover browses verified public applications without recording visits or adding
+shortcuts until the user chooses an action. Discovery rows show the publisher avatar and name
+below the application name, with a quiet format label and no inline add action. Format labels use stable purple
+for napplets, blue for napps, and teal for nsites, independent of the selected accent
+and status colours. Both modes open the shared application
+details. Favorites uses one vertically scrolling start page, with a single-row recent-visit
+preview above fixed-order shortcuts. Both sections scroll together and share
 cell widths, gutters, icon sizes and label geometry. Hover and press dim only
 the icon artwork, leaving labels and the page canvas unchanged. Rounded clipping
 belongs to icon artwork, never the caption beneath it. Outer icon
@@ -862,6 +874,7 @@ opens app menus with right-click and sorts desktop icons by direct dragging.
 App menus center on the icon, prefer the space above it, fall back below, and
 shift inward at pane edges. Available menu space excludes native window controls
 and safe areas, including when the overlay spans the full window. App menus follow the shared platform density, icon sizing and stroke conventions.
+Menu width accommodates localized action text within the available viewport.
 The active icon caption hides without changing layout only while its menu is below
 the icon; menus above leave the caption visible. Sorting actions stay out of the visual menu.
 On mobile, holding a desktop icon first opens its menu; moving the held icon dismisses the menu
@@ -874,27 +887,37 @@ apps never drag or share desktop selection feedback. Long press opens
 details, permissions and sharing, with add-to-desktop and danger-tone remove-from-history actions only
 for apps without a desktop shortcut. Removing recent usage preserves the
 desktop shortcut and application state. Cancelling a drag leaves the desktop intact.
-There is no discovery tab or pin state. Pointer menus and accessibility actions
+There is no pin state or browser-style forward/back toolbar. The address entry accepts both Nostr addresses and website URLs. Pointer menus and accessibility actions
 provide equivalent add, move and remove operations. Removing a shortcut preserves
 recent usage, app data, permissions and default task-handler choices. When the
 desktop is empty, omit its entire section, including the heading and guidance.
 
-Mini-app details prioritize app identity, a readable description and expanded
+Explore formats share their detail page, runtime chrome, information panel, and
+permission controls. Format-specific capabilities supply content within those
+shared layouts rather than defining separate page designs.
+Application details prioritize app identity, a readable description and expanded
 required access. The primary action stays fixed above the bottom safe area while information
 scrolls. It reads Allow and open when required access needs consent, otherwise
 Open. Explicit consent on this page replaces the duplicate launch prompt;
 viewing app details alone never grants access. Details, runtime information and
 launch consent share one information block for app identity, publisher, description
-and required access. Launch consent omits the account avatar. Access confirmation uses one
+and required access. First-use consent uses the same sheet across Explore formats,
+identifies the current account in its body, and omits the header account avatar.
+Access confirmation uses one
 horizontal action row with Cancel at the start and Allow at the end. Optional
 access is omitted from app details and launch consent sheets; it stays off until
 enabled in permission management.
-Details have the same layout regardless of installation state, without maintenance
+Details have the same layout regardless of format or installation state, without maintenance
 actions or a separate permissions entry. Permission controls live in the management
 view reached from the app menu. Protocol hashes stay out of ordinary app information
 surfaces.
 
 Mini-app More opens app information with Share, Permissions and Reload actions.
+Electron also offers Open in new window beside More, in the app context menu,
+and in the information sheet action rail. Independent windows merge application identity and menu actions into their native
+title bar, reserve the system caption controls, and omit duplicate page headers
+and new-window actions. They reuse embedded application sheets. Action-rail captions
+use concise labels; accessible action names may retain the full wording.
 Permissions closes the menu before navigating to the dedicated management page.
 Menu actions use square icon controls with single-line captions below. Slots grow
 to fit longer labels in an ordered horizontal rail that scrolls when needed
@@ -922,8 +945,9 @@ destinations. All signing content, including previews, event JSON, identities
 and relay addresses, disables text selection to preserve scrolling and gestures.
 Event JSON provides an explicit Copy action. Authentication keeps the server identity visible for the decision.
 Public-file uploads show the filename, type, size and storage services before
-confirmation, with a plain-language public-access notice. Saved upload grants
-remain distinguishable by storage destination and revocable alongside signing grants.
+confirmation, with a plain-language public-access notice. Each file requires app
+consent, independently of signing permissions; upload reviews have Allow and
+Cancel actions without signing-rule duration or event details.
 A fixed footer contains a single-level duration menu showing the current choice
 above two horizontal Allow/Reject actions. The menu floats above its trigger
 without changing sheet layout. Duration applies to either decision and defaults

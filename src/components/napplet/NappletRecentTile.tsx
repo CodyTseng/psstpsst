@@ -4,22 +4,22 @@ import { useTranslation } from 'react-i18next';
 import type { ContextMenuAnchor, ContextMenuPlacement } from '@/components/common/ContextMenu';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
 import { impact } from '@/lib/haptics';
-import type { NappletInstallation } from '@/services/napplet/protocol';
+import type { GridApp } from '@/services/explore/model';
 import { spacing } from '@/theme';
 import { NappletAppMenu } from './NappletAppMenu';
 import { NappletTile } from './NappletTile';
 
-export type RecentAppActions = {
-  onOpen: (app: NappletInstallation) => void;
-  onAdd: (app: NappletInstallation) => void;
-  onRemove: (app: NappletInstallation) => void;
-  onDetails: (app: NappletInstallation) => void;
-  onPermissions: (app: NappletInstallation) => void;
-  onShare: (app: NappletInstallation) => void;
+export type RecentAppActions<T extends GridApp = GridApp> = {
+  onOpen: (app: T) => void;
+  onAdd: (app: T) => void;
+  onRemove: (app: T) => void;
+  onDetails: (app: T) => void;
+  onPermissions: (app: T) => void;
+  onShare: (app: T) => void;
 };
 
-type Props = RecentAppActions & {
-  app: NappletInstallation;
+type Props<T extends GridApp = GridApp> = RecentAppActions<T> & {
+  app: T;
   width: number;
   height: number;
   iconSize: number;
@@ -27,7 +27,7 @@ type Props = RecentAppActions & {
 };
 
 /** Recent history owns its menu and never participates in desktop drag state. */
-export function NappletRecentTile({ app, width, height, iconSize, testID, onOpen, onAdd, onRemove, onDetails, onPermissions, onShare }: Props) {
+export function NappletRecentTile<T extends GridApp>({ app, width, height, iconSize, testID, onOpen, onAdd, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
   const icon = useRef<View>(null);
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);

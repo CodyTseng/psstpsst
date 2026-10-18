@@ -1,31 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { platform } from './index';
+import { useHasPresentedOverlay } from '@/hooks/use-overlay-presentation';
 
 type CaptureSession = { active: boolean; token: number };
 type Preview = { id: string; uri: string; session: CaptureSession };
 
-export function NappletSurface({ id, visible, obscured = false }: { id: string; visible: boolean; obscured?: boolean }) {
+export function NappletSurface({ id, visible, obscured: localObscured = false }: { id: string; visible: boolean; obscured?: boolean }) {
+  const hasOverlay = useHasPresentedOverlay();
+  const obscured = localObscured || hasOverlay;
   const ref = useRef<View>(null);
   const sessionRef = useRef<CaptureSession | null>(null);
   const sequence = useRef(0);
-  const [presentation, setPresentation] = useState({ id, visible, obscured, preview: null as Preview | null, covered: false });
+  const [presentation, setPresentation] = useState({ id, visible, obscured, preview: null as Preview | null });
   if (presentation.id !== id || presentation.visible !== visible || presentation.obscured !== obscured) {
-    setPresentation({ id, visible, obscured, covered: false, preview: visible && presentation.id === id ? presentation.preview : null });
+    setPresentation({ id, visible, obscured, preview: visible && presentation.id === id ? presentation.preview : null });
   }
   const preview = presentation.preview;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const session = { active: true, token: ++sequence.current };
     sessionRef.current = session;
     if (visible && obscured) {
       void platform.napplet.capture(id).then((uri) => {
         if (!session.active) return;
-        setPresentation((value) => uri ? { ...value, preview: { id, uri, session } } : { ...value, covered: true });
-      }).catch(() => { if (session.active) setPresentation((value) => ({ ...value, covered: true })); });
+        if(uri)setPresentation((value) => ({ ...value, preview: { id, uri, session } }));
+      }).catch(() => {});
     }
     return () => { session.active = false; };
   }, [id, visible, obscured]);
-  const nativeVisible = visible && (!obscured || !presentation.covered);
+  const nativeVisible = visible && !obscured;
   const place = useCallback(() => {
     const session = sessionRef.current;
     ref.current?.measureInWindow((x, y, width, height) => {
@@ -36,7 +39,7 @@ export function NappletSurface({ id, visible, obscured = false }: { id: string; 
       }).catch(() => {});
     });
   }, [id, nativeVisible, obscured, visible]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     place();
     window.addEventListener('resize', place);
     return () => {
@@ -49,13 +52,6 @@ export function NappletSurface({ id, visible, obscured = false }: { id: string; 
   return <View ref={ref} onLayout={place} style={{ flex: 1 }}>
     {preview?.id === id ? <View style={StyleSheet.absoluteFill} pointerEvents="none"><Image key={preview.session.token} source={{ uri: preview.uri }} style={StyleSheet.absoluteFill}
       resizeMode="stretch" accessible={false}
-      onLoad={() => {
-        const session = preview.session;
-        // Keep the native view until the replacement image has crossed a paint boundary.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (session.active) setPresentation((value) => ({ ...value, covered: true }));
-        }));
-      }}
-      onError={() => { if (preview.session.active) setPresentation((value) => ({ ...value, covered: true })); }} /></View> : null}
+      onError={() => { if (preview.session.active) setPresentation((value) => ({ ...value, preview: null })); }} /></View> : null}
   </View>;
 }

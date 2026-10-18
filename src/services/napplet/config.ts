@@ -99,3 +99,21 @@ export function validateValues(schema: ConfigSchema, value: unknown): void {
         throw new Error('invalid-value');
   }
 }
+
+/** Preserve valid values across upgrades and apply defaults for new or changed fields. */
+export function reconcileConfig(schema: ConfigSchema, saved: unknown): unknown {
+  if (schema.type === 'object') {
+    const values = { ...(schema.default && typeof schema.default === 'object' ? schema.default : {}),
+      ...(saved && typeof saved === 'object' && !Array.isArray(saved) ? saved as Record<string, unknown> : {}) } as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(schema.properties ?? {}).flatMap(([key, child]) => {
+      const value = reconcileConfig(child, values[key]);
+      return value === undefined ? [] : [[key, value]];
+    }));
+  }
+  try { validateValues(schema, saved); return saved; }
+  catch {
+    const fallback = configDefaults(schema);
+    try { validateValues(schema, fallback); return fallback; }
+    catch { return undefined; }
+  }
+}

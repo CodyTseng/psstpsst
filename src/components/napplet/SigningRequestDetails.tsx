@@ -10,11 +10,10 @@ import { useClipboard } from '@/hooks/use-clipboard';
 import Copy from 'lucide-react-native/icons/copy';
 import Check from 'lucide-react-native/icons/check';
 import { useDisplayName } from '@/hooks/use-display-name';
-import type { SigningRequest, SigningScope } from '@/services/napplet/signing-permissions';
+import type { SigningRequest, SigningScope } from '@/services/signing/model';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { isReplaceableKind, isAddressableKind } from 'nostr-tools/kinds';
 import { serializeEvent, type UnsignedEvent } from 'nostr-tools';
-import { formatFileSize } from '@/lib/nostr/file-tags';
 import { platform } from '@/platform';
 import { NappletIdentity } from './NappletIdentity';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
@@ -22,6 +21,7 @@ import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 
 export function signingAction(scope: Pick<SigningScope, 'operation' | 'kind'>, t: TFunction): string {
+  if (scope.operation === 'sign') return t('napplets.signing_sign_event');
   if (scope.operation === 'relay-auth') return t('napplets.signing_auth');
   if (scope.operation === 'upload') return t('napplets.signing_upload');
   if (scope.operation === 'encrypt-publish') return t('napplets.signing_encrypt');
@@ -60,8 +60,12 @@ export function SigningAccountAvatar({ pubkey }: { pubkey: string }) {
   </View>;
 }
 
-export function SigningRequester({ app }: { app?: NappletRelease }) {
-  return app ? <View style={{ paddingTop: spacing.sm }}><NappletIdentity release={app} compact /></View> : null;
+export function SigningRequester({ app, application }: { app?: NappletRelease; application?: import('@/services/explore/model').ApplicationInfo }) {
+  const identity=application??app;
+  return identity ? <View style={{ paddingTop: spacing.sm,gap:spacing.sm }}>
+    <NappletIdentity release={identity} compact />
+    {application?.origin?<AppText variant="caption" tone="muted" selectable>{application.origin}</AppText>:null}
+  </View> : null;
 }
 
 export function SigningScopeDetails({ scope }: { scope: SigningScope }) {
@@ -127,8 +131,7 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   }, [preview.repost, request]);
   const previewText = verified?.request === request ? verified.text : preview.text;
   const auth = request.operation === 'relay-auth';
-  const upload = request.operation === 'upload' ? request.upload : undefined;
-  const effect = auth ? 'signing_effect_auth' : upload ? 'signing_effect_upload' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
+  const effect = request.operation === 'sign' ? 'signing_effect_sign' : auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
   const showIdentifier = isReplaceableKind(request.kind) || isAddressableKind(request.kind);
   const dTag = request.tags.find((tag) => tag[0] === 'd');
   const title = request.kind === 30023 ? request.tags.find((tag) => tag[0] === 'title')?.[1] : undefined;
@@ -143,11 +146,6 @@ export function SigningRequestDetails({ request, showTitle = true }: {
     <SigningText>{t(`napplets.${effect}`)}</SigningText>
     {auth ? <AppCard variant="muted">
       <SigningText variant="subtitle">{new URL(request.relays[0]).host}</SigningText>
-    </AppCard> : upload ? <AppCard variant="muted" style={{ gap: spacing.sm }}>
-      <SigningText variant="subtitle">{upload.filename || t('message_detail.attachment')}</SigningText>
-      <SigningText variant="caption" tone="muted">{upload.mimeType} · {formatFileSize(upload.size)}</SigningText>
-      <SigningText variant="caption" tone="muted">{t('napplets.upload_destinations')}</SigningText>
-      {request.relays.map((server) => <SigningText key={server}>{new URL(server).host}</SigningText>)}
     </AppCard> : <>
       {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.signing_recipient')} /> : null}
       <AppCard variant="muted" style={{ gap: spacing.sm }}>
@@ -167,10 +165,10 @@ export function SigningRequestDetails({ request, showTitle = true }: {
     </View>
     {details ? <View style={{ gap: spacing.lg }}>
       <EventJson request={request} />
-      <View style={{ gap: spacing.sm }}>
+      {request.relays.length ? <View style={{ gap: spacing.sm }}>
         <SigningText variant="caption" tone="muted">{t('napplets.signing_destinations')}</SigningText>
         {request.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
-      </View>
+      </View> : null}
     </View> : null}
   </View>;
 }
