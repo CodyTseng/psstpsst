@@ -1,10 +1,21 @@
-export type SigningScope = {
+export type SignerAccessOperation = 'get-public-key' | 'nip04-encrypt' | 'nip04-decrypt' | 'nip44-encrypt' | 'nip44-decrypt';
+export type SignerAccessScope = {
+  operation: SignerAccessOperation;
+  kind?: never;
+  relays: string[];
+  identifier?: never;
+  recipient?: string;
+};
+export type SigningScope = SignerAccessScope | {
   operation: 'sign' | 'publish' | 'encrypt-publish' | 'relay-auth' | 'upload';
   kind: number;
   relays: string[];
   identifier?: string;
   recipient?: string;
 };
+export function isSignerAccess(scope: Pick<SigningScope, 'operation'>): scope is SignerAccessScope {
+  return ['get-public-key', 'nip04-encrypt', 'nip04-decrypt', 'nip44-encrypt', 'nip44-decrypt'].includes(scope.operation);
+}
 export type SigningRequest = SigningScope & {
   accountPubkey: string;
   content: string;
@@ -28,14 +39,17 @@ export type SigningRuleChange = {
 };
 export type SigningRuleTarget = Pick<SigningRule, 'key' | 'scope'>;
 export const MAX_SIGNING_RULES = 64;
-export const PROTECTED_EVENT_KINDS = new Set([
-  0, 3, 4, 5, 13, 14, 15, 1059, 10000, 10002, 10044, 10050, 10063, 22242, 24133, 24242, 27235,
-]);
 export const SIGNING_PERIODS = { '10m': 10 * 60000, '1h': 60 * 60000, '24h': 24 * 60 * 60000 } as const;
 export const isSigningRuleActive = (rule: SigningRule) => rule.duration !== 'timed' ||
   (typeof rule.expiresAt === 'number' && Number.isFinite(rule.expiresAt) && rule.expiresAt > Date.now());
 
 export function signingScope(request: SigningScope): SigningScope {
+  if (isSignerAccess(request)) return { operation: request.operation, relays: [],
+    ...(request.operation !== 'get-public-key' ? { recipient: request.recipient } : {}) };
+  if (request.operation === 'relay-auth' || request.operation === 'upload') return {
+    operation: request.operation, kind: request.kind,
+    relays: [...new Set(request.relays.map(value => new URL(value).href))].sort(),
+  };
   return { operation: 'publish', kind: request.kind, relays: [],
     ...(request.kind >= 30000 && request.kind < 40000 ? { identifier: request.identifier ?? '' } : {}) };
 }
@@ -43,9 +57,17 @@ export function signingRuleKey(request: SigningScope): string {
   return JSON.stringify(signingScope(request));
 }
 export function canRememberSigning(request: SigningScope): boolean {
-  if (request.operation === 'relay-auth' || request.operation === 'upload') return false;
-  return Number.isInteger(request.kind) && request.kind >= 0 && request.kind <= 65535 &&
-    !PROTECTED_EVENT_KINDS.has(request.kind) && !(request.kind >= 10000 && request.kind < 20000) && request.kind !== 30000;
+  if (isSignerAccess(request)) return request.operation === 'get-public-key' ||
+    typeof request.recipient === 'string' && /^[a-f0-9]{64}$/.test(request.recipient);
+  if (request.operation === 'relay-auth' || request.operation === 'upload') {
+    if (request.kind !== (request.operation === 'relay-auth' ? 22242 : 24242) || !request.relays.length || request.relays.length > 16) return false;
+    return request.relays.every(value => {
+      try { const url = new URL(value); return !!url.hostname && !url.username && !url.password &&
+        (request.operation === 'relay-auth' ? ['ws:', 'wss:'] : ['https:']).includes(url.protocol); }
+      catch { return false; }
+    });
+  }
+  return Number.isInteger(request.kind) && request.kind >= 0 && request.kind <= 65535;
 }
 /** Management changes keep the original canonical scope and never broaden it. */
 export function replaceSigningRule(rules: SigningRule[], source: SigningRuleTarget, change: SigningRuleChange): SigningRule[] {

@@ -37,7 +37,7 @@ export default function ExploreDetailsScreen() {
     onOpen={()=>{
       if(!app||!state.account)return;
       try {
-        if (platform.napplet.windows) {
+        if (platform.napplet.windows || platform.napplet.tasks) {
           const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : required;
           void openApplicationWindow(app, state.account, reviewed).catch(() => setError('napplets.request_failed'));
           return;

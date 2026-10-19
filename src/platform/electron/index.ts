@@ -223,6 +223,7 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     urlOpener: {
+      openApprovedBrowserUrl: url => bridge.system.openApprovedBrowserUrl(url).then(() => true, () => false),
       openExternalUrl: (url) => bridge.system.openExternalUrl(url).then(() => true, () => false),
     },
     localization: {

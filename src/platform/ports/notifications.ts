@@ -31,6 +31,7 @@ export type NotificationPresentationContent = {
 };
 
 export interface NotificationsPort {
+  presentWebsite?(application: string, title: string, body: string): Promise<boolean>;
   /** Whether the native notification capability is present at all. */
   isAvailable(): boolean;
   /**

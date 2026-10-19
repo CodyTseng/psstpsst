@@ -1,5 +1,5 @@
 import { platform } from '@/platform';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
@@ -14,7 +14,7 @@ import { AppText } from '@/components/common/AppText';
 import { ActionRow } from '@/components/common/ActionRow';
 import type { ContextMenuAnchor } from '@/components/common/ContextMenu';
 import { BottomSheet } from '@/components/common/BottomSheet';
-import { nappletService } from '@/services/napplet/service';
+import { nappletService, nappletStore } from '@/services/napplet/service';
 import type { ConfigSchema } from '@/services/napplet/config';
 import { getNappletAccountPubkey, useNapplets } from '@/stores/napplet.store';
 import { contentWidth, spacing, useThemeColors } from '@/theme';
@@ -25,8 +25,20 @@ import { UploadApproval } from './UploadApproval';
 import { CapabilityApproval } from './CapabilityApproval';
 import type { RuntimePromptChoice } from '@/services/napplet/runtime';
 import { ApplicationChoiceRow } from './ApplicationChoiceRow';
+import { useOwnsApplicationTaskOverlays } from './ApplicationTaskContext';
 
 export function NappletOverlays() {
+  const owns = useOwnsApplicationTaskOverlays();
+  useEffect(() => {
+    if (!owns) return;
+    const state = nappletStore.getState();
+    // A task switch can unmount the previous owner's sheet during its exit animation.
+    if (!state.prompt && !state.configuration && !state.panel) nappletService.overlayClosed();
+  }, [owns]);
+  return owns ? <NappletOverlayContent /> : null;
+}
+
+function NappletOverlayContent() {
   const { prompt, configuration, panel, accountPubkey } = useNapplets();
   const pending = useRef<(() => void) | null>(null);
   const { t } = useTranslation();
@@ -74,9 +86,7 @@ export function NappletOverlays() {
       onClosed={() => { nappletService.overlayClosed(); const work = pending.current; pending.current = null; work?.(); }}
       onClose={() => {
         if (menuOpen) { setMenu(undefined); return; }
-        if (prompt?.applicationSelection) { nappletService.answer(prompt.requestId, false); return; }
-        if (prompt?.upload) nappletService.answer(prompt.requestId, false);
-        else if (prompt) nappletService.rejectAllRequests();
+        if (prompt) { nappletService.answer(prompt.requestId, false); return; }
         nappletService.closeConfiguration();
         if (!prompt && !configuration) nappletService.closePanel();
       }}
@@ -99,14 +109,15 @@ export function NappletOverlays() {
           {prompt.app ? <SigningIdentity pubkey={prompt.app.event.pubkey} label={t('napplets.publisher')} /> : null}
         </> : null}
         {prompt.queued ? <AppText variant="caption" tone="muted">{t('napplets.signing_queued', { count: prompt.queued })}</AppText> : null}
-        {prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
+        {prompt.upload ? <UploadApproval prompt={prompt} hideActions={!!prompt.signing} /> : prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
           onChange={(value) => setChoice({ id: prompt.requestId, value })} hideActions />
-          : prompt.upload ? <UploadApproval prompt={prompt} /> : prompt.capabilities || prompt.application ? <CapabilityApproval key={prompt.requestId} prompt={prompt} onPublisher={() => {
+          : prompt.capabilities || prompt.application ? <CapabilityApproval key={prompt.requestId} prompt={prompt} onPublisher={() => {
             const pubkey = prompt.application?.publisher ?? prompt.app?.event.pubkey;
             if (!pubkey) return;
             const account = accountPubkey;
             pending.current = () => { if (getNappletAccountPubkey() !== account) return;
               if (platform.napplet.windows?.isHost) void platform.napplet.windows.action({ type: 'profile', pubkey });
+              else if (platform.napplet.tasks) void platform.napplet.tasks.showHost().then(() => router.push(`/profile/${pubkey}`)).catch(() => showToast(t('napplets.request_failed')));
               else router.push(`/profile/${pubkey}`); };
             nappletService.answer(prompt.requestId, false);
           }} /> : <>

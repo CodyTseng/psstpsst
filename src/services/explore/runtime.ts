@@ -3,6 +3,9 @@ import type { ExplorePage, ExploreMessage } from '@/platform/ports/explore';
 import { assertNotAborted } from '@/platform/abort';
 import { NappletNetwork } from '@/services/napplet/network';
 import { SigningPermissions } from '@/services/signing/permissions';
+import { ApplicationSigner } from '@/services/signing/application-signer';
+import { BrowserActions } from './browser-actions';
+import i18n from '@/i18n/core';
 import { signingRevision } from '@/services/signing/changes';
 import { nip19, verifyEvent } from 'nostr-tools';
 import { signingTemplate } from '@/services/signing/event-template';
@@ -15,7 +18,6 @@ import type { ExploreEntry } from './model';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
 import { localRelay } from '@/services/local-relay';
 import { ExploreStreams } from './streams';
-import { getData, setData } from '@/services/napplet/repository';
 import { NappCapabilities } from './capabilities';
 import type { ConfigSchema } from '@/services/napplet/config';
 import { NappData } from './data';
@@ -35,19 +37,19 @@ export class ExploreRuntime {
   private data?: NappData;
   private sync?: NappSync;
   private device?: NappDevice;
+  private browser?: BrowserActions;
   private permissions?: SigningPermissions;
   private document = '';
   private origin = '';
   private url = '';
-  private identityGranted = false;
   private pending = new Set<string>();
   private logWindow = { start: Date.now(), count: 0 };
   private unsubscribe?: () => void;
   presented=false;
   containerId?: string;
   constructor(readonly account: string, readonly entry: ExploreEntry, private options: {
-    accountAccessGranted?: boolean;
     presented?:()=>void;
+    focus?: () => Promise<void>;
     failed?: () => void;
     theme?: () => {
       background: string;
@@ -68,6 +70,7 @@ export class ExploreRuntime {
       throw new Error('napplets.rebuild_required');
     const page: ExplorePage = { storageId: this.account, sourceId: `${this.account}:${this.entry.key}`, network: this.entry.kind !== 'napp' || this.entry.required.includes('network'),
       script: '', bootstrap: { napp: this.entry.kind === 'napp', theme: this.options.theme?.(), domains: this.entry.required, instance: this.instance } };
+    page.labels = { ok: i18n.t('common.ok'), cancel: i18n.t('common.cancel'), allow: i18n.t('napplets.allow') };
     if (this.entry.kind === 'website')
       page.url = this.entry.address;
     else {
@@ -123,15 +126,28 @@ export class ExploreRuntime {
       catch {
         return;
       }
-      if (!['explore.navigation', 'explore.request', 'explore.error'].includes(message.type) || typeof message.document !== 'string' || typeof message.origin !== 'string')
+      if (!['explore.navigation', 'explore.request', 'explore.error', 'explore.browser'].includes(message.type) || typeof message.document !== 'string' || typeof message.origin !== 'string')
         return;
       if (message.type === 'explore.error') {
         this.log('warn', 'navigation', { url: message.url, error: message.error });
         this.options.failed?.();
         return;
       }
-      if (this.document !== message.document || message.type === 'explore.request' && message.origin !== this.origin)
+      if (this.document !== message.document || ['explore.request', 'explore.browser'].includes(message.type) && message.origin !== this.origin)
         this.enterDocument(message);
+      if (message.type === 'explore.browser' && message.browser) {
+        const request = message.browser, document = message.document;
+        void (async () => {
+          let result = false;
+          try {
+            if (request.action === 'window' || request.action === 'external') {
+              await this.browserActions().handle(request.action === 'window' ? 'open' : 'external', [request.url]); result = true;
+            } else result = await this.browserActions().approve(request);
+          } catch (error) { this.log('warn', 'browser', { error: String(error) }); }
+          if (this.document === document) await this.reply(document, { type: 'browser.result', id: request.id, result });
+        })().catch(() => {});
+        return;
+      }
       if (message.type === 'explore.request' && message.origin === this.origin)
         void this.request(message);
     };
@@ -161,13 +177,12 @@ export class ExploreRuntime {
     this.nonce = '';
     this.streams.clear();
     this.documentLife.abort();
-    this.data = undefined; this.sync = undefined; this.device = undefined;
+    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined;
     this.documentLife = new AbortController();
     this.pending.clear();
     this.document = message.document;
     this.origin = message.origin;
     this.url = message.url ?? message.origin;
-    this.identityGranted = !!this.options.accountAccessGranted && (this.entry.kind !== 'website' || this.origin === new URL(this.entry.address).origin);
     const sourceId = this.entry.kind === 'website' ? this.origin : this.entry.key;
     if (this.entry.kind === 'website' && !/^https?:\/\//.test(sourceId)) {
       this.permissions = undefined;
@@ -223,7 +238,17 @@ export class ExploreRuntime {
       await platform.napplet.send(this.containerId, raw);
     }
   }
+  private browserActions() {
+    return this.browser ??= new BrowserActions({ account: this.account, signal: this.documentLife.signal, confirm: this.options.confirm,
+      application: this.entry.kind === 'website' ? { title: new URL(this.origin).host, description: '', servers: [], required: [], origin: this.origin } : applicationPresentation(this.entry),
+      open: async address => {
+        if (!this.options.launch) throw new Error('window-unavailable');
+        const url = websiteAddress(address);
+        await this.options.launch({ key: url, address: url, title: new URL(url).host, description: '', kind: 'website', servers: [], required: [], desktopPosition: null, lastUsedAt: null });
+      } });
+  }
   private async dispatch(method: string, args: any[], current: () => void, signal: AbortSignal, nonce: string): Promise<unknown> {
+    if (method.startsWith('browser.')) return this.browserActions().handle(method.slice(8), args);
     if (method === 'ready') {
       this.presented=true;this.options.presented?.();
       if (this.entry.kind === 'website')
@@ -235,50 +260,14 @@ export class ExploreRuntime {
       return true;
     }
     const napp = this.entry.kind === 'napp';
-    if (napp && /^(nip04|nip44)\.(encrypt|decrypt)$/.test(method)) {
+    if (method === 'getPublicKey' || /^(nip04|nip44)\.(encrypt|decrypt)$/.test(method)) {
+      const permissions = this.permissions;
+      if (!permissions) throw new Error('invalid-origin');
+      const signer = new ApplicationSigner({ accountPubkey: this.account, permissions,
+        signer: () => this.network.getSigner(), current });
+      if (method === 'getPublicKey') return signer.getPublicKey();
       const [algorithm, operation] = method.split('.') as ['nip04' | 'nip44', 'encrypt' | 'decrypt'];
-      const [peer, text] = args;
-      if (typeof peer !== 'string' || !/^[a-f0-9]{64}$/.test(peer) || typeof text !== 'string' || !text || text.length > 100000)
-        throw new Error('invalid-crypto-request');
-      const signer = await this.network.getSigner(); current();
-      const key = `${algorithm}${operation === 'encrypt' ? 'Encrypt' : 'Decrypt'}` as 'nip04Encrypt' | 'nip04Decrypt' | 'nip44Encrypt' | 'nip44Decrypt';
-      const run = signer[key];
-      if (!run) throw new Error('unsupported-encryption');
-      const scope = { accountPubkey: this.account, sourceId: this.entry.key };
-      const revision = signingRevision(scope);
-      const answer = await this.options.confirm({ title: this.entry.title, detail: '', application: applicationPresentation(this.entry), accountPubkey: this.account,
-        crypto: { operation, algorithm, peer } }, signal);
-      current();
-      if (answer !== 'allow') throw new Error('permission-denied');
-      // Give consent UI a paint before a local cryptographic fallback starts.
-      await new Promise<void>(resolve => setTimeout(resolve, 0)); current();
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        const result = await Promise.race([run.call(signer, peer, text), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('crypto-timeout')), 25000); })]);
-        current();
-        if (signingRevision(scope) !== revision) throw new Error('permission-revoked');
-        return result;
-      } finally { clearTimeout(timer); }
-    }
-    if (method === 'getPublicKey') {
-      const source = this.entry.kind === 'website' ? this.origin : this.entry.key;
-      const scope = { accountPubkey: this.account, appKey: source };
-      if (!this.identityGranted && this.entry.kind === 'website') {
-        this.identityGranted = await getData(scope, 'permissions', 'domains') !== null;
-        current();
-      }
-      if (!this.identityGranted) {
-        const application = this.entry.kind === 'website' ? { title: new URL(this.origin).host, description: '', servers: [], required: [] }
-          : { ...this.entry, publisher: this.entry.manifest?.pubkey };
-        const answer = await this.options.confirm({ title: application.title, detail: '', application,
-          ...(this.entry.kind === 'website' ? { requester: { title: application.title, origin: this.origin } } : {}), accountPubkey: this.account }, signal);
-        current();
-        if (answer !== 'allow')
-          throw new Error('permission-denied');
-        this.identityGranted = true;
-        if(this.entry.kind === 'website') { await setData(scope,'permissions','domains','[]');current(); }
-      }
-      return this.account;
+      return signer.crypto(algorithm, operation, args[0], args[1]);
     }
     if (method === 'signEvent') {
       const event = signingTemplate(args[0]);
@@ -286,15 +275,24 @@ export class ExploreRuntime {
       if (!permissions)
         throw new Error('invalid-origin');
       const operation = event.kind === 22242 ? 'relay-auth' : 'sign';
-      const revision = await permissions.authorize({ operation, kind: event.kind, relays: [], accountPubkey: this.account, content: event.content, tags: event.tags, createdAt: event.created_at });
+      const revision = await permissions.authorize({ operation, kind: event.kind,
+        relays: operation === 'relay-auth' ? [event.tags.find(tag => tag[0] === 'relay')![1]] : [],
+        accountPubkey: this.account, content: event.content, tags: event.tags, createdAt: event.created_at });
       current();
       const expires = Date.now() + 25000;
       const signed = await this.network.sign(event);
       current();
       const scope = { accountPubkey: this.account, sourceId: this.entry.kind === 'website' ? this.origin : this.entry.key };
-      if (Date.now() > expires || operation !== 'relay-auth' && signingRevision(scope) !== revision)
+      if (Date.now() > expires || signingRevision(scope) !== revision)
         throw new Error('permission-revoked');
       return signed;
+    }
+    if (method === 'clipboard.writeText') {
+      const application = this.entry.kind === 'website'
+        ? { title: new URL(this.origin).host, description: '', servers: [], required: [], origin: this.origin }
+        : applicationPresentation(this.entry);
+      this.device ??= new NappDevice(application, this.account, signal, this.options.confirm);
+      return this.device.handle('copyText', args);
     }
     if (!napp)
       throw new Error('unsupported-method');
@@ -329,7 +327,10 @@ export class ExploreRuntime {
       const document = this.document;
       this.capabilities ??= new NappCapabilities(this.account, this.entry, this.network, {
         signal, confirm: this.options.confirm, beforeConnect: () => this.capabilitiesClosed,
-        send: message => this.reply(document, { ...(message.type?.startsWith('inc.') ? { type: 'nap', message } : message), nonce }),
+        send: async message => {
+          if (message.type === 'action') await this.options.focus?.();
+          await this.reply(document, { ...(message.type?.startsWith('inc.') ? { type: 'nap', message } : message), nonce });
+        },
         configure: (schema, values, save, life) => {
           if (!this.options.configure) throw new Error('settings-unavailable');
           this.options.configure(schema, values, save, life);
@@ -347,9 +348,13 @@ export class ExploreRuntime {
         async input=>{
           const event=signingTemplate(input);
           if(event.kind!==22242)throw new Error('invalid-auth');
-          await this.permissions!.authorize({operation:'relay-auth',kind:event.kind,relays:[],
+          const permissions = this.permissions!;
+          const revision = await permissions.authorize({operation:'relay-auth',kind:event.kind,
+            relays:[event.tags.find(tag=>tag[0]==='relay')![1]],
             accountPubkey:this.account,content:event.content,tags:event.tags,createdAt:event.created_at});
-          current();const signed=await this.network.sign(event);current();return signed;
+          current();const signed=await this.network.sign(event);current();
+          if(permissions.version!==revision)throw new Error('permission-revoked');
+          return signed;
         });
       return true;
     }

@@ -1,6 +1,6 @@
 import { clearAccountSigningPermissions, clearSigningPermissions, deleteSigningRule, saveSigningRule } from '@/services/signing/repository';
 import { desktopApps, moveDesktopApp } from './desktop-order';
-import { registerNappletLifecycle, notifyNappletTheme } from './lifecycle';
+import { registerNappletLifecycle, notifyNappletTheme, invalidateNappletSource } from './lifecycle';
 import { createStore } from 'zustand/vanilla';
 import { getAccount } from '@/services/account/account-access';
 import { nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingActivity } from '@/db/schema';
@@ -30,6 +30,7 @@ import { NappletRuntime, type RuntimePrompt, type RuntimeTheme } from './runtime
 import type { ConfigSchema } from './config';
 import { assertNotAborted } from '@/platform/abort';
 import { PromptQueue, type QueuedPrompt } from './prompt-queue';
+import { platform } from '@/platform';
 import { appSigningScope, readSigningSnapshot, replaceSigningRule, type SigningRuleTarget, type SigningRuleChange } from './signing-permissions';
 
 type State = {
@@ -323,7 +324,6 @@ export const nappletService = {
       release,
       html,
       domains: declared,
-      accountAccessGranted: true,
       theme: () => theme!,
       presented: () => {
         const launch = nappletStore.getState().launch;
@@ -341,6 +341,12 @@ export const nappletService = {
       invoke: async (target, payload) => {
         current();
         await this.open(target, payload);
+      },
+      openBrowser: async url => {
+        if (platform.napplet.windows || platform.napplet.tasks) {
+          const [{ openApplicationWindow }, { websiteEntry }] = await Promise.all([import('../explore/windows'), import('../explore/model')]);
+          await openApplicationWindow(websiteEntry(url), account);
+        } else if (!await platform.urlOpener.openExternalUrl(url)) throw new Error('external-open-failed');
       },
     });
     runtime = instance;
@@ -483,6 +489,7 @@ export const nappletService = {
     if (domains.some((domain) => !allowed.has(domain))) throw new Error('invalid-permissions');
     const required = ['shell', ...release.required];
     if (required.some((domain) => !domains.includes(domain))) throw new Error('required-permission');
+    invalidateNappletSource(expectedAccount, release.key);
     await setData({ accountPubkey: expectedAccount, appKey: release.key }, 'permissions', 'domains', JSON.stringify([...new Set(domains)]));
     check(expectedAccount, epoch);
     permissionsChanged();
@@ -540,6 +547,7 @@ export const nappletService = {
     const account = nappletStore.getState().accountPubkey;
     const epoch = generation;
     if (!account || (expectedAccount !== undefined && account !== expectedAccount)) return;
+    invalidateNappletSource(account, release.key);
     const active = runtime?.scope.appKey === release.key ? runtime : null;
     if (active) this.stop();
     await active?.signingPermissions.settled();

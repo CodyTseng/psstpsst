@@ -1,4 +1,5 @@
 import type { ApplicationWindowsPort } from './application-window';
+import type { ApplicationTasksPort } from './application-tasks';
 import type { ExplorePage } from './explore';
 export type NappletBounds = { x: number; y: number; width: number; height: number };
 
@@ -9,6 +10,7 @@ export const NAPPLET_FRAME_READY_MESSAGE = JSON.stringify({ type: NAPPLET_FRAME_
 /** Privileged transport only. No account credentials or application APIs cross this seam. */
 export interface NappletPort {
   windows?: ApplicationWindowsPort;
+  tasks?: ApplicationTasksPort;
   fetchResource(url: string, maxBytes: number, signal?: AbortSignal, options?: { accept: 'application/json' | 'application/nostr+json' }): Promise<Uint8Array>;
   clearPageData?(storageId: string): Promise<void>;
   openPage?(page: ExplorePage): Promise<string>;

@@ -56,10 +56,10 @@ let mockPrompt: QueuedPrompt | null = null;
 jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ prompt: mockPrompt, configuration: null }) }));
 
 let renderer: ReactTestRenderer;
-const prompt: QueuedPrompt = {
+const prompt = {
   requestId: 'request-A', expiresAt: Date.now() + 25000, queued: 0, title: 'Game', detail: '',
   signing: { operation: 'publish', kind: 1, accountPubkey: 'a'.repeat(64), content: 'Hello from the app', tags: [], createdAt: 100, relays: ['wss://relay.example/'] },
-};
+} satisfies QueuedPrompt;
 afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); });
 function selectDuration(value: string) {
   act(() => { renderer.root.findByType(SigningActions).props.onMenuChange({ x: 180, y: 700 }); });

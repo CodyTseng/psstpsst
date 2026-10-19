@@ -10,7 +10,7 @@ import { useClipboard } from '@/hooks/use-clipboard';
 import Copy from 'lucide-react-native/icons/copy';
 import Check from 'lucide-react-native/icons/check';
 import { useDisplayName } from '@/hooks/use-display-name';
-import type { SigningRequest, SigningScope } from '@/services/signing/model';
+import { isSignerAccess, type SigningRequest, type SigningScope } from '@/services/signing/model';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { isReplaceableKind, isAddressableKind } from 'nostr-tools/kinds';
 import { serializeEvent, type UnsignedEvent } from 'nostr-tools';
@@ -21,6 +21,8 @@ import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 
 export function signingAction(scope: Pick<SigningScope, 'operation' | 'kind'>, t: TFunction): string {
+  if (scope.operation === 'get-public-key') return t('napplets.signing_get_public_key');
+  if (isSignerAccess(scope)) return `${t(scope.operation.endsWith('-encrypt') ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt')} · ${scope.operation.startsWith('nip04') ? 'NIP-04' : 'NIP-44'}`;
   if (scope.operation === 'sign') return t('napplets.signing_sign_event');
   if (scope.operation === 'relay-auth') return t('napplets.signing_auth');
   if (scope.operation === 'upload') return t('napplets.signing_upload');
@@ -29,7 +31,7 @@ export function signingAction(scope: Pick<SigningScope, 'operation' | 'kind'>, t
     1: 'signing_post', 6: 'signing_repost', 7: 'signing_reaction',
     30023: 'signing_article', 30078: 'signing_app_data',
   };
-  return known[scope.kind] ? t(`napplets.${known[scope.kind]}`) : t('napplets.signing_unknown', { kind: scope.kind });
+  return scope.kind !== undefined && known[scope.kind] ? t(`napplets.${known[scope.kind]}`) : t('napplets.signing_unknown', { kind: scope.kind });
 }
 
 export function SigningIdentity({ pubkey, label }: { pubkey: string; label: string }) {
@@ -74,7 +76,7 @@ export function SigningScopeDetails({ scope }: { scope: SigningScope }) {
     <View style={{ gap: spacing.sm }}>
       {scope.operation === 'encrypt-publish' ? <SigningText>{signingAction({ ...scope, operation: 'publish' }, t)}</SigningText> : null}
       {scope.identifier !== undefined ? <SigningText>{t('napplets.signing_record')}: {scope.identifier || t('napplets.signing_unnamed')}</SigningText> : null}
-      {scope.recipient ? <SigningIdentity pubkey={scope.recipient} label={t('napplets.signing_recipient')} /> : null}
+      {scope.recipient ? <SigningIdentity pubkey={scope.recipient} label={t(isSignerAccess(scope) ? 'napplets.crypto_peer' : 'napplets.signing_recipient')} /> : null}
       <SigningText variant="caption" tone="muted">{t(scope.operation === 'upload' ? 'napplets.upload_destinations' : 'napplets.signing_destinations')}</SigningText>
       {scope.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
     </View>
@@ -130,6 +132,12 @@ export function SigningRequestDetails({ request, showTitle = true }: {
     return () => { active = false; };
   }, [preview.repost, request]);
   const previewText = verified?.request === request ? verified.text : preview.text;
+  if (isSignerAccess(request)) return <View style={{ gap: spacing.lg }}>
+    {showTitle ? <SigningText variant="title">{signingAction(request, t)}</SigningText> : null}
+    <SigningText>{t(request.operation === 'get-public-key' ? 'napplets.signing_get_public_key_notice'
+      : request.operation.endsWith('-encrypt') ? 'napplets.crypto_encrypt_notice' : 'napplets.crypto_decrypt_notice')}</SigningText>
+    {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.crypto_peer')} /> : null}
+  </View>;
   const auth = request.operation === 'relay-auth';
   const effect = request.operation === 'sign' ? 'signing_effect_sign' : auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
   const showIdentifier = isReplaceableKind(request.kind) || isAddressableKind(request.kind);

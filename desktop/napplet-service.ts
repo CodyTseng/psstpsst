@@ -1,11 +1,14 @@
 import type { ExplorePage } from '../src/platform/ports/explore';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import os from 'node:os';
+import { rename, copyFile, unlink } from 'node:fs/promises';
 import {
   BrowserWindow,
   WebContentsView,
   ipcMain,
   session,
+  dialog,
   type Session,
   type IpcMainInvokeEvent,
 } from 'electron';
@@ -35,10 +38,31 @@ export function registerNappletHandlers(
       capture?: Promise<string | null>;
       queued: string[];
       ownerClosed: () => void;
+      browser: Map<string, { resolve(allowed: boolean): void; timer: ReturnType<typeof setTimeout> }>;
+      fullscreen?: boolean;
+      permissions: Set<string>;
     }
   >();
   const requests = new Map<string, { abort: AbortController; owner: BrowserWindow }>();
   const configuredProfiles = new Set<Session>();
+  const downloads = new Set<Session>();
+  const browserRequest = (entry: (typeof views extends Map<string, infer T> ? T : never), action: 'window'|'external'|'permission'|'download',
+    details: { url?: string; resources?: string[]; filename?: string }, resolve: (allowed: boolean) => void = () => {}, source?: string) => {
+    if (!entry.page || entry.browser.size >= 16 || entry.owner.isDestroyed()) { resolve(false); return; }
+    const url = source || entry.view.webContents.getURL() || entry.url;
+    const target = new URL(url);
+    if (!['http:', 'https:'].includes(target.protocol)) { resolve(false); return; }
+    const id = `browser:${randomUUID()}`;
+    const timer = setTimeout(() => { entry.browser.delete(id); resolve(false); }, 460000);
+    entry.browser.set(id, { resolve, timer });
+    entry.owner.webContents.send(IPC.nappletMessage, [...views].find(([,value]) => value === entry)?.[0], JSON.stringify({
+      type: 'explore.browser', origin: target.origin, url, document: entry.document, browser: { id, action, ...details },
+    }));
+  };
+  const cancelBrowser = (entry: (typeof views extends Map<string, infer T> ? T : never)) => {
+    for (const pending of entry.browser.values()) { clearTimeout(pending.timer); pending.resolve(false); }
+    entry.browser.clear();
+  };
   const originFor = (source: string) => `https://${createHash('sha256').update(source).digest('hex')}.explore.psstpsst.invalid`;
   const configureProfile = (profile: Session) => {
     if (configuredProfiles.has(profile)) return;
@@ -91,6 +115,7 @@ export function registerNappletHandlers(
     const entry = views.get(id);
     if (!entry) return;
     views.delete(id);
+    cancelBrowser(entry);
     entry.owner.removeListener('closed', entry.ownerClosed);
     if (!entry.owner.isDestroyed()) entry.owner.contentView.removeChildView(entry.view);
     if (!entry.view.webContents.isDestroyed()) {
@@ -135,7 +160,7 @@ export function registerNappletHandlers(
     });
     const ownerClosed = () => close(id);
     view.setBackgroundColor('transparent');
-    views.set(id, { view, owner, url, ready: false, painted: false, visible: false, inputBlocked: true, queued: [], ownerClosed });
+    views.set(id, { view, owner, url, ready: false, painted: false, visible: false, inputBlocked: true, queued: [], ownerClosed, browser: new Map(), permissions: new Set() });
     owner.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -188,18 +213,63 @@ export function registerNappletHandlers(
     const url = page.url ?? `${origin}/index.html`;
     if (!page.url) await profile.clearStorageData({origin,storages:['serviceworkers','cachestorage']});
     if (!page.url) configureProfile(profile);
-    profile.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-    profile.setPermissionCheckHandler(() => false);
+    profile.setPermissionRequestHandler((contents, permission, callback, details) => {
+      const entry = [...views.values()].find(value => value.view.webContents === contents);
+      if (!entry?.page || !details.isMainFrame) { callback(false); return; }
+      if (permission === 'clipboard-sanitized-write') { callback(entry.visible && !entry.inputBlocked); return; }
+      const media = permission === 'media' && 'mediaTypes' in details && Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
+      const keys = media.length ? media.map(type => `media:${type}`) : [permission];
+      browserRequest(entry, 'permission', { resources: media.length ? media : [permission] }, allowed => {
+        if (allowed) for (const key of keys) entry.permissions.add(key);
+        callback(allowed);
+      }, details.requestingUrl);
+    });
+    profile.setPermissionCheckHandler((contents, permission, _origin, details) => {
+      if (!contents || !details.isMainFrame) return false;
+      const entry = [...views.values()].find(value => value.view.webContents === contents);
+      if (!entry?.page) return false;
+      if (permission === 'clipboard-sanitized-write') return entry.visible && !entry.inputBlocked;
+      return entry.permissions.has(permission === 'media' ? `media:${details.mediaType ?? 'unknown'}` : permission);
+    });
+    if (!downloads.has(profile)) {
+      downloads.add(profile);
+      profile.on('will-download', (_event, item, contents) => {
+        const entry = [...views.values()].find(value => value.view.webContents === contents);
+        if (!entry?.page) { item.cancel(); return; }
+        const temporary = path.join(os.tmpdir(), `psst-download-${randomUUID()}`);
+        item.setSavePath(temporary); item.pause();
+        let destination: string | undefined;
+        const cleanup = () => { void unlink(temporary).catch(() => {}); };
+        item.once('done', (_done, state) => {
+          if (state !== 'completed' || !destination) { cleanup(); return; }
+          const selected = destination;
+          void (async () => { try { await rename(temporary, selected); } catch { await copyFile(temporary, selected); await unlink(temporary); } })()
+            .catch(error => { cleanup(); console.warn('[explore] Download save failed', error); });
+        });
+        browserRequest(entry, 'download', { url: item.getURL(), filename: item.getFilename() }, allowed => {
+          if (!allowed || entry.owner.isDestroyed()) { item.cancel(); cleanup(); return; }
+          void dialog.showSaveDialog(entry.owner, { defaultPath: item.getFilename() }).then(result => {
+            if (result.canceled || !result.filePath) { item.cancel(); cleanup(); return; }
+            destination = result.filePath; item.resume();
+          }).catch(() => { item.cancel(); cleanup(); });
+        });
+      });
+    }
     const view = new WebContentsView({ webPreferences: {session:profile,preload:path.join(__dirname,'napplet-preload.js'),
       additionalArguments:[page.bootstrap ? `--psst-explore-bootstrap=${Buffer.from(JSON.stringify(page.bootstrap)).toString('base64')}` : `--psst-explore=${Buffer.from(page.script).toString('base64')}`],sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:false} });
     const ownerClosed=()=>close(id);
-    const entry={view,owner,url,ready:true,painted:true,visible:false,inputBlocked:true,queued:[] as string[],ownerClosed,page,files:page.files ? new Map(page.files.map(file => [file.path, file])) : undefined,document:randomUUID()};
+    const entry={view,owner,url,ready:true,painted:true,visible:false,inputBlocked:true,queued:[] as string[],ownerClosed,page,files:page.files ? new Map(page.files.map(file => [file.path, file])) : undefined,document:randomUUID(),browser:new Map<string,{resolve(allowed:boolean):void;timer:ReturnType<typeof setTimeout>}>(),fullscreen:false,permissions:new Set<string>()};
     views.set(id,entry);owner.contentView.addChildView(view);view.setVisible(false);owner.once('closed',ownerClosed);
-    view.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+    view.webContents.setWindowOpenHandler(details=>{ browserRequest(entry, 'window', { url: details.url }); return {action:'deny'}; });
     view.webContents.on('will-attach-webview',(event)=>event.preventDefault());
-    view.webContents.on('will-navigate',(event,target)=>{ const u=new URL(target); if(!['http:','https:'].includes(u.protocol) || (!page.url && u.origin!==origin)) event.preventDefault(); });
+    view.webContents.on('will-navigate',(event,target)=>{ const u=new URL(target); if(!['http:','https:'].includes(u.protocol) || (!page.url && u.origin!==origin)) {
+      event.preventDefault(); browserRequest(entry, ['http:','https:'].includes(u.protocol) ? 'window' : 'external', { url: target });
+    } });
+    let ownerWasFullscreen = false;
+    view.webContents.on('enter-html-full-screen',()=>{ownerWasFullscreen=owner.isFullScreen();entry.fullscreen=true;owner.setFullScreen(true);const bounds=owner.getContentBounds();view.setBounds({x:0,y:0,width:bounds.width,height:bounds.height});});
+    view.webContents.on('leave-html-full-screen',()=>{entry.fullscreen=false;owner.setFullScreen(ownerWasFullscreen);});
     view.webContents.on('did-start-navigation',(_event,target,inPlace,main)=>{
-      if(!main || inPlace) return;entry.document=randomUUID();
+      if(!main || inPlace) return;cancelBrowser(entry);entry.permissions.clear();entry.document=randomUUID();
       owner.webContents.send(IPC.nappletMessage,id,JSON.stringify({type:'explore.navigation',document:entry.document,origin:new URL(target).origin,url:target}));
     });
     view.webContents.on('before-input-event',(event)=>{if(entry.inputBlocked) event.preventDefault();});
@@ -254,7 +324,8 @@ export function registerNappletHandlers(
     )
       throw new Error('invalid-bounds');
     const zoom = entry.owner.webContents.getZoomFactor();
-    entry.view.setBounds({
+    const fullscreenBounds = entry.owner.getContentBounds();
+    entry.view.setBounds(entry.fullscreen ? {x:0,y:0,width:fullscreenBounds.width,height:fullscreenBounds.height} : {
       x: Math.round(bounds.x * zoom),
       y: Math.round(bounds.y * zoom),
       width: Math.max(0, Math.round(bounds.width * zoom)),
@@ -274,6 +345,11 @@ export function registerNappletHandlers(
     if (entry.page) {
       let envelope; try { envelope=JSON.parse(message); } catch { return; }
       if(envelope.document!==entry.document) return;
+      if(envelope.reply?.type==='browser.result') {
+        const pending=entry.browser.get(envelope.reply.id);
+        if(pending){entry.browser.delete(envelope.reply.id);clearTimeout(pending.timer);pending.resolve(envelope.reply.result===true);}
+        return;
+      }
       entry.view.webContents.send(IPC.exploreReply,JSON.stringify(envelope.reply));
     } else entry.view.webContents.send(IPC.nappletReply, message);
   });

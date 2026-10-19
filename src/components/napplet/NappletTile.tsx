@@ -3,7 +3,9 @@ import { useWindowDimensions, type View } from 'react-native';
 import { AppButton } from '@/components/common/AppButton';
 import type { GridApp } from '@/services/explore/model';
 import { spacing, typography } from '@/theme';
-import { NappletIcon } from './NappletIcon';
+import { RunningApplicationIcon } from './RunningApplicationIcon';
+import { useApplicationRunning } from '@/stores/application-presence.store';
+import { useTranslation } from 'react-i18next';
 
 /** All app grids share their columns, typography and font-scaled row geometry. */
 export function useNappletGridMetrics(width: number) {
@@ -38,7 +40,8 @@ type Props = Pick<ComponentProps<typeof AppButton>,
 };
 
 export function NappletTile({ app, iconSize, iconRef, hideLabel = false, ...actions }: Props) {
+  const running = useApplicationRunning(app.key), { t } = useTranslation();
   return <AppButton variant="ghost" corner="none" compact compactAxis="none" label={app.title} labelHidden={hideLabel} labelVariant="caption" labelNumberOfLines={1}
-    orientation="vertical" interactionFeedback="iconOpacity" accessibilityLabel={app.title} {...actions}
-    iconLeft={<NappletIcon release={app} size={iconSize} iconRef={iconRef} />} />;
+    orientation="vertical" interactionFeedback="iconOpacity" accessibilityLabel={running ? `${app.title}, ${t('napplets.running')}` : app.title} {...actions}
+    iconLeft={<RunningApplicationIcon sourceId={app.key} release={app} size={iconSize} iconRef={iconRef} />} />;
 }

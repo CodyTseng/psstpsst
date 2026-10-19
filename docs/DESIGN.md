@@ -922,10 +922,19 @@ signing-account labels and raw protocol action names.
 Mini-app More opens app information with Copy address, Share, Permissions and
 Reload actions. Copy uses the same public address as sharing and keeps the sheet
 open with brief in-place confirmation after the clipboard accepts the write.
-On Electron, opening an application creates an independent window by default.
+On Electron and Android, each account/application owns one independent window or
+task. Reopening restores and focuses that instance with its state intact. Open
+applications show a small success-green dot beside their icons in app grids and
+lists; closing the last instance clears it. On Electron, the first launch creates
+an independent window by default.
 There is no separate new-window action. Independent windows merge application
 identity and menu actions into their native title bar, reserve the system caption
-controls, and omit duplicate page headers. They reuse embedded application sheets. Action-rail captions
+controls, and omit duplicate page headers. Android opens applications as independent
+system tasks with their own app-named Recents cards. Application content has no
+host title bar, Close button or floating More control. System Back traverses the
+app's history, then closes its task; switching tasks preserves each running app.
+Application management remains available from the host's app list. All formats
+reuse the shared application sheets. Action-rail captions
 use concise labels; accessible action names may retain the full wording.
 Permissions closes the menu before navigating to the dedicated management page.
 Menu actions use square icon controls with single-line captions below. Slots grow
@@ -942,6 +951,13 @@ and history stay out of its default view. Permission reset uses the shared dange
 button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
 confirmation or cancellation.
 
+Webpage new-window links, external-app links, downloads and device permissions
+ask before proceeding and identify the current site and target/resource. Downloads
+use a system save destination picker. Website app menus include Open in browser,
+which hands the current URL to the default browser. Native webpage dialogs keep
+the originating site visible. Text and image copying do not show host confirmation;
+clipboard reads require it. Permission queries describe these same decisions.
+
 Signing confirmations lead with the action, its consequences and readable content.
 Keep the requesting app icon and name in a compact body row with balanced
 space between the header controls and the following content. Show the signing
@@ -953,22 +969,35 @@ a directional chevron expands directly into the event JSON, followed by relay
 destinations. All signing content, including previews, event JSON, identities
 and relay addresses, disables text selection to preserve scrolling and gestures.
 Event JSON provides an explicit Copy action. Authentication keeps the server identity visible for the decision.
-Public-file uploads show the filename, type, size and storage services before
-confirmation, with a plain-language public-access notice. Each file requires app
-consent, independently of signing permissions; upload reviews have Allow and
-Cancel actions without signing-rule duration or event details.
-Encryption and decryption each require one-request consent identifying the
-operation, account and other party. Application configuration reuses the host's
-settings form and serialized overlay lifecycle. Clipboard writes show the proposed
-text, and file saves identify the file before opening the system destination
-picker; both require independent one-request consent.
+Public-file upload reviews show the filename, type, size and storage services,
+with a plain-language public-access notice. They reuse the signer duration and
+Allow/Reject controls; remembered choices apply to uploads by this app to the
+reviewed storage services. Event JSON is not required for upload reviews.
+Public-key access, encryption and decryption reuse the signing approval layout
+and its Once, timed and Always decisions. Reviews identify the account and current
+host-verified source; crypto reviews also identify the algorithm and other party.
+These operations omit event-kind labels and event JSON. Their remembered rules
+remain separate by method, algorithm and peer and use the shared permission editor.
+Launching an application never grants these signer methods. Application configuration reuses the host's
+settings form and serialized overlay lifecycle. Text clipboard writes do not
+show a host confirmation. File saves identify the file and require consent
+before opening the system destination picker.
 A fixed footer contains a single-level duration menu showing the current choice
 above two horizontal Allow/Reject actions. The menu floats above its trigger
 without changing sheet layout. Duration applies to either decision and defaults
 to one request; remembered decisions retain the displayed operation's scope.
+Every valid ordinary event-signing request, including HTTP authentication,
+profiles, follow lists and application settings, offers the same duration choices.
+Event kind alone never forces one-request authorization. Relay authentication
+and uploads also default to review with the same duration choices; remembered
+decisions retain the reviewed Relay or storage-service destinations. No event
+kind or app-data identifier is categorically blocked from user-approved publication.
 Signing approvals show the remaining seconds in the Reject button, based on
 a fresh review deadline when each request becomes visible. Adding queued requests
 never restarts the active countdown.
+Closing an approval sheet through its backdrop, X or system Back rejects only
+the current request. Rejecting the whole queue requires the explicit Reject all
+action; ordinary dismissal never blocks later requests.
 
 ## 12. Hard Rules
 

@@ -115,7 +115,7 @@ export class NappCapabilities {
       let publisher: string | undefined;
       try { publisher = publicEventAddress(endpoint.sourceId).author; } catch { /* Metadata may be unavailable for a live endpoint. */ }
       return { key: `instance:${endpoint.instance}`, title: endpoint.title,
-        application: app ? { ...applicationListEntry(app), title: endpoint.title } : { title: endpoint.title, kind: 'napp' as const, servers: [], publisher } };
+        application: app ? { ...applicationListEntry(app), title: endpoint.title } : { key: endpoint.sourceId, title: endpoint.title, kind: 'napp' as const, servers: [], publisher } };
     }), ...applications.map(app => ({ key: `source:${app.key}`, title: app.title, application: applicationListEntry(app) }))].slice(0, 64);
     if (!choices.length) throw new Error('handler-unavailable');
     const selected = await this.options.confirm({ title: this.entry.title, detail: '', choices,

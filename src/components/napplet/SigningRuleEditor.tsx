@@ -59,7 +59,7 @@ export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed }: 
         icon: <RadioIndicator selected={option.key === selected} />,
         onPress: () => { setPeriod(option.key); setAnchor(undefined); },
       }))} /> : undefined}>
-    <AppText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: rule.scope.kind })}</AppText>
+    {rule.scope.kind !== undefined ? <AppText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: rule.scope.kind })}</AppText> : null}
     <ListGroup>{(['ask', 'allow', 'deny'] as const).map((value) => <ListRow key={value}
       title={t(value === 'ask' ? 'napplets.permissions_ask' : value === 'allow' ? 'napplets.permissions_allow' : 'napplets.permissions_deny')}
       selectionMode="single" active={decision === value} disabled={busy}

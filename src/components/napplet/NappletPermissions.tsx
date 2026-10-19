@@ -80,8 +80,10 @@ function PermissionRules({ release, sourceId, initiallyExpanded = false }: { rel
         const status = rule.duration === 'timed' && rule.expiresAt
           ? t('napplets.signing_until', { time: new Date(rule.expiresAt).toLocaleString(i18n?.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
           : t(rule.duration === 'session' ? 'napplets.signing_session' : 'napplets.signing_duration_always');
-        const scope = [t('chat.event_reference.kind', { kind: rule.scope.kind }), ...(rule.decision === 'ask' ? [] : [status])];
+        const scope = [...(rule.scope.kind !== undefined ? [t('chat.event_reference.kind', { kind: rule.scope.kind })] : []), ...(rule.decision === 'ask' ? [] : [status])];
         if (rule.scope.identifier !== undefined) scope.push(`d: ${JSON.stringify(rule.scope.identifier)}`);
+        if (rule.scope.recipient) scope.push(`${t('napplets.crypto_peer')}: ${rule.scope.recipient}`);
+        if (rule.scope.relays.length) scope.push(rule.scope.relays.map(url => new URL(url).host).join(', '));
         return <ListRow key={rule.key} title={signingAction(rule.scope, t)} subtitleMultiline
           disabled={busy} onPress={() => setEditor({ row: rule, visible: true })}
           titleTrailing={<DecisionStatus decision={rule.decision} />}

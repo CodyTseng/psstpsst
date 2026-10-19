@@ -7,7 +7,7 @@ import { ListRow } from '@/components/common/ListRow';
 import { useDisplayName } from '@/hooks/use-display-name';
 import type { ApplicationListEntry } from '@/services/explore/model';
 import { applicationFormatColors, radius, spacing, useEffectiveColorScheme } from '@/theme';
-import { NappletIcon } from './NappletIcon';
+import { RunningApplicationIcon } from './RunningApplicationIcon';
 
 /** Discovery and application handoffs share one recognizable application row. */
 export const ApplicationListRow = memo(function ApplicationListRow({ application, onPress }: {
@@ -25,6 +25,6 @@ export const ApplicationListRow = memo(function ApplicationListRow({ application
       borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }}>
       {t(`napplets.formats.${application.kind}`)}
     </AppText>}
-    icon={<NappletIcon release={application} size={spacing.xl}/>}
+    icon={<RunningApplicationIcon sourceId={application.key} release={application} size={spacing.xl}/>}
     onPress={onPress}/>;
 });

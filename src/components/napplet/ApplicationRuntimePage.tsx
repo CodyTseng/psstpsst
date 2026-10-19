@@ -13,6 +13,7 @@ import { NappletIcon } from './NappletIcon';
 import type { ApplicationInfo } from '@/services/explore/model';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing,uiDensity,useThemeColors } from '@/theme';
+import { IS_ANDROID } from '@/lib/platform';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
 export function ApplicationRuntimePage({title,application,loading,error,hidden=false,windowed=false,menuEnabled,onClose,onMore,onRetry,children,overlay}:{
@@ -20,13 +21,15 @@ export function ApplicationRuntimePage({title,application,loading,error,hidden=f
   onClose():void;onMore():void;onRetry():void;children?:ReactNode;overlay?:ReactNode;
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
-  const contentTop = windowed ? 0 : clearance;
-  const more = <IconButton size={uiDensity.headerActionSize} icon={<Ellipsis strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>}
+  const immersive = IS_ANDROID && !windowed;
+  const contentTop = windowed || immersive ? 0 : clearance;
+  const more = <IconButton size={uiDensity.headerActionSize}
+    icon={<Ellipsis strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>}
     accessibilityLabel={t('napplets.runtime_more')} onPress={onMore} disabled={!menuEnabled}/>;
   useDesktopWindowTitlebar(windowed ? { title, actions: more } : null);
-  return <AppScreen edges={['bottom']}>
+  return <AppScreen edges={immersive ? ['top', 'bottom'] : ['bottom']}>
     <View style={{flex:1,display:hidden?'none':'flex'}}>
-      {windowed ? null : <ScreenHeader title={title} back={false}
+      {windowed || immersive ? null : <ScreenHeader title={title} back={false}
         left={<IconButton size={uiDensity.headerActionSize} icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>} accessibilityLabel={t('common.close')} onPress={onClose}/>}
         right={more}/>}
 

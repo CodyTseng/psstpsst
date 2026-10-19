@@ -1,3 +1,5 @@
+import m0065 from './0065_authorization-destinations.sql';
+import m0064 from './0064_signer-access.sql';
 import m0063 from './0063_local-relay.sql';
 // This file is required for Expo/React Native SQLite migrations - https://orm.drizzle.team/quick-sqlite/expo
 
@@ -132,6 +134,8 @@ m0059,
 m0060,
 m0061,
 m0062,
-m0063
+m0063,
+m0064,
+m0065
     }
   }

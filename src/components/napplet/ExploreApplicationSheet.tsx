@@ -32,7 +32,9 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
     headerAction={page==='settings'?<SigningAccountAvatar pubkey={account}/>:undefined}
     scrollResetKey={page??'closed'} maxWidth={contentWidth.focused}
     contentStyle={{gap:spacing.lg}}
-    fixedFooter={page==='about'?<NappletPanelActions address={entry.kind === 'website' ? entry.address : `nostr:${entry.address}`} onAction={action=>{
+    fixedFooter={page==='about'?<NappletPanelActions address={entry.kind === 'website' ? entry.address : `nostr:${entry.address}`}
+      onOpenExternal={entry.kind === 'website' ? () => schedule(() => { void platform.urlOpener.openExternalUrl(entry.address).then(opened => { if (!opened) showToast(t('napplets.request_failed')); }); }) : undefined}
+      onAction={action=>{
       if(action==='settings')onPageChange('settings');
       else if(action==='share')schedule(()=>share(entry));
       else schedule(()=>exploreService.reload(runId));

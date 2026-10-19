@@ -162,7 +162,7 @@ test('advertises the host upload rail only to an endpoint granted the upload dom
   } finally { await restricted.close(); }
 });
 
-test.each([24242, 27235])('blocks generic publication of HTTP authorization kind %s', async (kind) => {
+test.each([-1, 65536, 1.5])('rejects malformed publication kind %s', async (kind) => {
   const runtime = new NappletRuntime(options());
   await runtime.open();
   try {
@@ -321,9 +321,11 @@ test.each([
   { kind: 30000, tags: [['d', 'psstpsst-contacts']] },
   { kind: 30078, tags: [['d', 'psstpsst-saved-groups']] },
   { kind: 10007, tags: [] },
-])('generic publication cannot change account configuration: $kind', async (event) => {
+])('account configuration publication reaches user approval: $kind', async (event) => {
   const config = options();
+  config.confirm = jest.fn(async () => false);
   const runtime = new NappletRuntime(config);
+  runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
   await runtime.open();
   try {
     await runtime.receive(
@@ -337,9 +339,9 @@ test.each([
       type: 'relay.publish.result',
       id: 'write',
       ok: false,
-      error: 'publication-blocked',
+      error: 'permission-denied',
     });
-    expect(config.confirm).not.toHaveBeenCalled();
+    expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({ kind: event.kind }) }), expect.any(AbortSignal));
   } finally {
     await runtime.close();
   }
@@ -517,7 +519,7 @@ it('asks for each file as app consent and signs Blossom authentication only afte
   await transferFile(runtime, 'file-one');
   for (let i = 0; i < 100 && !jest.mocked(platform.fileSystem.uploadFile).mock.calls.length; i++) await new Promise((resolve) => setTimeout(resolve, 0));
   expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ upload: expect.objectContaining({ filename: 'report.txt', size: 3 }) }), expect.any(AbortSignal));
-  expect(jest.mocked(config.confirm).mock.calls[0][0].signing).toBeUndefined();
+  expect(jest.mocked(config.confirm).mock.calls[0][0].signing).toMatchObject({ operation: 'upload', kind: 24242 });
   expect(network.sign).toHaveBeenCalledWith(expect.objectContaining({ kind: 24242 }));
   expect(platform.fileSystem.uploadFile).toHaveBeenCalledTimes(1);
   await transferFile(runtime, 'file-two');

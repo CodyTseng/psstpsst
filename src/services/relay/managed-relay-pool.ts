@@ -21,6 +21,7 @@ import { RelayQueryError } from './relay-query-error';
 
 const CONNECTION_TIMEOUT_MS = 5_000;
 const AUTH_TIMEOUT_MS = 8_000;
+const AUTH_APPROVAL_TIMEOUT_MS = 460_000;
 const RELAY_IDLE_TIMEOUT_MS = 30_000;
 const LONG_LIVED_EOSE_TIMEOUT_MS = 2_147_000_000;
 const LIVE_DEDUP_LIMIT = 8_192;
@@ -183,6 +184,7 @@ export class ManagedRelayPool {
   private readonly random: () => number;
   private readonly maxConcurrentQueriesPerRelay: number;
   private readonly connections = new Map<string, ManagedConnection>();
+  private readonly authentications = new WeakMap<AbstractRelay, Promise<string>>();
   private readonly subscriptions = new Map<string, LogicalSubscription>();
   private readonly subscriptionIdsByRelay = new Map<string, Set<string>>();
   private readonly activeQueriesByRelay = new Map<string, number>();
@@ -1045,11 +1047,44 @@ export class ManagedRelayPool {
   }
 
   private authenticate(relay: AbstractRelay, signAuth: SignAuth): Promise<string> {
-    return withBackgroundTimeout(
-      relay.auth(signAuth as (event: EventTemplate) => Promise<VerifiedEvent>),
-      AUTH_TIMEOUT_MS,
-      'auth timed out',
-    );
+    const existing = this.authentications.get(relay);
+    if (existing) return existing;
+    let settled = false;
+    let cancel = () => {};
+    const pending = new Promise<string>((resolve, reject) => {
+      const deadline = (delay: number) => {
+        cancel();
+        cancel = scheduleBackgroundDeadline(() => reject(new Error('auth timed out')), delay);
+      };
+      deadline(AUTH_TIMEOUT_MS);
+      void relay.auth(async template => {
+        // Human review has its own budget; the relay response still gets eight seconds.
+        deadline(AUTH_APPROVAL_TIMEOUT_MS);
+        try {
+          const signed = await signAuth(template);
+          if (settled) throw new Error('auth cancelled');
+          deadline(AUTH_TIMEOUT_MS);
+          return signed as VerifiedEvent;
+        } catch (error) {
+          // The relay SDK swallows signer rejections, so forward them to the caller here.
+          reject(error);
+          throw error;
+        }
+      }).then(resolve, reject);
+    }).catch(error => {
+      // Drop the SDK's cached failed AUTH after callers settle this connection's reads.
+      setTimeout(() => {
+        const connection = this.connections.get(relay.url);
+        if (connection?.relay !== relay) return;
+        this.closeConnection(connection, false);
+        this.scheduleRetry(connection);
+      }, 0);
+      throw error;
+    }).finally(() => {
+      settled = true; cancel(); this.authentications.delete(relay);
+    });
+    this.authentications.set(relay, pending);
+    return pending;
   }
 }
 

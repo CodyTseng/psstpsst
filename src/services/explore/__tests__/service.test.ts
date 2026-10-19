@@ -26,7 +26,7 @@ it.each(['website','nsite','napp'] as const)('uses one first-use approval and re
   await exploreService.start(runId);
   expect(nappletService.requestApproval).toHaveBeenCalledWith(expect.objectContaining({application:expect.objectContaining({title:'Site'}),accountPubkey:'account'}),expect.anything());
   expect(setData).toHaveBeenCalledWith({accountPubkey:'account',appKey:exploreService.signingSource(app)},'permissions','domains','[]');
-  expect(ExploreRuntime).toHaveBeenCalledWith('account',app,expect.objectContaining({accountAccessGranted:true}));
+  expect(ExploreRuntime).toHaveBeenCalledWith('account',app,expect.objectContaining({confirm:nappletService.requestApproval}));
   jest.mocked(nappletService.requestApproval).mockClear();jest.mocked(getData).mockResolvedValue('[]');
   const again=exploreService.prepare(app,'account');await exploreService.start(again);
   expect(nappletService.requestApproval).not.toHaveBeenCalled();

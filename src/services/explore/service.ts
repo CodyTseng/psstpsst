@@ -4,13 +4,12 @@ import { matchFilters } from 'nostr-tools';
 import { nappletService, nappletStore } from '@/services/napplet/service';
 import { NappletNetwork } from '@/services/napplet/network';
 import { MARKET_RELAYS } from '@/services/napplet/protocol';
-import { registerNappletLifecycle, registerNappletVisit, registerNappletTheme } from '@/services/napplet/lifecycle';
+import { registerNappletLifecycle, registerNappletVisit, registerNappletTheme, invalidateNappletSource } from '@/services/napplet/lifecycle';
 import { moveDesktopApp } from '@/services/napplet/desktop-order';
 import { clearSigningPermissions } from '@/services/signing/repository';
-import { normalizeSigningSource } from '@/services/signing/source';
 import { getData, setData } from '@/services/napplet/repository';
 import { readEntries, reorder, visit, forget } from './repository';
-import { fromNapplet, applicationPresentation, applicationRequirements, signedAddress, parseSite, websiteAddress, withVisit, type ExploreEntry } from './model';
+import { fromNapplet, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, signedAddress, parseSite, websiteAddress, withVisit, type ExploreEntry } from './model';
 import { ExploreRuntime } from './runtime';
 import { assertNotAborted } from '@/platform/abort';
 import { openApplicationWindow } from './windows';
@@ -23,7 +22,7 @@ const parents: { runtime: ExploreRuntime; entry: ExploreEntry; containerId: stri
 const readers=new Set<NappletNetwork>();
 let launchLife = new AbortController();
 let reviewedAccess: {runId:number;required:readonly string[]}|undefined;
-export const SUPPORTED_NAPP_DOMAINS = ['identity','network','storage','theme','link','relay','outbox','common','config','inc'];
+export { SUPPORTED_NAPP_DOMAINS } from './model';
 let writes: Promise<unknown> = Promise.resolve();
 const check = (account: string, generation: number) => { if (exploreStore.getState().account !== account || epoch !== generation)
   throw new Error('session-closed'); };
@@ -235,7 +234,9 @@ export const exploreService = {
   async goBack(runId: number) {
     const active = runtime;
     const overlay = () => { const state = nappletStore.getState(); return state.prompt || state.configuration || state.overlayActive; };
-    if (!active || navigatingBack === active || exploreStore.getState().runId !== runId || overlay()) return;
+    if (exploreStore.getState().runId !== runId || overlay()) return;
+    if (!active) { this.close(runId); return; }
+    if (navigatingBack === active) return;
     navigatingBack = active;
     try {
       const handled = await active.goBack();
@@ -256,6 +257,7 @@ export const exploreService = {
     const generation = epoch;
     check(account, generation);
     const sourceId = this.signingSource(app);
+    invalidateNappletSource(account, sourceId);
     const current = exploreStore.getState().entry;
     if (current && this.signingSource(current) === sourceId || parents.some(parent => this.signingSource(parent.entry) === sourceId))
       this.stop();
@@ -264,11 +266,10 @@ export const exploreService = {
     await setData({ accountPubkey: account, appKey: sourceId }, 'permissions', 'domains', null);
     check(account,generation);exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));
   },
-  signingSource(app: ExploreEntry) { return app.kind === 'website' ? new URL(app.address).origin : normalizeSigningSource(app.key); },
+  signingSource: applicationSigningSource,
 };
 function createRuntime(account: string, entry: ExploreEntry, generation: number, runId: number): ExploreRuntime {
   const instance = new ExploreRuntime(account, entry, {
-    accountAccessGranted: true,
     presented: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false }); },
     failed: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false, error: 'napplets.request_failed' }); },
     theme: () => nappletService.currentTheme()?.colors,
@@ -288,7 +289,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
     launch: async app => {
       check(account, generation);
       app = { ...app, required: applicationRequirements(app.kind, app.required) };
-      if (platform.napplet.windows) { await openApplicationWindow(app, account); return; }
+      if (platform.napplet.windows || platform.napplet.tasks) { await openApplicationWindow(app, account); return; }
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
       if (app.required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('napplets.unsupported');
       if (!await exploreService.access(app, account)) {
@@ -299,7 +300,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
       }
       check(account, generation);
       if (runtime !== instance || !instance.containerId) throw new Error('session-closed');
-      const parent = { runtime: instance, entry, containerId: instance.containerId };
+      const parent = { runtime: instance, entry: exploreStore.getState().entry ?? entry, containerId: instance.containerId };
       parents.push(parent);
       const child = createRuntime(account, app, generation, runId);
       runtime = child;

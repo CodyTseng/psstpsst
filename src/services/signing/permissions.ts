@@ -4,7 +4,7 @@ import { normalizeSigningSource } from './source';
 import { invalidateSigning, signingRevision, subscribeSigning } from './changes';
 
 import { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, SIGNING_PERIODS,
-  MAX_SIGNING_RULES as MAX_RULES, isSigningRuleActive as activeRule,
+  MAX_SIGNING_RULES as MAX_RULES, isSigningRuleActive as activeRule, isSignerAccess, type SignerAccessOperation,
   type SigningScope, type SigningRequest, type SigningRule, type SigningActivity, type SigningSnapshot, type SigningRuleChange, type SigningRuleTarget,
 } from './model';
 export { readSigningSnapshot } from './repository';
@@ -91,7 +91,8 @@ export class SigningPermissions {
     }
   }
 
-  async authorize(input: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal): Promise<number> {
+  async authorize(input: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal,
+    review?: (request: SigningRequest, signal?: AbortSignal) => Promise<string | false>): Promise<number> {
     let revision = this.version;
     const current = () => {
       assertNotAborted(this.signal);
@@ -102,9 +103,13 @@ export class SigningPermissions {
     const request: SigningRequest = JSON.parse(JSON.stringify(input));
     if (request.accountPubkey !== this.scope.accountPubkey) throw new Error('account-unavailable');
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
-    if ((request.operation === 'relay-auth' && request.kind === 22242) || (request.operation === 'upload' && request.kind === 24242)) { current(); return revision; }
-    if (!Number.isInteger(request.kind) || request.kind < 0 || request.kind > 65535) throw new Error('invalid-signing-request');
-    request.identifier = request.kind >= 30000 && request.kind < 40000 ? request.tags.find((tag) => tag[0] === 'd')?.[1] ?? '' : undefined;
+    if ((request.operation === 'relay-auth' || request.operation === 'upload') && !canRememberSigning(request)) throw new Error('invalid-signing-request');
+    if (isSignerAccess(request)) {
+      if (!canRememberSigning(request)) throw new Error('invalid-signing-request');
+    } else {
+      if (!Number.isInteger(request.kind) || request.kind < 0 || request.kind > 65535) throw new Error('invalid-signing-request');
+      request.identifier = request.kind >= 30000 && request.kind < 40000 ? request.tags.find((tag) => tag[0] === 'd')?.[1] ?? '' : undefined;
+    }
     await this.load();
     assertNotAborted(this.signal);
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
@@ -121,7 +126,7 @@ export class SigningPermissions {
     }
     const linked = linkAbort(requestSignal ? [this.signal, requestSignal] : [this.signal]);
     let answer: string | false;
-    try { answer = await this.confirm(request, linked.signal); }
+    try { answer = await (review ?? this.confirm)(request, linked.signal); }
     finally { linked.dispose(); }
     assertNotAborted(this.signal);
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
@@ -160,6 +165,11 @@ export class SigningPermissions {
     current();
     if (!approved) throw new Error('permission-denied');
     return revision;
+  }
+
+  authorizeAccess(operation: SignerAccessOperation, recipient?: string, requestSignal?: AbortSignal): Promise<number> {
+    return this.authorize({ operation, recipient, relays: [], accountPubkey: this.scope.accountPubkey,
+      content: '', tags: [], createdAt: Math.floor(Date.now() / 1000) }, undefined, requestSignal);
   }
 
   private async record(scope: SigningScope, decision: SigningActivity['decision']) {

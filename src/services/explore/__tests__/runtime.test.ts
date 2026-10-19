@@ -116,10 +116,10 @@ it('clears live remembered authority through the shared repository', async () =>
   expect(confirm).toHaveBeenCalledTimes(2);
 });
 
-it('receives and signs a well-formed relay AUTH event without prompting',async()=>{
+it('reviews a well-formed relay AUTH event for its destination',async()=>{
   const event={kind:22242,content:'',created_at:1,tags:[['relay','wss://relay.example/'],['challenge','server-challenge']]};
   receive('container',JSON.stringify({type:'explore.request',origin:'https://site.example',document:'one',raw:JSON.stringify({id:'auth',nonce:'test-document',method:'signEvent',args:[event]})}));
-  await flush();expect(confirm).not.toHaveBeenCalled();
+  await flush();expect(confirm).toHaveBeenCalledWith(expect.objectContaining({signing:expect.objectContaining({operation:'relay-auth',relays:['wss://relay.example/']})}),expect.any(AbortSignal));
   expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.result.kind).toBe(22242);
 });
 
@@ -149,12 +149,12 @@ it('reads public profiles and relay lists without declared capabilities', async 
   expect(confirm).not.toHaveBeenCalled();
 });
 
-it('reuses first-use account consent on the same origin and asks again on another origin',async()=>{
+it('reviews public-key access separately from launch consent and isolates origins',async()=>{
   runtime.stop();
-  runtime=new ExploreRuntime('account',entry,{accountAccessGranted:true,confirm,close:()=>{},link:()=>{}});
+  runtime=new ExploreRuntime('account',entry,{confirm,close:()=>{},link:()=>{}});
   await runtime.start();
   message('https://site.example','one','getPublicKey');await flush();
-  expect(confirm).not.toHaveBeenCalled();
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({signing:expect.objectContaining({operation:'get-public-key'}),requester:{title:'site.example',origin:'https://site.example'}}),expect.anything());
   confirm.mockResolvedValue('allow');
   message('https://other.example','two','getPublicKey','2');await flush();
   expect(confirm).toHaveBeenCalledWith(expect.objectContaining({application:expect.objectContaining({title:'other.example'}),requester:{title:'other.example',origin:'https://other.example'}}),expect.anything());

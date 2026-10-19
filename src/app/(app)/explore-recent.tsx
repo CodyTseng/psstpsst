@@ -19,7 +19,7 @@ export default function ExploreRecentScreen() {
   const open = (app: ExploreEntry) => {
     if (!state.account)
       return;
-    if (platform.napplet.windows) {
+    if (platform.napplet.windows || platform.napplet.tasks) {
       void openApplicationWindow(app, state.account).catch(failed);
       return;
     }

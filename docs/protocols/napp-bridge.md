@@ -96,8 +96,11 @@ streams credited chunks into a host-owned temporary file before the system
 destination picker. The application supplies a sanitized filename, never a path.
 There are at most two transfers, 64 MiB per file, with 48 KiB chunks and a
 two-minute staging deadline. Document teardown cleans staged files. `copyText`
-requires fresh consent previewing the replacement clipboard text and cannot
-read the clipboard. Signing permissions grant neither operation.
+writes text without a host confirmation and cannot read the clipboard. Signing
+permissions do not grant file saving or clipboard reading.
+The standard `navigator.clipboard.writeText` method uses the same host
+transport across Electron, Android and iOS, including ordinary websites and nsites.
+It returns a promise that settles after the native clipboard write, not after enqueueing.
 
 UI-kit injection and private PsstPsst chat access remain outside this bridge.
 
@@ -108,7 +111,9 @@ omitting the callback permits a popstate-only handler. `napp.action(name, payloa
 options?)` selects a live handler or a verified cached application declaring the
 action. The chooser names the caller and content purpose and asks which app to
 open it with. Candidate rows reuse discovery's icons, names, publishers and format
-labels. The sheet's Close action dismisses only this handoff. Options may identify one live
+labels. The sheet's Close action dismisses only this handoff. Android launches
+selected applications in independent document tasks and focuses an existing task
+when delivering an action to its live handler. Options may identify one live
 `instance` or request an `auxiliary` application. Exact patterns match; `view`
 also matches `view:<kind>`. Specific view actions require a verified event of
 that kind. Generic view actions retain an unresolved reference when resolution
@@ -127,8 +132,10 @@ a 25-second deadline; a delivered action has a two-minute deadline.
 Napps receive `nostr.nip04.encrypt/decrypt` and `nostr.nip44.encrypt/decrypt`.
 They use the account's identity signer, including remote NIP-46 signers. They
 never use the separate messaging key or read private conversation tables.
-Each invocation requires fresh, explicit consent identifying the operation and
-peer. Decryption consent explains that readable content reaches the application.
+Public-key access and crypto invocations use the shared signer authorization
+service with Once, timed and Always decisions. Rules bind the account, current
+verified source and method; crypto rules additionally bind the algorithm and peer.
+Decryption consent explains that readable content reaches the application.
 Signing rules do not grant encryption authority. Invalid peers and oversized
 inputs fail before consent; unavailable signer operations fail explicitly.
 Results are discarded after navigation, revocation, account change or timeout.

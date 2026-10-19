@@ -4,11 +4,18 @@ import { registerNappletLifecycle } from '@/services/napplet/lifecycle';
 import { parseManifest, publicUrl } from '@/services/napplet/protocol';
 import { fromNapplet, parseSite, websiteAddress, type ExploreEntry } from './model';
 import type { ApplicationWindowLaunch } from '@/platform/ports/application-window';
+import { applicationTasks } from './application-tasks';
 
 export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: string, reviewedRequired?: readonly string[]) {
-  if (!platform.napplet.windows) throw new Error('napplets.rebuild_required');
-  if (!await canReceiveForAccount(accountPubkey)) throw new Error('account-unavailable');
-  await platform.napplet.windows.open({ accountPubkey, address: entry.address, manifest: entry.manifest, servers: entry.servers, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined });
+  try {
+    if (!platform.napplet.windows && !platform.napplet.tasks) throw new Error('napplets.rebuild_required');
+    if (!await canReceiveForAccount(accountPubkey)) throw new Error('account-unavailable');
+    if (platform.napplet.tasks) { await applicationTasks.open(entry, accountPubkey, reviewedRequired); return; }
+    await platform.napplet.windows!.open({ accountPubkey, address: entry.address, manifest: entry.manifest, servers: entry.servers, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined });
+  } catch (error) {
+    console.warn('[explore] Application host could not open', error);
+    throw error;
+  }
 }
 
 /** Re-verify launch data; the runtime validates reviewed requirements against the manifest. */

@@ -1,5 +1,6 @@
 import type { ApplicationEndpoint, ApplicationEnvelope } from '@/platform/ports/application-messaging';
 import { IncBroker } from '@/services/napplet/inc';
+import { randomId } from '@/services/napplet/protocol';
 
 export const matchesAction = (pattern: string, name: string) => pattern === name || pattern === 'view' && name.startsWith('view:');
 type Endpoint = ApplicationEndpoint & { send(message: ApplicationEnvelope): void; detach(): void };
@@ -64,7 +65,7 @@ export class ApplicationMessagingBroker {
       if (!target || target.accountPubkey !== endpoint.accountPubkey || typeof message.name !== 'string' ||
         !target.actions.some(p => matchesAction(p, message.name))) throw new Error('handler-unavailable');
       if (this.pending.size >= 32) throw new Error('quota-exceeded');
-      const requestId = crypto.randomUUID();
+      const requestId = randomId();
       return new Promise((resolve, reject) => {
         const finish = (error?: Error, value?: unknown) => {
           clearTimeout(timer); this.pending.delete(requestId); if (error) reject(error); else resolve(value);

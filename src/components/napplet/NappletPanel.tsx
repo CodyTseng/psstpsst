@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import Copy from 'lucide-react-native/icons/copy';
 import Check from 'lucide-react-native/icons/check';
+import ExternalLink from 'lucide-react-native/icons/external-link';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { Share } from '@solar-icons/react-native/category/ui/Linear/Share';
 import { ShieldCheck } from '@solar-icons/react-native/category/security/Linear/ShieldCheck';
@@ -33,7 +34,7 @@ export function NappletSettings({ release, accountPubkey }: { release: NappletRe
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
-export function NappletPanelActions({ address, onAction }: { address: string; onAction: (action: 'share' | 'settings' | 'reload') => void }) {
+export function NappletPanelActions({ address, onAction, onOpenExternal }: { address: string; onAction: (action: 'share' | 'settings' | 'reload') => void; onOpenExternal?: () => void }) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const { copyText, copied } = useClipboard();
@@ -44,13 +45,14 @@ export function NappletPanelActions({ address, onAction }: { address: string; on
     { key: 'share', label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> },
     { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
     { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
+    ...(onOpenExternal ? [{ key: 'browser' as const, label: t('napplets.browser_open_default'), icon: <ExternalLink size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> }] : []),
   ] as const;
   return <HorizontalFadeScrollView fadeColor={c.sheetBackground}
     contentContainerStyle={{ gap: spacing.xs, alignItems: 'flex-start' }}>
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
       width={uiDensity.profileActionWidth + spacing.lg} size={uiDensity.profileActionSize + spacing.lg}
       singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={action.label}
-      onPress={() => { if (action.key === 'copy') void copyText(address); else onAction(action.key); }} />)}
+      onPress={() => { if (action.key === 'copy') void copyText(address); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
   </HorizontalFadeScrollView>;
 }
 

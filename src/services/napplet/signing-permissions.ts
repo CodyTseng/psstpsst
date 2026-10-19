@@ -5,7 +5,7 @@ import type { AppScope } from './repository';
 import type { NappletRelease } from './protocol';
 import type { RuntimePrompt } from './runtime';
 
-export { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, PROTECTED_EVENT_KINDS, SIGNING_PERIODS } from '@/services/signing/model';
+export { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, SIGNING_PERIODS } from '@/services/signing/model';
 export type { SigningScope, SigningRequest, SigningRule, SigningActivity, SigningSnapshot, SigningRuleChange, SigningRuleTarget } from '@/services/signing/model';
 export function appSigningScope(scope: AppScope) {
   return { accountPubkey: scope.accountPubkey, sourceId: signingSourceFromLegacyKey(scope.appKey) };

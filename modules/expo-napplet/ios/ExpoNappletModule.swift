@@ -4,6 +4,7 @@ import Network
 import Security
 import WebKit
 import CryptoKit
+import UserNotifications
 
 private func exploreProfileID(_ value: String) -> UUID {
   let hex = SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -164,6 +165,18 @@ public class ExpoNappletModule: Module {
   private let lock = NSLock()
   public func definition() -> ModuleDefinition {
     Name("ExpoNapplet")
+    AsyncFunction("notifyWebsiteAsync") { (application: String, title: String, body: String) async throws -> Bool in
+      guard application.count <= 256, title.count <= 256, body.count <= 4096 else { return false }
+      let center = UNUserNotificationCenter.current()
+      let settings = await center.notificationSettings()
+      guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else { return false }
+      let content = UNMutableNotificationContent()
+      content.title = "\(application) · \(title)"; content.body = body; content.sound = .default
+      content.userInfo = ["psstWebsite": true]
+      let identifier = "psst-web-\(Int.random(in: 0..<32))"
+      try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+      return true
+    }
     Function("isAvailable") { true }
     Function("supportsResourceHeaders") { true }
     Function("isExploreAvailable") { true }
@@ -235,11 +248,99 @@ private final class ExploreFiles: NSObject, WKURLSchemeHandler {
   func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }
 
-final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
+final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, UIDocumentPickerDelegate {
   let onMessage = EventDispatcher()
   private let proxy = MessageProxy()
   private var web: WKWebView!
   private var html = ""
+  private var browserRequests: [String: (Bool) -> Void] = [:]
+  private var browserLabels: [String: String] = [:]
+  private var scriptDialogs: [UUID: () -> Void] = [:]
+  private var committedURL: URL?
+  private var downloads: [ObjectIdentifier: (WKDownload, URL)] = [:]
+  private var exports: [UIDocumentPickerViewController: URL] = [:]
+  private func originURL(_ source: WKSecurityOrigin) -> URL? {
+    URL(string: "\(source.protocol)://\(source.host)" + (source.port > 0 ? ":\(source.port)" : ""))
+  }
+  private func requestBrowser(_ action: String, url: String? = nil, resources: [String]? = nil, filename: String? = nil, principal: URL? = nil, completion: @escaping (Bool) -> Void = { _ in }) {
+    guard isExplore, browserRequests.count < 16, let current = principal ?? committedURL ?? web?.url else { completion(false); return }
+    let id = "browser:\(UUID().uuidString)"
+    browserRequests[id] = completion
+    var browser: [String: Any] = ["id": id, "action": action]
+    if let url { browser["url"] = url }; if let resources { browser["resources"] = resources }; if let filename { browser["filename"] = filename }
+    let origin = self.origin(current)
+    let value: [String: Any] = ["type": "explore.browser", "document": document, "origin": origin, "url": current.absoluteString, "browser": browser]
+    if let data = try? JSONSerialization.data(withJSONObject: value), let raw = String(data: data, encoding: .utf8) { onMessage(["message": raw]) }
+  }
+  private func cancelBrowser() { let pending = Array(browserRequests.values); browserRequests.removeAll(); pending.forEach { $0(false) } }
+  private func presentBrowser(_ controller: UIViewController) {
+    var owner = web?.window?.rootViewController
+    while let presented = owner?.presentedViewController { owner = presented }
+    owner?.present(controller, animated: true)
+  }
+  private func presentScript(_ alert: UIAlertController, id: UUID, cancel: @escaping () -> Void) {
+    scriptDialogs[id] = { [weak alert] in alert?.dismiss(animated: false); cancel() }
+    guard web?.window != nil else { scriptDialogs.removeValue(forKey: id)?(); return }
+    presentBrowser(alert)
+  }
+  private func finishScript(_ id: UUID, action: () -> Void) {
+    guard scriptDialogs.removeValue(forKey: id) != nil else { return }; action()
+  }
+  private func cancelScripts() { let pending = Array(scriptDialogs.values); scriptDialogs.removeAll(); pending.forEach { $0() } }
+  func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+    let id = UUID(), alert = UIAlertController(title: originURL(frame.securityOrigin)?.host, message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: browserLabels["ok"] ?? NSLocalizedString("OK", comment: ""), style: .default) { [weak self] _ in self?.finishScript(id) { completionHandler() } })
+    presentScript(alert, id: id, cancel: completionHandler)
+  }
+  func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+    let id = UUID(), alert = UIAlertController(title: originURL(frame.securityOrigin)?.host, message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: browserLabels["cancel"] ?? NSLocalizedString("Cancel", comment: ""), style: .cancel) { [weak self] _ in self?.finishScript(id) { completionHandler(false) } })
+    alert.addAction(UIAlertAction(title: browserLabels["ok"] ?? NSLocalizedString("OK", comment: ""), style: .default) { [weak self] _ in self?.finishScript(id) { completionHandler(true) } })
+    presentScript(alert, id: id) { completionHandler(false) }
+  }
+  func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+    let id = UUID(), alert = UIAlertController(title: originURL(frame.securityOrigin)?.host, message: prompt, preferredStyle: .alert)
+    alert.addTextField { $0.text = defaultText }
+    alert.addAction(UIAlertAction(title: browserLabels["cancel"] ?? NSLocalizedString("Cancel", comment: ""), style: .cancel) { [weak self] _ in self?.finishScript(id) { completionHandler(nil) } })
+    alert.addAction(UIAlertAction(title: browserLabels["ok"] ?? NSLocalizedString("OK", comment: ""), style: .default) { [weak self, weak alert] _ in self?.finishScript(id) { completionHandler(alert?.textFields?.first?.text) } })
+    presentScript(alert, id: id) { completionHandler(nil) }
+  }
+  func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+    if let url = action.request.url { requestBrowser("window", url: url.absoluteString) }; return nil
+  }
+  func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+    guard frame.isMainFrame else { decisionHandler(.deny); return }
+    let resources = type == .camera ? ["video"] : type == .microphone ? ["audio"] : ["video", "audio"]
+    requestBrowser("permission", resources: resources, principal: originURL(origin)) { decisionHandler($0 ? .grant : .deny) }
+  }
+  func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+    let attachment = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?.lowercased().contains("attachment") == true
+    if isExplore && response.isForMainFrame && (!response.canShowMIMEType || attachment) {
+      requestBrowser("download", url: response.response.url?.absoluteString, filename: response.response.suggestedFilename) { decisionHandler($0 ? .download : .cancel) }
+    } else { decisionHandler(.allow) }
+  }
+  func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { download.delegate = self }
+  func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { download.delegate = self }
+  func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("psst-download-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let target = directory.appendingPathComponent(URL(fileURLWithPath: suggestedFilename).lastPathComponent)
+    downloads[ObjectIdentifier(download)] = (download, target); completionHandler(target)
+  }
+  func downloadDidFinish(_ download: WKDownload) {
+    guard let (_, file) = downloads.removeValue(forKey: ObjectIdentifier(download)) else { return }
+    let picker = UIDocumentPickerViewController(forExporting: [file], asCopy: true)
+    picker.delegate = self; exports[picker] = file; presentBrowser(picker)
+  }
+  func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+    if let (_, file) = downloads.removeValue(forKey: ObjectIdentifier(download)) { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    NSLog("[explore] Download failed: %@", error.localizedDescription)
+  }
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { finishExport(controller) }
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { finishExport(controller) }
+  private func finishExport(_ controller: UIDocumentPickerViewController) {
+    if let file = exports.removeValue(forKey: controller) { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+  }
   private var lastReply = 0
   private var pageValue = ""
   private var pageURL: URL?
@@ -254,20 +355,25 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     let suffix = port != nil && !(scheme == "https" && port == 443) && !(scheme == "http" && port == 80) ? ":\(port!)" : ""
     return "\(scheme)://\(host)\(suffix)"
   }
-  private func emit(_ type: String, _ raw: String? = nil) {
-    var envelope: [String: Any] = ["type": type, "document": document, "origin": origin(web.url ?? pageURL), "url": (web.url ?? pageURL)?.absoluteString ?? ""]
+  private func emit(_ type: String, _ raw: String? = nil, sourceURL: URL? = nil) {
+    let source = sourceURL ?? web.url ?? pageURL
+    var envelope: [String: Any] = ["type": type, "document": document, "origin": origin(source), "url": source?.absoluteString ?? ""]
     if let raw { envelope["raw"] = raw }
+    if type == "explore.error" { envelope["error"] = raw }
     if let bytes = try? JSONSerialization.data(withJSONObject: envelope), let text = String(data: bytes, encoding: .utf8) { onMessage(["message": text]) }
   }
   func receive(_ raw: String, origin source: WKSecurityOrigin) {
-    guard let current = web.url, current.scheme == source.protocol, current.host == source.host,
-      (current.port ?? (current.scheme == "https" ? 443 : current.scheme == "http" ? 80 : 0)) == source.port || source.port == 0 && current.port == nil else { return }
-    emit("explore.request", raw)
+    guard let current = [web.url, committedURL].compactMap({ $0 }).first(where: { current in
+      current.scheme == source.protocol && current.host == source.host &&
+        ((current.port ?? (current.scheme == "https" ? 443 : current.scheme == "http" ? 80 : 0)) == source.port || source.port == 0 && current.port == nil)
+    }) else { return }
+    emit("explore.request", raw, sourceURL: current)
   }
   func loadPage(_ value: String) {
     guard web != nil, value != pageValue, let data = value.data(using: .utf8),
       let page = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let script = page["script"] as? String else { return }
     pageValue = value
+    browserLabels = page["labels"] as? [String: String] ?? [:]
     storageId = page["storageId"] as? String ?? page["sourceId"] as? String ?? ""
     web.stopLoading(); web.configuration.userContentController.removeScriptMessageHandler(forName: "nappletHost")
     web.navigationDelegate = nil; web.removeFromSuperview()
@@ -286,6 +392,7 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     pageFiles.network = page["network"] as? Bool ?? false
     pageFiles.files = Dictionary(uniqueKeysWithValues: (page["files"] as? [[String: String]] ?? []).compactMap { file in file["path"].map { ($0, file) } })
     web.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    committedURL = pageURL
     if let pageURL { web.load(URLRequest(url: pageURL)) }
   }
 
@@ -319,6 +426,7 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
         guard let bytes = raw.data(using: .utf8), let response = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
           response["document"] as? String == document, let reply = response["reply"] as? [String: Any],
           let replyData = try? JSONSerialization.data(withJSONObject: reply), let replyText = String(data: replyData, encoding: .utf8) else { continue }
+        if reply["type"] as? String == "browser.result", let id = reply["id"] as? String { browserRequests.removeValue(forKey: id)?(reply["result"] as? Bool ?? false); continue }
         web.callAsyncJavaScript("const reply = JSON.parse(raw); if(reply.type === 'theme' || window.__exploreDocumentToken === reply.nonce) { window.__exploreReceive && window.__exploreReceive(reply); }", arguments: ["raw": replyText], in: nil, in: .page, completionHandler: nil)
         continue
       }
@@ -334,7 +442,11 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
     if isExplore {
       let target = action.request.url
+      if action.shouldPerformDownload {
+        requestBrowser("download", url: target?.absoluteString) { decisionHandler($0 ? .download : .cancel) }; return
+      }
       let allowed = pageRemote ? ["http", "https"].contains(target?.scheme ?? "") : target?.scheme == "psst-explore" && target?.host == pageURL?.host
+      if !allowed, let target { requestBrowser(["http", "https"].contains(target.scheme ?? "") ? "window" : "external", url: target.absoluteString) }
       decisionHandler(allowed ? .allow : .cancel); return
     }
     let url = action.request.url?.absoluteString ?? ""
@@ -343,10 +455,21 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     decisionHandler(localNavigation && (localURL == wrapperOrigin || localURL == "about:blank" || localURL == "about:srcdoc") ? .allow : .cancel)
   }
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-    if isExplore { document = UUID().uuidString; emit("explore.navigation") }
+    if isExplore { cancelBrowser();cancelScripts();document = UUID().uuidString; emit("explore.navigation") }
+  }
+  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { committedURL = webView.url }
+  func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    let failure = error as NSError
+    if failure.code != NSURLErrorCancelled && !(failure.domain == "WebKitErrorDomain" && failure.code == 102) { emit("explore.error", failure.localizedDescription) }
+  }
+  func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    if (error as NSError).code != NSURLErrorCancelled { emit("explore.error", error.localizedDescription) }
   }
   func dispose() {
     guard let view = web else { return }
+    cancelBrowser(); cancelScripts()
+    for (picker, file) in exports { picker.dismiss(animated: false); try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }; exports.removeAll()
+    for (_, (download, file)) in downloads { download.cancel { _ in }; try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }; downloads.removeAll()
     view.isHidden = true
     view.stopLoading(); view.configuration.userContentController.removeScriptMessageHandler(forName: "nappletHost")
     view.removeFromSuperview(); web = nil

@@ -146,9 +146,9 @@ export class NappletUploads {
       const template = { kind: 24242, created_at: now, content: 'Upload public file', tags: [
         ['t', 'upload'], ['x', hash], ['size', String(bytes.length)], ['expiration', String(now + 300)],
       ] };
-      job.authorizationVersion = this.options.version();
       const approval = await this.options.authorize(template, { ...meta, size: bytes.length, sha256: hash }, servers, signal);
       approval.check();
+      job.authorizationVersion = this.options.version();
       const root = await platform.fileSystem.cacheDirectoryUri();
       approval.check();
       if (!root) throw new Error('storage-unavailable');

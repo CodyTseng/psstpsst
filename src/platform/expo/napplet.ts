@@ -4,6 +4,7 @@ import { decodeNappletBytes } from '../napplet-bytes';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort } from '../ports/napplet';
 import { exploreBridge } from '@/lib/napp/bridge';
+import { applicationTasksAdapter } from './application-tasks';
 
 type NativeModule = {
   isAvailable(): boolean;
@@ -46,6 +47,7 @@ export const nativeSurface = {
   },
 };
 export const nappletAdapter: NappletPort = {
+  tasks: applicationTasksAdapter,
   async fetchResource(url, max, signal, options) {
     const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
     if (!native) throw new Error('napplets.rebuild_required');

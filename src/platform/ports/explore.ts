@@ -1,5 +1,6 @@
 /** Verified static files or an ordinary remote page, isolated from the host renderer. */
 export type ExplorePage = {
+  labels?: { ok: string; cancel: string; allow: string };
   bootstrap?: ExploreBootstrap;
   url?: string;
   sourceId: string;
@@ -21,10 +22,12 @@ export type ExploreBootstrap = {
 };
 /** Origin and document are attached by the platform, never by page JavaScript. */
 export type ExploreMessage = {
-  type: 'explore.request' | 'explore.navigation' | 'explore.error';
+  type: 'explore.request' | 'explore.navigation' | 'explore.error' | 'explore.browser';
+  browser?: BrowserRequest;
   origin: string;
   document: string;
   raw?: string;
   url?: string;
   error?: string;
 };
+export type BrowserRequest = { id: string; action: 'window' | 'external' | 'permission' | 'download'; url?: string; resources?: string[]; filename?: string };

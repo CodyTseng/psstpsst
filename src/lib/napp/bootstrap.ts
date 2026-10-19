@@ -1,3 +1,4 @@
+import { installBrowserCompat } from './browser-compat';
 // This module is bundled as browser source before the host runtime compiles it.
 export function install(options: {
   napp: boolean;
@@ -117,12 +118,13 @@ export function install(options: {
     try { post(raw); }
     catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }
   });
+  installBrowserCompat(call);
   (window as any).nostr = { getPublicKey: () => call('getPublicKey'), signEvent: (event: unknown) => call('signEvent', [event]) };
+  for (const algorithm of ['nip04', 'nip44']) (window as any).nostr[algorithm] = {
+    encrypt: (pubkey: string, text: string) => call(`${algorithm}.encrypt`, [pubkey, text]),
+    decrypt: (pubkey: string, text: string) => call(`${algorithm}.decrypt`, [pubkey, text]),
+  };
   if (options.napp) {
-    for (const algorithm of ['nip04', 'nip44']) (window as any).nostr[algorithm] = {
-      encrypt: (pubkey: string, text: string) => call(`${algorithm}.encrypt`, [pubkey, text]),
-      decrypt: (pubkey: string, text: string) => call(`${algorithm}.decrypt`, [pubkey, text]),
-    };
     const napRequests = new Set(['config.registerSchema', 'config.get', 'config.subscribe', 'config.unsubscribe', 'config.openSettings',
       'inc.emit', 'inc.subscribe', 'inc.unsubscribe', 'inc.channel.open', 'inc.channel.list', 'inc.channel.emit', 'inc.channel.broadcast', 'inc.channel.close']);
     addEventListener('message', event => {

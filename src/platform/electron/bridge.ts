@@ -256,6 +256,7 @@ export type ElectronBridge = {
   system: {
     openRuntimeNotices(): Promise<void>;
     openExternalUrl(url: string): Promise<void>;
+    openApprovedBrowserUrl(url: string): Promise<void>;
     platform: NodeJS.Platform;
   };
 };

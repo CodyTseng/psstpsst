@@ -23,8 +23,8 @@ export default function ExploreRunScreen() {
   const { prompt, configuration, overlayActive } = useNapplets();
   const owns = state.runId === id;
   const back = useCallback(() => { void exploreService.goBack(id).catch(error => console.warn('[explore] Back navigation failed', error)); }, [id]);
-  useFocusedOverlayDismiss(owns && !!state.containerId && !panel && !prompt && !configuration && !overlayActive, back);
-  usePreventRemove(focused && owns && !!state.containerId, ({ data }) => {
+  useFocusedOverlayDismiss(owns && !!state.entry && !panel && !prompt && !configuration && !overlayActive, back);
+  usePreventRemove(focused && owns && !!state.entry, ({ data }) => {
     if (isPrimaryPaneResetAction(data.action)) navigation.dispatch(data.action);
     else back();
   });

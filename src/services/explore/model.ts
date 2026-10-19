@@ -5,6 +5,11 @@ import { verifyEvent, type Event } from 'nostr-tools';
 import { decode, naddrEncode } from 'nostr-tools/nip19';
 import { publicUrl, appShareAddress, parseManifest, type NappletRelease } from '@/services/napplet/protocol';
 export type ExploreKind = 'napplet' | 'napp' | 'nsite' | 'website';
+export const SUPPORTED_NAPP_DOMAINS = ['identity','network','storage','theme','link','relay','outbox','common','config','inc'];
+
+export function applicationSigningSource(app: Pick<ExploreEntry, 'kind' | 'address' | 'key'>): string {
+  return app.kind === 'website' ? new URL(app.address).origin : normalizeSigningSource(app.key);
+}
 export type SiteFile = {
   path: string;
   hash: string;
@@ -32,9 +37,9 @@ export type ApplicationInfo = Pick<ExploreEntry, 'title' | 'description' | 'serv
   publisher?: string;
   origin?: string;
 };
-export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon'> & { publisher?: string };
+export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon'> & { publisher?: string; key?: string };
 export function applicationListEntry(entry: ExploreEntry): ApplicationListEntry {
-  return { title: entry.title, kind: entry.kind, servers: entry.servers, icon: entry.icon, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
+  return { key: entry.key, title: entry.title, kind: entry.kind, servers: entry.servers, icon: entry.icon, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
 }
 export function applicationRequirements(kind: ExploreKind, declared: readonly string[]): string[] {
   return [...new Set([...(kind === 'napp' ? ['network'] : []), ...declared])];
@@ -50,6 +55,10 @@ export function websiteAddress(value: string): string {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !url.hostname || value.length > 8192)
     throw new Error('napplets.invalid_manifest');
   return url.href;
+}
+export function websiteEntry(value: string): ExploreEntry {
+  const address = websiteAddress(value);
+  return { key: address, address, title: new URL(address).host, kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
 }
 export function sitePath(value: string): string {
   if (!value.startsWith('/') || value.startsWith('//') || /[?#\\\u0000-\u001f]/.test(value) || value.split('/').some((s) => ['.', '..'].includes(s)))

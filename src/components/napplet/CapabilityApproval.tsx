@@ -14,7 +14,7 @@ export function CapabilityApproval({ prompt, onPublisher }: { prompt: QueuedProm
     {prompt.application ? <ApplicationInfo release={{...prompt.application,origin:prompt.application.origin??prompt.requester?.origin}} onPublisher={onPublisher} />
       : prompt.app ? <NappletInfo release={prompt.app} onPublisher={onPublisher} /> : null}
     {prompt.accountPubkey ? <SigningIdentity pubkey={prompt.accountPubkey} label={t('napplets.signing_account')} /> : null}
-    {prompt.device ? <>
+    {prompt.browser ? <AppText variant="code">{prompt.detail}</AppText> : prompt.device ? <>
       <AppText>{t(prompt.device.operation === 'save-file' ? 'napplets.save_file_notice' : 'napplets.copy_text_notice')}</AppText>
       <AppText variant="code">{prompt.detail}</AppText>
     </> : prompt.crypto ? <>

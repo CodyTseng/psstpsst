@@ -1,4 +1,6 @@
-import type { ApplicationInfo, ApplicationListEntry } from '@/services/explore/model';
+import { applicationPresentation, type ApplicationInfo, type ApplicationListEntry } from '@/services/explore/model';
+import { NappDevice } from '@/services/explore/device';
+import { BrowserActions } from '@/services/explore/browser-actions';
 import { encodeNappletBytes } from '@/platform/napplet-bytes';
 import { assertNotAborted, linkAbort } from '@/platform/abort';
 import i18n from '@/i18n/core';
@@ -11,7 +13,8 @@ import { fetchBlob } from './artifacts';
 import { reconcileConfig, validateSchema, validateValues, type ConfigSchema } from './config';
 import { buildDocument } from './document';
 import { NappletNetwork, relayUrls } from './network';
-import { SigningPermissions, PROTECTED_EVENT_KINDS as protectedKinds, type SigningRequest } from './signing-permissions';
+import { SigningPermissions, appSigningScope, type SigningRequest } from './signing-permissions';
+import { subscribeSigning } from '@/services/signing/changes';
 import {
   boundedFilters,
   eventWeight,
@@ -24,6 +27,7 @@ import {
 import { dataEntries, dataKeys, getData, setData, type AppScope } from './repository';
 import { NappletUploads } from './upload';
 import { signingTemplate } from '@/services/signing/event-template';
+import { ApplicationSigner } from '@/services/signing/application-signer';
 
 export type RuntimePromptChoice = { key: string; title: string; application?: ApplicationListEntry };
 export type RuntimePrompt = {
@@ -39,6 +43,7 @@ export type RuntimePrompt = {
   upload?: { filename: string; mimeType: string; size: number; sha256: string; servers: string[] };
   crypto?: { operation: 'encrypt' | 'decrypt'; algorithm: 'nip04' | 'nip44'; peer: string };
   device?: { operation: 'save-file' | 'copy-text' };
+  browser?: { action: 'window' | 'external' | 'permission' | 'download' };
   capabilities?: { required: string[]; optional: string[] };
   expiresAt?: number;
 };
@@ -51,7 +56,6 @@ export type RuntimeOptions = {
   release: NappletRelease;
   html: string;
   domains: string[];
-  accountAccessGranted?: boolean;
   theme: () => RuntimeTheme;
   confirm: (prompt: RuntimePrompt, signal?: AbortSignal) => Promise<string | false>;
   permissionsChanged?: () => void;
@@ -59,10 +63,13 @@ export type RuntimeOptions = {
   configure: (schema: ConfigSchema, values: Record<string, unknown>) => void;
   handlers: () => Promise<NappletRelease[]>;
   invoke: (release: NappletRelease, delivery: Record<string, unknown>) => Promise<void>;
+  openBrowser?: (url: string) => Promise<void>;
 };
 type Message = Record<string, any>;
 const requests: Record<string, readonly string[]> = {
-  signer: ['getPublicKey', 'signEvent'],
+  signer: ['getPublicKey', 'signEvent', 'nip04.encrypt', 'nip04.decrypt', 'nip44.encrypt', 'nip44.decrypt'],
+  clipboard: ['writeText'],
+  browser: ['request'],
   shell: ['ready'],
   theme: ['get'],
   storage: ['get', 'set', 'remove', 'keys'],
@@ -106,10 +113,11 @@ export class NappletRuntime {
   readonly scope: AppScope;
   readonly signingPermissions: SigningPermissions;
   private uploads: NappletUploads;
+  private device?: NappDevice;
+  private browser?: BrowserActions;
   private life = new AbortController();
   private container: string | null = null;
   private presented = false;
-  private nip07IdentityGranted = false;
   private unsubscribe?: () => void;
   private streams = new Map<string, () => void>();
   private resources = new Map<string, AbortController>();
@@ -122,8 +130,8 @@ export class NappletRuntime {
   private schema: ConfigSchema | null = null;
   private configSubscribed = false;
   private delivery: Record<string, unknown> | null = null;
+  private shellReady = false;
   constructor(private options: RuntimeOptions) {
-    this.nip07IdentityGranted = options.accountAccessGranted ?? false;
     this.network = new NappletNetwork(options.accountPubkey);
     this.detachInc = incBroker.attach(this.endpoint, options.accountPubkey, (message) =>
       this.send(message),
@@ -138,25 +146,35 @@ export class NappletRuntime {
     );
     this.uploads = new NappletUploads({
       accountPubkey: options.accountPubkey, signal: this.signal,
-      send: (message) => this.send(message), version: () => 0,
+      send: (message) => this.send(message), version: () => this.signingPermissions.version,
       authorize: async (template, metadata, servers, signal) => {
-        const check = () => { this.check(); assertNotAborted(signal); };
-        const answer = await options.confirm({ title: options.release.title, detail: '', app: options.release,
-          accountPubkey: options.accountPubkey, upload: { ...metadata, servers },
-        }, signal);
-        if (answer !== 'allow') throw new Error('permission-denied');
+        let revision: number | undefined;
+        const check = () => {
+          this.check(); assertNotAborted(signal);
+          if (revision !== undefined && revision !== this.signingPermissions.version) throw new Error('permission-revoked');
+        };
+        revision = await this.signingPermissions.authorize({ operation: 'upload', kind: template.kind, relays: servers,
+          accountPubkey: options.accountPubkey, content: template.content, tags: template.tags, createdAt: template.created_at },
+        undefined, signal, (request, life) => options.confirm({ title: options.release.title, detail: '', app: options.release,
+          accountPubkey: options.accountPubkey, upload: { ...metadata, servers }, signing: request }, life));
         check();
         const event = await this.network.sign(template);
         check();
         return { event, check };
       },
     });
+    const unsubscribeUploads = subscribeSigning(appSigningScope(this.scope), () => this.uploads.authorizationChanged());
+    this.signal.addEventListener('abort', unsubscribeUploads, { once: true });
   }
   get signal() {
     return this.life.signal;
   }
   check() {
     assertNotAborted(this.life.signal);
+  }
+  private applicationSigner() {
+    return new ApplicationSigner({ accountPubkey: this.options.accountPubkey, permissions: this.signingPermissions,
+      signer: () => this.network.getSigner(), current: () => this.check() });
   }
   async open(): Promise<string> {
     const early: { id: string; raw: string }[] = [];
@@ -212,7 +230,8 @@ export class NappletRuntime {
     this.send({ type: 'theme.changed', theme: this.options.theme() });
   }
   setDelivery(delivery: Record<string, unknown>) {
-    this.delivery = delivery;
+    if (this.shellReady) this.send({ type: 'intent.deliver', delivery });
+    else this.delivery = delivery;
   }
   private result(message: Message, fields: Message = {}) {
     this.send({ type: `${message.type}.result`, id: message.id, ...fields });
@@ -241,7 +260,7 @@ export class NappletRuntime {
     if (template.kind !== 22242 || !relay || !template.tags.some((t) => t[0] === 'challenge'))
       throw new Error('invalid-auth');
     const target = publicUrl(relay, true);
-    await this.signingPermissions.authorize({
+    const revision = await this.signingPermissions.authorize({
       operation: 'relay-auth', kind: 22242, relays: [target],
       accountPubkey: this.options.accountPubkey, content: template.content,
       tags: template.tags.map((tag) => [...tag]), createdAt: template.created_at,
@@ -249,6 +268,7 @@ export class NappletRuntime {
     this.check();
     const event = await this.network.sign(template);
     this.check();
+    if (this.signingPermissions.version !== revision) throw new Error('permission-revoked');
     return event;
   }
   async receive(raw: string): Promise<void> {
@@ -266,12 +286,13 @@ export class NappletRuntime {
     if (!message || typeof message !== 'object' || typeof message.type !== 'string') return;
     const [domain, ...rest] = message.type.split('.');
     const operation = rest.join('.');
-    if (!requests[domain]?.includes(operation) || domain !== 'signer' && !this.options.domains.includes(domain)) return;
+    if (!requests[domain]?.includes(operation) || !['signer', 'clipboard', 'browser'].includes(domain) && !this.options.domains.includes(domain)) return;
     if (domain === 'upload' && operation.startsWith('transfer.')) {
       this.uploads.transfer(message);
       return;
     }
     if (domain === 'shell') {
+      this.shellReady = true;
       this.result(message, { capabilities: { domains: this.options.domains }, services: [] });
       this.send({
         type: 'shell.init',
@@ -331,27 +352,40 @@ export class NappletRuntime {
     else this.result(message, { ok: false, error });
   }
   private async dispatch(m: Message, domain: string, op: string): Promise<void> {
+    if (domain === 'browser') {
+      if (typeof m.event?.method !== 'string' || !m.event.method.startsWith('browser.') || !Array.isArray(m.event.args)) throw new Error('invalid-request');
+      this.browser ??= new BrowserActions({ account: this.options.accountPubkey, application: applicationPresentation(this.options.release), signal: this.signal,
+        confirm: (prompt, signal) => this.options.confirm(prompt, signal),
+        open: this.options.openBrowser ?? (async url => { if (!await platform.urlOpener.openExternalUrl(url)) throw new Error('external-open-failed'); }) });
+      const result = await this.browser.handle(m.event.method.slice(8), m.event.args);
+      this.result(m, { result }); return;
+    }
+    if (domain === 'clipboard') {
+      this.device ??= new NappDevice(applicationPresentation(this.options.release), this.options.accountPubkey, this.signal,
+        (prompt, signal) => this.options.confirm(prompt, signal));
+      await this.device.handle('copyText', [m.event?.text]);
+      this.result(m, {});
+      return;
+    }
     if (domain === 'signer') {
       if (op === 'getPublicKey') {
-        if (!this.nip07IdentityGranted) {
-          const answer = await this.options.confirm({ title: this.options.release.title,
-            detail: '', application: { ...this.options.release, publisher: this.options.release.event.pubkey }, accountPubkey: this.options.accountPubkey }, this.signal);
-          this.check();
-          if (answer !== 'allow') throw new Error('permission-denied');
-          this.nip07IdentityGranted = true;
-        }
-        this.result(m, { result: this.options.accountPubkey });
+        const pubkey = await this.applicationSigner().getPublicKey();
+        this.result(m, { result: pubkey });
+      } else if (/^(nip04|nip44)\.(encrypt|decrypt)$/.test(op)) {
+        const [algorithm, operation] = op.split('.') as ['nip04' | 'nip44', 'encrypt' | 'decrypt'];
+        const result = await this.applicationSigner().crypto(algorithm, operation, m.event?.pubkey, m.event?.text);
+        this.result(m, { result });
       } else {
         const event = signingTemplate(m.event);
         const operation = event.kind === 22242 ? 'relay-auth' : 'sign';
         const revision = await this.signingPermissions.authorize({ operation, kind: event.kind,
-          relays: [], accountPubkey: this.options.accountPubkey, content: event.content,
+          relays: operation === 'relay-auth' ? [event.tags.find(tag => tag[0] === 'relay')![1]] : [], accountPubkey: this.options.accountPubkey, content: event.content,
           tags: event.tags, createdAt: event.created_at });
         this.check();
         const expiresAt = Date.now() + 25000;
         const signed = await this.network.sign(event);
         this.check();
-        if (Date.now() > expiresAt || operation !== 'relay-auth' && this.signingPermissions.version !== revision)
+        if (Date.now() > expiresAt || this.signingPermissions.version !== revision)
           throw new Error('permission-revoked');
         this.result(m, { result: signed });
       }
@@ -470,7 +504,7 @@ export class NappletRuntime {
   private async identity(m: Message, op: string) {
     const pubkey = this.options.accountPubkey;
     if (op === 'getPublicKey') {
-      this.result(m, { pubkey });
+      this.result(m, { pubkey: await this.applicationSigner().getPublicKey() });
       return;
     }
     if (op === 'getRelays') {
@@ -856,7 +890,6 @@ export class NappletRuntime {
       !Number.isSafeInteger(input.kind) ||
       input.kind < 0 ||
       input.kind > 65535 ||
-      protectedKinds.has(input.kind) ||
       typeof input.content !== 'string' ||
       input.content.length > 64000 ||
       !Array.isArray(input.tags) ||
@@ -867,12 +900,6 @@ export class NappletRuntime {
           t.length > 16 ||
           t.some((v: unknown) => typeof v !== 'string' || v.length > 4096),
       )
-    )
-      throw new Error('publication-blocked');
-    if (
-      (input.kind >= 10000 && input.kind < 20000) ||
-      input.kind === 30000 ||
-      input.tags.some((tag: string[]) => tag[0] === 'd' && /^psstpsst(?:-|$)/i.test(tag[1] ?? ''))
     )
       throw new Error('publication-blocked');
     if (

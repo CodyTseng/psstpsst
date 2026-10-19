@@ -52,7 +52,7 @@ function AccountNapplets({ account }: { account: string | null }) {
     (app: ExploreEntry) => {
       setError(null);
       try {
-        if (platform.napplet.windows) {
+        if (platform.napplet.windows || platform.napplet.tasks) {
           void openApplicationWindow(app, account ?? '').catch(() => setError('napplets.request_failed'));
           return;
         }

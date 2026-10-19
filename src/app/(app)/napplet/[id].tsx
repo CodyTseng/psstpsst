@@ -21,7 +21,7 @@ export default function NappletDetailScreen() {
     onOpen={()=>{
       if(!release)return;
       try {
-        if (platform.napplet.windows) {
+        if (platform.napplet.windows || platform.napplet.tasks) {
           void openApplicationWindow(fromNapplet(release), accountPubkey ?? '', access.approved ? undefined : [...new Set(['shell', ...release.required])]).catch(() => setError('napplets.request_failed'));
           return;
         }

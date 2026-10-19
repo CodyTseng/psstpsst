@@ -41,11 +41,54 @@ instead of waiting indefinitely for the bridge's first-paint handshake.
 Napplets, napps, nsites, and websites always receive the NIP-07 public-key and event-signing
 methods, regardless of an `identity` requirement declaration. Injection does not
 grant account access or signing authority. Signing returns
-a signed event; it does not publish it. An ungranted account identity request
-requires consent, and event signing uses the shared account/source/kind/d-tag
-rules. Napps additionally receive the NIP-04 and NIP-44 encryption methods;
-each operation requires separate, one-request consent. Nsites and websites do not
-receive these optional methods.
+a signed event; it does not publish it. Public-key access uses the shared signer
+authorization service on every request, independently of launch permissions.
+Event signing uses account/source/kind/d-tag rules. All formats also receive
+NIP-04 and NIP-44 encryption/decryption methods when supported by the account's
+signer. These decisions support Once, timed and Always choices. Public-key,
+encryption and decryption grants remain separate; crypto grants also bind the
+algorithm and peer. Website grants bind the current main-frame origin rather
+than the original launch address. Revocation invalidates cached decisions and
+prevents in-flight public keys or crypto results from being returned.
+
+All formats bridge `navigator.clipboard.writeText` to the system clipboard port.
+The current verified document owns the request. Text writes require no host
+confirmation, and the browser promise resolves only after the OS write succeeds.
+This path does not rely on embedded-browser clipboard permissions or grant reads.
+
+## Browser compatibility
+
+Application opens reuse the existing account/source instance on Electron and
+Android. Nostr relay hints do not change the instance identity; website shortcuts
+retain their launch URL identity while navigation preserves the running page.
+Window/task close events update the host's running-icon indicator.
+
+`window.open` and links targeting a new window request host approval, then launch
+or focus an application window/task. This launcher handoff does not expose a
+cross-renderer JavaScript `WindowProxy` or `opener` object. External protocols also
+require approval before OS dispatch. Website information sheets can open the
+current page in the system's default browser.
+
+Electron mediates native browser permission requests. Android handles media,
+location and fullscreen callbacks, OS permission prompts, file selection and
+JavaScript dialogs through its WebChromeClient. iOS implements media review,
+native JavaScript dialogs and download delegates; WebKit manages its system
+location prompt. All native replies are tied to the current document, and
+cross-origin subframes receive no account authority.
+
+HTTP downloads use native browser/session cookies. Consent precedes the system
+destination picker or export picker. Android does not forward a site's cookies
+across origin-changing redirects. Blob/data exports use a single-use consent
+ticket and credited 48 KiB chunks with a 64 MiB bound and two-minute staging
+deadline. Temporary files are removed after completion/cancellation.
+
+Text/image clipboard writes do not prompt. `ClipboardItem` image writes stage a
+native image before copying; text/html writes preserve a plain-text fallback.
+Legacy `execCommand('copy')` keeps its synchronous command-acceptance contract
+and forwards selected/custom text to the same clipboard port. Clipboard reads
+prompt separately. Known permission queries return browser-compatible status
+objects; notification status follows the document's grant. Mobile website
+notifications use OS permission and a bounded separate notification namespace.
 
 Napp public-event queries and public metadata reads do not require a declared
 relay or identity capability. Account disclosure, signing, and publication retain

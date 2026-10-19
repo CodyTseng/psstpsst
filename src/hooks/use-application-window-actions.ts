@@ -5,9 +5,18 @@ import { exploreService } from '@/services/explore/service';
 import { KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
+import { subscribeExploreVisits } from '@/services/explore/visits';
+import { applicationPresence } from '@/services/explore/application-presence';
 
 /** Navigation and message composition belong to the main application host. */
 export function useApplicationWindowActions() {
+  useEffect(() => applicationPresence.observeWindows(), []);
+  useEffect(() => {
+    if (!platform.napplet.tasks) return;
+    return subscribeExploreVisits(({ accountPubkey, key }) => {
+      void exploreService.refreshVisit(accountPubkey, key).catch(error => console.warn('[explore] Task visit could not refresh', error));
+    });
+  }, []);
   useEffect(() => platform.napplet.windows?.onAction(action => {
     if (useActiveAccount.getState().status !== 'ready') return;
     if (action.type === 'visited') {

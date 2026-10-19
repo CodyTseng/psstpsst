@@ -177,8 +177,9 @@ Requests default to one-time approval. The user can remember a timed decision
 The shared signing service owns rules independently of app KV and UI. Its source
 is the canonical naddr for an app, or a host-verified HTTP(S) website origin (scheme, host and effective port); immutable
 legacy manifests use a canonical event ID. Each durable row binds the account,
-source, event kind and addressable d tag. It has no source type, artifact version,
-recipient condition or relay condition. Only exact-scope version-3 publication
+source, event kind and addressable d tag. Signer-access rules additionally distinguish
+methods and crypto peers; Relay AUTH and upload rules bind their destination set.
+There is no artifact-version condition. Only exact-scope version-3 publication
 rules are imported from the legacy KV backup. A broader migration never follows
 from dropping a legacy condition.
 
@@ -191,12 +192,13 @@ capability and signing rules. Upgrades preserve both data and authorizations;
 additional required capabilities need consent, and new optional capabilities stay
 off. The separate activity journal retains the latest 32 metadata-only decisions
 per account/source, without event bodies or a claim of publication success.
-Relay AUTH and host-built Blossom authentication are approved automatically.
+Relay AUTH and public-file uploads use the same Once, timed and Always permission
+flow, with their reviewed destinations retained in the rule. Upload review includes
+file metadata and authorizes the host-built Blossom authentication event.
 
 Authorized publication signs once and reports per-relay outcomes.
-Account configuration, key announcements, signer protocol traffic and
-private-message envelopes are protected from generic publication. Replaceable
-account settings, follow sets and reserved PsstPsst identifiers are blocked.
+All valid event kinds and app-data identifiers can reach user-approved generic
+publication, including account settings and protocol events.
 Consent expires 25 seconds after presentation; submitted timestamps are
 retained when valid, with future timestamps limited to one day. NIP-44
 publishEncrypted is available; NIP-04 is not. This API does not expose messaging
@@ -217,12 +219,12 @@ paths, credentials or destination servers.
 
 The host uses the current account's media-server upload plan, including its
 fallback. Public-file consent shows filename, MIME type, size and candidate
-storage services. Each file is approved through an application upload prompt,
-independently of signing rules. Upload capability access is still required;
-remembered event-signing rules never approve a file upload. A host-built
+storage services. Upload permission offers Once, timed and Always choices for
+that application's reviewed destination set, independently of ordinary event
+signing. Upload capability access is still required. A host-built
 kind-24242 authorization covers only the computed SHA-256 and size, expires after
-five minutes and never reaches the app. Generic publication cannot sign Blossom
-or NIP-98 authorization events.
+five minutes and never reaches the app. Generic publication of Blossom or
+NIP-98 authorization events is also available under its own event-signing rules.
 
 After approval, unchanged bytes are staged through the existing asynchronous
 filesystem port and sent through the shared Blossom backend, without background

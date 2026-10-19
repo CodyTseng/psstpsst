@@ -49,8 +49,8 @@ test('invalid scopes or expired edits cannot install permissions', async () => {
   const source = { key: signingRuleKey(request), scope: request };
   await expect(value.permissions.edit({ ...source, key: 'different' }, { decision: 'allow', duration: 'always' })).rejects.toThrow();
   await expect(value.permissions.edit(source, { decision: 'allow', duration: 'timed', expiresAt: Date.now() - 1 })).rejects.toThrow();
-  const protectedScope = { ...request, kind: 24242 };
-  await expect(value.permissions.edit({ key: signingRuleKey(protectedScope), scope: protectedScope }, { decision: 'allow', duration: 'always' })).rejects.toThrow();
+  const invalidScope = { ...request, kind: 65536 };
+  await expect(value.permissions.edit({ key: signingRuleKey(invalidScope), scope: invalidScope }, { decision: 'allow', duration: 'always' })).rejects.toThrow();
   expect(saveSigningRule).not.toHaveBeenCalled();
 });
 
@@ -115,12 +115,12 @@ test('session grants expire when the execution session ends', async () => {
   expect(next.confirm).toHaveBeenCalledTimes(1);
 });
 
-test('relay AUTH and Blossom authentication are automatic and never create grants', async () => {
+test('relay AUTH and uploads use explicit remembered destination permissions', async () => {
   const { permissions, confirm } = create();
   await permissions.authorize({ ...request, operation: 'relay-auth', kind: 22242 });
-  await permissions.authorize({ ...request, operation: 'upload', kind: 24242 });
-  expect(confirm).not.toHaveBeenCalled();
-  expect(saveSigningRule).not.toHaveBeenCalled();
+  await permissions.authorize({ ...request, operation: 'upload', kind: 24242, relays: ['https://media.example/'] });
+  expect(confirm).toHaveBeenCalledTimes(2);
+  expect(saveSigningRule).toHaveBeenCalledTimes(2);
 });
 
 test('custom kinds remain one-time by default and support explicitly scoped permission or refusal', async () => {

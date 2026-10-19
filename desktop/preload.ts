@@ -92,6 +92,12 @@ const bridge: ElectronBridge = {
       isHost: process.argv.includes('--psstpsst-application-window=1'),
       open: launch => invoke(IPC.applicationWindowOpen, launch),
       launch: () => invoke(IPC.applicationWindowLaunch),
+      running: () => invoke(IPC.applicationWindowsRunning),
+      onRunningChange: listener => {
+        const handler = (_event: unknown, applications: Parameters<typeof listener>[0]) => listener(applications);
+        ipcRenderer.on(IPC.applicationWindowsChanged, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationWindowsChanged, handler); };
+      },
       close: () => invoke(IPC.applicationWindowClose),
       closeAll: account => invoke(IPC.applicationWindowCloseAll, account),
       action: action => invoke(IPC.applicationWindowAction, action),
@@ -332,6 +338,7 @@ const bridge: ElectronBridge = {
   system: {
     openRuntimeNotices: () => invoke(IPC.systemOpenRuntimeNotices),
     openExternalUrl: (url) => invoke(IPC.systemOpenExternal, url),
+    openApprovedBrowserUrl: (url) => invoke(IPC.browserOpenExternal, url),
     platform: process.platform,
   },
 };

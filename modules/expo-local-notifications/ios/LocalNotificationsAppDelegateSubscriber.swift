@@ -36,7 +36,7 @@ private final class LocalNotificationDelegate: NSObject, UNUserNotificationCente
 
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
     // The app owns foreground rendering; a delivery racing with resume must not show stale content.
-    completionHandler([])
+    completionHandler(notification.request.content.userInfo["psstWebsite"] as? Bool == true ? [.banner, .sound] : [])
   }
 
   func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {

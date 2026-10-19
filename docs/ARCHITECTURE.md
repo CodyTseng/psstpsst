@@ -56,6 +56,18 @@ The adapter registry is initialized before routes and services. Expo is the
 mobile default. Electron installs its adapters synchronously from the preload
 bridge before Expo Router evaluates application modules.
 
+Android application tasks use non-exported document Activities with separate
+React surfaces on one trusted ReactHost. Each application owns its runtime,
+WebView and cancellation scope; account services and the serialized approval
+queue remain process-owned. Only the foreground Activity presents that queue.
+Account lifecycle changes and source access revocation close the affected tasks.
+Native application hosts deduplicate opens by account and canonical application
+source. Their process-owned instance registry drives focused-window restoration
+and UI running indicators; icons never infer running state from visit history.
+Task intents carry opaque in-memory
+session identifiers, so process death removes stale tasks rather than restoring
+account authority from intent extras.
+
 Electron application-binary updates run in the main process behind the
 `appUpdate` port. The renderer owns localized consent, while automatic download
 and install-on-quit remain disabled so each phase requires an explicit action.
@@ -672,6 +684,13 @@ Protocol-specific route adapters supply data and actions to shared application
 presentation components. Details-page consent is bound to the exact displayed
 requirements; changing requirements invalidates that reviewed launch consent.
 
+Browser UI requests retain host-assigned origin and document authority. Native
+permission, new-window and download callbacks resolve only after core consent;
+document replacement cancels stale callbacks. File pickers and native page dialogs
+remain platform-owned. Browser exports stage bounded files through asynchronous
+ports before the system destination picker. Website notifications have a separate
+native delivery path and never modify messaging badges.
+
 Discovery queries a bounded set of public manifests from default relays, verifies
 and deduplicates them in a temporary catalogue, and shares the existing detail
 presentation. Browsing never records a visit or writes to the local relay; adding
@@ -709,13 +728,18 @@ independent of launch recency. Desktop edits commit atomically and never change
 app data or grants. The recent preview shows one row; full recent history derives from the bounded
 installation library.
 Signing authorization belongs to the shared signing service, independently of app
-storage. One rule binds an account, a host-verified source, event kind and d tag.
+storage. Event rules bind an account, a host-verified source, event kind and d tag.
+Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
+service with separate method scopes; crypto scopes also bind the peer. Every
+call uses the current verified source. Launch access never bypasses signer
+authorization, and revocation invalidates pending results before disclosure.
 Sources are canonical naddr IDs or host-verified HTTP(S) website origins (scheme,
 host and effective port), without a source type or code version; immutable legacy listings use canonical event IDs. Durable rules and a
 bounded metadata-only activity journal have separate tables. Session grants stay
-in memory. Relay AUTH and Blossom authentication are automatic. File upload is
-app consent: access to the upload capability and approval of each concrete file
-precede automatic storage authentication. Upload bytes, temporary files and
+in memory. Relay AUTH and public-file uploads use explicit signer permissions
+with Once, timed and Always decisions, scoped to the reviewed destinations.
+File metadata accompanies upload review, and its authorization covers the
+host-built storage authentication event. Upload bytes, temporary files and
 status belong to one execution session; stopping it cancels uploads and cleans
 staged files. Migration retains a read-only backup of old app namespaces and
 imports only rules whose scope can be preserved exactly. Host-owned approval IDs
@@ -750,7 +774,7 @@ one account. Electron brokers cross-window messages in its main process; mobile
 keeps a bounded stack of live calling containers behind the foreground handler.
 Only trusted hosts assign endpoint metadata. Teardown cancels action requests and
 closes communication channels. Configuration shares account/source persistence;
-cryptographic requests obtain separate one-request consent using the identity
+cryptographic requests obtain method- and peer-scoped signer authorization using the identity
 signer, never the messaging key.
 Napp launch access includes ordinary web networking, independently of whether
 the signed manifest explicitly names it. This effective requirement participates

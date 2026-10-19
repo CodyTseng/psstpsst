@@ -1038,6 +1038,11 @@ function registerIpcHandlers(): void {
       open: (url) => shell.openExternal(url),
     });
   });
+  handle(IPC.browserOpenExternal, async (_event, value) => {
+    const url = new URL(validateString(value, 'external URL', 8192));
+    if (['javascript:', 'data:', 'file:', 'app:', 'about:', 'chrome:', 'devtools:', 'shell:', 'powershell:', 'cmd:', 'psstpsst-file:'].includes(url.protocol)) throw new Error('invalid-external-url');
+    await shell.openExternal(url.href);
+  });
 }
 
 async function registerProtocols(): Promise<void> {

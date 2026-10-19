@@ -21,11 +21,22 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
   private var pageOrigin = ""
   private var document = java.util.UUID.randomUUID().toString()
   private var startScript: androidx.webkit.ScriptHandler? = null
+  private val browserRequests = mutableMapOf<String, (Boolean) -> Unit>()
+  private val chrome = BrowserChrome(this, context)
+  internal fun requestBrowser(action: String, target: String? = null, resources: List<String>? = null, filename: String? = null, callback: (Boolean) -> Unit = {}) {
+    if (disposed || page == null || browserRequests.size >= 16) { callback(false); return }
+    val id = "browser:${java.util.UUID.randomUUID()}"
+    browserRequests[id] = callback
+    onMessage(JSONObject(envelope("explore.browser")).put("browser", JSONObject().put("id", id).put("action", action)
+      .apply { if(target != null) put("url",target); if(resources != null) put("resources",JSONArray(resources)); if(filename != null) put("filename",filename) }).toString())
+  }
+  private fun cancelBrowser() { val pending=browserRequests.values.toList();browserRequests.clear();pending.forEach { it(false) } }
   private fun origin(value: String): String {
     val uri = android.net.Uri.parse(value)
     val port = uri.port
     return "${uri.scheme}://${uri.host}" + if (port > 0 && !(uri.scheme == "https" && port == 443) && !(uri.scheme == "http" && port == 80)) ":$port" else ""
   }
+  internal fun sameOrigin(value: String) = origin(value) == origin(url ?: "")
   private fun envelope(type: String, raw: String? = null): String = JSONObject().put("type",type).put("origin",origin(url ?: pageOrigin))
     .put("document",document).put("url",url ?: pageOrigin).apply { if(raw != null) put("raw",raw) }.toString()
 
@@ -35,20 +46,24 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       javaScriptEnabled = true; domStorageEnabled = false; databaseEnabled = false
       allowFileAccess = false; allowContentAccess = false; javaScriptCanOpenWindowsAutomatically = false
       mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW; cacheMode = WebSettings.LOAD_NO_CACHE
-      setSupportMultipleWindows(false); mediaPlaybackRequiresUserGesture = true
+      setSupportMultipleWindows(true); mediaPlaybackRequiresUserGesture = true
     }
+    web.webChromeClient = chrome
+    web.setDownloadListener(chrome)
     web.webViewClient = object : WebViewClient() {
       override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         page?.let { config ->
           val scheme = request.url.scheme
-          return scheme !in setOf("http","https") || (!config.has("url") && origin(request.url.toString()) != pageOrigin)
+          val blocked = scheme !in setOf("http","https") || (!config.has("url") && origin(request.url.toString()) != pageOrigin)
+          if (blocked && request.isForMainFrame) requestBrowser(if(scheme in setOf("http","https")) "window" else "external", request.url.toString())
+          return blocked
         }
         // srcdoc and its initial blank document stay inside the sandboxed frame.
         if (request.isForMainFrame) return request.url.toString() != documentUrl
         return request.url.toString().substringBefore('#') !in setOf("about:blank", "about:srcdoc")
       }
       override fun onPageStarted(view: WebView, value: String, favicon: android.graphics.Bitmap?) {
-        if(page != null) { document=java.util.UUID.randomUUID().toString();onMessage(envelope("explore.navigation")) }
+        if(page != null) { cancelBrowser();chrome.navigation();document=java.util.UUID.randomUUID().toString();onMessage(envelope("explore.navigation")) }
       }
       override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (page == null || !request.isForMainFrame) return
@@ -130,6 +145,9 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       val message = entry.getString("message")
       if(page != null) {
         val response=JSONObject(message)
+        if(response.optString("document") == document && response.optJSONObject("reply")?.optString("type") == "browser.result") {
+          val reply=response.getJSONObject("reply");browserRequests.remove(reply.optString("id"))?.invoke(reply.optBoolean("result"));continue
+        }
         if(!disposed && response.optString("document") == document) evaluateJavascript("if(${response.getJSONObject("reply").optString("type") == "theme"} || window.__exploreDocumentToken === ${JSONObject.quote(response.getJSONObject("reply").optString("nonce"))}) { window.__exploreReceive && window.__exploreReceive(${response.getJSONObject("reply")}) }",null)
         continue
       }
@@ -142,5 +160,5 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
     evaluateJavascript("history.back()", null)
     return true
   }
-  fun dispose() { if (disposed) return; disposed = true; visibility = INVISIBLE; web.stopLoading(); web.destroy(); html = "" }
+  fun dispose() { if (disposed) return; disposed = true; cancelBrowser();chrome.dispose();visibility = INVISIBLE; web.stopLoading(); web.destroy(); html = "" }
 }
