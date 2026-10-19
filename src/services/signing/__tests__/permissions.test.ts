@@ -1,3 +1,5 @@
+import { ApplicationSigner } from '../application-signer';
+import type { Signer } from '@/services/signer/signer.interface';
 import { connectSigningWindows } from '../changes';
 import { SigningPermissions, signingRuleKey, type SigningRequest } from '../permissions';
 import { saveSigningRule } from '../repository';
@@ -6,7 +8,7 @@ import { rules as stored, activity } from '../testing/memory-repository';
 jest.mock('../repository', () => jest.requireActual('../testing/memory-repository').memoryRepository);
 const controllers: AbortController[] = [];
 const request: SigningRequest = {
-  operation: 'publish', kind: 30078, relays: ['wss://one.example/'], identifier: 'progress',
+  operation: 'publish', kind: 30078, relays: ['wss://one.example/'], scopeKey: 'progress',
   accountPubkey: 'accountA', content: 'private fixture content', tags: [['d', 'progress']], createdAt: 100,
 };
 function create(confirm = jest.fn(async () => 'allow-always' as string | false), account = 'accountA', source = 'app.example') {
@@ -40,7 +42,7 @@ test('edited expiry preserves the exact event kind and d tag', async () => {
   await value.permissions.edit(rule, { decision: 'allow', duration: 'timed', expiresAt });
   const reopened = create();
   expect((await reopened.permissions.snapshot()).rules[0]).toMatchObject({ scope: rule.scope, duration: 'timed', expiresAt });
-  await reopened.permissions.authorize({ ...request, identifier: 'another-record', tags: [['d', 'another-record']] });
+  await reopened.permissions.authorize({ ...request, scopeKey: 'another-record', tags: [['d', 'another-record']] });
   expect(reopened.confirm).toHaveBeenCalledTimes(1);
 });
 
@@ -96,7 +98,7 @@ test('rules survive sessions and remain isolated by account, source and d tag', 
   const version = create(undefined, 'accountA', 'other.example');
   await version.permissions.authorize(request);
   expect(version.confirm).toHaveBeenCalledTimes(1);
-  await first.permissions.authorize({ ...request, identifier: 'other', tags: [['d', 'other']] });
+  await first.permissions.authorize({ ...request, scopeKey: 'other', tags: [['d', 'other']] });
   await first.permissions.authorize({ ...request, relays: ['wss://two.example/'] });
   await reopened.permissions.authorize({ ...request, relays: ['wss://third.example/'] });
   expect(reopened.confirm).not.toHaveBeenCalled();
@@ -115,7 +117,7 @@ test('session grants expire when the execution session ends', async () => {
   expect(next.confirm).toHaveBeenCalledTimes(1);
 });
 
-test('relay AUTH and uploads use explicit remembered destination permissions', async () => {
+test('relay AUTH and uploads use independent remembered operation permissions', async () => {
   const { permissions, confirm } = create();
   await permissions.authorize({ ...request, operation: 'relay-auth', kind: 22242 });
   await permissions.authorize({ ...request, operation: 'upload', kind: 24242, relays: ['https://media.example/'] });
@@ -256,4 +258,90 @@ test('a remote host invalidates cached authority without rebroadcasting its mess
     expect(value.confirm).toHaveBeenCalledTimes(1);
   } finally { connectSigningWindows(); }
   expect(detach).toHaveBeenCalledTimes(1);
+});
+
+test('remembered relay AUTH covers other relays for the same account and source', async () => {
+  const auth: SigningRequest = { ...request, operation: 'relay-auth', kind: 22242, scopeKey: undefined, relays: ['wss://one.example/'] };
+  const first = create();
+  await first.permissions.authorize(auth);
+  await first.permissions.authorize({ ...auth, relays: ['wss://two.example/'] });
+  expect(first.confirm).toHaveBeenCalledTimes(1);
+  const saved = (await first.permissions.snapshot()).rules[0];
+  expect(saved.scope).toEqual({ operation: 'relay-auth', kind: 22242, relays: [] });
+  const reopened = create();
+  await reopened.permissions.authorize({ ...auth, relays: ['wss://third.example/path'] });
+  expect(reopened.confirm).not.toHaveBeenCalled();
+  const otherSource = create(undefined, 'accountA', 'another.example');
+  await otherSource.permissions.authorize(auth);
+  expect(otherSource.confirm).toHaveBeenCalledTimes(1);
+  const otherAccount = create(undefined, 'accountB');
+  await otherAccount.permissions.authorize({ ...auth, accountPubkey: 'accountB' });
+  expect(otherAccount.confirm).toHaveBeenCalledTimes(1);
+  await first.permissions.revoke(saved.key);
+  await reopened.permissions.authorize(auth);
+  expect(reopened.confirm).toHaveBeenCalledTimes(1);
+});
+
+test('relay AUTH refusals cover all relays and remain editable without a stored destination', async () => {
+  const auth: SigningRequest = { ...request, operation: 'relay-auth', kind: 22242, scopeKey: undefined };
+  const value = create(jest.fn(async () => 'deny-always'));
+  await expect(value.permissions.authorize(auth)).rejects.toThrow('permission-denied');
+  const rule = (await value.permissions.snapshot()).rules[0];
+  const reopened = create();
+  await expect(reopened.permissions.authorize({ ...auth, relays: ['wss://other.example/'] })).rejects.toThrow('permission-denied');
+  expect(reopened.confirm).not.toHaveBeenCalled();
+  await reopened.permissions.edit(rule, { decision: 'allow', duration: 'always' });
+  await reopened.permissions.authorize({ ...auth, relays: ['wss://another.example/'] });
+  expect(reopened.confirm).not.toHaveBeenCalled();
+});
+
+test('one-time AUTH still asks for every request and validates its actual target', async () => {
+  const auth: SigningRequest = { ...request, operation: 'relay-auth', kind: 22242, scopeKey: undefined };
+  const value = create(jest.fn(async () => 'allow'));
+  await value.permissions.authorize(auth);
+  await value.permissions.authorize({ ...auth, relays: ['wss://two.example/'] });
+  expect(value.confirm).toHaveBeenCalledTimes(2);
+  for (const relays of [[], ['https://wrong.example/']])
+    await expect(value.permissions.authorize({ ...auth, relays })).rejects.toThrow('invalid-signing-request');
+});
+
+test('upload grants continue to distinguish storage services', async () => {
+  const upload: SigningRequest = { ...request, operation: 'upload', kind: 24242, scopeKey: undefined, relays: ['https://one.example/'] };
+  const value = create();
+  await value.permissions.authorize(upload);
+  await value.permissions.authorize({ ...upload, relays: ['https://two.example/'] });
+  await value.permissions.authorize(upload);
+  expect(value.confirm).toHaveBeenCalledTimes(2);
+});
+
+test('generic scope keys distinguish grants for the same event kind', async () => {
+  const scoped: SigningRequest = { ...request, kind: 12345, tags: [], scopeKey: 'resource-one' };
+  const value = create();
+  await value.permissions.authorize(scoped);
+  await value.permissions.authorize({ ...scoped, scopeKey: 'resource-two' });
+  await value.permissions.authorize(scoped);
+  expect(value.confirm).toHaveBeenCalledTimes(2);
+  expect((await value.permissions.snapshot()).rules.map(rule => rule.scope.scopeKey)).toEqual(['resource-one', 'resource-two']);
+});
+
+test.each(['nip04', 'nip44'] as const)('%s encryption reviews the exact plaintext without retaining it in grants or history', async algorithm => {
+  const text = '  Private original\n{"literal":"<message>"}  ';
+  const { permissions, confirm } = create();
+  const encrypt = jest.fn(async () => 'encrypted-payload');
+  const signer = new ApplicationSigner({ accountPubkey: 'accountA', permissions, current: jest.fn(),
+    signer: async () => ({ nip04Encrypt: encrypt, nip44Encrypt: encrypt }) as unknown as Signer });
+  await expect(signer.crypto(algorithm, 'encrypt', 'b'.repeat(64), text)).resolves.toBe('encrypted-payload');
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ operation: `${algorithm}-encrypt`, content: text, recipient: 'b'.repeat(64) }), expect.anything());
+  expect(encrypt).toHaveBeenCalledWith('b'.repeat(64), text);
+  expect(JSON.stringify([...stored.values()])).not.toContain('Private original');
+  expect(JSON.stringify([...activity.values()])).not.toContain('Private original');
+  expect(JSON.stringify(await permissions.snapshot())).not.toContain('Private original');
+});
+test('rejecting plaintext review prevents the signer from encrypting it', async () => {
+  const { permissions, confirm } = create(jest.fn(async () => false));
+  const obtainSigner = jest.fn();
+  const signer = new ApplicationSigner({ accountPubkey: 'accountA', permissions, current: jest.fn(), signer: obtainSigner });
+  await expect(signer.crypto('nip44', 'encrypt', 'b'.repeat(64), 'do not encrypt')).rejects.toThrow('permission-denied');
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ content: 'do not encrypt' }), expect.anything());
+  expect(obtainSigner).not.toHaveBeenCalled();
 });

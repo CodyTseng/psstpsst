@@ -103,12 +103,13 @@ export class SigningPermissions {
     const request: SigningRequest = JSON.parse(JSON.stringify(input));
     if (request.accountPubkey !== this.scope.accountPubkey) throw new Error('account-unavailable');
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
+    if (request.operation === 'relay-auth' && !request.relays.length) throw new Error('invalid-signing-request');
     if ((request.operation === 'relay-auth' || request.operation === 'upload') && !canRememberSigning(request)) throw new Error('invalid-signing-request');
     if (isSignerAccess(request)) {
       if (!canRememberSigning(request)) throw new Error('invalid-signing-request');
     } else {
       if (!Number.isInteger(request.kind) || request.kind < 0 || request.kind > 65535) throw new Error('invalid-signing-request');
-      request.identifier = request.kind >= 30000 && request.kind < 40000 ? request.tags.find((tag) => tag[0] === 'd')?.[1] ?? '' : undefined;
+      if (request.kind >= 30000 && request.kind < 40000) request.scopeKey = request.tags.find((tag) => tag[0] === 'd')?.[1] ?? '';
     }
     await this.load();
     assertNotAborted(this.signal);
@@ -167,9 +168,9 @@ export class SigningPermissions {
     return revision;
   }
 
-  authorizeAccess(operation: SignerAccessOperation, recipient?: string, requestSignal?: AbortSignal): Promise<number> {
+  authorizeAccess(operation: SignerAccessOperation, recipient?: string, requestSignal?: AbortSignal, content = ''): Promise<number> {
     return this.authorize({ operation, recipient, relays: [], accountPubkey: this.scope.accountPubkey,
-      content: '', tags: [], createdAt: Math.floor(Date.now() / 1000) }, undefined, requestSignal);
+      content, tags: [], createdAt: Math.floor(Date.now() / 1000) }, undefined, requestSignal);
   }
 
   private async record(scope: SigningScope, decision: SigningActivity['decision']) {

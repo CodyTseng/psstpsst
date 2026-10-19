@@ -6,6 +6,7 @@ import { NappletNetwork } from '@/services/napplet/network';
 import { MARKET_RELAYS } from '@/services/napplet/protocol';
 import { registerNappletLifecycle, registerNappletVisit, registerNappletTheme, invalidateNappletSource } from '@/services/napplet/lifecycle';
 import { moveDesktopApp } from '@/services/napplet/desktop-order';
+import { clearBrowserPermissions } from './browser-permission-store';
 import { clearSigningPermissions } from '@/services/signing/repository';
 import { getData, setData } from '@/services/napplet/repository';
 import { readEntries, reorder, visit, forget } from './repository';
@@ -145,7 +146,7 @@ export const exploreService = {
     check(account,generation);
     const domains:unknown=stored?JSON.parse(stored):[];
     if(!Array.isArray(domains)||domains.some(domain=>typeof domain!=='string'))throw new Error('invalid-permissions');
-    return stored!==null && applicationRequirements(app.kind, app.required).every(domain=>domains.includes(domain));
+    return applicationRequirements(app.kind, app.required).every(domain=>domains.includes(domain));
   },
   prepare(app: ExploreEntry, account: string, reviewedRequired?:readonly string[]) {
     check(account, epoch);
@@ -175,7 +176,7 @@ export const exploreService = {
       const stored = await getData(scope, 'permissions', 'domains');
       current();
       const grants: string[] = stored ? JSON.parse(stored) : [];
-      if (!stored || entry.required.some(d => !grants.includes(d))) {
+      if (entry.required.some(d => !grants.includes(d))) {
         const reviewed=reviewedAccess?.runId===runId && reviewedAccess.required.length===entry.required.length && entry.required.every(domain=>reviewedAccess!.required.includes(domain));
         const answer = reviewed?'allow':await nappletService.requestApproval({ title: entry.title, detail: '', accountPubkey: account, application: applicationPresentation(entry) }, signal);
         current();
@@ -262,6 +263,7 @@ export const exploreService = {
     if (current && this.signingSource(current) === sourceId || parents.some(parent => this.signingSource(parent.entry) === sourceId))
       this.stop();
     await clearSigningPermissions({ accountPubkey: account, sourceId });
+    await clearBrowserPermissions({ accountPubkey: account, sourceId });
     check(account, generation);
     await setData({ accountPubkey: account, appKey: sourceId }, 'permissions', 'domains', null);
     check(account,generation);exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));

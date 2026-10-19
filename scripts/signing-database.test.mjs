@@ -56,6 +56,7 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
       export { migrateSigningSources } from ${JSON.stringify(path.resolve('src/db/data-migrations/signing-sources.ts'))};
       export { normalizeSigningSource,signingSourceFromLegacyKey } from ${JSON.stringify(path.resolve('src/services/signing/source.ts'))};
       export function repository() { return require(${JSON.stringify(path.resolve('src/services/signing/repository.ts'))}); }
+      export function browserPermissions() { return require(${JSON.stringify(path.resolve('src/services/explore/browser-permission-store.ts'))}); }
       export function exploreRepository() { return require(${JSON.stringify(path.resolve('src/services/explore/repository.ts'))}); }
       export function appRepository() { return require(${JSON.stringify(path.resolve('src/services/napplet/repository.ts'))}); }
       export function permissions() { return require(${JSON.stringify(path.resolve('src/services/signing/permissions.ts'))}); }
@@ -84,6 +85,25 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     sqlite.exec(readFileSync('src/db/migrations/0062_explore.sql','utf8'));
     await fixture.migrateExplore(globalThis.__signingDatabaseTest);
     sqlite.exec('COMMIT');
+    sqlite.exec(readFileSync('src/db/migrations/0064_signer-access.sql','utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0065_authorization-destinations.sql','utf8'));
+    const beforeKindMigration = sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all();
+    sqlite.exec('BEGIN');
+    sqlite.exec(readFileSync('src/db/migrations/0066_signer-access-kind.sql','utf8'));
+    sqlite.exec('COMMIT');
+    assert.deepEqual(sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all(), beforeKindMigration,
+      'the kind migration preserves every existing authorization field');
+    sqlite.exec(readFileSync('src/db/migrations/0067_application-relay-auth.sql','utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0068_signing-scope-key.sql','utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0069_browser-authorizations.sql','utf8'));
+    assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+    const insertKind = sqlite.prepare(`INSERT INTO signing_authorizations
+      (account_pubkey,source_id,operation,kind,decision,created_at,updated_at) VALUES('A','constraint-test',?,?,'allow',1,1)`);
+    for (const kind of [-1, 65536]) assert.throws(() => insertKind.run('publish', kind), /CHECK constraint/);
+    assert.throws(() => insertKind.run('get-public-key', 0), /CHECK constraint/);
+    for (const kind of [0, 65535]) insertKind.run('publish', kind);
+    assert.throws(() => insertKind.run('publish', 0), /UNIQUE constraint/);
+    sqlite.prepare("DELETE FROM signing_authorizations WHERE source_id='constraint-test'").run();
     const sourceId = fixture.signingSourceFromLegacyKey(app);
     const scope = { accountPubkey: 'A', sourceId };
     assert.equal(sqlite.prepare('SELECT position FROM explore_shortcuts WHERE account_pubkey=? AND source_id=?').get('A',sourceId).position,2);
@@ -122,7 +142,7 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     assert.equal((await repository.readSigningSnapshot({ ...scope, sourceId: fixture.signingSourceFromLegacyKey(emptyApp) })).rules.length, 0,
       'a current-version reset never restores a previous grant');
     assert.equal(saved.rules.length, 1, 'narrow, malformed and expired legacy grants do not expand');
-    assert.equal(saved.rules[0].scope.identifier, 'progress');
+    assert.equal(saved.rules[0].scope.scopeKey, 'progress');
     assert.equal(saved.activity.length, 1);
     const appRepository = fixture.appRepository();
     const appScope = { accountPubkey: 'A', appKey: app };
@@ -136,6 +156,53 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     const controller = new AbortController();
     let prompts = 0;
     const permissions = new SigningPermissions(scope, async () => { prompts++; return 'allow-always'; }, controller.signal, () => {});
+    // Exercise the real repository: memory repositories cannot catch SQL CHECK failures.
+    for (const operation of ['get-public-key', 'nip04-encrypt', 'nip04-decrypt', 'nip44-encrypt', 'nip44-decrypt']) {
+      const recipient = operation === 'get-public-key' ? undefined : 'c'.repeat(64);
+      const before = prompts;
+      await permissions.authorizeAccess(operation, recipient);
+      const snapshot = await repository.readSigningSnapshot(scope);
+      const accessRule = snapshot.rules.find(entry => entry.scope.operation === operation);
+      assert.equal(accessRule.duration, 'always');
+      assert.equal(accessRule.scope.kind, undefined);
+      assert.equal(accessRule.scope.recipient, recipient);
+      const reloaded = new SigningPermissions(scope, async () => { throw new Error('unexpected-prompt'); }, controller.signal, () => {});
+      await reloaded.authorizeAccess(operation, recipient);
+      assert.equal(prompts, before + 1, 'durable access grants survive a new permission controller');
+      await reloaded.edit(accessRule, { decision: 'deny', duration: 'always' });
+      await assert.rejects(reloaded.authorizeAccess(operation, recipient), /permission-denied/);
+      await reloaded.edit(accessRule, { decision: 'ask', duration: 'always' });
+      assert(!(await repository.readSigningSnapshot(scope)).rules.some(entry => entry.scope.operation === operation));
+      const expiresAt = Date.now() + 600000;
+      await reloaded.edit(accessRule, { decision: 'allow', duration: 'timed', expiresAt });
+      const timedRule = (await repository.readSigningSnapshot(scope)).rules.find(entry => entry.scope.operation === operation);
+      assert.equal(timedRule.duration, 'timed');
+      assert.equal(timedRule.expiresAt, expiresAt);
+      const timed = new SigningPermissions(scope, async () => { throw new Error('unexpected-prompt'); }, controller.signal, () => {});
+      await timed.authorizeAccess(operation, recipient);
+      await timed.edit(accessRule, { decision: 'ask', duration: 'always' });
+
+    }
+    prompts = 0;
+    const authRequest = { operation: 'relay-auth', kind: 22242, relays: ['wss://one.example/'], accountPubkey: 'A', content: '', tags: [], createdAt: 100 };
+    await permissions.authorize(authRequest);
+    const reloadedAuth = new SigningPermissions(scope, async () => { throw new Error('unexpected-auth-prompt'); }, controller.signal, () => {});
+    await reloadedAuth.authorize({ ...authRequest, relays: ['wss://two.example/'] });
+    const authRule = (await reloadedAuth.snapshot()).rules.find(entry => entry.scope.operation === 'relay-auth');
+    assert.deepEqual(authRule.scope, { operation: 'relay-auth', kind: 22242, relays: [] });
+    const authRow = sqlite.prepare("SELECT * FROM signing_authorizations WHERE source_id=? AND operation='relay-auth'").get(sourceId);
+    assert.equal(authRow.destinations, '[]'); assert.equal(authRow.scope_key, '');
+    await reloadedAuth.edit(authRule, { decision: 'deny', duration: 'always' });
+    await assert.rejects(reloadedAuth.authorize({ ...authRequest, relays: ['wss://third.example/'] }), /permission-denied/);
+    await reloadedAuth.edit(authRule, { decision: 'ask', duration: 'always' });
+    for (const scopeKey of ['resource-one', 'resource-two']) {
+      await permissions.authorize({ ...authRequest, operation: 'publish', kind: 12345, scopeKey, relays: [] });
+    }
+    const qualified = (await repository.readSigningSnapshot(scope)).rules.filter(entry => entry.scope.kind === 12345);
+    assert.deepEqual(qualified.map(entry => entry.scope.scopeKey).sort(), ['resource-one', 'resource-two']);
+    await repository.deleteSigningRule(scope, qualified[0].key);
+    assert.equal((await repository.readSigningSnapshot(scope)).rules.filter(entry => entry.scope.kind === 12345).length, 1);
+    prompts = 0;
     const request = { operation: 'publish', kind: 1, relays: [], accountPubkey: 'A', content: 'private payload', tags: [], createdAt: 100 };
     await permissions.authorize(request);
     await permissions.authorize(request);
@@ -154,9 +221,24 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     assert.notEqual(fixture.normalizeSigningSource('http://example.com'), fixture.normalizeSigningSource('https://example.com'));
     assert.notEqual(fixture.normalizeSigningSource('https://example.com:8443'), fixture.normalizeSigningSource('https://example.com'));
     assert.notEqual(fixture.normalizeSigningSource('https://other.example.com'), fixture.normalizeSigningSource('https://example.com'));
+    const browser = fixture.browserPermissions();
+    await browser.saveBrowserPermissions(scope, ['audio', 'video'], 'allow', null);
+    assert.deepEqual((await browser.readBrowserPermissions(scope)).map(row => row.resource).sort(), ['audio', 'video']);
+    assert.deepEqual(await browser.readBrowserPermissions({ ...scope, accountPubkey: 'B' }), []);
+    assert.deepEqual(await browser.readBrowserPermissions({ ...scope, sourceId: 'https://other.example' }), []);
+    await browser.saveBrowserPermissions(scope, ['audio'], 'deny', Date.now() + 60000);
+    assert.equal((await browser.readBrowserPermissions(scope)).find(row => row.resource === 'audio').decision, 'deny');
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM browser_authorizations').get().n, 2);
+    sqlite.prepare("UPDATE browser_authorizations SET expires_at=1 WHERE resource='audio'").run();
+    assert.deepEqual((await browser.readBrowserPermissions(scope)).map(row => row.resource), ['video']);
+    await assert.rejects(browser.saveBrowserPermissions(scope, ['display-capture'], 'allow', null), /invalid-permissions/);
+    await assert.rejects(browser.saveBrowserPermissions(scope, ['video'], 'allow', null, () => { throw new Error('closed'); }), /closed/);
+    await browser.clearBrowserPermissions(scope, 'video');
+    assert.deepEqual(await browser.readBrowserPermissions(scope), []);
+    await browser.saveBrowserPermissions(scope, ['clipboard-read'], 'allow', null);
     controller.abort();
     sqlite.prepare('DELETE FROM accounts WHERE pubkey=?').run('A');
-    for (const table of ['napplet_data', 'napplet_usage', 'napplet_data_legacy', 'signing_authorizations', 'signing_activity'])
+    for (const table of ['napplet_data', 'napplet_usage', 'napplet_data_legacy', 'signing_authorizations', 'signing_activity', 'browser_authorizations'])
       assert.equal(sqlite.prepare(`SELECT count(*) AS n FROM ${table} WHERE account_pubkey=?`).get('A').n, 0);
     assert.equal(sqlite.prepare('SELECT value FROM napplet_data WHERE account_pubkey=?').get('B').value, 'other-account');
     await assert.rejects(repository.saveSigningRule(scope, saved.rules[0]), /account-unavailable/);
@@ -164,4 +246,44 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     delete globalThis.__signingDatabaseTest;
     sqlite.close(); await rm(dir, { recursive: true, force: true });
   }
+});
+
+
+test('relay AUTH migration merges active decisions and generalizes d tags without changing other grants', () => {
+  const sqlite = new DatabaseSync(':memory:');
+  try {
+    sqlite.exec("PRAGMA foreign_keys=ON; CREATE TABLE accounts(pubkey TEXT PRIMARY KEY); INSERT INTO accounts VALUES('A'),('B');");
+    const statements = readFileSync('src/db/migrations/0066_signer-access-kind.sql', 'utf8').split('--> statement-breakpoint');
+    sqlite.exec(statements[0].replaceAll('signing_authorizations_new', 'signing_authorizations'));
+    sqlite.exec(statements.at(-1));
+    const insert = sqlite.prepare(`INSERT INTO signing_authorizations
+      (account_pubkey,source_id,operation,kind,d_tag,destinations,decision,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`);
+    const auth = (account, source, decision, updated, expiry = null, relay = 'wss://one.example/') =>
+      insert.run(account, source, 'relay-auth', 22242, '', JSON.stringify([relay]), decision, expiry, updated - 1, updated);
+    auth('A','one','allow',10); auth('A','one','deny',20,null,'wss://two.example/');
+    auth('B','one','allow',30);
+    auth('A','two','allow',40,Date.now()+600000); auth('A','two','deny',50,Date.now()-60000,'wss://two.example/');
+    auth('A','tie','deny',60); auth('A','tie','allow',60,null,'wss://two.example/');
+    insert.run('A','app','publish',30078,'CaseSensitive/记录','[]','allow',null,1,2);
+    insert.run('A','app','upload',24242,'','["https://storage.example/"]','deny',null,3,4);
+    const otherGrants = sqlite.prepare("SELECT * FROM signing_authorizations WHERE operation<>'relay-auth' ORDER BY id").all();
+    sqlite.exec('BEGIN');
+    sqlite.exec(readFileSync('src/db/migrations/0067_application-relay-auth.sql','utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0068_signing-scope-key.sql','utf8'));
+    sqlite.exec('COMMIT');
+    assert.deepEqual(sqlite.prepare("SELECT account_pubkey,source_id,decision,destinations,scope_key FROM signing_authorizations WHERE operation='relay-auth' ORDER BY account_pubkey,source_id").all().map(row=>({...row})),[
+      {account_pubkey:'A',source_id:'one',decision:'deny',destinations:'[]',scope_key:''},
+      {account_pubkey:'A',source_id:'tie',decision:'deny',destinations:'[]',scope_key:''},
+      {account_pubkey:'A',source_id:'two',decision:'allow',destinations:'[]',scope_key:''},
+      {account_pubkey:'B',source_id:'one',decision:'allow',destinations:'[]',scope_key:''},
+    ]);
+    const others = sqlite.prepare("SELECT * FROM signing_authorizations WHERE operation<>'relay-auth' ORDER BY id").all();
+    assert.deepEqual(others.map(({scope_key,...row})=>({...row,d_tag:scope_key})),otherGrants.map(row=>({...row})));
+    assert(!sqlite.prepare('PRAGMA table_info(signing_authorizations)').all().some(column=>column.name==='d_tag'));
+    const qualified = sqlite.prepare(`INSERT INTO signing_authorizations (account_pubkey,source_id,operation,kind,scope_key,decision,created_at,updated_at)
+      VALUES('A','one','relay-auth',22242,?,'allow',1,1)`);
+    assert.throws(()=>qualified.run(''), /UNIQUE constraint/);
+    qualified.run('wss://future.example/');
+    assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
+  } finally { sqlite.close(); }
 });

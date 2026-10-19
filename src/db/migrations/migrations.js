@@ -1,3 +1,6 @@
+import m0068 from './0068_signing-scope-key.sql';
+import m0067 from './0067_application-relay-auth.sql';
+import m0066 from './0066_signer-access-kind.sql';
 import m0065 from './0065_authorization-destinations.sql';
 import m0064 from './0064_signer-access.sql';
 import m0063 from './0063_local-relay.sql';
@@ -68,7 +71,9 @@ import m0056 from './0056_private-list-sync-state.sql';
 import m0057 from './0057_per-relay-sync-cursors.sql';
 import m0058 from './0058_forward-sync-checkpoints.sql';
 
-  export default {
+  import m0069 from './0069_browser-authorizations.sql';
+
+export default {
     journal,
     migrations: {
       m0000,
@@ -136,6 +141,10 @@ m0061,
 m0062,
 m0063,
 m0064,
-m0065
+m0065,
+m0066,
+m0067,
+m0068,
+m0069
     }
   }

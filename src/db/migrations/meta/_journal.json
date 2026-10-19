@@ -463,6 +463,34 @@
       "when": 1792627200000,
       "tag": "0065_authorization-destinations",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1792713600000,
+      "tag": "0066_signer-access-kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1792800000000,
+      "tag": "0067_application-relay-auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1792886400000,
+      "tag": "0068_signing-scope-key",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1792972800000,
+      "tag": "0069_browser-authorizations",
+      "breakpoints": true
     }
   ]
 }

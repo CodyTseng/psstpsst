@@ -1,3 +1,4 @@
+import { automaticBrowserPermission } from '../src/services/explore/browser-permissions';
 import type { ExplorePage } from '../src/platform/ports/explore';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -38,22 +39,22 @@ export function registerNappletHandlers(
       capture?: Promise<string | null>;
       queued: string[];
       ownerClosed: () => void;
-      browser: Map<string, { resolve(allowed: boolean): void; timer: ReturnType<typeof setTimeout> }>;
+      browser: Map<string, { resolve(allowed: boolean, expiresAt?: number | null): void; timer: ReturnType<typeof setTimeout> }>;
       fullscreen?: boolean;
-      permissions: Set<string>;
+      permissions: Map<string, number>;
     }
   >();
   const requests = new Map<string, { abort: AbortController; owner: BrowserWindow }>();
   const configuredProfiles = new Set<Session>();
   const downloads = new Set<Session>();
   const browserRequest = (entry: (typeof views extends Map<string, infer T> ? T : never), action: 'window'|'external'|'permission'|'download',
-    details: { url?: string; resources?: string[]; filename?: string }, resolve: (allowed: boolean) => void = () => {}, source?: string) => {
+    details: { url?: string; resources?: string[]; filename?: string }, resolve: (allowed: boolean, expiresAt?: number | null) => void = () => {}, source?: string) => {
     if (!entry.page || entry.browser.size >= 16 || entry.owner.isDestroyed()) { resolve(false); return; }
     const url = source || entry.view.webContents.getURL() || entry.url;
     const target = new URL(url);
     if (!['http:', 'https:'].includes(target.protocol)) { resolve(false); return; }
     const id = `browser:${randomUUID()}`;
-    const timer = setTimeout(() => { entry.browser.delete(id); resolve(false); }, 460000);
+    const timer = setTimeout(() => { entry.browser.delete(id); resolve(false); }, 1020000);
     entry.browser.set(id, { resolve, timer });
     entry.owner.webContents.send(IPC.nappletMessage, [...views].find(([,value]) => value === entry)?.[0], JSON.stringify({
       type: 'explore.browser', origin: target.origin, url, document: entry.document, browser: { id, action, ...details },
@@ -121,7 +122,8 @@ export function registerNappletHandlers(
     if (!entry.view.webContents.isDestroyed()) {
       const profile = entry.view.webContents.session;
       entry.view.webContents.close();
-      if (![...views.values()].some(item => !item.view.webContents.isDestroyed() && item.view.webContents.session === profile)) {
+      // Remote website profiles use Chromium's loader and have no custom handler to remove.
+      if (!entry.page?.url && ![...views.values()].some(item => !item.view.webContents.isDestroyed() && item.view.webContents.session === profile)) {
         profile.protocol.unhandle('https'); profile.webRequest.onBeforeRequest(null); configuredProfiles.delete(profile);
       }
       if (!entry.page) void profile.clearStorageData().catch(() => {});
@@ -160,7 +162,7 @@ export function registerNappletHandlers(
     });
     const ownerClosed = () => close(id);
     view.setBackgroundColor('transparent');
-    views.set(id, { view, owner, url, ready: false, painted: false, visible: false, inputBlocked: true, queued: [], ownerClosed, browser: new Map(), permissions: new Set() });
+    views.set(id, { view, owner, url, ready: false, painted: false, visible: false, inputBlocked: true, queued: [], ownerClosed, browser: new Map(), permissions: new Map() });
     owner.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -216,11 +218,11 @@ export function registerNappletHandlers(
     profile.setPermissionRequestHandler((contents, permission, callback, details) => {
       const entry = [...views.values()].find(value => value.view.webContents === contents);
       if (!entry?.page || !details.isMainFrame) { callback(false); return; }
-      if (permission === 'clipboard-sanitized-write') { callback(entry.visible && !entry.inputBlocked); return; }
+      if (automaticBrowserPermission(permission)) { callback(String(permission) === 'persistent-storage' || entry.visible && !entry.inputBlocked); return; }
       const media = permission === 'media' && 'mediaTypes' in details && Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
       const keys = media.length ? media.map(type => `media:${type}`) : [permission];
-      browserRequest(entry, 'permission', { resources: media.length ? media : [permission] }, allowed => {
-        if (allowed) for (const key of keys) entry.permissions.add(key);
+      browserRequest(entry, 'permission', { resources: media.length ? media : [permission] }, (allowed, expiresAt) => {
+        if (allowed) for (const key of keys) entry.permissions.set(key, expiresAt ?? Infinity);
         callback(allowed);
       }, details.requestingUrl);
     });
@@ -228,8 +230,9 @@ export function registerNappletHandlers(
       if (!contents || !details.isMainFrame) return false;
       const entry = [...views.values()].find(value => value.view.webContents === contents);
       if (!entry?.page) return false;
-      if (permission === 'clipboard-sanitized-write') return entry.visible && !entry.inputBlocked;
-      return entry.permissions.has(permission === 'media' ? `media:${details.mediaType ?? 'unknown'}` : permission);
+      if (automaticBrowserPermission(permission)) return String(permission) === 'persistent-storage' || entry.visible && !entry.inputBlocked;
+      const expiresAt = entry.permissions.get(permission === 'media' ? `media:${details.mediaType ?? 'unknown'}` : permission);
+      return expiresAt !== undefined && expiresAt > Date.now();
     });
     if (!downloads.has(profile)) {
       downloads.add(profile);
@@ -258,7 +261,7 @@ export function registerNappletHandlers(
     const view = new WebContentsView({ webPreferences: {session:profile,preload:path.join(__dirname,'napplet-preload.js'),
       additionalArguments:[page.bootstrap ? `--psst-explore-bootstrap=${Buffer.from(JSON.stringify(page.bootstrap)).toString('base64')}` : `--psst-explore=${Buffer.from(page.script).toString('base64')}`],sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:false} });
     const ownerClosed=()=>close(id);
-    const entry={view,owner,url,ready:true,painted:true,visible:false,inputBlocked:true,queued:[] as string[],ownerClosed,page,files:page.files ? new Map(page.files.map(file => [file.path, file])) : undefined,document:randomUUID(),browser:new Map<string,{resolve(allowed:boolean):void;timer:ReturnType<typeof setTimeout>}>(),fullscreen:false,permissions:new Set<string>()};
+    const entry={view,owner,url,ready:true,painted:true,visible:false,inputBlocked:true,queued:[] as string[],ownerClosed,page,files:page.files ? new Map(page.files.map(file => [file.path, file])) : undefined,document:randomUUID(),browser:new Map<string,{resolve(allowed:boolean, expiresAt?:number|null):void;timer:ReturnType<typeof setTimeout>}>(),fullscreen:false,permissions:new Map<string, number>()};
     views.set(id,entry);owner.contentView.addChildView(view);view.setVisible(false);owner.once('closed',ownerClosed);
     view.webContents.setWindowOpenHandler(details=>{ browserRequest(entry, 'window', { url: details.url }); return {action:'deny'}; });
     view.webContents.on('will-attach-webview',(event)=>event.preventDefault());
@@ -345,9 +348,10 @@ export function registerNappletHandlers(
     if (entry.page) {
       let envelope; try { envelope=JSON.parse(message); } catch { return; }
       if(envelope.document!==entry.document) return;
+      if(envelope.reply?.type==='browser.permissions-changed') { entry.permissions.clear(); return; }
       if(envelope.reply?.type==='browser.result') {
         const pending=entry.browser.get(envelope.reply.id);
-        if(pending){entry.browser.delete(envelope.reply.id);clearTimeout(pending.timer);pending.resolve(envelope.reply.result===true);}
+        if(pending){entry.browser.delete(envelope.reply.id);clearTimeout(pending.timer);pending.resolve(envelope.reply.result===true, envelope.reply.permissionExpiresAt === null ? null : Number.isFinite(envelope.reply.permissionExpiresAt) ? envelope.reply.permissionExpiresAt : Date.now());}
         return;
       }
       entry.view.webContents.send(IPC.exploreReply,JSON.stringify(envelope.reply));

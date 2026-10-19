@@ -74,8 +74,8 @@ export class PromptQueue {
     if (this.paused) { this.changed(null); return; }
     const first = this.entries[0];
     if (first && first.timer === undefined) {
-      first.prompt.expiresAt = Date.now() + 25000;
-      first.timer = setTimeout(() => this.remove(first.prompt.requestId, false), 25000);
+      first.prompt.expiresAt = Date.now() + 60000;
+      first.timer = setTimeout(() => this.remove(first.prompt.requestId, false), 60000);
     }
     this.changed(first ? { ...first.prompt, queued: this.entries.length - 1 } : null);
   }

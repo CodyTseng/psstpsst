@@ -39,10 +39,20 @@ export function SigningActions({ prompt, duration, menuOpen, onMenuChange }: {
   menuOpen: boolean; onMenuChange: (anchor: ContextMenuAnchor | null) => void;
 }) {
   const { t } = useTranslation();
+  return <PermissionActions prompt={prompt} duration={duration} menuOpen={menuOpen} onMenuChange={onMenuChange}
+    remember={canRememberSigning(prompt.signing!)}
+    label={t(prompt.signing!.operation === 'relay-auth' && !prompt.signing!.scopeKey ? 'napplets.signing_auth_remember' : 'napplets.signing_remember')} />;
+}
+
+/** Signing and browser permissions share the same duration and decision controls. */
+export function PermissionActions({ prompt, duration, menuOpen, onMenuChange, remember, label }: {
+  prompt: QueuedPrompt; duration: string; menuOpen: boolean;
+  onMenuChange: (anchor: ContextMenuAnchor | null) => void; remember: boolean; label: string;
+}) {
+  const { t } = useTranslation();
   const c = useThemeColors();
   const trigger = useRef<View>(null);
   const insets = useSafeAreaInsets();
-  const remember = canRememberSigning(prompt.signing!);
   const timed = duration.startsWith('allow-') && Object.prototype.hasOwnProperty.call(SIGNING_PERIODS, duration.slice(6));
   const mode = duration === 'allow-always' ? 'always' : timed ? 'timed' : 'once';
   const decision = remember && (mode === 'always' || timed) ? duration : 'allow';
@@ -51,8 +61,8 @@ export function SigningActions({ prompt, duration, menuOpen, onMenuChange }: {
   return <View style={{ gap: spacing.md }}>
     {remember ? <>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-        <AppText variant="caption" tone="muted" style={{ flex: 1 }}>{t('napplets.signing_remember')}</AppText>
-        <View ref={trigger} collapsable={false}><AppButton variant="secondary" size="sm" fullWidth={false}
+        <AppText tone="muted" style={{ flex: 1 }}>{label}</AppText>
+        <View ref={trigger} collapsable={false}><AppButton variant="secondary" size="sm" fullWidth={false} labelWeight="regular"
           label={options.find((option) => option.value === decision)!.label}
           accessibilityState={{ expanded: menuOpen }}
           iconRight={<ChevronDown size={spacing.lg} color={c.text} />}

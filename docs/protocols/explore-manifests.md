@@ -22,6 +22,12 @@ sorted `<hash> <path>\n` lines. File responses use host-selected MIME types.
 Every downloaded blob is verified before it reaches the container. Static containers
 do not register service workers; updates cannot retain a worker serving an old bundle.
 
+Host icon discovery prefers an explicit `icon` path, then HTML and Web App
+Manifest declarations and conventional favicon paths. Every metadata and image
+read stays inside the signed file map and verifies its blob hash; external and
+unsigned icon references never authorize remote fetches. Discovery is bounded
+and cached by signed manifest ID independently of launching the container.
+
 Servers come from manifest `server` tags, falling back to the author's verified
 kind-10063 media-server list when hints are absent or cannot supply a file. The
 lookup is lazy and shared by the bundle's bounded download workers. Public downloads

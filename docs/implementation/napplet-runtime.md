@@ -164,12 +164,12 @@ Live OUTBOX subscriptions refresh routing and retain bounded deduplication state
 Signing permission is separate from NAP domain access. Initial access grants the
 required domains; optional domains start disabled and can be selected individually.
 The host queues at most 16 approvals, shows one at a time, rejects stale approval
-IDs and cancels requests on session termination. Each approval receives 25 seconds
+IDs and cancels requests on session termination. Each approval receives 60 seconds
 when it becomes visible; queued requests have no running review timer. Explicitly
 rejecting the whole queue pauses prompts for one minute or until the execution
 session ends. Routing and post-approval signing each have a 25-second budget; late
 remote signatures are discarded without publication. The injected pinned OUTBOX
-shim extends only publication waits to 460 seconds to cover the bounded queue
+shim extends only publication waits to 1020 seconds to cover the bounded queue
 and these execution budgets.
 
 Requests default to one-time approval. The user can remember a timed decision
@@ -193,13 +193,15 @@ additional required capabilities need consent, and new optional capabilities sta
 off. The separate activity journal retains the latest 32 metadata-only decisions
 per account/source, without event bodies or a claim of publication success.
 Relay AUTH and public-file uploads use the same Once, timed and Always permission
-flow, with their reviewed destinations retained in the rule. Upload review includes
+flow. AUTH grants cover all relays for the account/source; uploads retain the
+reviewed storage destinations. Permission qualifiers live in `scope_key`: current
+addressable events use the d-tag value, and global AUTH uses the empty qualifier. Upload review includes
 file metadata and authorizes the host-built Blossom authentication event.
 
 Authorized publication signs once and reports per-relay outcomes.
 All valid event kinds and app-data identifiers can reach user-approved generic
 publication, including account settings and protocol events.
-Consent expires 25 seconds after presentation; submitted timestamps are
+Consent expires 60 seconds after presentation; submitted timestamps are
 retained when valid, with future timestamps limited to one day. NIP-44
 publishEncrypted is available; NIP-04 is not. This API does not expose messaging
 keys, decrypted chat histories, wallets or arbitrary signing primitives.
@@ -332,3 +334,13 @@ so installed mobile development clients need a native rebuild. Android Explore r
 WebView multi-profile support. iOS 17 and later use named persistent account
 profiles; earlier systems use ephemeral website storage. No package dependency
 was added for this feature.
+
+Browser permission requests automatically allow persistent storage and ordinary
+clipboard writes. Recognized sensitive resources share signing's duration menu
+(one visit, 10 minutes, one hour, 24 hours, or always), applying the selected
+duration to allow and deny alike. Records are per account, current website origin
+or signed application address, and resource in `browser_authorizations`; media
+requests retain separate camera and microphone resources. Screen capture,
+unknown permissions, window/external navigation, and downloads require fresh
+review. Permission management edits and reset invalidate active document caches
+across application windows; timed permission-check leases expire independently.

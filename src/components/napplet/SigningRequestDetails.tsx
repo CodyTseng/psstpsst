@@ -34,6 +34,20 @@ export function signingAction(scope: Pick<SigningScope, 'operation' | 'kind'>, t
   return scope.kind !== undefined && known[scope.kind] ? t(`napplets.${known[scope.kind]}`) : t('napplets.signing_unknown', { kind: scope.kind });
 }
 
+export function signingRequestTitle(scope: Pick<SigningScope, 'operation' | 'kind'>, t: TFunction): string {
+  if (isSignerAccess(scope) && scope.operation !== 'get-public-key') return t(scope.operation.endsWith('-encrypt') ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt');
+  return signingAction(scope, t);
+}
+
+export function signingEventType(kind: number, t: TFunction): string {
+  const known: Record<number, string> = {
+    0: 'event_profile', 1: 'event_post', 3: 'event_follows', 6: 'event_repost', 7: 'event_reaction',
+    10002: 'event_relays', 22242: 'event_relay_auth', 27235: 'event_http_auth',
+    30023: 'event_article', 30078: 'event_app_data',
+  };
+  return known[kind] ? t(`napplets.${known[kind]}`) : t('chat.event_reference.kind', { kind });
+}
+
 export function SigningIdentity({ pubkey, label }: { pubkey: string; label: string }) {
   const { name, profile } = useDisplayName(pubkey);
   return (
@@ -42,7 +56,7 @@ export function SigningIdentity({ pubkey, label }: { pubkey: string; label: stri
       <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
         <Avatar pubkey={pubkey} picture={profile?.picture} />
         <View style={{ flex: 1 }}>
-          <SigningText variant="subtitle">{name}</SigningText>
+          <SigningText>{name}</SigningText>
           <SigningText variant="caption" tone="muted">{pubkey.slice(0, 12)}…{pubkey.slice(-8)}</SigningText>
         </View>
       </View>
@@ -65,8 +79,8 @@ export function SigningAccountAvatar({ pubkey }: { pubkey: string }) {
 export function SigningRequester({ app, application }: { app?: NappletRelease; application?: import('@/services/explore/model').ApplicationInfo }) {
   const identity=application??app;
   return identity ? <View style={{ paddingTop: spacing.sm,gap:spacing.sm }}>
-    <NappletIdentity release={identity} compact />
-    {application?.origin?<AppText variant="caption" tone="muted" selectable>{application.origin}</AppText>:null}
+    <NappletIdentity release={identity} compact titleVariant="body" />
+    {application?.origin?<SigningText variant="caption" tone="muted">{application.origin}</SigningText>:null}
   </View> : null;
 }
 
@@ -75,10 +89,12 @@ export function SigningScopeDetails({ scope }: { scope: SigningScope }) {
   return (
     <View style={{ gap: spacing.sm }}>
       {scope.operation === 'encrypt-publish' ? <SigningText>{signingAction({ ...scope, operation: 'publish' }, t)}</SigningText> : null}
-      {scope.identifier !== undefined ? <SigningText>{t('napplets.signing_record')}: {scope.identifier || t('napplets.signing_unnamed')}</SigningText> : null}
+      {scope.scopeKey !== undefined ? <SigningText>{t(scope.kind !== undefined && scope.kind >= 30000 && scope.kind < 40000 ? 'napplets.signing_record' : 'napplets.signing_scope_key')}: {scope.scopeKey || t('napplets.signing_unnamed')}</SigningText> : null}
       {scope.recipient ? <SigningIdentity pubkey={scope.recipient} label={t(isSignerAccess(scope) ? 'napplets.crypto_peer' : 'napplets.signing_recipient')} /> : null}
-      <SigningText variant="caption" tone="muted">{t(scope.operation === 'upload' ? 'napplets.upload_destinations' : 'napplets.signing_destinations')}</SigningText>
-      {scope.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
+      {scope.operation === 'relay-auth' ? !scope.scopeKey ? <SigningText>{t('napplets.signing_auth_scope')}</SigningText> : null : <>
+        <SigningText variant="caption" tone="muted">{t(scope.operation === 'upload' ? 'napplets.upload_destinations' : 'napplets.signing_destinations')}</SigningText>
+        {scope.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
+      </>}
     </View>
   );
 }
@@ -103,7 +119,7 @@ function previewContent(request: SigningRequest): {
       } catch { /* Invalid embedded events remain literal request data. */ }
     }
   }
-  if (request.kind === 30078 && value && typeof value === 'object' && !Array.isArray(value)) {
+  if ([0, 30078].includes(request.kind ?? -1) && value && typeof value === 'object' && !Array.isArray(value)) {
     const fields = Object.entries(value).filter(([, item]) => item == null || ['string', 'number', 'boolean'].includes(typeof item));
     if (fields.length) return { text: '', fields: fields.slice(0, 6),
       truncated: fields.length > 6 || fields.length !== Object.keys(value).length ||
@@ -119,6 +135,7 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   const c = useThemeColors();
   const [details, setDetails] = useState(false);
   const preview = useMemo(() => previewContent(request), [request]);
+  const references = useMemo(() => request.tags.filter(tag => ['e', 'p', 'a', 'url', 'method', 'relay'].includes(tag[0]) && tag[1]), [request]);
   const [verified, setVerified] = useState<{ request: SigningRequest; text: string }>();
   useEffect(() => {
     let active = true;
@@ -133,40 +150,58 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   }, [preview.repost, request]);
   const previewText = verified?.request === request ? verified.text : preview.text;
   if (isSignerAccess(request)) return <View style={{ gap: spacing.lg }}>
-    {showTitle ? <SigningText variant="title">{signingAction(request, t)}</SigningText> : null}
+    {showTitle ? <SigningText variant="title">{signingRequestTitle(request, t)}</SigningText> : null}
     <SigningText>{t(request.operation === 'get-public-key' ? 'napplets.signing_get_public_key_notice'
       : request.operation.endsWith('-encrypt') ? 'napplets.crypto_encrypt_notice' : 'napplets.crypto_decrypt_notice')}</SigningText>
-    {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.crypto_peer')} /> : null}
+    {request.operation === 'get-public-key' ? <AppCard variant="muted" style={{ gap: spacing.sm }}>
+      <SigningText variant="caption" tone="muted">{t('profile.public_key')}</SigningText>
+      <SigningText variant="code">{request.accountPubkey}</SigningText>
+    </AppCard> : <AppCard variant="muted" style={{ gap: spacing.md }}>
+      <SigningText>{request.operation.startsWith('nip04') ? 'NIP-04' : 'NIP-44'}</SigningText>
+      {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.crypto_peer')} /> : null}
+    </AppCard>}
+    {request.operation.endsWith('-encrypt') ? <EncryptionPlaintext text={request.content} /> : null}
   </View>;
   const auth = request.operation === 'relay-auth';
   const effect = request.operation === 'sign' ? 'signing_effect_sign' : auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
   const showIdentifier = isReplaceableKind(request.kind) || isAddressableKind(request.kind);
+  const kindLabel = t('chat.event_reference.kind', { kind: request.kind });
+  const eventType = signingEventType(request.kind, t);
+  const eventMetadata = eventType === kindLabel ? kindLabel : `${eventType} · ${kindLabel}`;
   const dTag = request.tags.find((tag) => tag[0] === 'd');
   const title = request.kind === 30023 ? request.tags.find((tag) => tag[0] === 'title')?.[1] : undefined;
   return <View style={{ gap: spacing.lg }}>
-    {showTitle ? <SigningText variant="title">{signingAction(request, t)}</SigningText> : null}
-    <View style={{ gap: spacing.xs }}>
-      <SigningText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: request.kind })}</SigningText>
+    {showTitle ? <SigningText variant="title">{signingRequestTitle(request, t)}</SigningText> : null}
+    <View style={{ gap: spacing.sm }}>
+      <SigningText variant="caption" tone="muted">{eventMetadata}</SigningText>
       {showIdentifier ? <SigningText variant="caption" tone="muted">
         {`d: ${dTag ? JSON.stringify(dTag[1] ?? '') : t('napplets.none')}`}
       </SigningText> : null}
     </View>
-    <SigningText>{t(`napplets.${effect}`)}</SigningText>
+    {request.operation === 'encrypt-publish' ? <SigningText tone="muted">{t(`napplets.${effect}`)}</SigningText> : null}
     {auth ? <AppCard variant="muted">
-      <SigningText variant="subtitle">{new URL(request.relays[0]).host}</SigningText>
+      <SigningText>{new URL(request.relays[0]).host}</SigningText>
     </AppCard> : <>
       {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.signing_recipient')} /> : null}
       <AppCard variant="muted" style={{ gap: spacing.sm }}>
-        {title ? <SigningText variant="subtitle">{title}</SigningText> : null}
+        <SigningText variant="caption" tone="muted">{t('napplets.signing_content')}</SigningText>
+        {title ? <SigningText>{title}</SigningText> : null}
         {preview.fields.length ? preview.fields.map(([key, value]) => <View key={key} style={{ flexDirection: 'row', gap: spacing.md }}>
           <SigningText variant="caption" tone="muted" style={{ flex: 1 }}>{key.slice(0, 80)}</SigningText>
           <SigningText style={{ flex: 2 }}>{String(value).slice(0, 140)}</SigningText>
-        </View>) : <SigningText>{previewText.slice(0, 600) || t('napplets.none')}</SigningText>}
-        {preview.truncated || previewText.length > 600 ? <SigningText variant="caption" tone="muted">{t('napplets.signing_truncated')}</SigningText> : null}
+        </View>) : previewText || !references.length ? <SigningText>{previewText.slice(0, 600) || t('napplets.none')}</SigningText> : null}
+        {references.slice(0, 4).map((tag, index) => <View key={index} style={{ gap: spacing.xs }}>
+          <SigningText variant="caption" tone="muted">{tag[0] === 'p' ? t('profile.public_key')
+            : ['e', 'a'].includes(tag[0]) ? t('chat.event_reference.event')
+              : tag[0] === 'method' ? 'HTTP' : t('napplets.signing_destinations')}</SigningText>
+          <SigningText numberOfLines={2}>{tag[1].slice(0, 256)}</SigningText>
+        </View>)}
+        {preview.truncated || previewText.length > 600 || references.length > 4 || references.some(tag => tag[1].length > 256) ? <SigningText variant="caption" tone="muted">{t('napplets.signing_truncated')}</SigningText> : null}
       </AppCard>
     </>}
+    {request.operation !== 'encrypt-publish' ? <SigningText tone="muted">{t(`napplets.${effect}`)}</SigningText> : null}
     <View style={{ alignSelf: 'center' }}>
-      <AppButton variant="text" label={t(details ? 'napplets.signing_hide_details' : 'napplets.signing_details')}
+      <AppButton variant="text" labelWeight="regular" label={t(details ? 'napplets.signing_hide_details' : 'napplets.signing_details')}
         accessibilityState={{ expanded: details }}
         iconRight={details ? <ChevronUp size={spacing.lg} color={c.text} /> : <ChevronDown size={spacing.lg} color={c.text} />}
         onPress={() => setDetails(!details)} />
@@ -179,6 +214,31 @@ export function SigningRequestDetails({ request, showTitle = true }: {
       </View> : null}
     </View> : null}
   </View>;
+}
+
+/** Review the exact input without parsing or persisting application plaintext. */
+function EncryptionPlaintext({ text }: { text: string }) {
+  const { t } = useTranslation();
+  const c = useThemeColors();
+  const [expandedFor, setExpandedFor] = useState<string>();
+  const expanded = expandedFor === text;
+  const { copied, copyText } = useClipboard();
+  const truncated = text.length > 600;
+  return <AppCard variant="muted" style={{ gap: spacing.sm }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+      <SigningText variant="caption" tone="muted" style={{ flex: 1 }}>{t('napplets.crypto_plaintext')}</SigningText>
+      <AppButton variant="text" compact labelWeight="regular" label={t(copied ? 'common.copied' : 'common.copy')}
+        iconLeft={copied ? <Check size={spacing.lg} color={c.text} /> : <Copy size={spacing.lg} color={c.text} />}
+        onPress={() => { void copyText(text); }} />
+    </View>
+    <SigningText>{expanded ? text : text.slice(0, 600)}</SigningText>
+    {truncated && !expanded ? <SigningText variant="caption" tone="muted">{t('napplets.signing_truncated')}</SigningText> : null}
+    {truncated ? <AppButton variant="text" labelWeight="regular"
+      label={t(expanded ? 'napplets.signing_hide_details' : 'napplets.signing_details')}
+      accessibilityState={{ expanded }}
+      iconRight={expanded ? <ChevronUp size={spacing.lg} color={c.text} /> : <ChevronDown size={spacing.lg} color={c.text} />}
+      onPress={() => setExpandedFor(expanded ? undefined : text)} /> : null}
+  </AppCard>;
 }
 
 function EventJson({ request }: { request: SigningRequest }) {

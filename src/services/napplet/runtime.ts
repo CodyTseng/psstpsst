@@ -1,3 +1,4 @@
+import { signingSourceFromLegacyKey } from '@/services/signing/source';
 import { applicationPresentation, type ApplicationInfo, type ApplicationListEntry } from '@/services/explore/model';
 import { NappDevice } from '@/services/explore/device';
 import { BrowserActions } from '@/services/explore/browser-actions';
@@ -43,7 +44,7 @@ export type RuntimePrompt = {
   upload?: { filename: string; mimeType: string; size: number; sha256: string; servers: string[] };
   crypto?: { operation: 'encrypt' | 'decrypt'; algorithm: 'nip04' | 'nip44'; peer: string };
   device?: { operation: 'save-file' | 'copy-text' };
-  browser?: { action: 'window' | 'external' | 'permission' | 'download' };
+  browser?: { action: 'window' | 'external' | 'permission' | 'download'; resources?: string[]; url?: string; filename?: string };
   capabilities?: { required: string[]; optional: string[] };
   expiresAt?: number;
 };
@@ -354,7 +355,7 @@ export class NappletRuntime {
   private async dispatch(m: Message, domain: string, op: string): Promise<void> {
     if (domain === 'browser') {
       if (typeof m.event?.method !== 'string' || !m.event.method.startsWith('browser.') || !Array.isArray(m.event.args)) throw new Error('invalid-request');
-      this.browser ??= new BrowserActions({ account: this.options.accountPubkey, application: applicationPresentation(this.options.release), signal: this.signal,
+      this.browser ??= new BrowserActions({ account: this.options.accountPubkey, sourceId: signingSourceFromLegacyKey(this.options.release.key), application: applicationPresentation(this.options.release), signal: this.signal,
         confirm: (prompt, signal) => this.options.confirm(prompt, signal),
         open: this.options.openBrowser ?? (async url => { if (!await platform.urlOpener.openExternalUrl(url)) throw new Error('external-open-failed'); }) });
       const result = await this.browser.handle(m.event.method.slice(8), m.event.args);

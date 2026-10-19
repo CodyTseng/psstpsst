@@ -139,12 +139,13 @@ export class ExploreRuntime {
         const request = message.browser, document = message.document;
         void (async () => {
           let result = false;
+          let permissionExpiresAt: number | null | undefined;
           try {
             if (request.action === 'window' || request.action === 'external') {
               await this.browserActions().handle(request.action === 'window' ? 'open' : 'external', [request.url]); result = true;
-            } else result = await this.browserActions().approve(request);
+            } else { const decision = await this.browserActions().authorize(request); result = decision.allowed; permissionExpiresAt = decision.expiresAt; }
           } catch (error) { this.log('warn', 'browser', { error: String(error) }); }
-          if (this.document === document) await this.reply(document, { type: 'browser.result', id: request.id, result });
+          if (this.document === document) await this.reply(document, { type: 'browser.result', id: request.id, result, permissionExpiresAt });
         })().catch(() => {});
         return;
       }
@@ -239,7 +240,8 @@ export class ExploreRuntime {
     }
   }
   private browserActions() {
-    return this.browser ??= new BrowserActions({ account: this.account, signal: this.documentLife.signal, confirm: this.options.confirm,
+    return this.browser ??= new BrowserActions({ account: this.account, sourceId: this.entry.kind === 'website' ? this.origin : this.entry.key,
+      permissionsChanged: () => { void this.reply(this.document, { type: 'browser.permissions-changed' }).catch(() => {}); }, signal: this.documentLife.signal, confirm: this.options.confirm,
       application: this.entry.kind === 'website' ? { title: new URL(this.origin).host, description: '', servers: [], required: [], origin: this.origin } : applicationPresentation(this.entry),
       open: async address => {
         if (!this.options.launch) throw new Error('window-unavailable');

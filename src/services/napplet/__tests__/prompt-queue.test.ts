@@ -26,7 +26,7 @@ test('serializes requests and ignores answers from an obsolete dialog', async ()
   expect(current()).toBeNull();
 });
 
-test('each request receives 25 seconds only when it reaches the front', async () => {
+test('each request receives 60 seconds only when it reaches the front', async () => {
   const { queue, current } = setup();
   const first = queue.ask(prompt);
   const firstDeadline = current()!.expiresAt;
@@ -34,11 +34,11 @@ test('each request receives 25 seconds only when it reaches the front', async ()
   const second = queue.ask(prompt);
   expect(current()!.expiresAt).toBe(firstDeadline);
   expect(current()!.queued).toBe(1);
-  jest.advanceTimersByTime(15000);
+  jest.advanceTimersByTime(50000);
   await expect(first).resolves.toBe(false);
-  expect(current()!.expiresAt).toBe(Date.now() + 25000);
+  expect(current()!.expiresAt).toBe(Date.now() + 60000);
   expect(current()!.queued).toBe(0);
-  jest.advanceTimersByTime(24999);
+  jest.advanceTimersByTime(59999);
   expect(current()).not.toBeNull();
   queue.answer(current()!.requestId, 'allow');
   await expect(second).resolves.toBe('allow');
@@ -51,7 +51,7 @@ test('a queued request that becomes visible after a long wait still has its full
   jest.setSystemTime(Date.now() + 60000);
   queue.answer(current()!.requestId, 'allow-always');
   await expect(first).resolves.toBe(false);
-  expect(current()!.expiresAt).toBe(Date.now() + 25000);
+  expect(current()!.expiresAt).toBe(Date.now() + 60000);
   queue.answer(current()!.requestId, 'allow');
   await expect(second).resolves.toBe('allow');
 });
@@ -98,7 +98,7 @@ test('sharing defers background approval presentation and starts a fresh review 
   await jest.advanceTimersByTimeAsync(60000);
   expect(current()).toBeNull(); expect(settled).not.toHaveBeenCalled();
   queue.setPaused(false);
-  expect(current()!.expiresAt).toBe(Date.now() + 25000);
+  expect(current()!.expiresAt).toBe(Date.now() + 60000);
   queue.answer(current()!.requestId, 'allow');
   await expect(pending).resolves.toBe('allow');
 });

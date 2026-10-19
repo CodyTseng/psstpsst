@@ -15,6 +15,8 @@ test('Electron application hosts keep independent containers, owned IPC and shar
     const entry = `
       import { app, BrowserWindow, webContents, ipcMain } from 'electron';
       import { strict as assert } from 'node:assert';
+      import { createServer } from 'node:http';
+      process.on('uncaughtException',error=>{console.error(error);app.exit(1);});
       import { ApplicationWindows } from ${JSON.stringify(path.resolve('desktop/application-windows.ts'))};
       import { registerNappletHandlers } from ${JSON.stringify(path.resolve('desktop/napplet-service.ts'))};
       import { IPC } from ${JSON.stringify(path.resolve('desktop/ipc-channels.ts'))};
@@ -47,6 +49,8 @@ test('Electron application hosts keep independent containers, owned IPC and shar
         await invoke(second,IPC.nappletClose,secondId);
         assert.equal(views().length,1);
         const firstView=views()[0];await firstView.reload();await pause(150);
+        assert.equal(await Promise.race([firstView.executeJavaScript('navigator.storage.persist()'),pause(2000).then(()=> 'unexpected-storage-prompt')]),true,'persistent storage is granted without a consent sheet');
+
         assert.equal(await firstView.executeJavaScript('document.title'),'First','closing another host preserves this profile protocol');
         const change={accountPubkey:launch.accountPubkey,sourceId:'https://example.com',key:'publish:1'};
         await invoke(first,IPC.applicationSigningChange,change);await pause(40);
@@ -60,7 +64,16 @@ test('Electron application hosts keep independent containers, owned IPC and shar
         const firstOwner=first.webContents.id;
         await invoke(parent,IPC.applicationWindowCloseAll,launch.accountPubkey);await pause(50);
         assert(first.isDestroyed());assert(!second.isDestroyed());assert(cleaned.includes(firstOwner));assert.equal(views().length,0);
-        await invoke(parent,IPC.applicationWindowCloseAll);await pause(30);assert(second.isDestroyed());
+        const server=createServer((_request,response)=>response.end('<title>Website</title>'));
+        await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+        const website={sourceId:'website',storageId:'same-account',network:true,script:'',url:'http://127.0.0.1:'+server.address().port};
+        const websiteId=await invoke(second,IPC.exploreOpen,website);
+        await invoke(second,IPC.nappletClose,websiteId);
+        await invoke(second,IPC.nappletClose,websiteId);
+        await invoke(second,IPC.exploreOpen,website);
+        second.close();await pause(50);assert(second.isDestroyed(),'closing a website host must not unregister a bundle protocol');
+        await new Promise(resolve=>server.close(resolve));
+        await invoke(parent,IPC.applicationWindowCloseAll);await pause(30);
         const outsider=create();await outsider.loadURL('data:text/html,Outsider');
         await assert.rejects(invoke(outsider,IPC.applicationWindowOpen,launch),/untrusted-application-host/);
         outsider.destroy();parent.destroy();app.exit(0);

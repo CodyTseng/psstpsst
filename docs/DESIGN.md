@@ -860,7 +860,10 @@ for napplets, blue for napps, and teal for nsites, independent of the selected a
 and status colours. Both modes open the shared application
 details. Favorites uses one vertically scrolling start page, with a single-row recent-visit
 preview above fixed-order shortcuts. Both sections scroll together and share
-cell widths, gutters, icon sizes and label geometry. Hover and press dim only
+cell widths, gutters, icon sizes and label geometry. Running-state dots remain
+clearly visible, straddle the icon artwork's logical bottom-end corner, and use
+a page-background ring to separate them from artwork. Compact list icons use a
+smaller dot. Hover and press dim only
 the icon artwork, leaving labels and the page canvas unchanged. Rounded clipping
 belongs to icon artwork, never the caption beneath it. Outer icon
 artwork aligns with the content gutter; wider interaction cells extend into that
@@ -892,6 +895,11 @@ provide equivalent add, move and remove operations. Removing a shortcut preserve
 recent usage, app data, permissions and default task-handler choices. When the
 desktop is empty, omit its entire section, including the heading and guidance.
 
+Website artwork prefers the site's highest-resolution declared icon, then its
+conventional favicon, and falls back to a globe when unavailable. Signed sites
+and napps prefer their explicit artwork, then discover high-resolution icons
+from their verified HTML, Web App Manifest and conventional favicon files.
+
 Explore formats share their detail page, runtime chrome, information panel, and
 permission controls. Format-specific capabilities supply content within those
 shared layouts rather than defining separate page designs.
@@ -899,12 +907,13 @@ Application details prioritize app identity, a readable description and expanded
 required access. The primary action stays fixed above the bottom safe area while information
 scrolls. It reads Allow and open when required access needs consent, otherwise
 Open. Explicit consent on this page replaces the duplicate launch prompt;
-viewing app details alone never grants access. Details, runtime information and
-launch consent share one information block for app identity, publisher, description
-and required access. First-use consent uses the same sheet across Explore formats,
-identifies the current account in its body, and omits the header account avatar.
-Access confirmation uses one
-horizontal action row with Cancel at the start and Allow at the end. Optional
+viewing app details alone never grants access. Details and runtime information share the app identity, publisher, description
+and required access. Approval sheets show a compact requester identity and the
+exact requested access, omitting publisher rows and marketing descriptions. Applications with no effective required access open without
+launch consent. First-use consent uses the same sheet across Explore formats,
+identifies the current account with the shared header avatar when account-bound.
+Access confirmation fixes one horizontal action row below the scrolling content,
+with Cancel at the start and Allow at the end. Optional
 access is omitted from app details and launch consent sheets; it stays off until
 enabled in permission management.
 Details have the same layout regardless of format or installation state, without maintenance
@@ -955,10 +964,21 @@ Webpage new-window links, external-app links, downloads and device permissions
 ask before proceeding and identify the current site and target/resource. Downloads
 use a system save destination picker. Website app menus include Open in browser,
 which hands the current URL to the default browser. Native webpage dialogs keep
-the originating site visible. Text and image copying do not show host confirmation;
+the originating site visible. Permission reviews name each concrete requested
+resource, preserving unknown resource names rather than hiding them behind
+generic access wording. Targets and filenames stay separate from permission names. Text and image copying do not show host confirmation;
 clipboard reads require it. Permission queries describe these same decisions.
 
-Signing confirmations lead with the action, its consequences and readable content.
+All approval sheets lead with the operation and a compact requester identity.
+Signing reviews emphasize the event's readable type, kind and content before
+secondary consequences; relevant event, account and authentication targets stay
+visible before the JSON disclosure. Profile and application-data previews expose
+bounded readable fields. Approval bodies use regular body text for identities,
+values and explanations; caption text is reserved for labels and technical
+metadata. Combine event type and kind on one muted metadata line instead of
+adding nested headings. Disclosure and duration controls use regular text;
+header and decision-button emphasis remains shared chrome. Never show a
+pending-request count.
 Keep the requesting app icon and name in a compact body row with balanced
 space between the header controls and the following content. Show the signing
 account only as a circular avatar in the trailing title-bar slot, with an
@@ -975,7 +995,8 @@ Allow/Reject controls; remembered choices apply to uploads by this app to the
 reviewed storage services. Event JSON is not required for upload reviews.
 Public-key access, encryption and decryption reuse the signing approval layout
 and its Once, timed and Always decisions. Reviews identify the account and current
-host-verified source; crypto reviews also identify the algorithm and other party.
+host-verified source; crypto reviews also identify the algorithm and other party in a distinct summary.
+Public-key reviews show the exact public key the application will receive.
 These operations omit event-kind labels and event JSON. Their remembered rules
 remain separate by method, algorithm and peer and use the shared permission editor.
 Launching an application never grants these signer methods. Application configuration reuses the host's
@@ -990,14 +1011,26 @@ Every valid ordinary event-signing request, including HTTP authentication,
 profiles, follow lists and application settings, offers the same duration choices.
 Event kind alone never forces one-request authorization. Relay authentication
 and uploads also default to review with the same duration choices; remembered
-decisions retain the reviewed Relay or storage-service destinations. No event
+AUTH controls state that remembered decisions cover all relays used by this
+application; permission management shows that scope explicitly. Upload decisions
+retain the reviewed storage-service destinations. No event
 kind or app-data identifier is categorically blocked from user-approved publication.
 Signing approvals show the remaining seconds in the Reject button, based on
 a fresh review deadline when each request becomes visible. Adding queued requests
 never restarts the active countdown.
 Closing an approval sheet through its backdrop, X or system Back rejects only
-the current request. Rejecting the whole queue requires the explicit Reject all
-action; ordinary dismissal never blocks later requests.
+the current request. Approval sheets expose no bulk rejection or cooldown action;
+ordinary dismissal never blocks later requests.
+
+Encryption approval shows the exact plaintext with a bounded preview and an
+explicit full-text disclosure. Approval payloads remain transient and never
+become part of saved grants or permission history.
+
+Website capability prompts use the same duration selector as signing prompts.
+Routine clipboard writes and persistent-storage requests do not show a consent
+sheet. Sensitive capabilities expose one-visit, timed, and permanent decisions;
+screen capture and unknown capabilities require a fresh decision. Saved website
+capabilities can be changed or reset in application permissions.
 
 ## 12. Hard Rules
 

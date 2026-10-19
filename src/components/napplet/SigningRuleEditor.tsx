@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BottomSheet } from '@/components/common/BottomSheet';
@@ -18,6 +18,17 @@ export type EditableSigningRule = Omit<SigningRule, 'decision'> & { decision: Si
 
 export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed }: {
   rule: EditableSigningRule; visible: boolean;
+  onSave(change: SigningRuleChange): Promise<void>; onClose(): void; onClosed(): void;
+}) {
+  const { t } = useTranslation();
+  return <PermissionRuleEditor rule={rule} title={signingAction(rule.scope, t)} visible={visible} onSave={onSave} onClose={onClose} onClosed={onClosed}>
+    {rule.scope.kind !== undefined ? <AppText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: rule.scope.kind })}</AppText> : null}
+    {rule.scope.operation === 'relay-auth' || rule.scope.scopeKey !== undefined || rule.scope.recipient || rule.scope.relays.length ? <SigningScopeDetails scope={rule.scope} /> : null}
+  </PermissionRuleEditor>;
+}
+
+export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, onClosed, children }: {
+  rule: Pick<EditableSigningRule, 'decision' | 'duration' | 'expiresAt'>; title: string; visible: boolean; children?: ReactNode;
   onSave(change: SigningRuleChange): Promise<void>; onClose(): void; onClosed(): void;
 }) {
   const { t, i18n } = useTranslation();
@@ -50,7 +61,7 @@ export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed }: 
     finally { setBusy(false); }
   }
   function close() { if (anchor) setAnchor(undefined); else if (!busy) onClose(); }
-  return <BottomSheet visible={visible} title={signingAction(rule.scope, t)} onClose={close} onClosed={onClosed}
+  return <BottomSheet visible={visible} title={title} onClose={close} onClosed={onClosed}
     contentStyle={{ gap: spacing.lg }}
     fixedFooter={<AppButton label={t('common.save')} disabled={!changed} loading={busy} onPress={() => { void save(); }} />}
     modalOverlay={anchor ? <ContextMenuOverlay anchor={anchor} placement="above" align="end"
@@ -59,7 +70,7 @@ export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed }: 
         icon: <RadioIndicator selected={option.key === selected} />,
         onPress: () => { setPeriod(option.key); setAnchor(undefined); },
       }))} /> : undefined}>
-    {rule.scope.kind !== undefined ? <AppText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: rule.scope.kind })}</AppText> : null}
+    {children}
     <ListGroup>{(['ask', 'allow', 'deny'] as const).map((value) => <ListRow key={value}
       title={t(value === 'ask' ? 'napplets.permissions_ask' : value === 'allow' ? 'napplets.permissions_allow' : 'napplets.permissions_deny')}
       selectionMode="single" active={decision === value} disabled={busy}
@@ -70,7 +81,7 @@ export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed }: 
         trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />}
         onPress={() => durationRef.current?.measureInWindow((x, y, width, height) => setAnchor({ x: x + width, y: y + height }))} />
     </View>
-    {rule.scope.identifier !== undefined || rule.scope.recipient || rule.scope.relays.length ? <SigningScopeDetails scope={rule.scope} /> : null}
+
     {error ? <AppText tone="danger">{t('napplets.request_failed')}</AppText> : null}
   </BottomSheet>;
 }

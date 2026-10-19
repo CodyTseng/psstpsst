@@ -19,10 +19,9 @@ import type { ConfigSchema } from '@/services/napplet/config';
 import { getNappletAccountPubkey, useNapplets } from '@/stores/napplet.store';
 import { contentWidth, spacing, useThemeColors } from '@/theme';
 import { SigningApproval, SigningActions, SigningDurationMenu } from './SigningApproval';
-import { SigningIdentity, SigningRequester, SigningAccountAvatar, signingAction } from './SigningRequestDetails';
-import { NappletIdentity } from './NappletIdentity';
+import { SigningRequester, SigningAccountAvatar, signingRequestTitle } from './SigningRequestDetails';
 import { UploadApproval } from './UploadApproval';
-import { CapabilityApproval } from './CapabilityApproval';
+import { CapabilityActions, CapabilityApproval } from './CapabilityApproval';
 import type { RuntimePromptChoice } from '@/services/napplet/runtime';
 import { ApplicationChoiceRow } from './ApplicationChoiceRow';
 import { useOwnsApplicationTaskOverlays } from './ApplicationTaskContext';
@@ -48,6 +47,9 @@ function NappletOverlayContent() {
   const duration = choice?.id === prompt?.requestId ? choice?.value ?? 'allow' : 'allow';
   const showingPanel = prompt || configuration ? null : panel;
   const selectingApplication = prompt?.applicationSelection;
+  const accessPrompt = !!prompt && !prompt.signing && !prompt.upload && !selectingApplication
+    && !!(prompt.capabilities || prompt.application || prompt.browser || prompt.device || prompt.crypto);
+  const requestAccount = prompt?.signing?.accountPubkey ?? prompt?.accountPubkey;
   function panelAction(action: NappletPanelAction | 'settings') {
     if (!panel || !accountPubkey) return;
     if (action === 'settings') { nappletService.openPanel('settings'); return; }
@@ -69,8 +71,8 @@ function NappletOverlayContent() {
   return (
     <BottomSheet<RuntimePromptChoice>
       visible={!!prompt || !!configuration || !!panel}
-      title={selectingApplication ? t('napplets.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt') : prompt?.signing ? signingAction(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
-      headerAction={prompt?.signing ? <SigningAccountAvatar pubkey={prompt.signing.accountPubkey} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
+      title={selectingApplication ? t('napplets.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'napplets.permissions' : `napplets.browser_${prompt.browser.action}`) : accessPrompt ? t('napplets.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
+      headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
       contentStyle={selectingApplication ? undefined : { gap: spacing.lg, ...((prompt?.capabilities || prompt?.application && !prompt.signing && !prompt.upload) ? { paddingTop: spacing.sm } : {}) }}
       fixedSubheader={selectingApplication ? <AppText style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
@@ -90,11 +92,13 @@ function NappletOverlayContent() {
         nappletService.closeConfiguration();
         if (!prompt && !configuration) nappletService.closePanel();
       }}
-      modalOverlay={prompt?.signing && menuOpen && menu ? <SigningDurationMenu anchor={menu.anchor} duration={duration}
+      modalOverlay={prompt && menuOpen && menu ? <SigningDurationMenu anchor={menu.anchor} duration={duration}
         onChange={(value) => setChoice({ id: prompt.requestId, value })} onClose={() => setMenu(undefined)} /> : undefined}
-      fixedFooter={prompt?.signing ? <View style={{ gap: spacing.sm }}>
-        <SigningActions prompt={prompt} duration={duration} menuOpen={menuOpen}
+      fixedFooter={prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
+        {prompt?.signing ? <SigningActions prompt={prompt} duration={duration} menuOpen={menuOpen}
           onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} />
+          : prompt ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={menuOpen}
+            onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} /> : null}
       </View> : showingPanel?.page === 'about' ? <NappletPanelActions address={appShareAddress(showingPanel.release)} onAction={panelAction} /> : undefined}
     >
       {selectingApplication ? null : prompt ? <>
@@ -102,25 +106,10 @@ function NappletOverlayContent() {
           <AppText variant="subtitle">{prompt.requester.title}</AppText>
           <AppText variant="caption" tone="muted">{prompt.requester.origin}</AppText>
         </View> : null}
-        {prompt.signing || prompt.upload ? <SigningRequester app={prompt.app} application={prompt.application} /> : !prompt.capabilities && !prompt.application ? <>
-          <AppText>{t('napplets.permission_notice')}</AppText>
-          {prompt.app ? <NappletIdentity release={prompt.app} compact /> : null}
-          {prompt.accountPubkey ? <SigningIdentity pubkey={prompt.accountPubkey} label={t('napplets.signing_account')} /> : null}
-          {prompt.app ? <SigningIdentity pubkey={prompt.app.event.pubkey} label={t('napplets.publisher')} /> : null}
-        </> : null}
-        {prompt.queued ? <AppText variant="caption" tone="muted">{t('napplets.signing_queued', { count: prompt.queued })}</AppText> : null}
+        {prompt.app || prompt.application ? <SigningRequester app={prompt.app} application={prompt.application} /> : null}
         {prompt.upload ? <UploadApproval prompt={prompt} hideActions={!!prompt.signing} /> : prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
           onChange={(value) => setChoice({ id: prompt.requestId, value })} hideActions />
-          : prompt.capabilities || prompt.application ? <CapabilityApproval key={prompt.requestId} prompt={prompt} onPublisher={() => {
-            const pubkey = prompt.application?.publisher ?? prompt.app?.event.pubkey;
-            if (!pubkey) return;
-            const account = accountPubkey;
-            pending.current = () => { if (getNappletAccountPubkey() !== account) return;
-              if (platform.napplet.windows?.isHost) void platform.napplet.windows.action({ type: 'profile', pubkey });
-              else if (platform.napplet.tasks) void platform.napplet.tasks.showHost().then(() => router.push(`/profile/${pubkey}`)).catch(() => showToast(t('napplets.request_failed')));
-              else router.push(`/profile/${pubkey}`); };
-            nappletService.answer(prompt.requestId, false);
-          }} /> : <>
+          : accessPrompt ? <CapabilityApproval key={prompt.requestId} prompt={prompt} hideActions /> : <>
             <AppText variant="code">{prompt.detail}</AppText>
             {prompt.choices ? <>
               {prompt.choices.map((option) => <AppButton key={option.key} variant="secondary" label={option.title}
@@ -130,7 +119,6 @@ function NappletOverlayContent() {
               confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
               dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} />}
           </>}
-        {!prompt.signing && prompt.queued ? <AppButton variant="ghost" label={t('napplets.signing_reject_all')} onPress={() => nappletService.rejectAllRequests()} /> : null}
       </> : configuration ? <ConfigEditor key={configuration.requestId ?? 'napplet'} configuration={configuration} /> : panel && accountPubkey ?
         <NappletPanel key={`${accountPubkey}:${panel.release.key}:${panel.release.hash}:${panel.page}`}
           release={panel.release} page={panel.page} accountPubkey={accountPubkey} onAction={panelAction} /> : null}

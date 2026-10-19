@@ -253,6 +253,7 @@ export function boundedFilters(value: unknown): Filter[] {
 }
 
 export function resourceMime(bytes: Uint8Array): string {
+  if (bytes.length >= 6 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0 && (bytes[4] || bytes[5])) return 'image/x-icon';
   const head = new TextDecoder().decode(bytes.slice(0, 512));
   if (bytes[0] === 137 && head.slice(1, 4) === 'PNG') return 'image/png';
   if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return 'image/jpeg';

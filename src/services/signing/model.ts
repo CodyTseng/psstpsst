@@ -3,14 +3,14 @@ export type SignerAccessScope = {
   operation: SignerAccessOperation;
   kind?: never;
   relays: string[];
-  identifier?: never;
+  scopeKey?: never;
   recipient?: string;
 };
 export type SigningScope = SignerAccessScope | {
   operation: 'sign' | 'publish' | 'encrypt-publish' | 'relay-auth' | 'upload';
   kind: number;
   relays: string[];
-  identifier?: string;
+  scopeKey?: string;
   recipient?: string;
 };
 export function isSignerAccess(scope: Pick<SigningScope, 'operation'>): scope is SignerAccessScope {
@@ -46,21 +46,26 @@ export const isSigningRuleActive = (rule: SigningRule) => rule.duration !== 'tim
 export function signingScope(request: SigningScope): SigningScope {
   if (isSignerAccess(request)) return { operation: request.operation, relays: [],
     ...(request.operation !== 'get-public-key' ? { recipient: request.recipient } : {}) };
-  if (request.operation === 'relay-auth' || request.operation === 'upload') return {
+  const qualified = request.scopeKey || (request.kind !== undefined && request.kind >= 30000 && request.kind < 40000)
+    ? { scopeKey: request.scopeKey ?? '' } : {};
+  if (request.operation === 'relay-auth') return { operation: request.operation, kind: request.kind, relays: [], ...qualified };
+  if (request.operation === 'upload') return {
     operation: request.operation, kind: request.kind,
-    relays: [...new Set(request.relays.map(value => new URL(value).href))].sort(),
+    relays: [...new Set(request.relays.map(value => new URL(value).href))].sort(), ...qualified,
   };
   return { operation: 'publish', kind: request.kind, relays: [],
-    ...(request.kind >= 30000 && request.kind < 40000 ? { identifier: request.identifier ?? '' } : {}) };
+    ...qualified };
 }
 export function signingRuleKey(request: SigningScope): string {
   return JSON.stringify(signingScope(request));
 }
 export function canRememberSigning(request: SigningScope): boolean {
+  if (request.scopeKey !== undefined && (typeof request.scopeKey !== 'string' || request.scopeKey.length > 4096)) return false;
   if (isSignerAccess(request)) return request.operation === 'get-public-key' ||
     typeof request.recipient === 'string' && /^[a-f0-9]{64}$/.test(request.recipient);
   if (request.operation === 'relay-auth' || request.operation === 'upload') {
-    if (request.kind !== (request.operation === 'relay-auth' ? 22242 : 24242) || !request.relays.length || request.relays.length > 16) return false;
+    if (request.kind !== (request.operation === 'relay-auth' ? 22242 : 24242) ||
+      (request.operation === 'upload' && !request.relays.length) || request.relays.length > 16) return false;
     return request.relays.every(value => {
       try { const url = new URL(value); return !!url.hostname && !url.username && !url.password &&
         (request.operation === 'relay-auth' ? ['ws:', 'wss:'] : ['https:']).includes(url.protocol); }

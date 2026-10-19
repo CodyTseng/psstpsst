@@ -113,7 +113,7 @@ export function install(options: {
     const id = String(++serial);
     const raw = JSON.stringify({ id, nonce, method, args });
     if (raw.length > 1500000) return reject(new Error('quota-exceeded'));
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('request-timeout')); }, 460000);
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error('request-timeout')); }, 1020000);
     pending.set(id, { resolve, reject, timer });
     try { post(raw); }
     catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }

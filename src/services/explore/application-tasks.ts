@@ -88,7 +88,7 @@ export const applicationTasks = {
       const stored = await getData(scope, 'permissions', 'domains'); current();
       const saved: unknown = stored ? JSON.parse(stored) : [];
       let domains = Array.isArray(saved) ? saved.filter((domain): domain is string => typeof domain === 'string' && (required.includes(domain) || optional.includes(domain))) : [];
-      if (!stored || required.some(domain => !domains.includes(domain))) {
+      if (required.some(domain => !domains.includes(domain))) {
         const reviewed = session.reviewed?.length === required.length && required.every(domain => session.reviewed!.includes(domain));
         const answer = reviewed ? 'allow' : await confirm({ title: entry.title, detail: '', accountPubkey: account,
           ...(entry.release ? { app: entry.release, capabilities: { required, optional } } : { application: applicationPresentation(entry) }) });

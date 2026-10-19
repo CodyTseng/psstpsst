@@ -1,3 +1,4 @@
+import { clearBrowserPermissions } from '@/services/explore/browser-permission-store';
 import { rules as signingRules, activity as signingActivity } from '@/services/signing/testing/memory-repository';
 import { signingRuleKey } from '../signing-permissions';
 import { NappletRuntime } from '../runtime';
@@ -10,6 +11,7 @@ import { getData, setData, installations, saveDesktopOrder, clearRecent, type Ap
 import { parseManifest, type NappletInstallation } from '../protocol';
 import typeZoo from './fixtures/type-zoo-legacy.json';
 
+jest.mock('@/services/explore/browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(async () => {}), clearAccountBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
 jest.mock('@/services/signing/source', () => ({ signingSourceFromLegacyKey: (key: string) => `${key}.example` }));
 jest.mock('@/db/client', () => ({ db: {} }));
@@ -347,6 +349,7 @@ it('revokes only the selected source rule and resets access independently from a
   stored.set(key(scope, 'storage', 'progress'), 'preserve');
   await expect(nappletService.revokeSigningRule(app, rules[0].key, 'accountB')).rejects.toThrow('session-closed');
   await nappletService.revoke(app, 'accountA');
+  expect(clearBrowserPermissions).toHaveBeenCalledWith(source);
   expect(stored.has(key(scope, 'permissions', 'domains'))).toBe(false);
   expect(signingRules.has(JSON.stringify(source))).toBe(false);
   expect(stored.get(key(scope, 'storage', 'progress'))).toBe('preserve');

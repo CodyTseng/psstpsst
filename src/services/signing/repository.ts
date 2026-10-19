@@ -11,13 +11,13 @@ function storageScope(scope: SigningScope) {
   const canonical = signingScope(scope);
   // Non-event operations have no event kind; the legacy NOT NULL column uses -1.
   return { operation: canonical.operation, kind: canonical.kind ?? -1,
-    dTag: canonical.identifier ?? '', recipient: isSignerAccess(canonical) ? canonical.recipient ?? '' : '',
+    scopeKey: canonical.scopeKey ?? '', recipient: isSignerAccess(canonical) ? canonical.recipient ?? '' : '',
     destinations: JSON.stringify(canonical.relays) };
 }
 const whereRule = (scope: SigningAccountScope, rule: SigningScope) => {
   const value = storageScope(rule);
   return and(whereSource(scope), eq(signingAuthorizations.operation, value.operation), eq(signingAuthorizations.kind, value.kind),
-    eq(signingAuthorizations.dTag, value.dTag), eq(signingAuthorizations.recipient, value.recipient), eq(signingAuthorizations.destinations, value.destinations));
+    eq(signingAuthorizations.scopeKey, value.scopeKey), eq(signingAuthorizations.recipient, value.recipient), value.operation === 'relay-auth' ? undefined : eq(signingAuthorizations.destinations, value.destinations));
 };
 
 export async function readSigningSnapshot(scope: SigningAccountScope): Promise<SigningSnapshot> {
@@ -37,9 +37,10 @@ export async function readSigningSnapshot(scope: SigningAccountScope): Promise<S
         if (!['publish', 'relay-auth', 'upload'].includes(operation) || !Number.isInteger(row.kind) || row.kind < 0 || row.kind > 65535) return [];
         let destinations: unknown;
         try { destinations = JSON.parse(row.destinations); } catch { return []; }
-        if (!Array.isArray(destinations) || destinations.some(value => typeof value !== 'string')) return [];
+        if (!Array.isArray(destinations) || destinations.some(value => typeof value !== 'string') ||
+          (operation === 'relay-auth' && destinations.length)) return [];
         const scope: SigningScope = { operation: operation as 'publish' | 'relay-auth' | 'upload', kind: row.kind, relays: destinations,
-          ...(row.kind >= 30000 && row.kind < 40000 ? { identifier: row.dTag } : {}) };
+          ...(row.scopeKey || (row.kind >= 30000 && row.kind < 40000) ? { scopeKey: row.scopeKey } : {}) };
         if (!canRememberSigning(scope)) return [];
         canonical = signingScope(scope);
       }
@@ -73,7 +74,7 @@ export async function saveSigningRule(scope: SigningAccountScope, rule: SigningR
     const now = Date.now();
     await tx.insert(signingAuthorizations).values({ ...scope, ...value, decision: rule.decision,
       expiresAt: rule.duration === 'timed' ? rule.expiresAt! : null, createdAt: rule.createdAt, updatedAt: now })
-      .onConflictDoUpdate({ target: [signingAuthorizations.accountPubkey, signingAuthorizations.sourceId, signingAuthorizations.operation, signingAuthorizations.kind, signingAuthorizations.dTag, signingAuthorizations.recipient, signingAuthorizations.destinations],
+      .onConflictDoUpdate({ target: [signingAuthorizations.accountPubkey, signingAuthorizations.sourceId, signingAuthorizations.operation, signingAuthorizations.kind, signingAuthorizations.scopeKey, signingAuthorizations.recipient, signingAuthorizations.destinations],
         set: { decision: rule.decision, expiresAt: rule.duration === 'timed' ? rule.expiresAt! : null, updatedAt: now } });
     guard?.();
   });

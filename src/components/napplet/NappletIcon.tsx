@@ -1,24 +1,28 @@
 import { memo, useEffect, useState, type Ref } from 'react';
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
+import { Image } from 'expo-image';
+import { Earth } from '@solar-icons/react-native/category/astronomy/Linear/Earth';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
-import { loadIcon } from '@/services/napplet/artifacts';
-import type { NappletRelease } from '@/services/napplet/protocol';
+import { applicationIconKey, loadApplicationIcon, websiteIconOrigin, type ApplicationIconSource } from '@/services/explore/icons';
 import { radius, spacing, useThemeColors } from '@/theme';
 
 export const NAPPLET_ICON_SIZE = spacing['3xl'] + spacing.lg;
-export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef }: { release: Pick<NappletRelease, 'servers' | 'icon'>; size?: number; iconRef?: Ref<View> }) {
+export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef }: { release: ApplicationIconSource; size?: number; iconRef?: Ref<View> }) {
   const c = useThemeColors();
-  const [uri, setUri] = useState<string>();
+  const origin = websiteIconOrigin(release);
+  const iconKey = applicationIconKey(release);
+  const [loaded, setLoaded] = useState<{ key: string; uri?: string }>();
+  const uri = loaded?.key === iconKey ? loaded.uri : undefined;
   useEffect(() => {
     let active = true;
-    setUri(undefined);
-    void loadIcon(release).then((value) => {
-      if (active) setUri(value);
+    void loadApplicationIcon(release).then((value) => {
+      if (active) setLoaded(previous => previous?.key === iconKey && previous.uri === value
+        ? previous : { key: iconKey, uri: value });
     });
     return () => {
       active = false;
     };
-  }, [release]);
+  }, [release, iconKey]);
   return (
     <View ref={iconRef} testID="napplet-icon"
       style={{
@@ -34,11 +38,12 @@ export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_I
       {uri ? (
         <Image
           source={{ uri }}
-          onError={() => setUri(undefined)}
+          contentFit={origin || release.files ? 'contain' : 'cover'}
+          onError={() => setLoaded({ key: iconKey })}
           style={{ width: '100%', height: '100%' }}
         />
       ) : (
-        <Widget size={spacing.xl} color={c.textMuted} />
+        origin ? <Earth size={spacing.xl} color={c.textMuted} /> : <Widget size={spacing.xl} color={c.textMuted} />
       )}
     </View>
   );

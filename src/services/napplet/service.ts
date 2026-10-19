@@ -1,3 +1,4 @@
+import { clearBrowserPermissions, clearAccountBrowserPermissions } from '@/services/explore/browser-permission-store';
 import { clearAccountSigningPermissions, clearSigningPermissions, deleteSigningRule, saveSigningRule } from '@/services/signing/repository';
 import { desktopApps, moveDesktopApp } from './desktop-order';
 import { registerNappletLifecycle, notifyNappletTheme, invalidateNappletSource } from './lifecycle';
@@ -556,6 +557,7 @@ export const nappletService = {
     await setData(scope, 'permissions', 'domains', null);
     check(account, epoch);
     await clearSigningPermissions(appSigningScope(scope));
+    await clearBrowserPermissions(appSigningScope(scope));
     check(account, epoch);
     permissionsChanged();
   },
@@ -585,6 +587,7 @@ export const nappletService = {
   async removeAccount(account: string) {
     if (nappletStore.getState().accountPubkey === account) this.deactivate();
     await clearAccountSigningPermissions(account);
+    await clearAccountBrowserPermissions(account);
     await db.delete(nappletDataLegacy).where(eq(nappletDataLegacy.accountPubkey, account));
     await db.delete(signingActivity).where(eq(signingActivity.accountPubkey, account));
     await db.delete(nappletData).where(eq(nappletData.accountPubkey, account));

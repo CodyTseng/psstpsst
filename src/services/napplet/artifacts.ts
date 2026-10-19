@@ -108,14 +108,15 @@ export function loadIcon(release: Pick<NappletRelease, 'icon' | 'servers'>): Pro
 }
 
 /** Immutable site assets share the existing verified artifact cache across accounts. */
-export async function loadSiteBlob(release: Pick<NappletRelease, 'servers'>, hash: string, signal?: AbortSignal): Promise<Uint8Array> {
+export async function loadSiteBlob(release: Pick<NappletRelease, 'servers'>, hash: string, signal?: AbortSignal, maxBytes = MAX_ARTIFACT_BYTES): Promise<Uint8Array> {
   const path=(await artifactPath(hash)).replace(/\.html$/,'.blob');
-  if((await platform.fileSystem.stat(path)).exists) {
+  const stat = await platform.fileSystem.stat(path);
+  if(stat.exists && (stat.size == null || stat.size <= maxBytes)) {
     const bytes=await platform.fileSystem.readBytes(path);
     await new Promise<void>(resolve=>setTimeout(resolve,0));
     assertNotAborted(signal);
-    if(bytes.length<=MAX_ARTIFACT_BYTES && await platform.deviceCrypto.sha256Hex(bytes)===hash) return bytes;
+    if(bytes.length<=maxBytes && await platform.deviceCrypto.sha256Hex(bytes)===hash) return bytes;
   }
-  const bytes=await fetchBlob(release,hash,MAX_ARTIFACT_BYTES,signal);
+  const bytes=await fetchBlob(release,hash,maxBytes,signal);
   assertNotAborted(signal);await platform.fileSystem.writeBytes(path,bytes);return bytes;
 }

@@ -39,6 +39,9 @@ const { nappletStore, nappletService } = require('../../src/services/napplet/ser
 const { useThemeStore } = require('../../src/stores/theme.store') as typeof import('../../src/stores/theme.store');
 require('../../src/i18n');
 const params = new URLSearchParams(location.search);
+const browserPermissionRepository = require('../../src/services/explore/browser-permission-store') as typeof import('../../src/services/explore/browser-permission-store');
+browserPermissionRepository.readBrowserPermissions = async () => [];
+
 useThemeStore.setState({ preference: params.get('theme') === 'dark' ? 'dark' : 'light' });
 const auth = params.get('scenario') === 'auth';
 const raw = params.get('scenario') === 'raw';
@@ -46,13 +49,13 @@ const scroll = params.get('scenario') === 'scroll';
 nappletService.answer = (id, value) => { document.title = JSON.stringify({ id, value }); };
 nappletStore.setState({
   prompt: {
-    title: 'Arcade', requestId: 'fixture', expiresAt: Date.now() + 25000, queued: 2, detail: '',
+    title: 'Arcade', requestId: 'fixture', expiresAt: Date.now() + 60000, queued: 2, detail: '',
     accountPubkey: 'a'.repeat(64),
     app: { title: 'Arcade', hash: 'c'.repeat(64), event: { pubkey: 'b'.repeat(64) } } as NappletRelease,
     signing: {
       operation: auth ? 'relay-auth' : 'publish', kind: auth ? 22242 : raw ? 30079 : 30078,
       accountPubkey: 'a'.repeat(64), createdAt: 100, relays: ['wss://relay.example/'],
-      identifier: auth ? undefined : 'game-progress',
+      scopeKey: auth ? undefined : 'game-progress',
       content: auth ? '' : JSON.stringify({ score: 1280, level: 4, lives: 3, ...(scroll ? { entries: Array.from({ length: 40 }, (_, index) => ({ index, value: `Entry ${index}` })) } : {}) }), tags: auth ? [] : [['d', 'game-progress']],
     },
   },
@@ -88,7 +91,7 @@ if (params.get('scenario') === 'application-consent') {
 }
 if (params.get('scenario') === 'application-choice') {
   nappletStore.setState({ prompt: {
-    title: 'Notifications', requestId: 'fixture', expiresAt: Date.now() + 25000, queued: 0, detail: '',
+    title: 'Notifications', requestId: 'fixture', expiresAt: Date.now() + 60000, queued: 0, detail: '',
     applicationSelection: { requester: 'Notifications', content: 'profile' },
     choices: ['Notifications', 'Suggested Follows', 'Profile Feed'].map((title, index) => ({
       key: `app:${index}`, title, application: { title, kind: 'napp' as const, servers: [], publisher: 'b'.repeat(64) },
@@ -149,7 +152,7 @@ if(['explore-detail','explore-permissions','explore-menu'].includes(params.get('
   RuntimeScreen=params.get('scenario')==='explore-menu'?require('../../src/app/(app)/explore-run').default:require('../../src/app/(app)/explore-details').default;
 }
 if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
-  const release: NappletRelease = { title: 'Composer', key: '35129:publisher:composer', hash: 'c'.repeat(64),
+  const release: NappletRelease = { title: 'Composer', key: `35129:${'b'.repeat(64)}:composer`, hash: 'c'.repeat(64),
     description: params.get('empty') ? '' : 'Compose and publish posts with your Nostr account.'.repeat(params.get('long') ? 30 : 1),
     required: ['identity', 'outbox', 'relay', 'resource', 'theme', 'inc', 'intent', 'link', 'storage'],
     optional: ['upload'], servers: [], intents: [],

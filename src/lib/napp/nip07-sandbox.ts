@@ -16,7 +16,7 @@ export function install() {
   const call = (type: string, event?: unknown) => new Promise((resolve, reject) => {
     if (pending.size >= 16) return reject(new Error('quota-exceeded'));
     const id = `${prefix}${++serial}`;
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('request-timeout')); }, 460000);
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error('request-timeout')); }, 1020000);
     pending.set(id, { type, resolve, reject, timer });
     parent.postMessage({ type, id, ...(event === undefined ? {} : { event }) }, '*');
   });

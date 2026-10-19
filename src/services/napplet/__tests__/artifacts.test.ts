@@ -91,3 +91,12 @@ test('verifies cached multi-file assets before reusing them',async()=>{
   await expect(loadSiteBlob(release,hash)).resolves.toBe(bytes);
   expect(fetchResource).not.toHaveBeenCalled();
 });
+
+
+test('bounds icon cache reads and downloads without reading oversized cached assets', async () => {
+  jest.mocked(platform.fileSystem.stat).mockResolvedValue({ exists: true, size: 1024 } as never);
+  fetchResource.mockResolvedValue(new Uint8Array(1024));
+  await expect(loadSiteBlob(release, hash, undefined, 100)).rejects.toThrow('napplets.download_failed');
+  expect(platform.fileSystem.readBytes).not.toHaveBeenCalled();
+  expect(fetchResource).toHaveBeenCalledWith(`https://first.example/${hash}`, 100, undefined);
+});

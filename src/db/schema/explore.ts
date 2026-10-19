@@ -14,3 +14,11 @@ export const exploreHistory = sqliteTable('explore_history', {
   accountPubkey: text('account_pubkey').notNull().references(() => accounts.pubkey, { onDelete: 'cascade' }),
   sourceId: text('source_id').notNull(), lastUsedAt: integer('last_used_at').notNull(),
 }, (t) => [primaryKey({ columns: [t.accountPubkey, t.sourceId] }), index('explore_history_order').on(t.accountPubkey, t.lastUsedAt)]);
+
+/** Browser capability decisions are independent of event-signing grants. */
+export const browserAuthorizations = sqliteTable('browser_authorizations', {
+  accountPubkey: text('account_pubkey').notNull().references(() => accounts.pubkey, { onDelete: 'cascade' }),
+  sourceId: text('source_id').notNull(), resource: text('resource').notNull(),
+  decision: text('decision', { enum: ['allow', 'deny'] }).notNull(),
+  expiresAt: integer('expires_at'), updatedAt: integer('updated_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.accountPubkey, t.sourceId, t.resource] })]);

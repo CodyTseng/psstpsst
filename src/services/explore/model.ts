@@ -33,23 +33,24 @@ export type ExploreEntry = {
   desktopPosition: number | null;
   lastUsedAt: number | null;
 };
-export type ApplicationInfo = Pick<ExploreEntry, 'title' | 'description' | 'servers' | 'icon' | 'required'> & {
+export type ApplicationInfo = Pick<ExploreEntry, 'title' | 'description' | 'servers' | 'icon' | 'required' | 'files' | 'manifest'> & {
   publisher?: string;
   origin?: string;
 };
-export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon'> & { publisher?: string; key?: string };
+export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon' | 'files' | 'manifest'> & { publisher?: string; key?: string };
 export function applicationListEntry(entry: ExploreEntry): ApplicationListEntry {
-  return { key: entry.key, title: entry.title, kind: entry.kind, servers: entry.servers, icon: entry.icon, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
+  return { key: entry.key, title: entry.title, kind: entry.kind, servers: entry.servers, icon: entry.icon, files: entry.files, manifest: entry.manifest, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
 }
 export function applicationRequirements(kind: ExploreKind, declared: readonly string[]): string[] {
   return [...new Set([...(kind === 'napp' ? ['network'] : []), ...declared])];
 }
 export function applicationPresentation(entry: ExploreEntry | NappletRelease): ApplicationInfo {
   return { title:entry.title,description:entry.description,required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
+    files:'files' in entry?entry.files:undefined,manifest:'manifest' in entry?entry.manifest:undefined,
     publisher:'event' in entry?entry.event.pubkey:entry.manifest?.pubkey,
     origin:'kind' in entry&&entry.kind==='website'?new URL(entry.address).origin:undefined };
 }
-export type GridApp = Pick<ExploreEntry, 'key' | 'title' | 'servers' | 'icon' | 'desktopPosition' | 'lastUsedAt'>;
+export type GridApp = Pick<ExploreEntry, 'key' | 'title' | 'servers' | 'icon' | 'desktopPosition' | 'lastUsedAt' | 'files' | 'manifest'>;
 export function websiteAddress(value: string): string {
   const url = new URL(value.includes('://') ? value : `https://${value}`);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !url.hostname || value.length > 8192)
@@ -103,7 +104,7 @@ export function parseSite(input: Event): ExploreEntry {
   return { key, address: key, title: (tags('title')[0]?.[1] ?? tags('d')[0]?.[1] ?? '').slice(0, 200) || key,
     kind: event.kind === 35130 ? 'napp' : 'nsite', description: (tags('description')[0]?.[1] ?? event.content).slice(0, 16000),
     servers, manifest: event, files, required,
-    ...(iconFile && ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(iconFile.mime) ? { icon: { hash: iconFile.hash, mime: iconFile.mime } } : {}),
+    ...(iconFile && ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml', 'image/x-icon'].includes(iconFile.mime) ? { icon: { hash: iconFile.hash, mime: iconFile.mime } } : {}),
     desktopPosition: null, lastUsedAt: null };
 }
 export function signedAddress(value: string) {

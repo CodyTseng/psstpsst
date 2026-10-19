@@ -24,9 +24,9 @@ it('uses the displayed review deadline and corrects elapsed time after suspensio
 });
 
 it('starts from the next request deadline and clears the previous timer', () => {
-  act(() => { renderer = create(<SigningDecisions key="first" onApprove={jest.fn()} onReject={jest.fn()} expiresAt={125000} />); });
+  act(() => { renderer = create(<SigningDecisions key="first" onApprove={jest.fn()} onReject={jest.fn()} expiresAt={160000} />); });
   act(() => { jest.advanceTimersByTime(2000); });
-  expect(label().props.dismiss.label).toBe('Reject(23)');
+  expect(label().props.dismiss.label).toBe('Reject(58)');
   act(() => { renderer.update(<SigningDecisions key="next" onApprove={jest.fn()} onReject={jest.fn()} expiresAt={106000} />); });
   expect(label().props.dismiss.label).toBe('Reject(4)');
   expect(jest.getTimerCount()).toBe(1);

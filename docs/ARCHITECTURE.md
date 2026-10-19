@@ -728,7 +728,9 @@ independent of launch recency. Desktop edits commit atomically and never change
 app data or grants. The recent preview shows one row; full recent history derives from the bounded
 installation library.
 Signing authorization belongs to the shared signing service, independently of app
-storage. Event rules bind an account, a host-verified source, event kind and d tag.
+storage. Event rules bind an account, a host-verified source, operation, event kind and
+an optional `scope_key` qualifier. Addressable events derive that qualifier from
+the actual d tag; other operations may use their own trusted scope identifier.
 Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
 service with separate method scopes; crypto scopes also bind the peer. Every
 call uses the current verified source. Launch access never bypasses signer
@@ -737,7 +739,10 @@ Sources are canonical naddr IDs or host-verified HTTP(S) website origins (scheme
 host and effective port), without a source type or code version; immutable legacy listings use canonical event IDs. Durable rules and a
 bounded metadata-only activity journal have separate tables. Session grants stay
 in memory. Relay AUTH and public-file uploads use explicit signer permissions
-with Once, timed and Always decisions, scoped to the reviewed destinations.
+with Once, timed and Always decisions. Relay AUTH grants cover all relays for
+that account/source and leave `scope_key` empty; upload grants retain reviewed
+storage destinations. Legacy relay-specific AUTH decisions merge to the newest
+active decision per account/source, with denial winning timestamp ties.
 File metadata accompanies upload review, and its authorization covers the
 host-built storage authentication event. Upload bytes, temporary files and
 status belong to one execution session; stopping it cancels uploads and cleans
@@ -779,3 +784,13 @@ signer, never the messaging key.
 Napp launch access includes ordinary web networking, independently of whether
 the signed manifest explicitly names it. This effective requirement participates
 in the same visible consent and persisted-grant checks as declared access.
+
+Browser capability decisions live separately from signing grants in
+`browser_authorizations`, keyed by account, verified source, and individual
+resource. Website sources use the current document origin; signed applications
+use their canonical address. One-time access lasts for the current document;
+timed and permanent allow/deny decisions persist. Platform permission-check
+leases never outlive the saved expiry, navigation, or a permission-change
+invalidation. Reset clears both capability and signing decisions. Persistence
+and ordinary clipboard writes need no consent sheet; capture selectors and
+unknown resources never create reusable grants.

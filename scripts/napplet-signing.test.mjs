@@ -640,7 +640,7 @@ test(
         };
         sample();
       });
-      await page.clock.fastForward(25000);
+      await page.clock.fastForward(60000);
       await page.waitForFunction(() => window.__sheetExitFrames.some((frame) => frame.gone));
       const exitFrames = await page.evaluate(() => window.__sheetExitFrames.filter((frame) => !frame.gone));
       assert(exitFrames.some((frame) => frame.top > exitFrames[0].top + 10 && frame.top < 840), 'timeout dismissal visibly slides downward');
