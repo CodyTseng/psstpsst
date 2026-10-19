@@ -5,10 +5,13 @@ const manifest = (kind = 35130, extra: string[][] = []) => finalizeEvent({ kind,
 it('classifies by signed kind and accepts several static files', () => {
   const app = parseSite(manifest());
   expect(app.kind).toBe('napp');
+  expect(app.required).toContain('network');
+  expect(app.manifest!.tags).not.toContainEqual(['requires', 'network']);
   expect(app.files).toHaveLength(2);
   expect(app.files![1].mime).toBe('text/javascript');
   expect(signedAddress(app.key)?.source).toBe(app.key);
   expect(parseSite(manifest(35128, [['requires', 'identity']])).kind).toBe('nsite');
+  expect(parseSite(manifest(35128, [['requires', 'identity']])).required).toEqual(['identity']);
 });
 it.each(['/../secret', '//other/path', '/a/./b', '/a%2fb', '/path?query', '/a\\b'])('rejects ambiguous or escaping paths %s', path => expect(() => sitePath(path)).toThrow());
 it('rejects modified signatures, duplicate paths and invalid aggregates', () => {

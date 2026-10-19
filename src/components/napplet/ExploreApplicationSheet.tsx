@@ -1,8 +1,11 @@
 import { platform } from '@/platform';
 import { useRef } from 'react';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { BottomSheet } from '@/components/common/BottomSheet';
+import { AppButton } from '@/components/common/AppButton';
+import { showToast } from '@/stores/toast.store';
 import { NappletPanelActions } from './NappletPanel';
 import { SigningAccountAvatar } from './SigningRequestDetails';
 import { exploreService } from '@/services/explore/service';
@@ -29,13 +32,17 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
     headerAction={page==='settings'?<SigningAccountAvatar pubkey={account}/>:undefined}
     scrollResetKey={page??'closed'} maxWidth={contentWidth.focused}
     contentStyle={{gap:spacing.lg}}
-    fixedFooter={page==='about'?<NappletPanelActions onAction={action=>{
+    fixedFooter={page==='about'?<NappletPanelActions address={entry.kind === 'website' ? entry.address : `nostr:${entry.address}`} onAction={action=>{
       if(action==='settings')onPageChange('settings');
       else if(action==='share')schedule(()=>share(entry));
       else schedule(()=>exploreService.reload(runId));
     }}/>:undefined}>
     <ApplicationPanel application={applicationPresentation(entry)} page={page??'about'}
-      settings={<ApplicationSettings access={entry.required.length?<ApplicationAccessControls required={entry.required} selected={entry.required}/>:undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}/>}
+      settings={<ApplicationSettings access={entry.required.length ? <View style={{ gap: spacing.lg }}>
+        <ApplicationAccessControls required={entry.required} selected={entry.required}/>
+        {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('napplets.settings')}
+          onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'))); })}/> : null}
+      </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}/>}
       onPublisher={()=>{if(entry.manifest)schedule(()=>{if(platform.napplet.windows?.isHost)void platform.napplet.windows.action({type:'profile',pubkey:entry.manifest!.pubkey});else router.push(`/profile/${entry.manifest!.pubkey}`);});}}/>
   </BottomSheet>;
 }

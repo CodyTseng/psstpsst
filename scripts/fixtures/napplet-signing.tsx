@@ -86,6 +86,15 @@ if (params.get('scenario') === 'application-consent') {
     requester:website?{title:'example.com',origin:'https://example.com'}:undefined,
   }});
 }
+if (params.get('scenario') === 'application-choice') {
+  nappletStore.setState({ prompt: {
+    title: 'Notifications', requestId: 'fixture', expiresAt: Date.now() + 25000, queued: 0, detail: '',
+    applicationSelection: { requester: 'Notifications', content: 'profile' },
+    choices: ['Notifications', 'Suggested Follows', 'Profile Feed'].map((title, index) => ({
+      key: `app:${index}`, title, application: { title, kind: 'napp' as const, servers: [], publisher: 'b'.repeat(64) },
+    })),
+  } });
+}
 const standalone = params.get('scenario') === 'window';
 const menu = params.get('scenario') === 'menu' || standalone;
 let RuntimeScreen: React.ComponentType | undefined;

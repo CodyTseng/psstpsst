@@ -35,19 +35,18 @@ it.each([
 
 it('preserves events from a hinted relay while other relays end their initial read', async () => {
   const network = new NappletNetwork('account');
-  let subscription!: ManagedSubscribeOptions;
-  jest.spyOn(network.pool, 'subscribe').mockImplementation((options) => { subscription = options; return () => {}; });
+  const subscriptions = new Map<string, ManagedSubscribeOptions>();
+  jest.spyOn(network.pool, 'subscribe').mockImplementation(options => { subscriptions.set(options.relays[0], options); return () => {}; });
   const event = { id: 'b'.repeat(64), pubkey: author, kind: 35129, created_at: 100, content: 'App', tags: [['d', 'App/应用']], sig: 'c'.repeat(128) } as Event;
   try {
     const pending = network.query([relay, 'wss://market.example/'], [{ authors: [author], kinds: [35129], '#d': ['App/应用'], limit: 1 }]);
-    subscription.onEose?.();
-    subscription.onEvent({ ...event, tags: [['d', 'app/应用']] }, relay);
-    subscription.onEvent(event, relay);
-    subscription.onEnd?.([
-      { url: relay, status: 'eose', received: 1 }, { url: 'wss://market.example/', status: 'eose', received: 0 },
-    ]);
+    const publisher = subscriptions.get(relay)!;
+    publisher.onEvent({ ...event, id: 'd'.repeat(64), tags: [['d', 'app/应用']] }, relay);
+    publisher.onEvent(event, relay);
+    publisher.onEnd?.([{ url: relay, status: 'eose', received: 1 }]);
+    subscriptions.get('wss://market.example/')!.onEnd?.([{ url: 'wss://market.example/', status: 'eose', received: 0 }]);
     await expect(pending).resolves.toMatchObject({ events: [event], incomplete: false });
-    expect(subscription.filters).toEqual([{ authors: [author], kinds: [35129], '#d': ['App/应用'], limit: 1 }]);
+    expect(publisher.filters).toEqual([{ authors: [author], kinds: [35129], '#d': ['App/应用'], limit: 1 }]);
   } finally { network.destroy(); }
 });
 
@@ -65,5 +64,19 @@ it('discovers NIP-65 on metadata relays and returns only safe write or unmarked 
     expect(query.mock.calls[0][1]).toEqual([{ authors: [author], kinds: [10002], limit: 1 }]);
     await network.publisherRelays(author);
     expect(query).toHaveBeenCalledTimes(1);
+  } finally { network.destroy(); }
+});
+
+it('coalesces publisher relay-list lookups before resolving author routes', async () => {
+  const network = new NappletNetwork('account'), other = 'b'.repeat(64);
+  const events = [author, other].map((pubkey, index) => ({ id: String(index + 1).repeat(64), pubkey, kind: 10002, created_at: 100,
+    content: '', sig: 'c'.repeat(128), tags: [['r', `wss://author-${index}.example/`]] }) as Event);
+  const query = jest.spyOn(network, 'query').mockResolvedValue({ events, incomplete: false });
+  try {
+    await expect(Promise.all([network.publisherRelays(author), network.publisherRelays(other)])).resolves.toEqual([
+      ['wss://author-0.example/'], ['wss://author-1.example/'],
+    ]);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][1]).toEqual([{ kinds: [10002], authors: [author, other], limit: 2 }]);
   } finally { network.destroy(); }
 });

@@ -14,7 +14,13 @@ export function CapabilityApproval({ prompt, onPublisher }: { prompt: QueuedProm
     {prompt.application ? <ApplicationInfo release={{...prompt.application,origin:prompt.application.origin??prompt.requester?.origin}} onPublisher={onPublisher} />
       : prompt.app ? <NappletInfo release={prompt.app} onPublisher={onPublisher} /> : null}
     {prompt.accountPubkey ? <SigningIdentity pubkey={prompt.accountPubkey} label={t('napplets.signing_account')} /> : null}
-    <AppText variant="caption" tone="muted">{t('napplets.capabilities_signing_notice')}</AppText>
+    {prompt.device ? <>
+      <AppText>{t(prompt.device.operation === 'save-file' ? 'napplets.save_file_notice' : 'napplets.copy_text_notice')}</AppText>
+      <AppText variant="code">{prompt.detail}</AppText>
+    </> : prompt.crypto ? <>
+      <AppText>{t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt_notice' : 'napplets.crypto_decrypt_notice')}</AppText>
+      <SigningIdentity pubkey={prompt.crypto.peer} label={t('napplets.crypto_peer')} />
+    </> : <AppText variant="caption" tone="muted">{t('napplets.capabilities_signing_notice')}</AppText>}
     <ActionRow layout="horizontal"
       confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, prompt.capabilities ? 'domains:[]' : 'allow') }}
       dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} />

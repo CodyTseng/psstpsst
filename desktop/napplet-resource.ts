@@ -3,9 +3,10 @@ import { isIP } from 'node:net';
 import { isPublicAddress, resolvePublicAddresses } from './napplet-public-dns';
 
 /** Redirects share one deadline; every hop validates its URL, DNS and TLS independently. */
-export function fetchNappletResource(value: string, maxBytes: number, signal?: AbortSignal): Promise<Uint8Array> {
+export function fetchNappletResource(value: string, maxBytes: number, signal?: AbortSignal, accept = '*/*'): Promise<Uint8Array> {
+  if (!['*/*', 'application/json', 'application/nostr+json'].includes(accept)) throw new Error('invalid-accept');
   const deadline = AbortSignal.timeout(20000);
-  return fetchPublicResource(value, maxBytes, signal ? AbortSignal.any([signal, deadline]) : deadline, 0);
+  return fetchPublicResource(value, maxBytes, signal ? AbortSignal.any([signal, deadline]) : deadline, 0, accept);
 }
 
 /** DNS validation is part of the actual TLS connection, not a check-then-fetch preflight. */
@@ -14,6 +15,7 @@ function fetchPublicResource(
   maxBytes: number,
   signal: AbortSignal,
   redirects: number,
+  accept: string,
 ): Promise<Uint8Array> {
   const url = new URL(value);
   const host = url.hostname.replace(/^\[|\]$/g, '');
@@ -36,7 +38,7 @@ function fetchPublicResource(
         method: 'GET',
         agent: false,
         signal,
-        headers: { Accept: '*/*', 'Accept-Encoding': 'identity' },
+        headers: { Accept: accept, 'Accept-Encoding': 'identity' },
         lookup: (hostname, options, callback) => {
           void resolvePublicAddresses(hostname, signal).then((resolved) => {
             const addresses = options.family ? resolved.filter((entry) => entry.family === options.family) : resolved;
@@ -55,7 +57,7 @@ function fetchPublicResource(
             return;
           }
           try {
-            resolve(fetchPublicResource(new URL(location, url).href, maxBytes, signal, redirects + 1));
+            resolve(fetchPublicResource(new URL(location, url).href, maxBytes, signal, redirects + 1, accept));
           } catch (error) { reject(error); }
           return;
         }

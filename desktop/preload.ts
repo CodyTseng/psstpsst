@@ -77,7 +77,18 @@ ipcRenderer.on(
 
 const bridge: ElectronBridge = {
   napplet: {
+    supportsExploreBootstrap: true,
     windows: {
+      messaging: {
+        connect: endpoint => invoke(IPC.applicationMessagingConnect, endpoint),
+        disconnect: instance => invoke(IPC.applicationMessagingDisconnect, instance),
+        request: (instance, message) => invoke(IPC.applicationMessagingRequest, instance, message),
+        onMessage: listener => {
+          const handler = (_event: unknown, instance: string, message: Parameters<typeof listener>[1]) => listener(instance, message);
+          ipcRenderer.on(IPC.applicationMessagingMessage, handler);
+          return () => { ipcRenderer.removeListener(IPC.applicationMessagingMessage, handler); };
+        },
+      },
       isHost: process.argv.includes('--psstpsst-application-window=1'),
       open: launch => invoke(IPC.applicationWindowOpen, launch),
       launch: () => invoke(IPC.applicationWindowLaunch),
@@ -103,7 +114,7 @@ const bridge: ElectronBridge = {
     open: (html) => invoke(IPC.nappletOpen, html), close: (id) => invoke(IPC.nappletClose, id),
     send: (id, message) => invoke(IPC.nappletSend, id, message),
     setBounds: (id, bounds, visible, interactive) => invoke(IPC.nappletBounds, id, bounds, visible, interactive),
-    fetch: (id, url, max) => invoke(IPC.nappletFetch, id, url, max), cancel: (id) => invoke(IPC.nappletCancel, id),
+    fetch: (id, url, max, accept) => invoke(IPC.nappletFetch, id, url, max, accept), cancel: (id) => invoke(IPC.nappletCancel, id),
     onMessage: (listener) => {
       const handler = (_event: unknown, id: string, message: string) => listener(id, message);
       ipcRenderer.on(IPC.nappletMessage, handler);

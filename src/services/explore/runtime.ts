@@ -6,21 +6,35 @@ import { SigningPermissions } from '@/services/signing/permissions';
 import { signingRevision } from '@/services/signing/changes';
 import { nip19, verifyEvent } from 'nostr-tools';
 import { signingTemplate } from '@/services/signing/event-template';
-import { eventWeight, parseAppAddress } from '@/services/napplet/protocol';
+import { eventWeight, randomId } from '@/services/napplet/protocol';
+import { publicEventAddress } from './event-address';
 import { encodeNappletBytes } from '@/platform/napplet-bytes';
 import { loadSiteBlob } from '@/services/napplet/artifacts';
-import { exploreBridge } from './bridge';
 import { applicationPresentation, websiteAddress } from './model';
 import type { ExploreEntry } from './model';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
 import { localRelay } from '@/services/local-relay';
 import { ExploreStreams } from './streams';
 import { getData, setData } from '@/services/napplet/repository';
+import { NappCapabilities } from './capabilities';
+import type { ConfigSchema } from '@/services/napplet/config';
+import { NappData } from './data';
+import { NappSync } from './sync';
+import { NappDevice } from './device';
+import { LIST_KINDS, SET_KINDS } from './lists';
+import { relayHealth } from './relay-health';
 export class ExploreRuntime {
   private lifetime = new AbortController();
   private documentLife = new AbortController();
   private network: NappletNetwork;
   private streams: ExploreStreams;
+  private capabilities?: NappCapabilities;
+  private readonly instance = randomId();
+  private capabilitiesClosed: Promise<void> = Promise.resolve();
+  private nonce = '';
+  private data?: NappData;
+  private sync?: NappSync;
+  private device?: NappDevice;
   private permissions?: SigningPermissions;
   private document = '';
   private origin = '';
@@ -34,6 +48,7 @@ export class ExploreRuntime {
   constructor(readonly account: string, readonly entry: ExploreEntry, private options: {
     accountAccessGranted?: boolean;
     presented?:()=>void;
+    failed?: () => void;
     theme?: () => {
       background: string;
       text: string;
@@ -43,12 +58,16 @@ export class ExploreRuntime {
     close: () => void;
     link: (url: string) => void;
     navigated?: (url: string) => void;
+    configure?: (schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal) => void;
+    applications?: () => Promise<ExploreEntry[]>;
+    application?: (sourceId: string) => Promise<ExploreEntry | undefined>;
+    launch?: (entry: ExploreEntry) => Promise<void>;
   }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network); }
   async start() {
     if (!platform.napplet.openPage)
       throw new Error('napplets.rebuild_required');
     const page: ExplorePage = { storageId: this.account, sourceId: `${this.account}:${this.entry.key}`, network: this.entry.kind !== 'napp' || this.entry.required.includes('network'),
-      script: exploreBridge(this.entry.kind === 'napp', this.options.theme?.()) };
+      script: '', bootstrap: { napp: this.entry.kind === 'napp', theme: this.options.theme?.(), domains: this.entry.required, instance: this.instance } };
     if (this.entry.kind === 'website')
       page.url = this.entry.address;
     else {
@@ -104,8 +123,13 @@ export class ExploreRuntime {
       catch {
         return;
       }
-      if (!['explore.navigation', 'explore.request'].includes(message.type) || typeof message.document !== 'string' || typeof message.origin !== 'string')
+      if (!['explore.navigation', 'explore.request', 'explore.error'].includes(message.type) || typeof message.document !== 'string' || typeof message.origin !== 'string')
         return;
+      if (message.type === 'explore.error') {
+        this.log('warn', 'navigation', { url: message.url, error: message.error });
+        this.options.failed?.();
+        return;
+      }
       if (this.document !== message.document || message.type === 'explore.request' && message.origin !== this.origin)
         this.enterDocument(message);
       if (message.type === 'explore.request' && message.origin === this.origin)
@@ -133,8 +157,11 @@ export class ExploreRuntime {
     return this.containerId;
   }
   private enterDocument(message: ExploreMessage) {
+    this.capabilitiesClosed = this.capabilities?.stop() ?? this.capabilitiesClosed; this.capabilities = undefined;
+    this.nonce = '';
     this.streams.clear();
     this.documentLife.abort();
+    this.data = undefined; this.sync = undefined; this.device = undefined;
     this.documentLife = new AbortController();
     this.pending.clear();
     this.document = message.document;
@@ -163,6 +190,8 @@ export class ExploreRuntime {
       if (typeof request.nonce !== 'string' || request.nonce.length > 64 || typeof request.id !== 'string' || request.id.length > 128 || !Array.isArray(request.args) || request.args.length > 4 || this.pending.has(request.id) || this.pending.size >= 16)
         throw new Error('invalid-request');
       id = request.id;nonce=request.nonce;
+      if (this.nonce && nonce !== this.nonce) throw new Error('invalid-document-token');
+      this.nonce = nonce!;
       method = typeof request.method === 'string' ? request.method.slice(0, 80) : 'invalid-request';
       this.pending.add(id!);
       current();
@@ -188,8 +217,11 @@ export class ExploreRuntime {
     console[level]('[explore]', this.entry.title, method, details);
   }
   private async reply(document: string, reply: unknown) {
-    if (this.containerId && document === this.document && !this.lifetime.signal.aborted)
-      await platform.napplet.send(this.containerId, JSON.stringify({ document, reply }));
+    if (this.containerId && document === this.document && !this.lifetime.signal.aborted) {
+      const raw = JSON.stringify({ document, reply });
+      if (raw.length > 2 * 1024 * 1024) throw new Error('reply-too-large');
+      await platform.napplet.send(this.containerId, raw);
+    }
   }
   private async dispatch(method: string, args: any[], current: () => void, signal: AbortSignal, nonce: string): Promise<unknown> {
     if (method === 'ready') {
@@ -203,6 +235,31 @@ export class ExploreRuntime {
       return true;
     }
     const napp = this.entry.kind === 'napp';
+    if (napp && /^(nip04|nip44)\.(encrypt|decrypt)$/.test(method)) {
+      const [algorithm, operation] = method.split('.') as ['nip04' | 'nip44', 'encrypt' | 'decrypt'];
+      const [peer, text] = args;
+      if (typeof peer !== 'string' || !/^[a-f0-9]{64}$/.test(peer) || typeof text !== 'string' || !text || text.length > 100000)
+        throw new Error('invalid-crypto-request');
+      const signer = await this.network.getSigner(); current();
+      const key = `${algorithm}${operation === 'encrypt' ? 'Encrypt' : 'Decrypt'}` as 'nip04Encrypt' | 'nip04Decrypt' | 'nip44Encrypt' | 'nip44Decrypt';
+      const run = signer[key];
+      if (!run) throw new Error('unsupported-encryption');
+      const scope = { accountPubkey: this.account, sourceId: this.entry.key };
+      const revision = signingRevision(scope);
+      const answer = await this.options.confirm({ title: this.entry.title, detail: '', application: applicationPresentation(this.entry), accountPubkey: this.account,
+        crypto: { operation, algorithm, peer } }, signal);
+      current();
+      if (answer !== 'allow') throw new Error('permission-denied');
+      // Give consent UI a paint before a local cryptographic fallback starts.
+      await new Promise<void>(resolve => setTimeout(resolve, 0)); current();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const result = await Promise.race([run.call(signer, peer, text), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('crypto-timeout')), 25000); })]);
+        current();
+        if (signingRevision(scope) !== revision) throw new Error('permission-revoked');
+        return result;
+      } finally { clearTimeout(timer); }
+    }
     if (method === 'getPublicKey') {
       const source = this.entry.kind === 'website' ? this.origin : this.entry.key;
       const scope = { accountPubkey: this.account, appKey: source };
@@ -241,9 +298,51 @@ export class ExploreRuntime {
     }
     if (!napp)
       throw new Error('unsupported-method');
-    if (method === 'storeSubscribe' || method === 'relaySubscribe') {
+    if (method === 'sync' || method === 'relayHealth' || method.startsWith('utils.')) {
+      if (method.startsWith('utils.saveFile.') || method === 'utils.copyText') {
+        this.device ??= new NappDevice(applicationPresentation(this.entry), this.account, signal, this.options.confirm);
+        return this.device.handle(method.slice(6), args);
+      }
+      const data = this.data ??= new NappData(this.account, this.network, signal);
+      if (method === 'sync') { this.sync ??= new NappSync(data); return this.sync.run(args[0], args[1], args[2] ?? {}); }
+      if (method === 'relayHealth') return relayHealth(data, args[0]);
+      const operation = method.slice(6);
+      if (Object.hasOwn(LIST_KINDS, operation)) return data.list(operation, args[0]);
+      if (Object.hasOwn(SET_KINDS, operation)) return data.sets(operation, args[0]);
+      if (['fetchFavoriteRelaysWithSets', 'fetchEmojisWithSets', 'fetchFavoriteFollowSetsWithSets'].includes(operation)) return data.withSets(operation, args[0]);
+      if (operation === 'loadNostrUser') return data.user(args[0]);
+      if (operation === 'loadRelayInfo') return data.relayInfo(args[0]);
+      if (operation === 'loadEvent') return data.loadEvent(args[0], args[1] ?? undefined, args[2] ?? undefined);
+      if (operation === 'loadEvents') return data.loadEvents(args[0]);
+      if (operation === 'searchUserLocal') return data.searchLocal(args[0]);
+      if (operation === 'searchUser') return data.searchRemote(args[0]);
+      if (operation === 'findAuthors') return data.findAuthors(args[0], args[1] ?? {});
+      if (operation === 'publish') {
+        const results = await this.dispatch('publish', args, current, signal, nonce) as Record<string, boolean>;
+        const relays = Object.fromEntries(Object.entries(results).map(([url, ok]) => [url, { ok, ...(ok ? {} : { error: 'publication-failed' }) }]));
+        const published = Object.values(results).filter(Boolean).length;
+        return { published, failed: Object.keys(results).length - published, relays };
+      }
+      throw new Error('unsupported-method');
+    }
+    if (['instance', 'registerAction', 'action', 'actionResult', 'nap'].includes(method)) {
+      const document = this.document;
+      this.capabilities ??= new NappCapabilities(this.account, this.entry, this.network, {
+        signal, confirm: this.options.confirm, beforeConnect: () => this.capabilitiesClosed,
+        send: message => this.reply(document, { ...(message.type?.startsWith('inc.') ? { type: 'nap', message } : message), nonce }),
+        configure: (schema, values, save, life) => {
+          if (!this.options.configure) throw new Error('settings-unavailable');
+          this.options.configure(schema, values, save, life);
+        },
+        applications: this.options.applications ?? (async () => []),
+        application: this.options.application,
+        launch: this.options.launch ?? (async () => { throw new Error('handler-unavailable'); }),
+      }, this.instance);
+      return this.capabilities.handle(method === 'instance' ? 'ready' : method, args);
+    }
+    if (method === 'storeSubscribe' || method === 'relaySubscribe' || method === 'outboxSubscribe') {
       const document=this.document;
-      this.streams.open(method,args,signal,
+      await this.streams.open(method,args,signal,
         message=>this.reply(document,{...message,nonce}),
         async input=>{
           const event=signingTemplate(input);
@@ -307,7 +406,7 @@ export class ExploreRuntime {
       return { pubkey, npub, event, metadata, shortName: name ?? `${npub.slice(0, 12)}…${npub.slice(-4)}` };
     }
     if (method === 'loadEvent') {
-      const address = parseAppAddress(String(args[0]));
+      const address = publicEventAddress(args[0]);
       const result = await this.network.query(address.relays.length ? address.relays : await this.network.routes([this.account], 'read'), address.filters, signal);
       current();
       return result.events[0] ?? null;
@@ -326,7 +425,18 @@ export class ExploreRuntime {
     if (this.document)
       void this.reply(this.document, { type: 'theme', value: this.options.theme?.() }).catch(() => { });
   }
+  async openConfiguration() {
+    assertNotAborted(this.documentLife.signal);
+    if (!this.document || !this.nonce) throw new Error('application-not-ready');
+    await this.dispatch('nap', [{ type: 'config.openSettings' }], () => assertNotAborted(this.documentLife.signal), this.documentLife.signal, this.nonce);
+  }
+  async goBack(): Promise<boolean> {
+    assertNotAborted(this.lifetime.signal);
+    if (!this.containerId) return false;
+    return platform.napplet.goBack(this.containerId);
+  }
   stop() {
+    void this.capabilities?.stop(); this.capabilities = undefined;
     this.streams.clear();
     this.lifetime.abort();
     this.documentLife.abort();

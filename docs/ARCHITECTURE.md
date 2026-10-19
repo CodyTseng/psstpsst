@@ -744,3 +744,14 @@ actual host window; closing or replacing one host never stops another. Persisted
 signing changes invalidate matching approval caches across hosts. Locking, switching
 accounts or removing their account closes these windows. Sharing and publisher
 navigation return to the main host. Session-only grants remain execution-local.
+
+Napp action handlers and INC endpoints belong to authenticated documents under
+one account. Electron brokers cross-window messages in its main process; mobile
+keeps a bounded stack of live calling containers behind the foreground handler.
+Only trusted hosts assign endpoint metadata. Teardown cancels action requests and
+closes communication channels. Configuration shares account/source persistence;
+cryptographic requests obtain separate one-request consent using the identity
+signer, never the messaging key.
+Napp launch access includes ordinary web networking, independently of whether
+the signed manifest explicitly names it. This effective requirement participates
+in the same visible consent and persisted-grant checks as declared access.

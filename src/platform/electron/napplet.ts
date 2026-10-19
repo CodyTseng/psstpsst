@@ -5,7 +5,7 @@ import { getElectronBridge } from './bridge';
 
 export const electronNappletAdapter: NappletPort = {
   get windows() { return getElectronBridge().napplet.windows; },
-  async fetchResource(url, maxBytes, signal) {
+  async fetchResource(url, maxBytes, signal, options) {
     const bridge = getElectronBridge().napplet;
     const id = crypto.randomUUID();
     const abort = () => {
@@ -14,7 +14,7 @@ export const electronNappletAdapter: NappletPort = {
     assertNotAborted(signal);
     signal?.addEventListener('abort', abort, { once: true });
     try {
-      const bytes = await decodeNappletBytes(await bridge.fetch(id, url, maxBytes), signal);
+      const bytes = await decodeNappletBytes(await bridge.fetch(id, url, maxBytes, options?.accept), signal);
       assertNotAborted(signal);
       return bytes;
     } finally {
@@ -25,6 +25,7 @@ export const electronNappletAdapter: NappletPort = {
   async openPage(page) {
     const bridge=getElectronBridge().napplet;
     if(typeof bridge.openPage!=='function') throw new Error('napplets.rebuild_required');
+    if (page.bootstrap && !bridge.supportsExploreBootstrap) throw new Error('napplets.rebuild_required');
     return bridge.openPage(page);
   },
   open: (html) => getElectronBridge().napplet.open(html),

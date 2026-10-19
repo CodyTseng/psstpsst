@@ -112,6 +112,14 @@ export class Nip46Signer implements Signer {
     );
   }
 
+  async nip04Encrypt(peerPubkey: string, plaintext: string): Promise<string> {
+    return this.request('nip04_encrypt', signer => signer.nip04Encrypt(peerPubkey, plaintext));
+  }
+
+  async nip04Decrypt(peerPubkey: string, ciphertext: string): Promise<string> {
+    return this.request('nip04_decrypt', signer => signer.nip04Decrypt(peerPubkey, ciphertext));
+  }
+
   async nip44Decrypt(peerPubkey: string, ciphertext: string): Promise<string> {
     return this.request('nip44_decrypt', (signer) =>
       signer.nip44Decrypt(peerPubkey, ciphertext),

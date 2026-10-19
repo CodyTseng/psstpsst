@@ -9,7 +9,7 @@ export const NAPPLET_FRAME_READY_MESSAGE = JSON.stringify({ type: NAPPLET_FRAME_
 /** Privileged transport only. No account credentials or application APIs cross this seam. */
 export interface NappletPort {
   windows?: ApplicationWindowsPort;
-  fetchResource(url: string, maxBytes: number, signal?: AbortSignal): Promise<Uint8Array>;
+  fetchResource(url: string, maxBytes: number, signal?: AbortSignal, options?: { accept: 'application/json' | 'application/nostr+json' }): Promise<Uint8Array>;
   clearPageData?(storageId: string): Promise<void>;
   openPage?(page: ExplorePage): Promise<string>;
   open(html: string): Promise<string>;

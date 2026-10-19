@@ -18,7 +18,6 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
    import { createServer } from 'node:http';
    import { writeFileSync } from 'node:fs';
    import { registerNappletHandlers } from ${JSON.stringify(path.resolve('desktop/napplet-service.ts'))};
-   import { exploreBridge } from ${JSON.stringify(path.resolve('src/services/explore/bridge.ts'))};
    import { IPC } from ${JSON.stringify(path.resolve('desktop/ipc-channels.ts'))};
    const wait=ms=>new Promise(r=>setTimeout(r,ms));
    app.setPath('userData',${JSON.stringify(path.join(dir,'profile'))});
@@ -30,7 +29,7 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
     await owner.loadURL('data:text/html,<title>Owner</title>');
     const invoke=(channel,...args)=>owner.webContents.executeJavaScript('testHost.invoke('+[channel,...args].map(x=>JSON.stringify(x)).join(',')+')');
     const events=()=>owner.webContents.executeJavaScript('testHost.events()');
-    const page={sourceId:'account:naddr',network:false,script:exploreBridge(false),files:[
+    const page={sourceId:'account:naddr',network:false,script:'',bootstrap:{napp:false,domains:[],instance:'fixture'},files:[
       {path:'/index.html',mime:'text/html',body:Buffer.from('<script src="/app.js"></script>').toString('base64')},
       {path:'/app.js',mime:'text/javascript',body:Buffer.from('window.loaded=true;window.result=nostr.getPublicKey();').toString('base64')} ]};
     const id=await invoke(IPC.exploreOpen,page);
@@ -46,7 +45,7 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
     assert.equal(await guest.executeJavaScript('window.result'),'key');
     assert.equal(await guest.executeJavaScript('typeof require'),'undefined');
     assert.equal(await guest.executeJavaScript('typeof window.__psstNapplet'),'undefined');
-    const streaming=await invoke(IPC.exploreOpen,{sourceId:'account:streams',network:false,script:exploreBridge(true),files:[
+    const streaming=await invoke(IPC.exploreOpen,{sourceId:'account:streams',network:false,script:'',bootstrap:{napp:true,domains:['config','inc'],instance:'fixture'},files:[
       {path:'/index.html',mime:'text/html',body:Buffer.from('<script>window.iterator=nostrdb.subscribe({kinds:[1]});window.nextEvent=iterator.next();</script>').toString('base64')}
     ]});
     guest=webContents.getAllWebContents().find(w=>w.getURL().includes('.explore.psstpsst.invalid'));assert(guest);
@@ -65,7 +64,7 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
       await wait(20);
     }
     assert((await events()).some(e=>e.id===streaming&&JSON.parse(e.raw).raw?.includes('streamClose')));
-    const website=await invoke(IPC.exploreOpen,{url:'http://127.0.0.1:'+port+'/',sourceId:'account:site',storageId:'A',network:true,script:exploreBridge(false)});
+    const website=await invoke(IPC.exploreOpen,{url:'http://127.0.0.1:'+port+'/',sourceId:'account:site',storageId:'A',network:true,script:'',bootstrap:{napp:false,domains:[],instance:'fixture'}});
     guest=webContents.getAllWebContents().find(w=>w.getURL().startsWith('http://127.0.0.1:'+port));assert(guest);
     let first;
     for(let i=0;i<100;i++){first=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===website&&e.message.raw?.includes('getPublicKey'));if(first)break;await wait(20);}
@@ -76,7 +75,7 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
     const frame=guest.mainFrame.frames[0];if(frame) assert.equal(await frame.executeJavaScript('typeof window.nostr'),'undefined');
     await guest.executeJavaScript('localStorage.setItem("account-secret","A")');
     const openWebsite=async account=>{
-      const id=await invoke(IPC.exploreOpen,{url:'http://127.0.0.1:'+port+'/',sourceId:'site',storageId:account,network:true,script:exploreBridge(false)});
+      const id=await invoke(IPC.exploreOpen,{url:'http://127.0.0.1:'+port+'/',sourceId:'site',storageId:account,network:true,script:'',bootstrap:{napp:false,domains:[],instance:'fixture'}});
       const view=webContents.getAllWebContents().find(w=>w.getURL().startsWith('http://127.0.0.1:'+port));
       return {id,view};
     };

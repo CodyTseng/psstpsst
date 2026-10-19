@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
+import Copy from 'lucide-react-native/icons/copy';
+import Check from 'lucide-react-native/icons/check';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { Share } from '@solar-icons/react-native/category/ui/Linear/Share';
 import { ShieldCheck } from '@solar-icons/react-native/category/security/Linear/ShieldCheck';
 import { useTranslation } from 'react-i18next';
@@ -30,10 +33,14 @@ export function NappletSettings({ release, accountPubkey }: { release: NappletRe
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
-export function NappletPanelActions({ onAction }: { onAction: (action: 'share' | 'settings' | 'reload') => void }) {
+export function NappletPanelActions({ address, onAction }: { address: string; onAction: (action: 'share' | 'settings' | 'reload') => void }) {
   const { t } = useTranslation();
   const c = useThemeColors();
+  const { copyText, copied } = useClipboard();
   const actions = [
+    { key: 'copy', label: t(copied ? 'common.copied' : 'napplets.copy_address'), icon: copied
+      ? <Check size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/>
+      : <Copy size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> },
     { key: 'share', label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> },
     { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
     { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
@@ -43,7 +50,7 @@ export function NappletPanelActions({ onAction }: { onAction: (action: 'share' |
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
       width={uiDensity.profileActionWidth + spacing.lg} size={uiDensity.profileActionSize + spacing.lg}
       singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={action.label}
-      onPress={() => onAction(action.key)} />)}
+      onPress={() => { if (action.key === 'copy') void copyText(address); else onAction(action.key); }} />)}
   </HorizontalFadeScrollView>;
 }
 

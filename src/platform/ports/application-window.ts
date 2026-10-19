@@ -1,4 +1,5 @@
 import type { Event } from 'nostr-tools';
+import type { ApplicationMessagingPort } from './application-messaging';
 
 export type ApplicationWindowLaunch = { accountPubkey: string; address: string; manifest?: Event; servers?: string[]; reviewedRequired?: string[] };
 export type ApplicationWindowAction =
@@ -9,6 +10,7 @@ export type ApplicationSigningChange = { accountPubkey: string; sourceId: string
 
 /** Trusted application hosts share persistence while keeping their runtime and overlays local. */
 export interface ApplicationWindowsPort {
+  readonly messaging?: ApplicationMessagingPort;
   readonly isHost: boolean;
   open(launch: ApplicationWindowLaunch): Promise<void>;
   launch(): Promise<ApplicationWindowLaunch | null>;

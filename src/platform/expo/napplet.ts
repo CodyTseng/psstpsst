@@ -3,12 +3,14 @@ import { assertNotAborted } from '@/platform/abort';
 import { decodeNappletBytes } from '../napplet-bytes';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort } from '../ports/napplet';
+import { exploreBridge } from '@/lib/napp/bridge';
 
 type NativeModule = {
   isAvailable(): boolean;
   isExploreAvailable?(): boolean;
   clearPageDataAsync?(storageId: string): Promise<void>;
-  fetchResourceAsync(id: string, url: string, max: number): Promise<string>;
+  supportsResourceHeaders?(): boolean;
+  fetchResourceAsync(id: string, url: string, max: number, accept?: string): Promise<string>;
   cancelResourceAsync(id: string): Promise<void>;
   sendAsync(id: string, message: string): Promise<void>;
   closeAsync(id: string): Promise<void>;
@@ -44,9 +46,11 @@ export const nativeSurface = {
   },
 };
 export const nappletAdapter: NappletPort = {
-  async fetchResource(url, max, signal) {
+  async fetchResource(url, max, signal, options) {
     const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
     if (!native) throw new Error('napplets.rebuild_required');
+    const headers = native.supportsResourceHeaders?.() === true;
+    if (options && !headers) throw new Error('napplets.rebuild_required');
     const id = `resource:${++serial}`;
     assertNotAborted(signal);
     const abort = () => {
@@ -54,7 +58,8 @@ export const nappletAdapter: NappletPort = {
     };
     signal?.addEventListener('abort', abort, { once: true });
     try {
-      const bytes = await decodeNappletBytes(await native.fetchResourceAsync(id, url, max), signal);
+      const response = headers ? native.fetchResourceAsync(id, url, max, options?.accept ?? '*/*') : native.fetchResourceAsync(id, url, max);
+      const bytes = await decodeNappletBytes(await response, signal);
       assertNotAborted(signal);
       return bytes;
     } finally {
@@ -65,7 +70,9 @@ export const nappletAdapter: NappletPort = {
   async openPage(page: ExplorePage) {
     if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isExploreAvailable?.()) throw new Error('napplets.rebuild_required');
     const id=`surface:${Date.now()}:${++serial}`;
-    surfaces.set(id,{html:'',page:JSON.stringify(page),ready:false});updates.forEach(fn=>fn());return id;
+    const bootstrap = page.bootstrap;
+    const script = bootstrap ? exploreBridge(bootstrap.napp, bootstrap.theme, bootstrap.domains, bootstrap.instance) : page.script;
+    surfaces.set(id,{html:'',page:JSON.stringify({...page, script}),ready:false});updates.forEach(fn=>fn());return id;
   },
   async open(html) {
     if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isAvailable())

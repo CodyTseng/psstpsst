@@ -43,14 +43,15 @@ private final class PublicFetch {
     if let data { promise.resolve(data.base64EncodedString()) }
     else { promise.reject("ERR_RESOURCE", error ?? "network-error") }
   }
-  func start(_ value: String, max: Int) {
+  func start(_ value: String, max: Int, accept: String = "*/*") {
     queue.async {
       guard !self.deadlineStarted else { return }
       self.deadlineStarted = true
       self.queue.asyncAfter(deadline: .now() + 20) { self.finish(nil, "timeout") }
     }
     DispatchQueue.global(qos: .utility).async {
-      guard value.utf8.count <= 4096, let url = URL(string: value), url.scheme == "https", let host = url.host,
+      guard ["*/*", "application/json", "application/nostr+json"].contains(accept),
+        value.utf8.count <= 4096, let url = URL(string: value), url.scheme == "https", let host = url.host,
         url.user == nil, url.password == nil, url.port == nil || url.port == 443,
         max > 0, max <= 26214400 else { self.queue.async { self.finish(nil, "blocked-by-policy") }; return }
       var hints = addrinfo()
@@ -89,7 +90,7 @@ private final class PublicFetch {
                 connection.stateUpdateHandler = nil
                 self.connection = nil
                 connection.cancel()
-                self.start(target.absoluteString, max: max)
+                self.start(target.absoluteString, max: max, accept: accept)
                 return
               }
               do { self.finish(try Self.body(received, max: max)) }
@@ -103,7 +104,7 @@ private final class PublicFetch {
           case .ready:
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
             let target = (components.percentEncodedPath.isEmpty ? "/" : components.percentEncodedPath) + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
-            let request = "GET \(target) HTTP/1.1\r\nHost: \(host)\r\nAccept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n"
+            let request = "GET \(target) HTTP/1.1\r\nHost: \(host)\r\nAccept: \(accept)\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n"
             connection.send(content: Data(request.utf8), completion: .contentProcessed { error in
               if error != nil { self.finish(nil) } else { receive() }
             })
@@ -164,8 +165,9 @@ public class ExpoNappletModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoNapplet")
     Function("isAvailable") { true }
+    Function("supportsResourceHeaders") { true }
     Function("isExploreAvailable") { true }
-    AsyncFunction("fetchResourceAsync") { (id: String, url: String, max: Int, promise: Promise) in
+    AsyncFunction("fetchResourceAsync") { (id: String, url: String, max: Int, accept: String?, promise: Promise) in
       self.lock.lock()
       guard self.requests.count < 12 else { self.lock.unlock(); promise.reject("ERR_RESOURCE", "quota-exceeded"); return }
       let request = PublicFetch(promise) { [weak self] in
@@ -173,7 +175,7 @@ public class ExpoNappletModule: Module {
         self.lock.lock(); self.requests.removeValue(forKey: id); self.lock.unlock()
       }
       self.requests[id] = request; self.lock.unlock()
-      request.start(url, max: max)
+      request.start(url, max: max, accept: accept ?? "*/*")
     }
     AsyncFunction("cancelResourceAsync") { (id: String) in
       self.lock.lock(); let request = self.requests.removeValue(forKey: id); self.lock.unlock(); request?.cancel()

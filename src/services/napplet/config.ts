@@ -17,16 +17,18 @@ export function validateSchema(input: unknown, depth = 0): ConfigSchema {
   if (!input || typeof input !== 'object' || Array.isArray(input) || depth > 5)
     throw new Error('invalid-schema');
   const value = input as ConfigSchema;
+  for (const key of ['title', 'description'] as const)
+    if (value[key] !== undefined && (typeof value[key] !== 'string' || value[key]!.length > 2000)) throw new Error('invalid-schema');
   if (
     !['object', 'string', 'number', 'integer', 'boolean', 'array'].includes(value.type) ||
-    '$ref' in value ||
+    '$ref' in value || 'pattern' in value || 'patternProperties' in value ||
     JSON.stringify(value).length > 32000
   )
     throw new Error('invalid-schema');
   if (value.enum && (!Array.isArray(value.enum) || value.enum.length > 64))
     throw new Error('invalid-schema');
   if (value.type === 'object') {
-    if (!value.properties || Object.keys(value.properties).length > 32)
+    if (!value.properties || typeof value.properties !== 'object' || Array.isArray(value.properties) || Object.keys(value.properties).length > 32)
       throw new Error('invalid-schema');
     for (const [key, child] of Object.entries(value.properties)) {
       if (['__proto__', 'constructor', 'prototype'].includes(key))
@@ -35,7 +37,7 @@ export function validateSchema(input: unknown, depth = 0): ConfigSchema {
     }
     if (
       value.required &&
-      (!Array.isArray(value.required) || value.required.some((key) => !(key in value.properties!)))
+      (!Array.isArray(value.required) || value.required.length > 32 || value.required.some((key) => typeof key !== 'string' || !Object.hasOwn(value.properties!, key)))
     )
       throw new Error('invalid-schema');
   }

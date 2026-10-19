@@ -1,4 +1,4 @@
-import type { ApplicationInfo } from '@/services/explore/model';
+import type { ApplicationInfo, ApplicationListEntry } from '@/services/explore/model';
 import { encodeNappletBytes } from '@/platform/napplet-bytes';
 import { assertNotAborted, linkAbort } from '@/platform/abort';
 import i18n from '@/i18n/core';
@@ -25,16 +25,20 @@ import { dataEntries, dataKeys, getData, setData, type AppScope } from './reposi
 import { NappletUploads } from './upload';
 import { signingTemplate } from '@/services/signing/event-template';
 
+export type RuntimePromptChoice = { key: string; title: string; application?: ApplicationListEntry };
 export type RuntimePrompt = {
   title: string;
   detail: string;
   application?: ApplicationInfo;
   requester?: { title: string; origin: string };
-  choices?: { key: string; title: string }[];
+  choices?: RuntimePromptChoice[];
+  applicationSelection?: { requester: string; content: 'profile' | 'content' };
   app?: NappletRelease;
   accountPubkey?: string;
   signing?: SigningRequest;
   upload?: { filename: string; mimeType: string; size: number; sha256: string; servers: string[] };
+  crypto?: { operation: 'encrypt' | 'decrypt'; algorithm: 'nip04' | 'nip44'; peer: string };
+  device?: { operation: 'save-file' | 'copy-text' };
   capabilities?: { required: string[]; optional: string[] };
   expiresAt?: number;
 };

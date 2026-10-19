@@ -26,9 +26,10 @@ export default function ExploreDetailsScreen() {
   const access=app?.release?nappletAccess:genericAccess;
   const [error,setError]=useState<string>();
   const application=app?applicationPresentation(app):undefined;
+  const required = application?.required ?? [];
   const message=error??access.error??(state.loaded&&!app?'napplets.not_found':undefined);
   if(permissions==='1')return <ApplicationPermissionsPage application={application} error={message}>
-    {app&&state.account?<ApplicationSettings access={app.required.length?<ApplicationAccessControls required={app.required} selected={app.required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,state.account!)}/>:null}
+    {app&&state.account?<ApplicationSettings access={required.length?<ApplicationAccessControls required={required} selected={required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,state.account!)}/>:null}
   </ApplicationPermissionsPage>;
   return <ApplicationDetailsPage application={application} access={access} error={message}
     unsupported={app?.release?app.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain)):app?.kind==='napp'&&app.required.some(domain=>!SUPPORTED_NAPP_DOMAINS.includes(domain))}
@@ -37,7 +38,7 @@ export default function ExploreDetailsScreen() {
       if(!app||!state.account)return;
       try {
         if (platform.napplet.windows) {
-          const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : app.required;
+          const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : required;
           void openApplicationWindow(app, state.account, reviewed).catch(() => setError('napplets.request_failed'));
           return;
         }
@@ -46,7 +47,7 @@ export default function ExploreDetailsScreen() {
           router.push({pathname:'/napplet-run',params:{runId}});
           return;
         }
-        const runId=exploreService.prepare(app,state.account,access.approved?undefined:app.required);
+        const runId=exploreService.prepare(app,state.account,access.approved?undefined:required);
         router.push({pathname:'/explore-run',params:{runId}});
       } catch {setError('napplets.request_failed');}
     }}/>;

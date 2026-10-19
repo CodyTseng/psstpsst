@@ -1,4 +1,6 @@
 export const IPC = {
+  applicationMessagingConnect: 'application-messaging:connect', applicationMessagingDisconnect: 'application-messaging:disconnect',
+  applicationMessagingRequest: 'application-messaging:request', applicationMessagingMessage: 'application-messaging:message',
   applicationWindowOpen: 'application-window:open', applicationWindowLaunch: 'application-window:launch',
   applicationWindowClose: 'application-window:close', applicationWindowCloseAll: 'application-window:close-all',
   applicationWindowAction: 'application-window:action', applicationSigningChange: 'application-window:signing-change',

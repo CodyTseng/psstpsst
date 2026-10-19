@@ -69,7 +69,7 @@ export function registerNappletHandlers(
       if (entry && entry.owner !== owner || request && request.owner !== owner) throw new Error('untrusted-container-owner');
       return fn(owner, ...args);
     });
-  handle(IPC.nappletFetch, async (owner: BrowserWindow, id: string, url: string, max: number) => {
+  handle(IPC.nappletFetch, async (owner: BrowserWindow, id: string, url: string, max: number, accept?: string) => {
     if (typeof id !== 'string' || id.length > 128 || requests.size >= 32 || [...requests.values()].filter(request => request.owner === owner).length >= 12)
       throw new Error('quota-exceeded');
     const abort = new AbortController();
@@ -78,7 +78,7 @@ export function registerNappletHandlers(
     const ownerClosed = () => abort.abort();
     owner.once('closed', ownerClosed);
     try {
-      return Buffer.from(await fetchNappletResource(url, max, abort.signal)).toString('base64');
+      return Buffer.from(await fetchNappletResource(url, max, abort.signal, accept)).toString('base64');
     } finally {
       owner.removeListener('closed', ownerClosed);
       requests.delete(id);
@@ -161,28 +161,37 @@ export function registerNappletHandlers(
   handle(IPC.exploreClearData, async (_owner: BrowserWindow, storageId: string) => {
     if(typeof storageId!=='string' || storageId.length>256) throw new Error('invalid-page');
     for(const [id,entry] of views) if(entry.page?.storageId===storageId) close(id);
-    const profile=session.fromPartition(`persist:explore-${createHash('sha256').update(storageId).digest('hex')}`);
-    await profile.clearStorageData();await profile.clearCache();
+    const key = createHash('sha256').update(storageId).digest('hex');
+    for (const suffix of ['', '-bundles']) {
+      const profile = session.fromPartition(`persist:explore-${key}${suffix}`);
+      await profile.clearStorageData(); await profile.clearCache();
+    }
   });
   handle(IPC.exploreOpen, async (owner: BrowserWindow, page: ExplorePage) => {
-    if (!page || typeof page.sourceId !== 'string' || typeof page.script !== 'string' || page.script.length > 100000 ||
+    if (!page || typeof page.sourceId !== 'string' || typeof page.script !== 'string' || page.script.length > 32000 ||
       (page.files && (page.files.length > 512 || JSON.stringify(page.files).length > 48 * 1024 * 1024))) throw new Error('invalid-page');
+    if (page.bootstrap && (JSON.stringify(page.bootstrap).length > 8192 || typeof page.bootstrap.napp !== 'boolean' ||
+      typeof page.bootstrap.instance !== 'string' || page.bootstrap.instance.length > 128 ||
+      !Array.isArray(page.bootstrap.domains) || page.bootstrap.domains.length > 32 || page.bootstrap.domains.some(domain => typeof domain !== 'string' || domain.length > 64) ||
+      page.bootstrap.theme && ['background', 'text', 'primary'].some(key => typeof (page.bootstrap!.theme as any)[key] !== 'string' || (page.bootstrap!.theme as any)[key].length > 128))) throw new Error('invalid-page');
     if (page.url) {
       const parsed = new URL(page.url);
       if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('invalid-page');
     }
     for (const [id, entry] of views) if (entry.owner === owner) close(id);
     const id = randomUUID();
-    const profile = session.fromPartition(`persist:explore-${createHash('sha256').update(page.storageId??page.sourceId).digest('hex')}`, { cache: false });
+    // Remote pages keep Chromium's native HTTPS loader, including redirects and cookies.
+    // Bundle sessions alone intercept HTTPS to serve verified synthetic origins.
+    const profile = session.fromPartition(`persist:explore-${createHash('sha256').update(page.storageId??page.sourceId).digest('hex')}${page.url ? '' : '-bundles'}`, { cache: false });
     const host = createHash('sha256').update(page.sourceId).digest('hex');
     const origin = `https://${host}.explore.psstpsst.invalid`;
     const url = page.url ?? `${origin}/index.html`;
     if (!page.url) await profile.clearStorageData({origin,storages:['serviceworkers','cachestorage']});
-    configureProfile(profile);
+    if (!page.url) configureProfile(profile);
     profile.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     profile.setPermissionCheckHandler(() => false);
     const view = new WebContentsView({ webPreferences: {session:profile,preload:path.join(__dirname,'napplet-preload.js'),
-      additionalArguments:[`--psst-explore=${Buffer.from(page.script).toString('base64')}`],sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:false} });
+      additionalArguments:[page.bootstrap ? `--psst-explore-bootstrap=${Buffer.from(JSON.stringify(page.bootstrap)).toString('base64')}` : `--psst-explore=${Buffer.from(page.script).toString('base64')}`],sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:false} });
     const ownerClosed=()=>close(id);
     const entry={view,owner,url,ready:true,painted:true,visible:false,inputBlocked:true,queued:[] as string[],ownerClosed,page,files:page.files ? new Map(page.files.map(file => [file.path, file])) : undefined,document:randomUUID()};
     views.set(id,entry);owner.contentView.addChildView(view);view.setVisible(false);owner.once('closed',ownerClosed);
@@ -195,7 +204,8 @@ export function registerNappletHandlers(
     });
     view.webContents.on('before-input-event',(event)=>{if(entry.inputBlocked) event.preventDefault();});
     view.webContents.on('before-mouse-event',(event)=>{if(entry.inputBlocked) event.preventDefault();});
-    await view.webContents.loadURL(url);
+    try { await view.webContents.loadURL(url); }
+    catch (error) { close(id); throw error; }
     return id;
   });
   ipcMain.on(IPC.exploreMessage,(event,raw:string)=>{

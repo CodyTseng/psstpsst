@@ -446,6 +446,17 @@ export class ManagedRelayPool {
     }
   }
 
+  /** Drop only unused connection records when a bounded consumer evicts an idle destination. */
+  forgetIdleRelays(relays: string[]): void {
+    for (const url of normalizeRelayUrls(relays)) {
+      if (this.hasSubscriptionDemand(url) || this.activeQueriesByRelay.has(url) || this.queuedQueriesByRelay.has(url)) continue;
+      const connection = this.connections.get(url);
+      if (!connection) continue;
+      this.closeConnection(connection, false);
+      this.connections.delete(url);
+    }
+  }
+
   listConnectionStatus(): Map<string, boolean> {
     const result = new Map<string, boolean>();
     for (const [url, connection] of this.connections) {

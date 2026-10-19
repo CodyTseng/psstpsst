@@ -32,8 +32,15 @@ export type ApplicationInfo = Pick<ExploreEntry, 'title' | 'description' | 'serv
   publisher?: string;
   origin?: string;
 };
+export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon'> & { publisher?: string };
+export function applicationListEntry(entry: ExploreEntry): ApplicationListEntry {
+  return { title: entry.title, kind: entry.kind, servers: entry.servers, icon: entry.icon, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
+}
+export function applicationRequirements(kind: ExploreKind, declared: readonly string[]): string[] {
+  return [...new Set([...(kind === 'napp' ? ['network'] : []), ...declared])];
+}
 export function applicationPresentation(entry: ExploreEntry | NappletRelease): ApplicationInfo {
-  return { title:entry.title,description:entry.description,required:entry.required,servers:entry.servers,icon:entry.icon,
+  return { title:entry.title,description:entry.description,required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
     publisher:'event' in entry?entry.event.pubkey:entry.manifest?.pubkey,
     origin:'kind' in entry&&entry.kind==='website'?new URL(entry.address).origin:undefined };
 }
@@ -82,9 +89,11 @@ export function parseSite(input: Event): ExploreEntry {
   const key = naddrEncode({ kind: event.kind, pubkey: event.pubkey, identifier: tags('d')[0]?.[1] ?? '' });
   const servers = [...new Set(tags('server').map((t) => publicUrl(t[1])))].slice(0, 8);
   const iconFile = files.find((f) => f.path === tags('icon')[0]?.[1]);
+  // Napps are web applications; their normal network access must be visible in host consent.
+  const required = applicationRequirements(event.kind === 35130 ? 'napp' : 'nsite', tags('requires').map(tag => tag[1]).filter(Boolean));
   return { key, address: key, title: (tags('title')[0]?.[1] ?? tags('d')[0]?.[1] ?? '').slice(0, 200) || key,
     kind: event.kind === 35130 ? 'napp' : 'nsite', description: (tags('description')[0]?.[1] ?? event.content).slice(0, 16000),
-    servers, manifest: event, files, required: [...new Set(tags('requires').map((t) => t[1]).filter(Boolean))],
+    servers, manifest: event, files, required,
     ...(iconFile && ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(iconFile.mime) ? { icon: { hash: iconFile.hash, mime: iconFile.mime } } : {}),
     desktopPosition: null, lastUsedAt: null };
 }

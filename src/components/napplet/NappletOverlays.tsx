@@ -23,6 +23,8 @@ import { SigningIdentity, SigningRequester, SigningAccountAvatar, signingAction 
 import { NappletIdentity } from './NappletIdentity';
 import { UploadApproval } from './UploadApproval';
 import { CapabilityApproval } from './CapabilityApproval';
+import type { RuntimePromptChoice } from '@/services/napplet/runtime';
+import { ApplicationChoiceRow } from './ApplicationChoiceRow';
 
 export function NappletOverlays() {
   const { prompt, configuration, panel, accountPubkey } = useNapplets();
@@ -33,6 +35,7 @@ export function NappletOverlays() {
   const menuOpen = !!prompt && menu?.id === prompt.requestId;
   const duration = choice?.id === prompt?.requestId ? choice?.value ?? 'allow' : 'allow';
   const showingPanel = prompt || configuration ? null : panel;
+  const selectingApplication = prompt?.applicationSelection;
   function panelAction(action: NappletPanelAction | 'settings') {
     if (!panel || !accountPubkey) return;
     if (action === 'settings') { nappletService.openPanel('settings'); return; }
@@ -52,16 +55,26 @@ export function NappletOverlays() {
     nappletService.closePanel();
   }
   return (
-    <BottomSheet
+    <BottomSheet<RuntimePromptChoice>
       visible={!!prompt || !!configuration || !!panel}
-      title={prompt?.signing ? signingAction(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
+      title={selectingApplication ? t('napplets.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt') : prompt?.signing ? signingAction(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
       headerAction={prompt?.signing ? <SigningAccountAvatar pubkey={prompt.signing.accountPubkey} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
-      contentStyle={{ gap: spacing.lg, ...((prompt?.capabilities || prompt?.application && !prompt.signing && !prompt.upload) ? { paddingTop: spacing.sm } : {}) }}
+      contentStyle={selectingApplication ? undefined : { gap: spacing.lg, ...((prompt?.capabilities || prompt?.application && !prompt.signing && !prompt.upload) ? { paddingTop: spacing.sm } : {}) }}
+      fixedSubheader={selectingApplication ? <AppText style={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
+        {t(selectingApplication.content === 'profile' ? 'napplets.open_with_profile' : 'napplets.open_with_content', { app: selectingApplication.requester })}
+      </AppText> : undefined}
+      listProps={selectingApplication && prompt ? {
+        data: prompt.choices ?? [], keyExtractor: choice => choice.key,
+        initialNumToRender: 8,
+        contentContainerStyle: { paddingBottom: spacing.lg },
+        renderItem: ({ item }) => <ApplicationChoiceRow choice={item} requestId={prompt.requestId}/>,
+      } : undefined}
       scrollResetKey={prompt?.requestId ?? (configuration ? 'configuration' : panel?.page ?? 'closed')}
       onClosed={() => { nappletService.overlayClosed(); const work = pending.current; pending.current = null; work?.(); }}
       onClose={() => {
         if (menuOpen) { setMenu(undefined); return; }
+        if (prompt?.applicationSelection) { nappletService.answer(prompt.requestId, false); return; }
         if (prompt?.upload) nappletService.answer(prompt.requestId, false);
         else if (prompt) nappletService.rejectAllRequests();
         nappletService.closeConfiguration();
@@ -72,9 +85,9 @@ export function NappletOverlays() {
       fixedFooter={prompt?.signing ? <View style={{ gap: spacing.sm }}>
         <SigningActions prompt={prompt} duration={duration} menuOpen={menuOpen}
           onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} />
-      </View> : showingPanel?.page === 'about' ? <NappletPanelActions onAction={panelAction} /> : undefined}
+      </View> : showingPanel?.page === 'about' ? <NappletPanelActions address={appShareAddress(showingPanel.release)} onAction={panelAction} /> : undefined}
     >
-      {prompt ? <>
+      {selectingApplication ? null : prompt ? <>
         {prompt.requester && !prompt.application ? <View style={{ gap: spacing.xs }}>
           <AppText variant="subtitle">{prompt.requester.title}</AppText>
           <AppText variant="caption" tone="muted">{prompt.requester.origin}</AppText>
@@ -107,7 +120,7 @@ export function NappletOverlays() {
               dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} />}
           </>}
         {!prompt.signing && prompt.queued ? <AppButton variant="ghost" label={t('napplets.signing_reject_all')} onPress={() => nappletService.rejectAllRequests()} /> : null}
-      </> : configuration ? <ConfigEditor configuration={configuration} /> : panel && accountPubkey ?
+      </> : configuration ? <ConfigEditor key={configuration.requestId ?? 'napplet'} configuration={configuration} /> : panel && accountPubkey ?
         <NappletPanel key={`${accountPubkey}:${panel.release.key}:${panel.release.hash}:${panel.page}`}
           release={panel.release} page={panel.page} accountPubkey={accountPubkey} onAction={panelAction} /> : null}
     </BottomSheet>

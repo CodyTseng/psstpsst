@@ -50,6 +50,11 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       override fun onPageStarted(view: WebView, value: String, favicon: android.graphics.Bitmap?) {
         if(page != null) { document=java.util.UUID.randomUUID().toString();onMessage(envelope("explore.navigation")) }
       }
+      override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+        if (page == null || !request.isForMainFrame) return
+        onMessage(JSONObject(envelope("explore.error")).put("url", request.url.toString())
+          .put("error", "${error.errorCode}: ${error.description}").toString())
+      }
       override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         page?.let { config ->
           if (config.has("url")) return null

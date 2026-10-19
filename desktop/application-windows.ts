@@ -1,10 +1,14 @@
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import type { ApplicationWindowLaunch, ApplicationWindowAction, ApplicationSigningChange } from '../src/platform/ports/application-window';
 import { IPC } from './ipc-channels';
+import { ApplicationMessagingBroker } from '../src/services/explore/messaging-broker';
+import type { ApplicationEndpoint, ApplicationEnvelope } from '../src/platform/ports/application-messaging';
 
 /** Only host renderers enter this registry; application WebContentsViews never do. */
 export class ApplicationWindows {
   private hosts = new Map<BrowserWindow, ApplicationWindowLaunch>();
+  private messaging = new ApplicationMessagingBroker();
+  private endpoints = new Map<string, WebContents>();
   constructor(private options: { create: () => BrowserWindow; parent: () => BrowserWindow | null; url: () => string;
     cleanup: (ownerId: number) => void; trusted: (event: IpcMainInvokeEvent) => boolean }) {}
   owns(sender: WebContents) { return this.windows().some(window => window.webContents === sender); }
@@ -15,6 +19,24 @@ export class ApplicationWindows {
       if (!this.options.trusted(event)) throw new Error('untrusted-application-host');
       return callback(event, ...args);
     });
+    handle(IPC.applicationMessagingConnect, (event, endpoint: ApplicationEndpoint) => {
+      const window = this.host(event.sender), launch = window && this.hosts.get(window);
+      if (!launch || !endpoint || endpoint.accountPubkey !== launch.accountPubkey || this.endpoints.has(endpoint.instance) ||
+        [...this.endpoints.values()].filter(owner => owner === event.sender).length >= 8) throw new Error('invalid-endpoint');
+      this.messaging.connect(endpoint, message => {
+        if (message.type === 'action' && !window.isDestroyed()) { window.show(); window.focus(); }
+        if (!event.sender.isDestroyed()) event.sender.send(IPC.applicationMessagingMessage, endpoint.instance, message);
+      });
+      this.endpoints.set(endpoint.instance, event.sender);
+    });
+    handle(IPC.applicationMessagingDisconnect, (event, instance: string) => {
+      if (this.endpoints.get(instance) !== event.sender) throw new Error('untrusted-endpoint');
+      this.messaging.disconnect(instance); this.endpoints.delete(instance);
+    });
+    handle(IPC.applicationMessagingRequest, (event, instance: string, message: ApplicationEnvelope) => {
+      if (this.endpoints.get(instance) !== event.sender) throw new Error('untrusted-endpoint');
+      return this.messaging.request(instance, message);
+    });
     handle(IPC.applicationWindowOpen, async (_event, launch: ApplicationWindowLaunch) => {
       if (!launch || !/^[a-f0-9]{64}$/.test(launch.accountPubkey) || typeof launch.address !== 'string' || launch.address.length > 8192 ||
         JSON.stringify(launch).length > 512 * 1024 || this.hosts.size >= 8) throw new Error('invalid-application-window');
@@ -23,7 +45,13 @@ export class ApplicationWindows {
       // The host owns its native title; document/router titles never replace it.
       window.webContents.on('page-title-updated', event => event.preventDefault());
       const ownerId = window.webContents.id;
-      window.once('closed', () => { this.hosts.delete(window); this.options.cleanup(ownerId); });
+      const owner = window.webContents;
+      const disconnect = () => { for (const [instance, contents] of this.endpoints) if (contents === owner) {
+        this.messaging.disconnect(instance); this.endpoints.delete(instance);
+      } };
+      owner.on('render-process-gone', disconnect);
+      owner.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) disconnect(); });
+      window.once('closed', () => { disconnect(); this.hosts.delete(window); this.options.cleanup(ownerId); });
       try { await window.loadURL(this.options.url()); }
       catch (error) { window.destroy(); throw error; }
     });

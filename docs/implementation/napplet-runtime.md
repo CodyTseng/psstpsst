@@ -274,7 +274,12 @@ The host bounds installation libraries to 512 entries, resolved metadata to 500,
 and the recent preview to one grid row. Its recent-history page derives all used apps from
 the already-loaded installation library and virtualizes their grid. It bounds
 filters to eight with at most 200 events per filter, routed authors to 16, and a
-runtime's destination set to 24. Query and live-event buffers are byte-bounded;
+runtime's connection cache to 24 relay destinations. Active readers and publishers
+hold shared destination leases; completed requests release them. New destinations
+evict only idle entries, including their connection records. Finite requests wait
+in a bounded, cancellable queue when every slot is active, within their original
+deadline; the number of historically visited relays is not a lifetime quota.
+Queries use the shared pool's per-relay concurrency queue. Query and live-event buffers are byte-bounded;
 live delivery yields between batches. A process-level lifecycle observer retains
 only live relay pools. Verified manifest metadata and public icons are cached so
 reordering a shortcut does not repeat settled cryptographic work.
@@ -302,17 +307,26 @@ Both history and shortcuts refer to the cached identity, independently of signin
 authority. Website addresses keep their path, query and fragment, whereas signing
 rules bind only their host-verified scheme, host and effective port.
 
-Napp support currently includes NIP-07 `getPublicKey` and `signEvent`, declared
-network access, origin storage, basic link/close/log helpers, public-event reads,
-metadata lookups, and publication of already-signed events. Reads use isolated
-relay pools, never the private conversation database. The reference launcher's
-UI kit, general NIP-DB mutation/subscription API, action routing, encryption bridge,
-configuration and inter-app communication APIs are not implemented. Unsupported
-required domains fail explicitly before execution; unknown methods return an
-error instead of implying that a capability was granted.
+Napp support includes NIP-07 identity/signing and per-request NIP-04/NIP-44
+cryptography, declared network access, origin storage, theme updates, link/close/log
+helpers, all 42 reference `napp.utils` methods, synchronous Nostr helpers,
+public-event reads and subscriptions, metadata/list/set lookups, user discovery,
+signed-event publication, bounded synchronization, relay health, and the local
+NIP-DB store. Clipboard writes and file saves require independent consent. Actions route to live handlers or verified
+cached applications after user selection. Mobile keeps up to seven calling
+containers mounted behind the active handler and returns to the caller when the
+handler closes; desktop handlers use independent windows. Configuration and INC
+use the pinned NAP shim and account-scoped host services. Desktop IPC brokers
+messages across trusted hosts while application frames remain unprivileged.
+The reference launcher's UI kit and private chat APIs are not provided.
+See [napp bridge](../protocols/napp-bridge.md) for method and authorization details.
+Unsupported required domains fail before execution; unknown methods return an
+explicit error.
 
-The native container changed, so installed mobile development clients need a
-native rebuild. Android Explore requires document-start script injection and
+Electron bundles bridge code in its isolated preload and passes a small typed
+bootstrap descriptor, keeping generated helpers out of command-line arguments.
+The native public-resource adapter now supports allowlisted JSON Accept headers,
+so installed mobile development clients need a native rebuild. Android Explore requires document-start script injection and
 WebView multi-profile support. iOS 17 and later use named persistent account
 profiles; earlier systems use ephemeral website storage. No package dependency
 was added for this feature.

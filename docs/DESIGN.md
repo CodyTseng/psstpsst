@@ -912,7 +912,16 @@ actions or a separate permissions entry. Permission controls live in the managem
 view reached from the app menu. Protocol hashes stay out of ordinary app information
 surfaces.
 
-Mini-app More opens app information with Share, Permissions and Reload actions.
+Action handoffs explicitly ask which app should open the requested content
+and name the requesting app. Candidate rows reuse the discovery list's app icon,
+name, publisher attribution and format label. Choosing a row opens that app;
+The sheet's Close action dismisses only this handoff, without a duplicate Cancel
+footer. These choosers omit access-review language,
+signing-account labels and raw protocol action names.
+
+Mini-app More opens app information with Copy address, Share, Permissions and
+Reload actions. Copy uses the same public address as sharing and keeps the sheet
+open with brief in-place confirmation after the clipboard accepts the write.
 On Electron, opening an application creates an independent window by default.
 There is no separate new-window action. Independent windows merge application
 identity and menu actions into their native title bar, reserve the system caption
@@ -948,6 +957,11 @@ Public-file uploads show the filename, type, size and storage services before
 confirmation, with a plain-language public-access notice. Each file requires app
 consent, independently of signing permissions; upload reviews have Allow and
 Cancel actions without signing-rule duration or event details.
+Encryption and decryption each require one-request consent identifying the
+operation, account and other party. Application configuration reuses the host's
+settings form and serialized overlay lifecycle. Clipboard writes show the proposed
+text, and file saves identify the file before opening the system destination
+picker; both require independent one-request consent.
 A fixed footer contains a single-level duration menu showing the current choice
 above two horizontal Allow/Reject actions. The menu floats above its trigger
 without changing sheet layout. Duration applies to either decision and defaults

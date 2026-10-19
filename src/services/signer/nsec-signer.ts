@@ -1,4 +1,5 @@
 import { finalizeEvent, getPublicKey, type Event, type EventTemplate } from 'nostr-tools';
+import * as nip04 from 'nostr-tools/nip04';
 
 import { nip44Decrypt, nip44Encrypt } from '../crypto/nip44';
 import type { Signer } from './signer.interface';
@@ -29,6 +30,18 @@ export class NsecSigner implements Signer {
   async nip44Decrypt(peerPubkey: string, ciphertext: string): Promise<string> {
     this.check();
     return await nip44Decrypt(ciphertext, this.privkey, peerPubkey);
+  }
+
+  async nip04Encrypt(peerPubkey: string, plaintext: string): Promise<string> {
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    this.check();
+    return nip04.encrypt(this.privkey, peerPubkey, plaintext);
+  }
+
+  async nip04Decrypt(peerPubkey: string, ciphertext: string): Promise<string> {
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    this.check();
+    return nip04.decrypt(this.privkey, peerPubkey, ciphertext);
   }
 
   async destroy(): Promise<void> {

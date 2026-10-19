@@ -1,17 +1,14 @@
-import { memo, useEffect } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 import { ActivityIndicator, FlatList, View } from 'react-native';
 import { useDiscovery } from '@/stores/explore-discovery.store';
 import { useTranslation } from 'react-i18next';
 import { Compass } from '@solar-icons/react-native/category/map/Linear/Compass';
 import { AppText } from '@/components/common/AppText';
-import { Avatar } from '@/components/common/Avatar';
 import { AppButton } from '@/components/common/AppButton';
-import { ListRow } from '@/components/common/ListRow';
 import { discoverApplications } from '@/services/explore/discovery';
-import type { ExploreEntry } from '@/services/explore/model';
-import { useDisplayName } from '@/hooks/use-display-name';
-import { applicationFormatColors, radius, spacing, useEffectiveColorScheme, useThemeColors } from '@/theme';
-import { NappletIcon } from './NappletIcon';
+import { applicationListEntry, type ExploreEntry } from '@/services/explore/model';
+import { spacing, useThemeColors } from '@/theme';
+import { ApplicationListRow } from './ApplicationListRow';
 
 export function ExploreDiscovery({ account, onDetails, bottomInset, onScrollChange }: {
   account: string; onDetails: (app: ExploreEntry) => void;
@@ -42,19 +39,7 @@ export function ExploreDiscovery({ account, onDetails, bottomInset, onScrollChan
 const DiscoveryRow = memo(function DiscoveryRow({ app, onDetails }: {
   app: ExploreEntry; onDetails: (app: ExploreEntry) => void;
 }) {
-  const { t } = useTranslation();
-  const colors = applicationFormatColors[app.kind][useEffectiveColorScheme()];
-  const pubkey = app.manifest?.pubkey;
-  const { name, profile } = useDisplayName(pubkey ?? '');
-  return <ListRow variant="list" title={app.title} subtitleContent={pubkey ?
-    <View testID="discovery-publisher" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-      <Avatar pubkey={pubkey} picture={profile?.picture} size={spacing.lg} />
-      <AppText variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</AppText>
-    </View> : undefined}
-    trailing={<AppText variant="caption" style={{ color: colors.text, backgroundColor: colors.background,
-      borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }}>
-      {t(`napplets.formats.${app.kind}`)}
-    </AppText>}
-    icon={<NappletIcon release={app} size={spacing.xl} />}
-    onPress={() => onDetails(app)} />;
+  const application = useMemo(() => applicationListEntry(app), [app]);
+  const open = useCallback(() => onDetails(app), [app, onDetails]);
+  return <ApplicationListRow application={application} onPress={open}/>;
 });

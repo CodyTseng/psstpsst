@@ -34,13 +34,15 @@ class ExpoNappletModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ExpoNapplet")
     Function("isAvailable") { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) }
+    Function("supportsResourceHeaders") { true }
     Function("isExploreAvailable") { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }
-    AsyncFunction("fetchResourceAsync") { id: String, value: String, max: Int, promise: Promise ->
+    AsyncFunction("fetchResourceAsync") { id: String, value: String, max: Int, accept: String?, promise: Promise ->
       val task = FetchTask()
       val admitted = synchronized(calls) { if (calls.size >= 12 || id.length > 128 || value.length > 4096) false else { calls[id] = task; true } }
       if (!admitted) promise.reject("ERR_RESOURCE", "quota-exceeded", null)
       else executor.execute {
         try {
+          require(accept == null || accept in listOf("*/*", "application/json", "application/nostr+json")) { "invalid-accept" }
           require(!task.cancelled.get()) { "cancelled" }
           var url = value.toHttpUrl()
           var redirects = 0
@@ -53,7 +55,7 @@ class ExpoNappletModule : Module() {
               url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.port == 443 && max in 1..26214400) { "blocked-by-policy" }
             val remaining = deadline - System.nanoTime()
             require(remaining > 0) { "timeout" }
-            val call = client.newCall(Request.Builder().url(url).header("Accept-Encoding", "identity").build())
+            val call = client.newCall(Request.Builder().url(url).header("Accept", accept ?: "*/*").header("Accept-Encoding", "identity").build())
             call.timeout().timeout(remaining, TimeUnit.NANOSECONDS)
             task.call = call
             if (task.cancelled.get()) call.cancel()

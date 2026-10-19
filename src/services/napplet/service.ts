@@ -28,6 +28,7 @@ import {
 } from './repository';
 import { NappletRuntime, type RuntimePrompt, type RuntimeTheme } from './runtime';
 import type { ConfigSchema } from './config';
+import { assertNotAborted } from '@/platform/abort';
 import { PromptQueue, type QueuedPrompt } from './prompt-queue';
 import { appSigningScope, readSigningSnapshot, replaceSigningRule, type SigningRuleTarget, type SigningRuleChange } from './signing-permissions';
 
@@ -45,7 +46,7 @@ type State = {
   overlayActive: boolean;
   sharing: boolean;
   panel: { page: 'about' | 'settings'; release: NappletRelease } | null;
-  configuration: { schema: ConfigSchema; values: Record<string, unknown> } | null;
+  configuration: { schema: ConfigSchema; values: Record<string, unknown>; requestId?: number } | null;
 };
 export const nappletStore = createStore<State>(() => ({
   accountPubkey: null,
@@ -101,8 +102,19 @@ async function refresh(account: string, epoch: number) {
   if (revision !== desktopRevision) return refresh(account, epoch);
   nappletStore.setState({ recent, installed, loaded: true });
 }
+let externalConfiguration: { save(values: Record<string, unknown>): Promise<void>; signal: AbortSignal; close(): void } | undefined;
+let configurationSerial = 0;
+
 export const nappletService = {
   requestApproval: prompt,
+  configureExternal(schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal) {
+    assertNotAborted(signal);
+    this.closeConfiguration();
+    const close = () => { if (externalConfiguration?.signal === signal) this.closeConfiguration(); };
+    externalConfiguration = { save, signal, close };
+    signal.addEventListener('abort', close, { once: true });
+    nappletStore.setState({ configuration: { schema, values, requestId: ++configurationSerial }, overlayActive: true });
+  },
   async activate(accountPubkey: string) {
     if (nappletStore.getState().accountPubkey === accountPubkey) return;
     this.deactivate();
@@ -544,11 +556,22 @@ export const nappletService = {
     await this.install(parseManifest(JSON.parse(release.previousManifest)), expectedAccount);
   },
   async saveConfiguration(values: Record<string, unknown>) {
+    if (externalConfiguration) {
+      const owner = externalConfiguration;
+      assertNotAborted(owner.signal);
+      await owner.save(values);
+      if (externalConfiguration === owner) this.closeConfiguration();
+      return;
+    }
     if (!runtime) throw new Error('session-closed');
     await runtime.saveConfig(values);
     nappletStore.setState({ configuration: null });
   },
   closeConfiguration() {
+    if (externalConfiguration) {
+      externalConfiguration.signal.removeEventListener('abort', externalConfiguration.close);
+      externalConfiguration = undefined;
+    }
     nappletStore.setState({ configuration: null });
   },
   async removeAccount(account: string) {
