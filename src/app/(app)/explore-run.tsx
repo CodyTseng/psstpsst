@@ -1,6 +1,3 @@
-import { openApplicationWindowForKey } from '@/services/explore/windows';
-import { showToast } from '@/stores/toast.store';
-import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
@@ -28,9 +25,7 @@ export default function ExploreRunScreen() {
   } }, [id, owns, focused, state.loading, state.containerId]);
   useEffect(() => { if (owns && focused && !state.entry)
     router.back(); }, [owns, focused, state.entry]);
-  const { t } = useTranslation();
-  const openWindow = () => { const key = state.entry?.key; if (key) void openApplicationWindowForKey(key).catch(() => showToast(t('napplets.request_failed'))); };
-  return <ApplicationRuntimePage onOpenWindow={openWindow} title={state.entry?.title}
+  return <ApplicationRuntimePage title={state.entry?.title}
     application={state.entry?applicationPresentation(state.entry):undefined}
     menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.stop(id)} onMore={()=>setPanel('about')}
     loading={owns&&state.loading} error={owns?state.error:undefined} onRetry={()=>exploreService.retry(id)}

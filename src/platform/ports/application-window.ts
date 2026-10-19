@@ -1,6 +1,6 @@
 import type { Event } from 'nostr-tools';
 
-export type ApplicationWindowLaunch = { accountPubkey: string; address: string; manifest?: Event; servers?: string[] };
+export type ApplicationWindowLaunch = { accountPubkey: string; address: string; manifest?: Event; servers?: string[]; reviewedRequired?: string[] };
 export type ApplicationWindowAction =
   | { type: 'visited'; accountPubkey: string; key: string }
   | { type: 'profile'; pubkey: string }

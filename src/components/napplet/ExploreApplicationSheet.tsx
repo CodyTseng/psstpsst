@@ -1,6 +1,4 @@
-import { openApplicationWindowForKey } from '@/services/explore/windows';
 import { platform } from '@/platform';
-import { showToast } from '@/stores/toast.store';
 import { useRef } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +31,6 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
     contentStyle={{gap:spacing.lg}}
     fixedFooter={page==='about'?<NappletPanelActions onAction={action=>{
       if(action==='settings')onPageChange('settings');
-      else if(action==='window')schedule(()=>{void openApplicationWindowForKey(entry.key).catch(()=>showToast(t('napplets.request_failed')));});
       else if(action==='share')schedule(()=>share(entry));
       else schedule(()=>exploreService.reload(runId));
     }}/>:undefined}>

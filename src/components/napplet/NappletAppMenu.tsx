@@ -1,6 +1,3 @@
-import ExternalLink from 'lucide-react-native/icons/external-link';
-import { openApplicationWindowForKey } from '@/services/explore/windows';
-import { showToast } from '@/stores/toast.store';
 import Plus from 'lucide-react-native/icons/plus';
 import Trash from 'lucide-react-native/icons/trash-2';
 import Info from 'lucide-react-native/icons/info';
@@ -35,7 +32,6 @@ export function NappletAppMenu<T extends GridApp>({ app, anchor, inline, onClose
   return <ContextMenu inline={inline} anchor={anchor} align="center" placement="auto" density={density}
     onClose={onClose} onPlacementChange={onPlacementChange} items={[
       { key: 'details', title: t('napplets.details'), icon: <Info size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onDetails(app) },
-      ...(IS_ELECTRON ? [{ key: 'window', title: t('napplets.open_window'), icon: <ExternalLink size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => { void openApplicationWindowForKey(app.key).catch(() => showToast(t('napplets.request_failed'))); } }] : []),
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={c.text} />, onPress: () => onPermissions(app) },
       { key: 'share', title: t('share.title'), icon: <Share size={size} color={c.text} />, onPress: () => onShare(app) },
       ...(onAdd ? [{ key: 'add', title: t('napplets.add_to_desktop'), icon: <Plus size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onAdd(app) }] : []),

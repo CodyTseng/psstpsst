@@ -1,6 +1,3 @@
-import { platform } from '@/platform';
-import ExternalLink from 'lucide-react-native/icons/external-link';
-import { IS_ELECTRON } from '@/lib/platform';
 import { useEffect, useState } from 'react';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import { Share } from '@solar-icons/react-native/category/ui/Linear/Share';
@@ -17,7 +14,7 @@ import { ApplicationSettings } from './ApplicationSettings';
 import { ApplicationAccessControls } from './ApplicationAccessControls';
 import { applicationPresentation } from '@/services/explore/model';
 
-export type NappletPanelAction = 'share' | 'reload' | 'publisher' | 'window';
+export type NappletPanelAction = 'share' | 'reload' | 'publisher';
 
 export function NappletPanel({ release, page, accountPubkey, onAction }: {
   release: NappletRelease; page: 'about' | 'settings'; accountPubkey: string;
@@ -33,20 +30,19 @@ export function NappletSettings({ release, accountPubkey }: { release: NappletRe
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
-export function NappletPanelActions({ onAction }: { onAction: (action: 'share' | 'settings' | 'reload' | 'window') => void }) {
+export function NappletPanelActions({ onAction }: { onAction: (action: 'share' | 'settings' | 'reload') => void }) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const actions = [
     { key: 'share', label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> },
     { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
-    ...(IS_ELECTRON && !platform.napplet?.windows?.isHost ? [{ key: 'window', label: t('napplets.new_window'), icon: <ExternalLink size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> }] as const : []),
     { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
   ] as const;
   return <HorizontalFadeScrollView fadeColor={c.sheetBackground}
     contentContainerStyle={{ gap: spacing.xs, alignItems: 'flex-start' }}>
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
       width={uiDensity.profileActionWidth + spacing.lg} size={uiDensity.profileActionSize + spacing.lg}
-      singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={action.key === 'window' ? t('napplets.open_window') : action.label}
+      singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={action.label}
       onPress={() => onAction(action.key)} />)}
   </HorizontalFadeScrollView>;
 }

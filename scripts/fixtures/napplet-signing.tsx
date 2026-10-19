@@ -34,8 +34,6 @@ initPlatformAdapters({
 } as unknown as PlatformAdapters);
 const profile = require('../../src/hooks/use-display-name') as typeof import('../../src/hooks/use-display-name');
 profile.useDisplayName = () => ({ name: 'Alice', profile: null });
-const applicationWindows = require('../../src/services/explore/windows') as typeof import('../../src/services/explore/windows');
-applicationWindows.openApplicationWindowForKey = async (key) => { document.title = `New window ${key}`; };
 const { NappletOverlays } = require('../../src/components/napplet/NappletOverlays') as typeof import('../../src/components/napplet/NappletOverlays');
 const { nappletStore, nappletService } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
 const { useThemeStore } = require('../../src/stores/theme.store') as typeof import('../../src/stores/theme.store');

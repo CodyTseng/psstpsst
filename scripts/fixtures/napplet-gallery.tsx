@@ -14,8 +14,6 @@ initPlatformAdapters({
   database: { drizzle: () => ({}) },
   localization: { preferredLanguageTag: () => 'en' },
 } as unknown as PlatformAdapters);
-const applicationWindows = require('../../src/services/explore/windows') as typeof import('../../src/services/explore/windows');
-applicationWindows.openApplicationWindowForKey = async (key) => { document.title = `New window ${key}`; };
 const { NappletGrid } =
   require('../../src/components/napplet/NappletGrid') as typeof import('../../src/components/napplet/NappletGrid');
 const { NappletRecentPage } = require('../../src/components/napplet/NappletRecentPage') as typeof import('../../src/components/napplet/NappletRecentPage');

@@ -5,26 +5,14 @@ import { parseManifest, publicUrl } from '@/services/napplet/protocol';
 import { fromNapplet, parseSite, websiteAddress, type ExploreEntry } from './model';
 import type { ApplicationWindowLaunch } from '@/platform/ports/application-window';
 
-export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: string) {
+export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: string, reviewedRequired?: readonly string[]) {
   if (!platform.napplet.windows) throw new Error('napplets.rebuild_required');
   if (!await canReceiveForAccount(accountPubkey)) throw new Error('account-unavailable');
-  await platform.napplet.windows.open({ accountPubkey, address: entry.address, manifest: entry.manifest, servers: entry.servers });
+  await platform.napplet.windows.open({ accountPubkey, address: entry.address, manifest: entry.manifest, servers: entry.servers, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined });
 }
 
-export async function openApplicationWindowForKey(key: string) {
-  const [{ exploreStore }, { discoveryStore }, { nappletStore }] = await Promise.all([
-    import('./service'), import('./discovery'), import('@/services/napplet/service'),
-  ]);
-  const state = exploreStore.getState(), napplet = nappletStore.getState();
-  const entry = state.entries.find(entry => entry.key === key) ?? (state.entry?.key === key ? state.entry : undefined) ?? discoveryStore.getState().entries.find(entry => entry.key === key);
-  const release = napplet.running?.release.key === key ? napplet.running.release : [...napplet.installed, ...napplet.market].find(release => release.key === key);
-  const account = state.account ?? napplet.accountPubkey;
-  if (!account || !entry && !release) throw new Error('account-unavailable');
-  await openApplicationWindow(entry ?? fromNapplet(release!), account);
-}
-
-/** Re-verify the launch data in the new host; no renderer-supplied grant is accepted. */
-export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEntry; accountPubkey: string }> {
+/** Re-verify launch data; the runtime validates reviewed requirements against the manifest. */
+export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEntry; accountPubkey: string; reviewedRequired?: readonly string[] }> {
   const launch: ApplicationWindowLaunch | null | undefined = await platform.napplet.windows?.launch();
   if (!launch || !await canReceiveForAccount(launch.accountPubkey)) throw new Error('account-unavailable');
   let entry: ExploreEntry;
@@ -37,7 +25,9 @@ export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEnt
     entry = { ...entry, servers: [...new Set(launch.servers.slice(0, 8).map(server => publicUrl(server)))] };
     if (entry.release) entry.release = { ...entry.release, servers: entry.servers };
   }
-  return { entry, accountPubkey: launch.accountPubkey };
+  const reviewedRequired = Array.isArray(launch.reviewedRequired) && launch.reviewedRequired.every(domain => typeof domain === 'string')
+    ? launch.reviewedRequired : undefined;
+  return { entry, accountPubkey: launch.accountPubkey, reviewedRequired };
 }
 
 registerNappletLifecycle(account => {

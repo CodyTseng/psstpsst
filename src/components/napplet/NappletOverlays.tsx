@@ -1,4 +1,3 @@
-import { openApplicationWindowForKey } from '@/services/explore/windows';
 import { platform } from '@/platform';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
@@ -41,8 +40,7 @@ export function NappletOverlays() {
     const account = accountPubkey;
     pending.current = () => {
       if (getNappletAccountPubkey() !== account) return;
-      if (action === 'window') void openApplicationWindowForKey(release.key).catch(() => showToast(t('napplets.request_failed')));
-      else if (action === 'publisher') { if (platform.napplet.windows?.isHost) void platform.napplet.windows.action({type:'profile',pubkey:release.event.pubkey}); else router.push(`/profile/${release.event.pubkey}`); }
+      if (action === 'publisher') { if (platform.napplet.windows?.isHost) void platform.napplet.windows.action({type:'profile',pubkey:release.event.pubkey}); else router.push(`/profile/${release.event.pubkey}`); }
       else if (action === 'share') {
         if (platform.napplet.windows?.isHost) { void platform.napplet.windows.action({type:'share',accountPubkey:account,title:release.title,address:appShareAddress(release)}); return; }
         const draftId = useForwardDraftStore.getState().start({ accountPubkey: account, sourceConversationKey: null,

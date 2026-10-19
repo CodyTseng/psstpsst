@@ -1,5 +1,3 @@
-import ExternalLink from 'lucide-react-native/icons/external-link';
-import { IS_ELECTRON } from '@/lib/platform';
 import type { ReactNode } from 'react';
 import { ActivityIndicator,StyleSheet,View } from 'react-native';
 import X from 'lucide-react-native/icons/x';
@@ -17,9 +15,8 @@ import { iconStrokeWidth } from '@/theme/icons';
 import { spacing,uiDensity,useThemeColors } from '@/theme';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
-export function ApplicationRuntimePage({title,application,loading,error,hidden=false,windowed=false,menuEnabled,onClose,onMore,onOpenWindow,onRetry,children,overlay}:{
+export function ApplicationRuntimePage({title,application,loading,error,hidden=false,windowed=false,menuEnabled,onClose,onMore,onRetry,children,overlay}:{
   title?:string;application?:ApplicationInfo;loading?:boolean;error?:string|null;hidden?:boolean;windowed?:boolean;menuEnabled:boolean;
-  onOpenWindow?:()=>void;
   onClose():void;onMore():void;onRetry():void;children?:ReactNode;overlay?:ReactNode;
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
@@ -31,13 +28,7 @@ export function ApplicationRuntimePage({title,application,loading,error,hidden=f
     <View style={{flex:1,display:hidden?'none':'flex'}}>
       {windowed ? null : <ScreenHeader title={title} back={false}
         left={<IconButton size={uiDensity.headerActionSize} icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>} accessibilityLabel={t('common.close')} onPress={onClose}/>}
-        titleSideInset={IS_ELECTRON && onOpenWindow ? uiDensity.headerActionSize * 2 + spacing.lg : undefined}
-        right={<View style={{flexDirection:'row',alignItems:'center',gap:spacing.xs}}>
-          {IS_ELECTRON && onOpenWindow ? <IconButton size={uiDensity.headerActionSize}
-            icon={<ExternalLink strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>}
-            accessibilityLabel={t('napplets.open_window')} onPress={onOpenWindow} disabled={!menuEnabled}/> : null}
-          {more}
-        </View>}/>}
+        right={more}/>}
 
       <View style={{flex:1,paddingTop:contentTop}}>
         {children}

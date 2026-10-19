@@ -30,12 +30,12 @@ export function ApplicationWindowRoot() {
   useEffect(() => {
     let active = true;
     void (async () => {
-      const { entry, accountPubkey } = await readApplicationWindowLaunch();
+      const { entry, accountPubkey, reviewedRequired } = await readApplicationWindowLaunch();
       await Promise.all([useThemeStore.getState().load(), useLanguageStore.getState().load(), exploreService.activate(accountPubkey)]);
       if (!active) return;
       useActiveAccount.setState({ activePubkey: accountPubkey, status: 'ready' });
-      if (entry.release) nappletService.prepareOpen(entry.release, accountPubkey);
-      else exploreService.prepare(entry, accountPubkey);
+      if (entry.release) nappletService.prepareOpen(entry.release, accountPubkey, reviewedRequired);
+      else exploreService.prepare(entry, accountPubkey, reviewedRequired);
       setReady(true);
     })().catch(error => { console.warn('[explore] Application window could not start', error); if (active) setFailed(true); });
     return () => { active = false; exploreService.deactivate(); nappletService.deactivate(); };

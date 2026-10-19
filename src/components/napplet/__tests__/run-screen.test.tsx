@@ -1,5 +1,4 @@
 jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));
-jest.mock('@/services/explore/windows', () => ({ openApplicationWindowForKey: jest.fn() }));
 jest.mock('lucide-react-native/icons/external-link', () => () => null);
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { PRIMARY_PANE_RESET_MARKER } from '@/components/navigation/responsive-stack-router';

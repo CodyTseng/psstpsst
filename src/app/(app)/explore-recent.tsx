@@ -1,3 +1,5 @@
+import { platform } from '@/platform';
+import { openApplicationWindow } from '@/services/explore/windows';
 import { useMemo } from 'react';
 import { router } from 'expo-router';
 import { NappletRecentPage } from '@/components/napplet/NappletRecentPage';
@@ -17,6 +19,10 @@ export default function ExploreRecentScreen() {
   const open = (app: ExploreEntry) => {
     if (!state.account)
       return;
+    if (platform.napplet.windows) {
+      void openApplicationWindow(app, state.account).catch(failed);
+      return;
+    }
     if (app.release) {
       const runId = nappletService.prepareOpen(app.release, state.account);
       router.push({ pathname: '/napplet-run', params: { runId } });

@@ -1,4 +1,3 @@
-jest.mock('@/services/explore/windows', () => ({ openApplicationWindowForKey: jest.fn() }));
 jest.mock('lucide-react-native/icons/external-link', () => () => null);
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet, Text } from 'react-native';

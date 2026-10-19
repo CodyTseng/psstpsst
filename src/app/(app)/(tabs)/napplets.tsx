@@ -1,3 +1,5 @@
+import { platform } from '@/platform';
+import { openApplicationWindow } from '@/services/explore/windows';
 import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { ExploreDiscovery } from '@/components/napplet/ExploreDiscovery';
 import { exploreService } from '@/services/explore/service';
@@ -50,6 +52,10 @@ function AccountNapplets({ account }: { account: string | null }) {
     (app: ExploreEntry) => {
       setError(null);
       try {
+        if (platform.napplet.windows) {
+          void openApplicationWindow(app, account ?? '').catch(() => setError('napplets.request_failed'));
+          return;
+        }
         if(app.release) {
           const runId=nappletService.prepareOpen(app.release,account??'');
           navigation.open(`/napplet-run?runId=${runId}`);

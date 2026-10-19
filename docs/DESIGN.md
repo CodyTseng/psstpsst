@@ -913,10 +913,10 @@ view reached from the app menu. Protocol hashes stay out of ordinary app informa
 surfaces.
 
 Mini-app More opens app information with Share, Permissions and Reload actions.
-Electron also offers Open in new window beside More, in the app context menu,
-and in the information sheet action rail. Independent windows merge application identity and menu actions into their native
-title bar, reserve the system caption controls, and omit duplicate page headers
-and new-window actions. They reuse embedded application sheets. Action-rail captions
+On Electron, opening an application creates an independent window by default.
+There is no separate new-window action. Independent windows merge application
+identity and menu actions into their native title bar, reserve the system caption
+controls, and omit duplicate page headers. They reuse embedded application sheets. Action-rail captions
 use concise labels; accessible action names may retain the full wording.
 Permissions closes the menu before navigating to the dedicated management page.
 Menu actions use square icon controls with single-line captions below. Slots grow

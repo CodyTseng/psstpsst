@@ -1,3 +1,5 @@
+import { platform } from '@/platform';
+import { openApplicationWindow } from '@/services/explore/windows';
 import { useDiscovery } from '@/stores/explore-discovery.store';
 import { useNappletAccess } from '@/hooks/use-napplet-access';
 import { nappletService } from '@/services/napplet/service';
@@ -34,6 +36,11 @@ export default function ExploreDetailsScreen() {
     onOpen={()=>{
       if(!app||!state.account)return;
       try {
+        if (platform.napplet.windows) {
+          const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : app.required;
+          void openApplicationWindow(app, state.account, reviewed).catch(() => setError('napplets.request_failed'));
+          return;
+        }
         if(app.release) {
           const runId=nappletService.prepareOpen(app.release,state.account,access.approved?undefined:[...new Set(['shell',...app.required])]);
           router.push({pathname:'/napplet-run',params:{runId}});

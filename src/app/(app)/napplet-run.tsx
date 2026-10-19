@@ -1,6 +1,3 @@
-import { openApplicationWindowForKey } from '@/services/explore/windows';
-import { showToast } from '@/stores/toast.store';
-import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect } from 'react';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useIsFocused, usePreventRemove } from 'expo-router/react-navigation';
@@ -42,9 +39,7 @@ export default function NappletRunScreen() {
     if (focused && ownsRun && !running && !launching && !panel && !launch?.error) router.back();
   }, [running, launching, launch?.error, panel, focused, ownsRun]);
   const release=running?.release??launch?.release??panel?.release;
-  const { t } = useTranslation();
-  const openWindow = () => { const key = release?.key; if (key) void openApplicationWindowForKey(key).catch(() => showToast(t('napplets.request_failed'))); };
-  return <ApplicationRuntimePage onOpenWindow={openWindow} title={release?.title} application={release}
+  return <ApplicationRuntimePage title={release?.title} application={release}
     hidden={sharing} menuEnabled={!!running} onClose={close} onMore={()=>nappletService.openPanel('about')}
     loading={ownsRun&&launch?.showLoading&&!launch.error} error={ownsRun?launch?.error:undefined}
     onRetry={()=>nappletService.retryOpen(ownerRunId)}
