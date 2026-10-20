@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/common/AppText';
 import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
-import { QuotedReply } from '@/components/chat/QuotedReply';
 import { Avatar } from '@/components/common/Avatar';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { useDisplayName } from '@/hooks/use-display-name';
@@ -27,47 +26,42 @@ const userTextStyle: TextStyle = Platform.OS === 'web'
 
 type ScrollProps = Pick<ScrollViewProps, 'onScroll' | 'scrollEventThrottle'>;
 
-export function ApplicationComments({ entry, account, header, topInset, scrollProps }: {
-  entry: ExploreEntry; account: string; header: ReactNode; topInset: number;
+export function ApplicationComments({ entry, account, header, scrollProps }: {
+  entry: ExploreEntry; account: string; header: ReactNode;
   scrollProps?: ScrollProps;
 }) {
   const target = useMemo(() => applicationCommentTarget(entry), [entry]);
   return target ? <Discussion key={`${account}:${target.key}:${target.eventId ?? ''}`}
-    account={account} target={target} header={header} topInset={topInset} scrollProps={scrollProps} /> : <ScrollView {...scrollProps}>{header}</ScrollView>;
+    account={account} target={target} header={header} scrollProps={scrollProps} /> : <ScrollView {...scrollProps}>{header}</ScrollView>;
 }
 
-function Discussion({ account, target, header, topInset, scrollProps }: {
-  account: string; target: CommentTarget; header: ReactNode; topInset: number; scrollProps?: ScrollProps;
+function Discussion({ account, target, header, scrollProps }: {
+  account: string; target: CommentTarget; header: ReactNode; scrollProps?: ScrollProps;
 }) {
   const state = useApplicationComments(account, target);
   const { t } = useTranslation();
   const colors = useThemeColors();
-  const [reply, setReply] = useState<ApplicationComment>();
-  const list = useRef<FlatList<CommentRow>>(null);
+  const [replyId, setReplyId] = useState<string>();
   const input = useRef<TextInput>(null);
-  const composerOffset = useRef(0);
-  const chooseReply = useCallback((comment: ApplicationComment) => {
-    setReply(comment);
-    list.current?.scrollToOffset({ offset: Math.max(0, composerOffset.current - topInset), animated: true });
-    input.current?.focus();
-  }, [topInset]);
-  const sent = useCallback((parentId?: string) => setReply(current => current?.event.id === parentId ? undefined : current), []);
-  return <FlatList ref={list} data={state.rows} keyExtractor={row => row.comment.event.id} {...scrollProps}
+  const chooseReply = useCallback((comment: ApplicationComment) => setReplyId(comment.event.id), []);
+  const cancelReply = useCallback(() => setReplyId(undefined), []);
+  const sent = useCallback((parentId?: string) => setReplyId(current => current === parentId ? undefined : current), []);
+  return <FlatList data={state.rows} extraData={replyId} keyExtractor={row => row.comment.event.id} {...scrollProps}
     initialNumToRender={12} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets
     ListHeaderComponent={<View>
       {header}
-      <View onLayout={event => { composerOffset.current = event.nativeEvent.layout.y; }}
-        style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xl, gap: spacing.lg }}>
+      <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm }}>
         <SectionLabel>{t('comments.title')}</SectionLabel>
-        <CommentComposer account={account} session={state.session} reply={reply} inputRef={input}
-          onCancelReply={() => setReply(undefined)} onSent={sent} />
+        <CommentComposer account={account} session={state.session} inputRef={input}
+          onCancelReply={cancelReply} onSent={sent} />
         {state.error ? <View style={{ gap: spacing.sm }}>
           <AppText tone="muted">{t('comments.load_failed')}</AppText>
           <AppButton variant="text" label={t('common.retry')} onPress={() => { void state.session.load(true); }} />
         </View> : null}
       </View>
     </View>}
-    renderItem={({ item }) => <CommentItem row={item} onReply={chooseReply} />}
+    renderItem={({ item }) => <CommentItem row={item} account={account} session={state.session}
+      replying={replyId === item.comment.event.id} onReply={chooseReply} onCancelReply={cancelReply} onSent={sent} />}
     ListEmptyComponent={state.loading || !state.loaded && !state.error
       ? <ActivityIndicator color={colors.accent} style={{ padding: spacing.lg }} />
       : !state.error && !state.hasMore ? <View style={{ alignItems: 'center', gap: spacing.sm, padding: spacing.xl }}>
@@ -80,13 +74,17 @@ function Discussion({ account, target, header, topInset, scrollProps }: {
     </View> : null} />;
 }
 
-const CommentItem = memo(function CommentItem({ row, onReply }: { row: CommentRow; onReply(comment: ApplicationComment): void }) {
+const CommentItem = memo(function CommentItem({ row, account, session, replying, onReply, onCancelReply, onSent }: {
+  row: CommentRow; account: string; session: ApplicationCommentsSession; replying: boolean;
+  onReply(comment: ApplicationComment): void; onCancelReply(): void; onSent(parentId?: string): void;
+}) {
+  const input = useRef<TextInput>(null);
   const { event } = row.comment;
   const { name, profile } = useDisplayName(event.pubkey);
   const colors = useThemeColors();
   const { t } = useTranslation();
   const guideStart = (depth: number) => spacing.lg + depth * replyIndent + avatarSize / 2;
-  return <View style={{ marginTop: row.depth === 0 ? spacing.sm : 0 }}>
+  return <View style={{ marginTop: row.depth === 0 ? spacing.xs : 0 }}>
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {(row.guideDepths ?? []).map(depth => <View key={depth} style={{ position: 'absolute', start: guideStart(depth),
         top: 0, bottom: 0, width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />)}
@@ -94,18 +92,18 @@ const CommentItem = memo(function CommentItem({ row, onReply }: { row: CommentRo
         {row.continuesParent ? <View style={{ position: 'absolute', start: guideStart(row.parentDepth),
           top: 0, bottom: 0, width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} /> : null}
         <View style={{ position: 'absolute', start: guideStart(row.parentDepth), top: 0,
-          width: replyIndent - avatarSize / 2 - spacing.xs, height: spacing.md + avatarSize / 2,
+          width: replyIndent - avatarSize / 2 - spacing.xs, height: spacing.sm + avatarSize / 2,
           borderStartWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomStartRadius: radius.md, borderColor: colors.border }} />
       </> : null}
       {row.hasReplies ? <View style={{ position: 'absolute', start: guideStart(row.depth),
-        top: spacing.md + avatarSize + spacing.xs, bottom: 0,
+        top: spacing.sm + avatarSize + spacing.xs, bottom: 0,
         width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} /> : null}
     </View>
     <View style={{ paddingStart: spacing.lg + row.depth * replyIndent, paddingEnd: spacing.lg,
-      paddingVertical: spacing.md, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+      paddingVertical: spacing.sm, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
       <Avatar pubkey={event.pubkey} picture={profile?.picture} size={avatarSize} />
-      <View style={{ flex: 1, gap: spacing.sm }}>
+      <View style={{ flex: 1, gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
           <AppText variant="caption" tone="muted" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</AppText>
           <AppText variant="caption" tone="muted">{formatListTime(event.created_at)}</AppText>
@@ -115,22 +113,26 @@ const CommentItem = memo(function CommentItem({ row, onReply }: { row: CommentRo
           <AppButton variant="accentText" fullWidth={false} compact compactAxis="none" labelVariant="caption"
             label={t('comments.reply')} onPress={() => onReply(row.comment)} />
         </View>
+        {replying ? <CommentComposer account={account} session={session} reply={row.comment} inputRef={input}
+          autoFocus onCancelReply={onCancelReply} onSent={onSent} /> : null}
       </View>
     </View>
   </View>;
-}, (before, after) => before.row.comment === after.row.comment && before.row.depth === after.row.depth &&
+}, (before, after) => before.account === after.account && before.session === after.session &&
+  before.replying === after.replying && before.onCancelReply === after.onCancelReply && before.onSent === after.onSent &&
+  before.row.comment === after.row.comment && before.row.depth === after.row.depth &&
   before.row.hasReplies === after.row.hasReplies && before.row.parentDepth === after.row.parentDepth &&
   before.row.continuesParent === after.row.continuesParent && before.onReply === after.onReply &&
   before.row.guideDepths.length === after.row.guideDepths.length &&
   before.row.guideDepths.every((depth, i) => depth === after.row.guideDepths[i]));
 
 /** Keep keystrokes and signing/publishing progress out of the virtualized thread. */
-export function CommentComposer({ account, session, reply, inputRef, onCancelReply, onSent }: {
-  account: string; session: ApplicationCommentsSession; reply?: ApplicationComment;
+export function CommentComposer({ account, session, reply, inputRef, autoFocus, onCancelReply, onSent }: {
+  account: string; session: ApplicationCommentsSession; reply?: ApplicationComment; autoFocus?: boolean;
   inputRef: React.RefObject<TextInput | null>; onCancelReply(): void; onSent(parentId?: string): void;
 }) {
   const { t } = useTranslation();
-  const { name, profile } = useDisplayName(account);
+  const { profile } = useDisplayName(account);
   const [content, setContent] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -145,28 +147,19 @@ export function CommentComposer({ account, session, reply, inputRef, onCancelRep
     } catch { setError(true); }
     finally { posting.current = false; setBusy(false); }
   };
-  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
     <Avatar pubkey={account} picture={profile?.picture} size={avatarSize} />
-    <View style={{ flex: 1, gap: spacing.md }}>
-      <AppInput {...userDirection} style={userTextStyle} ref={inputRef} multiline value={content} onChangeText={setContent} editable={!busy} maxLength={MAX_COMMENT_LENGTH}
-        inputHeaderAccessory={reply ? <ReplyQuote reply={reply} busy={busy} onCancel={onCancelReply} /> : undefined}
+    <View style={{ flex: 1, gap: spacing.sm }}>
+      <AppInput {...userDirection} style={userTextStyle} ref={inputRef} autoFocus={autoFocus} multiline value={content} onChangeText={setContent} editable={!busy} maxLength={MAX_COMMENT_LENGTH}
         accessibilityLabel={t(reply ? 'comments.reply_placeholder' : 'comments.placeholder')}
         placeholder={t(reply ? 'comments.reply_placeholder' : 'comments.placeholder')} />
       {error ? <AppText variant="caption" tone="danger">{t('comments.post_failed')}</AppText> : null}
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.md }}>
-        <AppText variant="caption" tone="muted" style={{ flexShrink: 1 }}>{t('comments.public_as', { name })}</AppText>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm }}>
+        {reply ? <AppButton variant="secondary" fullWidth={false} size="sm" label={t('common.cancel')}
+          accessibilityLabel={t('comments.cancel_reply')} disabled={busy} onPress={onCancelReply} /> : null}
         <AppButton variant="primary" fullWidth={false} size="sm" label={t('comments.post')} loading={busy} disabled={!content.trim()}
           onPress={() => { void post(); }} />
       </View>
     </View>
-  </View>;
-}
-
-function ReplyQuote({ reply, busy, onCancel }: { reply: ApplicationComment; busy: boolean; onCancel(): void }) {
-  const { name } = useDisplayName(reply.event.pubkey);
-  const { t } = useTranslation();
-  return <View accessibilityLiveRegion="polite">
-    <QuotedReply bare senderName={name} contentPreview={reply.event.content} onCancel={onCancel}
-      cancelDisabled={busy} cancelAccessibilityLabel={t('comments.cancel_reply')} />
   </View>;
 }

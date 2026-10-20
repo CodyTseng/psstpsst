@@ -36,7 +36,7 @@ export function ApplicationDetailsPage({application,error,access,unsupported=fal
   return <AppScreen edges={['bottom']}>
     <ScreenHeader title={application?.title??t('napplets.details')} bordered={scrolled}
       right={application&&actions?<ApplicationDetailsActions key={actions.entry.key} {...actions}/>:undefined}/>
-    {application&&discussion?<ApplicationComments entry={discussion.entry} account={discussion.account} header={header} topInset={clearance} scrollProps={scrollProps}/>
+    {application&&discussion?<ApplicationComments entry={discussion.entry} account={discussion.account} header={header} scrollProps={scrollProps}/>
       :<ScrollView style={{flex:1}} {...scrollProps}>{header}</ScrollView>}
   </AppScreen>;
 }

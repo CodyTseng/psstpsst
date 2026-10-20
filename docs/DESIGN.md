@@ -356,14 +356,16 @@ and remain borderless, with text aligned to the surrounding content gutter. Hove
 feedback reduce only the identity avatar and name's opacity, without adding a
 background. Publisher rows open that publisher's application catalogue from the
 whole row, across application details and runtime information surfaces.
-Application reviews use an inline public-account composer followed by an
-avatar-led thread, with compact avatars, muted author metadata distinct from
-the body, accent text reply actions, and logical guides connecting parent and
-reply avatars across rows. Review composers reuse the chat composer quote
-treatment inside the input, including its accent strip, author, preview and
-dismiss action; public posting identity stays beside the submit action.
-Review sections and separate threads use whitespace rather than horizontal
-rules; reply guides carry the conversation hierarchy.
+Application reviews keep a top-level composer above an avatar-led thread,
+with compact avatars, muted author metadata distinct from the body, accent text reply actions, and logical guides connecting parent and
+reply avatars across rows. Reply actions expand a focused composer directly
+below the selected review while preserving the top-level draft. All review
+composers omit posting-identity captions. Reply composers appear only on demand, omit redundant
+quotes and pair equal-height Cancel and Post
+buttons in one action row.
+Review rows keep metadata, body, and reply actions closely grouped. Composers
+keep their action row close to the input. Separate threads use compact
+whitespace rather than horizontal rules; reply guides carry the hierarchy.
 Application details place a compact primary Open action beside the app identity
 in the scrolling header. Launching and reviewing are independent action
 contexts, each with a primary action. Failed posts retain the draft.
@@ -430,6 +432,7 @@ glyph; solid danger fills remain reserved for prominent destructive actions.
 Use `ActionRow` for action groups so order, role, spacing, and RTL behaviour do
 not drift. `AppInput` owns its field label above the control and its supporting
 text below it; an error replaces the description in the same slot.
+Clicking unused space inside an editable input focuses its editor.
 Input placeholders share the caret and entered text's alignment and content
 area, excluding inline actions.
 

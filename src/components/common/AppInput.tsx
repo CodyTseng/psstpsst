@@ -1,5 +1,5 @@
-import { forwardRef, type ReactNode, useState } from 'react';
-import { StyleSheet, TextInput, type TextInputProps, View } from 'react-native';
+import { forwardRef, type ReactNode, useImperativeHandle, useRef, useState } from 'react';
+import { Pressable, StyleSheet, TextInput, type TextInputProps, View } from 'react-native';
 
 import { radius, spacing, typography, uiDensity, useThemeColors } from '@/theme';
 
@@ -43,6 +43,8 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
   ref,
 ) {
   const c = useThemeColors();
+  const inputRef = useRef<TextInput>(null);
+  useImperativeHandle(ref, () => inputRef.current!, []);
   const [focused, setFocused] = useState(false);
   const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue ?? '');
 
@@ -55,7 +57,12 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
   const textAlign = StyleSheet.flatten(style)?.textAlign;
 
   const input = (
-    <View
+    <Pressable
+      accessible={false}
+      focusable={false}
+      onPress={() => {
+        if (rest.editable !== false) inputRef.current?.focus();
+      }}
       style={{
         borderWidth: 1,
         borderColor,
@@ -70,7 +77,7 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
       }}
     >
       {multiline && inputHeaderAccessory ? <View style={{ marginBottom: spacing.md }}>{inputHeaderAccessory}</View> : null}
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: multiline ? 'flex-start' : 'center',
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: multiline ? 'stretch' : 'center',
         minHeight: multiline && inputHeaderAccessory ? uiDensity.multilineInputMinHeight - spacing.xl : undefined }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
           {showTruncatedPlaceholder ? (
@@ -96,7 +103,7 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
             </View>
           ) : null}
           <TextInput
-            ref={ref}
+            ref={inputRef}
             placeholderTextColor={c.textMuted}
             {...rest}
             value={value}
@@ -139,7 +146,7 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
           <View style={{ flexShrink: 0 }}>{inputTrailingAccessory}</View>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 
   const control =
