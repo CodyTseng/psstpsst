@@ -1118,6 +1118,7 @@
     "up_to_date": "Bu uygulama güncel.",
     "immutable_version": "Bu sabit bir sürümdür. Güncellemek için daha yeni bir uygulama adresini açın.",
     "publisher": "Yayıncı",
+    "publisher_apps": "Yayınlanan uygulamalar",
     "permissions": "İstenen erişim",
     "version": "Doğrulanmış sürüm",
     "none": "Yok",

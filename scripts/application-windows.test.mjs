@@ -60,6 +60,10 @@ test('Electron application hosts keep independent containers, owned IPC and shar
         await invoke(first,IPC.applicationWindowAction,share);await pause(40);
         assert((await events(parent)).some(e=>e.channel===IPC.applicationWindowAction&&e.args[0].title==='Example'));
         await assert.rejects(invoke(first,IPC.applicationWindowAction,{...share,accountPubkey:'b'.repeat(64)}),/invalid-window-action/);
+        const publisher={type:'publisher',pubkey:'c'.repeat(64)};
+        await invoke(first,IPC.applicationWindowAction,publisher);await pause(40);
+        assert((await events(parent)).some(e=>e.channel===IPC.applicationWindowAction&&e.args[0].type==='publisher'&&e.args[0].pubkey===publisher.pubkey));
+        await assert.rejects(invoke(first,IPC.applicationWindowAction,{type:'publisher',pubkey:'invalid'}),/invalid-window-action/);
         await assert.rejects(invoke(first,IPC.applicationWindowCloseAll),/untrusted-window-owner/);
         const firstOwner=first.webContents.id;
         await invoke(parent,IPC.applicationWindowCloseAll,launch.accountPubkey);await pause(50);

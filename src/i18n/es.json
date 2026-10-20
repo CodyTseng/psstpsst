@@ -1123,6 +1123,7 @@
     "up_to_date": "Esta aplicación está actualizada.",
     "immutable_version": "Esta es una versión fija. Abre una dirección de aplicación más reciente para actualizarla.",
     "publisher": "Publicador",
+    "publisher_apps": "Aplicaciones publicadas",
     "permissions": "Acceso solicitado",
     "version": "Versión verificada",
     "none": "Ninguna",

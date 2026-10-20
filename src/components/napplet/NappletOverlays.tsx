@@ -1,8 +1,8 @@
+import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { router } from 'expo-router';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
 import { appShareAddress } from '@/services/napplet/protocol';
 import { KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
@@ -38,6 +38,7 @@ export function NappletOverlays() {
 }
 
 function NappletOverlayContent() {
+  const openPublisher = useOpenPublisher();
   const { prompt, configuration, panel, accountPubkey } = useNapplets();
   const pending = useRef<(() => void) | null>(null);
   const { t } = useTranslation();
@@ -57,7 +58,7 @@ function NappletOverlayContent() {
     const account = accountPubkey;
     pending.current = () => {
       if (getNappletAccountPubkey() !== account) return;
-      if (action === 'publisher') { if (platform.napplet.windows?.isHost) void platform.napplet.windows.action({type:'profile',pubkey:release.event.pubkey}); else router.push(`/profile/${release.event.pubkey}`); }
+      if (action === 'publisher') openPublisher(release.event.pubkey);
       else if (action === 'share') {
         if (platform.napplet.windows?.isHost) { void platform.napplet.windows.action({type:'share',accountPubkey:account,title:release.title,address:appShareAddress(release)}); return; }
         const draftId = useForwardDraftStore.getState().start({ accountPubkey: account, sourceConversationKey: null,

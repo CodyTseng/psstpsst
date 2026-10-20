@@ -1118,6 +1118,7 @@
     "up_to_date": "このアプリは最新です。",
     "immutable_version": "これは固定バージョンです。更新するには、新しいアプリのアドレスを開いてください。",
     "publisher": "公開者",
+    "publisher_apps": "公開したアプリ",
     "permissions": "要求されるアクセス",
     "version": "検証済みバージョン",
     "none": "なし",

@@ -1118,6 +1118,7 @@
     "up_to_date": "최신 버전입니다.",
     "immutable_version": "고정된 버전입니다. 업데이트하려면 더 최신 앱 주소를 여세요.",
     "publisher": "게시자",
+    "publisher_apps": "게시한 앱",
     "permissions": "요청한 접근 권한",
     "version": "검증된 버전",
     "none": "없음",

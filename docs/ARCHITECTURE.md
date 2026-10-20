@@ -695,6 +695,9 @@ Discovery queries a bounded set of public manifests from default relays, verifie
 and deduplicates them in a temporary catalogue, and shares the existing detail
 presentation. Browsing never records a visit or writes to the local relay; adding
 a favorite persists its metadata and shortcut independently of history.
+Publisher catalogues query the same supported manifest kinds with an exact author
+filter and verify authorship locally. Their bounded, temporary results share the
+application detail flow without changing saved applications or discovery results.
 
 Cached entries, explicit shortcut positions, and distinct-address last visits use
 separate account-scoped tables. Opening changes recency only. The cache is bounded

@@ -1,3 +1,4 @@
+import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
 import { openApplicationWindow } from '@/services/explore/windows';
 import { useState } from 'react';
@@ -10,6 +11,7 @@ import { nappletService } from '@/services/napplet/service';
 import { fromNapplet, applicationPresentation } from '@/services/explore/model';
 
 export default function NappletDetailScreen() {
+  const openPublisher=useOpenPublisher();
   const {id}=useLocalSearchParams<{id:string}>();
   const {release,accountPubkey,error:loadError}=useNappletRelease(id);
   const access=useNappletAccess(release,accountPubkey);
@@ -17,7 +19,7 @@ export default function NappletDetailScreen() {
   return <ApplicationDetailsPage application={release?applicationPresentation(release):undefined}
     access={access} error={error??loadError??access.error}
     unsupported={release?.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain))}
-    onPublisher={()=>{if(release)router.push(`/profile/${release.event.pubkey}`);}}
+    onPublisher={()=>{if(release)openPublisher(release.event.pubkey);}}
     onOpen={()=>{
       if(!release)return;
       try {

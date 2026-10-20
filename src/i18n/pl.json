@@ -1128,6 +1128,7 @@
     "up_to_date": "Ta aplikacja jest aktualna.",
     "immutable_version": "To stała wersja. Aby ją zaktualizować, otwórz adres nowszej aplikacji.",
     "publisher": "Wydawca",
+    "publisher_apps": "Opublikowane aplikacje",
     "permissions": "Żądany dostęp",
     "version": "Zweryfikowana wersja",
     "none": "Brak",

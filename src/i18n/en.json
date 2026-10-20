@@ -1118,6 +1118,7 @@
     "up_to_date": "This app is up to date.",
     "immutable_version": "This is a fixed version. Open a newer app address to update it.",
     "publisher": "Publisher",
+    "publisher_apps": "Published apps",
     "permissions": "Requested access",
     "version": "Verified version",
     "none": "None",

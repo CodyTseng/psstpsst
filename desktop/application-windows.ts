@@ -95,7 +95,7 @@ export class ApplicationWindows {
         this.options.parent()?.webContents.send(IPC.applicationWindowAction, action);
         return;
       }
-      if (action.type === 'profile' ? !/^[a-f0-9]{64}$/.test(action.pubkey) :
+      if (action.type === 'profile' || action.type === 'publisher' ? typeof action.pubkey !== 'string' || !/^[a-f0-9]{64}$/.test(action.pubkey) :
         action.type !== 'share' || action.accountPubkey !== launch.accountPubkey || typeof action.title !== 'string' || typeof action.address !== 'string') throw new Error('invalid-window-action');
       const parent = this.options.parent();
       if (!parent || parent.isDestroyed()) throw new Error('window-unavailable');

@@ -352,7 +352,8 @@ Mini-app publisher attribution uses a separate labelled information row between
 the app heading and description. Supporting metadata rows fit their visible content with expanded touch targets
 and remain borderless, with text aligned to the surrounding content gutter. Hover and press
 feedback reduce only the identity avatar and name's opacity, without adding a
-background. Publisher rows open the profile from the whole row.
+background. Publisher rows open that publisher's application catalogue from the
+whole row, across application details and runtime information surfaces.
 
 ## 8. Component vocabulary
 

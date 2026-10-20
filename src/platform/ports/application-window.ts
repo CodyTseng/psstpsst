@@ -5,6 +5,7 @@ export type ApplicationWindowLaunch = { accountPubkey: string; address: string; 
 export type ApplicationWindowAction =
   | { type: 'visited'; accountPubkey: string; key: string }
   | { type: 'profile'; pubkey: string }
+  | { type: 'publisher'; pubkey: string }
   | { type: 'share'; accountPubkey: string; title: string; address: string };
 export type ApplicationSigningChange = { accountPubkey: string; sourceId: string; key?: string };
 export type RunningApplication = { accountPubkey: string; sourceId: string };

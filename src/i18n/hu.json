@@ -1118,6 +1118,7 @@
     "up_to_date": "Az app naprakész.",
     "immutable_version": "Ez egy rögzített verzió. Frissítéshez nyiss meg egy újabb appcímet.",
     "publisher": "Közzétevő",
+    "publisher_apps": "Közzétett alkalmazások",
     "permissions": "Kért hozzáférés",
     "version": "Ellenőrzött verzió",
     "none": "Nincs",

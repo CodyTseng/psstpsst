@@ -1,7 +1,7 @@
+import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
 import { useRef } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { AppButton } from '@/components/common/AppButton';
@@ -21,6 +21,7 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
   onPageChange(page: 'about'|'settings'|null): void;
 }) {
   const {t}=useTranslation();
+  const openPublisher=useOpenPublisher();
   const share=useExploreShare(account);
   const pending=useRef<(()=>void)|null>(null);
   const close=()=>onPageChange(null);
@@ -45,6 +46,6 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
         {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('napplets.settings')}
           onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'))); })}/> : null}
       </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}/>}
-      onPublisher={()=>{if(entry.manifest)schedule(()=>{if(platform.napplet.windows?.isHost)void platform.napplet.windows.action({type:'profile',pubkey:entry.manifest!.pubkey});else router.push(`/profile/${entry.manifest!.pubkey}`);});}}/>
+      onPublisher={()=>{if(entry.manifest)schedule(()=>openPublisher(entry.manifest!.pubkey));}}/>
   </BottomSheet>;
 }

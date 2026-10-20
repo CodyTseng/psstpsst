@@ -1118,6 +1118,7 @@
     "up_to_date": "已是最新版本。",
     "immutable_version": "這是固定版本。請開啟新的應用地址以更新。",
     "publisher": "釋出者",
+    "publisher_apps": "已發佈的應用程式",
     "permissions": "請求的許可權",
     "version": "已驗證版本",
     "none": "無",
