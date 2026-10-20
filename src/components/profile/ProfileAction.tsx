@@ -16,7 +16,7 @@ type Props = {
   shape?: 'circle' | 'square';
   /** Fixed slots preserve action order in a horizontally scrolling rail. */
   layout?: 'equal' | 'fixed';
-  /** Equal-column basis, or minimum slot width when layout is fixed. */
+  /** Equal-column basis, or exact slot width when layout is fixed. */
   width?: number;
   size?: number;
   singleLineLabel?: boolean;
@@ -33,10 +33,11 @@ export function ProfileAction({ icon, label, accessibilityLabel, onPress, disabl
       style={{
         alignItems: 'center',
         gap: spacing.sm,
-        flexBasis: layout === 'fixed' ? 'auto' : width,
+        flexBasis: width,
         flexGrow: layout === 'equal' ? 1 : 0,
         flexShrink: layout === 'equal' ? 1 : 0,
         minWidth: layout === 'fixed' ? width : 0,
+        width: layout === 'fixed' ? width : undefined,
         paddingHorizontal: spacing.xs,
       }}
     >

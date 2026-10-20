@@ -39,7 +39,7 @@ export function NappletPanelActions({ address, onAction, onOpenExternal }: { add
   const c = useThemeColors();
   const { copyText, copied } = useClipboard();
   const actions = [
-    { key: 'copy', label: t(copied ? 'common.copied' : 'napplets.copy_address'), icon: copied
+    { key: 'copy', label: t(copied ? 'common.copied' : 'common.copy'), accessibilityLabel: t(copied ? 'common.copied' : 'napplets.copy_address'), icon: copied
       ? <Check size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/>
       : <Copy size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> },
     { key: 'share', label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> },
@@ -50,8 +50,8 @@ export function NappletPanelActions({ address, onAction, onOpenExternal }: { add
   return <HorizontalFadeScrollView fadeColor={c.sheetBackground}
     contentContainerStyle={{ gap: spacing.xs, alignItems: 'flex-start' }}>
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
-      width={uiDensity.profileActionWidth + spacing.lg} size={uiDensity.profileActionSize + spacing.lg}
-      singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={action.label}
+      width={uiDensity.profileActionWidth + spacing.xl} size={uiDensity.profileActionSize + spacing.lg}
+      singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
       onPress={() => { if (action.key === 'copy') void copyText(address); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
   </HorizontalFadeScrollView>;
 }

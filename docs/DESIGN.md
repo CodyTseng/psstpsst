@@ -107,6 +107,8 @@ anchor, such as an empty state, onboarding prompt, dialog, or pairing code.
 Text beside an icon, avatar, control, or metadata stays start-aligned.
 Captions beneath circular profile actions are centered within equal-width
 columns and wrap to show the full label.
+Action rails use fixed equal-width slots for each icon and caption; labels and
+temporary confirmation text never resize the slots.
 
 Arabic and Persian use RTL. Use `AppText` logical alignment and logical layout
 properties (`start`, `end`, `marginStart`, `paddingEnd`). Directional icons
