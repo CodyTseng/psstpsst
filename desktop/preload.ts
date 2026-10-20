@@ -121,6 +121,7 @@ const bridge: ElectronBridge = {
     send: (id, message) => invoke(IPC.nappletSend, id, message),
     setBounds: (id, bounds, visible, interactive) => invoke(IPC.nappletBounds, id, bounds, visible, interactive),
     fetch: (id, url, max, accept) => invoke(IPC.nappletFetch, id, url, max, accept), cancel: (id) => invoke(IPC.nappletCancel, id),
+    fetchResponse: (id, url, max, validators) => invoke(IPC.nappletFetch, id, url, max, undefined, { validators }),
     onMessage: (listener) => {
       const handler = (_event: unknown, id: string, message: string) => listener(id, message);
       ipcRenderer.on(IPC.nappletMessage, handler);
@@ -170,6 +171,7 @@ const bridge: ElectronBridge = {
     copyAttachment: (uri, options) => invoke(IPC.clipboardCopyAttachment, uri, options),
   },
   fileSystem: {
+    updateJson: (uri, patch) => invoke(IPC.fsUpdateJson, uri, patch),
     documentDirectoryUri: () => invoke(IPC.fsDocumentDirectory),
     cacheDirectoryUri: () => invoke(IPC.fsCacheDirectory),
     availableDiskSpace: () => invoke(IPC.fsAvailableDiskSpace),

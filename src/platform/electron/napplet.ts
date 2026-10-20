@@ -4,6 +4,21 @@ import type { NappletPort } from '../ports/napplet';
 import { getElectronBridge } from './bridge';
 
 export const electronNappletAdapter: NappletPort = {
+  async fetchResourceResponse(url, maxBytes, signal, validators) {
+    const bridge = getElectronBridge().napplet;
+    if (!bridge.fetchResponse) return { status: 200, bytes: await electronNappletAdapter.fetchResource(url, maxBytes, signal) };
+    const id = crypto.randomUUID();
+    const abort = () => { void bridge.cancel(id).catch(() => {}); };
+    assertNotAborted(signal);
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const result = await bridge.fetchResponse(id, url, maxBytes, validators);
+      assertNotAborted(signal);
+      if (!result) throw Object.assign(new Error('session-closed'), { name: 'AbortError' });
+      if ('error' in result) throw Object.assign(new Error(result.error), { code: result.code });
+      return { ...result, bytes: await decodeNappletBytes(result.bytes, signal) };
+    } finally { signal?.removeEventListener('abort', abort); }
+  },
   get windows() { return getElectronBridge().napplet.windows; },
   async fetchResource(url, maxBytes, signal, options) {
     const bridge = getElectronBridge().napplet;
@@ -14,7 +29,17 @@ export const electronNappletAdapter: NappletPort = {
     assertNotAborted(signal);
     signal?.addEventListener('abort', abort, { once: true });
     try {
-      const bytes = await decodeNappletBytes(await bridge.fetch(id, url, maxBytes, options?.accept), signal);
+      const result = await bridge.fetch(id, url, maxBytes, options?.accept);
+      if (result === null) {
+        const error = new Error('session-closed');
+        error.name = 'AbortError';
+        throw error;
+      }
+      assertNotAborted(signal);
+      if (typeof result !== 'string') {
+        throw Object.assign(new Error(result.error), { code: result.code });
+      }
+      const bytes = await decodeNappletBytes(result, signal);
       assertNotAborted(signal);
       return bytes;
     } finally {

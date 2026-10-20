@@ -109,6 +109,7 @@ function lazyFileSystemAdapter(): FileSystemPort {
     readBase64: (uri) => load().readBase64(uri),
     readBytes: (uri) => load().readBytes(uri),
     writeText: (uri, contents) => load().writeText(uri, contents),
+    updateJson: (uri, patch) => load().updateJson(uri, patch),
     writeBytes: (uri, bytes) => load().writeBytes(uri, bytes),
     openReadHandle: (uri, options) => load().openReadHandle(uri, options),
     openWriteHandle: (uri, options) => load().openWriteHandle(uri, options),

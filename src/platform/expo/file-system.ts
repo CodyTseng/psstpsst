@@ -1,6 +1,9 @@
 import { fetch } from 'expo/fetch';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
+import { updateJson } from '../shared/update-json';
 
 import { readRemoteBody } from '../shared/read-remote-body';
 
@@ -87,6 +90,21 @@ function wrapWriteHandle(handle: {
 
 /** File storage backed by `expo-file-system` (modern + legacy entries). */
 export const fileSystemAdapter: FileSystemPort = {
+  async updateJson(uri, patch) {
+    await updateJson(uri, patch, async () => {
+      if (!await LegacyFileSystem.getInfoAsync(uri).then(info => info.exists)) return null;
+      return LegacyFileSystem.readAsStringAsync(uri);
+    }, async text => {
+      if (Platform.OS === 'android') {
+        const native = requireOptionalNativeModule<{ writeTextAtomicAsync?(uri: string, text: string): Promise<void> }>('ExpoNapplet');
+        if (!native?.writeTextAtomicAsync) throw new Error('napplets.rebuild_required');
+        await native.writeTextAtomicAsync(uri, text);
+      } else {
+        // The SDK's iOS legacy writer uses Foundation's atomic replacement.
+        await LegacyFileSystem.writeAsStringAsync(uri, text);
+      }
+    });
+  },
   documentDirectoryUri: () => Promise.resolve(LegacyFileSystem.documentDirectory),
   cacheDirectoryUri: () => Promise.resolve(LegacyFileSystem.cacheDirectory),
   availableDiskSpace: () => Promise.resolve(Paths.availableDiskSpace),

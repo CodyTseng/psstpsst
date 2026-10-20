@@ -12,7 +12,7 @@ import { signingTemplate } from '@/services/signing/event-template';
 import { eventWeight, randomId } from '@/services/napplet/protocol';
 import { publicEventAddress } from './event-address';
 import { encodeNappletBytes } from '@/platform/napplet-bytes';
-import { loadSiteBlob } from '@/services/napplet/artifacts';
+import { loadSiteBlob, recordArtifactVersion } from '@/services/napplet/artifacts';
 import { applicationPresentation, websiteAddress } from './model';
 import type { ExploreEntry } from './model';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
@@ -75,6 +75,8 @@ export class ExploreRuntime {
       page.url = this.entry.address;
     else {
       page.files = [];
+      const artifactFiles = (this.entry.files ?? []).map(file => `files/${file.hash}.blob`);
+      await recordArtifactVersion(this.entry, artifactFiles, false);
       let total = 0;
       let mediaServers: Promise<string[]> | undefined;
       const load = async (hash: string) => {
@@ -87,7 +89,7 @@ export class ExploreRuntime {
           const servers = (await mediaServers).filter(server => !this.entry.servers.includes(server));
           assertNotAborted(this.lifetime.signal);
           if (!servers.length) throw error;
-          return loadSiteBlob({ servers }, hash, this.lifetime.signal);
+          return loadSiteBlob({ ...this.entry, servers }, hash, this.lifetime.signal);
         }
       };
       // A small worker pool bounds network and memory pressure; blobs remain hash-verified.
@@ -114,6 +116,8 @@ export class ExploreRuntime {
         }
       };
       await Promise.all([worker(), worker(), worker()]);
+      assertNotAborted(this.lifetime.signal);
+      await recordArtifactVersion(this.entry, artifactFiles, true);
     }
     assertNotAborted(this.lifetime.signal);
     const receive = (id: string, raw: string) => {

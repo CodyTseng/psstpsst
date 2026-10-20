@@ -1,13 +1,13 @@
 import { EventEmitter } from 'node:events';
 import { request } from 'node:https';
-import { fetchNappletResource } from '../napplet-resource';
+import { fetchNappletResource, fetchNappletResourceResponse } from '../napplet-resource';
 import { resolvePublicAddresses } from '../napplet-public-dns';
 
 jest.mock('node:https', () => ({ request: jest.fn() }));
 jest.mock('../napplet-public-dns', () => ({
   ...jest.requireActual('../napplet-public-dns'), resolvePublicAddresses: jest.fn(),
 }));
-type Reply = { status?: number; location?: string; bytes?: Buffer };
+type Reply = { status?: number; location?: string; bytes?: Buffer; etag?: string; modified?: string };
 let replies: Reply[];
 beforeEach(() => {
   jest.clearAllMocks();
@@ -24,7 +24,7 @@ beforeEach(() => {
         const reply = replies.shift() ?? { status: 302, location: '/loop' };
         const response = new EventEmitter() as any;
         response.statusCode = reply.status ?? 200;
-        response.headers = { location: reply.location };
+        response.headers = { location: reply.location, etag: reply.etag, 'last-modified': reply.modified };
         response.destroy = jest.fn((error?: Error) => { if (error) response.emit('error', error); });
         respond(response);
         response.emit('data', reply.bytes ?? Buffer.from('verified bytes'));
@@ -33,6 +33,28 @@ beforeEach(() => {
     };
     return req;
   }) as typeof request);
+});
+
+it('returns validators with their original case and supports 304 without reading a body', async () => {
+  replies = [{ bytes: Buffer.from('icon'), etag: '"MixedCaseTag"', modified: 'Tue, 01 Jan 2030 00:00:00 GMT' }];
+  await expect(fetchNappletResourceResponse('https://site.example/icon', 100)).resolves.toMatchObject({ status: 200, etag: '"MixedCaseTag"' });
+  replies = [{ status: 304, etag: '"MixedCaseTag"' }];
+  await expect(fetchNappletResourceResponse('https://site.example/icon', 100, undefined, { etag: '"MixedCaseTag"' }))
+    .resolves.toMatchObject({ status: 304, bytes: new Uint8Array() });
+  expect(jest.mocked(request).mock.calls.at(-1)?.[1]).toMatchObject({ headers: { 'If-None-Match': '"MixedCaseTag"' } });
+});
+
+it('drops conditional headers on redirects and retains DNS validation', async () => {
+  replies = [{ status: 302, location: 'https://cdn.example/icon' }, { bytes: Buffer.from('icon') }];
+  await fetchNappletResourceResponse('https://site.example/icon', 100, undefined, { etag: '"PrivateTag"' });
+  const headers = jest.mocked(request).mock.calls[1][1] as { headers: Record<string, string> };
+  expect(headers.headers['If-None-Match']).toBeUndefined();
+  expect(resolvePublicAddresses).toHaveBeenCalledTimes(2);
+});
+
+it('rejects validator header injection before connecting', () => {
+  expect(() => fetchNappletResourceResponse('https://site.example/icon', 100, undefined, { etag: 'a\r\nInjected: true' })).toThrow('invalid-validator');
+  expect(request).not.toHaveBeenCalled();
 });
 
 it('follows relative and cross-host redirects with a fresh public DNS lookup for every hop', async () => {

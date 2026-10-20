@@ -722,7 +722,16 @@ verified manifest identity. Upgrades retain storage, configuration and capabilit
 grants; newly required capabilities need fresh consent. Artifact hashes identify
 code and cache entries. Runtime relay AUTH connections and
 remote-signer transport never borrow the chat session. Only hash-verified immutable
-artifacts are shared across accounts. See [napplet runtime](implementation/napplet-runtime.md).
+artifacts are shared across accounts. Artifact storage groups files by canonical
+application coordinate under `documents/app-artifacts/`, with content hashes
+identifying originals inside each application's `files/` directory. The application
+directory's outer level is reserved for host-managed materials. See [napplet runtime](implementation/napplet-runtime.md).
+Host-owned cache metadata records version file sets and icon locations through
+serialized atomic merges. It never supplies signing authority or replaces signed
+manifests; runtime files remain hash-verified.
+Website artwork is indexed by canonical origin in a separate website directory.
+Local display files survive restarts; refreshes retain usable artwork and use the
+same bounded public-resource transport as application downloads.
 Mini-app desktop membership and position are explicit account-scoped state,
 independent of launch recency. Desktop edits commit atomically and never change
 app data or grants. The recent preview shows one row; full recent history derives from the bounded

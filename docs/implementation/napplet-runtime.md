@@ -116,6 +116,52 @@ other schemes return an unsupported-scheme error. Bulk requests accept the pinne
 SDK request objects and legacy URL arrays, preserve successful siblings, and
 bound aggregate reply size and total request time.
 
+Downloaded code, bundle files and declared icons live in
+`documents/app-artifacts/<app-id>/files/`, named by content hash with `.html` or
+`.blob` extensions. Host-generated materials belong directly under `<app-id>/`.
+The directory ID is the canonical relay-free `naddr` (or `nevent` for
+immutable legacy listings), so updates retain the same directory. IDs exceeding
+240 characters use `app-<sha256(app-id)>` with the full ID in `app-id.txt` to stay
+within filesystem component limits. Earlier files stored directly under
+`<app-id>/` or in the flat `documents/napplets/` cache are hash-verified and copied
+into `files/` on demand, without scanning or deleting the old cache.
+Account-specific data and grants remain in their separate stores.
+
+Each application directory contains a host-owned `metadata.json` with
+`schemaVersion`, the full `appId`, `versions` keyed by signed manifest event ID,
+and an optional `icon` record. Version file lists contain relative hashed paths;
+`complete: true` is committed only after all required files are ready. Missing
+`complete` means preparation is incomplete, and retries cannot downgrade a
+completed record. Icon records contain the source hash, source manifest ID and
+relative source-file path; they do not imply that a display thumbnail exists.
+Bundle preparation updates metadata at its start and completion, rather than
+after every file. Atomic object merges preserve other versions and concurrent
+icon changes. Electron serializes these operations in the main process; mobile
+serializes them in the shared adapter and performs replacement off the JS thread.
+Metadata is a rebuildable cache index, never an authority for runtime code or
+permissions. Display-image generation and automatic artifact collection are
+separate consumers of this index.
+
+Website artwork uses `documents/app-artifacts/website-<sha256(origin)>/`, with
+the canonical scheme/host/port origin as `appId` and `origin` in `metadata.json`.
+Its icon record stores the discovery URL, source-content hash, relative display
+path and optional HTTP validators; `checkedAt` and `refreshAfter` govern refresh.
+Displayed artwork is read directly from local files, without rehashing or base64
+encoding pixels on every launch. Native image conversion produces a PNG bounded
+to 256 pixels on either dimension; formats unsupported by a native converter
+retain their original extension for the image view.
+Successful fetches remain fresh for 24 hours. Stale artwork is returned before a
+background refresh; ETag/Last-Modified conditional requests reuse it on 304.
+Missing/moved icon URLs fall back to bounded HTML/manifest discovery. Network
+failures retain existing artwork and defer retries for five minutes, including
+across restarts. Website discovery and refresh share a four-job pool and a
+64-job waiting bound; the in-memory origin index is capped at 128 entries.
+New files are staged before publication, metadata is replaced atomically, and
+the previous icon is removed only after the new record is published. Mounted
+identity rows receive refresh notifications; decoder failures retry missing or
+corrupt local files with a bounded recovery interval. Older native/preload
+transports fall back to full bounded downloads when response metadata is absent.
+
 ## Runtime controls
 
 The runtime header exposes More and Close. More opens app identity and publisher

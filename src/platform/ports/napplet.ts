@@ -7,10 +7,14 @@ export type NappletBounds = { x: number; y: number; width: number; height: numbe
 export const NAPPLET_FRAME_READY = 'psst.frameReady';
 export const NAPPLET_FRAME_READY_MESSAGE = JSON.stringify({ type: NAPPLET_FRAME_READY });
 
+export type ResourceValidators = { etag?: string; lastModified?: string };
+export type ResourceResponse = ResourceValidators & { status: 200 | 304; bytes: Uint8Array };
+
 /** Privileged transport only. No account credentials or application APIs cross this seam. */
 export interface NappletPort {
   windows?: ApplicationWindowsPort;
   tasks?: ApplicationTasksPort;
+  fetchResourceResponse?(url: string, maxBytes: number, signal?: AbortSignal, validators?: ResourceValidators): Promise<ResourceResponse>;
   fetchResource(url: string, maxBytes: number, signal?: AbortSignal, options?: { accept: 'application/json' | 'application/nostr+json' }): Promise<Uint8Array>;
   clearPageData?(storageId: string): Promise<void>;
   openPage?(page: ExplorePage): Promise<string>;

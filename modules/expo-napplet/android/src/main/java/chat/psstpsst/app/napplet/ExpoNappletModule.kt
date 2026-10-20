@@ -32,8 +32,90 @@ class ExpoNappletModule : Module() {
     .connectTimeout(10, TimeUnit.SECONDS).callTimeout(20, TimeUnit.SECONDS)
     .proxy(java.net.Proxy.NO_PROXY)
     .dns(PublicDns()).build()
+  private fun fetchResource(id: String, value: String, max: Int, accept: String?, promise: Promise,
+    responseDetails: Boolean = false, etag: String? = null, lastModified: String? = null) {
+      val task = FetchTask()
+      val admitted = synchronized(calls) { if (calls.size >= 12 || id.length > 128 || value.length > 4096) false else { calls[id] = task; true } }
+      if (!admitted) promise.reject("ERR_RESOURCE", "quota-exceeded", null)
+      else executor.execute {
+        try {
+          require(accept == null || accept in listOf("*/*", "application/json", "application/nostr+json")) { "invalid-accept" }
+          require(!task.cancelled.get()) { "cancelled" }
+          var url = value.toHttpUrl()
+          var redirects = 0
+          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
+          for (validator in listOf(etag, lastModified)) require(validator == null || validator.length <= 2048 && !validator.contains(Regex("[\\r\\n\\u0000]"))) { "invalid-validator" }
+          val responseInfo = mutableMapOf<String, Any>("status" to 200)
+          var downloaded: String? = null
+          while (downloaded == null) {
+            require(!task.cancelled.get()) { "cancelled" }
+            val literalHost = url.host.matches(Regex("[0-9.]+")) || url.host.contains(":")
+            require(url.toString().length <= 4096 && (!literalHost || publicAddress(InetAddress.getByName(url.host))) &&
+              url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.port == 443 && max in 1..26214400) { "blocked-by-policy" }
+            val remaining = deadline - System.nanoTime()
+            require(remaining > 0) { "timeout" }
+            val builder = Request.Builder().url(url).header("Accept", accept ?: "*/*").header("Accept-Encoding", "identity")
+            if (responseDetails && redirects == 0) {
+              if (etag != null) builder.header("If-None-Match", etag)
+              if (lastModified != null) builder.header("If-Modified-Since", lastModified)
+            }
+            val call = client.newCall(builder.build())
+            call.timeout().timeout(remaining, TimeUnit.NANOSECONDS)
+            task.call = call
+            if (task.cancelled.get()) call.cancel()
+            call.execute().use { response ->
+              if (responseDetails) {
+                responseInfo.remove("etag"); responseInfo.remove("lastModified")
+                responseInfo["status"] = response.code
+                response.header("ETag")?.takeIf { it.length <= 2048 }?.let { responseInfo["etag"] = it }
+                response.header("Last-Modified")?.takeIf { it.length <= 2048 }?.let { responseInfo["lastModified"] = it }
+              }
+              if (response.code == 304 && responseDetails && redirects == 0 && (etag != null || lastModified != null)) {
+                downloaded = ""
+              } else if (response.code in listOf(301, 302, 303, 307, 308)) {
+                require(redirects++ < 5) { "redirect-limit" }
+                val location = response.header("Location") ?: error("resource-unavailable")
+                require(location.length <= 4096) { "blocked-by-policy" }
+                url = url.resolve(location) ?: error("resource-unavailable")
+              } else {
+                require(response.code == 200 && (response.header("Content-Encoding") == null || response.header("Content-Encoding") == "identity")) { "resource-unavailable" }
+                val body = response.body ?: error("resource-unavailable")
+                require(body.contentLength() <= max) { "too-large" }
+                val output = java.io.ByteArrayOutputStream()
+                body.byteStream().use { input ->
+                  val buffer = ByteArray(16384)
+                  while (true) { val count = input.read(buffer); if (count < 0) break
+                    require(output.size() + count <= max) { "too-large" }; output.write(buffer, 0, count)
+                  }
+                }
+                downloaded = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+              }
+            }
+          }
+          if (responseDetails) { responseInfo["bytes"] = downloaded!!; promise.resolve(responseInfo) } else promise.resolve(downloaded)
+        } catch (error: Exception) { promise.reject("ERR_RESOURCE", error.message ?: "network-error", error) }
+        finally { calls.remove(id) }
+      }
+  }
   override fun definition() = ModuleDefinition {
     Name("ExpoNapplet")
+    AsyncFunction("writeTextAtomicAsync") { uri: String, text: String ->
+      val parsed = android.net.Uri.parse(uri)
+      require(parsed.scheme == "file" && parsed.host.isNullOrEmpty() && text.length <= 2 * 1024 * 1024) { "invalid-file" }
+      val file = java.io.File(parsed.path ?: throw IllegalArgumentException("invalid-file")).canonicalFile
+      val root = appContext.persistentFilesDirectory.canonicalFile
+      require(file.path.startsWith(root.path + java.io.File.separator)) { "invalid-file" }
+      val temporary = java.io.File.createTempFile("metadata-", ".tmp", file.parentFile)
+      try {
+        java.io.FileOutputStream(temporary).use { stream ->
+          stream.write(text.toByteArray(Charsets.UTF_8))
+          stream.fd.sync()
+        }
+        android.system.Os.rename(temporary.path, file.path)
+      } finally {
+        temporary.delete()
+      }
+    }
     Events("onTaskActive", "onTaskClosed")
     OnActivityResult { _, result -> BrowserPickers.result(result.requestCode, result.resultCode, result.data) }
     OnCreate { ApplicationTasks.emit = { event, payload -> sendEvent(event, payload) } }
@@ -99,53 +181,10 @@ class ExpoNappletModule : Module() {
     Function("supportsResourceHeaders") { true }
     Function("isExploreAvailable") { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }
     AsyncFunction("fetchResourceAsync") { id: String, value: String, max: Int, accept: String?, promise: Promise ->
-      val task = FetchTask()
-      val admitted = synchronized(calls) { if (calls.size >= 12 || id.length > 128 || value.length > 4096) false else { calls[id] = task; true } }
-      if (!admitted) promise.reject("ERR_RESOURCE", "quota-exceeded", null)
-      else executor.execute {
-        try {
-          require(accept == null || accept in listOf("*/*", "application/json", "application/nostr+json")) { "invalid-accept" }
-          require(!task.cancelled.get()) { "cancelled" }
-          var url = value.toHttpUrl()
-          var redirects = 0
-          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
-          var downloaded: String? = null
-          while (downloaded == null) {
-            require(!task.cancelled.get()) { "cancelled" }
-            val literalHost = url.host.matches(Regex("[0-9.]+")) || url.host.contains(":")
-            require(url.toString().length <= 4096 && (!literalHost || publicAddress(InetAddress.getByName(url.host))) &&
-              url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.port == 443 && max in 1..26214400) { "blocked-by-policy" }
-            val remaining = deadline - System.nanoTime()
-            require(remaining > 0) { "timeout" }
-            val call = client.newCall(Request.Builder().url(url).header("Accept", accept ?: "*/*").header("Accept-Encoding", "identity").build())
-            call.timeout().timeout(remaining, TimeUnit.NANOSECONDS)
-            task.call = call
-            if (task.cancelled.get()) call.cancel()
-            call.execute().use { response ->
-              if (response.code in listOf(301, 302, 303, 307, 308)) {
-                require(redirects++ < 5) { "redirect-limit" }
-                val location = response.header("Location") ?: error("resource-unavailable")
-                require(location.length <= 4096) { "blocked-by-policy" }
-                url = url.resolve(location) ?: error("resource-unavailable")
-              } else {
-                require(response.code == 200 && (response.header("Content-Encoding") == null || response.header("Content-Encoding") == "identity")) { "resource-unavailable" }
-                val body = response.body ?: error("resource-unavailable")
-                require(body.contentLength() <= max) { "too-large" }
-                val output = java.io.ByteArrayOutputStream()
-                body.byteStream().use { input ->
-                  val buffer = ByteArray(16384)
-                  while (true) { val count = input.read(buffer); if (count < 0) break
-                    require(output.size() + count <= max) { "too-large" }; output.write(buffer, 0, count)
-                  }
-                }
-                downloaded = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
-              }
-            }
-          }
-          promise.resolve(downloaded)
-        } catch (error: Exception) { promise.reject("ERR_RESOURCE", error.message ?: "network-error", error) }
-        finally { calls.remove(id) }
-      }
+      fetchResource(id, value, max, accept, promise)
+    }
+    AsyncFunction("fetchResourceResponseAsync") { id: String, value: String, max: Int, etag: String?, lastModified: String?, promise: Promise ->
+      fetchResource(id, value, max, null, promise, true, etag, lastModified)
     }
     AsyncFunction("cancelResourceAsync") { id: String -> calls[id]?.let { it.cancelled.set(true); it.call?.cancel() }; Unit }
     AsyncFunction("clearPageDataAsync") { storageId: String ->

@@ -36,12 +36,24 @@ private final class PublicFetch {
   private var deadlineStarted = false
   private let promise: Promise
   private let finished: () -> Void
-  init(_ promise: Promise, finished: @escaping () -> Void) { self.promise = promise; self.finished = finished }
+  private let responseDetails: Bool
+  private let etag: String?
+  private let lastModified: String?
+  init(_ promise: Promise, responseDetails: Bool = false, etag: String? = nil, lastModified: String? = nil, finished: @escaping () -> Void) {
+    self.promise = promise; self.finished = finished; self.responseDetails = responseDetails; self.etag = etag; self.lastModified = lastModified
+  }
   func cancel() { queue.async { self.finish(nil, "cancelled") } }
-  private func finish(_ data: Data?, _ error: String? = nil) {
+  private func finish(_ data: Data?, _ error: String? = nil, status: Int = 200, headers: [String: String] = [:]) {
     guard !terminal else { return }; terminal = true
     connection?.stateUpdateHandler = nil; connection?.cancel(); connection = nil; finished()
-    if let data { promise.resolve(data.base64EncodedString()) }
+    if let data {
+      if responseDetails {
+        var response: [String: Any] = ["status": status, "bytes": data.base64EncodedString()]
+        if let value = headers["etag"], value.utf8.count <= 2048 { response["etag"] = value }
+        if let value = headers["last-modified"], value.utf8.count <= 2048 { response["lastModified"] = value }
+        promise.resolve(response)
+      } else { promise.resolve(data.base64EncodedString()) }
+    }
     else { promise.reject("ERR_RESOURCE", error ?? "network-error") }
   }
   func start(_ value: String, max: Int, accept: String = "*/*") {
@@ -52,6 +64,7 @@ private final class PublicFetch {
     }
     DispatchQueue.global(qos: .utility).async {
       guard ["*/*", "application/json", "application/nostr+json"].contains(accept),
+        [self.etag, self.lastModified].allSatisfy({ value in value == nil || value!.utf8.count <= 2048 && !value!.contains(where: { $0 == "\r" || $0 == "\n" || $0 == "\0" }) }),
         value.utf8.count <= 4096, let url = URL(string: value), url.scheme == "https", let host = url.host,
         url.user == nil, url.password == nil, url.port == nil || url.port == 443,
         max > 0, max <= 26214400 else { self.queue.async { self.finish(nil, "blocked-by-policy") }; return }
@@ -94,7 +107,14 @@ private final class PublicFetch {
                 self.start(target.absoluteString, max: max, accept: accept)
                 return
               }
-              do { self.finish(try Self.body(received, max: max)) }
+              do {
+                if self.responseDetails {
+                  let headers = try Self.responseHeaders(received)
+                  if self.redirects == 0 && (self.etag != nil || self.lastModified != nil) && headers.status == 304 {
+                    self.finish(Data(), status: 304, headers: headers.values)
+                  } else { self.finish(try Self.body(received, max: max), headers: headers.values) }
+                } else { self.finish(try Self.body(received, max: max)) }
+              }
               catch { self.finish(nil, "resource-unavailable") }
             } else { receive() }
           }
@@ -105,7 +125,12 @@ private final class PublicFetch {
           case .ready:
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
             let target = (components.percentEncodedPath.isEmpty ? "/" : components.percentEncodedPath) + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
-            let request = "GET \(target) HTTP/1.1\r\nHost: \(host)\r\nAccept: \(accept)\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n"
+            var conditional = ""
+            if self.responseDetails && self.redirects == 0 {
+              if let etag = self.etag { conditional += "If-None-Match: \(etag)\r\n" }
+              if let modified = self.lastModified { conditional += "If-Modified-Since: \(modified)\r\n" }
+            }
+            let request = "GET \(target) HTTP/1.1\r\nHost: \(host)\r\nAccept: \(accept)\r\nAccept-Encoding: identity\r\n\(conditional)Connection: close\r\n\r\n"
             connection.send(content: Data(request.utf8), completion: .contentProcessed { error in
               if error != nil { self.finish(nil) } else { receive() }
             })
@@ -157,6 +182,20 @@ private final class PublicFetch {
     if let expected = headers["content-length"], Int(expected) != body.count { throw Invalid() }
     return body
   }
+
+  private static func responseHeaders(_ data: Data) throws -> (status: Int, values: [String: String]) {
+    struct Invalid: Error {}
+    guard let boundary = data.range(of: Data("\r\n\r\n".utf8)), boundary.lowerBound <= 32768,
+      let header = String(data: data[..<boundary.lowerBound], encoding: .utf8) else { throw Invalid() }
+    let lines = header.components(separatedBy: "\r\n")
+    guard let value = lines.first?.split(separator: " ").dropFirst().first, let status = Int(value) else { throw Invalid() }
+    var values: [String: String] = [:]
+    for line in lines.dropFirst() {
+      guard let colon = line.firstIndex(of: ":") else { continue }
+      values[String(line[..<colon]).lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+    }
+    return (status, values)
+  }
 }
 
 public class ExpoNappletModule: Module {
@@ -189,6 +228,16 @@ public class ExpoNappletModule: Module {
       }
       self.requests[id] = request; self.lock.unlock()
       request.start(url, max: max, accept: accept ?? "*/*")
+    }
+    AsyncFunction("fetchResourceResponseAsync") { (id: String, url: String, max: Int, etag: String?, lastModified: String?, promise: Promise) in
+      self.lock.lock()
+      guard self.requests.count < 12 else { self.lock.unlock(); promise.reject("ERR_RESOURCE", "quota-exceeded"); return }
+      let request = PublicFetch(promise, responseDetails: true, etag: etag, lastModified: lastModified) { [weak self] in
+        guard let self else { return }
+        self.lock.lock(); self.requests.removeValue(forKey: id); self.lock.unlock()
+      }
+      self.requests[id] = request; self.lock.unlock()
+      request.start(url, max: max)
     }
     AsyncFunction("cancelResourceAsync") { (id: String) in
       self.lock.lock(); let request = self.requests.removeValue(forKey: id); self.lock.unlock(); request?.cancel()

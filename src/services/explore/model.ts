@@ -46,7 +46,7 @@ export function applicationRequirements(kind: ExploreKind, declared: readonly st
 }
 export function applicationPresentation(entry: ExploreEntry | NappletRelease): ApplicationInfo {
   return { title:entry.title,description:entry.description,required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
-    files:'files' in entry?entry.files:undefined,manifest:'manifest' in entry?entry.manifest:undefined,
+    files:'files' in entry?entry.files:undefined,manifest:'event' in entry?entry.event:entry.manifest,
     publisher:'event' in entry?entry.event.pubkey:entry.manifest?.pubkey,
     origin:'kind' in entry&&entry.kind==='website'?new URL(entry.address).origin:undefined };
 }

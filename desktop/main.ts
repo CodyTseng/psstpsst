@@ -525,6 +525,7 @@ function registerIpcHandlers(): void {
       validateString(contents, 'file contents', 64 * 1024 * 1024),
     ),
   );
+  handle(IPC.fsUpdateJson, (_event, uri, patch) => services().files.updateJson(validateString(uri, 'file URI'), patch));
   handle(IPC.fsWriteBytes, (_event, uri, bytes) =>
     services().files.writeBytes(validateString(uri, 'file URI'), validateBytes(bytes, 'file bytes')),
   );

@@ -10,7 +10,7 @@ jest.mock('@/platform', () => ({ platform: {
   deviceCrypto: { sha256Hex: jest.fn() },
   fileSystem: { documentDirectoryUri: jest.fn(async () => 'file:///documents/'),
     makeDirectory: jest.fn(async () => {}), stat: jest.fn(async () => ({ exists: false })),
-    readBytes: jest.fn(), writeBytes: jest.fn(async () => {}),
+    readBytes: jest.fn(), writeBytes: jest.fn(async () => {}), updateJson: jest.fn(async () => {}),
   },
 } }));
 const encode = (value: string) => new TextEncoder().encode(value);
@@ -50,39 +50,56 @@ it.each([
   expect(fetchResource.mock.calls[0][0]).toBe(`https://blobs.example/${hash(bytes)}`);
 });
 
-it('discovers the highest-resolution icon from verified HTML and a relative web manifest', async () => {
+it('uses one conventional icon without reading HTML or a web manifest', async () => {
   const html = encode('<link rel="icon" sizes="32x32" href="/small.svg"><link rel="manifest" href="/assets/app.webmanifest">');
   const manifest = encode(JSON.stringify({ icons: [{ src: 'large.svg', sizes: '512x512' }] }));
-  const { entry } = site({ '/index.html': html, '/assets/app.webmanifest': manifest, '/assets/large.svg': image, '/small.svg': encode('<svg></svg>') });
+  const { entry } = site({ '/index.html': html, '/assets/app.webmanifest': manifest, '/assets/large.svg': image,
+    '/favicon.svg': image, '/favicon.ico': new Uint8Array([0, 0, 1, 0, 1, 0]), '/small.svg': encode('<svg></svg>') });
   const first = loadApplicationIcon(entry);
   expect(loadApplicationIcon(applicationPresentation(entry))).toBe(first);
   expect(await first).toMatch(/^data:image\/svg\+xml;base64,/);
-  expect(fetchResource.mock.calls.map(([url]) => url)).toEqual([html, manifest, image].map(bytes => `https://blobs.example/${hash(bytes)}`));
-  expect(platform.deviceCrypto.sha256Hex).toHaveBeenCalledTimes(3);
+  expect(fetchResource.mock.calls.map(([url]) => url)).toEqual([`https://blobs.example/${hash(image)}`]);
+  expect(platform.deviceCrypto.sha256Hex).toHaveBeenCalledTimes(1);
 });
 
-it('never fetches external or unsigned HTML and manifest icon references', async () => {
+it('uses a signed favicon without following HTML or manifest icon references', async () => {
   const html = encode('<link rel="icon" sizes="2048x2048" href="https://outside.example/icon.svg"><link rel="icon" href="/unsigned.svg"><link rel="manifest" href="/manifest.json">');
   const manifest = encode(JSON.stringify({ icons: [{ src: 'https://outside.example/large.svg', sizes: '512x512' }, { src: '/missing.svg', sizes: '192x192' }] }));
   const ico = new Uint8Array([0, 0, 1, 0, 1, 0]);
   const { entry } = site({ '/index.html': html, '/manifest.json': manifest, '/favicon.ico': ico });
   expect(await loadApplicationIcon(entry)).toMatch(/^data:image\/x-icon;base64,/);
-  expect(fetchResource.mock.calls.map(([url]) => url)).toEqual([html, manifest, ico].map(bytes => `https://blobs.example/${hash(bytes)}`));
+  expect(fetchResource.mock.calls.map(([url]) => url)).toEqual([`https://blobs.example/${hash(ico)}`]);
 });
 
-it('rejects a corrupt high-resolution image and uses the next verified candidate', async () => {
-  const html = encode('<link rel="icon" sizes="512x512" href="/large.svg"><link rel="icon" sizes="192x192" href="/small.svg">');
-  const small = encode('<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192"></svg>');
-  const { entry, blobs } = site({ '/index.html': html, '/large.svg': image, '/small.svg': small });
+it('falls back without trying another icon when the selected file is corrupt', async () => {
+  const { entry, blobs } = site({ '/favicon.svg': image, '/favicon.ico': new Uint8Array([0, 0, 1, 0, 1, 0]) });
   blobs.set(hash(image), encode('<svg>tampered</svg>'));
-  const uri = await loadApplicationIcon(entry);
-  expect(uri).toBe(`data:image/svg+xml;base64,${Buffer.from(small).toString('base64')}`);
+  expect(await loadApplicationIcon(entry)).toBeUndefined();
+  expect(fetchResource).toHaveBeenCalledTimes(1);
+  expect(platform.fileSystem.writeBytes).not.toHaveBeenCalled();
+  expect(await loadApplicationIcon(entry)).toBeUndefined();
+  expect(fetchResource).toHaveBeenCalledTimes(1);
 });
 
-it('discovers conventional signed icon paths without HTML icon declarations', async () => {
-  const { entry } = site({ '/favicon.svg': image });
-  expect(await loadApplicationIcon(entry)).toMatch(/^data:image\/svg\+xml;base64,/);
-  expect(fetchResource.mock.calls.at(-1)?.[0]).toBe(`https://blobs.example/${hash(image)}`);
+it('uses the fallback without downloading when only metadata references an icon', async () => {
+  const { entry } = site({ '/index.html': encode('<link rel="icon" href="/brand.svg">'), '/brand.svg': image,
+    '/manifest.json': encode(JSON.stringify({ icons: [{ src: '/brand.svg' }] })) });
+  expect(await loadApplicationIcon(entry)).toBeUndefined();
+  expect(fetchResource).not.toHaveBeenCalled();
+});
+
+it('does not probe conventional icons when a declared icon fails', async () => {
+  const broken = encode('<svg>broken</svg>');
+  const { entry, blobs } = site({ '/brand.svg': broken, '/favicon.svg': image }, [['icon', '/brand.svg']]);
+  blobs.delete(hash(broken));
+  expect(await loadApplicationIcon(entry)).toBeUndefined();
+  expect(fetchResource).toHaveBeenCalledTimes(1);
+});
+
+it('rejects non-image content at a conventional icon path', async () => {
+  const { entry } = site({ '/favicon.svg': encode('<html>not an image</html>') });
+  expect(await loadApplicationIcon(entry)).toBeUndefined();
+  expect(fetchResource).toHaveBeenCalledTimes(1);
 });
 
 it('invalidates icon discovery for an updated signed manifest at the same address', async () => {
@@ -105,8 +122,7 @@ it('preserves the signed file map through both presentation adapters', () => {
 });
 
 it('reuses hash-verified bundle files already cached by the runtime', async () => {
-  const html = encode('<link rel="icon" sizes="512x512" href="/cached.svg">');
-  const { entry, blobs } = site({ '/index.html': html, '/cached.svg': image });
+  const { entry, blobs } = site({ '/favicon.svg': image });
   jest.mocked(platform.fileSystem.stat).mockImplementation(async path => {
     const bytes = blobs.get(path.split('/').at(-1)!.replace(/\.blob$/, ''));
     return { exists: !!bytes, size: bytes?.length ?? null } as never;
@@ -114,5 +130,5 @@ it('reuses hash-verified bundle files already cached by the runtime', async () =
   jest.mocked(platform.fileSystem.readBytes).mockImplementation(async path => blobs.get(path.split('/').at(-1)!.replace(/\.blob$/, ''))!);
   expect(await loadApplicationIcon(entry)).toMatch(/^data:image\/svg\+xml;base64,/);
   expect(fetchResource).not.toHaveBeenCalled();
-  expect(platform.deviceCrypto.sha256Hex).toHaveBeenCalledTimes(2);
+  expect(platform.deviceCrypto.sha256Hex).toHaveBeenCalledTimes(1);
 });

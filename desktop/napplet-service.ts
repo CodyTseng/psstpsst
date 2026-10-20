@@ -13,9 +13,9 @@ import {
   type Session,
   type IpcMainInvokeEvent,
 } from 'electron';
-import { NAPPLET_FRAME_READY_MESSAGE, type NappletBounds } from '../src/platform/ports/napplet';
+import { NAPPLET_FRAME_READY_MESSAGE, type NappletBounds, type ResourceValidators } from '../src/platform/ports/napplet';
 import { IPC } from './ipc-channels';
-import { fetchNappletResource } from './napplet-resource';
+import { fetchNappletResource, fetchNappletResourceResponse } from './napplet-resource';
 
 export { isPublicAddress } from './napplet-public-dns';
 
@@ -94,7 +94,7 @@ export function registerNappletHandlers(
       if (entry && entry.owner !== owner || request && request.owner !== owner) throw new Error('untrusted-container-owner');
       return fn(owner, ...args);
     });
-  handle(IPC.nappletFetch, async (owner: BrowserWindow, id: string, url: string, max: number, accept?: string) => {
+  handle(IPC.nappletFetch, async (owner: BrowserWindow, id: string, url: string, max: number, accept?: string, responseOptions?: { validators?: ResourceValidators }) => {
     if (typeof id !== 'string' || id.length > 128 || requests.size >= 32 || [...requests.values()].filter(request => request.owner === owner).length >= 12)
       throw new Error('quota-exceeded');
     const abort = new AbortController();
@@ -103,7 +103,17 @@ export function registerNappletHandlers(
     const ownerClosed = () => abort.abort();
     owner.once('closed', ownerClosed);
     try {
+      if (responseOptions) {
+        const response = await fetchNappletResourceResponse(url, max, abort.signal, responseOptions.validators);
+        return { ...response, bytes: Buffer.from(response.bytes).toString('base64') };
+      }
       return Buffer.from(await fetchNappletResource(url, max, abort.signal, accept)).toString('base64');
+    } catch (error) {
+      // Resource failures are handled by callers; rejecting invoke logs them again in Electron.
+      if (abort.signal.aborted) return null;
+      const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+        ? error.code : undefined;
+      return { error: error instanceof Error && error.message ? error.message : code ?? 'resource-unavailable', code };
     } finally {
       owner.removeListener('closed', ownerClosed);
       requests.delete(id);

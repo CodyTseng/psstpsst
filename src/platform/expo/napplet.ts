@@ -12,6 +12,7 @@ type NativeModule = {
   clearPageDataAsync?(storageId: string): Promise<void>;
   supportsResourceHeaders?(): boolean;
   fetchResourceAsync(id: string, url: string, max: number, accept?: string): Promise<string>;
+  fetchResourceResponseAsync?(id: string, url: string, max: number, etag?: string, lastModified?: string): Promise<{ status: 200 | 304; bytes: string; etag?: string; lastModified?: string }>;
   cancelResourceAsync(id: string): Promise<void>;
   sendAsync(id: string, message: string): Promise<void>;
   closeAsync(id: string): Promise<void>;
@@ -47,6 +48,19 @@ export const nativeSurface = {
   },
 };
 export const nappletAdapter: NappletPort = {
+  async fetchResourceResponse(url, max, signal, validators) {
+    const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
+    if (!native?.fetchResourceResponseAsync) return { status: 200, bytes: await nappletAdapter.fetchResource(url, max, signal) };
+    assertNotAborted(signal);
+    const id = `resource:${++serial}`;
+    const abort = () => { void native.cancelResourceAsync(id).catch(() => {}); };
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const result = await native.fetchResourceResponseAsync(id, url, max, validators?.etag, validators?.lastModified);
+      assertNotAborted(signal);
+      return { ...result, bytes: await decodeNappletBytes(result.bytes, signal) };
+    } finally { signal?.removeEventListener('abort', abort); }
+  },
   tasks: applicationTasksAdapter,
   async fetchResource(url, max, signal, options) {
     const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');

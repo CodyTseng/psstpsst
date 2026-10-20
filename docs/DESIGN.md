@@ -343,6 +343,11 @@ are reserved for body actions.
 
 Human avatars are circular. Mini-app icons are rounded squares at every size,
 including compact identity rows and loading or fallback artwork.
+Signed-site icons use declared artwork or one conventional icon from the signed
+file list; missing or unavailable artwork uses the shared fallback without
+fetching page metadata.
+Website identities retain cached artwork while refreshing in the background;
+temporary network failures must not replace usable artwork with a fallback.
 Mini-app publisher attribution uses a separate labelled information row between
 the app heading and description. Supporting metadata rows fit their visible content with expanded touch targets
 and remain borderless, with text aligned to the surrounding content gutter. Hover and press

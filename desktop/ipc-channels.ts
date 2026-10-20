@@ -47,6 +47,7 @@ export const IPC = {
   fsReadBase64: 'psstpsst:fs:read-base64',
   fsReadBytes: 'psstpsst:fs:read-bytes',
   fsWriteText: 'psstpsst:fs:write-text',
+  fsUpdateJson: 'psstpsst:fs:update-json',
   fsWriteBytes: 'psstpsst:fs:write-bytes',
   fsOpenReadHandle: 'psstpsst:fs:open-read-handle',
   fsReadHandle: 'psstpsst:fs:read-handle',

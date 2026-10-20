@@ -2,10 +2,20 @@ import { nappletAdapter, nativeSurface } from '../napplet';
 import { NAPPLET_FRAME_READY_MESSAGE } from '../../ports/napplet';
 
 let mockExploreAvailable=false;
+const mockResourceResponse = jest.fn();
+const mockCancelResource = jest.fn(async () => {});
 jest.mock('expo-modules-core', () => ({
   ...jest.requireActual('expo-modules-core'),
-  requireOptionalNativeModule: () => ({ isAvailable: () => true, isExploreAvailable:()=>mockExploreAvailable, closeAsync: async () => {} }),
+  requireOptionalNativeModule: () => ({ isAvailable: () => true, isExploreAvailable:()=>mockExploreAvailable, closeAsync: async () => {},
+    fetchResourceResponseAsync: (...args: unknown[]) => mockResourceResponse(...args), cancelResourceAsync: mockCancelResource }),
 }));
+
+it('returns native conditional response headers without changing validator case', async () => {
+  mockResourceResponse.mockResolvedValueOnce({ status: 304, bytes: '', etag: '"MixedCase"' });
+  await expect(nappletAdapter.fetchResourceResponse!('https://site.example/icon', 1024, undefined, { etag: '"MixedCase"' }))
+    .resolves.toEqual({ status: 304, bytes: new Uint8Array(), etag: '"MixedCase"' });
+  expect(mockResourceResponse).toHaveBeenCalledWith(expect.any(String), 'https://site.example/icon', 1024, '"MixedCase"', undefined);
+});
 
 it('keeps a mounted surface hidden until its own first frame and ignores late readiness', async () => {
   const first = await nappletAdapter.open('first');

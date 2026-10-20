@@ -35,7 +35,8 @@ export type ElectronBridge = {
     open(html: string): Promise<string>; close(id: string): Promise<void>;
     send(id: string, message: string): Promise<void>;
     setBounds(id: string, bounds: NappletBounds, visible: boolean, interactive?: boolean): Promise<void>;
-    fetch(id: string, url: string, maxBytes: number, accept?: string): Promise<string>;
+    fetch(id: string, url: string, maxBytes: number, accept?: string): Promise<string | null | { error: string; code?: string }>;
+    fetchResponse(id: string, url: string, maxBytes: number, validators?: import('../ports/napplet').ResourceValidators): Promise<null | { error: string; code?: string } | { status: 200 | 304; bytes: string; etag?: string; lastModified?: string }>;
     cancel(id: string): Promise<void>;
     onMessage(listener: (id: string, message: string) => void): () => void;
   };
@@ -81,6 +82,7 @@ export type ElectronBridge = {
     copyAttachment(uri: string, options?: { mimeType?: string; name?: string }): Promise<void>;
   };
   fileSystem: {
+    updateJson(uri: string, patch: import('../ports/file-system').JsonObject): Promise<void>;
     documentDirectoryUri(): Promise<string>;
     cacheDirectoryUri(): Promise<string>;
     availableDiskSpace(): Promise<number>;

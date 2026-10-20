@@ -1,12 +1,21 @@
 import { request } from 'node:https';
 import { isIP } from 'node:net';
 import { isPublicAddress, resolvePublicAddresses } from './napplet-public-dns';
+import type { ResourceResponse, ResourceValidators } from '../src/platform/ports/napplet';
 
 /** Redirects share one deadline; every hop validates its URL, DNS and TLS independently. */
-export function fetchNappletResource(value: string, maxBytes: number, signal?: AbortSignal, accept = '*/*'): Promise<Uint8Array> {
+export async function fetchNappletResource(value: string, maxBytes: number, signal?: AbortSignal, accept = '*/*'): Promise<Uint8Array> {
   if (!['*/*', 'application/json', 'application/nostr+json'].includes(accept)) throw new Error('invalid-accept');
   const deadline = AbortSignal.timeout(20000);
-  return fetchPublicResource(value, maxBytes, signal ? AbortSignal.any([signal, deadline]) : deadline, 0, accept);
+  return (await fetchPublicResource(value, maxBytes, signal ? AbortSignal.any([signal, deadline]) : deadline, 0, accept)).bytes;
+}
+
+export function fetchNappletResourceResponse(value: string, maxBytes: number, signal?: AbortSignal, validators?: ResourceValidators): Promise<ResourceResponse> {
+  for (const header of [validators?.etag, validators?.lastModified]) {
+    if (header !== undefined && (typeof header !== 'string' || header.length > 2048 || /[\r\n\0]/.test(header))) throw new Error('invalid-validator');
+  }
+  const deadline = AbortSignal.timeout(20000);
+  return fetchPublicResource(value, maxBytes, signal ? AbortSignal.any([signal, deadline]) : deadline, 0, '*/*', validators);
 }
 
 /** DNS validation is part of the actual TLS connection, not a check-then-fetch preflight. */
@@ -16,7 +25,8 @@ function fetchPublicResource(
   signal: AbortSignal,
   redirects: number,
   accept: string,
-): Promise<Uint8Array> {
+  validators?: ResourceValidators,
+): Promise<ResourceResponse> {
   const url = new URL(value);
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (
@@ -38,7 +48,9 @@ function fetchPublicResource(
         method: 'GET',
         agent: false,
         signal,
-        headers: { Accept: accept, 'Accept-Encoding': 'identity' },
+        headers: { Accept: accept, 'Accept-Encoding': 'identity',
+          ...(validators?.etag ? { 'If-None-Match': validators.etag } : {}),
+          ...(validators?.lastModified ? { 'If-Modified-Since': validators.lastModified } : {}) },
         lookup: (hostname, options, callback) => {
           void resolvePublicAddresses(hostname, signal).then((resolved) => {
             const addresses = options.family ? resolved.filter((entry) => entry.family === options.family) : resolved;
@@ -49,6 +61,13 @@ function fetchPublicResource(
         },
       },
       (response) => {
+        const headers = {
+          ...(typeof response.headers.etag === 'string' ? { etag: response.headers.etag } : {}),
+          ...(typeof response.headers['last-modified'] === 'string' ? { lastModified: response.headers['last-modified'] } : {}),
+        };
+        if (response.statusCode === 304 && (validators?.etag || validators?.lastModified)) {
+          response.destroy(); resolve({ status: 304, bytes: new Uint8Array(), ...headers }); return;
+        }
         if ([301, 302, 303, 307, 308].includes(response.statusCode ?? 0)) {
           const location = response.headers.location;
           response.destroy();
@@ -78,7 +97,7 @@ function fetchPublicResource(
           if (length > maxBytes) response.destroy(new Error('too-large'));
           else chunks.push(chunk);
         });
-        response.on('end', () => resolve(new Uint8Array(Buffer.concat(chunks, length))));
+        response.on('end', () => resolve({ status: 200, bytes: new Uint8Array(Buffer.concat(chunks, length)), ...headers }));
         response.on('error', reject);
       },
     );
