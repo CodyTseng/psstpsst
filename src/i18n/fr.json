@@ -1261,5 +1261,19 @@
     "signing_auth_remember": "Mémoriser pour tous les relais",
     "signing_auth_scope": "Tous les relais",
     "signing_scope_key": "Portée de l’autorisation"
+  },
+  "comments": {
+    "title": "Avis",
+    "placeholder": "Partagez votre expérience avec cette application…",
+    "reply_placeholder": "Écrivez une réponse…",
+    "post": "Publier",
+    "reply": "Répondre",
+    "replying_to": "Réponse à {{name}}",
+    "cancel_reply": "Annuler la réponse",
+    "empty": "Aucun avis pour le moment",
+    "load_more": "Charger plus de commentaires",
+    "load_failed": "Impossible de charger les commentaires. Réessayez.",
+    "post_failed": "Impossible de publier votre commentaire. Votre brouillon est conservé.",
+    "public_as": "Publication publique en tant que {{name}}"
   }
 }

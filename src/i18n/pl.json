@@ -1266,5 +1266,19 @@
     "signing_auth_remember": "Zapamiętaj dla wszystkich przekaźników",
     "signing_auth_scope": "Wszystkie przekaźniki",
     "signing_scope_key": "Zakres uprawnienia"
+  },
+  "comments": {
+    "title": "Opinie",
+    "placeholder": "Podziel się doświadczeniami z tą aplikacją…",
+    "reply_placeholder": "Napisz odpowiedź…",
+    "post": "Opublikuj",
+    "reply": "Odpowiedz",
+    "replying_to": "Odpowiedź do {{name}}",
+    "cancel_reply": "Anuluj odpowiedź",
+    "empty": "Brak opinii",
+    "load_more": "Wczytaj więcej komentarzy",
+    "load_failed": "Nie udało się wczytać komentarzy. Spróbuj ponownie.",
+    "post_failed": "Nie udało się opublikować komentarza. Wersja robocza została zachowana.",
+    "public_as": "Publikowanie publicznie jako {{name}}"
   }
 }

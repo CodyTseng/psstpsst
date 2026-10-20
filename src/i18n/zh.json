@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "记住所有中继的决定",
     "signing_auth_scope": "所有中继",
     "signing_scope_key": "权限范围"
+  },
+  "comments": {
+    "title": "评价",
+    "placeholder": "分享你对这个应用的使用体验…",
+    "reply_placeholder": "写下回复…",
+    "post": "发布",
+    "reply": "回复",
+    "replying_to": "正在回复 {{name}}",
+    "cancel_reply": "取消回复",
+    "empty": "暂无评价",
+    "load_more": "加载更多评论",
+    "load_failed": "无法加载评论，请重试。",
+    "post_failed": "评论发布失败，草稿已保留。",
+    "public_as": "以 {{name}} 的身份公开评论"
   }
 }

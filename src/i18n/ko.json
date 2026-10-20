@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "모든 릴레이에 적용해 기억",
     "signing_auth_scope": "모든 릴레이",
     "signing_scope_key": "권한 범위"
+  },
+  "comments": {
+    "title": "리뷰",
+    "placeholder": "이 앱을 사용한 경험을 공유하세요…",
+    "reply_placeholder": "답글을 작성하세요…",
+    "post": "게시",
+    "reply": "답글",
+    "replying_to": "{{name}}님에게 답글",
+    "cancel_reply": "답글 취소",
+    "empty": "아직 리뷰가 없습니다",
+    "load_more": "댓글 더 불러오기",
+    "load_failed": "댓글을 불러오지 못했습니다. 다시 시도하세요.",
+    "post_failed": "댓글을 게시하지 못했습니다. 초안은 유지됩니다.",
+    "public_as": "{{name}} 이름으로 공개 게시"
   }
 }

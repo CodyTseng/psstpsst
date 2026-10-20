@@ -27,7 +27,7 @@ export function useApplicationWindowActions() {
       router.push({ pathname: '/explore-publisher', params: { pubkey: action.pubkey } });
     } else if (useActiveAccount.getState().activePubkey === action.accountPubkey) {
       useForwardDraftStore.getState().start({ accountPubkey: action.accountPubkey, sourceConversationKey: null,
-        messages: [{ kind: KIND_CHAT, content: `${action.title}\n${action.address}`, tags: [] }] });
+        messages: [{ kind: KIND_CHAT, content: action.address, tags: [] }] });
       router.push('/forward');
     }
   }), []);

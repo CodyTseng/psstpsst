@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "Tüm röleler için hatırla",
     "signing_auth_scope": "Tüm röleler",
     "signing_scope_key": "İzin kapsamı"
+  },
+  "comments": {
+    "title": "Değerlendirmeler",
+    "placeholder": "Bu uygulamayla ilgili deneyimini paylaş…",
+    "reply_placeholder": "Bir yanıt yaz…",
+    "post": "Yayınla",
+    "reply": "Yanıtla",
+    "replying_to": "{{name}} adlı kişiye yanıt",
+    "cancel_reply": "Yanıtı iptal et",
+    "empty": "Henüz değerlendirme yok",
+    "load_more": "Daha fazla yorum yükle",
+    "load_failed": "Yorumlar yüklenemedi. Tekrar dene.",
+    "post_failed": "Yorumun yayınlanamadı. Taslağın korundu.",
+    "public_as": "{{name}} olarak herkese açık paylaşım"
   }
 }

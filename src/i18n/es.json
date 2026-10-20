@@ -1261,5 +1261,19 @@
     "signing_auth_remember": "Recordar para todos los relays",
     "signing_auth_scope": "Todos los relays",
     "signing_scope_key": "Alcance del permiso"
+  },
+  "comments": {
+    "title": "Reseñas",
+    "placeholder": "Comparte tu experiencia con esta aplicación…",
+    "reply_placeholder": "Escribe una respuesta…",
+    "post": "Publicar",
+    "reply": "Responder",
+    "replying_to": "Respondiendo a {{name}}",
+    "cancel_reply": "Cancelar respuesta",
+    "empty": "Aún no hay reseñas",
+    "load_more": "Cargar más comentarios",
+    "load_failed": "No se pudieron cargar los comentarios. Inténtalo de nuevo.",
+    "post_failed": "No se pudo publicar tu comentario. Se ha conservado el borrador.",
+    "public_as": "Publicando como {{name}} de forma pública"
   }
 }

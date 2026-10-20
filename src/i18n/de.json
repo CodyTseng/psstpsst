@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "Für alle Relays merken",
     "signing_auth_scope": "Alle Relays",
     "signing_scope_key": "Berechtigungsumfang"
+  },
+  "comments": {
+    "title": "Bewertungen",
+    "placeholder": "Teile deine Erfahrungen mit dieser App…",
+    "reply_placeholder": "Schreibe eine Antwort…",
+    "post": "Veröffentlichen",
+    "reply": "Antworten",
+    "replying_to": "Antwort an {{name}}",
+    "cancel_reply": "Antwort abbrechen",
+    "empty": "Noch keine Bewertungen",
+    "load_more": "Weitere Kommentare laden",
+    "load_failed": "Kommentare konnten nicht geladen werden. Versuche es erneut.",
+    "post_failed": "Dein Kommentar konnte nicht veröffentlicht werden. Dein Entwurf bleibt erhalten.",
+    "public_as": "Öffentlich posten als {{name}}"
   }
 }

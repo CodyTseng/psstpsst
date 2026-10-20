@@ -5,6 +5,9 @@ import { verifyEvent, type Event } from 'nostr-tools';
 import { decode, naddrEncode } from 'nostr-tools/nip19';
 import { publicUrl, appShareAddress, parseManifest, type NappletRelease } from '@/services/napplet/protocol';
 export type ExploreKind = 'napplet' | 'napp' | 'nsite' | 'website';
+export function applicationShareLink(entry: Pick<ExploreEntry, 'kind' | 'address'>): string {
+  return entry.kind === 'website' ? entry.address : `nostr:${entry.address}`;
+}
 export const SUPPORTED_NAPP_DOMAINS = ['identity','network','storage','theme','link','relay','outbox','common','config','inc'];
 
 export function applicationSigningSource(app: Pick<ExploreEntry, 'kind' | 'address' | 'key'>): string {

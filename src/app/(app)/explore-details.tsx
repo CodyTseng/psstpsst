@@ -1,4 +1,5 @@
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
+import { useExploreShare } from '@/hooks/use-explore-share';
 import { platform } from '@/platform';
 import { openApplicationWindow } from '@/services/explore/windows';
 import { usePublisherApplications } from '@/stores/explore-publisher.store';
@@ -22,6 +23,7 @@ export default function ExploreDetailsScreen() {
   const openPublisher=useOpenPublisher();
   const publisherApps=usePublisherApplications(publisher);
   const state=useExplore();
+  const share=useExploreShare(state.account);
   const loadPublisher=publisherApps.load;
   useEffect(()=>{if(state.account&&loadPublisher)void loadPublisher(state.account);},[state.account,loadPublisher]);
   const discovery=useDiscovery();
@@ -39,6 +41,8 @@ export default function ExploreDetailsScreen() {
     {app&&state.account?<ApplicationSettings access={required.length?<ApplicationAccessControls required={required} selected={required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,state.account!)}/>:null}
   </ApplicationPermissionsPage>;
   return <ApplicationDetailsPage application={application} access={access} error={message}
+    actions={app?{entry:app,onShare:state.account?()=>share(app):undefined}:undefined}
+    discussion={app&&state.account?{entry:app,account:state.account}:undefined}
     unsupported={app?.release?app.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain)):app?.kind==='napp'&&app.required.some(domain=>!SUPPORTED_NAPP_DOMAINS.includes(domain))}
     onPublisher={()=>{if(app?.manifest)openPublisher(app.manifest.pubkey);}}
     onOpen={()=>{

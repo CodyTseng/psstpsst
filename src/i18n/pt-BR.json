@@ -1261,5 +1261,19 @@
     "signing_auth_remember": "Lembrar para todos os relays",
     "signing_auth_scope": "Todos os relays",
     "signing_scope_key": "Escopo da permissão"
+  },
+  "comments": {
+    "title": "Avaliações",
+    "placeholder": "Compartilhe sua experiência com este aplicativo…",
+    "reply_placeholder": "Escreva uma resposta…",
+    "post": "Publicar",
+    "reply": "Responder",
+    "replying_to": "Respondendo a {{name}}",
+    "cancel_reply": "Cancelar resposta",
+    "empty": "Ainda não há avaliações",
+    "load_more": "Carregar mais comentários",
+    "load_failed": "Não foi possível carregar os comentários. Tente novamente.",
+    "post_failed": "Não foi possível publicar seu comentário. O rascunho foi mantido.",
+    "public_as": "Publicando como {{name}} de forma pública"
   }
 }

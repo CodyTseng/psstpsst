@@ -62,7 +62,7 @@ function NappletOverlayContent() {
       else if (action === 'share') {
         if (platform.napplet.windows?.isHost) { void platform.napplet.windows.action({type:'share',accountPubkey:account,title:release.title,address:appShareAddress(release)}); return; }
         const draftId = useForwardDraftStore.getState().start({ accountPubkey: account, sourceConversationKey: null,
-          messages: [{ kind: KIND_CHAT, content: `${release.title}\n${appShareAddress(release)}`, tags: [] }] });
+          messages: [{ kind: KIND_CHAT, content: appShareAddress(release), tags: [] }] });
         try { nappletService.startShare(account, release); }
         catch { useForwardDraftStore.getState().discard(draftId); }
       } else void nappletService.reload(release, account).catch(() => showToast(t('napplets.request_failed')));

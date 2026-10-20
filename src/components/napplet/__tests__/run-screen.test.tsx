@@ -1,5 +1,3 @@
-jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));
-jest.mock('lucide-react-native/icons/external-link', () => () => null);
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { PRIMARY_PANE_RESET_MARKER } from '@/components/navigation/responsive-stack-router';
 import { NappletSurface } from '@/platform/napplet-surface';
@@ -12,6 +10,9 @@ import { AppButton } from '@/components/common/AppButton';
 import { ActivityIndicator } from 'react-native';
 import { NappletIcon } from '@/components/napplet/NappletIcon';
 import NappletRunScreen from '../../../app/(app)/napplet-run';
+
+jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));
+jest.mock('lucide-react-native/icons/external-link', () => () => null);
 
 const mockDispatch = jest.fn();
 let mockFocused = true;
@@ -128,7 +129,7 @@ it('places explicit close at the start and sends system back to the app', async 
   act(() => { renderer = create(<NappletRunScreen />); });
   const header = renderer.root.findByType(ScreenHeader);
   expect(header.props.left.props.accessibilityLabel).toBe('common.close');
-  expect(header.props.right.props.children.at(-1).props.accessibilityLabel).toBe('napplets.runtime_more');
+  expect(header.props.right.props.accessibilityLabel).toBe('napplets.runtime_more');
   const [active, back] = jest.mocked(useFocusedOverlayDismiss).mock.calls.at(-1)!;
   expect(active).toBe(true);
   await act(async () => { back(); });

@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "Remember for all relays",
     "signing_auth_scope": "All relays",
     "signing_scope_key": "Permission scope"
+  },
+  "comments": {
+    "title": "Reviews",
+    "placeholder": "Share your experience with this app…",
+    "reply_placeholder": "Write a reply…",
+    "post": "Post",
+    "reply": "Reply",
+    "replying_to": "Replying to {{name}}",
+    "cancel_reply": "Cancel reply",
+    "empty": "No reviews yet",
+    "load_more": "Load more comments",
+    "load_failed": "Couldn't load comments. Try again.",
+    "post_failed": "Couldn't publish your comment. Your draft is still here.",
+    "public_as": "Posting publicly as {{name}}"
   }
 }

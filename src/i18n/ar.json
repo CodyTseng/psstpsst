@@ -1276,5 +1276,19 @@
     "signing_auth_remember": "تذكّر لجميع المرحّلات",
     "signing_auth_scope": "جميع المرحّلات",
     "signing_scope_key": "نطاق الإذن"
+  },
+  "comments": {
+    "title": "التقييمات",
+    "placeholder": "شارك تجربتك مع هذا التطبيق…",
+    "reply_placeholder": "اكتب ردًا…",
+    "post": "نشر",
+    "reply": "رد",
+    "replying_to": "الرد على {{name}}",
+    "cancel_reply": "إلغاء الرد",
+    "empty": "لا توجد تقييمات بعد",
+    "load_more": "تحميل المزيد من التعليقات",
+    "load_failed": "تعذر تحميل التعليقات. حاول مجددًا.",
+    "post_failed": "تعذر نشر تعليقك. ما زالت مسودتك محفوظة.",
+    "public_as": "النشر علنًا باسم {{name}}"
   }
 }

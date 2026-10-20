@@ -1261,5 +1261,19 @@
     "signing_auth_remember": "Ricorda per tutti i relay",
     "signing_auth_scope": "Tutti i relay",
     "signing_scope_key": "Ambito del permesso"
+  },
+  "comments": {
+    "title": "Recensioni",
+    "placeholder": "Condividi la tua esperienza con questa app…",
+    "reply_placeholder": "Scrivi una risposta…",
+    "post": "Pubblica",
+    "reply": "Rispondi",
+    "replying_to": "In risposta a {{name}}",
+    "cancel_reply": "Annulla risposta",
+    "empty": "Ancora nessuna recensione",
+    "load_more": "Carica altri commenti",
+    "load_failed": "Impossibile caricare i commenti. Riprova.",
+    "post_failed": "Impossibile pubblicare il commento. La bozza è stata conservata.",
+    "public_as": "Pubblicazione pubblica come {{name}}"
   }
 }

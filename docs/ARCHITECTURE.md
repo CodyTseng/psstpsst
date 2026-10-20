@@ -698,6 +698,14 @@ a favorite persists its metadata and shortcut independently of history.
 Publisher catalogues query the same supported manifest kinds with an exact author
 filter and verify authorship locally. Their bounded, temporary results share the
 application detail flow without changing saved applications or discovery results.
+Application sharing sends only the canonical `nostr:` application reference (or
+the URL for unsigned websites), without a title or surrounding prose. Clipboard,
+in-app forwarding and separate-window handoffs preserve the same link.
+Application reviews are public NIP-22 discussions scoped to the verified
+application coordinate or website URL. Their bounded, virtualized read models
+stay separate from private messages and mini-app signing grants. Explicit user
+posts use the account identity signer; account lifecycle changes cancel reads,
+signing and publishing before results can enter a replacement session.
 
 Cached entries, explicit shortcut positions, and distinct-address last visits use
 separate account-scoped tables. Opening changes recency only. The cache is bounded

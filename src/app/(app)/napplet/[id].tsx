@@ -1,7 +1,8 @@
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
+import { useExploreShare } from '@/hooks/use-explore-share';
 import { platform } from '@/platform';
 import { openApplicationWindow } from '@/services/explore/windows';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { router,useLocalSearchParams } from 'expo-router';
 import { ApplicationDetailsPage } from '@/components/napplet/ApplicationDetailsPage';
 import { useNappletAccess } from '@/hooks/use-napplet-access';
@@ -14,9 +15,13 @@ export default function NappletDetailScreen() {
   const openPublisher=useOpenPublisher();
   const {id}=useLocalSearchParams<{id:string}>();
   const {release,accountPubkey,error:loadError}=useNappletRelease(id);
+  const share=useExploreShare(accountPubkey??null);
+  const entry=useMemo(()=>release?fromNapplet(release):undefined,[release]);
   const access=useNappletAccess(release,accountPubkey);
   const [error,setError]=useState<string>();
   return <ApplicationDetailsPage application={release?applicationPresentation(release):undefined}
+    actions={entry?{entry,onShare:accountPubkey?()=>share(entry):undefined}:undefined}
+    discussion={entry&&accountPubkey?{entry,account:accountPubkey}:undefined}
     access={access} error={error??loadError??access.error}
     unsupported={release?.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain))}
     onPublisher={()=>{if(release)openPublisher(release.event.pubkey);}}

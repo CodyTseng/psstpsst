@@ -354,6 +354,18 @@ and remain borderless, with text aligned to the surrounding content gutter. Hove
 feedback reduce only the identity avatar and name's opacity, without adding a
 background. Publisher rows open that publisher's application catalogue from the
 whole row, across application details and runtime information surfaces.
+Application reviews use an inline public-account composer followed by an
+avatar-led thread, with compact avatars, muted author metadata distinct from
+the body, accent text reply actions, and logical guides connecting parent and
+reply avatars across rows. Review composers reuse the chat composer quote
+treatment inside the input, including its accent strip, author, preview and
+dismiss action; public posting identity stays beside the submit action.
+Review sections and separate threads use whitespace rather than horizontal
+rules; reply guides carry the conversation hierarchy.
+Application details place a compact primary Open action beside the app identity
+in the scrolling header. Launching and reviewing are independent action
+contexts, each with a primary action. Failed posts retain the draft.
+Review text follows its own writing direction independently of the interface.
 
 ## 8. Component vocabulary
 
@@ -1055,7 +1067,8 @@ message.
 6. **No page-specific theme.** Read the effective app theme.
 7. **Verify light and dark mode.** New UI must support both.
 8. **Empty states are complete.** Use icon, title, and optional guidance/action.
-9. **Only one primary action per screen.**
+9. **Only one primary action per screen**, except the independent launch and
+   review contexts on application details.
 10. **No emoji decoration in chrome.** Emoji belongs to user content.
 11. **Reuse first.** Extend a shared component instead of duplicating it.
 12. **Only two button primitives.** Use `AppButton` or `IconButton`, never a raw

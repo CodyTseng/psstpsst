@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "記住所有中繼的決定",
     "signing_auth_scope": "所有中繼",
     "signing_scope_key": "權限範圍"
+  },
+  "comments": {
+    "title": "評價",
+    "placeholder": "分享你對這個應用程式的使用體驗…",
+    "reply_placeholder": "撰寫回覆…",
+    "post": "發布",
+    "reply": "回覆",
+    "replying_to": "正在回覆 {{name}}",
+    "cancel_reply": "取消回覆",
+    "empty": "暫無評價",
+    "load_more": "載入更多留言",
+    "load_failed": "無法載入留言，請重試。",
+    "post_failed": "留言發布失敗，草稿已保留。",
+    "public_as": "以 {{name}} 的身分公開留言"
   }
 }

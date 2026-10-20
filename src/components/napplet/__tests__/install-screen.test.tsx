@@ -5,6 +5,9 @@ import { QrScanButton } from '@/components/common/QrScanButton';
 import { exploreService } from '@/services/explore/service';
 import NappletInstallScreen from '../../../app/(app)/napplet-install';
 
+jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
+jest.mock('@/services/explore/windows', () => ({ openApplicationWindow: jest.fn() }));
+
 jest.mock('expo-router', () => ({ router: { replace: jest.fn() } }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/common/AppScreen', () => ({ AppScreen: ({ children }: { children: React.ReactNode }) => children }));

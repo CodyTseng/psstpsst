@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "Megjegyzés minden reléhez",
     "signing_auth_scope": "Minden relé",
     "signing_scope_key": "Engedély hatóköre"
+  },
+  "comments": {
+    "title": "Vélemények",
+    "placeholder": "Oszd meg a tapasztalataidat az alkalmazásról…",
+    "reply_placeholder": "Írj választ…",
+    "post": "Közzététel",
+    "reply": "Válasz",
+    "replying_to": "Válasz neki: {{name}}",
+    "cancel_reply": "Válasz elvetése",
+    "empty": "Még nincsenek vélemények",
+    "load_more": "További hozzászólások betöltése",
+    "load_failed": "Nem sikerült betölteni a hozzászólásokat. Próbáld újra.",
+    "post_failed": "Nem sikerült közzétenni a hozzászólást. A piszkozat megmaradt.",
+    "public_as": "Nyilvános közzététel {{name}} néven"
   }
 }

@@ -121,6 +121,19 @@ describe('AppInput field chrome', () => {
     });
   });
 
+  it('keeps the editor mounted when multiline context is added or dismissed', () => {
+    act(() => { renderer = create(<AppInput multiline value="Draft" />); });
+    const editor = renderer!.root.findByType(TextInput);
+    act(() => {
+      renderer!.update(<AppInput multiline value="Draft" inputHeaderAccessory={<View testID="reply-context" />} />);
+    });
+    expect(renderer!.root.findByProps({ testID: 'reply-context' })).toBeTruthy();
+    expect(renderer!.root.findByType(TextInput)).toBe(editor);
+    act(() => { renderer!.update(<AppInput multiline value="Draft" />); });
+    expect(renderer!.root.findByType(TextInput)).toBe(editor);
+    expect(editor.props.value).toBe('Draft');
+  });
+
   it('aligns a centered placeholder with the editable text', () => {
     act(() => {
       renderer = create(

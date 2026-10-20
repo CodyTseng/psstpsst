@@ -1256,5 +1256,19 @@
     "signing_auth_remember": "すべてのリレーで記憶",
     "signing_auth_scope": "すべてのリレー",
     "signing_scope_key": "権限の範囲"
+  },
+  "comments": {
+    "title": "レビュー",
+    "placeholder": "このアプリの使用感を共有…",
+    "reply_placeholder": "返信を書く…",
+    "post": "投稿",
+    "reply": "返信",
+    "replying_to": "{{name}} に返信",
+    "cancel_reply": "返信をキャンセル",
+    "empty": "まだレビューはありません",
+    "load_more": "コメントをさらに読み込む",
+    "load_failed": "コメントを読み込めませんでした。もう一度お試しください。",
+    "post_failed": "コメントを投稿できませんでした。下書きは保持されています。",
+    "public_as": "{{name}} として公開投稿"
   }
 }
