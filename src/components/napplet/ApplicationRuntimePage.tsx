@@ -33,9 +33,9 @@ export function ApplicationRuntimePage({title,application,loading,error,hidden=f
         left={<IconButton size={uiDensity.headerActionSize} icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>} accessibilityLabel={t('common.close')} onPress={onClose}/>}
         right={more}/>}
 
-      <View style={{flex:1,paddingTop:contentTop}}>
+      <View style={{flex:1,marginTop:contentTop,overflow:'hidden'}}>
         {children}
-        {loading&&!error?<View style={[StyleSheet.absoluteFill,{top:contentTop,alignItems:'center',justifyContent:'center',padding:spacing.xl,gap:spacing.lg,backgroundColor:c.background}]}>
+        {loading&&!error?<View style={[StyleSheet.absoluteFill,{alignItems:'center',justifyContent:'center',padding:spacing.xl,gap:spacing.lg,backgroundColor:c.background}]}>
           {application?<NappletIcon release={application}/>:null}
           <ActivityIndicator color={c.accent}/>
           <AppText align="center" tone="muted">{t('napplets.runtime_loading')}</AppText>
