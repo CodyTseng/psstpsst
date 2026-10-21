@@ -1078,6 +1078,7 @@
     "favorites": "Kedvencek",
     "discover": "Felfedezés",
     "discovery_empty": "Nem található alkalmazás",
+    "search_placeholder": "Alkalmazás keresése vagy cím megadása",
     "permissions_ask": "Mindig kérdezzen rá",
     "permissions_duration": "Időtartam",
     "permissions_manage": "Engedélyek",

@@ -697,14 +697,20 @@ remain platform-owned. Browser exports stage bounded files through asynchronous
 ports before the system destination picker. Website notifications have a separate
 native delivery path and never modify messaging badges.
 
-Discovery queries public manifests in bounded pages only from dedicated relays for each
-format, without falling back to general-purpose relays. Results are verified
+Discovery queries napp and napplet manifests in bounded pages only from dedicated
+relays for each format, without falling back to general-purpose relays. Results are verified
 and deduplicated in a temporary catalogue, and share the existing detail
 presentation. Independent relay cursors and buffered merging preserve newest-first
-ordering as the visible list grows incrementally. Browsing never records a visit or writes to the local relay; adding
+ordering as the visible list grows incrementally. Local search reads the verified
+fetched catalogue independently of the visible browsing window and never advances
+relay cursors. Exact-address search checks cached and saved applications before
+resolving a manifest from explicit hints or, when absent, author write relays plus
+dedicated format relays. Its bounded account-scoped result cache does not admit
+applications to discovery or record visits. Query replacement cancels stale reads.
+Browsing never records a visit or writes to the local relay; adding
 a favorite persists its metadata and shortcut independently of history.
-Publisher catalogues use the same format-specific sources with an exact author
-filter and verify authorship locally. Their bounded, temporary results share the
+Publisher catalogues additionally include nsites from dedicated relays, with an
+exact author filter and local authorship verification. Their bounded, temporary results share the
 application detail flow without changing saved applications or discovery results.
 Application sharing sends only the canonical `nostr:` application reference (or
 the URL for unsigned websites), without a title or surrounding prose. Clipboard,

@@ -26,12 +26,12 @@ type Rect = { x: number; y: number; width: number; height: number };
 type Source = 'recent' | 'desktop';
 type Props<T extends GridApp = GridApp> = {
   items: T[];
-  recent: T[];
+  recent?: T[];
   onOpen: (app: T) => void;
   onMove: (app: T, index: number | null) => void | Promise<void>;
   bottomInset: number;
-  onShowRecent: () => void;
-  onRemoveRecent: (app: T) => void;
+  onShowRecent?: () => void;
+  onRemoveRecent?: (app: T) => void;
   onDetails: (app: T) => void;
   onPermissions: (app: T) => void;
   onShare: (app: T) => void;
@@ -70,11 +70,13 @@ function previewTransform(index: number, slot: number, drag: Drag) {
   ];
 }
 
-/** One virtualized page and drag surface contain the recent row and desktop. */
+const EMPTY_RECENT: GridApp[] = [];
+
+/** One virtualized drag surface for shortcuts, with an optional recent preview. */
 export function NappletGrid<T extends GridApp>(props: Props<T>) {
   return <AppGrid {...props as unknown as Props} />;
 }
-function AppGrid({ items, recent, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
+function AppGrid({ items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
   const c = useThemeColors();
   const { t } = useTranslation();
   const rtl = useIsRTL();
@@ -277,7 +279,7 @@ function AppGrid({ items, recent, onOpen, onMove, bottomInset, onShowRecent, onR
           const height = event.nativeEvent.layout.height;
           headerSize.set(height); setHeaderHeight(height);
         }}>
-          {recent.length ? <View testID="napplet-recent" style={{ paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
+          {recent.length && onShowRecent && onRemoveRecent ? <View testID="napplet-recent" style={{ paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
             <View testID="napplet-recent-header" style={{ paddingHorizontal: spacing.lg - gridInset, overflow: 'hidden' }}>
               <ListRow variant="inline" title={t('napplets.recent')} titleTone="muted" onPress={onShowRecent}
                 trailing={<ChevronRight size={spacing.lg} color={c.textMuted} style={rtl ? { transform: [{ scaleX: -1 }] } : undefined} />} />
@@ -289,7 +291,6 @@ function AppGrid({ items, recent, onOpen, onMove, bottomInset, onShowRecent, onR
                 onRemove={onRemoveRecent} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare} />)}
             </View>
           </View> : null}
-          {items.length ? <AppText variant="caption" tone="muted" style={{ paddingBottom: spacing.sm, paddingHorizontal: spacing.lg - gridInset }}>{t('napplets.desktop')}</AppText> : null}
         </View>}
         renderItem={({ item, index }) => renderTile(item, 'desktop', index)}
       /> : null}

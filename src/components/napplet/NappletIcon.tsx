@@ -43,6 +43,7 @@ export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_I
       {uri ? (
         <Image
           source={{ uri }}
+          draggable={false}
           contentFit={origin || release.files ? 'contain' : 'cover'}
           onError={() => {
             setLoaded({ key: iconKey });

@@ -8,7 +8,20 @@ const NWC_CONNECTION =
 describe('chat QR resolver', () => {
   const address = nip19.naddrEncode({ pubkey: 'ab'.repeat(32), kind: 35129, identifier: 'type-zoo', relays: ['wss://relay.example.com'] });
   it.each([address, `nostr:${address}`, `https://napplet.example/app/${address}`])('recognizes a mini-app address and retains relay hints: %s', async (input) => {
-    await expect(resolveChatQrScan(input)).resolves.toEqual({ kind: 'napplet', address });
+    await expect(resolveChatQrScan(input)).resolves.toEqual({ kind: 'application', address: input });
+  });
+
+  it.each([35130, 35128, 15128, 15129])('recognizes application naddr kind %s through the shared address classifier', async kind => {
+    const value = nip19.naddrEncode({ pubkey: 'ab'.repeat(32), kind, identifier: kind < 30000 ? '' : 'app' });
+    await expect(resolveChatQrScan(value)).resolves.toEqual({ kind: 'application', address: value });
+  });
+
+  it.each(['https://example.com/app', 'example.com/app'])('routes a website URL to application search: %s', async input => {
+    await expect(resolveChatQrScan(input)).resolves.toEqual({ kind: 'application', address: input });
+  });
+
+  it.each(['https://pay.example/.well-known/lnurlp/alice', 'https://pay.example/lnurl/pay', 'lightning:https://pay.example/invoice'])('preserves explicit payment links: %s', async input => {
+    await expect(resolveChatQrScan(input)).resolves.toEqual({ kind: 'payment', input });
   });
 
   it.each([15129, 35129, undefined])('recognizes a mini-app event pointer with kind %s', async (kind) => {

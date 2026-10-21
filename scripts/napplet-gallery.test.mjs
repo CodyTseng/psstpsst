@@ -307,7 +307,7 @@ test(
           await page.waitForFunction(() => {
             const page = document.querySelector('[data-testid="napplet-recent-page"]');
             const first = page?.querySelector('[data-testid="napplet-icon"]')?.getBoundingClientRect();
-            return page?.getBoundingClientRect().width === 900 && first?.width === 68 && Math.abs(first.x - 16) < 1;
+            return page?.getBoundingClientRect().width === 900 && first?.width === 40 && Math.abs(first.x - 16) < 1;
           });
           assert.equal(await page.getByText('Recently visited', { exact: true }).count(), 1);
           await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -335,7 +335,7 @@ test(
       const rtlPage = page.getByTestId('napplet-recent-page');
       const latestRecent = rtlPage.getByTestId('all-recent-app-Reader');
       await latestRecent.waitFor();
-      assert((await latestRecent.boundingBox()).x > 210, 'full history starts at the logical right edge in RTL');
+      assert((await latestRecent.getByTestId('napplet-icon').boundingBox()).x > 210, 'history artwork starts at the logical right edge in RTL');
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await page.waitForFunction(() => !document.querySelector('[data-testid="napplet-recent-page"]'));
       await drag('desktop', 'Weather', tile('desktop', 'Reader'), 'move:Weather:0');
@@ -368,7 +368,7 @@ test(
       assert.deepEqual(await page.getByTestId('recent-app-Reader').boundingBox(), recentReader);
       await page.getByRole('button', { name: 'عرض التفاصيل', exact: true }).click();
       await page.getByTestId('napplet-recent-header').click({ position: { x: 200, y: 16 } });
-      const music = page.getByTestId('all-recent-app-Music').getByRole('button', { name: 'Music', exact: true });
+      const music = page.getByTestId('all-recent-app-Music').getByText('Music', { exact: true });
       const musicBounds = await music.boundingBox();
       await page.mouse.move(musicBounds.x + musicBounds.width / 2, musicBounds.y + musicBounds.height / 2);
       await page.mouse.down();
@@ -417,7 +417,7 @@ test(
         scroll.scrollTop = scroll.scrollHeight;
       });
       await scrollHistory();
-      const olderApp = history.getByTestId('all-recent-app-App 80').getByRole('button', { name: 'App 80', exact: true });
+      const olderApp = history.getByTestId('all-recent-app-App 80').getByText('App 80', { exact: true });
       await olderApp.waitFor();
       await olderApp.scrollIntoViewIfNeeded();
       await olderApp.click({ trial: true });
@@ -433,9 +433,8 @@ test(
       await scrollHistory();
       await olderApp.waitFor();
       await olderApp.click();
-      await page.getByRole('button', { name: 'Close app', exact: true }).waitFor();
-      assert.equal(await page.getByRole('dialog').count(), 0, 'opening an app from history does not create a modal');
-      await page.getByRole('button', { name: 'Close app', exact: true }).click();
+      await page.waitForFunction(() => document.title === 'Details App 80');
+      assert.equal(await page.getByRole('button', { name: 'Close app', exact: true }).count(), 0, 'history opens details without launching the app');
       await history.waitFor();
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await tile('desktop', 'App 80').waitFor();

@@ -1078,6 +1078,7 @@
     "favorites": "पसंदीदा",
     "discover": "खोजें",
     "discovery_empty": "कोई ऐप नहीं मिला",
+    "search_placeholder": "ऐप खोजें या पता दर्ज करें",
     "permissions_ask": "हर बार पूछें",
     "permissions_duration": "अवधि",
     "permissions_manage": "अनुमतियाँ",

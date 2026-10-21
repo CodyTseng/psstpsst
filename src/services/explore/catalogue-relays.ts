@@ -1,16 +1,22 @@
 import type { Event } from 'nostr-tools';
 import type { NappletNetwork } from '@/services/napplet/network';
 
-export const APPLICATION_CATALOGUE_SOURCES = [
+export const APPLICATION_QUERY_LIMIT = 200;
+
+export const APPLICATION_DISCOVERY_SOURCES = [
   { relays: ['wss://relay.nostrapps.com/'], kinds: [35130] },
   { relays: ['wss://relay.napplet.soy/'], kinds: [5129, 15129, 35129] },
+];
+
+export const APPLICATION_CATALOGUE_SOURCES = [
+  ...APPLICATION_DISCOVERY_SOURCES,
   { relays: ['wss://relay.nsite.lol/', 'wss://relay.nosto.re/'], kinds: [15128, 35128] },
 ];
 
 /** Catalogue membership comes only from each format's dedicated relays. */
 export async function queryApplicationCatalogue(network: NappletNetwork, author?: string) {
   const results = await Promise.allSettled(APPLICATION_CATALOGUE_SOURCES.map(async source => network.query(source.relays,
-    [{ kinds: source.kinds, limit: 100, ...(author ? { authors: [author] } : {}) }])));
+    [{ kinds: source.kinds, limit: APPLICATION_QUERY_LIMIT, ...(author ? { authors: [author] } : {}) }])));
   const events: Event[] = [];
   let available = false;
   let incomplete = false;

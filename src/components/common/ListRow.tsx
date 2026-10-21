@@ -2,6 +2,7 @@ import { useContext, useState } from 'react';
 import {
   ActivityIndicator,
   type TextProps,
+  type PressableProps,
   View,
 } from 'react-native';
 
@@ -42,10 +43,16 @@ type ValuePlacement = 'trailing' | 'below';
 type PreserveColumn = 'title' | 'value';
 type SelectionMode = 'single';
 
-type Props = {
+type Props = Pick<PressableProps, 'onLongPress' | 'accessibilityActions' | 'onAccessibilityAction'> & {
   /** An icon node — rendered as-is in a fixed-width slot (no background).
    * Caller sets its size (≈22) and color (match `titleTone`). */
   icon?: React.ReactNode;
+  /** Artwork can reserve its own width instead of the standard glyph column. */
+  iconWidth?: number;
+  /** Align leading artwork with the top of a multiline text stack. */
+  iconAlign?: 'center' | 'start';
+  /** Optional vertical inset from the shared spacing scale. */
+  verticalPadding?: keyof typeof spacing;
   title: string;
   /** Non-shrinking status after the title; long titles truncate before it. */
   titleTrailing?: React.ReactNode;
@@ -110,6 +117,9 @@ type Props = {
  */
 export function ListRow({
   icon,
+  iconWidth,
+  iconAlign = 'center',
+  verticalPadding,
   title,
   titleTrailing,
   subtitle,
@@ -128,6 +138,9 @@ export function ListRow({
   trailing,
   trailingOnHover,
   onPress,
+  onLongPress,
+  accessibilityActions,
+  onAccessibilityAction,
   loading,
   disabled,
   active = false,
@@ -156,6 +169,7 @@ export function ListRow({
   const multilineValue =
     hasTrailingValue && valueMultiline;
   const multilineContent = multilineValue || (hasSubtitle && subtitleMultiline);
+  const flexibleHeight = multilineContent || iconWidth !== undefined;
   // Column preservation only applies when title and value compete side by side.
   // A single text stack must yield to its trailing accessory so long labels,
   // subtitles, and identifiers stay inside the row.
@@ -178,6 +192,9 @@ export function ListRow({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       hitSlop={compactInline ? { top: spacing.md, bottom: spacing.md } : undefined}
       accessible={onPress != null}
       accessibilityRole={selectionMode === 'single' ? 'radio' : undefined}
@@ -194,17 +211,17 @@ export function ListRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: ICON_GAP,
-        minHeight: compactInline ? rowHeight : multilineContent
+        minHeight: compactInline ? rowHeight : flexibleHeight
           ? hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
             : rowHeight
           : undefined,
-        height: multilineContent
+        height: flexibleHeight
           ? undefined
           : hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
             : compactInline ? undefined : rowHeight,
-        paddingVertical: multilineContent ? spacing.sm : 0,
+        paddingVertical: verticalPadding ? spacing[verticalPadding] : multilineContent ? spacing.sm : 0,
         paddingHorizontal: isInline ? spacing.sm : isPlain ? PLAIN_PADDING_H : ROW_PADDING_H,
         marginHorizontal: isInline ? -spacing.sm : isPlain ? -PLAIN_BLEED : 0,
         borderRadius: rowRadius,
@@ -238,9 +255,10 @@ export function ListRow({
             {icon ? (
               <View
                 style={{
-                  width: ICON_SLOT,
+                  width: iconWidth ?? ICON_SLOT,
                   alignItems: 'center',
-                  transform: [{ translateX: -ICON_OPTICAL_SHIFT }],
+                  alignSelf: iconAlign === 'start' ? 'flex-start' : undefined,
+                  transform: iconWidth === undefined ? [{ translateX: -ICON_OPTICAL_SHIFT }] : undefined,
                 }}
               >
                 {icon}

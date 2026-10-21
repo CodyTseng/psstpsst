@@ -1,30 +1,30 @@
-import { memo } from 'react';
+import { memo, type ComponentProps } from 'react';
 import { View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/common/Avatar';
 import { AppText } from '@/components/common/AppText';
 import { ListRow } from '@/components/common/ListRow';
 import { useDisplayName } from '@/hooks/use-display-name';
 import type { ApplicationListEntry } from '@/services/explore/model';
-import { applicationFormatColors, radius, spacing, useEffectiveColorScheme } from '@/theme';
+import { spacing } from '@/theme';
 import { RunningApplicationIcon } from './RunningApplicationIcon';
 
+const APPLICATION_ICON_SIZE = spacing['2xl'] + spacing.sm;
+
 /** Discovery and application handoffs share one recognizable application row. */
-export const ApplicationListRow = memo(function ApplicationListRow({ application, onPress }: {
+export const ApplicationListRow = memo(function ApplicationListRow({ application, onPress, ...interactions }: {
   application: ApplicationListEntry; onPress(): void;
-}) {
-  const { t } = useTranslation();
-  const colors = applicationFormatColors[application.kind][useEffectiveColorScheme()];
+} & Pick<ComponentProps<typeof ListRow>, 'onLongPress' | 'accessibilityActions' | 'onAccessibilityAction'>) {
   const { name, profile } = useDisplayName(application.publisher ?? '');
-  return <ListRow variant="list" title={application.title} subtitleContent={application.publisher ?
-    <View testID="discovery-publisher" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-      <Avatar pubkey={application.publisher} picture={profile?.picture} size={spacing.lg}/>
-      <AppText variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</AppText>
+  const description = application.description?.trim().replace(/\s+/g, ' ');
+  return <ListRow {...interactions} variant="list" title={application.title} subtitleMultiline
+    iconWidth={APPLICATION_ICON_SIZE} iconAlign="start" verticalPadding="md"
+    subtitleContent={description || application.publisher ? <View style={{ gap: spacing.xs }}>
+      {description ? <AppText variant="caption" tone="muted" numberOfLines={1}>{description}</AppText> : null}
+      {application.publisher ? <View testID="discovery-publisher" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+        <Avatar pubkey={application.publisher} picture={profile?.picture} size={spacing.lg}/>
+        <AppText variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</AppText>
+      </View> : null}
     </View> : undefined}
-    trailing={<AppText variant="caption" style={{ color: colors.text, backgroundColor: colors.background,
-      borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }}>
-      {t(`napplets.formats.${application.kind}`)}
-    </AppText>}
-    icon={<RunningApplicationIcon sourceId={application.key} release={application} size={spacing.xl}/>}
+    icon={<RunningApplicationIcon sourceId={application.key} release={application} size={APPLICATION_ICON_SIZE}/>}
     onPress={onPress}/>;
 });

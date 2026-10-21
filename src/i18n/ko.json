@@ -1078,6 +1078,7 @@
     "favorites": "즐겨찾기",
     "discover": "탐색",
     "discovery_empty": "앱을 찾을 수 없습니다",
+    "search_placeholder": "앱 검색 또는 주소 입력",
     "permissions_ask": "매번 확인",
     "permissions_duration": "기간",
     "permissions_manage": "권한",

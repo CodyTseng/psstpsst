@@ -1078,6 +1078,7 @@
     "favorites": "Favoriten",
     "discover": "Entdecken",
     "discovery_empty": "Keine Apps gefunden",
+    "search_placeholder": "Apps suchen oder Adresse eingeben",
     "permissions_ask": "Jedes Mal fragen",
     "permissions_duration": "Dauer",
     "permissions_manage": "Berechtigungen",

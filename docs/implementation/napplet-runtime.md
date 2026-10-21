@@ -320,8 +320,8 @@ cd android
 ```
 
 The host bounds installation libraries to 512 entries, resolved metadata to 500,
-and the recent preview to one grid row. Its recent-history page derives all used apps from
-the already-loaded installation library and virtualizes their grid. It bounds
+and keeps recent usage on a dedicated history page. That page derives used apps from
+the already-loaded installation library and virtualizes their list. It bounds
 filters to eight with at most 200 events per filter, routed authors to 16, and a
 runtime's connection cache to 24 relay destinations. Active readers and publishers
 hold shared destination leases; completed requests release them. New destinations
@@ -351,16 +351,24 @@ Legacy napplet routes remain valid for shared links and capability management.
 Discovery and publisher catalogues query napp kind `35130` only on
 `wss://relay.nostrapps.com/`, napplet kinds `5129`/`15129`/`35129` only on
 `wss://relay.napplet.soy/`, and nsite kinds `15128`/`35128` only on
-`wss://relay.nsite.lol/` and `wss://relay.nosto.re/`. Format queries run concurrently;
+`wss://relay.nsite.lol/` and `wss://relay.nosto.re/`. Discovery omits the nsite
+sources; publisher catalogues retain them. Format queries run concurrently;
 failed sources mark the result incomplete without discarding other formats.
-Each format uses one filter containing its supported kinds with `limit: 100`.
+Each format uses one filter containing its supported kinds with `limit: 200`.
 Discovery delegates raw event pagination to `src/services/relay/relay-timeline.ts`.
 It accepts `{ urls, filter }` subrequests and an injected query callback, retaining
 an independent inclusive `until` cursor and verified buffer per relay/query pair.
 Buffer heads merge by descending event time with event-ID tie breaking and
 adjacent-ID deduplication. Cancellation rolls back uncommitted cursor progress.
-Discovery parses the selected events, deduplicates application coordinates, and
-reveals 20 additional applications per scroll page. A depleted source is
+Discovery parses each fetched batch once and incrementally merges verified
+application coordinates into a searchable in-memory catalogue. A bounded event
+parse cache avoids repeating verification for buffered events. The visible list
+reveals 20 additional applications per scroll page; local name/description/publisher search
+includes fetched applications beyond that visible window, also reveals 20 matches
+at a time, and never advances relay cursors. Publisher names use the shared batch
+profile/contact hooks, including local petnames; asynchronous metadata updates
+automatically update active search results. Clearing search restores the browsing
+window. A depleted source is
 refilled before exposing older buffered results from other sources. Duplicate
 application coordinates retain the first (newest) release; consumed pages are
 replaced instead of re-sorting the accumulated list. Refresh resets the cursors
@@ -368,6 +376,35 @@ and visible window. Failed reads retain displayed content and stop automatic
 loading until refresh. A full, duplicate-only timestamp boundary also stops with
 an error rather than skipping unseen same-second events, since fixed-size NIP-01
 filters cannot exclude already-seen IDs.
+Explore's header uses the shared QR scanner. The home scanner classifies application
+naddr and website URLs with the same pure parser, then sends an account-scoped,
+one-use in-memory handoff to the Explore tab; only the handoff ID enters route
+params. Explicit Lightning/LNURL endpoints retain their payment routing, and legacy
+note/nevent app pointers retain their existing detail route. A valid naddr/URL scan seeds
+the shared search field without changing the selected Favorites/Discover scope
+or starting a background catalogue read,
+reusing the same local-first lookup rather
+than launching or authorizing the application. Invalid scan content reports an
+error without replacing the current search. Repeated scans reset the search
+instance; mode changes preserve the query. Empty Favorites links to Discover.
+The header's compact mode selector and Scan action share one row; its fixed
+search field occupies the second row. Keyword search uses only desktop shortcuts
+in Favorites and the fetched catalogue in Discover. The results component keeps
+per-query display windows, and Favorites keyword search never starts discovery
+reads. Clearing a Favorites search restores its shortcut grid. Favorites omits the recent
+preview; the leading header action in both modes opens `/explore-recent`. Recent-only accounts
+show the empty Favorites state while retaining that history entry point. History
+uses the shared discovery row in a virtualized list, opening details on press and preserving context-menu actions.
+Discovery search recognizes bare naddr, `nostr:naddr`, naddr share-link URLs, and
+HTTP(S) website addresses. It checks the fetched catalogue, its account-scoped
+64-entry address cache, saved in-memory entries, and an exact asynchronous local
+repository lookup before networking. Signed misses query only their hints; with
+no hints they query the deduplicated union of NIP-65 write relays and that format's
+dedicated sources, including nsites for explicit input. Manifests are matched and
+signature-verified before display. Plain URLs become website entries without an
+invented author or relay lookup. A 300ms debounce and abortable transport prevent
+superseded lookups from publishing results. Details can resolve address-cache
+entries independently of the curated browsing window.
 Explicit application links retain their relay hints and author routing.
 
 `explore_entries` caches verified manifests and visited URLs;

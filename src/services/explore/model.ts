@@ -39,16 +39,17 @@ export type ExploreEntry = {
 export type ApplicationInfo = Pick<ExploreEntry, 'title' | 'description' | 'servers' | 'icon' | 'required' | 'files' | 'manifest'> & {
   publisher?: string;
   origin?: string;
+  kind?: ExploreKind;
 };
-export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon' | 'files' | 'manifest'> & { publisher?: string; key?: string };
+export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon' | 'files' | 'manifest'> & { publisher?: string; key?: string; description?: string };
 export function applicationListEntry(entry: ExploreEntry): ApplicationListEntry {
-  return { key: entry.key, title: entry.title, kind: entry.kind, servers: entry.servers, icon: entry.icon, files: entry.files, manifest: entry.manifest, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
+  return { key: entry.key, title: entry.title, description: entry.description, kind: entry.kind, servers: entry.servers, icon: entry.icon, files: entry.files, manifest: entry.manifest, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
 }
 export function applicationRequirements(kind: ExploreKind, declared: readonly string[]): string[] {
   return [...new Set([...(kind === 'napp' ? ['network'] : []), ...declared])];
 }
 export function applicationPresentation(entry: ExploreEntry | NappletRelease): ApplicationInfo {
-  return { title:entry.title,description:entry.description,required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
+  return { title:entry.title,description:entry.description,kind:'kind' in entry?entry.kind:'napplet',required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
     files:'files' in entry?entry.files:undefined,manifest:'event' in entry?entry.event:entry.manifest,
     publisher:'event' in entry?entry.event.pubkey:entry.manifest?.pubkey,
     origin:'kind' in entry&&entry.kind==='website'?new URL(entry.address).origin:undefined };

@@ -1083,6 +1083,7 @@
     "favorites": "Favoris",
     "discover": "Découvrir",
     "discovery_empty": "Aucune application trouvée",
+    "search_placeholder": "Rechercher une application ou saisir une adresse",
     "permissions_ask": "Toujours demander",
     "permissions_duration": "Durée",
     "permissions_manage": "Autorisations",

@@ -875,16 +875,34 @@ Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
 
-Explore switches between Favorites and Discover with the shared local mode control.
-Discover browses verified public applications without recording visits or adding
-shortcuts until the user chooses an action. Scrolling reveals more results in
-newest-first order, with quiet loading feedback at the list end. Discovery rows show the publisher avatar and name
-below the application name, with a quiet format label and no inline add action. Format labels use stable purple
-for napplets, blue for napps, and teal for nsites, independent of the selected accent
-and status colours. Both modes open the shared application
-details. Favorites uses one vertically scrolling start page, with a single-row recent-visit
-preview above fixed-order shortcuts. Both sections scroll together and share
-cell widths, gutters, icon sizes and label geometry. Running-state dots remain
+Explore uses two fixed header rows: compact Favorites/Discover mode selection
+beside Scan, then one shared search field. The redundant Explore title is omitted.
+The first three tabs keep the shared title-row height and begin their search
+fields immediately below that row, without extra top padding.
+Keywords persist across mode changes: Favorites searches saved shortcuts, while
+Discover searches the already-fetched catalogue. Both scopes match application
+names, descriptions and resolved publisher names. Scanning fills the shared search
+without switching the selected scope; the home scanner hands off to the same flow.
+Explicit Lightning/LNURL links retain their wallet flow in the home scanner.
+Empty Favorites opens Discover rather than a separate address-entry task.
+Discover lists verified napps and napplets, excluding nsites, without recording visits or adding
+shortcuts until the user chooses an action. Exact naddr and URL input selects address lookup:
+local matches appear first, naddr hints choose manifest relays, and hintless
+addresses use author write relays plus format-specific sources. Address results
+remain separate from the curated directory. Scrolling reveals
+more results in newest-first order, with quiet loading feedback at the list end.
+Application rows give artwork and text a comfortable vertical inset. Artwork
+approximates the combined title/description height and aligns with the title top,
+with a single-line description and publisher avatar/name below the title. Artwork
+has no format border, and rows omit format badges. Application information shows
+the format as muted caption text
+beneath the title. Both modes open the shared application
+details. Favorites displays only saved shortcuts in its vertically scrolling
+grid without a redundant section heading. Both Explore modes keep the leading
+header history action, which opens the dedicated recent-use page;
+recent apps do not appear inline in Favorites. History reuses Discover application
+rows with artwork, a single-line description and publisher identity. Pressing a
+history row opens application details. Running-state dots remain
 clearly visible, straddle the icon artwork's logical bottom-end corner, and use
 a page-background ring to separate them from artwork. Compact list icons use a
 smaller dot. Hover and press dim only
@@ -893,10 +911,8 @@ belongs to icon artwork, never the caption beneath it. Outer icon
 artwork aligns with the content gutter; wider interaction cells extend into that
 gutter. Responsive grids prioritize recognizable artwork over extra columns:
 icons stay at least 60px and grow to 68px when the pane allows. Column counts and
-distributed gaps adapt around that size. The preview fits the available columns
-without horizontal scrolling. Its entire heading row opens a dedicated, vertically
-scrolling history page with Back navigation and the same grid vocabulary; a
-trailing directional chevron replaces a separate More label. Launching an app updates only recency. Electron
+distributed gaps adapt around that size. History scrolls vertically with Back navigation in most-recently-used order.
+Launching an app updates only recency. Electron
 opens app menus with right-click and sorts desktop icons by direct dragging.
 App menus center on the icon, prefer the space above it, fall back below, and
 shift inward at pane edges. Available menu space excludes native window controls
@@ -907,7 +923,8 @@ the icon; menus above leave the caption visible. Sorting actions stay out of the
 On mobile, holding a desktop icon first opens its menu; moving the held icon dismisses the menu
 and begins sorting. On mobile, opening an app menu by holding gives one light
 haptic at the hold threshold, without repeating during dragging. App cells remain
-unframed in every state, including sorting; other icons preview their new slots
+unframed in every state, including sorting; icon artwork disables browser-native
+image dragging so it cannot interrupt sorting; other icons preview their new slots
 while dragging; only release commits the order. Released positions stay visible
 until the committed layout takes over, without restoring the old order. Recent
 apps never drag or share desktop selection feedback. Long press opens
@@ -946,7 +963,7 @@ surfaces.
 
 Action handoffs explicitly ask which app should open the requested content
 and name the requesting app. Candidate rows reuse the discovery list's app icon,
-name, publisher attribution and format label. Choosing a row opens that app;
+name, description and publisher attribution. Choosing a row opens that app;
 The sheet's Close action dismisses only this handoff, without a duplicate Cancel
 footer. These choosers omit access-review language,
 signing-account labels and raw protocol action names.

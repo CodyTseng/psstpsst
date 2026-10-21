@@ -1,4 +1,4 @@
-import { useIsFocused, useNavigation } from 'expo-router';
+import { router, useIsFocused, useNavigation } from 'expo-router';
 import { ChatRound as MessageCircle } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
 import Plus from 'lucide-react-native/icons/plus';
 import { Scanner } from '@solar-icons/react-native/category/security/Linear/Scanner';
@@ -52,6 +52,7 @@ import { useProximityStore } from '@/stores/proximity.store';
 import { useSyncPhase } from '@/stores/sync-status.store';
 import { useScreenshotPreviewStore } from '@/stores/screenshot-preview.store';
 import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
+import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useWalletConnectionHandoffStore } from '@/stores/wallet-connection-handoff.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { bottomBarHeight, headerHeight, spacing, uiDensity, useThemeColors } from '@/theme';
@@ -325,6 +326,12 @@ function RealConversations() {
     }
 
     setSearchActive(false);
+    if (result.kind === 'application') {
+      if (!accountPubkey) return;
+      const handoff = useExploreSearchHandoffStore.getState().start({ account: accountPubkey, value: result.address });
+      router.navigate({ pathname: '/napplets', params: { searchHandoff: String(handoff) } });
+      return;
+    }
     if (result.kind === 'napplet') {
       openInDetailPane(`/napplet/${encodeURIComponent(result.address)}`);
       return;

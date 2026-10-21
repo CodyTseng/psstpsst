@@ -1078,6 +1078,7 @@
     "favorites": "个人收藏",
     "discover": "发现",
     "discovery_empty": "暂未发现应用",
+    "search_placeholder": "搜索应用或输入地址",
     "permissions_ask": "每次询问",
     "permissions_duration": "有效期",
     "permissions_manage": "权限管理",

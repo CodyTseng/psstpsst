@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
+import { naddrEncode } from 'nostr-tools/nip19';
 
 test(
   'signing approvals prioritize impact and use two horizontal decisions with scoped duration',
@@ -534,25 +535,58 @@ test(
       await page.getByText('Requested access', { exact: true }).waitFor();
       assert.equal(await page.getByText('Reset permissions', { exact: true }).count(), 0);
       assert.equal(await page.getByRole('switch').count(), 0, 'uninstalled access is informational');
+      for (const surface of ['pointer', 'touch']) {
+        await page.goto(`${address}/?scenario=explore-discovery&favorites-drag=1&surface=${surface}`);
+        await page.getByText('Notes', { exact: true }).waitFor();
+        const shortcuts = page.locator('[data-testid^="desktop-app-"]');
+        const artwork = shortcuts.nth(0).locator('img');
+        await artwork.waitFor();
+        assert.equal(await artwork.evaluate(node => node.draggable), false, 'artwork cannot steal sorting into native image drag');
+        const source = await artwork.boundingBox();
+        const destination = await shortcuts.nth(1).boundingBox();
+        await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(550);
+        await page.mouse.move(destination.x + destination.width / 2, destination.y + destination.height / 2, { steps: 12 });
+        await page.mouse.up();
+        await page.waitForFunction(() => document.title === 'move:Notes:1');
+        assert.equal(await shortcuts.nth(0).getByText('Photo Gallery', { exact: true }).count(), 1,
+          'Favorites without recent previews still supports drag sorting');
+      }
       for(const theme of ['light','dark']) {
         await page.goto(`${address}/?scenario=explore-discovery&theme=${theme}`);
         await page.getByText('Your space to explore',{exact:true}).waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error.message}\n${JSON.stringify(errors)}\n${await page.locator('body').innerText()}`);});
         await page.getByRole('tab',{name:'Discover',exact:true}).click();
         await page.getByText('Photo Gallery',{exact:true}).waitFor();
         assert.equal(await page.getByRole('button',{name:'Add shortcut',exact:true}).count(),0);
-        assert.equal(await page.getByText('Alice',{exact:true}).count(),3,'each app shows its publisher');
-        for(const format of ['napplet','napp','nsite'])assert.equal(await page.getByText(format,{exact:true}).count(),1,'each app shows its format');
-        const formatColors=await Promise.all(['napplet','napp','nsite'].map(format=>page.getByText(format,{exact:true}).evaluate(node=>({text:getComputedStyle(node).color,background:getComputedStyle(node).backgroundColor}))));
-        assert.equal(new Set(formatColors.map(color=>color.text)).size,3,'formats have distinct foregrounds');
-        assert.equal(new Set(formatColors.map(color=>color.background)).size,3,'formats have distinct tinted backgrounds');
-        assert.equal(await page.getByText('A useful application for your Nostr account.',{exact:true}).count(),0);
+        assert.equal(await page.getByText('Alice',{exact:true}).count(),2,'each app shows its publisher');
+        for(const format of ['napplet','napp','nsite'])assert.equal(await page.getByText(format,{exact:true}).count(),0,'format badges stay out of app rows');
+        assert.equal(await page.getByTestId('application-format-border').count(),0,'application artwork has no format border');
+        assert.equal(await page.getByText('A useful application for your Nostr account.',{exact:true}).count(),2,'each row includes its description');
         const appName=await page.getByText('Notes',{exact:true}).boundingBox();
+        const appIcon=await page.getByTestId('napplet-icon').first().boundingBox();
+        assert.equal(appIcon.width,40,'application artwork matches the title and description height');
+        assert(Math.abs(appIcon.y-appName.y)<=1,'application artwork aligns with the title top');
         const publisher=await page.getByText('Alice',{exact:true}).first().boundingBox();
         assert(publisher.y>=appName.y+appName.height,'publisher appears below the application name');
         const publisherAvatar=await page.getByTestId('discovery-publisher').first().locator(':scope > div').first().boundingBox();
         assert(publisherAvatar.width===16 && publisherAvatar.height===16,'publisher uses a compact avatar');
         assert(publisher.x>=publisherAvatar.x+publisherAvatar.width,'publisher name follows the avatar');
         if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-discovery.png`});
+        const search=page.getByPlaceholder('Search apps or enter an address',{exact:true});
+        await search.fill('photo');
+        await page.getByText('Notes',{exact:true}).waitFor({state:'hidden'});
+        assert.equal(await page.getByText('Photo Gallery',{exact:true}).count(),1);
+        await search.fill('Alice');
+        await page.getByText('Notes',{exact:true}).waitFor();
+        assert.equal(await page.getByText('Photo Gallery',{exact:true}).count(),1,'author names participate in local search');
+        await search.fill(naddrEncode({kind:35130,pubkey:'b'.repeat(64),identifier:'Notes',relays:['wss://unused.example/']}));
+        await page.getByText('Photo Gallery',{exact:true}).waitFor({state:'hidden'});
+        assert.equal(await page.getByText('Notes',{exact:true}).count(),1,'a local naddr match ignores differing relay hints');
+        await search.fill('https://example.com/page');
+        await page.getByText('example.com',{exact:true}).waitFor();
+        await search.fill('');
+        await page.getByText('Notes',{exact:true}).waitFor();
         await page.getByRole('tab',{name:'Favorites',exact:true}).click();
         await page.getByText('Your space to explore',{exact:true}).waitFor();
         assert.equal(await page.getByText('Recently visited',{exact:true}).count(),0,'browsing discovery never creates a visit');
@@ -574,17 +608,20 @@ test(
         });
         await page.waitForFunction(()=>{
           const tabs=document.querySelector('[role="tablist"]');
-          const header=tabs.parentElement.parentElement.parentElement;
-          return [...header.children].some(child=>getComputedStyle(child).pointerEvents==='none'&&child.getBoundingClientRect().height<=1);
+          let header=tabs.parentElement;
+          while(header && !(header.querySelector('input[placeholder="Search apps or enter an address"]')&&[...header.children].some(child=>getComputedStyle(child).pointerEvents==='none'&&child.getBoundingClientRect().height<=1)))header=header.parentElement;
+          return !!header;
         });
         const tabsAfter=await page.getByRole('tablist').boundingBox();
         assert.equal(tabsAfter.y,tabsBefore.y,'tabs stay inside the fixed title bar');
         const boundary=await page.getByRole('tablist').evaluate(tabs=>{
-          const header=tabs.parentElement.parentElement.parentElement;
+          let header=tabs.parentElement;
+          while(header && !(header.querySelector('input[placeholder="Search apps or enter an address"]')&&[...header.children].some(child=>getComputedStyle(child).pointerEvents==='none'&&child.getBoundingClientRect().height<=1)))header=header.parentElement;
           const divider=[...header.children].find(child=>getComputedStyle(child).pointerEvents==='none'&&child.getBoundingClientRect().height<=1);
-          return {tabBottom:tabs.getBoundingClientRect().bottom,dividerTop:divider.getBoundingClientRect().top,headerBottom:header.getBoundingClientRect().bottom};
+          const search=header.querySelector('input[placeholder="Search apps or enter an address"]');
+          return {searchBottom:search.getBoundingClientRect().bottom,dividerTop:divider.getBoundingClientRect().top,headerBottom:header.getBoundingClientRect().bottom};
         });
-        assert(boundary.dividerTop>=boundary.tabBottom,'title-bar divider sits below the tabs');
+        assert(boundary.dividerTop>=boundary.searchBottom,'header divider sits below the shared search field');
         assert(Math.abs(boundary.headerBottom-boundary.dividerTop)<=1,'divider uses the complete header boundary');
         if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-discovery-scrolled.png`});
       }

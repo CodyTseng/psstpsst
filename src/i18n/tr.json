@@ -1078,6 +1078,7 @@
     "favorites": "Favoriler",
     "discover": "Keşfet",
     "discovery_empty": "Uygulama bulunamadı",
+    "search_placeholder": "Uygulama ara veya adres gir",
     "permissions_ask": "Her seferinde sor",
     "permissions_duration": "Süre",
     "permissions_manage": "İzinler",

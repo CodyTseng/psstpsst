@@ -1,9 +1,9 @@
 import { createStore } from 'zustand/vanilla';
-import type { Event } from 'nostr-tools';
+import { matchFilters, type Event } from 'nostr-tools';
 import { NappletNetwork } from '@/services/napplet/network';
 import { parseManifest } from '@/services/napplet/protocol';
 import { fromNapplet, parseSite, type ExploreEntry } from './model';
-import { APPLICATION_CATALOGUE_SOURCES } from './catalogue-relays';
+import { APPLICATION_DISCOVERY_SOURCES, APPLICATION_QUERY_LIMIT } from './catalogue-relays';
 import { RelayTimeline, compareTimelineEvents } from '@/services/relay/relay-timeline';
 
 /** Verify bounded relay results without blocking a frame with a batch of signatures. */
@@ -23,22 +23,27 @@ export async function discoveryEntries(events: Event[]): Promise<ExploreEntry[]>
   return [...entries.values()].sort(compare);
 }
 
+export type ApplicationAddressCache = { account: string | null; entries: ExploreEntry[] };
 const DISPLAY_PAGE_SIZE = 20;
-const RELAY_PAGE_SIZE = 100;
+const RELAY_PAGE_SIZE = APPLICATION_QUERY_LIMIT;
 const CACHE_MS = 5 * 60 * 1000;
 const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 const compare = (a: ExploreEntry, b: ExploreEntry) => compareTimelineEvents(a.manifest!, b.manifest!);
-const createTimeline = () => new RelayTimeline(APPLICATION_CATALOGUE_SOURCES.map(source => ({
+const createTimeline = () => new RelayTimeline(APPLICATION_DISCOVERY_SOURCES.map(source => ({
   urls: source.relays, filter: { kinds: source.kinds },
 })), RELAY_PAGE_SIZE);
 
 /** Discovery owns application parsing and the visible window; RelayTimeline owns event pagination. */
 export class ApplicationDiscovery {
   readonly store = createStore(() => ({
-    entries: [] as ExploreEntry[], loading: false, loadingMore: false, loaded: false, error: false, hasMore: false,
+    addressCache: { account: null, entries: [] } as ApplicationAddressCache,
+    entries: [] as ExploreEntry[], visibleEntries: [] as ExploreEntry[], loading: false, loadingMore: false, loaded: false, error: false, hasMore: false,
   }));
   private timeline = createTimeline();
   private shown = new Set<string>();
+  private catalogue = new Map<string, ExploreEntry>();
+  private cached: ExploreEntry[] = [];
+  private parsed = new Map<string, ExploreEntry | undefined>();
   private updatedAt = 0;
   private pending?: Promise<void>;
 
@@ -48,6 +53,9 @@ export class ApplicationDiscovery {
     this.timeline.dispose();
     this.timeline = createTimeline();
     this.shown.clear();
+    this.catalogue.clear();
+    this.cached = [];
+    this.parsed.clear();
     return this.read(account, true);
   }
 
@@ -56,6 +64,33 @@ export class ApplicationDiscovery {
     const state = this.store.getState();
     if (!state.loaded || !state.hasMore || state.error) return Promise.resolve();
     return this.read(account, false);
+  }
+
+  private async remember(events: Event[]) {
+    const missing = events.filter(event => !this.parsed.has(event.id));
+    if (!missing.length) return;
+    for (const event of missing) this.parsed.set(event.id, undefined);
+    const changed = new Map<string, ExploreEntry>();
+    for (const entry of await discoveryEntries(missing)) {
+      this.parsed.set(entry.manifest!.id, entry);
+      const previous = this.catalogue.get(entry.key);
+      if (!previous || compare(entry, previous) < 0) {
+        this.catalogue.set(entry.key, entry);
+        changed.set(entry.key, entry);
+      }
+    }
+    if (changed.size) {
+      const incoming = [...changed.values()].sort(compare);
+      const previous = this.cached.filter(entry => !changed.has(entry.key));
+      const merged: ExploreEntry[] = [];
+      let i = 0, j = 0;
+      while (i < previous.length && j < incoming.length) {
+        merged.push(compare(previous[i], incoming[j]) <= 0 ? previous[i++] : incoming[j++]);
+      }
+      this.cached = merged.concat(previous.slice(i), incoming.slice(j));
+    }
+    // Retain parsing results for recent relay buffers, independently of the searchable catalogue.
+    while (this.parsed.size > RELAY_PAGE_SIZE * 4) this.parsed.delete(this.parsed.keys().next().value!);
   }
 
   private read(account: string, refresh: boolean): Promise<void> {
@@ -68,12 +103,16 @@ export class ApplicationDiscovery {
         let error = false;
         let hasMore = true;
         while (page.length < DISPLAY_PAGE_SIZE && hasMore && !error) {
-          const result = await this.timeline.next((relay, filter, signal) => {
+          const result = await this.timeline.next(async (relay, filter, signal) => {
             network ??= new NappletNetwork(account);
-            return network.query([relay], [filter], signal);
+            const result = await network.query([relay], [filter], signal);
+            await this.remember(result.events.filter(event => matchFilters([filter], event)));
+            return result;
           }, DISPLAY_PAGE_SIZE - page.length);
-          for (const entry of await discoveryEntries(result.events)) {
-            if (!this.shown.has(entry.key)) {
+          await this.remember(result.events);
+          for (const event of result.events) {
+            const entry = this.parsed.get(event.id);
+            if (entry && !this.shown.has(entry.key)) {
               this.shown.add(entry.key);
               page.push(entry);
             }
@@ -82,8 +121,8 @@ export class ApplicationDiscovery {
           hasMore = result.hasMore;
         }
         if (!refresh || page.length || !error) {
-          const entries = refresh ? page : [...this.store.getState().entries, ...page];
-          this.store.setState({ entries, loaded: true, error, hasMore });
+          const visibleEntries = refresh ? page : [...this.store.getState().visibleEntries, ...page];
+          this.store.setState({ entries: this.cached, visibleEntries, loaded: true, error, hasMore });
           if (!error) this.updatedAt = Date.now();
         } else this.store.setState({ error: true });
       } catch { this.store.setState({ error: true }); }
@@ -100,5 +139,12 @@ export class ApplicationDiscovery {
 
 const discovery = new ApplicationDiscovery();
 export const discoveryStore = discovery.store;
-export const discoverApplications = (account: string, refresh = false) => discovery.load(account, refresh);
-export const loadMoreApplications = (account: string) => discovery.loadMore(account);
+export function discoverApplications(account: string, refresh = false) { return discovery.load(account, refresh); }
+export function loadMoreApplications(account: string) { return discovery.loadMore(account); }
+
+/** Exact-address results remain separate from the curated discovery catalogue. */
+export function cacheApplicationAddress(account: string, entry: ExploreEntry) {
+  discoveryStore.setState(state => ({ addressCache: { account,
+    entries: [entry, ...(state.addressCache.account === account ? state.addressCache.entries : []).filter(app => app.key !== entry.key)].slice(0, 64),
+  } }));
+}

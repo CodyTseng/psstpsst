@@ -1078,6 +1078,7 @@
     "favorites": "お気に入り",
     "discover": "見つける",
     "discovery_empty": "アプリが見つかりません",
+    "search_placeholder": "アプリを検索、またはアドレスを入力",
     "permissions_ask": "毎回確認する",
     "permissions_duration": "有効期間",
     "permissions_manage": "権限",

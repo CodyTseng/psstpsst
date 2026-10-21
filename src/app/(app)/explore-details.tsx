@@ -27,7 +27,7 @@ export default function ExploreDetailsScreen() {
   const loadPublisher=publisherApps.load;
   useEffect(()=>{if(state.account&&loadPublisher)void loadPublisher(state.account);},[state.account,loadPublisher]);
   const discovery=useDiscovery();
-  const discovered=publisherApps.entries.find(entry=>entry.key===key)??discovery.entries.find(entry=>entry.key===key);
+  const discovered=publisherApps.entries.find(entry=>entry.key===key)??(discovery.addressCache.account===state.account?discovery.addressCache.entries.find(entry=>entry.key===key):undefined)??discovery.entries.find(entry=>entry.key===key);
   const app=(catalog==='1'?discovered:undefined)??state.entries.find(entry=>entry.key===key)??(state.entry?.key===key?state.entry:undefined)??discovered;
   const genericAccess=useExploreAccess(app?.release?undefined:app,state.account,state.accessRevision);
   const nappletAccess=useNappletAccess(app?.release,state.account);

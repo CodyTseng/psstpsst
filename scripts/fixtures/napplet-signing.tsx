@@ -34,6 +34,10 @@ initPlatformAdapters({
 } as unknown as PlatformAdapters);
 const profile = require('../../src/hooks/use-display-name') as typeof import('../../src/hooks/use-display-name');
 profile.useDisplayName = () => ({ name: 'Alice', profile: null });
+const profileHooks = require('../../src/hooks/use-profile') as typeof import('../../src/hooks/use-profile');
+profileHooks.useProfilesMap = pubkeys => Object.fromEntries(pubkeys.map(pubkey => [pubkey, { pubkey, name: 'Alice', displayName: null, fetchedAt: Math.floor(Date.now() / 1000) }])) as ReturnType<typeof profileHooks.useProfilesMap>;
+const contactHooks = require('../../src/hooks/use-contacts') as typeof import('../../src/hooks/use-contacts');
+contactHooks.useContactsMap = () => ({});
 const { NappletOverlays } = require('../../src/components/napplet/NappletOverlays') as typeof import('../../src/components/napplet/NappletOverlays');
 const { nappletStore, nappletService } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
 const { useThemeStore } = require('../../src/stores/theme.store') as typeof import('../../src/stores/theme.store');
@@ -103,21 +107,33 @@ const menu = params.get('scenario') === 'menu' || standalone;
 let RuntimeScreen: React.ComponentType | undefined;
 let exploreFixtureKey: string | undefined;
 if(params.get('scenario')==='explore-discovery') {
+  (require('../../src/services/explore/repository') as typeof import('../../src/services/explore/repository')).readEntries = async () => [];
   const {exploreService,exploreStore}=require('../../src/services/explore/service') as typeof import('../../src/services/explore/service');
   const {discoveryStore}=require('../../src/services/explore/discovery') as typeof import('../../src/services/explore/discovery');
   const {naddrEncode}=require('nostr-tools/nip19') as typeof import('nostr-tools/nip19');
-  const titles=['Notes','Photo Gallery','My Website'];
-  const apps=Array.from({length:params.has('long-catalog')?80:3},(_,index)=>titles[index]??`Application ${index}`).map((title,index)=>{
-    const kind=index===0?35130:index===1?35129:35128;
+  const titles=['Notes','Photo Gallery'];
+  const apps=Array.from({length:params.has('long-catalog')?80:2},(_,index)=>titles[index]??`Application ${index}`).map((title,index)=>{
+    const kind=index%2===0?35130:35129;
     const key=naddrEncode({kind,pubkey:'b'.repeat(64),identifier:title});
-    return {key,address:key,title,kind:index===0?'napp':index===1?'napplet':'nsite',description:'A useful application for your Nostr account.',
+    return {key,address:key,title,kind:index%2===0?'napp':'napplet',description:'A useful application for your Nostr account.',
       required:[],servers:[],desktopPosition:null,lastUsedAt:null,manifest:{pubkey:'b'.repeat(64),kind,id:'c'.repeat(64),sig:'d'.repeat(128),created_at:1,content:'',tags:[['d',title]]}} as import('../../src/services/explore/model').ExploreEntry;
   });
   nappletStore.setState({accountPubkey:'a'.repeat(64),prompt:null,loaded:true});
-  exploreStore.setState({account:'a'.repeat(64),loaded:true,entries:[]});
-  discoveryStore.setState({entries:apps,loaded:true,loading:false,error:false});
+  exploreStore.setState({account:'a'.repeat(64),loaded:true,entries:params.has('favorites-drag')?apps.map((app,desktopPosition)=>({...app,desktopPosition})):params.has('saved-apps')?[{...apps[0],desktopPosition:0},{...apps[1],lastUsedAt:10}]:[]});
+  discoveryStore.setState({entries:apps,visibleEntries:apps,loaded:true,loading:false,error:false});
   require('../../src/services/explore/discovery').discoverApplications=async()=>{};
   exploreService.activate=async()=>{};
+  if (params.has('favorites-drag')) {
+    const icons = require('../../src/services/explore/icons') as typeof import('../../src/services/explore/icons');
+    icons.loadApplicationIcon = async () => 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64"/></svg>');
+  }
+  if (params.has('favorites-drag')) require('expo-router/build/global-state/store').storeRef.current.navigationRef = { current: {} };
+  if (params.has('favorites-drag')) exploreService.move = async (app, index) => {
+    const entries = exploreStore.getState().entries.filter(entry => entry.key !== app.key);
+    if (index !== null) entries.splice(index, 0, app);
+    exploreStore.setState({ entries: entries.map((entry, desktopPosition) => ({ ...entry, desktopPosition })) });
+    document.title = `move:${app.title}:${index}`;
+  };
   const active=require('../../src/stores/active-account.store') as typeof import('../../src/stores/active-account.store');
   active.useActiveAccount.setState({activePubkey:'a'.repeat(64)});
   const navigation=require('../../src/components/navigation/primary-pane-navigation') as typeof import('../../src/components/navigation/primary-pane-navigation');

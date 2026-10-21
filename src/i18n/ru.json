@@ -1088,6 +1088,7 @@
     "favorites": "Избранное",
     "discover": "Обзор",
     "discovery_empty": "Приложения не найдены",
+    "search_placeholder": "Поиск приложений или ввод адреса",
     "permissions_ask": "Спрашивать каждый раз",
     "permissions_duration": "Срок действия",
     "permissions_manage": "Разрешения",

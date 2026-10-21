@@ -1098,6 +1098,7 @@
     "favorites": "المفضلة",
     "discover": "اكتشاف",
     "discovery_empty": "لم يتم العثور على تطبيقات",
+    "search_placeholder": "ابحث عن تطبيق أو أدخل عنوانًا",
     "permissions_ask": "السؤال في كل مرة",
     "permissions_duration": "المدة",
     "permissions_manage": "الأذونات",

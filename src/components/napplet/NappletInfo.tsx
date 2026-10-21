@@ -18,8 +18,9 @@ export function NappletInfo({ release, onPublisher, notice }: { release: Napplet
 }
 
 export function ApplicationInfo({release,onPublisher,notice,action}:{release:ApplicationPresentation;onPublisher():void;notice?:ReactNode;action?:ReactNode}) {
+  const { t } = useTranslation();
   return <View testID="napplet-info" style={{ gap: spacing.lg }}>
-    <NappletIdentity release={release} action={action} />
+    <NappletIdentity release={release} action={action} subtitle={release.kind ? t(`napplets.formats.${release.kind}`) : undefined} />
     {release.publisher?<PublisherRow pubkey={release.publisher} onPress={onPublisher}/>:null}
     {release.description.trim() ? <AppText>{release.description}</AppText> : null}
     {release.origin?<AppText variant="caption" tone="muted" selectable>{release.origin}</AppText>:null}

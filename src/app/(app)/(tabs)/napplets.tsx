@@ -8,41 +8,57 @@ import type { ExploreEntry } from '@/services/explore/model';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
+import { iconStrokeWidth } from '@/theme/icons';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
-import Plus from 'lucide-react-native/icons/plus';
+import { useLocalSearchParams } from 'expo-router';
+import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getBottomChromeInset } from '@/lib/layout/bottom-chrome';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
+import { SearchBar, SEARCH_BAR_SCREEN_GUTTER } from '@/components/search/SearchBar';
 import { IconButton } from '@/components/common/IconButton';
+import { QrScanButton } from '@/components/common/QrScanButton';
+import { parseApplicationAddressQuery } from '@/services/explore/address-query';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { NappletGrid } from '@/components/napplet/NappletGrid';
 import { nappletService } from '@/services/napplet/service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { usePrimaryPaneNavigation } from '@/components/navigation/primary-pane-navigation';
-import { iconStrokeWidth } from '@/theme/icons';
 import { bottomBarHeight, spacing, uiDensity, useThemeColors } from '@/theme';
 
-const TABS_HEIGHT = uiDensity.segmentedControlHeight + spacing.sm;
+const SEARCH_HEIGHT = uiDensity.searchBarHeight + spacing.sm;
+type ExploreMode = 'favorites' | 'discover';
 
 export default function NappletsScreen() {
   const account = useActiveAccount((s) => s.activePubkey);
-  return <AccountNapplets key={account ?? 'signed-out'} account={account} />;
+  const [mode, setMode] = useState<{ account: string | null; value: ExploreMode }>({ account, value: 'favorites' });
+  const { searchHandoff } = useLocalSearchParams<{ searchHandoff?: string }>();
+  const pending = useExploreSearchHandoffStore(state => state.pending);
+  const id = typeof searchHandoff === 'string' ? Number(searchHandoff) : NaN;
+  const input = pending?.id === id && pending.account === account ? pending.value : undefined;
+  useEffect(() => {
+    if (input !== undefined && account) useExploreSearchHandoffStore.getState().consume(id, account);
+  }, [input, account, id]);
+  return <AccountNapplets key={`${account ?? 'signed-out'}:${searchHandoff ?? ''}`} account={account} initialAddress={input}
+    tab={mode.account === account ? mode.value : 'favorites'} onTabChange={value => setMode({ account, value })} />;
 }
-function AccountNapplets({ account }: { account: string | null }) {
+function AccountNapplets({ account, initialAddress, tab, onTabChange }: { account: string | null; initialAddress?: string; tab: ExploreMode; onTabChange(value: ExploreMode): void }) {
   const c = useThemeColors();
   const { t } = useTranslation();
   const state = useExplore();
   const share = useExploreShare(account);
   const navigation = usePrimaryPaneNavigation();
   const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
-  const recent = useMemo(() => state.entries.filter(a=>a.lastUsedAt!==null).sort((a,b)=>b.lastUsedAt!-a.lastUsedAt!), [state.entries]);
-  const [tab, setTab] = useState<'favorites'|'discover'>('favorites');
+  const [query, setQuery] = useState(initialAddress ?? '');
+  const [scanRevision, setScanRevision] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const clearance = useScreenHeaderClearance(TABS_HEIGHT);
+  const changeQuery = useCallback((value: string) => { setQuery(value); setScrolled(false); }, []);
+  const clearance = useScreenHeaderClearance(SEARCH_HEIGHT);
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   useEffect(() => {
     if (account)
@@ -68,6 +84,9 @@ function AccountNapplets({ account }: { account: string | null }) {
     },
     [account, navigation],
   );
+  const showSearchDetails = useCallback((app: ExploreEntry) => {
+    navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1`);
+  }, [navigation]);
   const action = useCallback(
     (app: ExploreEntry, index: number | null) => {
       setError(null);
@@ -81,21 +100,30 @@ function AccountNapplets({ account }: { account: string | null }) {
     <AppScreen edges={[]}>
       <ScreenHeader
         back={false}
+        left={<IconButton variant="plain" size={uiDensity.headerActionSize}
+          icon={<RotateCcwClock size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.text} />}
+          accessibilityLabel={t('napplets.recent')} onPress={() => navigation.open('/explore-recent')} />}
         bordered={scrolled}
-        title={t('napplets.title')}
-        belowHeight={TABS_HEIGHT}
+        titleControl={<SegmentedControl compact value={tab}
+          options={[{ value: 'favorites', label: t('napplets.favorites') }, { value: 'discover', label: t('napplets.discover') }]}
+          onChange={value => { onTabChange(value); setScrolled(false); setError(null); }} />}
+        belowHeight={SEARCH_HEIGHT}
         below={
-          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
-            <SegmentedControl value={tab}
-              options={[{ value: 'favorites', label: t('napplets.favorites') }, { value: 'discover', label: t('napplets.discover') }]}
-              onChange={value => { setTab(value); setScrolled(false); }} />
+          <View style={{ paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
+            <SearchBar value={query} onChangeText={changeQuery} placeholder={t('napplets.search_placeholder')} />
           </View>
         }
         right={
-          <IconButton variant="plain" size={uiDensity.headerActionSize}
-            icon={<Plus strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text} />}
-            accessibilityLabel={t('napplets.install_link')}
-            onPress={() => navigation.open('/napplet-install')}
+          <QrScanButton variant="plain" size={uiDensity.headerActionSize} iconSize={uiDensity.headerActionIconSize}
+            onScanned={data => {
+              const value = data.trim();
+              const address = parseApplicationAddressQuery(value);
+              if (!address || address.type === 'invalid') { setError('napplets.invalid_manifest'); return; }
+              setError(null);
+              setQuery(value);
+              setScanRevision(revision => revision + 1);
+              setScrolled(false);
+            }}
           />
         }
       />
@@ -107,18 +135,17 @@ function AccountNapplets({ account }: { account: string | null }) {
         ) : null}
         {!state.loaded || state.account !== account ? (
           <ActivityIndicator color={c.accent} style={{ padding: spacing.lg }} />
-        ) : tab==='discover' && account ? <ExploreDiscovery account={account} bottomInset={bottomInset} onScrollChange={setScrolled}
-          onDetails={app=>navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1`)} /> : desktop.length || recent.length ? (
+        ) : account && (tab==='discover' || query.trim()) ? <ExploreDiscovery key={scanRevision} query={query} scope={tab} favorites={desktop} account={account} bottomInset={bottomInset} onScrollChange={setScrolled}
+          onDetails={showSearchDetails} /> : desktop.length ? (
           <NappletGrid onPermissions={(app) => navigation.open(app.release?`/napplet-permissions/${app.release.event.id}`:`/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`)} onShare={share}
     onDetails={(app) => navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`)}
-            onRemoveRecent={(app) => { void exploreService.forget(app, account ?? '').catch(() => setError('napplets.request_failed')); }}
-            onShowRecent={() => navigation.open('/explore-recent')} items={desktop} recent={recent} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />
-        ) : <Empty onAdd={() => navigation.open('/napplet-install')} />}
+            items={desktop} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />
+        ) : <Empty onDiscover={() => { setError(null); onTabChange('discover'); setScrolled(false); }} />}
       </View>
     </AppScreen>
   );
 }
-function Empty({ onAdd }: { onAdd: () => void }) {
+function Empty({ onDiscover }: { onDiscover: () => void }) {
   const c = useThemeColors();
   const { t } = useTranslation();
   return (
@@ -138,7 +165,7 @@ function Empty({ onAdd }: { onAdd: () => void }) {
       <AppText tone="muted" align="center">
         {t('napplets.empty_description')}
       </AppText>
-      <View><AppButton fullWidth={false} label={t('napplets.install_link')} onPress={onAdd} /></View>
+      <View><AppButton fullWidth={false} label={t('napplets.discover')} onPress={onDiscover} /></View>
     </View>
   );
 }
