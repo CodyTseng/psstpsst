@@ -988,6 +988,8 @@ signing-account labels and raw protocol action names.
 Mini-app More opens app information with Copy address, Share, Permissions and
 Reload actions. Copy uses the same public address as sharing and keeps the sheet
 open with brief in-place confirmation after the clipboard accepts the write.
+On iOS, runtime swipe gestures navigate embedded page history without dismissing
+the host route; leaving the runtime uses its explicit Close action.
 On Electron and Android, each account/application owns one independent window or
 task. Reopening restores and focuses that instance with its state intact. Open
 applications show a small success-green dot beside their icons in app grids and

@@ -381,6 +381,19 @@ private final class ExploreFiles: NSObject, WKURLSchemeHandler {
   func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }
 
+/** Browser-internal addresses never become host window or external-app requests. */
+private func browserHandoffURL(_ value: String?) -> URL? {
+  guard let value, value.utf8.count <= 8192, let url = URL(string: value),
+    let scheme = url.scheme?.lowercased(),
+    !["javascript", "data", "blob", "file", "app", "about", "chrome", "devtools", "shell", "powershell", "cmd", "psstpsst-file", "psst-explore"].contains(scheme) else { return nil }
+  return url
+}
+
+private func isInternalBrowserSubframe(_ url: URL?, mainFrame: Bool) -> Bool {
+  guard !mainFrame, let url, url.scheme == "about" else { return false }
+  return url.path == "blank" || url.path == "srcdoc"
+}
+
 final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, UIDocumentPickerDelegate {
   let onMessage = EventDispatcher()
   private let proxy = MessageProxy()
@@ -397,6 +410,9 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
   }
   private func requestBrowser(_ action: String, url: String? = nil, resources: [String]? = nil, filename: String? = nil, principal: URL? = nil, completion: @escaping (Bool) -> Void = { _ in }) {
     guard isExplore, browserRequests.count < 16, let current = principal ?? committedURL ?? web?.url else { completion(false); return }
+    if action == "window" || action == "external" {
+      guard browserHandoffURL(url) != nil else { completion(false); return }
+    }
     let id = "browser:\(UUID().uuidString)"
     browserRequests[id] = completion
     var browser: [String: Any] = ["id": id, "action": action]
@@ -527,6 +543,7 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
     configuration.setURLSchemeHandler(pageFiles, forURLScheme: "psst-explore")
     configuration.userContentController.add(proxy, name: "nappletHost")
     web = WKWebView(frame: bounds, configuration: configuration)
+    web.allowsBackForwardNavigationGestures = true
     web.isOpaque = false; web.backgroundColor = .clear; web.scrollView.backgroundColor = .clear
     web.navigationDelegate = self; web.uiDelegate = self; addSubview(web)
     pageRemote = page["url"] != nil
@@ -548,6 +565,7 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
     proxy.owner = self
     configuration.userContentController.add(proxy, name: "nappletHost")
     web = WKWebView(frame: .zero, configuration: configuration)
+    web.allowsBackForwardNavigationGestures = true
     web.isOpaque = false
     web.backgroundColor = .clear
     web.scrollView.backgroundColor = .clear
@@ -588,8 +606,10 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
       if action.shouldPerformDownload {
         requestBrowser("download", url: target?.absoluteString) { decisionHandler($0 ? .download : .cancel) }; return
       }
-      let allowed = pageRemote ? ["http", "https"].contains(target?.scheme ?? "") : target?.scheme == "psst-explore" && target?.host == pageURL?.host
-      if !allowed, let target { requestBrowser(["http", "https"].contains(target.scheme ?? "") ? "window" : "external", url: target.absoluteString) }
+      let mainFrame = action.targetFrame?.isMainFrame != false
+      let internalFrame = isInternalBrowserSubframe(target, mainFrame: mainFrame)
+      let allowed = internalFrame || (pageRemote ? ["http", "https"].contains(target?.scheme ?? "") : target?.scheme == "psst-explore" && target?.host == pageURL?.host)
+      if !allowed, mainFrame, let target { requestBrowser(["http", "https"].contains(target.scheme ?? "") ? "window" : "external", url: target.absoluteString) }
       decisionHandler(allowed ? .allow : .cancel); return
     }
     let url = action.request.url?.absoluteString ?? ""
