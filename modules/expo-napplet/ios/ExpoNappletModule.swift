@@ -27,6 +27,11 @@ private func publicIP(_ value: String) -> Bool {
     || (a == 100 && b >= 64 && b <= 127) || (a == 198 && b >= 18 && b <= 19))
 }
 
+private final class ResourceException: GenericException<String>, @unchecked Sendable {
+  override var code: String { "ERR_RESOURCE" }
+  override var reason: String { param }
+}
+
 /** Connect to the validated numeric address while retaining hostname TLS verification. */
 private final class PublicFetch {
   private let queue = DispatchQueue(label: "psstpsst.napplet.resource")
@@ -34,19 +39,25 @@ private final class PublicFetch {
   private var terminal = false
   private var redirects = 0
   private var deadlineStarted = false
-  private let promise: Promise
-  private let finished: () -> Void
+  private let completion: (Data?, String?, Int, [String: String]) -> Void
+  private let bootstrap: String?
+  private let timeout: Double
+  private var dnsRequest: PublicFetch?
+  private static let dnsLock = NSLock()
+  private static var dnsCache: [String: (address: String, expires: TimeInterval)] = [:]
+  private static let resolvers = [
+    ("https://cloudflare-dns.com/dns-query", "1.1.1.1"),
+    ("https://dns.google/resolve", "8.8.8.8"),
+  ]
   private let responseDetails: Bool
   private let etag: String?
   private let lastModified: String?
   init(_ promise: Promise, responseDetails: Bool = false, etag: String? = nil, lastModified: String? = nil, finished: @escaping () -> Void) {
-    self.promise = promise; self.finished = finished; self.responseDetails = responseDetails; self.etag = etag; self.lastModified = lastModified
-  }
-  func cancel() { queue.async { self.finish(nil, "cancelled") } }
-  private func finish(_ data: Data?, _ error: String? = nil, status: Int = 200, headers: [String: String] = [:]) {
-    guard !terminal else { return }; terminal = true
-    connection?.stateUpdateHandler = nil; connection?.cancel(); connection = nil; finished()
-    if let data {
+    self.responseDetails = responseDetails; self.etag = etag; self.lastModified = lastModified
+    self.bootstrap = nil; self.timeout = 20
+    self.completion = { data, error, status, headers in
+      finished()
+      guard let data else { promise.reject(ResourceException(error ?? "network-error")); return }
       if responseDetails {
         var response: [String: Any] = ["status": status, "bytes": data.base64EncodedString()]
         if let value = headers["etag"], value.utf8.count <= 2048 { response["etag"] = value }
@@ -54,93 +65,166 @@ private final class PublicFetch {
         promise.resolve(response)
       } else { promise.resolve(data.base64EncodedString()) }
     }
-    else { promise.reject("ERR_RESOURCE", error ?? "network-error") }
   }
+  private init(bootstrap: String, completion: @escaping (Data?, String?, Int, [String: String]) -> Void) {
+    self.bootstrap = bootstrap; self.timeout = 5; self.completion = completion
+    self.responseDetails = false; self.etag = nil; self.lastModified = nil
+  }
+  func cancel() { queue.async { self.finish(nil, "cancelled") } }
+  private func finish(_ data: Data?, _ error: String? = nil, status: Int = 200, headers: [String: String] = [:]) {
+    guard !terminal else { return }; terminal = true
+    connection?.stateUpdateHandler = nil; connection?.cancel(); connection = nil
+    dnsRequest?.cancel(); dnsRequest = nil
+    completion(data, error, status, headers)
+  }
+
   func start(_ value: String, max: Int, accept: String = "*/*") {
     queue.async {
       guard !self.deadlineStarted else { return }
       self.deadlineStarted = true
-      self.queue.asyncAfter(deadline: .now() + 20) { self.finish(nil, "timeout") }
+      self.queue.asyncAfter(deadline: .now() + self.timeout) { self.finish(nil, "timeout") }
     }
     DispatchQueue.global(qos: .utility).async {
-      guard ["*/*", "application/json", "application/nostr+json"].contains(accept),
+      guard ["*/*", "application/json", "application/nostr+json", "application/dns-json"].contains(accept),
         [self.etag, self.lastModified].allSatisfy({ value in value == nil || value!.utf8.count <= 2048 && !value!.contains(where: { $0 == "\r" || $0 == "\n" || $0 == "\0" }) }),
         value.utf8.count <= 4096, let url = URL(string: value), url.scheme == "https", let host = url.host,
         url.user == nil, url.password == nil, url.port == nil || url.port == 443,
         max > 0, max <= 26214400 else { self.queue.async { self.finish(nil, "blocked-by-policy") }; return }
+      if let bootstrap = self.bootstrap {
+        self.queue.async { self.connect(url, host: host, address: bootstrap, max: max, accept: accept) }
+        return
+      }
       var hints = addrinfo()
       hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM
       var result: UnsafeMutablePointer<addrinfo>?
-      guard getaddrinfo(host, "443", &hints, &result) == 0 else { self.queue.async { self.finish(nil) }; return }
-      defer { freeaddrinfo(result) }
+      let status = getaddrinfo(host, "443", &hints, &result)
+      defer { if let result { freeaddrinfo(result) } }
       var addresses: [String] = []
       var current = result
-      while let item = current {
+      while status == 0, let item = current {
         var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
         if getnameinfo(item.pointee.ai_addr, item.pointee.ai_addrlen, &buffer, socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0 {
           addresses.append(String(cString: buffer))
         }
         current = item.pointee.ai_next
       }
-      guard let address = addresses.first, addresses.allSatisfy(publicIP) else { self.queue.async { self.finish(nil, "blocked-by-policy") }; return }
       self.queue.async {
         guard !self.terminal else { return }
-        let tls = NWProtocolTLS.Options()
-        sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, host)
-        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
-        let connection = NWConnection(host: NWEndpoint.Host(address), port: 443, using: NWParameters(tls: tls))
-        self.connection = connection
-        var received = Data()
-        func receive() {
-          connection.receive(minimumIncompleteLength: 1, maximumLength: 32768) { data, _, complete, error in
-            guard !self.terminal, self.connection === connection else { return }
-            if let data { received.append(data) }
-            guard received.count <= max + 65536 else { self.finish(nil, "too-large"); return }
-            if error != nil { self.finish(nil); return }
-            if complete {
-              if let target = Self.redirect(received, from: url) {
-                guard self.redirects < 5 else { self.finish(nil, "redirect-limit"); return }
-                self.redirects += 1
-                connection.stateUpdateHandler = nil
-                self.connection = nil
-                connection.cancel()
-                self.start(target.absoluteString, max: max, accept: accept)
-                return
-              }
-              do {
-                if self.responseDetails {
-                  let headers = try Self.responseHeaders(received)
-                  if self.redirects == 0 && (self.etag != nil || self.lastModified != nil) && headers.status == 304 {
-                    self.finish(Data(), status: 304, headers: headers.values)
-                  } else { self.finish(try Self.body(received, max: max), headers: headers.values) }
-                } else { self.finish(try Self.body(received, max: max)) }
-              }
-              catch { self.finish(nil, "resource-unavailable") }
-            } else { receive() }
-          }
+        if let address = addresses.first, addresses.allSatisfy(publicIP) {
+          self.connect(url, host: host, address: address, max: max, accept: accept)
+        } else if host.contains(":") || host.allSatisfy({ $0.isNumber || $0 == "." }) {
+          self.finish(nil, "blocked-by-policy")
+        } else {
+          self.resolvePublicAddress(url, host: host, max: max, accept: accept)
         }
-        connection.stateUpdateHandler = { state in
-          guard !self.terminal, self.connection === connection else { return }
-          switch state {
-          case .ready:
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            let target = (components.percentEncodedPath.isEmpty ? "/" : components.percentEncodedPath) + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
-            var conditional = ""
-            if self.responseDetails && self.redirects == 0 {
-              if let etag = self.etag { conditional += "If-None-Match: \(etag)\r\n" }
-              if let modified = self.lastModified { conditional += "If-Modified-Since: \(modified)\r\n" }
-            }
-            let request = "GET \(target) HTTP/1.1\r\nHost: \(host)\r\nAccept: \(accept)\r\nAccept-Encoding: identity\r\n\(conditional)Connection: close\r\n\r\n"
-            connection.send(content: Data(request.utf8), completion: .contentProcessed { error in
-              if error != nil { self.finish(nil) } else { receive() }
-            })
-          case .failed: self.finish(nil)
-          default: break
-          }
-        }
-        connection.start(queue: self.queue)
       }
     }
+  }
+  private func resolvePublicAddress(_ url: URL, host: String, max: Int, accept: String, resolver: Int = 0) {
+    guard !terminal else { return }
+    Self.dnsLock.lock()
+    let cached = Self.dnsCache[host]
+    Self.dnsLock.unlock()
+    if let cached, cached.expires > ProcessInfo.processInfo.systemUptime {
+      connect(url, host: host, address: cached.address, max: max, accept: accept)
+      return
+    }
+    guard resolver < Self.resolvers.count else { finish(nil, "dns-unavailable"); return }
+    let (endpoint, bootstrap) = Self.resolvers[resolver]
+    var components = URLComponents(string: endpoint)!
+    components.queryItems = [URLQueryItem(name: "name", value: host), URLQueryItem(name: "type", value: "A")]
+    let request = PublicFetch(bootstrap: bootstrap) { [weak self] data, _, _, _ in
+      guard let self else { return }
+      self.queue.async {
+        guard !self.terminal else { return }
+        self.dnsRequest = nil
+        guard let data, let answer = Self.dnsAnswer(data) else {
+          self.resolvePublicAddress(url, host: host, max: max, accept: accept, resolver: resolver + 1)
+          return
+        }
+        if answer.ttl > 0 {
+          Self.dnsLock.lock()
+          if Self.dnsCache.count >= 64, let key = Self.dnsCache.keys.first { Self.dnsCache.removeValue(forKey: key) }
+          Self.dnsCache[host] = (answer.address, ProcessInfo.processInfo.systemUptime + answer.ttl)
+          Self.dnsLock.unlock()
+        }
+        self.connect(url, host: host, address: answer.address, max: max, accept: accept)
+      }
+    }
+    dnsRequest = request
+    request.start(components.url!.absoluteString, max: 32768, accept: "application/dns-json")
+  }
+  private static func dnsAnswer(_ data: Data) -> (address: String, ttl: TimeInterval)? {
+    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      json["Status"] as? Int == 0, json["TC"] as? Bool != true,
+      let records = json["Answer"] as? [[String: Any]], records.count <= 64 else { return nil }
+    var address: String?
+    var ttl: TimeInterval = 60
+    for record in records where record["type"] as? Int == 1 {
+      guard let value = record["data"] as? String, IPv4Address(value) != nil, publicIP(value) else { return nil }
+      address = address ?? value
+      ttl = min(ttl, max(0, record["TTL"] as? Double ?? 0))
+    }
+    guard let address else { return nil }
+    return (address, ttl)
+  }
+  private func connect(_ url: URL, host: String, address: String, max: Int, accept: String) {
+    guard !terminal, publicIP(address) else { return }
+    let tls = NWProtocolTLS.Options()
+    sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, host)
+    sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
+    let connection = NWConnection(host: NWEndpoint.Host(address), port: 443, using: NWParameters(tls: tls))
+    self.connection = connection
+    var received = Data()
+    func receive() {
+      connection.receive(minimumIncompleteLength: 1, maximumLength: 32768) { data, _, complete, error in
+        guard !self.terminal, self.connection === connection else { return }
+        if let data { received.append(data) }
+        guard received.count <= max + 65536 else { self.finish(nil, "too-large"); return }
+        if let error { self.finish(nil, "receive-failed: \(error)"); return }
+        if complete {
+          if let target = Self.redirect(received, from: url) {
+            guard self.bootstrap == nil else { self.finish(nil, "dns-unavailable"); return }
+            guard self.redirects < 5 else { self.finish(nil, "redirect-limit"); return }
+            self.redirects += 1
+            connection.stateUpdateHandler = nil
+            self.connection = nil
+            connection.cancel()
+            self.start(target.absoluteString, max: max, accept: accept)
+            return
+          }
+          do {
+            if self.responseDetails {
+              let headers = try Self.responseHeaders(received)
+              if self.redirects == 0 && (self.etag != nil || self.lastModified != nil) && headers.status == 304 {
+                self.finish(Data(), status: 304, headers: headers.values)
+              } else { self.finish(try Self.body(received, max: max), headers: headers.values) }
+            } else { self.finish(try Self.body(received, max: max)) }
+          }
+          catch { self.finish(nil, "resource-unavailable") }
+        } else { receive() }
+      }
+    }
+    connection.stateUpdateHandler = { state in
+      guard !self.terminal, self.connection === connection else { return }
+      switch state {
+      case .ready:
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let target = (components.percentEncodedPath.isEmpty ? "/" : components.percentEncodedPath) + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
+        var conditional = ""
+        if self.responseDetails && self.redirects == 0 {
+          if let etag = self.etag { conditional += "If-None-Match: \(etag)\r\n" }
+          if let modified = self.lastModified { conditional += "If-Modified-Since: \(modified)\r\n" }
+        }
+        let request = "GET \(target) HTTP/1.1\r\nHost: \(host)\r\nAccept: \(accept)\r\nAccept-Encoding: identity\r\n\(conditional)Connection: close\r\n\r\n"
+        connection.send(content: Data(request.utf8), completion: .contentProcessed { error in
+          if let error { self.finish(nil, "send-failed: \(error)") } else { receive() }
+        })
+      case .failed(let error): self.finish(nil, "connection-failed: \(error)")
+      default: break
+      }
+    }
+    connection.start(queue: self.queue)
   }
   private static func redirect(_ data: Data, from url: URL) -> URL? {
     guard let boundary = data.range(of: Data("\r\n\r\n".utf8)), boundary.lowerBound <= 32768,
@@ -221,7 +305,7 @@ public class ExpoNappletModule: Module {
     Function("isExploreAvailable") { true }
     AsyncFunction("fetchResourceAsync") { (id: String, url: String, max: Int, accept: String?, promise: Promise) in
       self.lock.lock()
-      guard self.requests.count < 12 else { self.lock.unlock(); promise.reject("ERR_RESOURCE", "quota-exceeded"); return }
+      guard self.requests.count < 12 else { self.lock.unlock(); promise.reject(ResourceException("quota-exceeded")); return }
       let request = PublicFetch(promise) { [weak self] in
         guard let self else { return }
         self.lock.lock(); self.requests.removeValue(forKey: id); self.lock.unlock()
@@ -231,7 +315,7 @@ public class ExpoNappletModule: Module {
     }
     AsyncFunction("fetchResourceResponseAsync") { (id: String, url: String, max: Int, etag: String?, lastModified: String?, promise: Promise) in
       self.lock.lock()
-      guard self.requests.count < 12 else { self.lock.unlock(); promise.reject("ERR_RESOURCE", "quota-exceeded"); return }
+      guard self.requests.count < 12 else { self.lock.unlock(); promise.reject(ResourceException("quota-exceeded")); return }
       let request = PublicFetch(promise, responseDetails: true, etag: etag, lastModified: lastModified) { [weak self] in
         guard let self else { return }
         self.lock.lock(); self.requests.removeValue(forKey: id); self.lock.unlock()
@@ -412,9 +496,19 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
     if let bytes = try? JSONSerialization.data(withJSONObject: envelope), let text = String(data: bytes, encoding: .utf8) { onMessage(["message": text]) }
   }
   func receive(_ raw: String, origin source: WKSecurityOrigin) {
-    guard let current = [web.url, committedURL].compactMap({ $0 }).first(where: { current in
-      current.scheme == source.protocol && current.host == source.host &&
-        ((current.port ?? (current.scheme == "https" ? 443 : current.scheme == "http" ? 80 : 0)) == source.port || source.port == 0 && current.port == nil)
+    let candidates: [URL?] = [web.url, committedURL]
+    guard let current = candidates.compactMap({ $0 }).first(where: { current in
+      guard current.scheme == source.protocol, current.host == source.host else { return false }
+      let defaultPort: Int
+      switch current.scheme {
+      case "https": defaultPort = 443
+      case "http": defaultPort = 80
+      default: defaultPort = 0
+      }
+      let explicitPort = current.port
+      let effectivePort = explicitPort ?? defaultPort
+      let implicitSourcePort = source.port == 0 && explicitPort == nil
+      return effectivePort == source.port || implicitSourcePort
     }) else { return }
     emit("explore.request", raw, sourceURL: current)
   }

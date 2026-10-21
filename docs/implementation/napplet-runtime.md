@@ -105,7 +105,7 @@ the existing off-thread device-crypto port; bridge codecs, UTF-8 decoding and
 document preparation yield between bounded chunks. Each transport checks
 DNS in the actual connection path; iOS pins the numeric connection target while
 retaining hostname TLS verification. Redirects are rejected.
-Android and Electron retry non-public system DNS answers through
+Android, iOS and Electron retry non-public system DNS answers through
 Cloudflare or Google DNS over HTTPS using pinned bootstrap IPs. Only independently
 resolved public addresses are admitted; TLS still verifies the original hostname.
 This supports Fake-IP VPN DNS without allowing access to private endpoints. The
