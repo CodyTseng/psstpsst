@@ -1083,7 +1083,6 @@
     "favorites": "Preferiti",
     "discover": "Scopri",
     "discovery_empty": "Nessuna app trovata",
-    "allow_and_open": "Consenti e apri",
     "permissions_ask": "Chiedi ogni volta",
     "permissions_duration": "Durata",
     "permissions_manage": "Autorizzazioni",
@@ -1271,8 +1270,8 @@
     "replying_to": "In risposta a {{name}}",
     "cancel_reply": "Annulla risposta",
     "empty": "Ancora nessuna recensione",
-    "load_more": "Carica altri commenti",
-    "load_failed": "Impossibile caricare i commenti. Riprova.",
+    "load_failed": "Impossibile caricare i commenti.",
+    "try_again": "Riprova",
     "post_failed": "Impossibile pubblicare il commento. La bozza è stata conservata.",
     "public_as": "Pubblicazione pubblica come {{name}}"
   }

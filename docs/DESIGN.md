@@ -928,8 +928,7 @@ permission controls. Format-specific capabilities supply content within those
 shared layouts rather than defining separate page designs.
 Application details prioritize app identity, a readable description and expanded
 required access. The primary action stays fixed above the bottom safe area while information
-scrolls. It reads Allow and open when required access needs consent, otherwise
-Open. Explicit consent on this page replaces the duplicate launch prompt;
+scrolls. It always reads Open, regardless of installation or access approval state. Explicit consent on this page replaces the duplicate launch prompt;
 viewing app details alone never grants access. Details and runtime information share the app identity, publisher, description
 and required access. Approval sheets show a compact requester identity and the
 exact requested access, omitting publisher rows and marketing descriptions. Applications with no effective required access open without

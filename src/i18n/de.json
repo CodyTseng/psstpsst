@@ -1078,7 +1078,6 @@
     "favorites": "Favoriten",
     "discover": "Entdecken",
     "discovery_empty": "Keine Apps gefunden",
-    "allow_and_open": "Erlauben und öffnen",
     "permissions_ask": "Jedes Mal fragen",
     "permissions_duration": "Dauer",
     "permissions_manage": "Berechtigungen",
@@ -1266,8 +1265,8 @@
     "replying_to": "Antwort an {{name}}",
     "cancel_reply": "Antwort abbrechen",
     "empty": "Noch keine Bewertungen",
-    "load_more": "Weitere Kommentare laden",
-    "load_failed": "Kommentare konnten nicht geladen werden. Versuche es erneut.",
+    "load_failed": "Kommentare konnten nicht geladen werden.",
+    "try_again": "Versuche es erneut",
     "post_failed": "Dein Kommentar konnte nicht veröffentlicht werden. Dein Entwurf bleibt erhalten.",
     "public_as": "Öffentlich posten als {{name}}"
   }

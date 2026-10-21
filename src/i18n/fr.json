@@ -1083,7 +1083,6 @@
     "favorites": "Favoris",
     "discover": "Découvrir",
     "discovery_empty": "Aucune application trouvée",
-    "allow_and_open": "Autoriser et ouvrir",
     "permissions_ask": "Toujours demander",
     "permissions_duration": "Durée",
     "permissions_manage": "Autorisations",
@@ -1271,8 +1270,8 @@
     "replying_to": "Réponse à {{name}}",
     "cancel_reply": "Annuler la réponse",
     "empty": "Aucun avis pour le moment",
-    "load_more": "Charger plus de commentaires",
-    "load_failed": "Impossible de charger les commentaires. Réessayez.",
+    "load_failed": "Impossible de charger les commentaires.",
+    "try_again": "Réessayez",
     "post_failed": "Impossible de publier votre commentaire. Votre brouillon est conservé.",
     "public_as": "Publication publique en tant que {{name}}"
   }

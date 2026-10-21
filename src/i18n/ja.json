@@ -1078,7 +1078,6 @@
     "favorites": "お気に入り",
     "discover": "見つける",
     "discovery_empty": "アプリが見つかりません",
-    "allow_and_open": "許可して開く",
     "permissions_ask": "毎回確認する",
     "permissions_duration": "有効期間",
     "permissions_manage": "権限",
@@ -1266,8 +1265,8 @@
     "replying_to": "{{name}} に返信",
     "cancel_reply": "返信をキャンセル",
     "empty": "まだレビューはありません",
-    "load_more": "コメントをさらに読み込む",
-    "load_failed": "コメントを読み込めませんでした。もう一度お試しください。",
+    "load_failed": "コメントを読み込めませんでした。",
+    "try_again": "もう一度お試しください",
     "post_failed": "コメントを投稿できませんでした。下書きは保持されています。",
     "public_as": "{{name}} として公開投稿"
   }

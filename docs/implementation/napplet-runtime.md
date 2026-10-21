@@ -34,8 +34,7 @@ late results; their connections, signer, INC endpoint and native container close
 
 Entry points synchronously prepare an account-bound launch and navigate to its
 container before starting installation, authorization or artifact loading. The
-details page uses Allow and open when required access needs consent, otherwise
-Open, with required access expanded above a fixed bottom action. Optional access is omitted from app details.
+details page always uses Open, with required access expanded above a fixed bottom action. Optional access is omitted from app details.
 The container starts that work after committing. Verified local code loads on a blank
 themed canvas; a missing or corrupt artifact enables the icon and loading state
 only when a network download is needed, retaining it until the first frame.

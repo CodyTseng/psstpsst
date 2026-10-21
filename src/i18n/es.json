@@ -1083,7 +1083,6 @@
     "favorites": "Favoritos",
     "discover": "Descubrir",
     "discovery_empty": "No se encontraron aplicaciones",
-    "allow_and_open": "Permitir y abrir",
     "permissions_ask": "Preguntar siempre",
     "permissions_duration": "Duración",
     "permissions_manage": "Permisos",
@@ -1271,8 +1270,8 @@
     "replying_to": "Respondiendo a {{name}}",
     "cancel_reply": "Cancelar respuesta",
     "empty": "Aún no hay reseñas",
-    "load_more": "Cargar más comentarios",
-    "load_failed": "No se pudieron cargar los comentarios. Inténtalo de nuevo.",
+    "load_failed": "No se pudieron cargar los comentarios.",
+    "try_again": "Inténtalo de nuevo",
     "post_failed": "No se pudo publicar tu comentario. Se ha conservado el borrador.",
     "public_as": "Publicando como {{name}} de forma pública"
   }

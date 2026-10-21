@@ -1088,7 +1088,6 @@
     "favorites": "Ulubione",
     "discover": "Odkrywaj",
     "discovery_empty": "Nie znaleziono aplikacji",
-    "allow_and_open": "Zezwól i otwórz",
     "permissions_ask": "Pytaj za każdym razem",
     "permissions_duration": "Czas obowiązywania",
     "permissions_manage": "Uprawnienia",
@@ -1276,8 +1275,8 @@
     "replying_to": "Odpowiedź do {{name}}",
     "cancel_reply": "Anuluj odpowiedź",
     "empty": "Brak opinii",
-    "load_more": "Wczytaj więcej komentarzy",
-    "load_failed": "Nie udało się wczytać komentarzy. Spróbuj ponownie.",
+    "load_failed": "Nie udało się wczytać komentarzy.",
+    "try_again": "Spróbuj ponownie",
     "post_failed": "Nie udało się opublikować komentarza. Wersja robocza została zachowana.",
     "public_as": "Publikowanie publicznie jako {{name}}"
   }

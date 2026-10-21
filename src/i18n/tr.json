@@ -1078,7 +1078,6 @@
     "favorites": "Favoriler",
     "discover": "Keşfet",
     "discovery_empty": "Uygulama bulunamadı",
-    "allow_and_open": "İzin ver ve aç",
     "permissions_ask": "Her seferinde sor",
     "permissions_duration": "Süre",
     "permissions_manage": "İzinler",
@@ -1266,8 +1265,8 @@
     "replying_to": "{{name}} adlı kişiye yanıt",
     "cancel_reply": "Yanıtı iptal et",
     "empty": "Henüz değerlendirme yok",
-    "load_more": "Daha fazla yorum yükle",
-    "load_failed": "Yorumlar yüklenemedi. Tekrar dene.",
+    "load_failed": "Yorumlar yüklenemedi.",
+    "try_again": "Tekrar dene",
     "post_failed": "Yorumun yayınlanamadı. Taslağın korundu.",
     "public_as": "{{name}} olarak herkese açık paylaşım"
   }

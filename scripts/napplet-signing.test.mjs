@@ -396,7 +396,7 @@ test(
           await allow.click();assert.equal(JSON.parse(await page.title()).value,'allow');
         }
         await page.goto(`${address}/?scenario=detail&theme=${theme}&needs-consent=1`);
-        const allow = page.getByRole('button', { name: 'Allow and open', exact: true });
+        const allow = page.getByRole('button', { name: 'Open', exact: true });
         await allow.waitFor();
         assert.equal(await page.getByRole('dialog').count(), 0);
         assert.equal(await page.evaluate(() => window.reviewedRequired), undefined, 'viewing details does not grant consent');
@@ -590,7 +590,7 @@ test(
       }
       for(const theme of ['light','dark'])for(const kind of ['napp','nsite','website']) {
         await page.goto(`${address}/?scenario=explore-detail&kind=${kind}&theme=${theme}&needs-consent=1`);
-        const open=page.getByRole('button',{name:'Allow and open',exact:true});await open.click({trial:true});
+        const open=page.getByRole('button',{name:'Open',exact:true});await open.click({trial:true});
         assert.equal(await page.getByTestId('napplet-info').count(),1);
         assert.equal(await page.getByRole('button',{name:'Share',exact:true}).count(),0);
         assert.equal(await page.getByText('Signing rules',{exact:true}).count(),0);

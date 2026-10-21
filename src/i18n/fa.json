@@ -1078,7 +1078,6 @@
     "favorites": "علاقه‌مندی‌ها",
     "discover": "کشف",
     "discovery_empty": "برنامه‌ای یافت نشد",
-    "allow_and_open": "اجازه و باز کردن",
     "permissions_ask": "هر بار بپرس",
     "permissions_duration": "مدت",
     "permissions_manage": "مجوزها",
@@ -1266,8 +1265,8 @@
     "replying_to": "در پاسخ به {{name}}",
     "cancel_reply": "لغو پاسخ",
     "empty": "هنوز دیدگاهی وجود ندارد",
-    "load_more": "بارگیری دیدگاه‌های بیشتر",
-    "load_failed": "بارگیری دیدگاه‌ها ممکن نشد. دوباره تلاش کنید.",
+    "load_failed": "بارگیری دیدگاه‌ها ممکن نشد.",
+    "try_again": "دوباره تلاش کنید",
     "post_failed": "انتشار دیدگاه ممکن نشد. پیش‌نویس شما حفظ شده است.",
     "public_as": "انتشار عمومی با نام {{name}}"
   }

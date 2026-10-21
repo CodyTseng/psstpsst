@@ -1078,7 +1078,6 @@
     "favorites": "Kedvencek",
     "discover": "Felfedezés",
     "discovery_empty": "Nem található alkalmazás",
-    "allow_and_open": "Engedélyezés és megnyitás",
     "permissions_ask": "Mindig kérdezzen rá",
     "permissions_duration": "Időtartam",
     "permissions_manage": "Engedélyek",
@@ -1266,8 +1265,8 @@
     "replying_to": "Válasz neki: {{name}}",
     "cancel_reply": "Válasz elvetése",
     "empty": "Még nincsenek vélemények",
-    "load_more": "További hozzászólások betöltése",
-    "load_failed": "Nem sikerült betölteni a hozzászólásokat. Próbáld újra.",
+    "load_failed": "Nem sikerült betölteni a hozzászólásokat.",
+    "try_again": "Próbáld újra",
     "post_failed": "Nem sikerült közzétenni a hozzászólást. A piszkozat megmaradt.",
     "public_as": "Nyilvános közzététel {{name}} néven"
   }

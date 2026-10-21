@@ -1078,7 +1078,6 @@
     "favorites": "Favorites",
     "discover": "Discover",
     "discovery_empty": "No apps found",
-    "allow_and_open": "Allow and open",
     "permissions_ask": "Ask every time",
     "permissions_duration": "Duration",
     "permissions_manage": "Permissions",
@@ -1266,8 +1265,8 @@
     "replying_to": "Replying to {{name}}",
     "cancel_reply": "Cancel reply",
     "empty": "No reviews yet",
-    "load_more": "Load more comments",
-    "load_failed": "Couldn't load comments. Try again.",
+    "load_failed": "Couldn't load comments.",
+    "try_again": "Try again",
     "post_failed": "Couldn't publish your comment. Your draft is still here.",
     "public_as": "Posting publicly as {{name}}"
   }

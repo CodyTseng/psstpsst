@@ -1078,7 +1078,6 @@
     "favorites": "पसंदीदा",
     "discover": "खोजें",
     "discovery_empty": "कोई ऐप नहीं मिला",
-    "allow_and_open": "अनुमति दें और खोलें",
     "permissions_ask": "हर बार पूछें",
     "permissions_duration": "अवधि",
     "permissions_manage": "अनुमतियाँ",
@@ -1266,8 +1265,8 @@
     "replying_to": "{{name}} को जवाब",
     "cancel_reply": "जवाब रद्द करें",
     "empty": "अभी कोई समीक्षा नहीं",
-    "load_more": "और टिप्पणियाँ लोड करें",
-    "load_failed": "टिप्पणियाँ लोड नहीं हो सकीं। फिर कोशिश करें।",
+    "load_failed": "टिप्पणियाँ लोड नहीं हो सकीं।",
+    "try_again": "फिर कोशिश करें",
     "post_failed": "आपकी टिप्पणी प्रकाशित नहीं हो सकी। मसौदा सुरक्षित है।",
     "public_as": "{{name}} के रूप में सार्वजनिक पोस्ट"
   }

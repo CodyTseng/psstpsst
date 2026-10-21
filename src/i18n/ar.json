@@ -1098,7 +1098,6 @@
     "favorites": "المفضلة",
     "discover": "اكتشاف",
     "discovery_empty": "لم يتم العثور على تطبيقات",
-    "allow_and_open": "السماح والفتح",
     "permissions_ask": "السؤال في كل مرة",
     "permissions_duration": "المدة",
     "permissions_manage": "الأذونات",
@@ -1286,8 +1285,8 @@
     "replying_to": "الرد على {{name}}",
     "cancel_reply": "إلغاء الرد",
     "empty": "لا توجد تقييمات بعد",
-    "load_more": "تحميل المزيد من التعليقات",
-    "load_failed": "تعذر تحميل التعليقات. حاول مجددًا.",
+    "load_failed": "تعذر تحميل التعليقات.",
+    "try_again": "حاول مجددًا",
     "post_failed": "تعذر نشر تعليقك. ما زالت مسودتك محفوظة.",
     "public_as": "النشر علنًا باسم {{name}}"
   }

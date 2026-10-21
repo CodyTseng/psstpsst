@@ -1078,7 +1078,6 @@
     "favorites": "个人收藏",
     "discover": "发现",
     "discovery_empty": "暂未发现应用",
-    "allow_and_open": "允许并打开",
     "permissions_ask": "每次询问",
     "permissions_duration": "有效期",
     "permissions_manage": "权限管理",
@@ -1266,8 +1265,8 @@
     "replying_to": "正在回复 {{name}}",
     "cancel_reply": "取消回复",
     "empty": "暂无评价",
-    "load_more": "加载更多评论",
-    "load_failed": "无法加载评论，请重试。",
+    "load_failed": "无法加载评论。",
+    "try_again": "请重试",
     "post_failed": "评论发布失败，草稿已保留。",
     "public_as": "以 {{name}} 的身份公开评论"
   }

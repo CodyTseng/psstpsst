@@ -25,7 +25,7 @@ export function ApplicationDetailsPage({application,error,access,unsupported=fal
     {error?<AppText tone="danger">{t(error)}</AppText>:null}
     {application?<ApplicationInfo release={application} onPublisher={onPublisher}
       action={<AppButton variant="primary" fullWidth={false} size="sm"
-        label={t(access.loaded&&!access.approved?'napplets.allow_and_open':'napplets.open')}
+        label={t('napplets.open')}
         disabled={unsupported||!access.loaded} onPress={onOpen}/>}
       notice={unsupported||access.loaded&&!access.approved?<View style={{gap:spacing.sm}}>
         {unsupported?<AppText tone="danger">{t('napplets.unsupported')}</AppText>:null}

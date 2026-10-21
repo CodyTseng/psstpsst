@@ -1078,7 +1078,6 @@
     "favorites": "個人收藏",
     "discover": "探索",
     "discovery_empty": "暫未找到應用程式",
-    "allow_and_open": "允許並開啟",
     "permissions_ask": "每次詢問",
     "permissions_duration": "有效期",
     "permissions_manage": "權限管理",
@@ -1266,8 +1265,8 @@
     "replying_to": "正在回覆 {{name}}",
     "cancel_reply": "取消回覆",
     "empty": "暫無評價",
-    "load_more": "載入更多留言",
-    "load_failed": "無法載入留言，請重試。",
+    "load_failed": "無法載入留言。",
+    "try_again": "請重試",
     "post_failed": "留言發布失敗，草稿已保留。",
     "public_as": "以 {{name}} 的身分公開留言"
   }

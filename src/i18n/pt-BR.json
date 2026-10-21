@@ -1083,7 +1083,6 @@
     "favorites": "Favoritos",
     "discover": "Descobrir",
     "discovery_empty": "Nenhum aplicativo encontrado",
-    "allow_and_open": "Permitir e abrir",
     "permissions_ask": "Perguntar sempre",
     "permissions_duration": "Duração",
     "permissions_manage": "Permissões",
@@ -1271,8 +1270,8 @@
     "replying_to": "Respondendo a {{name}}",
     "cancel_reply": "Cancelar resposta",
     "empty": "Ainda não há avaliações",
-    "load_more": "Carregar mais comentários",
-    "load_failed": "Não foi possível carregar os comentários. Tente novamente.",
+    "load_failed": "Não foi possível carregar os comentários.",
+    "try_again": "Tente novamente",
     "post_failed": "Não foi possível publicar seu comentário. O rascunho foi mantido.",
     "public_as": "Publicando como {{name}} de forma pública"
   }

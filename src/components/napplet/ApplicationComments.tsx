@@ -47,6 +47,9 @@ function Discussion({ account, target, header, scrollProps }: {
   const cancelReply = useCallback(() => setReplyId(undefined), []);
   const sent = useCallback((parentId?: string) => setReplyId(current => current === parentId ? undefined : current), []);
   return <FlatList data={state.rows} extraData={replyId} keyExtractor={row => row.comment.event.id} {...scrollProps}
+    onEndReached={() => {
+      if (state.loaded && state.hasMore && !state.loading && !state.error) void state.session.load();
+    }} onEndReachedThreshold={0.3}
     initialNumToRender={12} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets
     ListHeaderComponent={<View>
       {header}
@@ -54,9 +57,10 @@ function Discussion({ account, target, header, scrollProps }: {
         <SectionLabel>{t('comments.title')}</SectionLabel>
         <CommentComposer account={account} session={state.session} inputRef={input}
           onCancelReply={cancelReply} onSent={sent} />
-        {state.error ? <View style={{ gap: spacing.sm }}>
+        {state.error ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing.sm }}>
           <AppText tone="muted">{t('comments.load_failed')}</AppText>
-          <AppButton variant="text" label={t('common.retry')} onPress={() => { void state.session.load(true); }} />
+          <AppButton variant="accentText" compact compactAxis="none" label={t('comments.try_again')}
+            onPress={() => { void state.session.load(true); }} />
         </View> : null}
       </View>
     </View>}
@@ -68,10 +72,8 @@ function Discussion({ account, target, header, scrollProps }: {
         <ChatRound size={spacing['3xl']} color={colors.textMuted} />
         <AppText tone="muted" align="center">{t('comments.empty')}</AppText>
       </View> : null}
-    ListFooterComponent={state.rows.length || state.loaded && state.hasMore ? <View style={{ padding: spacing.lg }}>
-      {state.loading ? <ActivityIndicator color={colors.accent} /> : state.hasMore
-        ? <AppButton variant="text" label={t('comments.load_more')} onPress={() => { void state.session.load(); }} /> : null}
-    </View> : null} />;
+    ListFooterComponent={state.rows.length > 0 && state.loading
+      ? <ActivityIndicator color={colors.accent} style={{ padding: spacing.lg }} /> : null} />;
 }
 
 const CommentItem = memo(function CommentItem({ row, account, session, replying, onReply, onCancelReply, onSent }: {
