@@ -158,6 +158,27 @@ it('shares in-flight reads, caches the visible page and preserves content after 
   expect(destroy).toHaveBeenCalledTimes(2);
 });
 
+it('queues and deduplicates an explicit refresh behind an in-flight read', async () => {
+  const old = uniqueManifest(35130, 100);
+  const latest = uniqueManifest(35130, 200);
+  const data = { [nappRelay]: [old] };
+  const { query, discovery } = setup(data);
+  let finish!: (value: { events: ReturnType<typeof manifest>[]; incomplete: boolean }) => void;
+  query.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const initial = discovery.load('account');
+  const refresh = discovery.load('account', true);
+  expect(refresh).not.toBe(initial);
+  expect(discovery.load('account', true)).toBe(refresh);
+  expect(discovery.loadMore('account')).toBe(refresh);
+  while (!finish) await flush();
+  data[nappRelay] = [latest, old];
+  finish({ events: [old], incomplete: false });
+  await initial;
+  await refresh;
+  expect(query.mock.calls.filter(([, [filter]]) => filter.until === undefined)).toHaveLength(4);
+  expect(discovery.store.getState().visibleEntries[0].manifest!.id).toBe(latest.id);
+});
+
 it('restarts cursors and the 20-entry window when explicitly refreshed', async () => {
   const data = { [nappRelay]: Array.from({ length: 60 }, (_, i) => uniqueManifest(35130, 1000 - i)) };
   const { query, discovery } = setup(data);

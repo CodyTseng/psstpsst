@@ -11,11 +11,11 @@ import { needsFavoriteMetadata } from '@/services/explore/favorite-metadata';
 import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Keyboard, ScrollView, View } from 'react-native';
 import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
 import { iconStrokeWidth } from '@/theme/icons';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
-import { useLocalSearchParams } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,8 @@ import { AppScreen } from '@/components/common/AppScreen';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { SearchBar, SEARCH_BAR_SCREEN_GUTTER } from '@/components/search/SearchBar';
+import { SearchTransition } from '@/components/search/SearchTransition';
+import { SEARCH_ACTIVATION_SHORTCUT_LABEL } from '@/components/search/search-shortcut';
 import { IconButton } from '@/components/common/IconButton';
 import { QrScanButton } from '@/components/common/QrScanButton';
 import { parseApplicationAddressQuery } from '@/services/explore/address-query';
@@ -59,13 +61,24 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const navigation = usePrimaryPaneNavigation();
   const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
   const [query, setQuery] = useState('');
+  const [searchActive, setSearchActive] = useState(false);
+  const focused = useIsFocused();
+  const tabsNavigation = useNavigation();
+  const openSearch = useCallback(() => setSearchActive(true), []);
+  const closeSearch = useCallback(() => {
+    setQuery('');
+    setSearchActive(false);
+    Keyboard.dismiss();
+  }, []);
+  const searching = query.trim().length > 0;
   const [scan, setScan] = useState<{ value: string } | null>(() => initialAddress ? { value: initialAddress } : null);
   const [settledScan, setSettledScan] = useState<typeof scan>(null);
   const scanLoading = scan !== null && scan !== settledScan;
   const [scrolled, setScrolled] = useState(false);
+  const [searchScrolled, setSearchScrolled] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setScrolled(false); }, []);
-  const clearance = useScreenHeaderClearance(SEARCH_HEIGHT);
+  const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setSearchScrolled(false); }, []);
+  const clearance = useScreenHeaderClearance();
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   useEffect(() => {
     if (account)
@@ -128,6 +141,15 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
     const timer = setTimeout(() => { void resolveScan(scan, controller.signal); }, 0);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [scan, account, state.loaded, state.account]);
+  useEffect(() => {
+    if (!focused || !searchActive) return;
+    const back = BackHandler.addEventListener('hardwareBackPress', () => { closeSearch(); return true; });
+    return () => back.remove();
+  }, [focused, searchActive, closeSearch]);
+  useEffect(() => tabsNavigation.addListener('tabPress' as never, () => {
+    const state = tabsNavigation.getState();
+    if (state?.routes[state.index]?.name === 'napplets' && searchActive) closeSearch();
+  }), [tabsNavigation, searchActive, closeSearch]);
   const action = useCallback(
     (app: ExploreEntry, index: number | null) => {
       setError(null);
@@ -144,6 +166,11 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const showPermissions = useCallback((app: ExploreEntry) => {
     navigation.open(app.release ? `/napplet-permissions/${app.release.event.id}` : `/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`);
   }, [navigation]);
+  const restingSearch = <View style={{ paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
+    <SearchBar value="" onChangeText={() => {}} placeholder={t('napplets.search_placeholder')}
+      shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} onPress={openSearch} />
+  </View>;
+  const stopEmptySearch = () => { if (searchActive && !searching) closeSearch(); };
   return (
     <AppScreen edges={[]}>
       <ScreenHeader
@@ -151,19 +178,14 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
         left={<IconButton variant="plain" size={uiDensity.headerActionSize}
           icon={<RotateCcwClock size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.text} />}
           accessibilityLabel={t('napplets.recent')} onPress={() => navigation.open('/explore-recent')} />}
-        bordered={scrolled}
+        bordered={searching ? searchScrolled : scrolled}
         titleControl={<SegmentedControl compact value={tab}
           options={[{ value: 'favorites', label: t('napplets.favorites') }, { value: 'discover', label: t('napplets.discover') }]}
           onChange={value => { onTabChange(value); setScrolled(false); setError(null); }} />}
-        belowHeight={SEARCH_HEIGHT}
-        below={
-          <View style={{ paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
-            <SearchBar value={query} onChangeText={changeQuery} placeholder={t('napplets.search_placeholder')} />
-          </View>
-        }
         right={
           <QrScanButton variant="plain" size={uiDensity.headerActionSize} iconSize={uiDensity.headerActionIconSize}
             onScanned={data => {
+              closeSearch();
               const value = data.trim();
               const address = parseApplicationAddressQuery(value);
               if (!address || address.type === 'invalid') { setScan(null); setError('napplets.invalid_manifest'); return; }
@@ -173,22 +195,40 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
           />
         }
       />
-      <View style={{ flex: 1, paddingTop: clearance }}>
-        {error ? (
-          <AppText align="center" style={{ color: c.danger, padding: spacing.md }}>
+      <SearchTransition active={searchActive} contentActive={searching} focused={focused}
+        onActivate={openSearch} onCancel={closeSearch}
+        activeChrome={<View style={{ paddingTop: clearance, paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
+          <SearchBar value={query} onChangeText={changeQuery} placeholder={t('napplets.search_placeholder')}
+            shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} autoFocus />
+        </View>}
+        activeContent={<View style={{ flex: 1, paddingTop: clearance + SEARCH_HEIGHT }}>
+          {account ? <ExploreDiscovery query={query} scope={tab} favorites={desktop} account={account}
+            bottomInset={bottomInset} onScrollChange={setSearchScrolled} onDetails={showSearchDetails}
+            onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : null}
+        </View>}>
+        <View style={{ flex: 1, paddingTop: clearance }}>
+          {error ? <AppText align="center" style={{ color: c.danger, padding: spacing.md }}>
             {t(error.startsWith('napplets.') ? error : 'napplets.request_failed')}
-          </AppText>
-        ) : null}
-        {scanLoading || !state.loaded || state.account !== account ? (
-          <ActivityIndicator color={c.accent} style={{ padding: spacing.lg }} />
-        ) : account && (tab==='discover' || query.trim()) ? <ExploreDiscovery query={query} scope={tab} favorites={desktop} account={account} bottomInset={bottomInset} onScrollChange={setScrolled}
-          onDetails={showSearchDetails} onShare={share}
-          onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (
-          <NappletGrid onPermissions={(app) => navigation.open(app.release?`/napplet-permissions/${app.release.event.id}`:`/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`)} onShare={share}
-    onDetails={(app) => navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`)}
-            items={desktop} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />
-        ) : <Empty onDiscover={() => { setError(null); onTabChange('discover'); setScrolled(false); }} />}
-      </View>
+          </AppText> : null}
+          {scanLoading || !state.loaded || state.account !== account ? <View>
+            {restingSearch}
+            <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
+          </View> : account && tab === 'discover' ? <ExploreDiscovery scope={tab} favorites={desktop} account={account}
+            header={restingSearch} headerHeight={SEARCH_HEIGHT} onScrollBeginDrag={stopEmptySearch}
+            bottomInset={bottomInset} onScrollChange={setScrolled} onDetails={showSearchDetails}
+            onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (
+            <NappletGrid header={restingSearch} onScrollBeginDrag={stopEmptySearch}
+              onPermissions={showPermissions} onShare={share}
+              onDetails={(app) => navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`)}
+              items={desktop} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />
+          ) : <ScrollView onScroll={event => setScrolled(event.nativeEvent.contentOffset.y > 0)} scrollEventThrottle={16}
+            onScrollBeginDrag={stopEmptySearch} keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: bottomInset }}>
+            {restingSearch}
+            <Empty onDiscover={() => { setError(null); onTabChange('discover'); setScrolled(false); }} />
+          </ScrollView>}
+        </View>
+      </SearchTransition>
     </AppScreen>
   );
 }

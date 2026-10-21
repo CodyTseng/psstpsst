@@ -1,11 +1,27 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { ActivityIndicator, FlatList } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
 import { ExploreDiscovery } from '../ExploreDiscovery';
 import type { ExploreEntry } from '@/services/explore/model';
 import { useProfilesMap } from '@/hooks/use-profile';
 import { AppText } from '@/components/common/AppText';
 import { discoverApplications, loadMoreApplications } from '@/services/explore/discovery';
 import { darkPalette, lightPalette } from '@/theme';
+
+jest.mock('react-native-reanimated', () => {
+  const native = jest.requireActual<typeof import('react-native')>('react-native');
+  const react = jest.requireActual<typeof import('react')>('react');
+  return {
+    __esModule: true,
+    default: { FlatList: native.FlatList, View: native.View },
+    useSharedValue: (value: number) => react.useRef({
+      value, get() { return this.value; }, set(next: number) { this.value = next; },
+    }).current,
+    useAnimatedScrollHandler: (handler: (event: unknown) => void) => handler,
+    useAnimatedStyle: (style: () => unknown) => style(),
+    useAnimatedReaction: jest.fn(),
+  };
+});
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
 
 let mockScheme: 'light' | 'dark' = 'light';
 const mockAddressSearch = { active: false, entry: undefined as ExploreEntry | undefined, loading: false, error: undefined as string | undefined, retry: jest.fn() };
@@ -53,10 +69,81 @@ it.each(['light', 'dark'] as const)('loads on scroll and shows themed footer pro
   await act(async () => { renderer.update(screen()); });
   await act(async () => { renderer.root.findByType(FlatList).props.onEndReached(); });
   expect(loadMoreApplications).toHaveBeenCalledTimes(1);
-  expect(renderer.root.findByType(ActivityIndicator).props.color).toBe((scheme === 'light' ? lightPalette : darkPalette).accent);
+  expect(renderer.root.findByType(ActivityIndicator).props.color).toBe((scheme === 'light' ? lightPalette : darkPalette).textMuted);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.discovery_empty')).toBe(false);
   await act(async () => { renderer.root.findByType(FlatList).props.onRefresh(); });
   expect(discoverApplications).toHaveBeenLastCalledWith('account', true);
+});
+
+it.each(['light', 'dark'] as const)('keeps pull-to-refresh below the scrolling search field in %s mode', async scheme => {
+  mockScheme = scheme;
+  const screenWithHeader = () => <ExploreDiscovery account="account" header={<View testID="search-field" />} headerHeight={48}
+    bottomInset={0} onDetails={() => {}} onFavorite={() => {}} onPermissions={() => {}} onShare={() => {}} onScrollChange={() => {}} />;
+  await act(async () => { renderer = create(screenWithHeader()); });
+  const list = () => renderer.root.findByType(FlatList);
+  const headerStyle = () => renderer.root.findByProps({ testID: 'search-field' }).parent!.props.style;
+  const headerHeight = () => renderer.root.findByProps({ testID: 'explore-search-header' }).props.style[1].height;
+  const control = list().props.refreshControl;
+  expect(control.type).toBe(RefreshControl);
+  expect(control.props.progressViewOffset).toBeUndefined();
+  expect(control.props.tintColor).toBe((scheme === 'light' ? lightPalette : darkPalette).textMuted);
+  expect(control.props.colors).toEqual([(scheme === 'light' ? lightPalette : darkPalette).textMuted]);
+  expect(headerHeight()).toBe(48);
+  for (const y of [-32, -4, -60, 0]) {
+    await act(async () => { list().props.onScroll({ contentOffset: { y } }); renderer.update(screenWithHeader()); });
+    expect(headerStyle().transform[0].translateY).toBeCloseTo(0);
+    expect(headerHeight()).toBe(48);
+  }
+  await act(async () => { list().props.onScroll({ contentOffset: { y: 80 } }); renderer.update(screenWithHeader()); });
+  expect(headerStyle().transform).toEqual([{ translateY: -48 }]);
+  expect(headerHeight()).toBe(0);
+  await act(async () => { list().props.onRefresh(); });
+  expect(discoverApplications).toHaveBeenLastCalledWith('account', true);
+});
+
+it('does not pull the iOS list open for a background reload', async () => {
+  const app = { key: 'cached', title: 'Cached app', description: '' } as ExploreEntry;
+  mockState.entries = [app]; mockState.visibleEntries = [app]; mockState.loading = true;
+  await act(async () => { renderer = create(screen()); });
+  expect(renderer.root.findByType(FlatList).props.refreshing).toBe(false);
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([app]);
+});
+
+it('keeps the refresh control active only for the user-requested refresh lifetime', async () => {
+  await act(async () => { renderer = create(screen()); });
+  let finish!: () => void;
+  jest.mocked(discoverApplications).mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+  act(() => { void renderer.root.findByType(FlatList).props.onRefresh(); });
+  expect(renderer.root.findByType(FlatList).props.refreshing).toBe(true);
+  await act(async () => { finish(); });
+  expect(renderer.root.findByType(FlatList).props.refreshing).toBe(false);
+});
+
+it('keeps an explicit pull refreshing before the first successful load', async () => {
+  mockState.loaded = false;
+  await act(async () => { renderer = create(screen()); });
+  let finish!: () => void;
+  jest.mocked(discoverApplications).mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+  act(() => { void renderer.root.findByType(FlatList).props.refreshControl.props.onRefresh(); });
+  expect(renderer.root.findByType(FlatList).props.refreshControl.props.refreshing).toBe(true);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  await act(async () => { finish(); });
+  expect(renderer.root.findByType(FlatList).props.refreshControl.props.refreshing).toBe(false);
+});
+
+it('shows a catalogue request error only when no content can be displayed', async () => {
+  const app = { key: 'cached', title: 'Cached app', description: '' } as ExploreEntry;
+  mockState.error = true;
+  await act(async () => { renderer = create(screen()); });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(true);
+  mockState.entries = [app]; mockState.visibleEntries = [app];
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([app]);
+  mockQuery = 'no local match';
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'search.empty')).toBe(true);
 });
 
 it.each(['loading', 'error', 'exhausted'])('does not request another page while %s', async state => {

@@ -46,10 +46,22 @@ export class ApplicationDiscovery {
   private parsed = new Map<string, ExploreEntry | undefined>();
   private updatedAt = 0;
   private pending?: Promise<void>;
+  private pendingRefresh?: Promise<void>;
 
   load(account: string, refresh = false): Promise<void> {
-    if (this.pending) return this.pending;
+    if (refresh && this.pendingRefresh) return this.pendingRefresh;
+    if (this.pending) {
+      if (!refresh) return this.pending;
+      const queued = this.pending.then(() => this.reload(account));
+      this.pendingRefresh = queued;
+      void queued.finally(() => { if (this.pendingRefresh === queued) this.pendingRefresh = undefined; });
+      return queued;
+    }
     if (!refresh && this.updatedAt && Date.now() - this.updatedAt < CACHE_MS) return Promise.resolve();
+    return this.reload(account);
+  }
+
+  private reload(account: string): Promise<void> {
     this.timeline.dispose();
     this.timeline = createTimeline();
     this.shown.clear();
@@ -60,6 +72,7 @@ export class ApplicationDiscovery {
   }
 
   loadMore(account: string): Promise<void> {
+    if (this.pendingRefresh) return this.pendingRefresh;
     if (this.pending) return this.pending;
     const state = this.store.getState();
     if (!state.loaded || !state.hasMore || state.error) return Promise.resolve();

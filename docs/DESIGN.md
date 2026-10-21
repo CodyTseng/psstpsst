@@ -875,8 +875,16 @@ Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
 
-Explore uses two fixed header rows: compact Favorites/Discover mode selection
-beside Scan, then one shared search field. The redundant Explore title is omitted.
+Explore keeps compact Favorites/Discover mode selection beside Scan in its fixed
+header, without a redundant Explore title. Like Chats and Contacts, its resting
+search field belongs to the scrolling content; tapping it opens the shared search
+transition, with editable chrome fixed only while search is active. Discover
+pull-to-refresh uses the native platform control below the resting search field;
+the field collapses during upward scrolling and stays still during pull/rebound.
+Explore loading indicators use muted gray; refresh indicator sizing stays native.
+Background reloads never open the refresh control. Request errors appear only
+when there are no usable results; partial and cached results stay visible without
+an error banner.
 The first three tabs keep the shared title-row height and begin their search
 fields immediately below that row, without extra top padding.
 Keywords persist across mode changes: Favorites searches saved shortcuts, while

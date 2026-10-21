@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FlatList, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -25,6 +25,8 @@ import { NappletTile, useNappletGridMetrics } from './NappletTile';
 type Rect = { x: number; y: number; width: number; height: number };
 type Source = 'recent' | 'desktop';
 type Props<T extends GridApp = GridApp> = {
+  header?: ReactNode;
+  onScrollBeginDrag?: () => void;
   items: T[];
   recent?: T[];
   onOpen: (app: T) => void;
@@ -76,7 +78,7 @@ const EMPTY_RECENT: GridApp[] = [];
 export function NappletGrid<T extends GridApp>(props: Props<T>) {
   return <AppGrid {...props as unknown as Props} />;
 }
-function AppGrid({ items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
+function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
   const c = useThemeColors();
   const { t } = useTranslation();
   const rtl = useIsRTL();
@@ -269,7 +271,7 @@ function AppGrid({ items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, on
       {width > 0 ? <Animated.FlatList
         ref={list} key={columns} data={items} numColumns={columns}
         keyExtractor={(item) => item.key}
-        scrollEnabled={!dragging} onScroll={scroll} scrollEventThrottle={16}
+        scrollEnabled={!dragging} onScrollBeginDrag={onScrollBeginDrag} onScroll={scroll} scrollEventThrottle={16}
         onContentSizeChange={(_w, h) => contentHeight.set(h)}
         getItemLayout={(_data, index) => ({ length: cellHeight, offset: headerHeight + cellHeight * index, index })}
         initialNumToRender={24} removeClippedSubviews={false}
@@ -279,6 +281,7 @@ function AppGrid({ items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, on
           const height = event.nativeEvent.layout.height;
           headerSize.set(height); setHeaderHeight(height);
         }}>
+          {header ? <View style={{ marginHorizontal: -gridInset }}>{header}</View> : null}
           {recent.length && onShowRecent && onRemoveRecent ? <View testID="napplet-recent" style={{ paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
             <View testID="napplet-recent-header" style={{ paddingHorizontal: spacing.lg - gridInset, overflow: 'hidden' }}>
               <ListRow variant="inline" title={t('napplets.recent')} titleTone="muted" onPress={onShowRecent}
