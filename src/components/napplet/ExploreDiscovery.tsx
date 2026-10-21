@@ -57,7 +57,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   const refresh = () => { if (address.active) address.retry(); else if (scope === 'discover') void discoverApplications(account, true); };
   const error = address.active ? address.error : scope === 'discover' && state.error ? 'napplets.request_failed' : undefined;
   return <FlatList ref={list} data={data} keyExtractor={app => app.key}
-    initialNumToRender={20} refreshing={scope === 'discover' && !address.active && state.loading} onRefresh={address.active || scope === 'discover' ? refresh : undefined}
+    initialNumToRender={20} refreshing={scope === 'discover' && !address.active && state.loaded && state.loading} onRefresh={address.active || scope === 'discover' ? refresh : undefined}
     onEndReached={() => {
       if (address.active) return;
       if (searching || scope === 'favorites') {
