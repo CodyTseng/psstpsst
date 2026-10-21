@@ -54,7 +54,7 @@ internal class BrowserChrome(private val host: NappletWebView, private val conte
   private val workers = Executors.newSingleThreadExecutor()
   private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
   private val calls = mutableSetOf<okhttp3.Call>()
-  private var disposed = false
+  @Volatile private var disposed = false
   private val captures = mutableSetOf<PermissionRequest>()
   private fun title(url: String) = Uri.parse(url).host ?: host.title ?: ""
   override fun onJsAlert(view: WebView, url: String, message: String, result: JsResult): Boolean {
@@ -163,34 +163,50 @@ internal class BrowserChrome(private val host: NappletWebView, private val conte
       val cookie = androidx.webkit.WebViewCompat.getProfile(host).cookieManager.getCookie(url)
       BrowserPickers.open(owner, intent, this) { uri, _ ->
         if (uri == null || disposed) return@open
-        workers.execute {
-          val initial = url.toHttpUrl()
-          var target = initial
-          try {
-            for (redirect in 0..5) {
-              if (disposed) error("download-cancelled")
-              val request = Request.Builder().url(target).header("User-Agent", userAgent).apply {
-                if (cookie != null && target.scheme == initial.scheme && target.host == initial.host && target.port == initial.port) header("Cookie", cookie)
-              }.build()
-              val call = client.newCall(request)
-              synchronized(calls) { calls.add(call); if (disposed) call.cancel() }
-              try { call.execute().use { response ->
-                if (response.code in listOf(301,302,303,307,308)) {
-                  val next = response.header("Location")?.let { target.resolve(it) } ?: error("invalid-redirect")
-                  if (next.scheme !in listOf("http", "https") || redirect == 5) error("invalid-redirect")
-                  target = next
-                } else {
-                  if (!response.isSuccessful) error("download-failed")
-                  context.contentResolver.openOutputStream(uri)?.use { output -> response.body?.byteStream()?.use { it.copyTo(output) } } ?: error("destination-unavailable")
-                  return@execute
-                }
-              } } finally { synchronized(calls) { calls.remove(call) } }
-            }
-          } catch (error: Exception) { android.util.Log.w("PsstBrowser", "Download failed", error) }
-        }
+        workers.execute { download(url, userAgent, cookie, uri) }
       }
     }
   }
+
+  // Keep monitor regions out of nested resource/finally blocks: DEX verification
+  // can reject their inlined combination before any WebView can be constructed.
+  private fun trackDownload(call: okhttp3.Call) {
+    synchronized(calls) {
+      calls.add(call)
+      if (disposed) call.cancel()
+    }
+  }
+  private fun untrackDownload(call: okhttp3.Call) {
+    synchronized(calls) { calls.remove(call) }
+  }
+  private fun download(url: String, userAgent: String, cookie: String?, uri: Uri) {
+    try {
+      val initial = url.toHttpUrl()
+      var target = initial
+      for (redirect in 0..5) {
+        if (disposed) error("download-cancelled")
+        val request = Request.Builder().url(target).header("User-Agent", userAgent).apply {
+          if (cookie != null && target.scheme == initial.scheme && target.host == initial.host && target.port == initial.port) header("Cookie", cookie)
+        }.build()
+        val call = client.newCall(request)
+        trackDownload(call)
+        try {
+          call.execute().use { response ->
+            if (response.code in listOf(301,302,303,307,308)) {
+              val next = response.header("Location")?.let { target.resolve(it) } ?: error("invalid-redirect")
+              if (next.scheme !in listOf("http", "https") || redirect == 5) error("invalid-redirect")
+              target = next
+            } else {
+              if (!response.isSuccessful) error("download-failed")
+              context.contentResolver.openOutputStream(uri)?.use { output -> response.body?.byteStream()?.use { it.copyTo(output) } } ?: error("destination-unavailable")
+              return
+            }
+          }
+        } finally { untrackDownload(call) }
+      }
+    } catch (error: Exception) { android.util.Log.w("PsstBrowser", "Download failed", error) }
+  }
+
   fun dispose() {
     disposed = true; fileCallback?.onReceiveValue(null); fileCallback = null
     captures.toList().forEach { it.deny() }; captures.clear()
