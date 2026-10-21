@@ -4,11 +4,13 @@ import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { ExploreDiscovery } from '@/components/napplet/ExploreDiscovery';
 import { exploreService } from '@/services/explore/service';
 import { useExplore } from '@/stores/explore.store';
-import type { ExploreEntry } from '@/services/explore/model';
+import { websiteEntry, type ExploreEntry } from '@/services/explore/model';
+import { resolveApplicationAddress } from '@/services/explore/address-search';
+import { cacheApplicationAddress, discoveryStore } from '@/services/explore/discovery';
 import { needsFavoriteMetadata } from '@/services/explore/favorite-metadata';
 import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { useExploreShare } from '@/hooks/use-explore-share';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
 import { iconStrokeWidth } from '@/theme/icons';
@@ -56,11 +58,13 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const setFavorite = useApplicationFavorite(account, 'primary');
   const navigation = usePrimaryPaneNavigation();
   const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
-  const [query, setQuery] = useState(initialAddress ?? '');
-  const [scanRevision, setScanRevision] = useState(0);
+  const [query, setQuery] = useState('');
+  const [scan, setScan] = useState<{ value: string } | null>(() => initialAddress ? { value: initialAddress } : null);
+  const [settledScan, setSettledScan] = useState<typeof scan>(null);
+  const scanLoading = scan !== null && scan !== settledScan;
   const [scrolled, setScrolled] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const changeQuery = useCallback((value: string) => { setQuery(value); setScrolled(false); }, []);
+  const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setScrolled(false); }, []);
   const clearance = useScreenHeaderClearance(SEARCH_HEIGHT);
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   useEffect(() => {
@@ -91,6 +95,39 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const showSearchDetails = useCallback((app: ExploreEntry) => {
     navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1`);
   }, [navigation]);
+  const resolveScan = useEffectEvent(async (request: { value: string }, signal: AbortSignal) => {
+    const address = parseApplicationAddressQuery(request.value);
+    if (!account || !address || address.type === 'invalid') {
+      setError('napplets.invalid_manifest');
+      setSettledScan(request);
+      return;
+    }
+    try {
+      if (address.type === 'website') {
+        await open(websiteEntry(address.key));
+      } else {
+        const discovery = discoveryStore.getState();
+        const entries = [...state.entries, ...discovery.entries,
+          ...(discovery.addressCache.account === account ? discovery.addressCache.entries : [])];
+        const app = await resolveApplicationAddress(account, address, entries, signal);
+        if (signal.aborted) return;
+        cacheApplicationAddress(account, app);
+        showSearchDetails(app);
+      }
+    } catch (error) {
+      if (!signal.aborted) setError(error instanceof Error && ['napplets.not_found', 'napplets.invalid_manifest'].includes(error.message)
+        ? error.message : 'napplets.request_failed');
+    } finally {
+      if (!signal.aborted) setSettledScan(request);
+    }
+  });
+  useEffect(() => {
+    if (!scan || !account || !state.loaded || state.account !== account) return;
+    const controller = new AbortController();
+    // Let the scanner close and loading feedback paint before resolving a manifest.
+    const timer = setTimeout(() => { void resolveScan(scan, controller.signal); }, 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [scan, account, state.loaded, state.account]);
   const action = useCallback(
     (app: ExploreEntry, index: number | null) => {
       setError(null);
@@ -129,11 +166,9 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
             onScanned={data => {
               const value = data.trim();
               const address = parseApplicationAddressQuery(value);
-              if (!address || address.type === 'invalid') { setError('napplets.invalid_manifest'); return; }
+              if (!address || address.type === 'invalid') { setScan(null); setError('napplets.invalid_manifest'); return; }
               setError(null);
-              setQuery(value);
-              setScanRevision(revision => revision + 1);
-              setScrolled(false);
+              setScan({ value });
             }}
           />
         }
@@ -144,9 +179,9 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
             {t(error.startsWith('napplets.') ? error : 'napplets.request_failed')}
           </AppText>
         ) : null}
-        {!state.loaded || state.account !== account ? (
+        {scanLoading || !state.loaded || state.account !== account ? (
           <ActivityIndicator color={c.accent} style={{ padding: spacing.lg }} />
-        ) : account && (tab==='discover' || query.trim()) ? <ExploreDiscovery key={scanRevision} query={query} scope={tab} favorites={desktop} account={account} bottomInset={bottomInset} onScrollChange={setScrolled}
+        ) : account && (tab==='discover' || query.trim()) ? <ExploreDiscovery query={query} scope={tab} favorites={desktop} account={account} bottomInset={bottomInset} onScrollChange={setScrolled}
           onDetails={showSearchDetails} onShare={share}
           onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (
           <NappletGrid onPermissions={(app) => navigation.open(app.release?`/napplet-permissions/${app.release.event.id}`:`/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`)} onShare={share}

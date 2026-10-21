@@ -13,6 +13,9 @@ import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { ExploreDiscovery } from '../ExploreDiscovery';
 import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { spacing, uiDensity } from '@/theme';
+import { resolveApplicationAddress } from '@/services/explore/address-search';
+import { exploreService } from '@/services/explore/service';
+import { discoveryStore } from '@/services/explore/discovery';
 
 const mockNavigate = jest.fn();
 let mockHandoff: string | undefined;
@@ -22,7 +25,8 @@ jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/services/explore/windows', () => ({ openApplicationWindow: jest.fn() }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 jest.mock('@/services/explore/repository', () => ({ readEntries: jest.fn() }));
-jest.mock('@/services/explore/service', () => ({ exploreService: { activate: jest.fn(async () => {}) } }));
+jest.mock('@/services/explore/service', () => ({ exploreService: { activate: jest.fn(async () => {}), prepare: jest.fn(() => 7) } }));
+jest.mock('@/services/explore/address-search', () => ({ ...jest.requireActual('@/services/explore/address-search'), resolveApplicationAddress: jest.fn() }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { prepareOpen: jest.fn() } }));
 jest.mock('@/hooks/use-explore-share', () => ({ useExploreShare: () => jest.fn() }));
 jest.mock('@/stores/explore.store', () => ({ useExplore: () => mockExplore }));
@@ -45,8 +49,8 @@ jest.mock('@/components/napplet/NappletGrid', () => ({ NappletGrid: 'Grid' }));
 jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ Widget: () => null }), { virtual: true });
 
 let renderer: ReactTestRenderer;
-beforeEach(async () => { jest.clearAllMocks(); mockHandoff = undefined; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<NappletsScreen />); }); });
-afterEach(() => { act(() => renderer?.unmount()); });
+beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<NappletsScreen />); }); });
+afterEach(() => { act(() => renderer?.unmount()); jest.useRealTimers(); });
 
 it('uses the shared header-sized scanner and points empty Favorites to Discover', async () => {
   const scanner = renderer.root.findByType(QrScanButton);
@@ -65,11 +69,52 @@ it('uses the shared header-sized scanner and points empty Favorites to Discover'
   expect(mockNavigate).not.toHaveBeenCalled();
 });
 
-it.each(['https://example.com/app', `nostr:${naddrEncode({ kind: 35130, pubkey: 'a'.repeat(64), identifier: 'app' })}`])('sends scanned %s into the existing search flow without launching the app', async value => {
+it.each(['https://example.com/app', 'http://example.com/app'])('opens scanned %s directly in the website runtime', async value => {
   await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned(`  ${value}  `); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(0); });
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');
-  expect(renderer.root.findByType(ExploreDiscovery).props.query).toBe(value);
+  expect(renderer.root.findByType(SearchBar).props.value).toBe('');
+  expect(exploreService.prepare).toHaveBeenCalledWith(expect.objectContaining({ kind: 'website', address: value }), 'account');
+  expect(mockNavigate).toHaveBeenCalledWith('/explore-run?runId=7');
+  expect(resolveApplicationAddress).not.toHaveBeenCalled();
+});
+
+it.each([35129, 35130, 35128])('opens scanned kind-%s naddr details after verified resolution', async kind => {
+  const value = naddrEncode({ kind, pubkey: 'a'.repeat(64), identifier: 'app' });
+  const app = { key: value, title: 'App' } as ExploreEntry;
+  jest.mocked(resolveApplicationAddress).mockResolvedValueOnce(app);
+  await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned(`nostr:${value}`); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+  expect(mockNavigate).toHaveBeenCalledWith(`/explore-details?key=${value}&catalog=1`);
+  expect(discoveryStore.getState().addressCache.entries).toEqual([app]);
+  expect(exploreService.prepare).not.toHaveBeenCalled();
+  expect(renderer.root.findByType(SearchBar).props.value).toBe('');
+});
+
+it('ignores a late naddr result after a replacement scan', async () => {
+  let finish!: (app: ExploreEntry) => void;
+  jest.mocked(resolveApplicationAddress).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const value = naddrEncode({ kind: 35130, pubkey: 'a'.repeat(64), identifier: 'old' });
+  await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned(value); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+  const signal = jest.mocked(resolveApplicationAddress).mock.calls[0][3];
+  await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned('https://example.com/new'); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+  await act(async () => { finish({ key: value } as ExploreEntry); });
+  expect(signal.aborted).toBe(true);
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(mockNavigate).toHaveBeenCalledWith('/explore-run?runId=7');
+  expect(discoveryStore.getState().addressCache.entries).toEqual([]);
+});
+
+it('reports a failed naddr lookup without launching or recording an application', async () => {
+  const value = naddrEncode({ kind: 35130, pubkey: 'a'.repeat(64), identifier: 'missing' });
+  jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error('napplets.not_found'));
+  await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned(value); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(0); });
   expect(mockNavigate).not.toHaveBeenCalled();
+  expect(discoveryStore.getState().addressCache.entries).toEqual([]);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.not_found')).toBe(true);
 });
 
 it('keeps invalid scans out of discovery search', async () => {
@@ -79,18 +124,22 @@ it('keeps invalid scans out of discovery search', async () => {
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.invalid_manifest')).toBe(true);
 });
 
-it('consumes a home-scan handoff into shared address search without changing scope', async () => {
+it('opens a home-scanned website directly without changing scope', async () => {
   const value = 'https://example.com/from-home';
-  const id = useExploreSearchHandoffStore.getState().start({ account: 'account', value });
+  let id!: number;
+  act(() => { id = useExploreSearchHandoffStore.getState().start({ account: 'account', value }); });
   mockHandoff = String(id);
   await act(async () => { renderer.update(<NappletsScreen />); });
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');
-  expect(renderer.root.findByType(ExploreDiscovery).props.query).toBe(value);
+  await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+  expect(mockNavigate).toHaveBeenCalledWith('/explore-run?runId=7');
+  expect(renderer.root.findByType(SearchBar).props.value).toBe('');
   expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
 });
 
 it("does not consume another account's scan", async () => {
-  const id = useExploreSearchHandoffStore.getState().start({ account: 'other', value: 'https://example.com/private' });
+  let id!: number;
+  act(() => { id = useExploreSearchHandoffStore.getState().start({ account: 'other', value: 'https://example.com/private' }); });
   mockHandoff = String(id);
   await act(async () => { renderer.update(<NappletsScreen />); });
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');

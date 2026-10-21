@@ -881,8 +881,9 @@ The first three tabs keep the shared title-row height and begin their search
 fields immediately below that row, without extra top padding.
 Keywords persist across mode changes: Favorites searches saved shortcuts, while
 Discover searches the already-fetched catalogue. Both scopes match application
-names, descriptions and resolved publisher names. Scanning fills the shared search
-without switching the selected scope; the home scanner hands off to the same flow.
+names, descriptions and resolved publisher names. Both Explore and home scanning
+open exact application naddr references in their details page and website URLs
+in their application container, without changing the selected search scope.
 Explicit Lightning/LNURL links retain their wallet flow in the home scanner.
 Empty Favorites opens Discover rather than a separate address-entry task.
 Discover lists verified napps and napplets, excluding nsites, without recording visits or adding
