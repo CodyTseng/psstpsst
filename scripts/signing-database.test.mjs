@@ -62,6 +62,9 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
       export function permissions() { return require(${JSON.stringify(path.resolve('src/services/signing/permissions.ts'))}); }
     `, loader: 'ts', resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', outfile: output,
       plugins: [{ name: 'db', setup(builder) {
+        // This storage fixture does not run deferred crypto/publication jobs.
+        builder.onResolve({ filter: /private-list-sync\.service$|\/favorites$/ }, () => ({ path: 'publication', namespace: 'private-sync' }));
+        builder.onLoad({ filter: /.*/, namespace: 'private-sync' }, () => ({ contents: 'export async function markPrivateListDirty() {} export function queuePrivateListPublication() {} export function queueFavoritesPublication() {}' }));
         builder.onResolve({ filter: /^@\/db\/client$/ }, () => ({ path: 'db', namespace: 'fixture' }));
         builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const db = globalThis.__signingDatabaseTest;' }));
       } }],
@@ -96,6 +99,8 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     sqlite.exec(readFileSync('src/db/migrations/0067_application-relay-auth.sql','utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0068_signing-scope-key.sql','utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0069_browser-authorizations.sql','utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0056_private-list-sync-state.sql','utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0070_private-favorites.sql','utf8'));
     assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
     const insertKind = sqlite.prepare(`INSERT INTO signing_authorizations
       (account_pubkey,source_id,operation,kind,decision,created_at,updated_at) VALUES('A','constraint-test',?,?,'allow',1,1)`);

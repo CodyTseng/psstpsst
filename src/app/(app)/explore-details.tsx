@@ -1,3 +1,4 @@
+import { useFavoriteMetadata } from '@/hooks/use-favorite-metadata';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { platform } from '@/platform';
@@ -28,7 +29,9 @@ export default function ExploreDetailsScreen() {
   useEffect(()=>{if(state.account&&loadPublisher)void loadPublisher(state.account);},[state.account,loadPublisher]);
   const discovery=useDiscovery();
   const discovered=publisherApps.entries.find(entry=>entry.key===key)??(discovery.addressCache.account===state.account?discovery.addressCache.entries.find(entry=>entry.key===key):undefined)??discovery.entries.find(entry=>entry.key===key);
-  const app=(catalog==='1'?discovered:undefined)??state.entries.find(entry=>entry.key===key)??(state.entry?.key===key?state.entry:undefined)??discovered;
+  const cachedApp=(catalog==='1'?discovered:undefined)??state.entries.find(entry=>entry.key===key)??(state.entry?.key===key?state.entry:undefined)??discovered;
+  const metadata=useFavoriteMetadata(cachedApp,state.account);
+  const app=metadata.entry;
   const genericAccess=useExploreAccess(app?.release?undefined:app,state.account,state.accessRevision);
   const nappletAccess=useNappletAccess(app?.release,state.account);
   const access=app?.release?nappletAccess:genericAccess;
@@ -36,12 +39,12 @@ export default function ExploreDetailsScreen() {
   const application=app?applicationPresentation(app):undefined;
   const required = application?.required ?? [];
   const publisherPending=!!loadPublisher&&!publisherApps.loaded&&!publisherApps.error;
-  const message=error??access.error??(!app&&publisherApps.error?'napplets.request_failed':state.loaded&&!app&&!publisherPending?'napplets.not_found':undefined);
+  const message=error??metadata.error??access.error??(!app&&publisherApps.error?'napplets.request_failed':state.loaded&&!app&&!publisherPending?'napplets.not_found':undefined);
   if(permissions==='1')return <ApplicationPermissionsPage application={application} error={message}>
     {app&&state.account?<ApplicationSettings access={required.length?<ApplicationAccessControls required={required} selected={required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,state.account!)}/>:null}
   </ApplicationPermissionsPage>;
-  return <ApplicationDetailsPage application={application} access={access} error={message}
-    actions={app?{entry:app,onShare:state.account?()=>share(app):undefined}:undefined}
+  return <ApplicationDetailsPage application={application} access={metadata.unresolved?{loaded:false,approved:false}:access} error={message}
+    actions={app?{entry:app,account:state.account,onShare:state.account?()=>share(app):undefined}:undefined}
     discussion={app&&state.account?{entry:app,account:state.account}:undefined}
     unsupported={app?.release?app.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain)):app?.kind==='napp'&&app.required.some(domain=>!SUPPORTED_NAPP_DOMAINS.includes(domain))}
     onPublisher={()=>{if(app?.manifest)openPublisher(app.manifest.pubkey);}}

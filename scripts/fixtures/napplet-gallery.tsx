@@ -110,7 +110,7 @@ function Gallery() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <View style={{ flex: 1, backgroundColor: c.background, direction: rtl ? 'rtl' : 'ltr' }}>
             {recentPage && !opened ? <NappletRecentPage recent={currentRecent} onBack={() => setRecentPage(false)}
-              onAdd={addRecent} onRemove={removeRecent} onDetails={details} onPermissions={(app) => { document.title = `Permissions ${app.title}`; }} onShare={(app) => { document.title = `Share ${app.title}`; }} /> : <View style={{ flex: 1, paddingTop: 48, backgroundColor: c.background }}>
+              onUnfavorite={app => { void move(app, null); }} onAdd={addRecent} onRemove={removeRecent} onDetails={details} onPermissions={(app) => { document.title = `Permissions ${app.title}`; }} onShare={(app) => { document.title = `Share ${app.title}`; }} /> : <View style={{ flex: 1, paddingTop: 48, backgroundColor: c.background }}>
             <AppText variant="title" align="center">
               Explore
             </AppText>

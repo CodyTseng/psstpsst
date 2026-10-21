@@ -1,4 +1,4 @@
-import Plus from 'lucide-react-native/icons/plus';
+import Star from 'lucide-react-native/icons/star';
 import Trash from 'lucide-react-native/icons/trash-2';
 import Info from 'lucide-react-native/icons/info';
 import { Share } from '@solar-icons/react-native/category/ui/Linear/Share';
@@ -14,27 +14,29 @@ type Props<T extends GridApp> = {
   app: T;
   anchor: ContextMenuAnchor;
   inline?: boolean;
+  point?: boolean;
+  favorite?: boolean;
   onClose: () => void;
-  onPlacementChange: (placement: ContextMenuPlacement) => void;
+  onPlacementChange?: (placement: ContextMenuPlacement) => void;
   onDetails: (app: T) => void;
   onPermissions: (app: T) => void;
   onShare: (app: T) => void;
-  onAdd?: (app: T) => void;
+  onFavorite?: (app: T) => void;
   onRemove?: (app: T) => void;
 };
 
 /** Desktop shortcuts and recent apps use the same platform menu vocabulary. */
-export function NappletAppMenu<T extends GridApp>({ app, anchor, inline, onClose, onPlacementChange, onDetails, onPermissions, onShare, onAdd, onRemove }: Props<T>) {
+export function NappletAppMenu<T extends GridApp>({ app, anchor, inline, point, favorite = false, onClose, onPlacementChange, onDetails, onPermissions, onShare, onFavorite, onRemove }: Props<T>) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const density = IS_ELECTRON ? 'pointer' : 'touch';
   const size = CONTEXT_MENU_ICON_SIZE[density];
-  return <ContextMenu inline={inline} anchor={anchor} align="center" placement="auto" density={density}
+  return <ContextMenu inline={inline} anchor={anchor} align={point ? 'start' : 'center'} placement="auto" density={density}
     onClose={onClose} onPlacementChange={onPlacementChange} items={[
       { key: 'details', title: t('napplets.details'), icon: <Info size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onDetails(app) },
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={c.text} />, onPress: () => onPermissions(app) },
       { key: 'share', title: t('share.title'), icon: <Share size={size} color={c.text} />, onPress: () => onShare(app) },
-      ...(onAdd ? [{ key: 'add', title: t('napplets.add_to_desktop'), icon: <Plus size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onAdd(app) }] : []),
+      ...(onFavorite ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'), icon: <Star size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onFavorite(app) }] : []),
       ...(onRemove ? [{ key: 'remove', title: t('common.remove'), tone: 'danger' as const, separatorBefore: true,
         icon: <Trash size={size} strokeWidth={iconStrokeWidth.default} color={c.danger} />, onPress: () => onRemove(app) }] : []),
     ]} />;

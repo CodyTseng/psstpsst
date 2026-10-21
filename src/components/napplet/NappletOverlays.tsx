@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
+import { fromNapplet } from '@/services/explore/model';
 import { appShareAddress } from '@/services/napplet/protocol';
 import { KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
 import { showToast } from '@/stores/toast.store';
@@ -100,7 +101,7 @@ function NappletOverlayContent() {
           onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} />
           : prompt ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={menuOpen}
             onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} /> : null}
-      </View> : showingPanel?.page === 'about' ? <NappletPanelActions address={appShareAddress(showingPanel.release)} onAction={panelAction} /> : undefined}
+      </View> : showingPanel?.page === 'about' ? <NappletPanelActions entry={fromNapplet(showingPanel.release)} account={accountPubkey} address={appShareAddress(showingPanel.release)} onAction={panelAction} /> : undefined}
     >
       {selectingApplication ? null : prompt ? <>
         {prompt.requester && !prompt.application ? <View style={{ gap: spacing.xs }}>

@@ -9,6 +9,7 @@ export const exploreEntries = sqliteTable('explore_entries', {
 export const exploreShortcuts = sqliteTable('explore_shortcuts', {
   accountPubkey: text('account_pubkey').notNull().references(() => accounts.pubkey, { onDelete: 'cascade' }),
   sourceId: text('source_id').notNull(), position: integer('position').notNull(),
+  reference: text('reference', { mode: 'json' }).$type<string[]>(),
 }, (t) => [primaryKey({ columns: [t.accountPubkey, t.sourceId] }), index('explore_shortcut_order').on(t.accountPubkey, t.position)]);
 export const exploreHistory = sqliteTable('explore_history', {
   accountPubkey: text('account_pubkey').notNull().references(() => accounts.pubkey, { onDelete: 'cascade' }),

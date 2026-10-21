@@ -2,6 +2,8 @@ import type { Event } from 'nostr-tools';
 
 import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
 
+jest.mock('@/services/explore/favorites', () => ({ applyFavoritesEvent: jest.fn(async () => {}), queueFavoritesPublication: jest.fn() }));
+
 const SELF = 'self-pubkey';
 const PRIVATE_SET_D_TAGS = [
   'psstpsst-muted',
@@ -307,9 +309,9 @@ describe('selfEventStream', () => {
     // URLs are normalized (trailing slash dropped) before set arithmetic.
     const dm = findSub('self.dm')!;
     expect(dm.relays).toEqual(['wss://dm-a.example/', 'wss://shared.example/']);
-    expect(dm.filters).toHaveLength(3);
+    expect(dm.filters).toHaveLength(4);
     expect(dm.filters![0]).toEqual({ kinds: [10044], authors: [SELF] });
-    const keySyncFilters = dm.filters!.slice(1);
+    const keySyncFilters = dm.filters!.slice(1, 3);
     expect(keySyncFilters).toEqual([
       { kinds: [4454], authors: [SELF], since: expect.any(Number) },
       { kinds: [4455], authors: [SELF], '#p': [SELF], since: expect.any(Number) },
@@ -326,6 +328,7 @@ describe('selfEventStream', () => {
       { kinds: [10044], authors: [SELF] },
       { kinds: [4454], authors: [SELF], since: expect.any(Number) },
       { kinds: [4455], authors: [SELF], '#p': [SELF], since: expect.any(Number) },
+      { kinds: [30267], authors: [SELF], '#d': ['psstpsst-favorites'] },
       { kinds: [30000], authors: [SELF], '#d': PRIVATE_SET_D_TAGS },
       { kinds: [10030], authors: [SELF] },
       { kinds: [10063], authors: [SELF] },
@@ -336,6 +339,7 @@ describe('selfEventStream', () => {
     expect(discovery.relays).toEqual([...DISCOVERY_RELAYS]);
     expect(discovery.filters).toEqual([
       { kinds: [10044], authors: [SELF] },
+      { kinds: [30267], authors: [SELF], '#d': ['psstpsst-favorites'] },
       { kinds: [30000], authors: [SELF], '#d': PRIVATE_SET_D_TAGS },
       { kinds: [10030], authors: [SELF] },
       { kinds: [10063], authors: [SELF] },
@@ -350,6 +354,10 @@ describe('selfEventStream', () => {
     await startStream();
 
     expect(mockSubscribeCalls.map((c) => c.label)).toEqual(['self.dm']);
+    expect(findSub('self.dm')!.filters).toContainEqual({ kinds: [30267], authors: [SELF], '#d': ['psstpsst-favorites'] });
+    const favorites = makeEvent(30267, 100, [['d', 'psstpsst-favorites']]);
+    deliver('self.dm', favorites); await flush();
+    expect(jest.requireMock('@/services/explore/favorites').applyFavoritesEvent).toHaveBeenCalledWith(SELF, favorites, fakeSigner);
   });
 
   it('dispatches a key change synchronously without waiting for a UI timer', async () => {
@@ -404,14 +412,16 @@ describe('selfEventStream', () => {
     const muted = makeEvent(30000, 100, [['d', 'psstpsst-muted']]);
     const contacts = makeEvent(30000, 100, [['d', 'psstpsst-contacts']]);
     const blocked = makeEvent(30000, 100, [['d', 'psstpsst-blocked']]);
+    const favorites = makeEvent(30267, 100, [['d', 'psstpsst-favorites']]);
     const savedGroups = makeEvent(30078, 100, [['d', 'psstpsst-saved-groups']]);
     const emoji = makeEvent(10030, 100);
     const media = makeEvent(10063, 100);
-    for (const event of [muted, contacts, blocked, savedGroups, emoji, media]) {
+    for (const event of [favorites, muted, contacts, blocked, savedGroups, emoji, media]) {
       deliver('self.write', event);
     }
     await flush();
 
+    expect(jest.requireMock('@/services/explore/favorites').applyFavoritesEvent).toHaveBeenCalledWith(SELF, favorites, fakeSigner);
     expect(mockApplyMutedEvent).toHaveBeenCalledWith(SELF, muted, fakeSigner);
     expect(mockApplyContactsEvent).toHaveBeenCalledWith(SELF, contacts, fakeSigner);
     expect(mockApplyBlockedEvent).toHaveBeenCalledWith(SELF, blocked, fakeSigner);

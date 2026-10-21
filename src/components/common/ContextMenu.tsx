@@ -1,12 +1,12 @@
 import { actionMenuWidth } from './action-menu-width';
 import { useMemo, useLayoutEffect, useRef, useState } from 'react';
-import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Modal, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { desktopChrome, spacing } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IS_ELECTRON } from '@/lib/platform';
+import { IS_ELECTRON, desktopContextMenuPoint, type DesktopContextMenuEvent } from '@/lib/platform';
 
 import {
   ACTION_MENU_ICON_SIZE,
@@ -115,6 +115,18 @@ export function ContextMenuOverlay({
         tabIndex={-1}
         style={[StyleSheet.absoluteFill, IS_ELECTRON && styles.desktopBackdrop]}
         onPress={onClose}
+        {...(Platform.OS === 'web' ? { onContextMenu: (event: DesktopContextMenuEvent) => {
+          event.preventDefault?.(); event.stopPropagation?.();
+          const point = desktopContextMenuPoint(event);
+          onClose();
+          if (!point) return;
+          // Let React remove the modal before delivering the new context request underneath it.
+          setTimeout(() => {
+            document.elementFromPoint(point.x, point.y)?.dispatchEvent(new MouseEvent('contextmenu', {
+              bubbles: true, cancelable: true, button: 2, clientX: point.x, clientY: point.y,
+            }));
+          }, 0);
+        } } : {})}
       />
       <ActionMenuPanel
         density={density}

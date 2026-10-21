@@ -1,3 +1,4 @@
+import { needsFavoriteMetadata, resolveFavoriteMetadata } from './favorite-metadata';
 import { createStore } from 'zustand/vanilla';
 import { platform } from '@/platform';
 import { assertNotAborted } from '@/platform/abort';
@@ -68,7 +69,8 @@ export const applicationTasks = {
   async start(id: string) {
     const session = sessions.get(id), state = applicationTaskStore.getState().sessions.get(id);
     if (!session || !state || session.starting || session.runtime) return;
-    const { entry, account } = state;
+    const { account } = state;
+    let { entry } = state;
     const signal = session.life.signal;
     const current = () => { assertNotAborted(signal); if (sessions.get(id) !== session) throw new Error('session-closed'); };
     const confirm = async (prompt: RuntimePrompt, requestSignal?: AbortSignal) => {
@@ -80,6 +82,10 @@ export const applicationTasks = {
     const start = async () => {
       if (!await canReceiveForAccount(account)) throw new Error('account-unavailable');
       current();
+      if (needsFavoriteMetadata(entry)) {
+        entry = await resolveFavoriteMetadata(account, entry, signal);
+        current(); patch(id, { entry });
+      }
       const required = entry.release ? [...new Set(['shell', ...entry.required])] : applicationRequirements(entry.kind, entry.required);
       if (entry.kind === 'napp' && required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('napplets.unsupported');
       const optional = entry.release?.optional.filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)) ?? [];

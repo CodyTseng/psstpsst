@@ -13,7 +13,7 @@ jest.mock('@/services/explore/discovery', () => ({ cacheApplicationAddress: jest
 let mockSaved = { account: 'account', entries: [] as ExploreEntry[] };
 jest.mock('@/stores/explore.store', () => ({ useExplore: () => mockSaved }));
 const address = (identifier: string) => naddrEncode({ kind: 35130, pubkey: 'a'.repeat(64), identifier });
-const entry = (identifier: string) => ({ key: address(identifier), address: address(identifier), title: identifier, kind: 'napp' }) as ExploreEntry;
+const entry = (identifier: string) => ({ key: address(identifier), address: address(identifier), title: identifier, description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null, kind: 'napp', manifest: { id: 'b'.repeat(64), pubkey: 'a'.repeat(64), kind: 35130, created_at: 1, content: '', tags: [], sig: 'c'.repeat(128) } }) as ExploreEntry;
 const cache: ApplicationAddressCache = { account: null, entries: [] };
 const empty: ExploreEntry[] = [];
 let state: ReturnType<typeof useApplicationAddressSearch>;
@@ -69,4 +69,15 @@ it('replaces an earlier lookup error when the app subsequently appears in local 
   await act(async () => { renderer.update(<Harness value={address('app')} entries={[entry('app')]} />); });
   expect(state!.entry?.title).toBe('app');
   expect(state!.error).toBeUndefined();
+});
+
+it('resolves a synced signed reference that does not yet have a manifest', async () => {
+  const app = { ...entry('pending'), manifest: undefined };
+  mockSaved.entries = [app];
+  jest.mocked(resolveApplicationAddress).mockResolvedValue(entry('pending'));
+  await act(async () => { renderer = create(<Harness value={address('pending')} />); });
+  expect(state!.loading).toBe(true);
+  await act(async () => { await jest.advanceTimersByTimeAsync(300); });
+  expect(resolveApplicationAddress).toHaveBeenCalled();
+  expect(state!.entry?.manifest).toBeDefined();
 });

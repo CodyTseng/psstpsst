@@ -38,7 +38,7 @@ export function findApplicationAddress(query: ApplicationAddressQuery | null, en
   if (!query || query.type === 'invalid') return undefined;
   let found: ExploreEntry | undefined;
   for (const entry of entries) {
-    if (entry.key !== query.key) continue;
+    if (entry.key !== query.key || entry.kind !== 'website' && !entry.manifest) continue;
     if (!found || (entry.manifest?.created_at ?? 0) > (found.manifest?.created_at ?? 0) ||
       (entry.manifest?.created_at === found.manifest?.created_at && (entry.manifest?.id ?? '') < (found.manifest?.id ?? ''))) found = entry;
   }

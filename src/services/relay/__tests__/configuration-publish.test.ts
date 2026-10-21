@@ -45,6 +45,7 @@ jest.mock('@/db/client', () => {
     PRAGMA foreign_keys = ON;
     CREATE TABLE accounts (pubkey TEXT PRIMARY KEY);
     INSERT INTO accounts VALUES ('${'a'.repeat(64)}'), ('other');
+    CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE profiles (
       pubkey TEXT PRIMARY KEY, name TEXT, display_name TEXT, picture TEXT, nip05 TEXT,
       lud06 TEXT, lud16 TEXT, about TEXT, raw_event TEXT, fetched_at INTEGER
@@ -86,6 +87,8 @@ jest.mock('@/db/client', () => {
     );
   `);
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0056_private-list-sync-state.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0062_explore.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0070_private-favorites.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0044_contact-sync-state.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0045_configuration-outbox.sql`, 'utf8'));
   const execute = async (query: string, params: unknown[], method: string) => {
@@ -1034,4 +1037,87 @@ it('does not publish a converted legacy mute snapshot superseded before its back
   await jest.runAllTimersAsync();
   expect(mockSigner.signEvent).not.toHaveBeenCalled();
   expect(await pending(30000, MUTED_D)).toBeNull();
+});
+
+function favorites() {
+  mockSigner.nip44Encrypt.mockReset().mockImplementation(async (_pubkey: string, text: string) => `encrypted:${text}`);
+  mockSigner.nip44Decrypt.mockReset().mockImplementation(async (_pubkey: string, text: string) => text.replace('encrypted:', ''));
+  const repository = jest.requireActual('../../explore/repository') as typeof import('../../explore/repository');
+  const sync = jest.requireActual('../../explore/favorites') as typeof import('../../explore/favorites');
+  const { websiteEntry } = jest.requireActual('../../explore/model') as typeof import('../../explore/model');
+  const snapshot = (tags: string[][], at = 100) => ({ ...event(30267, 'psstpsst-favorites', at), content: `encrypted:${JSON.stringify(tags)}` });
+  return { ...repository, ...sync, websiteEntry, snapshot };
+}
+it('commits favorite membership and dirty revision before any deferred encryption or signing', async () => {
+  const f = favorites(), app = f.websiteEntry('https://example.com/app');
+  await f.reorder(SELF, [app.key], app);
+  expect((await f.readEntries(SELF))[0]).toMatchObject({ key: app.key, desktopPosition: 0, lastUsedAt: null });
+  expect(sqlite.prepare('SELECT kind, dirty FROM private_list_sync_state').get()).toEqual({ kind: 30267, dirty: 1 });
+  expect(mockSigner.nip44Encrypt).not.toHaveBeenCalled();
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  await jest.runAllTimersAsync();
+  const queued = await pending(30267, 'psstpsst-favorites');
+  expect(queued?.event.tags).toEqual([['d', 'psstpsst-favorites']]);
+  expect(queued?.event.content).toBe(`encrypted:${JSON.stringify([['r', app.address]])}`);
+  expect(mockSigner.nip44Encrypt).toHaveBeenCalledWith(SELF, JSON.stringify([['r', app.address]]));
+});
+it('reconciles remote favorites in order, keeps unresolved apps visible, and leaves history independent', async () => {
+  const f = favorites();
+  const app = f.websiteEntry('https://example.com/');
+  await f.visit(SELF, app);
+  const remote = f.snapshot([['a', `35130:${'b'.repeat(64)}:notes`, 'wss://hint.example/'], ['r', app.address]]);
+  await f.applyFavoritesEvent(SELF, remote, mockSigner);
+  const rows = await f.readEntries(SELF);
+  expect(rows.find(row => row.kind === 'napp')).toMatchObject({ title: 'notes', desktopPosition: 0, lastUsedAt: null });
+  expect(rows.find(row => row.kind === 'napp')?.manifest).toBeUndefined();
+  expect(rows.find(row => row.key === app.key)).toMatchObject({ desktopPosition: 1, lastUsedAt: expect.any(Number) });
+  await f.applyFavoritesEvent(SELF, f.snapshot([], 101), mockSigner);
+  expect((await f.readEntries(SELF)).every(row => row.desktopPosition === null)).toBe(true);
+  expect(sqlite.prepare('SELECT COUNT(*) AS n FROM explore_history').get()).toEqual({ n: 1 });
+});
+it('protects dirty local favorites before crypto and pending snapshots after signing from remote echoes', async () => {
+  const f = favorites(), app = f.websiteEntry('https://local.example/');
+  await f.reorder(SELF, [app.key], app);
+  const remote = f.snapshot([['r', 'https://remote.example/']]);
+  await f.applyFavoritesEvent(SELF, remote, mockSigner);
+  expect((await f.readEntries(SELF)).map(app => app.key)).toEqual([app.key]);
+  await jest.runAllTimersAsync();
+  await f.applyFavoritesEvent(SELF, remote, mockSigner);
+  expect((await f.readEntries(SELF)).map(app => app.key)).toEqual([app.key]);
+});
+it('rechecks favorite revisions after slow decryption before replacing local edits', async () => {
+  const f = favorites(), app = f.websiteEntry('https://local.example/');
+  let decrypt!: (value: string) => void;
+  mockSigner.nip44Decrypt.mockImplementationOnce(() => new Promise(resolve => { decrypt = resolve; }));
+  const applying = f.applyFavoritesEvent(SELF, f.snapshot([]), mockSigner); await settle();
+  await f.reorder(SELF, [app.key], app);
+  decrypt('[]'); await applying;
+  expect((await f.readEntries(SELF)).filter(app => app.desktopPosition !== null).map(app => app.key)).toEqual([app.key]);
+});
+it('keeps local favorites when a remote snapshot is malformed or belongs to another account', async () => {
+  const f = favorites(), app = f.websiteEntry('https://example.com/');
+  await f.applyFavoritesEvent(SELF, f.snapshot([['r', app.address]]), mockSigner);
+  await f.applyFavoritesEvent(SELF, { ...f.snapshot([]), content: 'encrypted:{}' }, mockSigner);
+  await f.applyFavoritesEvent(SELF, { ...f.snapshot([]), pubkey: 'other' }, mockSigner);
+  expect((await f.readEntries(SELF)).filter(app => app.desktopPosition !== null)).toHaveLength(1);
+});
+it('publishes an encrypted empty snapshot after removing the last favorite', async () => {
+  const f = favorites(), app = f.websiteEntry('https://example.com/');
+  await f.reorder(SELF, [app.key], app); await jest.runAllTimersAsync();
+  await f.reorder(SELF, [], app); await jest.runAllTimersAsync();
+  expect((await pending(30267, 'psstpsst-favorites'))?.event.content).toBe('encrypted:[]');
+});
+
+it('retains a signed favorites snapshot for offline outbox retry without encrypting it again', async () => {
+  const f = favorites(), app = f.websiteEntry('https://example.com/');
+  await f.reorder(SELF, [app.key], app); await jest.runAllTimersAsync();
+  const id = (await pending(30267, 'psstpsst-favorites'))!.eventId;
+  await start(); await worker.flush(); worker.stop();
+  expect((await pending(30267, 'psstpsst-favorites'))?.eventId).toBe(id);
+  expect(mockSigner.nip44Encrypt).toHaveBeenCalledTimes(1);
+  mockPublish.mockResolvedValue(results(3));
+  jest.advanceTimersByTime(60_000);
+  await start(); await worker.flush(); worker.stop();
+  expect(await pending(30267, 'psstpsst-favorites')).toBeNull();
+  expect(mockSigner.nip44Encrypt).toHaveBeenCalledTimes(1);
 });

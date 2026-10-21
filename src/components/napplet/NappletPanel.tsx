@@ -3,6 +3,12 @@ import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import Copy from 'lucide-react-native/icons/copy';
 import Check from 'lucide-react-native/icons/check';
 import ExternalLink from 'lucide-react-native/icons/external-link';
+import Star from 'lucide-react-native/icons/star';
+import { useApplicationFavorite } from '@/hooks/use-application-favorite';
+import { getExploreState, useExplore } from '@/stores/explore.store';
+import { exploreService } from '@/services/explore/service';
+import { showToast } from '@/stores/toast.store';
+import type { ExploreEntry } from '@/services/explore/model';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { Share } from '@solar-icons/react-native/category/ui/Linear/Share';
 import { ShieldCheck } from '@solar-icons/react-native/category/security/Linear/ShieldCheck';
@@ -34,15 +40,25 @@ export function NappletSettings({ release, accountPubkey }: { release: NappletRe
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
-export function NappletPanelActions({ address, onAction, onOpenExternal }: { address: string; onAction: (action: 'share' | 'settings' | 'reload') => void; onOpenExternal?: () => void }) {
+export function NappletPanelActions({ address, entry, account, onAction, onOpenExternal }: { address: string; entry: ExploreEntry; account: string | null; onAction: (action: 'share' | 'settings' | 'reload') => void; onOpenExternal?: () => void }) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const { copyText, copied } = useClipboard();
+  const state = useExplore();
+  const favorite = state.account === account && state.entries.some(app => app.key === entry.key && app.desktopPosition !== null);
+  const setFavorite = useApplicationFavorite(account, 'detail');
+  useEffect(() => {
+    if (!account) return;
+    const current = getExploreState();
+    if (current.account !== account || !current.loaded)
+      void exploreService.activate(account).catch(() => showToast(t('napplets.request_failed'), { target: 'detail' }));
+  }, [account, t]);
   const actions = [
     { key: 'copy', label: t(copied ? 'common.copied' : 'common.copy'), accessibilityLabel: t(copied ? 'common.copied' : 'napplets.copy_address'), icon: copied
       ? <Check size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/>
       : <Copy size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> },
     { key: 'share', label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> },
+    ...(account ? [{ key: 'favorite' as const, label: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'), icon: <Star size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> }] : []),
     { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
     { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
     ...(onOpenExternal ? [{ key: 'browser' as const, label: t('napplets.browser_open_default'), icon: <ExternalLink size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> }] : []),
@@ -52,7 +68,7 @@ export function NappletPanelActions({ address, onAction, onOpenExternal }: { add
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
       width={uiDensity.profileActionWidth + spacing.xl} size={uiDensity.profileActionSize + spacing.lg}
       singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
-      onPress={() => { if (action.key === 'copy') void copyText(address); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
+      onPress={() => { if (action.key === 'copy') void copyText(address); else if (action.key === 'favorite') void setFavorite(entry, !favorite); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
   </HorizontalFadeScrollView>;
 }
 

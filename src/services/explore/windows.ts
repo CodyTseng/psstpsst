@@ -1,3 +1,4 @@
+import { resolveFavoriteMetadata } from './favorite-metadata';
 import { platform } from '@/platform';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { registerNappletLifecycle } from '@/services/napplet/lifecycle';
@@ -10,6 +11,7 @@ export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: 
   try {
     if (!platform.napplet.windows && !platform.napplet.tasks) throw new Error('napplets.rebuild_required');
     if (!await canReceiveForAccount(accountPubkey)) throw new Error('account-unavailable');
+    entry = await resolveFavoriteMetadata(accountPubkey, entry, new AbortController().signal);
     if (platform.napplet.tasks) { await applicationTasks.open(entry, accountPubkey, reviewedRequired); return; }
     await platform.napplet.windows!.open({ accountPubkey, address: entry.address, manifest: entry.manifest, servers: entry.servers, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined });
   } catch (error) {

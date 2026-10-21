@@ -5,6 +5,8 @@ import { ExploreDiscovery } from '@/components/napplet/ExploreDiscovery';
 import { exploreService } from '@/services/explore/service';
 import { useExplore } from '@/stores/explore.store';
 import type { ExploreEntry } from '@/services/explore/model';
+import { needsFavoriteMetadata } from '@/services/explore/favorite-metadata';
+import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -51,6 +53,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const { t } = useTranslation();
   const state = useExplore();
   const share = useExploreShare(account);
+  const setFavorite = useApplicationFavorite(account, 'primary');
   const navigation = usePrimaryPaneNavigation();
   const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
   const [query, setQuery] = useState(initialAddress ?? '');
@@ -65,9 +68,10 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
       void exploreService.activate(account).catch(() => setError('napplets.request_failed'));
   }, [account]);
   const open = useCallback(
-    (app: ExploreEntry) => {
+    async (app: ExploreEntry) => {
       setError(null);
       try {
+        if (needsFavoriteMetadata(app)) app = await exploreService.resolveFavorite(app, account ?? '');
         if (platform.napplet.windows || platform.napplet.tasks) {
           void openApplicationWindow(app, account ?? '').catch(() => setError('napplets.request_failed'));
           return;
@@ -90,12 +94,19 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const action = useCallback(
     (app: ExploreEntry, index: number | null) => {
       setError(null);
+      if (index === null) return setFavorite(app, false);
       return exploreService
         .move(app, index, account ?? '')
         .catch(() => setError('napplets.request_failed'));
     },
-    [account],
+    [account, setFavorite],
   );
+  const toggleFavorite = useCallback((app: ExploreEntry) => {
+    void setFavorite(app, !desktop.some(item => item.key === app.key));
+  }, [setFavorite, desktop]);
+  const showPermissions = useCallback((app: ExploreEntry) => {
+    navigation.open(app.release ? `/napplet-permissions/${app.release.event.id}` : `/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`);
+  }, [navigation]);
   return (
     <AppScreen edges={[]}>
       <ScreenHeader
@@ -136,7 +147,8 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
         {!state.loaded || state.account !== account ? (
           <ActivityIndicator color={c.accent} style={{ padding: spacing.lg }} />
         ) : account && (tab==='discover' || query.trim()) ? <ExploreDiscovery key={scanRevision} query={query} scope={tab} favorites={desktop} account={account} bottomInset={bottomInset} onScrollChange={setScrolled}
-          onDetails={showSearchDetails} /> : desktop.length ? (
+          onDetails={showSearchDetails} onShare={share}
+          onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (
           <NappletGrid onPermissions={(app) => navigation.open(app.release?`/napplet-permissions/${app.release.event.id}`:`/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`)} onShare={share}
     onDetails={(app) => navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`)}
             items={desktop} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />

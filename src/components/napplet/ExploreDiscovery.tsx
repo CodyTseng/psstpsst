@@ -1,4 +1,4 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, View } from 'react-native';
 import { useDiscovery } from '@/stores/explore-discovery.store';
 import { useTranslation } from 'react-i18next';
@@ -10,17 +10,19 @@ import { useProfilesMap } from '@/hooks/use-profile';
 import { useContactsMap } from '@/hooks/use-contacts';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { discoverApplications, loadMoreApplications } from '@/services/explore/discovery';
-import { applicationListEntry, type ExploreEntry } from '@/services/explore/model';
+import { type ExploreEntry } from '@/services/explore/model';
 import { spacing, useThemeColors } from '@/theme';
-import { ApplicationListRow } from './ApplicationListRow';
+import { ApplicationContextRow } from './ApplicationContextRow';
 
 const EMPTY_ENTRIES: ExploreEntry[] = [];
 
-export function ExploreDiscovery({ account, onDetails, bottomInset, onScrollChange, query = '', scope = 'discover', favorites = EMPTY_ENTRIES }: {
+export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions, onShare, bottomInset, onScrollChange, query = '', scope = 'discover', favorites = EMPTY_ENTRIES }: {
   account: string; onDetails: (app: ExploreEntry) => void;
+  onFavorite: (app: ExploreEntry) => void; onPermissions: (app: ExploreEntry) => void; onShare: (app: ExploreEntry) => void;
   bottomInset: number; onScrollChange: (scrolled: boolean) => void; query?: string; scope?: 'favorites' | 'discover'; favorites?: ExploreEntry[];
 }) {
   const state = useDiscovery();
+  const favoriteKeys = useMemo(() => new Set(favorites.map(app => app.key)), [favorites]);
   const searchKey = useMemo(() => ({ query, scope }), [query, scope]);
   const [searchWindow, setSearchWindow] = useState({ key: searchKey, count: 20 });
   const searchCount = searchWindow.key === searchKey ? searchWindow.count : 20;
@@ -79,13 +81,6 @@ export function ExploreDiscovery({ account, onDetails, bottomInset, onScrollChan
         <AppText variant="title" align="center">{t(searching || scope === 'favorites' ? 'search.empty' : 'napplets.discovery_empty')}</AppText>
         {!searching && scope === 'discover' ? <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} /> : null}
       </View> : null}
-    renderItem={({ item }) => <DiscoveryRow app={item} onDetails={onDetails} />} />;
+    renderItem={({ item }) => <ApplicationContextRow app={item} favorite={favoriteKeys.has(item.key)}
+      onDetails={onDetails} onFavorite={onFavorite} onPermissions={onPermissions} onShare={onShare} />} />;
 }
-
-const DiscoveryRow = memo(function DiscoveryRow({ app, onDetails }: {
-  app: ExploreEntry; onDetails: (app: ExploreEntry) => void;
-}) {
-  const application = useMemo(() => applicationListEntry(app), [app]);
-  const open = useCallback(() => onDetails(app), [app, onDetails]);
-  return <ApplicationListRow application={application} onPress={open}/>;
-});

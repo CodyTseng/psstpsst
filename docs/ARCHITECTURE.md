@@ -722,7 +722,14 @@ posts use the account identity signer; account lifecycle changes cancel reads,
 signing and publishing before results can enter a replacement session.
 
 Cached entries, explicit shortcut positions, and distinct-address last visits use
-separate account-scoped tables. Opening changes recency only. The cache is bounded
+separate account-scoped tables. Favorites synchronize as a private NIP-51
+kind-30267 snapshot through the shared private-list queue, configuration outbox
+and self-event intake. Local membership/order and dirty revision commit before
+background encryption/signing; dirty or signed-pending work blocks remote echoes.
+Recency and grants remain device-local. Unresolved references retain membership;
+verified metadata hydrates in bounded workers and refreshes one entry at a time.
+See [the favorites wire format](protocols/application-favorites.md).
+Opening changes recency only. The cache is bounded
 by 512 recent addresses plus 512 shortcuts. Existing napplet membership and recency
 migrate atomically. Platform website data uses account-specific profiles; removing
 an account clears its profile as well as its database rows. Old iOS versions without

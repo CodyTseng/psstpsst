@@ -914,7 +914,7 @@ icons stay at least 60px and grow to 68px when the pane allows. Column counts an
 distributed gaps adapt around that size. History scrolls vertically with Back navigation in most-recently-used order.
 Launching an app updates only recency. Electron
 opens app menus with right-click and sorts desktop icons by direct dragging.
-App menus center on the icon, prefer the space above it, fall back below, and
+Grid menus center on the icon, prefer the space above it, fall back below, and
 shift inward at pane edges. Available menu space excludes native window controls
 and safe areas, including when the overlay spans the full window. App menus follow the shared platform density, icon sizing and stroke conventions.
 Menu width accommodates localized action text within the available viewport.
@@ -927,9 +927,17 @@ unframed in every state, including sorting; icon artwork disables browser-native
 image dragging so it cannot interrupt sorting; other icons preview their new slots
 while dragging; only release commits the order. Released positions stay visible
 until the committed layout takes over, without restoring the old order. Recent
-apps never drag or share desktop selection feedback. Long press opens
-details, permissions and sharing, with add-to-desktop and danger-tone remove-from-history actions only
-for apps without a desktop shortcut. Removing recent usage preserves the
+apps never drag or share desktop selection feedback. Discover and history rows
+share right-click and long-press menus near the pointer or touch position, clamped
+to safe viewport bounds. Right-clicking another visible app replaces the open menu
+and its action target. Menu-enabled row text does not enter text selection
+during a hold. Their menus offer details, permissions, sharing and
+Favorite/Unfavorite. Every history row also offers danger-tone Remove, including
+favorited apps. The application-detail header menu exposes the same permissions,
+sharing and Favorite/Unfavorite actions, plus Copy. History removal belongs to
+the recent-use list, not application details. Runtime menu sheets include Favorite/Unfavorite in their bottom
+action rail. Every menu favorite change confirms success with a bottom toast;
+failures show error feedback. Favorite removal is labelled Unfavorite throughout Explore. Removing recent usage preserves the
 desktop shortcut and application state. Cancelling a drag leaves the desktop intact.
 There is no pin state or browser-style forward/back toolbar. The address entry accepts both Nostr addresses and website URLs. Pointer menus and accessibility actions
 provide equivalent add, move and remove operations. Removing a shortcut preserves

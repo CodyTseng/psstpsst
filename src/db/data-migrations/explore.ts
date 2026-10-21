@@ -18,7 +18,7 @@ export async function migrateExplore(tx: Database) {
       }
       await tx.run(sql `INSERT INTO explore_entries(account_pubkey,source_id,address,title,kind,manifest) VALUES(${String(account)},${source},${source},${source},'napplet',${String(manifest)})`);
       if (position !== null)
-        await tx.run(sql `INSERT INTO explore_shortcuts VALUES(${String(account)},${source},${Number(position)})`);
+        await tx.run(sql `INSERT INTO explore_shortcuts(account_pubkey,source_id,position) VALUES(${String(account)},${source},${Number(position)})`);
       if (lastUsed !== null)
         await tx.run(sql `INSERT INTO explore_history VALUES(${String(account)},${source},${Number(lastUsed)})`);
     }

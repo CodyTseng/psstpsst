@@ -553,12 +553,46 @@ test(
         assert.equal(await shortcuts.nth(0).getByText('Photo Gallery', { exact: true }).count(), 1,
           'Favorites without recent previews still supports drag sorting');
       }
+      for (const theme of ['light', 'dark']) {
+        await page.goto(`${address}/?scenario=explore-discovery&list-actions=1&saved-apps=1&theme=${theme}`);
+        await page.getByRole('tab', { name: 'Discover', exact: true }).click();
+        await page.getByText('Photo Gallery', { exact: true }).waitFor();
+        const first = await page.getByText('Notes', { exact: true }).boundingBox();
+        const second = await page.getByText('Photo Gallery', { exact: true }).boundingBox();
+        await page.mouse.click(first.x + 130, first.y + 5, { button: 'right' });
+        await page.getByRole('button', { name: 'Unfavorite', exact: true }).waitFor();
+        await page.mouse.click(20, second.y + 5, { button: 'right' });
+        await page.getByRole('button', { name: 'Favorite', exact: true }).click();
+        await page.waitForFunction(() => document.title === 'move:Photo Gallery:1');
+      }
+      for (const theme of ['light', 'dark']) {
+        await page.goto(`${address}/?scenario=explore-discovery&list-actions=1&saved-apps=1&theme=${theme}`);
+        await page.getByRole('tab', { name: 'Discover', exact: true }).click();
+        await page.getByText('Photo Gallery', { exact: true }).waitFor();
+        const notes = page.getByText('Notes', { exact: true });
+        await notes.waitFor();
+        await notes.click({ button: 'right' });
+        await page.getByRole('button', { name: 'Unfavorite', exact: true }).click();
+        await page.waitForFunction(() => document.title === 'move:Notes:null');
+        const bounds = await notes.boundingBox();
+        await page.mouse.move(bounds.x + 10, bounds.y + 5);
+        await page.mouse.down();
+        await page.waitForTimeout(650);
+        await page.mouse.up();
+        await page.getByRole('button', { name: 'Favorite', exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: 'Remove', exact: true }).count(), 0,
+          'discovery menus do not remove history');
+        await page.getByRole('button', { name: 'Favorite', exact: true }).click();
+        await page.waitForFunction(() => document.title === 'move:Notes:0');
+        await page.getByRole('tab', { name: 'Favorites', exact: true }).click();
+        await page.getByText('Notes', { exact: true }).waitFor();
+      }
       for(const theme of ['light','dark']) {
         await page.goto(`${address}/?scenario=explore-discovery&theme=${theme}`);
         await page.getByText('Your space to explore',{exact:true}).waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error.message}\n${JSON.stringify(errors)}\n${await page.locator('body').innerText()}`);});
         await page.getByRole('tab',{name:'Discover',exact:true}).click();
         await page.getByText('Photo Gallery',{exact:true}).waitFor();
-        assert.equal(await page.getByRole('button',{name:'Add shortcut',exact:true}).count(),0);
+        assert.equal(await page.getByRole('button',{name:'Favorite',exact:true}).count(),0);
         assert.equal(await page.getByText('Alice',{exact:true}).count(),2,'each app shows its publisher');
         for(const format of ['napplet','napp','nsite'])assert.equal(await page.getByText(format,{exact:true}).count(),0,'format badges stay out of app rows');
         assert.equal(await page.getByTestId('application-format-border').count(),0,'application artwork has no format border');
@@ -625,6 +659,19 @@ test(
         assert(Math.abs(boundary.headerBottom-boundary.dividerTop)<=1,'divider uses the complete header boundary');
         if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-discovery-scrolled.png`});
       }
+      for (const theme of ['light', 'dark']) {
+        await page.goto(`${address}/?scenario=explore-detail&detail-actions=1&theme=${theme}`);
+        const more = page.getByRole('button', { name: 'More', exact: true });
+        await more.click();
+        await page.getByRole('button', { name: 'Permissions', exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: 'Remove', exact: true }).count(), 0);
+        await page.getByRole('button', { name: 'Favorite', exact: true }).click();
+        await page.getByText('Added to favorites', { exact: true }).waitFor();
+        await more.click();
+        assert.equal(await page.getByRole('button', { name: 'Remove', exact: true }).count(), 0);
+        await page.getByRole('button', { name: 'Unfavorite', exact: true }).click();
+        await page.getByText('Removed from favorites', { exact: true }).waitFor();
+      }
       for(const theme of ['light','dark'])for(const kind of ['napp','nsite','website']) {
         await page.goto(`${address}/?scenario=explore-detail&kind=${kind}&theme=${theme}&needs-consent=1`);
         const open=page.getByRole('button',{name:'Open',exact:true});await open.click({trial:true});
@@ -645,7 +692,13 @@ test(
         await page.goto(`${address}/?scenario=explore-menu&kind=${kind}&theme=${theme}`);
         await assertRuntimeHeader();
         await page.getByRole('button',{name:'App menu',exact:true}).click();
-        const sheet=page.getByRole('dialog');await sheet.getByRole('button',{name:'Permissions',exact:true}).click();
+        const sheet=page.getByRole('dialog');
+        await sheet.getByRole('button',{name:'Favorite',exact:true}).click();
+        await sheet.getByText('Added to favorites',{exact:true}).waitFor();
+        await sheet.getByRole('button',{name:'Unfavorite',exact:true}).click();
+        await sheet.getByText('Removed from favorites',{exact:true}).waitFor();
+        await sheet.getByRole('button',{name:'Favorite',exact:true}).waitFor();
+        await sheet.getByRole('button',{name:'Permissions',exact:true}).click();
         await sheet.getByText('Signing rules',{exact:true}).waitFor();
         assert.equal(await page.evaluate(()=>window.lastRoute),undefined);
         assert.equal(await page.evaluate(()=>window.nappletVisible),false);

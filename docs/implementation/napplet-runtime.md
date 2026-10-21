@@ -394,7 +394,11 @@ per-query display windows, and Favorites keyword search never starts discovery
 reads. Clearing a Favorites search restores its shortcut grid. Favorites omits the recent
 preview; the leading header action in both modes opens `/explore-recent`. Recent-only accounts
 show the empty Favorites state while retaining that history entry point. History
-uses the shared discovery row in a virtualized list, opening details on press and preserving context-menu actions.
+uses the shared discovery row in a virtualized list, opening details on press. Discovery and history share pointer-anchored menus for
+details, permissions, sharing and Favorite/Unfavorite; history always exposes
+Remove, which clears recency without changing favorites. Detail header menus
+expose favorite actions while keeping history removal in the history list. Runtime menu footers include a favorite toggle;
+all menu favorite changes use the shared hook for persistence and bottom-toast feedback.
 Discovery search recognizes bare naddr, `nostr:naddr`, naddr share-link URLs, and
 HTTP(S) website addresses. It checks the fetched catalogue, its account-scoped
 64-entry address cache, saved in-memory entries, and an exact asynchronous local
@@ -408,8 +412,10 @@ entries independently of the curated browsing window.
 Explicit application links retain their relay hints and author routing.
 
 `explore_entries` caches verified manifests and visited URLs;
-`explore_shortcuts` owns explicit order; `explore_history` keeps one latest visit
+`explore_shortcuts` owns explicit order and retained sync references; `explore_history` keeps one latest visit
 per address, bounded to 512 per account. This is not a chronological click log.
+Favorites synchronize through the shared private-list/configuration infrastructure
+using [encrypted app-curation snapshots](../protocols/application-favorites.md).
 Both history and shortcuts refer to the cached identity, independently of signing
 authority. Website addresses keep their path, query and fragment, whereas signing
 rules bind only their host-verified scheme, host and effective port.

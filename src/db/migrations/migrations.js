@@ -1,3 +1,4 @@
+import m0070 from './0070_private-favorites.sql';
 import m0068 from './0068_signing-scope-key.sql';
 import m0067 from './0067_application-relay-auth.sql';
 import m0066 from './0066_signer-access-kind.sql';
@@ -145,6 +146,7 @@ m0065,
 m0066,
 m0067,
 m0068,
-m0069
+m0069,
+m0070
     }
   }

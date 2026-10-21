@@ -12,6 +12,7 @@ import { NappletTile } from './NappletTile';
 export type RecentAppActions<T extends GridApp = GridApp> = {
   onOpen: (app: T) => void;
   onAdd: (app: T) => void;
+  onUnfavorite: (app: T) => void;
   onRemove: (app: T) => void;
   onDetails: (app: T) => void;
   onPermissions: (app: T) => void;
@@ -27,7 +28,7 @@ type Props<T extends GridApp = GridApp> = RecentAppActions<T> & {
 };
 
 /** Recent history owns its menu and never participates in desktop drag state. */
-export function NappletRecentTile<T extends GridApp>({ app, width, height, iconSize, testID, onOpen, onAdd, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
+export function NappletRecentTile<T extends GridApp>({ app, width, height, iconSize, testID, onOpen, onAdd, onUnfavorite, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
   const icon = useRef<View>(null);
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);
@@ -53,18 +54,20 @@ export function NappletRecentTile<T extends GridApp>({ app, width, height, iconS
         { name: 'share', label: t('share.title') },
         ...(app.desktopPosition === null ? [
           { name: 'add', label: t('napplets.add_to_desktop') },
-          { name: 'remove', label: t('common.remove') },
         ] : []),
+        ...(app.desktopPosition !== null ? [{ name: 'unfavorite', label: t('napplets.remove_from_desktop') }] : []),
+        { name: 'remove', label: t('common.remove') },
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'details') onDetails(app);
         else if (event.nativeEvent.actionName === 'permissions') onPermissions(app);
         else if (event.nativeEvent.actionName === 'share') onShare(app);
         else if (event.nativeEvent.actionName === 'add' && app.desktopPosition === null) onAdd(app);
-        else if (event.nativeEvent.actionName === 'remove' && app.desktopPosition === null) onRemove(app);
+        else if (event.nativeEvent.actionName === 'unfavorite') onUnfavorite(app);
+        else if (event.nativeEvent.actionName === 'remove') onRemove(app);
       }} />
     {anchor ? <NappletAppMenu app={app} anchor={anchor} onClose={() => setAnchor(null)}
       onPlacementChange={setMenuPlacement} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare}
-      onAdd={app.desktopPosition === null ? onAdd : undefined} onRemove={app.desktopPosition === null ? onRemove : undefined} /> : null}
+      favorite={app.desktopPosition !== null} onFavorite={app.desktopPosition === null ? onAdd : onUnfavorite} onRemove={onRemove} /> : null}
   </View>;
 }

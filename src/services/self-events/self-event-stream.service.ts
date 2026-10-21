@@ -1,3 +1,5 @@
+import { applyFavoritesEvent } from '../explore/favorites';
+import { FAVORITES_D, KIND_APP_FAVORITES } from '../explore/favorites-protocol';
 import type { Event, Filter } from 'nostr-tools';
 
 import { KIND_USER_EMOJI_LIST } from '@/lib/nostr/custom-emoji';
@@ -73,6 +75,7 @@ type Route =
   | 'key-request'
   | 'key-transfer'
   | 'key-announcement'
+  | 'favorites'
   | 'contacts'
   | 'muted'
   | 'blocked'
@@ -205,7 +208,9 @@ class SelfEventStream {
         since: fiveMinAgo,
       },
     ];
+    const favoritesFilter: Filter = { kinds: [KIND_APP_FAVORITES], authors: [self], '#d': [FAVORITES_D] };
     const ownListFilters: Filter[] = [
+      favoritesFilter,
       { kinds: [KIND_FOLLOW_SET], authors: [self], '#d': [...PRIVATE_SET_D_TAGS] },
       { kinds: [KIND_USER_EMOJI_LIST], authors: [self] },
       { kinds: [KIND_BLOSSOM_SERVER_LIST], authors: [self] },
@@ -237,7 +242,10 @@ class SelfEventStream {
       );
     };
 
-    subscribe('self.dm', [...dm], [keyAnnouncementFilter, ...keySyncFilters]);
+    // A write/discovery relay already covered by self.dm still needs the favorites filter.
+    const metadataRelays = new Set([...write, ...normalizeSet(DISCOVERY_RELAYS)]);
+    const dmCarriesFavorites = [...dm].some(relay => metadataRelays.has(relay));
+    subscribe('self.dm', [...dm], [keyAnnouncementFilter, ...keySyncFilters, ...(dmCarriesFavorites ? [favoritesFilter] : [])]);
     subscribe('self.write', writeOnly, [keyAnnouncementFilter, ...keySyncFilters, ...ownListFilters]);
     subscribe('self.discovery', discoveryOnly, [keyAnnouncementFilter, ...ownListFilters]);
   }
@@ -287,6 +295,14 @@ class SelfEventStream {
         // A new key must stop message intake before another event can decrypt
         // with the old key. This control signal cannot wait behind a UI yield.
         config.handlers.onKeyAnnouncement(event);
+        return;
+      case KIND_APP_FAVORITES:
+        if (dTagOf(event) !== FAVORITES_D || !this.isNewerReplaceable(event)) return;
+        this.storeReplaceable(event);
+        this.enqueue('favorites', async () => {
+          const signer = await this.loadSigner(config);
+          if (signer) await applyFavoritesEvent(config.accountPubkey, event, signer);
+        });
         return;
       case KIND_FOLLOW_SET:
         this.dispatchFollowSet(config, event);

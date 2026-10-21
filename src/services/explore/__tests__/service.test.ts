@@ -1,3 +1,4 @@
+import { notifyFavoritesChanged } from '../favorites-events';
 import { exploreService,exploreStore } from '../service';
 import { applicationTasks, applicationTaskStore } from '../application-tasks';
 import { nappletService } from '@/services/napplet/service';
@@ -16,7 +17,8 @@ jest.mock('@/services/napplet/network',()=>({NappletNetwork:jest.fn()}));
 jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn()}));
 jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{})}));
 jest.mock('@/services/napplet/repository',()=>({getData:jest.fn(async()=>null),setData:jest.fn(async()=>{})}));
-jest.mock('../repository',()=>({readEntries:jest.fn(async()=>[]),visit:jest.fn(async()=>{}),fromNapplet:jest.fn(),reorder:jest.fn(),forget:jest.fn()}));
+jest.mock('../favorite-metadata', () => ({ needsFavoriteMetadata: () => false, resolveFavoriteMetadata: async (_account: string, entry: unknown) => entry }));
+jest.mock('../repository',()=>({queueFavoritesPublication:jest.fn(),readEntries:jest.fn(async()=>[]),visit:jest.fn(async()=>{}),fromNapplet:jest.fn(),reorder:jest.fn(),forget:jest.fn()}));
 jest.mock('../runtime',()=>({ExploreRuntime:jest.fn().mockImplementation(function(this: object){Object.assign(this,{start:jest.fn(async()=> 'container'),stop:jest.fn(),presented:true});})}));
 const website:ExploreEntry={key:'https://site.example/path',address:'https://site.example/path',title:'Site',kind:'website',required:[],description:'',servers:[],lastUsedAt:null,desktopPosition:null};
 function entry(kind:'website'|'nsite'|'napp'):ExploreEntry {
@@ -110,4 +112,17 @@ it('still reviews required access for an independent task',async()=>{
   await applicationTasks.start(id);
   expect(nappletService.requestApproval).toHaveBeenCalledWith(expect.objectContaining({application:expect.objectContaining({required:['network']})}),expect.anything());
   expect(applicationTaskStore.getState().sessions.get(id)?.containerId).toBe('container');
+});
+
+it('refreshes remote favorite order and applies metadata completion without overwriting it', async () => {
+  exploreStore.setState({ entries: [{ ...website, desktopPosition: 3, lastUsedAt: 10 }] });
+  jest.mocked(readEntries).mockResolvedValueOnce([{ ...website, desktopPosition: 0, lastUsedAt: 10 }]);
+  notifyFavoritesChanged('account');
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(exploreStore.getState().entries[0].desktopPosition).toBe(0);
+  jest.mocked(readEntries).mockResolvedValueOnce([{ ...website, title: 'Resolved', desktopPosition: 4, lastUsedAt: 99 }]);
+  notifyFavoritesChanged('account', website.key);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(readEntries).toHaveBeenLastCalledWith('account', website.key);
+  expect(exploreStore.getState().entries[0]).toMatchObject({ title: 'Resolved', desktopPosition: 0, lastUsedAt: 10 });
 });

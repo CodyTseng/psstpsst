@@ -288,7 +288,7 @@ function AppGrid({ items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, on
               {preview.map((app) => <NappletRecentTile key={app.key} app={app} testID={`recent-app-${app.key}`}
                 width={cellWidth} height={cellHeight} iconSize={iconSize} onOpen={open}
                 onAdd={(item) => { if (item.desktopPosition === null) void onMove(item, items.length); }}
-                onRemove={onRemoveRecent} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare} />)}
+                onUnfavorite={(app) => onMove(app, null)} onRemove={onRemoveRecent} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare} />)}
             </View>
           </View> : null}
         </View>}
@@ -304,7 +304,7 @@ function AppGrid({ items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, on
     </Animated.View> : null}
     {menu ? <NappletAppMenu inline app={menu.app} anchor={menu.anchor} onClose={() => setMenu(null)}
       onPlacementChange={setMenuPlacement} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare}
-      onRemove={(app) => action(app, 'remove')} /> : null}
+      favorite onFavorite={(app) => action(app, 'remove')} /> : null}
 
   </View></GestureDetector>;
 }

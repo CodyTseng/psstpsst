@@ -20,7 +20,7 @@ type Props<T extends GridApp> = Omit<RecentAppActions<T>, 'onOpen'> & {
   onBack?: () => void;
 };
 
-export function NappletRecentPage<T extends GridApp>({ recent, loaded = true, error, onBack, onAdd, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
+export function NappletRecentPage<T extends GridApp>({ recent, loaded = true, error, onBack, onAdd, onUnfavorite, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const direction = useLanguageDirection();
@@ -42,7 +42,7 @@ export function NappletRecentPage<T extends GridApp>({ recent, loaded = true, er
         <AppText tone="muted" align="center">{t('napplets.empty_description')}</AppText>
       </View>}
       renderItem={({ item }) => <NappletRecentRow app={item} testID={`all-recent-app-${item.key}`}
-        onAdd={onAdd} onRemove={onRemove} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare} />}
+        onAdd={onAdd} onUnfavorite={onUnfavorite} onRemove={onRemove} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare} />}
 
       />}
     </View>

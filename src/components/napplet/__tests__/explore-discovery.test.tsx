@@ -24,7 +24,7 @@ jest.mock('@/theme', () => ({ ...jest.requireActual('@/theme'),
 }));
 jest.mock('@/components/common/AppText', () => ({ AppText: 'Text' }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: 'Button' }));
-jest.mock('@/components/napplet/ApplicationListRow', () => ({ ApplicationListRow: 'Row' }));
+jest.mock('@/components/napplet/ApplicationContextRow', () => ({ ApplicationContextRow: 'Row' }));
 jest.mock('@solar-icons/react-native/category/map/Linear/Compass', () => ({ Compass: () => null }), { virtual: true });
 jest.mock('@/services/explore/model', () => ({ applicationListEntry: (entry: unknown) => entry }));
 
@@ -32,7 +32,7 @@ let renderer: ReactTestRenderer;
 let mockQuery = '';
 let mockScope: 'favorites' | 'discover' = 'discover';
 let mockFavorites: ExploreEntry[] = [];
-const screen = () => <ExploreDiscovery query={mockQuery} scope={mockScope} favorites={mockFavorites} account="account" bottomInset={0} onDetails={() => {}} onScrollChange={() => {}} />;
+const screen = () => <ExploreDiscovery query={mockQuery} scope={mockScope} favorites={mockFavorites} account="account" onFavorite={() => {}} onPermissions={() => {}} onShare={() => {}} bottomInset={0} onDetails={() => {}} onScrollChange={() => {}} />;
 beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = ''; mockScope = 'discover'; mockFavorites = [];
@@ -152,4 +152,16 @@ it('searches only saved Favorites and keeps relay discovery dormant in that scop
   await act(async () => { renderer.update(screen()); });
   expect(renderer.root.findByType(FlatList).props.data).toEqual([discovered]);
   expect(discoverApplications).toHaveBeenCalledWith('account');
+});
+
+it('uses the saved favorite set instead of stale catalogue positions for row menus', async () => {
+  const app = { key: 'notes', title: 'Notes', description: '', desktopPosition: null } as ExploreEntry;
+  mockState.entries = [app]; mockState.visibleEntries = [app];
+  mockFavorites = [{ ...app, desktopPosition: 0 }];
+  await act(async () => { renderer = create(screen()); });
+  const row = renderer.root.findByType(FlatList).props.renderItem({ item: app });
+  expect(row.props.favorite).toBe(true);
+  mockFavorites = [];
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findByType(FlatList).props.renderItem({ item: app }).props.favorite).toBe(false);
 });

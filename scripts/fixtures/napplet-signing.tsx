@@ -119,19 +119,22 @@ if(params.get('scenario')==='explore-discovery') {
       required:[],servers:[],desktopPosition:null,lastUsedAt:null,manifest:{pubkey:'b'.repeat(64),kind,id:'c'.repeat(64),sig:'d'.repeat(128),created_at:1,content:'',tags:[['d',title]]}} as import('../../src/services/explore/model').ExploreEntry;
   });
   nappletStore.setState({accountPubkey:'a'.repeat(64),prompt:null,loaded:true});
-  exploreStore.setState({account:'a'.repeat(64),loaded:true,entries:params.has('favorites-drag')?apps.map((app,desktopPosition)=>({...app,desktopPosition})):params.has('saved-apps')?[{...apps[0],desktopPosition:0},{...apps[1],lastUsedAt:10}]:[]});
+  exploreStore.setState({account:'a'.repeat(64),loaded:true,entries:params.has('favorites-drag')?apps.map((app,desktopPosition)=>({...app,desktopPosition})):params.has('saved-apps')?[{...apps[0],desktopPosition:0,lastUsedAt:params.has('list-actions')?20:null},{...apps[1],lastUsedAt:10}]:[]});
   discoveryStore.setState({entries:apps,visibleEntries:apps,loaded:true,loading:false,error:false});
   require('../../src/services/explore/discovery').discoverApplications=async()=>{};
   exploreService.activate=async()=>{};
-  if (params.has('favorites-drag')) {
+  if (params.has('favorites-drag') || params.has('list-actions')) {
     const icons = require('../../src/services/explore/icons') as typeof import('../../src/services/explore/icons');
     icons.loadApplicationIcon = async () => 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64"/></svg>');
   }
-  if (params.has('favorites-drag')) require('expo-router/build/global-state/store').storeRef.current.navigationRef = { current: {} };
-  if (params.has('favorites-drag')) exploreService.move = async (app, index) => {
-    const entries = exploreStore.getState().entries.filter(entry => entry.key !== app.key);
-    if (index !== null) entries.splice(index, 0, app);
-    exploreStore.setState({ entries: entries.map((entry, desktopPosition) => ({ ...entry, desktopPosition })) });
+  if (params.has('favorites-drag') || params.has('list-actions')) require('expo-router/build/global-state/store').storeRef.current.navigationRef = { current: {} };
+  if (params.has('favorites-drag') || params.has('list-actions')) exploreService.move = async (app, index) => {
+    const previous = exploreStore.getState().entries;
+    const ordered = previous.filter(entry => entry.desktopPosition !== null && entry.key !== app.key).sort((a,b) => a.desktopPosition! - b.desktopPosition!);
+    if (index !== null) ordered.splice(index, 0, app);
+    const positions = new Map(ordered.map((entry, position) => [entry.key, position]));
+    const entries = previous.some(entry => entry.key === app.key) ? previous : [...previous, app];
+    exploreStore.setState({ entries: entries.map(entry => ({ ...entry, desktopPosition: positions.get(entry.key) ?? null })) });
     document.title = `move:${app.title}:${index}`;
   };
   const active=require('../../src/stores/active-account.store') as typeof import('../../src/stores/active-account.store');
@@ -153,6 +156,13 @@ if(['explore-detail','explore-permissions','explore-menu'].includes(params.get('
   nappletStore.setState({accountPubkey:'a'.repeat(64),prompt:null,loaded:true});
   exploreStore.setState({account:'a'.repeat(64),loaded:true,entries:[entry],entry:params.get('scenario')==='explore-menu'?entry:null,
     runId:1,containerId:params.get('scenario')==='explore-menu'?'fixture':null,loading:false,error:null});
+  exploreService.move = async (app, position) => {
+    const saved = exploreStore.getState().entries.find(item => item.key === app.key) ?? app;
+    exploreStore.setState({ entries: [{ ...saved, desktopPosition: position }] });
+  };
+  exploreService.forget = async app => {
+    exploreStore.setState(state => ({ entries: state.entries.map(item => item.key === app.key ? { ...item, lastUsedAt: null } : item) }));
+  };
   exploreService.access=async()=>!params.has('needs-consent');
   exploreService.prepare=(_entry,_account,reviewedRequired)=>{
     (window as unknown as {reviewedRequired:readonly string[]|undefined}).reviewedRequired=reviewedRequired;return 1;
@@ -178,6 +188,11 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
   nappletStore.setState({ accountPubkey: 'a'.repeat(64), loaded: true, prompt: null, market: [release],
     installed: params.get('uninstalled') ? [] : [{ ...release, desktopPosition: null, lastUsedAt: null, previousManifest: null }],
   });
+  const explore = require('../../src/services/explore/service') as typeof import('../../src/services/explore/service');
+  explore.exploreStore.setState({ account: 'a'.repeat(64), loaded: true, entries: [] });
+  explore.exploreService.move = async (entry, position) => {
+    explore.exploreStore.setState({ entries: [{ ...entry, desktopPosition: position }] });
+  };
   const { nappletPermissionStore } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
   const { signingRuleKey, replaceSigningRule } = require('../../src/services/signing/model') as typeof import('../../src/services/signing/model');
   const storageKey = `fixture-signing-rules-${params.get('theme') ?? 'light'}`;
@@ -232,6 +247,11 @@ if (menu) {
   };
   nappletStore.setState({ accountPubkey: 'a'.repeat(64), prompt: null,
     running: { release, containerId: 'fixture' }, panel: null, overlayActive: false });
+  const explore = require('../../src/services/explore/service') as typeof import('../../src/services/explore/service');
+  explore.exploreStore.setState({ account: 'a'.repeat(64), loaded: true, entries: [] });
+  explore.exploreService.move = async (entry, position) => {
+    explore.exploreStore.setState({ entries: [{ ...entry, desktopPosition: position }] });
+  };
   const { nappletPermissionStore } = require('../../src/services/napplet/service') as typeof import('../../src/services/napplet/service');
   let rules: import('../../src/services/signing/model').SigningRule[] = [{
     key: 'post', decision: 'allow', duration: 'always', createdAt: 100,
@@ -271,6 +291,7 @@ function Fixture() {
     <WindowFrame><GestureHandlerRootView style={{ flex: 1 }}>
       <LocalRouteParamsContext.Provider value={{ id: 'd'.repeat(64),...(exploreFixtureKey?{key:exploreFixtureKey,runId:'1',permissions:params.get('scenario')==='explore-permissions'?'1':undefined}:{}) }}>
         {RuntimeScreen ? <RuntimeScreen /> : null}
+        {params.has('detail-actions') ? React.createElement(require('../../src/components/common/Toast').Toast) : null}
       </LocalRouteParamsContext.Provider><NappletOverlays />
     </GestureHandlerRootView></WindowFrame>
     </PreventRemoveContext.Provider>

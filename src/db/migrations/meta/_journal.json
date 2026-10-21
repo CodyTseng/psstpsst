@@ -491,6 +491,13 @@
       "when": 1792972800000,
       "tag": "0069_browser-authorizations",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "6",
+      "when": 1793059200000,
+      "tag": "0070_private-favorites",
+      "breakpoints": true
     }
   ]
 }

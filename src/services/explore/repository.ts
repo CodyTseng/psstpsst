@@ -1,20 +1,23 @@
 import { notifyExploreVisit } from './visits';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { markPrivateListDirty } from '@/services/relay/private-list-sync.service';
+import { favoriteReference, parseFavoriteReference, KIND_APP_FAVORITES, FAVORITES_D } from './favorites-protocol';
+import { queueFavoritesPublication } from './favorites';
 import { db } from '@/db/client';
 import { exploreEntries as entries, exploreHistory as history, exploreShortcuts as shortcuts } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { parseManifest } from '@/services/napplet/protocol';
 import { fromNapplet, parseSite, type ExploreEntry } from './model';
 export async function readEntries(account: string, sourceId?: string): Promise<ExploreEntry[]> {
-  const rows = await db.select({ entry: entries, position: shortcuts.position, lastUsed: history.lastUsedAt }).from(entries)
+  const rows = await db.select({ entry: entries, position: shortcuts.position, reference: shortcuts.reference, lastUsed: history.lastUsedAt }).from(entries)
     .leftJoin(shortcuts, and(eq(shortcuts.accountPubkey, entries.accountPubkey), eq(shortcuts.sourceId, entries.sourceId)))
     .leftJoin(history, and(eq(history.accountPubkey, entries.accountPubkey), eq(history.sourceId, entries.sourceId)))
     .where(and(eq(entries.accountPubkey, account), sourceId ? eq(entries.sourceId, sourceId) : undefined)).limit(sourceId ? 1 : 1024);
   const result: ExploreEntry[] = [];
-  for (const { entry, position, lastUsed } of rows) {
+  for (const { entry, position, reference, lastUsed } of rows) {
     try {
       const app: ExploreEntry = entry.manifest ? entry.kind === 'napplet' ? fromNapplet(parseManifest(JSON.parse(entry.manifest))) : parseSite(JSON.parse(entry.manifest))
-        : { key: entry.sourceId, address: entry.address, title: entry.title, kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
+        : entry.kind !== 'website' ? { ...parseFavoriteReference(reference ?? favoriteReference({ address: entry.address, kind: entry.kind as ExploreEntry['kind'] })).entry, title: entry.title } : { key: entry.sourceId, address: entry.address, title: entry.title, kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
       if (app.key !== entry.sourceId)
         continue;
       if (entry.servers && !app.servers.length)
@@ -50,15 +53,27 @@ export async function reorder(account: string, keys: string[], app?: ExploreEntr
       throw new Error('account-unavailable');
     if (app && keys.includes(app.key)) await tx.insert(entries).values({ accountPubkey: account, sourceId: app.key, address: app.address, title: app.title, kind: app.kind, servers: JSON.stringify(app.servers), manifest: app.manifest ? JSON.stringify(app.manifest) : null }).onConflictDoNothing();
     const rows = await tx.select().from(shortcuts).where(eq(shortcuts.accountPubkey, account)).orderBy(asc(shortcuts.position));
-    const previous = new Map(rows.map(r => [r.sourceId, r.position]));
+    const previous = new Map(rows.map(row => [row.sourceId, row.position]));
     const positions = new Map(keys.map((key, index) => [key, index]));
-    for (const row of rows)
-      if (!positions.has(row.sourceId))
-        await tx.delete(shortcuts).where(and(eq(shortcuts.accountPubkey, account), eq(shortcuts.sourceId, row.sourceId)));
-    for (const [sourceId, position] of positions) {
-      if (previous.get(sourceId) === position)
-        continue;
-      await tx.insert(shortcuts).values({ accountPubkey: account, sourceId, position }).onConflictDoUpdate({ target: [shortcuts.accountPubkey, shortcuts.sourceId], set: { position } });
+    const removed = rows.filter(row => !positions.has(row.sourceId)).map(row => row.sourceId);
+    const changed = [...positions].filter(([key, position]) => previous.get(key) !== position);
+    if (!removed.length && !changed.length) return;
+    await markPrivateListDirty(account, FAVORITES_D, tx, KIND_APP_FAVORITES);
+    if (removed.length) await tx.delete(shortcuts).where(and(eq(shortcuts.accountPubkey, account), inArray(shortcuts.sourceId, removed)));
+    for (let offset = 0; offset < changed.length; offset += 64) {
+      await tx.insert(shortcuts).values(changed.slice(offset, offset + 64).map(([sourceId, position]) => ({
+        accountPubkey: account, sourceId, position, ...(app?.key === sourceId ? { reference: favoriteReference(app) } : {}),
+      }))).onConflictDoUpdate({ target: [shortcuts.accountPubkey, shortcuts.sourceId], set: { position: sql`excluded.position` } });
     }
+    await tx.run(sql`DELETE FROM explore_entries WHERE account_pubkey=${account} AND source_id NOT IN (SELECT source_id FROM explore_shortcuts WHERE account_pubkey=${account} UNION SELECT source_id FROM explore_history WHERE account_pubkey=${account})`);
   });
+  queueFavoritesPublication(account);
+}
+
+export { queueFavoritesPublication } from './favorites';
+
+/** Metadata refresh never changes favorite membership, order, or recency. */
+export async function cacheFavoriteMetadata(account: string, app: ExploreEntry) {
+  await db.update(entries).set({ address: app.address, title: app.title, kind: app.kind, servers: JSON.stringify(app.servers), manifest: app.manifest ? JSON.stringify(app.manifest) : null })
+    .where(and(eq(entries.accountPubkey, account), eq(entries.sourceId, app.key)));
 }

@@ -1,3 +1,5 @@
+import { needsFavoriteMetadata, resolveFavoriteMetadata } from './favorite-metadata';
+import { subscribeFavoritesChanged } from './favorites-events';
 import { platform } from '@/platform';
 import { createStore } from 'zustand/vanilla';
 import { matchFilters } from 'nostr-tools';
@@ -9,7 +11,7 @@ import { moveDesktopApp } from '@/services/napplet/desktop-order';
 import { clearBrowserPermissions } from './browser-permission-store';
 import { clearSigningPermissions } from '@/services/signing/repository';
 import { getData, setData } from '@/services/napplet/repository';
-import { readEntries, reorder, visit, forget } from './repository';
+import { readEntries, reorder, visit, forget, queueFavoritesPublication } from './repository';
 import { fromNapplet, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, signedAddress, parseSite, websiteAddress, withVisit, type ExploreEntry } from './model';
 import { ExploreRuntime } from './runtime';
 import { assertNotAborted } from '@/platform/abort';
@@ -25,6 +27,22 @@ let launchLife = new AbortController();
 let reviewedAccess: {runId:number;required:readonly string[]}|undefined;
 export { SUPPORTED_NAPP_DOMAINS } from './model';
 let writes: Promise<unknown> = Promise.resolve();
+let favoritesLife = new AbortController();
+const metadataJobs = new Set<string>();
+function hydrateFavorites(account: string, entries: ExploreEntry[]) {
+  const signal = favoritesLife.signal;
+  const unresolved = entries.filter(entry => needsFavoriteMetadata(entry) && (entry.desktopPosition !== null || entry.lastUsedAt !== null));
+  let cursor = 0;
+  const worker = async () => {
+    while (!signal.aborted && cursor < unresolved.length) {
+      const entry = unresolved[cursor++];
+      if (metadataJobs.has(entry.key)) continue;
+      metadataJobs.add(entry.key);
+      try { await resolveFavoriteMetadata(account, entry, signal); } catch { /* Keep the saved reference available for retry. */ }
+    }
+  };
+  setTimeout(() => { if (!signal.aborted) for (let i = 0; i < Math.min(4, unresolved.length); i++) void worker(); }, 0);
+}
 const check = (account: string, generation: number) => { if (exploreStore.getState().account !== account || epoch !== generation)
   throw new Error('session-closed'); };
 export const exploreService = {
@@ -44,8 +62,10 @@ export const exploreService = {
     const entries = await readEntries(account);
     check(account, generation);
     exploreStore.setState({ entries, loaded: true });
+    queueFavoritesPublication(account);
+    hydrateFavorites(account, entries);
   },
-  deactivate() { for(const reader of readers) reader.destroy();readers.clear();epoch++; this.stop(); exploreStore.setState({ account: null, loaded: false, entries: [] }); },
+  deactivate() { favoritesLife.abort(); favoritesLife = new AbortController(); metadataJobs.clear(); for(const reader of readers) reader.destroy();readers.clear();epoch++; this.stop(); exploreStore.setState({ account: null, loaded: false, entries: [] }); },
   async resolve(value: string): Promise<ExploreEntry> {
     const { account } = exploreStore.getState();
     const generation = epoch;
@@ -139,6 +159,13 @@ export const exploreService = {
     writes = work.catch(() => { });
     return work;
   },
+  async resolveFavorite(app: ExploreEntry, account: string) {
+    const generation = epoch;
+    check(account, generation);
+    const resolved = await resolveFavoriteMetadata(account, app, favoritesLife.signal);
+    check(account, generation);
+    return resolved;
+  },
   async access(app: ExploreEntry, account: string) {
     const generation=epoch;
     check(account,generation);
@@ -160,7 +187,8 @@ export const exploreService = {
     return runId;
   },
   async start(runId: number) {
-    const { account, entry } = exploreStore.getState();
+    const { account } = exploreStore.getState();
+    let { entry } = exploreStore.getState();
     if (runtime) return;
     const generation = epoch;
     if (!account || !entry || runId !== exploreStore.getState().runId)
@@ -168,6 +196,11 @@ export const exploreService = {
     const signal=launchLife.signal;
     const current=()=>{check(account,generation);assertNotAborted(signal);if(runId!==exploreStore.getState().runId)throw new Error('session-closed');};
     try {
+      if (needsFavoriteMetadata(entry)) {
+        entry = await resolveFavoriteMetadata(account, entry, signal);
+        current();
+        exploreStore.setState({ entry });
+      }
       if (entry.kind === 'napp') {
         if (entry.required.some(d => !SUPPORTED_NAPP_DOMAINS.includes(d)))
           throw new Error('napplets.unsupported');
@@ -339,3 +372,24 @@ registerNappletVisit((account, release) => {
 });
 
 registerNappletTheme(() => { runtime?.updateTheme(); for (const parent of parents) parent.runtime.updateTheme(); });
+
+subscribeFavoritesChanged((account, key) => {
+  const generation = epoch;
+  if (exploreStore.getState().account !== account) return;
+  void (async () => {
+    await writes;
+    if (key) {
+      const [app] = await readEntries(account, key);
+      check(account, generation);
+      if (app) exploreStore.setState(state => ({ entries: state.entries.map(current => current.key === key
+        ? { ...app, desktopPosition: current.desktopPosition, lastUsedAt: current.lastUsedAt } : current) }));
+      return;
+    }
+    const revision = desktopRevision;
+    const entries = await readEntries(account);
+    check(account, generation);
+    if (revision !== desktopRevision) return;
+    exploreStore.setState({ entries });
+    hydrateFavorites(account, entries);
+  })().catch(() => {});
+});

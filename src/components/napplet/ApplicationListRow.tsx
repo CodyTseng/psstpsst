@@ -19,10 +19,10 @@ export const ApplicationListRow = memo(function ApplicationListRow({ application
   return <ListRow {...interactions} variant="list" title={application.title} subtitleMultiline
     iconWidth={APPLICATION_ICON_SIZE} iconAlign="start" verticalPadding="md"
     subtitleContent={description || application.publisher ? <View style={{ gap: spacing.xs }}>
-      {description ? <AppText variant="caption" tone="muted" numberOfLines={1}>{description}</AppText> : null}
+      {description ? <AppText variant="caption" tone="muted" numberOfLines={1} selectable={false} style={{ userSelect: 'none' }}>{description}</AppText> : null}
       {application.publisher ? <View testID="discovery-publisher" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
         <Avatar pubkey={application.publisher} picture={profile?.picture} size={spacing.lg}/>
-        <AppText variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</AppText>
+        <AppText variant="caption" tone="muted" numberOfLines={1} selectable={false} style={{ flexShrink: 1, userSelect: 'none' }}>{name}</AppText>
       </View> : null}
     </View> : undefined}
     icon={<RunningApplicationIcon sourceId={application.key} release={application} size={APPLICATION_ICON_SIZE}/>}

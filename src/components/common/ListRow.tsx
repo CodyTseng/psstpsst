@@ -184,8 +184,9 @@ export function ListRow({
   const rowHeight = compactInline ? spacing.xl : isInline ? uiDensity.listRowCompactHeight : ROW_HEIGHT;
   const rowRadius = isCard || isPlain || isInline ? radius.lg : 0;
   const titleText = <AppText
+    selectable={onLongPress ? false : undefined}
     variant={hasBelowValue || isInline ? 'caption' : 'subtitle'} weight="regular" numberOfLines={1}
-    style={{ color: hasBelowValue ? c.textMuted : titleColor, ...(titleTrailing ? { flexShrink: 1, minWidth: 0 } : {}) }}>
+    style={{ color: hasBelowValue ? c.textMuted : titleColor, userSelect: onLongPress ? 'none' : undefined, ...(titleTrailing ? { flexShrink: 1, minWidth: 0 } : {}) }}>
     {title}
   </AppText>;
 

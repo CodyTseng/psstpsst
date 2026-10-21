@@ -17,7 +17,7 @@ export function ApplicationDetailsPage({application,error,access,unsupported=fal
   access:{loaded:boolean;approved:boolean};unsupported?:boolean;
   onPublisher():void;onOpen():void;
   discussion?:{entry:ExploreEntry;account:string};
-  actions?:{entry:ExploreEntry;onShare?:()=>void};
+  actions?:{entry:ExploreEntry;account?:string|null;onShare?:()=>void};
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
   const {scrolled,scrollProps}=useScrolled({resetKey:discussion?`${discussion.account}:${discussion.entry.key}`:undefined});
