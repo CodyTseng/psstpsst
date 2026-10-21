@@ -29,7 +29,9 @@ events more than ten minutes in the future are ignored.
 
 Discussions use isolated account-bound relay pools. Reads, live subscriptions and
 publication share the deduplicated union of the publisher's NIP-65 read relays
-and the Explore discovery relay set. Unmarked NIP-65 relay entries also count as
+and the general metadata-discovery relays plus `wss://relay.napplet.soy/`.
+These discussion routes are independent of the dedicated application catalogue
+sources, which may reject comment events. Unmarked NIP-65 relay entries also count as
 read relays; write-only entries do not. Websites without a publisher and
 publishers without configured read relays use the discovery set alone. Reads and
 subscriptions use a root-tag filter and kind 1111.

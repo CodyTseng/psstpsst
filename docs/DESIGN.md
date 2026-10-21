@@ -877,7 +877,8 @@ the newly selected language.
 
 Explore switches between Favorites and Discover with the shared local mode control.
 Discover browses verified public applications without recording visits or adding
-shortcuts until the user chooses an action. Discovery rows show the publisher avatar and name
+shortcuts until the user chooses an action. Scrolling reveals more results in
+newest-first order, with quiet loading feedback at the list end. Discovery rows show the publisher avatar and name
 below the application name, with a quiet format label and no inline add action. Format labels use stable purple
 for napplets, blue for napps, and teal for nsites, independent of the selected accent
 and status colours. Both modes open the shared application

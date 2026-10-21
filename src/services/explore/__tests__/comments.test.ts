@@ -1,11 +1,10 @@
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event, type EventTemplate } from 'nostr-tools';
-import { ApplicationCommentsSession } from '../comments';
+import { ApplicationCommentsSession, APPLICATION_COMMENT_RELAYS } from '../comments';
 import { commentTemplate, type CommentTarget } from '../comments-protocol';
 import { NappletNetwork } from '@/services/napplet/network';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { getActiveAccountPubkey } from '@/services/account/account.service';
 import { nappletLifecycle } from '@/services/napplet/lifecycle';
-import { EXPLORE_RELAYS } from '../discovery';
 
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 jest.mock('@/services/account/account-receive-guard', () => ({ canReceiveForAccount: jest.fn() }));
@@ -60,7 +59,7 @@ it('signs with the selected account and adds its review only after relay acknowl
   expect(event.pubkey).toBe(account);
   expect(routes).toHaveBeenCalledTimes(1);
   expect(routes).toHaveBeenCalledWith([publisher], 'read', true, expect.anything());
-  const relays = [...new Set(['wss://relay.example/', ...EXPLORE_RELAYS])];
+  const relays = [...new Set(['wss://relay.example/', ...APPLICATION_COMMENT_RELAYS])];
   expect(query.mock.calls[0][0]).toEqual(relays);
   expect(subscribe.mock.calls[0][0].relays).toEqual(relays);
   expect(publish.mock.calls[0][1]).toEqual(relays);
@@ -68,10 +67,10 @@ it('signs with the selected account and adds its review only after relay acknowl
 });
 
 it('deduplicates publisher read relays against discovery relays for reads and publication', async () => {
-  routes.mockResolvedValue([EXPLORE_RELAYS[0], 'wss://publisher.example/']);
+  routes.mockResolvedValue([APPLICATION_COMMENT_RELAYS[0], 'wss://publisher.example/']);
   session.start(); await session.load();
   await session.post('Review');
-  const relays = [...new Set([EXPLORE_RELAYS[0], 'wss://publisher.example/', ...EXPLORE_RELAYS])];
+  const relays = [...new Set([APPLICATION_COMMENT_RELAYS[0], 'wss://publisher.example/', ...APPLICATION_COMMENT_RELAYS])];
   expect(query.mock.calls[0][0]).toEqual(relays);
   expect(publish.mock.calls[0][1]).toEqual(relays);
   expect(subscribe).toHaveBeenCalledTimes(1);
@@ -81,8 +80,8 @@ it('uses discovery relays when the publisher has no read relays', async () => {
   routes.mockRejectedValue(new Error('recipient-relays-unavailable'));
   session.start(); await session.load();
   await session.post('Review');
-  expect(query.mock.calls[0][0]).toEqual(EXPLORE_RELAYS);
-  expect(publish.mock.calls[0][1]).toEqual(EXPLORE_RELAYS);
+  expect(query.mock.calls[0][0]).toEqual(APPLICATION_COMMENT_RELAYS);
+  expect(publish.mock.calls[0][1]).toEqual(APPLICATION_COMMENT_RELAYS);
   expect(session.store.getState().error).toBe(false);
 });
 
@@ -91,8 +90,8 @@ it('uses discovery relays for websites without inventing a publisher', async () 
   session.start(); await session.load();
   await session.post('Review');
   expect(routes).not.toHaveBeenCalled();
-  expect(query.mock.calls[0][0]).toEqual(EXPLORE_RELAYS);
-  expect(publish.mock.calls[0][1]).toEqual(EXPLORE_RELAYS);
+  expect(query.mock.calls[0][0]).toEqual(APPLICATION_COMMENT_RELAYS);
+  expect(publish.mock.calls[0][1]).toEqual(APPLICATION_COMMENT_RELAYS);
 });
 
 it('reuses the signed event on publication failure rather than publishing a duplicate review', async () => {

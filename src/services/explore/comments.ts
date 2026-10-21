@@ -5,11 +5,14 @@ import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { getActiveAccountPubkey } from '@/services/account/account.service';
 import { registerNappletLifecycle } from '@/services/napplet/lifecycle';
 import { NappletNetwork } from '@/services/napplet/network';
-import { EXPLORE_RELAYS } from './discovery';
+import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
+import { MARKET_RELAYS } from '@/services/napplet/protocol';
 import { CommentIndex, MAX_THREAD_COMMENTS, type CommentRow } from './comments-index';
 import { commentFilter, commentTemplate, isCommentCandidate, parseApplicationComment, type CommentTarget } from './comments-protocol';
 
 const PAGE_SIZE = 100;
+// Public discussions need relays that accept comments, independently of catalogue admission.
+export const APPLICATION_COMMENT_RELAYS = [...new Set([...DISCOVERY_RELAYS, MARKET_RELAYS[0]])];
 const active = new Set<ApplicationCommentsSession>();
 const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 export type CommentsState = { rows: CommentRow[]; loading: boolean; loaded: boolean; error: boolean; hasMore: boolean };
@@ -64,7 +67,7 @@ export class ApplicationCommentsSession {
           throw error;
         }) : [];
       this.check(network, signal);
-      const relays = [...new Set([...inbox, ...EXPLORE_RELAYS])];
+      const relays = [...new Set([...inbox, ...APPLICATION_COMMENT_RELAYS])];
       network.subscribe({ relays, filters: [{ ...commentFilter(this.target, PAGE_SIZE), since: Math.floor(Date.now() / 1000) }],
         abort: signal, onEvent: event => this.enqueue(event) });
       return relays;

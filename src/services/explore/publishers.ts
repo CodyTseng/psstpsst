@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { NappletNetwork } from '@/services/napplet/network';
-import { discoveryEntries, discoveryStore, EXPLORE_KINDS, EXPLORE_RELAYS } from './discovery';
+import { discoveryEntries, discoveryStore } from './discovery';
+import { queryApplicationCatalogue } from './catalogue-relays';
 import type { ExploreEntry } from './model';
 import { isPublicKey as isPublisher } from './lists';
 export { isPublisher };
@@ -25,9 +26,7 @@ function createCatalogue(pubkey: string) {
         let network: NappletNetwork | undefined;
         try {
           network = new NappletNetwork(account);
-          const result = await network.query(EXPLORE_RELAYS,
-            EXPLORE_KINDS.map(kind => ({ kinds: [kind], authors: [pubkey], limit: 60 })));
-          if (result.error) throw new Error(result.error);
+          const result = await queryApplicationCatalogue(network, pubkey);
           // Relay filters are a request; verify both authorship and signatures locally.
           const entries = await discoveryEntries(result.events.filter(event => event.pubkey === pubkey));
           store.setState({ entries, loaded: true, error: result.incomplete });

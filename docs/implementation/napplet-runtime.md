@@ -348,6 +348,27 @@ The Explore start page reuses the responsive icon grid and menu interactions for
 napplets, napps, nsites and websites. Its address entry accepts canonical Nostr
 addresses and HTTP(S) URLs without introducing a browser navigation toolbar.
 Legacy napplet routes remain valid for shared links and capability management.
+Discovery and publisher catalogues query napp kind `35130` only on
+`wss://relay.nostrapps.com/`, napplet kinds `5129`/`15129`/`35129` only on
+`wss://relay.napplet.soy/`, and nsite kinds `15128`/`35128` only on
+`wss://relay.nsite.lol/` and `wss://relay.nosto.re/`. Format queries run concurrently;
+failed sources mark the result incomplete without discarding other formats.
+Each format uses one filter containing its supported kinds with `limit: 100`.
+Discovery delegates raw event pagination to `src/services/relay/relay-timeline.ts`.
+It accepts `{ urls, filter }` subrequests and an injected query callback, retaining
+an independent inclusive `until` cursor and verified buffer per relay/query pair.
+Buffer heads merge by descending event time with event-ID tie breaking and
+adjacent-ID deduplication. Cancellation rolls back uncommitted cursor progress.
+Discovery parses the selected events, deduplicates application coordinates, and
+reveals 20 additional applications per scroll page. A depleted source is
+refilled before exposing older buffered results from other sources. Duplicate
+application coordinates retain the first (newest) release; consumed pages are
+replaced instead of re-sorting the accumulated list. Refresh resets the cursors
+and visible window. Failed reads retain displayed content and stop automatic
+loading until refresh. A full, duplicate-only timestamp boundary also stops with
+an error rather than skipping unseen same-second events, since fixed-size NIP-01
+filters cannot exclude already-seen IDs.
+Explicit application links retain their relay hints and author routing.
 
 `explore_entries` caches verified manifests and visited URLs;
 `explore_shortcuts` owns explicit order; `explore_history` keeps one latest visit

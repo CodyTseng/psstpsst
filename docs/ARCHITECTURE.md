@@ -192,6 +192,12 @@ results. Services do not open ad hoc relay connections.
 Local relay-settings readers sit below routing and publication and never import
 either layer.
 
+`RelayTimeline` owns reusable in-memory event pagination. Each relay/query pair
+has an independent cursor and buffer; ordered merging and event-ID deduplication
+happen before results reach consumers. Callers supply the verified transport and
+own domain parsing, display windows and cache policy. Durable message-history
+coverage remains in the separate account/relay sync cursor store.
+
 Relay addresses share `src/lib/nostr/relay-url.ts` normalization at input,
 metadata, persistence-read, and transport boundaries. Equivalent addresses use
 one identity for routing, connection reuse, delivery tracking, and sync cursors;
@@ -691,11 +697,13 @@ remain platform-owned. Browser exports stage bounded files through asynchronous
 ports before the system destination picker. Website notifications have a separate
 native delivery path and never modify messaging badges.
 
-Discovery queries a bounded set of public manifests from default relays, verifies
-and deduplicates them in a temporary catalogue, and shares the existing detail
-presentation. Browsing never records a visit or writes to the local relay; adding
+Discovery queries public manifests in bounded pages only from dedicated relays for each
+format, without falling back to general-purpose relays. Results are verified
+and deduplicated in a temporary catalogue, and share the existing detail
+presentation. Independent relay cursors and buffered merging preserve newest-first
+ordering as the visible list grows incrementally. Browsing never records a visit or writes to the local relay; adding
 a favorite persists its metadata and shortcut independently of history.
-Publisher catalogues query the same supported manifest kinds with an exact author
+Publisher catalogues use the same format-specific sources with an exact author
 filter and verify authorship locally. Their bounded, temporary results share the
 application detail flow without changing saved applications or discovery results.
 Application sharing sends only the canonical `nostr:` application reference (or

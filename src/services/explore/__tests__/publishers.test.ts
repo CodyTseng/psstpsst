@@ -1,6 +1,6 @@
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
 import { NappletNetwork } from '@/services/napplet/network';
-import { discoveryEntries, discoveryStore, EXPLORE_KINDS, EXPLORE_RELAYS } from '../discovery';
+import { discoveryEntries, discoveryStore } from '../discovery';
 import { publisherCatalogue } from '../publishers';
 
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
@@ -13,7 +13,7 @@ const manifest = (created_at = 1, signer = secret) => finalizeEvent({ kind: 3513
 
 beforeEach(() => {
   secret = generateSecretKey(); publisher = getPublicKey(secret);
-  query.mockReset(); destroy.mockClear();
+  query.mockReset().mockResolvedValue({ events: [], incomplete: false }); destroy.mockClear();
   jest.mocked(NappletNetwork).mockClear().mockImplementation(() => ({ query, destroy }) as unknown as NappletNetwork);
   discoveryStore.setState({ entries: [] });
 });
@@ -23,7 +23,11 @@ it('queries all supported manifest kinds with an exact publisher filter and veri
   query.mockResolvedValue({ events: [older, latest, unrelated, { ...latest, content: 'forged' }], incomplete: false });
   const catalogue = publisherCatalogue(publisher);
   await catalogue.load('account');
-  expect(query).toHaveBeenCalledWith(EXPLORE_RELAYS, EXPLORE_KINDS.map(kind => ({ kinds: [kind], authors: [publisher], limit: 60 })));
+  expect(query.mock.calls).toEqual([
+    [['wss://relay.nostrapps.com/'], [{ kinds: [35130], authors: [publisher], limit: 100 }]],
+    [['wss://relay.napplet.soy/'], [{ kinds: [5129, 15129, 35129], authors: [publisher], limit: 100 }]],
+    [['wss://relay.nsite.lol/', 'wss://relay.nosto.re/'], [{ kinds: [15128, 35128], authors: [publisher], limit: 100 }]],
+  ]);
   expect(catalogue.store.getState()).toMatchObject({ loaded: true, loading: false, error: false });
   expect(catalogue.store.getState().entries.map(entry => entry.manifest?.id)).toEqual([latest.id]);
   expect(discoveryStore.getState().entries).toEqual([]);
@@ -40,7 +44,7 @@ it('shares in-flight queries and caches results when returning from application 
   finish({ events: [manifest()], incomplete: false });
   await pending;
   await catalogue.load('account');
-  expect(query).toHaveBeenCalledTimes(1);
+  expect(query).toHaveBeenCalledTimes(3);
 });
 
 it('retains known published applications when refreshing fails', async () => {
@@ -56,8 +60,9 @@ it('retains known published applications when refreshing fails', async () => {
 it('keeps separate publishers independent when their requests finish out of order', async () => {
   const otherSecret = generateSecretKey(), other = getPublicKey(otherSecret);
   let finish!: (result: { events: ReturnType<typeof manifest>[]; incomplete: boolean }) => void;
-  query.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }))
-    .mockResolvedValueOnce({ events: [manifest(2, otherSecret)], incomplete: false });
+  query.mockImplementation((_relays, filters) => Promise.resolve({
+    events: filters[0].kinds[0] === 35130 ? [manifest(2, otherSecret)] : [], incomplete: false,
+  })).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
   const first = publisherCatalogue(publisher), second = publisherCatalogue(other);
   const pending = first.load('account');
   await second.load('account');
