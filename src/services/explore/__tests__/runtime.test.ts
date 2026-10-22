@@ -108,13 +108,33 @@ it('does not return a signature revoked while the signer was working', async () 
   expect(response.reply.error).toBe('permission-revoked');
   expect(response.reply.result).toBeUndefined();
 });
-it('requires consent before returning the account public key', async () => {
+it.each(['getPublicKey', 'signEvent'])('returns a denied %s request without logging a warning', async method => {
   confirm.mockResolvedValue(false);
-  message('https://site.example', 'one', 'getPublicKey');
+  message('https://site.example', 'one', method);
   await flush();
   expect(confirm).toHaveBeenCalled();
   expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.error).toBe('permission-denied');
-  expect(warningLog).toHaveBeenCalledWith('[explore]', 'Site', 'getPublicKey', { error: 'permission-denied' });
+  expect(warningLog).not.toHaveBeenCalled();
+  expect((NappletNetwork as jest.Mock).mock.results.at(-1)!.value.sign).not.toHaveBeenCalled();
+});
+
+it('still warns when an approved signing operation fails', async () => {
+  (NappletNetwork as jest.Mock).mock.results.at(-1)!.value.sign.mockRejectedValueOnce(new Error('signer-unavailable'));
+  message('https://site.example', 'one');
+  await flush();
+  expect(warningLog).toHaveBeenCalledWith('[explore]', 'Site', 'signEvent', { error: 'signer-unavailable' });
+  expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.error).toBe('signer-unavailable');
+});
+
+it('returns a denied browser window request without logging a warning', async () => {
+  confirm.mockResolvedValue(false);
+  receive('container', JSON.stringify({ type: 'explore.browser', origin: 'https://site.example', document: 'one',
+    browser: { action: 'window', id: 'denied-window', url: 'https://other.example/' } }));
+  await flush();
+  expect(confirm).toHaveBeenCalled();
+  expect(warningLog).not.toHaveBeenCalled();
+  expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply)
+    .toMatchObject({ type: 'browser.result', id: 'denied-window', result: false });
 });
 it('allows a napp without identity requirements to request account access and signing', async () => {
   await runtime.stop();

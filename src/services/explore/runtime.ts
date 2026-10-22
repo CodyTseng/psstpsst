@@ -25,6 +25,7 @@ import { NappSync } from './sync';
 import { NappDevice } from './device';
 import { LIST_KINDS, SET_KINDS } from './lists';
 import { relayHealth } from './relay-health';
+const isPermissionDenied = (error: unknown) => error instanceof Error && error.message === 'permission-denied';
 export class ExploreRuntime {
   private lifetime = new AbortController();
   private documentLife = new AbortController();
@@ -150,7 +151,7 @@ export class ExploreRuntime {
             if (request.action === 'window' || request.action === 'external') {
               await this.browserActions().handle(request.action === 'window' ? 'open' : 'external', [request.url]); result = true;
             } else { const decision = await this.browserActions().authorize(request); result = decision.allowed; permissionExpiresAt = decision.expiresAt; }
-          } catch (error) { this.log('warn', 'browser', { error: String(error) }); }
+          } catch (error) { if (!isPermissionDenied(error)) this.log('warn', 'browser', { error: String(error) }); }
           if (this.document === document) await this.reply(document, { type: 'browser.result', id: request.id, result, permissionExpiresAt });
         })().catch(() => {});
         return;
@@ -227,7 +228,7 @@ export class ExploreRuntime {
       await this.reply(document, { id, nonce, result });
     }
     catch (error) {
-      if (!signal.aborted) this.log('warn', method, { error: error instanceof Error ? error.message.slice(0, 240) : 'request-failed' });
+      if (!signal.aborted && !isPermissionDenied(error)) this.log('warn', method, { error: error instanceof Error ? error.message.slice(0, 240) : 'request-failed' });
       if (id && !signal.aborted)
         await this.reply(document, { id, nonce, error: error instanceof Error ? error.message : 'request-failed' });
     }
