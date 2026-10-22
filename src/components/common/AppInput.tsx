@@ -17,8 +17,6 @@ type Props = TextInputProps & {
   trailingAccessory?: ReactNode;
   /** Compact control rendered inside the input at its logical end. */
   inputTrailingAccessory?: ReactNode;
-  /** Context shown above the editable area inside a multiline input. */
-  inputHeaderAccessory?: ReactNode;
 };
 
 export const AppInput = forwardRef<TextInput, Props>(function AppInput(
@@ -29,7 +27,6 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
     error,
     trailingAccessory,
     inputTrailingAccessory,
-    inputHeaderAccessory,
     style,
     onFocus,
     onBlur,
@@ -73,79 +70,76 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
         minHeight: multiline ? uiDensity.multilineInputMinHeight : undefined,
         paddingVertical: multiline ? 12 : 0,
         justifyContent: multiline ? 'flex-start' : 'center',
-        flexDirection: 'column',
+        flexDirection: 'row',
+        alignItems: multiline ? 'stretch' : 'center',
       }}
     >
-      {multiline && inputHeaderAccessory ? <View style={{ marginBottom: spacing.md }}>{inputHeaderAccessory}</View> : null}
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: multiline ? 'stretch' : 'center',
-        minHeight: multiline && inputHeaderAccessory ? uiDensity.multilineInputMinHeight - spacing.xl : undefined }}>
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
-          {showTruncatedPlaceholder ? (
-            <View
-              pointerEvents="none"
-              importantForAccessibility="no-hide-descendants"
-              style={{
-                position: 'absolute',
-                insetBlock: 0,
-                insetInline: 0,
-                justifyContent: 'center',
-              }}
+      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
+        {showTruncatedPlaceholder ? (
+          <View
+            pointerEvents="none"
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              position: 'absolute',
+              insetBlock: 0,
+              insetInline: 0,
+              justifyContent: 'center',
+            }}
+          >
+            <AppText
+              variant="body"
+              tone="muted"
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={textAlign == null ? undefined : { textAlign }}
             >
-              <AppText
-                variant="body"
-                tone="muted"
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={textAlign == null ? undefined : { textAlign }}
-              >
-                {placeholder}
-              </AppText>
-            </View>
-          ) : null}
-          <TextInput
-            ref={inputRef}
-            placeholderTextColor={c.textMuted}
-            {...rest}
-            value={value}
-            defaultValue={defaultValue}
-            placeholder={multiline ? placeholder : undefined}
-            multiline={multiline}
-            numberOfLines={multiline ? rest.numberOfLines : 1}
-            accessibilityLabel={accessibilityLabel ?? label ?? placeholder}
-            onChangeText={(nextValue) => {
-              setUncontrolledValue(nextValue);
-              onChangeText?.(nextValue);
-            }}
-            onFocus={(e) => {
-              setFocused(true);
-              onFocus?.(e);
-            }}
-            onBlur={(e) => {
-              setFocused(false);
-              onBlur?.(e);
-            }}
-            style={[
-              {
-                color: c.text,
-                fontSize: typography.body.fontSize,
-                lineHeight: typography.body.fontFamily ? typography.body.lineHeight : undefined,
-                fontFamily: typography.body.fontFamily,
-                flex: 1,
-                paddingVertical: 0,
-                // The shell owns the inset; native padding would offset the caret
-                // from the separately rendered single-line placeholder.
-                paddingStart: 0,
-                paddingEnd: 0,
-                textAlignVertical: multiline ? 'top' : 'center',
-              },
-              style,
-            ]}
-          />
-        </View>
-        {inputTrailingAccessory ? (
-          <View style={{ flexShrink: 0 }}>{inputTrailingAccessory}</View>
+              {placeholder}
+            </AppText>
+          </View>
         ) : null}
+        <TextInput
+          ref={inputRef}
+          placeholderTextColor={c.textMuted}
+          {...rest}
+          value={value}
+          defaultValue={defaultValue}
+          placeholder={multiline ? placeholder : undefined}
+          multiline={multiline}
+          numberOfLines={multiline ? rest.numberOfLines : 1}
+          accessibilityLabel={accessibilityLabel ?? label ?? placeholder}
+          onChangeText={(nextValue) => {
+            setUncontrolledValue(nextValue);
+            onChangeText?.(nextValue);
+          }}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          style={[
+            {
+              color: c.text,
+              fontSize: typography.body.fontSize,
+              lineHeight: typography.body.fontFamily ? typography.body.lineHeight : undefined,
+              fontFamily: typography.body.fontFamily,
+              flex: 1,
+              paddingVertical: 0,
+              // The shell owns the inset; native padding would offset the caret
+              // from the separately rendered single-line placeholder.
+              paddingStart: 0,
+              paddingEnd: 0,
+              textAlignVertical: multiline ? 'top' : 'center',
+            },
+            style,
+          ]}
+        />
       </View>
+      {inputTrailingAccessory ? (
+        <View style={{ flexShrink: 0 }}>{inputTrailingAccessory}</View>
+      ) : null}
     </Pressable>
   );
 

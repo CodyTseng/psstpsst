@@ -20,8 +20,6 @@ type Props = {
   onPress?: () => void;
   /** Renders a cancel button inside the card (composer); omitted in bubbles. */
   onCancel?: () => void;
-  cancelAccessibilityLabel?: string;
-  cancelDisabled?: boolean;
   /** Bare look (composer): no fill, radius, or padding — just the accent
    * strip next to the text. The default is the filled rounded card. */
   bare?: boolean;
@@ -46,8 +44,6 @@ export function QuotedReply({
   tone = 'neutral',
   onPress,
   onCancel,
-  cancelAccessibilityLabel,
-  cancelDisabled,
   bare,
   style,
 }: Props) {
@@ -115,8 +111,6 @@ export function QuotedReply({
           variant="plain"
           size={spacing['2xl']}
           hitSlop={10}
-          accessibilityLabel={cancelAccessibilityLabel}
-          disabled={cancelDisabled}
           onPress={(event) => {
             event.stopPropagation();
             onCancel();

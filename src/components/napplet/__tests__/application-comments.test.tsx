@@ -131,7 +131,6 @@ it.each(['light', 'dark'] as const)('opens and closes nested reply composers in 
   expect(inline.parent!.findAllByType(AppText).some(node => node.props.children === 'Nested reply')).toBe(true);
   expect(inline.findByType(AppInput).props.autoFocus).toBe(true);
   expect(inline.findAllByType(AppText).some(node => String(node.props.children).includes('comments.public_as'))).toBe(false);
-  expect(inline.findByType(AppInput).props.inputHeaderAccessory).toBeUndefined();
   const cancel = inline.findAllByType(AppButton).find(node => node.props.label === 'common.cancel')!;
   const post = inline.findAllByType(AppButton).find(node => node.props.label === 'comments.post')!;
   expect(cancel.props.variant).toBe('secondary');

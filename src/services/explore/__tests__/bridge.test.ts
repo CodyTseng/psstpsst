@@ -1,4 +1,4 @@
-import { exploreBridge } from '../bridge';
+import { exploreBridge } from '@/lib/napp/bridge';
 
 // Protocol tests use an idle document; browser behavior is covered by browser tests.
 const documentBeforeReady = { readyState: 'loading', execCommand: () => false, addEventListener: () => {} };
