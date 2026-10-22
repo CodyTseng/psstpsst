@@ -5,6 +5,7 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort } from '../ports/napplet';
 import { exploreBridge } from '@/lib/napp/bridge';
 import { applicationTasksAdapter } from './application-tasks';
+import { pageAppearance, type PageAppearance } from '@/lib/page-appearance';
 
 type NativeModule = {
   isAvailable(): boolean;
@@ -18,7 +19,7 @@ type NativeModule = {
   closeAsync(id: string): Promise<void>;
   goBackAsync(id: string): Promise<boolean>;
 };
-export type NativeSurface = { html: string; page?: string; ready: boolean };
+export type NativeSurface = { html: string; page?: string; ready: boolean; appearance?: PageAppearance; document?: string };
 const surfaces = new Map<string, NativeSurface>();
 const updates = new Set<() => void>();
 const messages = new Set<(id: string, raw: string) => void>();
@@ -34,8 +35,25 @@ export const nativeSurface = {
   message: (id: string, raw: string) => {
     const surface = surfaces.get(id);
     if (!surface) return;
-    let exploreReady=false;
-    if(surface.page) {try{const envelope=JSON.parse(raw);exploreReady=envelope.type==='explore.request' && JSON.parse(envelope.raw).method==='ready';}catch{/* Ignore malformed page messages. */}}
+    let exploreReady = false;
+    if (surface.page || raw.startsWith('{"type":"psst.appearance"')) try {
+      const envelope = JSON.parse(raw);
+      if (surface.page && envelope.type === 'explore.navigation') {
+        surfaces.set(id, { ...surface, appearance: undefined, document: envelope.document });
+        updates.forEach(fn => fn());
+      }
+      const hint = surface.page && envelope.type === 'explore.request' ? JSON.parse(envelope.raw) : envelope;
+      exploreReady = surface.page !== undefined && envelope.type === 'explore.request' && hint.method === 'ready';
+      if (hint.type === 'psst.appearance') {
+        if (surface.page && surface.document && envelope.document !== surface.document) return;
+        const appearance = pageAppearance(hint.color);
+        if (surface.appearance?.background !== appearance?.background) {
+          surfaces.set(id, { ...surface, appearance });
+          updates.forEach(fn => fn());
+        }
+        return;
+      }
+    } catch { /* Presentation hints never affect application protocol handling. */ }
     if (raw === NAPPLET_FRAME_READY_MESSAGE || exploreReady) {
       if (!surface.ready) {
         surfaces.set(id, { ...surface, ready: true });

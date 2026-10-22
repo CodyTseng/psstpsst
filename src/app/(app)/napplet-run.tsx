@@ -39,7 +39,7 @@ export default function NappletRunScreen() {
     if (focused && ownsRun && !running && !launching && !panel && !launch?.error) router.back();
   }, [running, launching, launch?.error, panel, focused, ownsRun]);
   const release=running?.release??launch?.release??panel?.release;
-  return <ApplicationRuntimePage title={release?.title} application={release}
+  return <ApplicationRuntimePage containerId={ownsRun ? running?.containerId : undefined} active={focused} title={release?.title} application={release}
     hidden={sharing} menuEnabled={!!running} onClose={close} onMore={()=>nappletService.openPanel('about')}
     loading={ownsRun&&launch?.showLoading&&!launch.error} error={ownsRun?launch?.error:undefined}
     onRetry={()=>nappletService.retryOpen(ownerRunId)}

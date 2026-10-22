@@ -5,5 +5,10 @@
       android:name="chat.psstpsst.app.napplet.NappletTestActivity"
       android:exported="false"
       android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+    <activity
+      android:name="chat.psstpsst.app.napplet.ApplicationBackTestActivity"
+      android:exported="false"
+      android:enableOnBackInvokedCallback="true"
+      android:theme="@android:style/Theme.Material.Light.NoActionBar" />
   </application>
 </manifest>

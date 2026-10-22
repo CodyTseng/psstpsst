@@ -1,4 +1,5 @@
 import { installBrowserCompat } from './browser-compat';
+import { observePageAppearance } from './page-appearance';
 // This module is bundled as browser source before the host runtime compiles it.
 export function install(options: {
   napp: boolean;
@@ -70,6 +71,8 @@ export function install(options: {
     else if (w.__nappletHost)
       w.__nappletHost.postMessage(raw);
   };
+  if (!(window as any).__psstExplore)
+    observePageAppearance(color => post(JSON.stringify({ type: 'psst.appearance', color })));
   const receive = (raw: unknown) => {
     try {
       const value = typeof raw === 'string' ? JSON.parse(raw) : raw;

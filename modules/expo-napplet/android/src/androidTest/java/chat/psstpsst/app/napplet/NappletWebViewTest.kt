@@ -4,6 +4,10 @@ import android.app.Activity
 import android.content.Intent
 import android.webkit.WebChromeClient
 import android.webkit.ConsoleMessage
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -15,6 +19,36 @@ import org.junit.Test
 class NappletTestActivity : Activity()
 
 class NappletWebViewTest {
+  @Test
+  @SdkSuppress(minSdkVersion = 30)
+  fun hostReservedSafeAreasAreClearedWithoutConsumingKeyboardInsets() {
+    InstrumentationRegistry.getInstrumentation().runOnMainSync {
+      val web = NappletWebView(InstrumentationRegistry.getInstrumentation().targetContext) {}
+      try {
+        val safeArea = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+        val ime = WindowInsetsCompat.Type.ime()
+        val gestures = WindowInsetsCompat.Type.systemGestures()
+        for (keyboardHeight in listOf(320, 0, 320)) {
+          val incoming = WindowInsetsCompat.Builder()
+            .setInsets(safeArea, Insets.of(24, 32, 0, 24))
+            .setInsetsIgnoringVisibility(safeArea, Insets.of(24, 32, 0, 24))
+            .setInsets(ime, Insets.of(0, 0, 0, keyboardHeight))
+            .setInsets(gestures, Insets.of(16, 0, 16, 24))
+            .setVisible(ime, keyboardHeight > 0)
+            .build()
+          val remaining = ViewCompat.dispatchApplyWindowInsets(web, incoming)
+          assertEquals(Insets.NONE, remaining.getInsets(safeArea))
+          assertEquals(Insets.NONE, remaining.getInsetsIgnoringVisibility(safeArea))
+          assertNull(remaining.displayCutout)
+          assertEquals(incoming.getInsets(ime), remaining.getInsets(ime))
+          assertEquals(incoming.isVisible(ime), remaining.isVisible(ime))
+          assertEquals(incoming.getInsets(gestures), remaining.getInsets(gestures))
+          assertFalse(remaining.isConsumed)
+        }
+      } finally { web.dispose() }
+    }
+  }
+
   @Test fun shippedWrapperLoadsAndHandshakesInsideTheAndroidSandbox() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val activity = instrumentation.startActivitySync(

@@ -2,7 +2,13 @@ package chat.psstpsst.app.napplet
 
 import android.content.Context
 import android.graphics.Color
+import android.os.SystemClock
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.webkit.*
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONArray
@@ -16,6 +22,8 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
   private val documentUrl = "$ORIGIN/${java.util.UUID.randomUUID()}"
   private var lastReply = 0L
   private var disposed = false
+  private var touchActive = false
+  private var touchCancelled = false
   private var page: JSONObject? = null
   private var pageValue = ""
   private var pageOrigin = ""
@@ -40,8 +48,46 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
   private fun envelope(type: String, raw: String? = null): String = JSONObject().put("type",type).put("origin",origin(url ?: pageOrigin))
     .put("document",document).put("url",url ?: pageOrigin).apply { if(raw != null) put("raw",raw) }.toString()
 
+  override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    when (event.actionMasked) {
+      MotionEvent.ACTION_DOWN -> { touchActive = true; touchCancelled = false }
+      MotionEvent.ACTION_UP -> touchActive = false
+      MotionEvent.ACTION_CANCEL -> { touchActive = false; touchCancelled = true }
+    }
+    return super.dispatchTouchEvent(event)
+  }
+
+  override fun onCancelPendingInputEvents() {
+    val cancelTouch = touchActive
+    touchActive = false
+    if (cancelTouch && !disposed) {
+      touchCancelled = true
+      val now = SystemClock.uptimeMillis()
+      val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+      try { super.onTouchEvent(cancel) } finally { cancel.recycle() }
+    }
+    super.onCancelPendingInputEvents()
+  }
+
+  override fun performHapticFeedback(feedbackConstant: Int, flags: Int): Boolean {
+    // Chromium can acknowledge a long press after system Back has cancelled its touch.
+    // Keep live page feedback, but never add a stale long-press buzz to system navigation.
+    if (feedbackConstant == HapticFeedbackConstants.LONG_PRESS && touchCancelled) return false
+    return super.performHapticFeedback(feedbackConstant, flags)
+  }
+
   init {
     setBackgroundColor(Color.TRANSPARENT)
+    ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+      // AppScreen already keeps this WebView inside the system safe area.
+      // Forward zeroes to reset CSS safe-area values, while retaining IME insets.
+      val safeArea = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+      WindowInsetsCompat.Builder(insets)
+        .setInsets(safeArea, Insets.NONE)
+        .setInsetsIgnoringVisibility(safeArea, Insets.NONE)
+        .setDisplayCutout(null)
+        .build()
+    }
     web.settings.apply {
       javaScriptEnabled = true; domStorageEnabled = false; databaseEnabled = false
       allowFileAccess = false; allowContentAccess = false; javaScriptCanOpenWindowsAutomatically = false

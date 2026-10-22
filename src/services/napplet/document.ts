@@ -85,13 +85,19 @@ window.addEventListener('message',event=>{
  if(event.source===window && event.data?.__psstHostReply){try{window.__hostReceive(JSON.parse(event.data.__psstHostReply));}catch{}return;}
  if(event.source!==frame.contentWindow||!event.data||typeof event.data!=='object')return;
  if(typeof event.data.type!=='string'||event.data.type.length>80)return;
- if(event.data.type.startsWith('psst.')||event.data.type.startsWith('upload.transfer.'))return;
+ if((event.data.type.startsWith('psst.')&&event.data.type!=='psst.appearance')||event.data.type.startsWith('upload.transfer.'))return;
  if(event.data.type==='upload.upload'){
   void bridgeUpload(event.data).catch(error=>frame.contentWindow.postMessage({type:'upload.upload.result',id:event.data.id,error:String(error.message||'upload-failed')},'*'));
   return;
  }
  if(Date.now()-budgetStart>=1000){budgetStart=Date.now();budgetCalls=0;budgetBytes=0;}
  if(++budgetCalls>32)return;
+ if(event.data.type==='psst.appearance'){
+  if(window.__psstNapplet)return;
+  const color=event.data.color;
+  if(color===null||typeof color==='string'&&/^#[\\da-f]{6}$/i.test(color))postHost(JSON.stringify({type:'psst.appearance',color}));
+  return;
+ }
  let raw;try{raw=JSON.stringify(event.data);}catch{return;}
  budgetBytes+=raw.length;if(raw.length>1500000||budgetBytes>2097152)return;
  postHost(raw);

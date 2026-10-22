@@ -14,20 +14,25 @@ import type { ApplicationInfo } from '@/services/explore/model';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing,uiDensity,useThemeColors } from '@/theme';
 import { IS_ANDROID } from '@/lib/platform';
+import { useNappletAppearance } from '@/platform/napplet-appearance';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
-export function ApplicationRuntimePage({title,application,loading,error,hidden=false,windowed=false,menuEnabled,onClose,onMore,onRetry,children,overlay}:{
+export function ApplicationRuntimePage({title,application,containerId,active=true,loading,error,hidden=false,windowed=false,menuEnabled,onClose,onMore,onRetry,children,overlay}:{
+  containerId?:string|null;active?:boolean;
   title?:string;application?:ApplicationInfo;loading?:boolean;error?:string|null;hidden?:boolean;windowed?:boolean;menuEnabled:boolean;
   onClose():void;onMore():void;onRetry():void;children?:ReactNode;overlay?:ReactNode;
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
   const immersive = IS_ANDROID && !windowed;
+  const appearance = useNappletAppearance(containerId);
   const contentTop = windowed || immersive ? 0 : clearance;
   const more = <IconButton size={uiDensity.headerActionSize}
     icon={<Ellipsis strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>}
     accessibilityLabel={t('napplets.runtime_more')} onPress={onMore} disabled={!menuEnabled}/>;
   useDesktopWindowTitlebar(windowed ? { title, actions: more } : null);
-  return <AppScreen edges={immersive ? ['top', 'bottom'] : ['bottom']}>
+  return <AppScreen edges={immersive ? ['top', 'bottom'] : ['bottom']}
+    appearance={!loading && !error && !hidden ? appearance : undefined}
+    statusBarActive={active} statusBarFollowsAppearance={immersive}>
     <View style={{flex:1,display:hidden?'none':'flex'}}>
       {windowed || immersive ? null : <ScreenHeader title={title} back={false}
         left={<IconButton size={uiDensity.headerActionSize} icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>} accessibilityLabel={t('common.close')} onPress={onClose}/>}

@@ -35,7 +35,7 @@ export default function ExploreRunScreen() {
   } }, [id, owns, focused, state.loading, state.containerId]);
   useEffect(() => { if (owns && focused && !state.entry)
     router.back(); }, [owns, focused, state.entry]);
-  return <ApplicationRuntimePage title={state.entry?.title}
+  return <ApplicationRuntimePage containerId={owns ? state.containerId : undefined} active={focused} title={state.entry?.title}
     application={state.entry?applicationPresentation(state.entry):undefined}
     menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.close(id)} onMore={()=>setPanel('about')}
     loading={owns&&state.loading} error={owns?state.error:undefined} onRetry={()=>exploreService.retry(id)}

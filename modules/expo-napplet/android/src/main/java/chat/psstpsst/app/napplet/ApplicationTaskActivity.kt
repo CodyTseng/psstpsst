@@ -55,6 +55,7 @@ class ApplicationTaskActivity : ReactActivity() {
       return
     }
     super.onCreate(null)
+    installApplicationBackGesture(this)
     ApplicationTasks.activities[applicationTaskId] = WeakReference(this)
     @Suppress("DEPRECATION")
     setTaskDescription(ActivityManager.TaskDescription(intent.getStringExtra("taskTitle") ?: "PsstPsst"))

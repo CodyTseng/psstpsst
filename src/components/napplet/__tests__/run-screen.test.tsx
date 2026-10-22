@@ -10,6 +10,7 @@ import { AppButton } from '@/components/common/AppButton';
 import { ActivityIndicator } from 'react-native';
 import { NappletIcon } from '@/components/napplet/NappletIcon';
 import NappletRunScreen from '../../../app/(app)/napplet-run';
+import { AppScreen } from '@/components/common/AppScreen';
 
 jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));
 jest.mock('lucide-react-native/icons/external-link', () => () => null);
@@ -37,6 +38,8 @@ jest.mock('@/components/common/AppText', () => ({ AppText: ({ children }: { chil
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('@/components/napplet/NappletIcon', () => ({ NappletIcon: () => null }));
 jest.mock('@/platform/napplet-surface', () => ({ NappletSurface: () => null }));
+jest.mock('@/platform/napplet-appearance', () => ({ useNappletAppearance: (id?: string) => id === 'test'
+  ? { background: '#121212', dark: true } : undefined }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { stop: jest.fn(), goBack: jest.fn(async () => {}), openPanel: jest.fn(), startPreparedOpen: jest.fn(), retryOpen: jest.fn() } }));
 jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ running: mockRunning, launching: mockLaunching, launch: mockLaunch, runId: mockRunId, panel: mockPanel, overlayActive: mockOverlayActive, sharing: mockSharing }) }));
 jest.mock('@/theme', () => ({ spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { iconButtonSize: 32, headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text', accent: 'accent' }) }));
@@ -67,6 +70,19 @@ it('keeps the app visible behind a sheet and blocks it until the exit finishes',
   act(() => { renderer.update(<NappletRunScreen />); });
   expect(surface.props.visible).toBe(true);
   expect(surface.props.obscured).toBe(false);
+  act(() => renderer.unmount());
+});
+
+it('uses the live document canvas and releases status-bar ownership when unfocused', () => {
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(renderer.root.findByType(AppScreen).props.appearance).toEqual({ background: '#121212', dark: true });
+  mockFocused = false;
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(renderer.root.findByType(AppScreen).props.statusBarActive).toBe(false);
+  mockSharing = true;
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(renderer.root.findByType(AppScreen).props.appearance).toBeUndefined();
   act(() => renderer.unmount());
 });
 

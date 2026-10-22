@@ -48,7 +48,7 @@ function ApplicationTaskContent({ id }: { id: string }) {
     return () => listener.remove();
   }, [foreground, obscured, id]);
   return <View style={{ flex: 1, direction }}>
-    <ApplicationRuntimePage title={state?.entry.title} application={state ? applicationPresentation(state.entry) : undefined}
+    <ApplicationRuntimePage containerId={state?.containerId} active={foreground} title={state?.entry.title} application={state ? applicationPresentation(state.entry) : undefined}
       loading={state?.loading} error={state?.error} menuEnabled={false}
       onClose={() => { void applicationTasks.close(id); }} onMore={() => {}}
       onRetry={() => { void applicationTasks.retry(id); }}>

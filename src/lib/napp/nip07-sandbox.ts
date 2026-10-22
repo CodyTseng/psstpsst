@@ -1,6 +1,8 @@
 import { installBrowserCompat } from './browser-compat';
+import { observePageAppearance } from './page-appearance';
 /** Runs inside the sandbox; the immutable parent authenticates the transport. */
 export function install() {
+  observePageAppearance(color => parent.postMessage({ type: 'psst.appearance', color }, '*'));
   let serial = 0;
   const prefix = `nip07:${Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')}:`;
   const pending = new Map<string, { type: string; resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();

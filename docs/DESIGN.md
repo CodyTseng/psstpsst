@@ -25,6 +25,10 @@ gradients, emoji in navigation, and bouncy motion.
 
 All colours come from `useThemeColors()` in `src/theme/index.ts`. Components
 must never contain raw hex or rgba values.
+Embedded application safe-area canvases may use validated document colours:
+prefer the current HTML theme colour, then an opaque page background, then the
+host theme. Follow live document and light/dark changes. Status text retains
+contrast; host title bars and approval controls keep their own theme palette.
 
 | Token family | Role |
 | --- | --- |
@@ -129,6 +133,8 @@ between a message bubble and its reaction row.
 - Settings lists and forms start `spacing.sm` below the header clearance,
   matching the Me hub in both single-pane and split-pane layouts.
 - Safe-area insets belong to `AppScreen` and navigation chrome, not screens.
+- Embedded web content receives only safe-area insets not already reserved by
+  its host, so websites do not apply the same spacing twice.
 - Headers, lists, bubbles, and the composer align to the same content gutter.
 - Persistent top and bottom chrome uses a hairline border, not a shadow.
 - Scroll-driven top chrome is borderless at the visual top and shows a themed
@@ -1001,6 +1007,8 @@ controls, and omit duplicate page headers. Android opens applications as indepen
 system tasks with their own app-named Recents cards. Application content has no
 host title bar, Close button or floating More control. System Back traverses the
 app's history, then closes its task; switching tasks preserves each running app.
+System back gestures cancel pending webpage touches when the gesture starts,
+so navigation never also triggers a page long press.
 Application management remains available from the host's app list. All formats
 reuse the shared application sheets. Action-rail captions
 use concise labels; accessible action names may retain the full wording.
@@ -1096,7 +1104,8 @@ capabilities can be changed or reset in application permissions.
 Breaking a rule requires explicit approval and a reason in the PR or commit
 message.
 
-1. **No raw colours.** Use theme tokens.
+1. **No raw colours.** Use theme tokens; embedded safe-area canvases may use
+   validated document colours as defined in §2.
 2. **No raw font metrics.** Use `AppText` variants and typography tokens.
 3. **No raw spacing.** Use the spacing scale.
 4. **Use shared primitives.** Every route starts with `AppScreen`; text, inputs,
