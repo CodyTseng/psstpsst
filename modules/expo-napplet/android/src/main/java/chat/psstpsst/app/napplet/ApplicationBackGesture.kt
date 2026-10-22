@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 
 /** Cancel page input at predictive-back start, before the platform sends touch cancellation. */
-internal fun installApplicationBackGesture(activity: ComponentActivity) {
+fun installApplicationBackGesture(activity: ComponentActivity) {
   activity.onBackPressedDispatcher.addCallback(activity, object : OnBackPressedCallback(true) {
     override fun handleOnBackStarted(backEvent: BackEventCompat) {
       activity.window.decorView.cancelPendingInputEvents()

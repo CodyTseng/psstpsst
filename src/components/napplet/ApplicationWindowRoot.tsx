@@ -1,4 +1,5 @@
 import { connectSigningWindows } from '@/services/signing/changes';
+import { useInlineApplicationLaunch } from '@/hooks/use-inline-application-launch';
 import { useEffect, useState } from 'react';
 import { Stack, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
@@ -21,6 +22,7 @@ import { NappletOverlays } from './NappletOverlays';
 
 /** A trusted leaf host shares persistence without starting messaging or notification services. */
 export function ApplicationWindowRoot() {
+  useInlineApplicationLaunch();
   useEffect(() => { connectSigningWindows(platform.napplet.windows); return () => connectSigningWindows(); }, []);
   useEffect(() => subscribeExploreVisits(visit => {
     void platform.napplet.windows?.action({ type: 'visited', ...visit }).catch(() => {});

@@ -14,6 +14,8 @@ import { applicationPresentation, applicationRequirements, applicationSigningSou
 import { readEntries, visit } from './repository';
 import { applicationPresence } from './application-presence';
 import { applicationSourceId } from '@/lib/application-identity';
+import { shouldOpenApplicationWindow } from './open-preferences';
+import { openInlineApplication } from './inline-launch';
 
 export type ApplicationTaskState = {
   entry: ExploreEntry; account: string; containerId?: string; loading: boolean; error?: string;
@@ -82,6 +84,12 @@ export const applicationTasks = {
     const start = async () => {
       if (!await canReceiveForAccount(account)) throw new Error('account-unavailable');
       current();
+      const launch = async (app: ExploreEntry, delivery?: Record<string, unknown>) => {
+        const windowed = await shouldOpenApplicationWindow(app, account);
+        current();
+        if (windowed) await this.open(app, account, undefined, delivery);
+        else await openInlineApplication({ entry: app, account });
+      };
       if (needsFavoriteMetadata(entry)) {
         entry = await resolveFavoriteMetadata(account, entry, signal);
         current(); patch(id, { entry });
@@ -113,8 +121,8 @@ export const applicationTasks = {
           theme, confirm, presented,
           configure: (schema, values) => nappletService.configureExternal(schema, values, value => runtime.saveConfig(value), signal),
           handlers: async () => nappletStore.getState().installed,
-          invoke: (target, delivery) => this.open(fromNapplet(target), account, undefined, delivery),
-          openBrowser: url => this.open(websiteEntry(url), account),
+          invoke: (target, delivery) => launch(fromNapplet(target), delivery),
+          openBrowser: url => launch(websiteEntry(url)),
         });
         session.runtime = runtime;
         if (session.delivery) runtime.setDelivery(session.delivery);
@@ -129,7 +137,7 @@ export const applicationTasks = {
           configure: (schema, values, save, configSignal) => nappletService.configureExternal(schema, values, save, configSignal),
           applications: () => readEntries(account),
           application: async source => (await readEntries(account, source))[0],
-          launch: app => this.open(app, account),
+          launch: app => launch(app),
           navigated: address => patch(id, { entry: { ...entry, key: address, address, title: new URL(address).host } }),
         });
         session.runtime = runtime;

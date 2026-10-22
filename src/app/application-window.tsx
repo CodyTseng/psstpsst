@@ -24,7 +24,7 @@ export default function ApplicationWindowScreen() {
     if (!app && !napplet.launching && !napplet.panel) void platform.napplet.windows?.close();
   }, [app, napplet.launching, napplet.panel]);
   const close = () => { exploreService.stop(); nappletService.stop(); void platform.napplet.windows?.close(); };
-  return <ApplicationRuntimePage windowed title={app?.title} application={app ? applicationPresentation(app) : undefined}
+  return <ApplicationRuntimePage windowed active={focused} title={app?.title} application={app ? applicationPresentation(app) : undefined}
     loading={release ? napplet.launch?.showLoading : explore.loading} error={release ? napplet.launch?.error : explore.error}
     menuEnabled={!!containerId} onClose={close}
     onMore={() => { if (release) nappletService.openPanel('about'); else setPanel('about'); }}

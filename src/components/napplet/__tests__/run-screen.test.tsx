@@ -30,6 +30,7 @@ jest.mock('@/components/common/use-focused-overlay-dismiss', () => ({ useFocused
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('lucide-react-native/icons/x', () => () => null);
 jest.mock('lucide-react-native/icons/ellipsis', () => () => null);
+jest.mock('@solar-icons/react-native/category/arrows-action/Linear/MaximizeSquareMinimalistic', () => ({ MaximizeSquareMinimalistic: () => null }), { virtual: true });
 jest.mock('@/components/share/ForwardTargetScreen', () => ({ ForwardTargetScreen: () => null }));
 jest.mock('@/components/common/AppScreen', () => ({ AppScreen: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null, useScreenHeaderClearance: () => 56 }));

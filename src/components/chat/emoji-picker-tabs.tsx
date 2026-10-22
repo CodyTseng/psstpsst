@@ -16,7 +16,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import { useTranslation } from 'react-i18next';
 
-import { HorizontalFadeScrollView } from '@/components/common/HorizontalFadeScrollView';
+import { HorizontalScrollView } from '@/components/common/HorizontalScrollView';
 import { CustomEmojiImage } from '@/components/emoji/CustomEmojiImage';
 import Plus from 'lucide-react-native/icons/plus';
 import type { CustomEmoji, EmojiPack } from '@/lib/nostr/custom-emoji';
@@ -25,7 +25,6 @@ import { iconStrokeWidth } from '@/theme/icons';
 import {
   emojiPickerLayout,
   emojiSize,
-  horizontalRailLayout,
   radius,
   spacing,
   uiDensity,
@@ -43,7 +42,6 @@ type Props = {
   onSelectPack: (coordinate: string) => void;
   onSelectCategory?: (slug: string) => void;
   showUnicodeCategories?: boolean;
-  backgroundColor?: string;
   unicodeGroups?: readonly { slug: string }[];
 };
 
@@ -128,7 +126,6 @@ export function EmojiPickerTabs({
   onSelectPack,
   onSelectCategory,
   showUnicodeCategories = true,
-  backgroundColor,
   unicodeGroups = [],
 }: Props) {
   const { t } = useTranslation();
@@ -150,10 +147,10 @@ export function EmojiPickerTabs({
     const contentWidth = contentWidthRef.current;
     if (!layout || viewportWidth <= 0 || contentWidth <= 0) return;
 
-    // Keep the selected tab clear of either logical-edge fade. Measurements
-    // and offsets share physical coordinates; only the content order is RTL.
-    const leftInset = horizontalRailLayout.fadeWidth;
-    const rightInset = horizontalRailLayout.fadeWidth;
+    // Keep the selected tab fully visible with the normal resting gutter.
+    // Measurements use physical coordinates; only the content order is RTL.
+    const leftInset = railPadding;
+    const rightInset = railPadding;
     const currentX = scrollXRef.current;
     let nextX = currentX;
     if (layout.x < currentX + leftInset) {
@@ -165,7 +162,7 @@ export function EmojiPickerTabs({
     if (nextX === currentX) return;
     scrollXRef.current = nextX;
     scrollRef.current?.scrollTo({ x: nextX, animated: !reducedMotion });
-  }, [reducedMotion]);
+  }, [reducedMotion, railPadding]);
 
   const handleActiveLayout = useCallback((layout: LayoutRectangle | null) => {
     activeLayoutRef.current = layout;
@@ -173,9 +170,8 @@ export function EmojiPickerTabs({
   }, [revealActiveTab]);
 
   return (
-    <HorizontalFadeScrollView
+    <HorizontalScrollView
       ref={scrollRef}
-      fadeColor={backgroundColor ?? c.background}
       containerStyle={{
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: c.border,
@@ -281,6 +277,6 @@ export function EmojiPickerTabs({
           </EmojiTab>
         );
       }) : null}
-    </HorizontalFadeScrollView>
+    </HorizontalScrollView>
   );
 }

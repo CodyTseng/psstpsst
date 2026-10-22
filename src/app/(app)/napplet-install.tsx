@@ -1,5 +1,4 @@
-import { platform } from '@/platform';
-import { openApplicationWindow } from '@/services/explore/windows';
+import { tryOpenApplicationWindow } from '@/services/explore/windows';
 import { useState } from 'react';
 import { ScrollView } from 'react-native';
 import { router } from 'expo-router';
@@ -29,7 +28,7 @@ export default function NappletInstallScreen() {
       .then(async (release) => {
         if(release.release) router.replace({ pathname: '/napplet/[id]', params: { id: release.release.event.id } });
         else { const account=exploreStore.getState().account;if(!account) throw new Error('account-unavailable');
-          if (platform.napplet.windows || platform.napplet.tasks) { await openApplicationWindow(release, account); router.back(); return; }
+          if (await tryOpenApplicationWindow(release, account)) { router.back(); return; }
           const runId=exploreService.prepare(release,account);router.replace({pathname:'/explore-run',params:{runId}}); }
       })
       .catch((error: Error) => setError(error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed'))

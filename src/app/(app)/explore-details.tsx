@@ -1,8 +1,7 @@
 import { useFavoriteMetadata } from '@/hooks/use-favorite-metadata';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { useExploreShare } from '@/hooks/use-explore-share';
-import { platform } from '@/platform';
-import { openApplicationWindow } from '@/services/explore/windows';
+import { tryOpenApplicationWindow } from '@/services/explore/windows';
 import { usePublisherApplications } from '@/stores/explore-publisher.store';
 import { useDiscovery } from '@/stores/explore-discovery.store';
 import { useNappletAccess } from '@/hooks/use-napplet-access';
@@ -48,14 +47,11 @@ export default function ExploreDetailsScreen() {
     discussion={app&&state.account?{entry:app,account:state.account}:undefined}
     unsupported={app?.release?app.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain)):app?.kind==='napp'&&app.required.some(domain=>!SUPPORTED_NAPP_DOMAINS.includes(domain))}
     onPublisher={()=>{if(app?.manifest)openPublisher(app.manifest.pubkey);}}
-    onOpen={()=>{
+    onOpen={async()=>{
       if(!app||!state.account)return;
       try {
-        if (platform.napplet.windows || platform.napplet.tasks) {
-          const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : required;
-          void openApplicationWindow(app, state.account, reviewed).catch(() => setError('napplets.request_failed'));
-          return;
-        }
+        const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : required;
+        if (await tryOpenApplicationWindow(app, state.account, reviewed)) return;
         if(app.release) {
           const runId=nappletService.prepareOpen(app.release,state.account,access.approved?undefined:[...new Set(['shell',...app.required])]);
           router.push({pathname:'/napplet-run',params:{runId}});

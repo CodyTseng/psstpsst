@@ -31,6 +31,7 @@ jest.mock('@/components/common/AppInput', () => ({ AppInput: 'Input' }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: 'Button' }));
 jest.mock('@/components/common/IconButton', () => ({ IconButton: 'IconButton' }));
 jest.mock('@/components/napplet/NappletInfo', () => ({ ApplicationInfo: ({ action }: { action?: React.ReactNode }) => action ?? null }));
+jest.mock('@/components/napplet/ApplicationOpenSetting', () => ({ ApplicationOpenSetting: () => null }));
 jest.mock('@/components/napplet/ApplicationDetailsActions', () => ({ ApplicationDetailsActions: () => null }));
 jest.mock('lucide-react-native/icons/x', () => () => null);
 jest.mock('@solar-icons/react-native/category/messages/Linear/ChatRound', () => ({ ChatRound: 'EmptyIcon' }), { virtual: true });

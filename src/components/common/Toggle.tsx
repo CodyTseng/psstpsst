@@ -15,6 +15,7 @@ type Props = {
   value: boolean;
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
+  accessibilityLabel?: string;
 };
 
 // iOS-proportioned switch, drawn from plain Views so it sits in the exact center
@@ -36,7 +37,7 @@ const TRAVEL = TRACK_W - THUMB - PAD * 2;
  * (the row is non-tappable — the switch is the target). Don't hand-roll a switch
  * elsewhere; route every toggle through this so they read identically.
  */
-export function Toggle({ value, onValueChange, disabled }: Props) {
+export function Toggle({ value, onValueChange, disabled, accessibilityLabel }: Props) {
   const c = useThemeColors();
   const isRTL = useIsRTL();
   const progress = useSharedValue(value ? 1 : 0);
@@ -57,8 +58,11 @@ export function Toggle({ value, onValueChange, disabled }: Props) {
 
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="switch"
       accessibilityState={{ checked: value, disabled }}
+      aria-checked={value}
+      aria-disabled={disabled}
       disabled={disabled}
       onPress={() => onValueChange(!value)}
       style={{ opacity: disabled ? 0.5 : 1 }}

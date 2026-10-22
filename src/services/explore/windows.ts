@@ -6,6 +6,14 @@ import { parseManifest, publicUrl } from '@/services/napplet/protocol';
 import { fromNapplet, parseSite, websiteAddress, type ExploreEntry } from './model';
 import type { ApplicationWindowLaunch } from '@/platform/ports/application-window';
 import { applicationTasks } from './application-tasks';
+import { shouldOpenApplicationWindow } from './open-preferences';
+
+/** False leaves navigation with the caller's existing inline container flow. */
+export async function tryOpenApplicationWindow(entry: ExploreEntry, accountPubkey: string, reviewedRequired?: readonly string[]): Promise<boolean> {
+  if (!await shouldOpenApplicationWindow(entry, accountPubkey)) return false;
+  await openApplicationWindow(entry, accountPubkey, reviewedRequired);
+  return true;
+}
 
 export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: string, reviewedRequired?: readonly string[]) {
   try {

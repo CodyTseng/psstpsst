@@ -7,9 +7,11 @@ import { useActiveAccount } from '@/stores/active-account.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
 import { subscribeExploreVisits } from '@/services/explore/visits';
 import { applicationPresence } from '@/services/explore/application-presence';
+import { useInlineApplicationLaunch } from './use-inline-application-launch';
 
 /** Navigation and message composition belong to the main application host. */
 export function useApplicationWindowActions() {
+  useInlineApplicationLaunch();
   useEffect(() => applicationPresence.observeWindows(), []);
   useEffect(() => {
     if (!platform.napplet.tasks) return;

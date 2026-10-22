@@ -10,6 +10,7 @@ import { NappletPanelActions } from './NappletPanel';
 import { SigningAccountAvatar } from './SigningRequestDetails';
 import { exploreService } from '@/services/explore/service';
 import { applicationPresentation,type ExploreEntry } from '@/services/explore/model';
+import { ApplicationOpenSetting } from './ApplicationOpenSetting';
 import { ApplicationPanel } from './ApplicationPanel';
 import { ApplicationSettings } from './ApplicationSettings';
 import { ApplicationAccessControls } from './ApplicationAccessControls';
@@ -32,9 +33,13 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
     title={t(page==='settings'?'napplets.permissions_manage':'napplets.details')}
     headerAction={page==='settings'?<SigningAccountAvatar pubkey={account}/>:undefined}
     scrollResetKey={page??'closed'} maxWidth={contentWidth.focused}
-    contentStyle={{gap:spacing.lg}}
+    contentStyle={{gap:spacing.xl,paddingBottom:page==='about'?spacing.md:undefined}}
     fixedFooter={page==='about'?<NappletPanelActions entry={entry} account={account} address={entry.kind === 'website' ? entry.address : `nostr:${entry.address}`}
-      onOpenExternal={entry.kind === 'website' ? () => schedule(() => { void platform.urlOpener.openExternalUrl(entry.address).then(opened => { if (!opened) showToast(t('napplets.request_failed')); }); }) : undefined}
+      onOpenExternal={entry.kind === 'website' ? () => schedule(() => {
+        void platform.urlOpener.openExternalUrl(entry.address)
+          .then(opened => { if (!opened) showToast(t('napplets.request_failed')); })
+          .catch(() => showToast(t('napplets.request_failed')));
+      }) : undefined}
       onAction={action=>{
       if(action==='settings')onPageChange('settings');
       else if(action==='share')schedule(()=>share(entry));
@@ -47,5 +52,6 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
           onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'))); })}/> : null}
       </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}/>}
       onPublisher={()=>{if(entry.manifest)schedule(()=>openPublisher(entry.manifest!.pubkey));}}/>
+    {page === 'about' ? <ApplicationOpenSetting entry={entry} account={account} /> : null}
   </BottomSheet>;
 }

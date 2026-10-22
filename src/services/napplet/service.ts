@@ -345,8 +345,10 @@ export const nappletService = {
       },
       openBrowser: async url => {
         if (platform.napplet.windows || platform.napplet.tasks) {
-          const [{ openApplicationWindow }, { websiteEntry }] = await Promise.all([import('../explore/windows'), import('../explore/model')]);
-          await openApplicationWindow(websiteEntry(url), account);
+          const [{ tryOpenApplicationWindow }, { websiteEntry }, { openInlineApplication }] = await Promise.all([
+            import('../explore/windows'), import('../explore/model'), import('../explore/inline-launch')]);
+          const entry = websiteEntry(url);
+          if (!await tryOpenApplicationWindow(entry, account)) { current(); await openInlineApplication({ entry, account }); }
         } else if (!await platform.urlOpener.openExternalUrl(url)) throw new Error('external-open-failed');
       },
     });

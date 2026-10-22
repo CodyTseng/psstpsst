@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Global } from '@solar-icons/react-native/category/map/Linear/Global';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import Copy from 'lucide-react-native/icons/copy';
 import Check from 'lucide-react-native/icons/check';
-import ExternalLink from 'lucide-react-native/icons/external-link';
 import Star from 'lucide-react-native/icons/star';
 import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { getExploreState, useExplore } from '@/stores/explore.store';
@@ -13,7 +13,7 @@ import { useClipboard } from '@/hooks/use-clipboard';
 import { Share } from '@solar-icons/react-native/category/ui/Linear/Share';
 import { ShieldCheck } from '@solar-icons/react-native/category/security/Linear/ShieldCheck';
 import { useTranslation } from 'react-i18next';
-import { HorizontalFadeScrollView } from '@/components/common/HorizontalFadeScrollView';
+import { HorizontalScrollView } from '@/components/common/HorizontalScrollView';
 import { ProfileAction } from '@/components/profile/ProfileAction';
 import { nappletService } from '@/services/napplet/service';
 import { NAP_DOMAINS, type NappletRelease } from '@/services/napplet/protocol';
@@ -53,23 +53,27 @@ export function NappletPanelActions({ address, entry, account, onAction, onOpenE
     if (current.account !== account || !current.loaded)
       void exploreService.activate(account).catch(() => showToast(t('napplets.request_failed'), { target: 'detail' }));
   }, [account, t]);
+  const actionSize = uiDensity.profileActionSize + spacing.lg;
+  const actionWidth = actionSize + spacing.sm;
   const actions = [
     { key: 'copy', label: t(copied ? 'common.copied' : 'common.copy'), accessibilityLabel: t(copied ? 'common.copied' : 'napplets.copy_address'), icon: copied
       ? <Check size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/>
       : <Copy size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> },
+    ...(onOpenExternal ? [{ key: 'browser' as const, label: t('napplets.browser_short'), accessibilityLabel: t('napplets.browser_open_default'),
+      icon: <Global size={spacing.xl} color={c.text} /> }] : []),
     { key: 'share', label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> },
     ...(account ? [{ key: 'favorite' as const, label: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'), icon: <Star size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> }] : []),
     { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
     { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
-    ...(onOpenExternal ? [{ key: 'browser' as const, label: t('napplets.browser_open_default'), icon: <ExternalLink size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> }] : []),
   ] as const;
-  return <HorizontalFadeScrollView fadeColor={c.sheetBackground}
-    contentContainerStyle={{ gap: spacing.xs, alignItems: 'flex-start' }}>
+  return <HorizontalScrollView
+    containerStyle={{ marginHorizontal: -spacing.lg }}
+    contentContainerStyle={{ paddingHorizontal: spacing.lg - (actionWidth - actionSize) / 2, gap: spacing.xs, alignItems: 'flex-start' }}>
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
-      width={uiDensity.profileActionWidth + spacing.xl} size={uiDensity.profileActionSize + spacing.lg}
-      singleLineLabel icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
+      width={actionWidth} size={actionSize}
+      singleLineLabel labelVariant="micro" icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
       onPress={() => { if (action.key === 'copy') void copyText(address); else if (action.key === 'favorite') void setFavorite(entry, !favorite); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
-  </HorizontalFadeScrollView>;
+  </HorizontalScrollView>;
 }
 
 function DomainPermissions({ release, accountPubkey }: { release: NappletRelease; accountPubkey: string }) {

@@ -7,6 +7,8 @@ import { readEntries, reorder, visit } from '../repository';
 import { ExploreRuntime } from '../runtime';
 import type { ExploreEntry } from '../model';
 import { naddrEncode } from 'nostr-tools/nip19';
+import { tryOpenApplicationWindow } from '../windows';
+import { platform } from '@/platform';
 jest.mock('../browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/platform',()=>({platform:{urlOpener:{openExternalUrl:jest.fn()},napplet:{tasks:{open:jest.fn(async()=>{}),focus:jest.fn(async()=>{}),close:jest.fn(async()=>{}),onClosed:jest.fn()}}}}));
 jest.mock('@/services/account/account-receive-guard',()=>({canReceiveForAccount:jest.fn(async()=>true)}));
@@ -28,6 +30,21 @@ function entry(kind:'website'|'nsite'|'napp'):ExploreEntry {
 }
 beforeEach(async()=>{jest.clearAllMocks();jest.mocked(getData).mockResolvedValue(null);jest.mocked(nappletService.requestApproval).mockResolvedValue('allow');await exploreService.activate('account');});
 afterEach(async()=>{exploreService.deactivate();for(const id of applicationTaskStore.getState().sessions.keys())await applicationTasks.close(id);});
+it('keeps websites inline by default and opens a task for an explicit window choice', async () => {
+  expect(await tryOpenApplicationWindow(website, 'account')).toBe(false);
+  expect(platform.napplet.tasks!.open).not.toHaveBeenCalled();
+  jest.mocked(getData).mockResolvedValueOnce('true');
+  expect(await tryOpenApplicationWindow(website, 'account')).toBe(true);
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(1);
+});
+it('always opens applications independently despite an old inline choice', async () => {
+  expect(await tryOpenApplicationWindow(entry('napp'), 'account')).toBe(true);
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(1);
+  jest.mocked(getData).mockResolvedValue('false');
+  expect(await tryOpenApplicationWindow(entry('napp'), 'account')).toBe(true);
+  expect(getData).not.toHaveBeenCalled();
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(1);
+});
 it.each(['website','nsite'] as const)('opens %s without required access or a first-use approval',async kind=>{
   const app=entry(kind);
   expect(await exploreService.access(app,'account')).toBe(true);
@@ -125,4 +142,48 @@ it('refreshes remote favorite order and applies metadata completion without over
   for (let i = 0; i < 20; i++) await Promise.resolve();
   expect(readEntries).toHaveBeenLastCalledWith('account', website.key);
   expect(exploreStore.getState().entries[0]).toMatchObject({ title: 'Resolved', desktopPosition: 0, lastUsedAt: 10 });
+});
+
+it('closes the inline page only after its independent window opens', async () => {
+  const runId = exploreService.prepare(website, 'account');
+  await exploreService.start(runId);
+  const instance = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+  let opened!: () => void;
+  jest.mocked(platform.napplet.tasks!.open).mockImplementationOnce(() => new Promise<void>(resolve => { opened = resolve; }));
+  const launch = exploreService.openInWindow(runId);
+  // The native launch awaits account and metadata checks first.
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(exploreStore.getState().entry).toEqual(website);
+  expect(instance.stop).not.toHaveBeenCalled();
+  opened();
+  await launch;
+  expect(instance.stop).toHaveBeenCalledTimes(1);
+  expect(exploreStore.getState().entry).toBeNull();
+  expect(exploreStore.getState().surfaces).toEqual([]);
+  expect(setData).not.toHaveBeenCalled();
+});
+
+it('keeps the inline page available when opening a window fails', async () => {
+  const runId = exploreService.prepare(website, 'account');
+  await exploreService.start(runId);
+  jest.mocked(platform.napplet.tasks!.open).mockRejectedValueOnce(new Error('open-failed'));
+  await expect(exploreService.openInWindow(runId)).rejects.toThrow('open-failed');
+  expect(exploreStore.getState().entry).toEqual(website);
+  expect(exploreStore.getState().containerId).toBe('container');
+});
+
+it('does not close a newer inline session after a delayed window launch', async () => {
+  const runId = exploreService.prepare(website, 'account');
+  await exploreService.start(runId);
+  let opened!: () => void;
+  jest.mocked(platform.napplet.tasks!.open).mockImplementationOnce(() => new Promise<void>(resolve => { opened = resolve; }));
+  const launch = exploreService.openInWindow(runId);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const next = { ...website, address: 'https://another.example/', key: 'https://another.example/' };
+  const nextRun = exploreService.prepare(next, 'account');
+  await exploreService.start(nextRun);
+  opened();
+  await launch;
+  expect(exploreStore.getState().runId).toBe(nextRun);
+  expect(exploreStore.getState().entry).toEqual(next);
 });

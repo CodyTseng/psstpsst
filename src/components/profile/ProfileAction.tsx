@@ -20,6 +20,7 @@ type Props = {
   width?: number;
   size?: number;
   singleLineLabel?: boolean;
+  labelVariant?: 'caption' | 'micro';
 };
 
 /**
@@ -27,7 +28,7 @@ type Props = {
  * to circular controls in equal-width columns; horizontal rails can use fixed
  * slots and square controls without changing the shared button language.
  */
-export function ProfileAction({ icon, label, accessibilityLabel, onPress, disabled, tone = 'default', shape = 'circle', layout = 'equal', width = uiDensity.profileActionWidth, size = uiDensity.profileActionSize, singleLineLabel = false }: Props) {
+export function ProfileAction({ icon, label, accessibilityLabel, onPress, disabled, tone = 'default', shape = 'circle', layout = 'equal', width = uiDensity.profileActionWidth, size = uiDensity.profileActionSize, singleLineLabel = false, labelVariant = 'caption' }: Props) {
   return (
     <View
       style={{
@@ -51,7 +52,7 @@ export function ProfileAction({ icon, label, accessibilityLabel, onPress, disabl
         accessibilityLabel={accessibilityLabel ?? label}
       />
       <AppText
-        variant="caption"
+        variant={labelVariant}
         tone={tone === 'danger' ? 'danger' : 'muted'}
         align="center"
         numberOfLines={singleLineLabel ? 1 : undefined}

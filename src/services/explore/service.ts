@@ -15,7 +15,7 @@ import { readEntries, reorder, visit, forget, queueFavoritesPublication } from '
 import { fromNapplet, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, signedAddress, parseSite, websiteAddress, withVisit, type ExploreEntry } from './model';
 import { ExploreRuntime } from './runtime';
 import { assertNotAborted } from '@/platform/abort';
-import { openApplicationWindow } from './windows';
+import { openApplicationWindow, tryOpenApplicationWindow } from './windows';
 export const exploreStore = createStore(() => ({ account: null as string | null, loaded: false, entries: [] as ExploreEntry[],
   surfaces: [] as string[], runId: 0, entry: null as ExploreEntry | null, containerId: null as string | null, loading: false, error: null as string | null, accessRevision: 0 }));
 let epoch = 0, serial = 0, desktopRevision = 0;
@@ -258,6 +258,13 @@ export const exploreService = {
     launchLife.abort();launchLife=new AbortController();
     exploreStore.setState({containerId:null,surfaces:parents.map(parent=>parent.containerId),loading:true,error:null});
   },
+  async openInWindow(runId: number) {
+    const state = exploreStore.getState(), instance = runtime;
+    if (state.runId !== runId || !state.entry || !state.account || !instance) throw new Error('session-closed');
+    await openApplicationWindow(state.entry, state.account);
+    // A delayed launch must never close a newer inline runtime.
+    if (runtime === instance) this.close(runId);
+  },
   close(runId: number) {
     if (exploreStore.getState().runId !== runId) return;
     const parent = parents.pop();
@@ -324,7 +331,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
     launch: async app => {
       check(account, generation);
       app = { ...app, required: applicationRequirements(app.kind, app.required) };
-      if (platform.napplet.windows || platform.napplet.tasks) { await openApplicationWindow(app, account); return; }
+      if (await tryOpenApplicationWindow(app, account)) return;
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
       if (app.required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('napplets.unsupported');
       if (!await exploreService.access(app, account)) {

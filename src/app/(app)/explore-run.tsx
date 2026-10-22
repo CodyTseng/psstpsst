@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useIsFocused, usePreventRemove } from 'expo-router/react-navigation';
@@ -10,8 +10,14 @@ import { useExplore } from '@/stores/explore.store';
 import { useNapplets } from '@/stores/napplet.store';
 import { ApplicationRuntimePage } from '@/components/napplet/ApplicationRuntimePage';
 import { applicationPresentation } from '@/services/explore/model';
+import { platform } from '@/platform';
+import { showToast } from '@/stores/toast.store';
+import { useTranslation } from 'react-i18next';
 import { ExploreApplicationSheet } from '@/components/napplet/ExploreApplicationSheet';
 export default function ExploreRunScreen() {
+  const { t } = useTranslation();
+  const openingWindow = useRef(false);
+  const [windowPending, setWindowPending] = useState(false);
   const [panel, setPanel] = useState<'about'|'settings'|null>(null);
   const state = useExplore();
   const focused = useIsFocused();
@@ -35,8 +41,18 @@ export default function ExploreRunScreen() {
   } }, [id, owns, focused, state.loading, state.containerId]);
   useEffect(() => { if (owns && focused && !state.entry)
     router.back(); }, [owns, focused, state.entry]);
+  const openInWindow = async () => {
+    if (openingWindow.current) return;
+    openingWindow.current = true; setWindowPending(true);
+    try { await exploreService.openInWindow(id); }
+    catch { showToast(t('napplets.request_failed')); }
+    finally { openingWindow.current = false; setWindowPending(false); }
+  };
+  const canOpenWindow = owns && (state.entry?.kind === 'website' || state.entry?.kind === 'nsite')
+    && !!(platform.napplet.windows || platform.napplet.tasks);
   return <ApplicationRuntimePage containerId={owns ? state.containerId : undefined} active={focused} title={state.entry?.title}
     application={state.entry?applicationPresentation(state.entry):undefined}
+    onOpenWindow={canOpenWindow ? openInWindow : undefined} openingWindow={windowPending}
     menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.close(id)} onMore={()=>setPanel('about')}
     loading={owns&&state.loading} error={owns?state.error:undefined} onRetry={()=>exploreService.retry(id)}
     overlay={owns&&state.entry&&state.account?<ExploreApplicationSheet key={`${id}:${state.entry.key}`} entry={state.entry} account={state.account} runId={id} page={panel} onPageChange={setPanel}/>:null}>

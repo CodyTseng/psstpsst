@@ -100,7 +100,7 @@ only in `src/theme/typography.ts`.
 | `body` | Ordinary copy, inputs, and buttons |
 | `caption` | Metadata, labels, and supporting text |
 | `code` | Keys, hashes, addresses, and technical values |
-| `micro` | Tab labels and compact numeric badges only |
+| `micro` | Tab labels, compact action-rail labels, and numeric badges only |
 
 Do not define `fontSize`, `lineHeight`, `letterSpacing`, or `textTransform` in a
 screen. Controlled artwork and emoji sizes remain named theme/component
@@ -149,10 +149,10 @@ between a message bubble and its reaction row.
   share the same spacing so pinning does not shift the text.
 - Do not nest scrolling containers unless the shared component explicitly owns
   that pattern.
-- Compact horizontal rails use `HorizontalFadeScrollView`. Logical-start and
-  logical-end fades appear only while content remains hidden beyond that edge;
-  native and Electron overlay scrollbars stay hidden because the fades are the
-  rail's overflow affordance.
+- Compact horizontal rails use `HorizontalScrollView` without edge fades.
+  Extend the viewport through surrounding gutters so partially visible items
+  reveal overflow; content padding preserves first/last alignment at rest.
+  Native and Electron overlay scrollbars stay hidden.
 - Single-line names and titles truncate within the available width. Adjacent
   status marks, timestamps, and actions retain their space, including in selection mode.
 - In a wide layout, opening a conversation freezes any existing draft preview
@@ -244,8 +244,7 @@ ownership restriction. The summary keeps a single-line height. Failed relay rows
 place to show their failure reason. Targets stay in stable
 identity order while statuses update, with the user's own copy labelled as
 themselves and kept last. Avatar tabs use a compact gap and sit close to the
-selected target detail. An overflowing rail uses the shared translucent
-logical-edge fades while content remains beyond either side. The rail extends through the sheet
+selected target detail. The rail extends through the sheet
 body gutter while its resting tabs retain that gutter, so scrolling content is
 never clipped at the inner padding boundary. Status changes never reorder the
 tabs.
@@ -398,7 +397,7 @@ this table records when to choose each primitive.
 | Contact-list destination or identity row | `IdentityListItem` |
 | Contact or conversation row | `ContactListItem` / `ConversationListItem` |
 | Section heading | `SectionLabel` |
-| Scrollable horizontal rail | `HorizontalFadeScrollView` |
+| Scrollable horizontal rail | `HorizontalScrollView` |
 | Summoned task, picker, or form | `BottomSheet` |
 | Short decision or notice | `platform.confirmationDialog` |
 | Small Electron value entry | `InputDialog` |
@@ -996,26 +995,41 @@ Reload actions. Copy uses the same public address as sharing and keeps the sheet
 open with brief in-place confirmation after the clipboard accepts the write.
 On iOS, runtime swipe gestures navigate embedded page history without dismissing
 the host route; leaving the runtime uses its explicit Close action.
-On Electron and Android, each account/application owns one independent window or
-task. Reopening restores and focuses that instance with its state intact. Open
-applications show a small success-green dot beside their icons in app grids and
-lists; closing the last instance clears it. On Electron, the first launch creates
-an independent window by default.
-There is no separate new-window action. Independent windows merge application
+On Electron and Android, napps and napplets always open in an independent
+window or task. Nsites and ordinary websites default to the current host;
+their account-scoped opening preference appears on the details page and below
+the identity information in the runtime sheet. Keep the shared header clearance
+and equal section spacing above and below the opening control. Action menus
+omit opening preferences. Website runtime sheets include a default-browser
+action with the Solar Linear Global icon. Preference labels explicitly describe
+the default for future opens, distinct from immediate opening actions.
+Preferences apply to subsequent opens and never move a running page. Independent hosts reuse
+the account/application instance with its state intact. Open applications show a
+small success-green dot beside their icons in app grids and lists; closing the
+last independent instance clears it.
+Inline websites expose a Solar Linear MaximizeSquareMinimalistic window-opening action
+beside More in the header. Opening a
+window succeeds before the current inline page closes, without changing its
+saved opening preference; failures leave the page available.
+Independent windows merge application
 identity and menu actions into their native title bar, reserve the system caption
 controls, and omit duplicate page headers. Android opens applications as independent
-system tasks with their own app-named Recents cards. Application content has no
-host title bar, Close button or floating More control. System Back traverses the
-app's history, then closes its task; switching tasks preserves each running app.
+system tasks with their own app-named Recents cards. Independent application
+and website content has no host title bar, Close button or floating More control.
+Pages in the main host retain the shared Close and More header. System Back
+traverses the app's history, then closes its task; switching tasks preserves each running app.
 System back gestures cancel pending webpage touches when the gesture starts,
 so navigation never also triggers a page long press.
 Application management remains available from the host's app list. All formats
 reuse the shared application sheets. Action-rail captions
 use concise labels; accessible action names may retain the full wording.
 Permissions closes the menu before navigating to the dedicated management page.
-Menu actions use square icon controls with single-line captions below. Slots grow
-to fit longer labels in an ordered horizontal rail that scrolls when needed
-rather than stretching actions across the available width. Host permissions expose
+Menu actions use square icon controls with single-line micro labels below.
+Keep their equal-width slots compact in an ordered horizontal rail that scrolls
+when needed rather than stretching actions across the available width. Gaps
+between controls stay narrower than the body gutter to reveal overflowing actions.
+Application action rails extend through the sheet gutter; their first and last visible controls
+align with the body gutter at the corresponding scroll boundary. Host permissions expose
 app access and remembered signing decisions. Each rule is one editing target,
 with Ask every time, Automatically allow and Automatically reject choices and
 an independent duration. Saved changes take effect immediately. Choosing Ask
@@ -1029,8 +1043,7 @@ confirmation or cancellation.
 
 Webpage new-window links, external-app links, downloads and device permissions
 ask before proceeding and identify the current site and target/resource. Downloads
-use a system save destination picker. Website app menus include Open in browser,
-which hands the current URL to the default browser. Native webpage dialogs keep
+use a system save destination picker. Native webpage dialogs keep
 the originating site visible. Permission reviews name each concrete requested
 resource, preserving unknown resource names rather than hiding them behind
 generic access wording. Targets and filenames stay separate from permission names. Text and image copying do not show host confirmation;

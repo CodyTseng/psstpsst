@@ -61,6 +61,12 @@ React surfaces on one trusted ReactHost. Each application owns its runtime,
 WebView and cancellation scope; account services and the serialized approval
 queue remain process-owned. Only the foreground Activity presents that queue.
 Account lifecycle changes and source access revocation close the affected tasks.
+Website opening preferences are host-owned account/site data, separate from
+capability grants. Website keys retain their full shortcut URL; signed site keys
+omit relay hints. Launchers read the saved website choice before selecting a host;
+napps and napplets always use independent native hosts when available.
+Both the main Android Activity and independent application tasks cancel pending
+web input when predictive back starts, using the same native callback.
 Native application hosts deduplicate opens by account and canonical application
 source. Their process-owned instance registry drives focused-window restoration
 and UI running indicators; icons never infer running state from visit history.

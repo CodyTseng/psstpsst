@@ -7,6 +7,7 @@ import { ScreenHeader,useScreenHeaderClearance } from '@/components/common/Scree
 import { useScrolled } from '@/hooks/use-scrolled';
 import { ApplicationInfo } from './NappletInfo';
 import { ApplicationComments } from './ApplicationComments';
+import { ApplicationOpenSetting } from './ApplicationOpenSetting';
 import { ApplicationDetailsActions } from './ApplicationDetailsActions';
 import type { ExploreEntry, ApplicationInfo as ApplicationPresentation } from '@/services/explore/model';
 import { spacing,useThemeColors } from '@/theme';
@@ -32,6 +33,7 @@ export function ApplicationDetailsPage({application,error,access,unsupported=fal
         {access.loaded&&!access.approved?<AppText variant="caption" tone="muted">{t('napplets.capabilities_signing_notice')}</AppText>:null}
       </View>:undefined}/>
       :!error?<ActivityIndicator color={c.accent}/>:null}
+    {application && actions?.account ? <ApplicationOpenSetting entry={actions.entry} account={actions.account} /> : null}
   </View>;
   return <AppScreen edges={['bottom']}>
     <ScreenHeader title={application?.title??t('napplets.details')} bordered={scrolled}

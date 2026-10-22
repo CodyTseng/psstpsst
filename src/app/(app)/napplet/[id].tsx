@@ -1,7 +1,6 @@
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { useExploreShare } from '@/hooks/use-explore-share';
-import { platform } from '@/platform';
-import { openApplicationWindow } from '@/services/explore/windows';
+import { tryOpenApplicationWindow } from '@/services/explore/windows';
 import { useMemo, useState } from 'react';
 import { router,useLocalSearchParams } from 'expo-router';
 import { ApplicationDetailsPage } from '@/components/napplet/ApplicationDetailsPage';
@@ -25,13 +24,10 @@ export default function NappletDetailScreen() {
     access={access} error={error??loadError??access.error}
     unsupported={release?.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain))}
     onPublisher={()=>{if(release)openPublisher(release.event.pubkey);}}
-    onOpen={()=>{
+    onOpen={async()=>{
       if(!release)return;
       try {
-        if (platform.napplet.windows || platform.napplet.tasks) {
-          void openApplicationWindow(fromNapplet(release), accountPubkey ?? '', access.approved ? undefined : [...new Set(['shell', ...release.required])]).catch(() => setError('napplets.request_failed'));
-          return;
-        }
+        if (await tryOpenApplicationWindow(fromNapplet(release), accountPubkey ?? '', access.approved ? undefined : [...new Set(['shell', ...release.required])])) return;
         const runId=nappletService.prepareOpen(release,accountPubkey??'',access.approved?undefined:[...new Set(['shell',...release.required])]);
         router.push({pathname:'/napplet-run',params:{runId}});
       } catch {setError('napplets.request_failed');}

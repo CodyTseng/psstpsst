@@ -1,5 +1,4 @@
-import { platform } from '@/platform';
-import { openApplicationWindow } from '@/services/explore/windows';
+import { tryOpenApplicationWindow } from '@/services/explore/windows';
 import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { ExploreDiscovery } from '@/components/napplet/ExploreDiscovery';
 import { exploreService } from '@/services/explore/service';
@@ -89,10 +88,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
       setError(null);
       try {
         if (needsFavoriteMetadata(app)) app = await exploreService.resolveFavorite(app, account ?? '');
-        if (platform.napplet.windows || platform.napplet.tasks) {
-          void openApplicationWindow(app, account ?? '').catch(() => setError('napplets.request_failed'));
-          return;
-        }
+        if (await tryOpenApplicationWindow(app, account ?? '')) return;
         if(app.release) {
           const runId=nappletService.prepareOpen(app.release,account??'');
           navigation.open(`/napplet-run?runId=${runId}`);
