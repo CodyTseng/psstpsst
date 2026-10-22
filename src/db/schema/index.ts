@@ -27,7 +27,7 @@ export * from './proximity-file-partials';
 export * from './proximity-file-spools';
 export * from './proximity-file-uploads';
 export * from './proximity-peers';
-export * from './referenced-events';
+export * from './cached-events';
 export * from './relay-lists';
 export * from './replaceable-events';
 export * from './saved-groups';

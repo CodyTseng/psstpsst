@@ -2,11 +2,34 @@ import { normalizeSigningSource } from '@/services/signing/source';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { verifyEvent, type Event } from 'nostr-tools';
-import { decode, naddrEncode } from 'nostr-tools/nip19';
+import { decode, naddrEncode, neventEncode } from 'nostr-tools/nip19';
+import { parseNostrEventReference } from '@/lib/nostr/event-reference';
+import { normalizeRelayUrls } from '@/lib/nostr/relay-url';
 import { publicUrl, appShareAddress, parseManifest, type NappletRelease } from '@/services/napplet/protocol';
 export type ExploreKind = 'napplet' | 'napp' | 'nsite' | 'website';
-export function applicationShareLink(entry: Pick<ExploreEntry, 'kind' | 'address'>): string {
-  return entry.kind === 'website' ? entry.address : `nostr:${entry.address}`;
+export function needsFavoriteMetadata(entry: Pick<ExploreEntry, 'kind' | 'manifest'>) { return entry.kind !== 'website' && !entry.manifest; }
+
+type ApplicationAddressEntry = Pick<ExploreEntry, 'kind' | 'address' | 'manifest' | 'eventRelays'>;
+
+export function applicationCopyAddress(entry: ApplicationAddressEntry): string {
+  if (entry.kind === 'website') return entry.address;
+  const reference = parseNostrEventReference(entry.address);
+  const event = entry.manifest;
+  const kind = event?.kind ?? reference?.kind;
+  const author = event?.pubkey ?? reference?.author;
+  const relays = normalizeRelayUrls([...(entry.eventRelays ?? []), ...(reference?.relays ?? [])]).slice(0, 8);
+  if (kind !== undefined && author && (kind >= 10000 && kind < 20000 || kind >= 30000 && kind < 40000)) {
+    const identifier = kind < 30000 ? '' : event?.tags.find(tag => tag[0] === 'd')?.[1] ?? reference?.identifier;
+    if (identifier !== undefined) return naddrEncode({ kind, pubkey: author, identifier, relays });
+  }
+  const id = event?.id ?? reference?.id;
+  if (id) return neventEncode({ id, author, kind, relays });
+  return entry.address.trim().replace(/^nostr:/i, '');
+}
+
+export function applicationShareLink(entry: ApplicationAddressEntry): string {
+  const address = applicationCopyAddress(entry);
+  return entry.kind === 'website' ? address : `nostr:${address}`;
 }
 export const SUPPORTED_NAPP_DOMAINS = ['identity','network','storage','theme','link','relay','outbox','common','config','inc'];
 
@@ -30,6 +53,8 @@ export type ExploreEntry = {
     mime: string;
   };
   manifest?: Event;
+  /** Relays observed returning this exact manifest; address hints remain separate. */
+  eventRelays?: string[];
   release?: NappletRelease;
   files?: SiteFile[];
   required: string[];
@@ -133,6 +158,27 @@ export function withVisit(entries: readonly ExploreEntry[], app: ExploreEntry, a
 
 export function fromNapplet(release: ReturnType<typeof parseManifest>): ExploreEntry {
   const key = normalizeSigningSource(appShareAddress(release));
-  return { key, address: key, title: release.title, kind: 'napplet', description: release.description, servers: release.servers,
+  return { key, address: key, title: release.title, kind: 'napplet', description: release.description, servers: release.servers, eventRelays: release.eventRelays,
     icon: release.icon, manifest: release.event, release, required: release.required, desktopPosition: null, lastUsedAt: null };
+}
+
+/** Preserve settled row identities when a cache check changes only freshness metadata. */
+export function mergeApplicationEntries(previous: ExploreEntry[], incoming: ExploreEntry[]): ExploreEntry[] {
+  const pending = new Map(incoming.map(entry => [entry.key, entry]));
+  let changed = previous.length !== incoming.length;
+  const result: ExploreEntry[] = [];
+  for (const entry of previous) {
+    const updated = pending.get(entry.key);
+    pending.delete(entry.key);
+    if (!updated) { changed = true; continue; }
+    const same = entry.manifest?.id === updated.manifest?.id && entry.title === updated.title && entry.kind === updated.kind &&
+      entry.address === updated.address && entry.desktopPosition === updated.desktopPosition && entry.lastUsedAt === updated.lastUsedAt &&
+      entry.servers.length === updated.servers.length && entry.servers.every((server, index) => server === updated.servers[index]) &&
+      (entry.eventRelays?.length ?? 0) === (updated.eventRelays?.length ?? 0) &&
+      (entry.eventRelays ?? []).every((relay, index) => relay === updated.eventRelays?.[index]);
+    result.push(same ? entry : updated);
+    changed ||= !same;
+  }
+  result.push(...pending.values());
+  return changed ? result : previous;
 }

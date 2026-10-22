@@ -1,3 +1,4 @@
+import { clearApplicationTestCache } from '../testing/memory-cache';
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
 import { naddrEncode } from 'nostr-tools/nip19';
 import { parseApplicationAddressQuery, resolveApplicationAddress } from '../address-search';
@@ -5,6 +6,9 @@ import { parseSite, websiteEntry } from '../model';
 import { readEntries } from '../repository';
 import { NappletNetwork } from '@/services/napplet/network';
 
+jest.mock('@/services/nostr/event-cache-retention', () => ({ pruneEventCache: jest.fn(async () => {}), favoriteCoordinates: '' }));
+jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActual('../testing/memory-cache').replaceableCache);
+jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('../testing/memory-cache').immutableCache);
 jest.mock('../repository', () => ({ readEntries: jest.fn() }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 const secret = generateSecretKey(), author = getPublicKey(secret);
@@ -18,6 +22,7 @@ const query = jest.fn(), routes = jest.fn(), destroy = jest.fn(), mediaServers =
 const target = (kind = 35130, relays: string[] = []) => parseApplicationAddressQuery(pointer(kind, relays))!;
 const signal = () => new AbortController().signal;
 beforeEach(() => {
+  clearApplicationTestCache();
   jest.clearAllMocks();
   jest.mocked(readEntries).mockResolvedValue([]);
   query.mockReset().mockResolvedValue({ events: [manifest()], incomplete: false });
@@ -39,7 +44,7 @@ it('distinguishes keywords, URLs, Nostr URIs and naddr share URLs', () => {
 
 it('returns a canonical in-memory match despite different relay hints without reading the database or relay', async () => {
   const app = parseSite(manifest());
-  expect(await resolveApplicationAddress('account', target(35130, ['wss://hint.example']), [app], signal())).toBe(app);
+  expect(await resolveApplicationAddress('account', target(35130, ['wss://hint.example']), [app], signal())).toMatchObject({ key: app.key, manifest: app.manifest });
   expect(readEntries).not.toHaveBeenCalled();
   expect(NappletNetwork).not.toHaveBeenCalled();
 });
@@ -47,7 +52,7 @@ it('returns a canonical in-memory match despite different relay hints without re
 it('reads a locally saved application before querying relays', async () => {
   const app = parseSite(manifest());
   jest.mocked(readEntries).mockResolvedValue([app]);
-  expect(await resolveApplicationAddress('account', target(), [], signal())).toBe(app);
+  expect(await resolveApplicationAddress('account', target(), [], signal())).toMatchObject(app);
   expect(readEntries).toHaveBeenCalledWith('account', app.key);
   expect(NappletNetwork).not.toHaveBeenCalled();
 });

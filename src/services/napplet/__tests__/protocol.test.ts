@@ -116,6 +116,7 @@ test('configuration validation rejects active references and invalid values', ()
 test.each([5129, 15129, 35129])('shared app kind %s round-trips to its install address', (kind) => {
   const release = parseManifest(manifest(kind, kind === 35129 ? [['d', 'shared-app']] : []));
   const address = appShareAddress(release);
+  expect(parseAppAddress(address).relays).toEqual([]);
   expect(parseAppAddress(address).filters).toEqual(kind === 5129 ? [{ ids: [release.event.id] }] : [{
     kinds: [kind], authors: [release.event.pubkey], ...(kind === 35129 ? { '#d': ['shared-app'] } : {}),
   }]);

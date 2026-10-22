@@ -18,6 +18,7 @@ export async function queryApplicationCatalogue(network: NappletNetwork, author?
   const results = await Promise.allSettled(APPLICATION_CATALOGUE_SOURCES.map(async source => network.query(source.relays,
     [{ kinds: source.kinds, limit: APPLICATION_QUERY_LIMIT, ...(author ? { authors: [author] } : {}) }])));
   const events: Event[] = [];
+  const eventRelays = new Map<string, string[]>();
   let available = false;
   let incomplete = false;
   for (let i = 0; i < results.length; i++) {
@@ -29,9 +30,13 @@ export async function queryApplicationCatalogue(network: NappletNetwork, author?
     available = true;
     incomplete ||= result.value.incomplete;
     for (const event of result.value.events) {
-      if (APPLICATION_CATALOGUE_SOURCES[i].kinds.includes(event.kind) && (!author || event.pubkey === author)) events.push(event);
+      if (APPLICATION_CATALOGUE_SOURCES[i].kinds.includes(event.kind) && (!author || event.pubkey === author)) {
+        events.push(event);
+        const observed = result.value.eventRelays?.get(event.id);
+        if (observed?.length) eventRelays.set(event.id, [...new Set([...(eventRelays.get(event.id) ?? []), ...observed])].slice(0, 8));
+      }
     }
   }
   if (!available) throw new Error('catalogue-unavailable');
-  return { events, incomplete };
+  return { events, incomplete, eventRelays };
 }

@@ -9,12 +9,14 @@ import type { ExploreEntry } from '../model';
 import { naddrEncode } from 'nostr-tools/nip19';
 import { tryOpenApplicationWindow } from '../windows';
 import { platform } from '@/platform';
+jest.mock('../application-metadata', () => ({ refreshApplicationMetadata: jest.fn(async () => {}), subscribeApplicationMetadata: jest.fn() }));
+jest.mock('@/services/relay/replaceable-events.service', () => ({ invalidateReplaceableEvents: jest.fn() }));
 jest.mock('../browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/platform',()=>({platform:{urlOpener:{openExternalUrl:jest.fn()},napplet:{tasks:{open:jest.fn(async()=>{}),focus:jest.fn(async()=>{}),close:jest.fn(async()=>{}),onClosed:jest.fn()}}}}));
 jest.mock('@/services/account/account-receive-guard',()=>({canReceiveForAccount:jest.fn(async()=>true)}));
 jest.mock('@/services/napplet/artifacts',()=>({loadArtifact:jest.fn()}));
 jest.mock('@/services/napplet/runtime',()=>({NappletRuntime:jest.fn()}));
-jest.mock('@/services/napplet/service',()=>({nappletStore:{getState:()=>({accountPubkey:'account'})},nappletService:{activate:jest.fn(async()=>{}),stop:jest.fn(),requestApproval:jest.fn(async()=> 'allow'),currentTheme:()=>undefined}}));
+jest.mock('@/services/napplet/service',()=>({nappletStore:{getState:()=>({accountPubkey:'account'})},nappletService:{activate:jest.fn(async()=>{}),activateAccount:jest.fn(async()=>{}),stop:jest.fn(),requestApproval:jest.fn(async()=> 'allow'),currentTheme:()=>undefined}}));
 jest.mock('@/services/napplet/network',()=>({NappletNetwork:jest.fn()}));
 jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn()}));
 jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{})}));
@@ -52,7 +54,7 @@ it.each(['website','nsite'] as const)('opens %s without required access or a fir
   await exploreService.start(runId);
   expect(nappletService.requestApproval).not.toHaveBeenCalled();
   expect(setData).not.toHaveBeenCalled();
-  expect(ExploreRuntime).toHaveBeenCalledWith('account',app,expect.objectContaining({confirm:nappletService.requestApproval}));
+  expect(ExploreRuntime).toHaveBeenCalledWith('account',app,expect.objectContaining({confirm:expect.any(Function)}));
 });
 it.each(['website','nsite','napp'] as const)('reviews missing required access and remembers it for %s',async kind=>{
   const app={...entry(kind),required:['network']};
@@ -186,4 +188,145 @@ it('does not close a newer inline session after a delayed window launch', async 
   await launch;
   expect(exploreStore.getState().runId).toBe(nextRun);
   expect(exploreStore.getState().entry).toEqual(next);
+});
+
+it('shares unfinished Favorites initialization across overlapping page opens', async () => {
+  exploreService.deactivate();
+  jest.mocked(nappletService.activateAccount).mockClear();
+  jest.mocked(readEntries).mockClear();
+  let ready!: () => void;
+  jest.mocked(nappletService.activateAccount).mockImplementationOnce(() => new Promise<void>(resolve => { ready = resolve; }));
+  const first = exploreService.activate('account');
+  const second = exploreService.activate('account');
+  expect(nappletService.activateAccount).toHaveBeenCalledTimes(1);
+  expect(readEntries).toHaveBeenCalledTimes(1);
+  expect(exploreStore.getState().loaded).toBe(false);
+  ready();
+  await Promise.all([first, second]);
+  expect(readEntries).toHaveBeenCalledTimes(1);
+  expect(exploreStore.getState()).toMatchObject({ account: 'account', loaded: true });
+});
+
+
+it('retains the loaded Favorites snapshot when reopening the same account', async () => {
+  jest.mocked(nappletService.activateAccount).mockClear();
+  jest.mocked(readEntries).mockClear();
+  await exploreService.activate('account');
+  await exploreService.activate('account');
+  expect(readEntries).not.toHaveBeenCalled();
+  expect(nappletService.activateAccount).not.toHaveBeenCalled();
+});
+
+it('allows another initialization attempt after a failed local Favorites read', async () => {
+  exploreService.deactivate();
+  jest.mocked(readEntries).mockClear();
+  jest.mocked(readEntries).mockRejectedValueOnce(new Error('database-busy'));
+  await expect(exploreService.activate('account')).rejects.toThrow('database-busy');
+  await exploreService.activate('account');
+  expect(readEntries).toHaveBeenCalledTimes(2);
+  expect(exploreStore.getState().loaded).toBe(true);
+});
+
+it('does not let an old account load discard another account initialization', async () => {
+  exploreService.deactivate();
+  jest.mocked(nappletService.activateAccount).mockClear();
+  let firstReady!: () => void, secondReady!: () => void;
+  jest.mocked(nappletService.activateAccount)
+    .mockImplementationOnce(() => new Promise<void>(resolve => { firstReady = resolve; }))
+    .mockImplementationOnce(() => new Promise<void>(resolve => { secondReady = resolve; }));
+  const first = exploreService.activate('first');
+  const second = exploreService.activate('second');
+  firstReady();
+  await first;
+  const repeated = exploreService.activate('second');
+  expect(nappletService.activateAccount).toHaveBeenCalledTimes(2);
+  secondReady();
+  await Promise.all([second, repeated]);
+  expect(exploreStore.getState()).toMatchObject({ account: 'second', loaded: true });
+});
+
+it('releases the old inline runtime and keeps a retryable error when an update cannot start', async () => {
+  const app = entry('napp'), runId = exploreService.prepare(app, 'account');
+  await exploreService.start(runId);
+  const old = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+  jest.mocked(ExploreRuntime).mockImplementationOnce(function(this: object) {
+    Object.assign(this, { start: jest.fn(async () => { throw new Error('download-failed'); }), stop: jest.fn(), presented: true });
+    return this as ExploreRuntime;
+  });
+  await expect(exploreService.restart(runId, { ...app, title: 'Updated' })).rejects.toThrow();
+  expect(old.stop).toHaveBeenCalledTimes(1);
+  expect(exploreStore.getState()).toMatchObject({ entry: { key: app.key, title: 'Updated', required: ['network'] }, containerId: null, error: 'napplets.request_failed' });
+});
+
+it('closes an old inline runtime before starting the replacement', async () => {
+  const app = entry('napp'), runId = exploreService.prepare(app, 'account');
+  await exploreService.start(runId);
+  const old = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+  jest.mocked(ExploreRuntime).mockImplementationOnce(function(this: object) {
+    expect(old.stop).toHaveBeenCalledTimes(1);
+    Object.assign(this, { start: jest.fn(async () => 'container'), stop: jest.fn(), presented: true });
+    return this as ExploreRuntime;
+  });
+  await exploreService.restart(runId, { ...app, title: 'Updated' });
+  expect(old.stop).toHaveBeenCalledTimes(1);
+  expect(exploreStore.getState()).toMatchObject({ entry: { title: 'Updated' }, containerId: 'container' });
+});
+
+it('shares restart initialization with route startup while cleanup and permission reads are pending', async () => {
+  const app = entry('napp'), id = exploreService.prepare(app, 'account');
+  await exploreService.start(id);
+  const old = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+  let cleaned!: () => void, permissions!: (value: string) => void;
+  jest.mocked(old.stop).mockReturnValueOnce(new Promise<void>(resolve => { cleaned = resolve; }));
+  jest.mocked(getData).mockClear();
+  jest.mocked(getData).mockImplementationOnce(() => new Promise(resolve => { permissions = resolve; }));
+  jest.mocked(nappletService.requestApproval).mockClear();
+  const restart = exploreService.restart(id, { ...app, title: 'Updated' });
+  const route = exploreService.start(id);
+  expect(getData).not.toHaveBeenCalled();
+  expect(ExploreRuntime).toHaveBeenCalledTimes(1);
+  cleaned();
+  await Promise.resolve();
+  const repeated = exploreService.start(id);
+  expect(getData).toHaveBeenCalledTimes(1);
+  permissions('["network"]');
+  await Promise.all([restart, route, repeated]);
+  expect(ExploreRuntime).toHaveBeenCalledTimes(2);
+  expect(nappletService.requestApproval).not.toHaveBeenCalled();
+});
+
+it('ignores retiring task callbacks while a replacement runtime starts', async () => {
+  const app = entry('napp');
+  await applicationTasks.open(app, 'account');
+  const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  await applicationTasks.start(id);
+  const callbacks = jest.mocked(ExploreRuntime).mock.calls.at(-1)![2];
+  let ready!: (id: string) => void;
+  jest.mocked(ExploreRuntime).mockImplementationOnce(function(this: object) {
+    Object.assign(this, { start: jest.fn(() => new Promise<string>(resolve => { ready = resolve; })), stop: jest.fn(), presented: false });
+    return this as ExploreRuntime;
+  });
+  const replacing = applicationTasks.restart(id, { ...app, title: 'Updated' });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  callbacks.presented?.(); callbacks.failed?.(); callbacks.navigated?.('https://unrelated.example/'); callbacks.close?.();
+  expect(applicationTaskStore.getState().sessions.get(id)).toMatchObject({ entry: { title: 'Updated' }, loading: true });
+  expect(platform.napplet.tasks!.close).not.toHaveBeenCalled();
+  ready('replacement'); await replacing;
+});
+
+it('waits for old task resources to close and shares initialization with the task surface', async () => {
+  const app = entry('napp');
+  await applicationTasks.open(app, 'account');
+  const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  await applicationTasks.start(id);
+  const old = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+  let closed!: () => void;
+  jest.mocked(old.stop).mockReturnValueOnce(new Promise<void>(resolve => { closed = resolve; }));
+  const restarting = applicationTasks.restart(id, { ...app, title: 'Updated' });
+  const surface = applicationTasks.start(id);
+  expect(ExploreRuntime).toHaveBeenCalledTimes(1);
+  expect(applicationTaskStore.getState().sessions.get(id)?.containerId).toBeUndefined();
+  closed(); await Promise.all([restarting, surface]);
+  expect(ExploreRuntime).toHaveBeenCalledTimes(2);
+  expect(old.stop).toHaveBeenCalledTimes(1);
 });

@@ -89,6 +89,10 @@ jest.mock('@/db/client', () => {
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0056_private-list-sync-state.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0062_explore.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0070_private-favorites.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0029_referenced_events.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0059_napplets.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0071_event-backed-applications.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0072_event-relay-sources.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0044_contact-sync-state.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0045_configuration-outbox.sql`, 'utf8'));
   const execute = async (query: string, params: unknown[], method: string) => {
@@ -1120,4 +1124,14 @@ it('retains a signed favorites snapshot for offline outbox retry without encrypt
   await start(); await worker.flush(); worker.stop();
   expect(await pending(30267, 'psstpsst-favorites')).toBeNull();
   expect(mockSigner.nip44Encrypt).toHaveBeenCalledTimes(1);
+});
+
+it('preserves favorite relay hints while reordering cached application metadata', async () => {
+  const f = favorites();
+  const reference = ['a', `35130:${'b'.repeat(64)}:notes`, 'wss://hint.example/'];
+  await f.applyFavoritesEvent(SELF, f.snapshot([reference, ['r', 'https://example.com/']]), mockSigner);
+  const app = (await f.readEntries(SELF)).find(entry => entry.kind === 'napp')!;
+  await f.reorder(SELF, ['https://example.com/', app.key], app);
+  const state = sqlite.prepare('SELECT draft FROM private_list_sync_state WHERE kind=30267').get() as { draft: string };
+  expect(JSON.parse(state.draft)).toEqual([['r', 'https://example.com/'], reference]);
 });

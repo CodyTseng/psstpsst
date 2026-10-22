@@ -1,3 +1,7 @@
+import { cacheApplicationEvent, readApplicationCache } from '@/services/explore/application-cache';
+import { refreshApplicationMetadata } from '@/services/explore/application-metadata';
+import { parseFavoriteReference } from '@/services/explore/favorites-protocol';
+import { fromNapplet } from '@/services/explore/model';
 import { clearBrowserPermissions, clearAccountBrowserPermissions } from '@/services/explore/browser-permission-store';
 import { clearAccountSigningPermissions, clearSigningPermissions, deleteSigningRule, saveSigningRule } from '@/services/signing/repository';
 import { desktopApps, moveDesktopApp } from './desktop-order';
@@ -70,12 +74,14 @@ export const nappletStore = createStore<State>(() => ({
 export const nappletPermissionStore = createStore(() => ({ revision: 0 }));
 
 let generation = 0;
+let activation: { account: string; ready: Promise<void>; promise: Promise<void> } | undefined;
 let desktopRevision = 0;
 let desktopEdits: Promise<void> = Promise.resolve();
 let catalog: NappletNetwork | null = null;
 const addressReaders = new Set<NappletNetwork>();
 const signingEdits = new Map<string, Promise<void>>();
 let runtime: NappletRuntime | null = null;
+let runtimeClosing: Promise<void> = Promise.resolve();
 const approvals = new PromptQueue((prompt) => nappletStore.setState({ prompt, ...(prompt ? { overlayActive: true } : {}) }));
 let theme: RuntimeTheme | null = null;
 let opening = 0;
@@ -92,6 +98,36 @@ function prompt(value: RuntimePrompt, signal?: AbortSignal): Promise<string | fa
 function permissionsChanged() {
   nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
 }
+async function authorizeRelease(release: NappletRelease, account: string, current: () => void, reviewedRequired?: readonly string[]) {
+  const scope = { accountPubkey: account, appKey: release.key };
+  const required = [...new Set(['shell', ...release.required])];
+  const optional = [...new Set(release.optional.filter((domain) =>
+    (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
+  const saved = await getData(scope, 'permissions', 'domains');
+  current();
+  let declared = saved ? (JSON.parse(saved) as string[]).filter((domain) =>
+    required.includes(domain) || optional.includes(domain)) : [];
+  if (!saved || required.some((domain) => !declared.includes(domain))) {
+    // Details-page consent applies only to the exact required set the user reviewed.
+    const reviewed = reviewedRequired && reviewedRequired.length === required.length
+      && required.every((domain) => reviewedRequired.includes(domain));
+    const answer = reviewed ? `domains:${JSON.stringify(declared.filter((domain) => optional.includes(domain)))}`
+      : await prompt({
+        title: release.title, app: release, accountPubkey: account, detail: '',
+        capabilities: { required, optional },
+      });
+    if (!answer) throw new Error('permission-denied');
+    current();
+    const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
+    if (!Array.isArray(selected)) throw new Error('permission-denied');
+    declared = [...required, ...optional.filter((domain) => selected.includes(domain))];
+    await setData(scope, 'permissions', 'domains', JSON.stringify(declared));
+    current();
+    permissionsChanged();
+  }
+  return declared;
+}
+
 async function refresh(account: string, epoch: number) {
   await desktopEdits;
   check(account, epoch);
@@ -118,16 +154,32 @@ export const nappletService = {
     nappletStore.setState({ configuration: { schema, values, requestId: ++configurationSerial }, overlayActive: true });
   },
   async activate(accountPubkey: string) {
-    if (nappletStore.getState().accountPubkey === accountPubkey) return;
+    if (nappletStore.getState().accountPubkey === accountPubkey && nappletStore.getState().loaded) return;
+    if (activation?.account === accountPubkey) return activation.promise;
     this.deactivate();
     const epoch = generation;
-    if (!(await getAccount(accountPubkey))) throw new Error('account-unavailable');
-    if (generation !== epoch) return;
-    catalog = new NappletNetwork(accountPubkey);
-    nappletStore.setState({ accountPubkey });
-    await refresh(accountPubkey, epoch);
+    let ready!: () => void, failed!: (error: unknown) => void;
+    const context = new Promise<void>((resolve, reject) => { ready = resolve; failed = reject; });
+    void context.catch(() => {});
+    const promise = (async () => {
+      if (!(await getAccount(accountPubkey))) throw new Error('account-unavailable');
+      if (generation !== epoch) { ready(); return; }
+      catalog = new NappletNetwork(accountPubkey);
+      nappletStore.setState({ accountPubkey });
+      ready();
+      await refresh(accountPubkey, epoch);
+    })().catch(error => { failed(error); throw error; }).finally(() => { if (activation?.promise === promise) activation = undefined; });
+    activation = { account: accountPubkey, ready: context, promise };
+    return promise;
+  },
+  async activateAccount(accountPubkey: string) {
+    const work = this.activate(accountPubkey);
+    void work.catch(() => {});
+    await (activation?.account === accountPubkey ? activation.ready : work);
+    if (nappletStore.getState().accountPubkey !== accountPubkey) throw new Error('session-closed');
   },
   deactivate() {
+    activation = undefined;
     generation++;
     opening++;
     approvals.cancelAll();
@@ -160,7 +212,16 @@ export const nappletService = {
     const epoch = generation;
     if (!catalog || !account) throw new Error('account-unavailable');
     const address = parseAppAddress(value);
+    const filter = address.filters[0];
+    const reference = filter.ids?.[0] ? parseFavoriteReference(['e', filter.ids[0], address.relays[0] ?? '', address.author ?? '']).entry
+      : parseFavoriteReference(['a', `${filter.kinds![0]}:${filter.authors![0]}:${filter['#d']?.[0] ?? ''}`, ...(address.relays[0] ? [address.relays[0]] : [])]).entry;
     if (!options.refresh) {
+      const stored = await readApplicationCache([reference]).catch(() => new Map());
+      const release = stored.get(reference.key)?.release;
+      if (release) {
+        void refreshApplicationMetadata(account, [fromNapplet(release)], new AbortController().signal).catch(() => {});
+        return release;
+      }
       let cached: NappletRelease | undefined;
       for (const releases of [installed, market]) {
         for (const release of releases) {
@@ -169,7 +230,12 @@ export const nappletService = {
             (release.event.created_at === cached.event.created_at && release.event.id < cached.event.id))) cached = release;
         }
       }
-      if (cached) return cached;
+      if (cached) {
+        await cacheApplicationEvent(fromNapplet(cached)).catch(() => {});
+        if (filter.ids?.length) return cached;
+        const latest = (await readApplicationCache([fromNapplet(cached)]).catch(() => new Map())).get(fromNapplet(cached).key)?.release;
+        return latest ?? cached;
+      }
     }
     const network = new NappletNetwork(account);
     addressReaders.add(network);
@@ -186,7 +252,8 @@ export const nappletService = {
         failed ||= !!result.error || result.incomplete;
         for (const event of result.events.sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id))) {
           try {
-            const release = parseManifest(event);
+            const release = { ...parseManifest(event), eventRelays: result.eventRelays?.get(event.id) ?? [] };
+            await cacheApplicationEvent(fromNapplet(release)).catch(() => {});
             nappletStore.setState((state) => {
               const previous = state.market.find((app) => app.key === release.key);
               if (previous && (previous.event.created_at > event.created_at ||
@@ -229,6 +296,7 @@ export const nappletService = {
       throw new Error('napplets.unsupported');
     await loadArtifact(release, undefined, onDownload);
     check(account, epoch);
+    desktopRevision++;
     await saveInstallation(account, release);
     check(account, epoch);
     await refresh(account, epoch);
@@ -241,6 +309,24 @@ export const nappletService = {
     const runId = ++runSerial;
     nappletStore.setState({ runId, launching: true, launch: { release, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined, pending: true, showLoading: false, error: null } });
     return runId;
+  },
+  async restartOpen(runId: number, release: NappletRelease) {
+    const state = nappletStore.getState(), previous = state.running?.release ?? state.launch?.release;
+    if (state.runId !== runId || !previous || previous.key !== release.key) throw new Error('session-closed');
+    if (!state.accountPubkey) throw new Error('account-unavailable');
+    this.stop(runId);
+    const cleanup = runtimeClosing, token = opening;
+    nappletStore.setState({ launching: true, launch: { release, pending: false, showLoading: true, error: null } });
+    try {
+      await cleanup;
+      const active = nappletStore.getState();
+      if (active.runId !== runId || active.accountPubkey !== state.accountPubkey || opening !== token) throw new Error('session-closed');
+      nappletStore.setState({ launch: { release, pending: true, showLoading: true, error: null } });
+    } catch (error) {
+      if (opening === token && nappletStore.getState().runId === runId) nappletStore.setState({ launching: false,
+        launch: { release, pending: false, showLoading: false, error: 'napplets.request_failed' } });
+      throw error;
+    }
   },
   startPreparedOpen(runId: number) {
     const state = nappletStore.getState();
@@ -277,6 +363,7 @@ export const nappletService = {
     const account = nappletStore.getState().accountPubkey;
     const epoch = generation;
     if (!account || !theme) throw new Error('account-unavailable');
+    check(account, epoch);
     this.stop();
     const operation = ++opening;
     nappletStore.setState({ launching: true, launch: { release, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined, pending: false, showLoading: false, error: null } });
@@ -284,6 +371,8 @@ export const nappletService = {
       check(account, epoch);
       if (operation !== opening) throw new Error('session-closed');
     };
+    if (!nappletStore.getState().loaded) await this.activate(account);
+    current();
     const installed = nappletStore.getState().installed.find((item) => item.key === release.key);
     const downloading = () => {
       current();
@@ -292,32 +381,7 @@ export const nappletService = {
     };
     if (!installed || installed.hash !== release.hash) await this.install(release, account, downloading);
     current();
-    const scope = { accountPubkey: account, appKey: release.key };
-    const required = [...new Set(['shell', ...release.required])];
-    const optional = [...new Set(release.optional.filter((domain) =>
-      (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
-    const saved = await getData(scope, 'permissions', 'domains');
-    current();
-    let declared = saved ? (JSON.parse(saved) as string[]).filter((domain) =>
-      required.includes(domain) || optional.includes(domain)) : [];
-    if (!saved || required.some((domain) => !declared.includes(domain))) {
-      // Details-page consent applies only to the exact required set the user reviewed.
-      const reviewed = reviewedRequired && reviewedRequired.length === required.length
-        && required.every((domain) => reviewedRequired.includes(domain));
-      const answer = reviewed ? `domains:${JSON.stringify(declared.filter((domain) => optional.includes(domain)))}`
-        : await prompt({
-          title: release.title, app: release, accountPubkey: account, detail: '',
-          capabilities: { required, optional },
-        });
-      if (!answer) throw new Error('permission-denied');
-      current();
-      const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
-      if (!Array.isArray(selected)) throw new Error('permission-denied');
-      declared = [...required, ...optional.filter((domain) => selected.includes(domain))];
-      await setData(scope, 'permissions', 'domains', JSON.stringify(declared));
-      current();
-      permissionsChanged();
-    }
+    const declared = await authorizeRelease(release, account, current, reviewedRequired);
     const html = await loadArtifact(release, undefined, downloading);
     current();
     const instance = new NappletRuntime({
@@ -386,7 +450,8 @@ export const nappletService = {
     const old = runtime;
     runtime = null;
     approvals.cancelAll();
-    if (old) void old.close().catch(() => {});
+    if (old) runtimeClosing = old.close();
+    void runtimeClosing.catch(() => {});
     nappletStore.setState({ running: null, launching: false, launch: null, configuration: null, panel: null, overlayActive: false, sharing: false });
     if (old) permissionsChanged();
   },
@@ -562,10 +627,6 @@ export const nappletService = {
     await clearBrowserPermissions(appSigningScope(scope));
     check(account, epoch);
     permissionsChanged();
-  },
-  async rollback(release: NappletInstallation, expectedAccount?: string) {
-    if (!release.previousManifest) return;
-    await this.install(parseManifest(JSON.parse(release.previousManifest)), expectedAccount);
   },
   async saveConfiguration(values: Record<string, unknown>) {
     if (externalConfiguration) {

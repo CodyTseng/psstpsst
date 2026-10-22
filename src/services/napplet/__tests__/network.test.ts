@@ -28,7 +28,7 @@ it.each([
   try {
     const pending = network.query([relay], [{ authors: [author], kinds: [35129], '#d': ['App/应用'], limit: 1 }]);
     subscription.onEnd?.([result]);
-    await expect(pending).resolves.toEqual({ events: [], incomplete, error });
+    await expect(pending).resolves.toEqual({ events: [], eventRelays: new Map(), incomplete, error });
     expect(close).toHaveBeenCalled();
   } finally { network.destroy(); }
 });
@@ -45,7 +45,7 @@ it('preserves events from a hinted relay while other relays end their initial re
     publisher.onEvent(event, relay);
     publisher.onEnd?.([{ url: relay, status: 'eose', received: 1 }]);
     subscriptions.get('wss://market.example/')!.onEnd?.([{ url: 'wss://market.example/', status: 'eose', received: 0 }]);
-    await expect(pending).resolves.toMatchObject({ events: [event], incomplete: false });
+    await expect(pending).resolves.toMatchObject({ events: [event], eventRelays: new Map([[event.id, [relay]]]), incomplete: false });
     expect(publisher.filters).toEqual([{ authors: [author], kinds: [35129], '#d': ['App/应用'], limit: 1 }]);
   } finally { network.destroy(); }
 });

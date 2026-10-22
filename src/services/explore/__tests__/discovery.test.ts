@@ -3,6 +3,7 @@ import { discoveryEntries, ApplicationDiscovery } from '../discovery';
 import { queryApplicationCatalogue } from '../catalogue-relays';
 import { NappletNetwork } from '@/services/napplet/network';
 
+jest.mock('../application-cache', () => ({ cacheApplicationEvent: jest.fn(async () => {}) }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 const secret = generateSecretKey();
 const manifest = (kind: number, created_at = 1) => finalizeEvent({ kind, created_at, content: 'Description',
@@ -34,7 +35,7 @@ it('queries each format only on its dedicated relays and rejects results from th
     [['wss://relay.napplet.soy/'], [{ kinds: [5129, 15129, 35129], limit: 200 }]],
     [['wss://relay.nsite.lol/', 'wss://relay.nosto.re/'], [{ kinds: [15128, 35128], limit: 200 }]],
   ]);
-  expect(result).toEqual({ events: [napp, nsite], incomplete: false });
+  expect(result).toMatchObject({ events: [napp, nsite], incomplete: false });
 });
 
 it.each(['reject', 'error', 'incomplete'])('retains other formats when one catalogue source reports %s', async failure => {
@@ -44,7 +45,7 @@ it.each(['reject', 'error', 'incomplete'])('retains other formats when one catal
   else query.mockResolvedValueOnce({ events: [], incomplete: true, ...(failure === 'error' ? { error: 'network-error' } : {}) });
   query.mockResolvedValueOnce({ events: [nsite], incomplete: false });
   expect(await queryApplicationCatalogue({ query } as unknown as NappletNetwork))
-    .toEqual({ events: [napp, nsite], incomplete: true });
+    .toMatchObject({ events: [napp, nsite], incomplete: true });
   expect(query).toHaveBeenCalledTimes(3);
 });
 

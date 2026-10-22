@@ -29,7 +29,7 @@ const livePools = new Set<ManagedRelayPool>();
 type MetadataWaiter = { resolve(event: Event | null): void; reject(error: unknown): void; cleanup(): void };
 type PendingMetadata = { key: string; pubkey: string; kind: number; waiters: Set<MetadataWaiter>; batch?: MetadataBatch };
 type MetadataBatch = { requests: PendingMetadata[]; controller: AbortController };
-type NetworkRead = { events: Event[]; incomplete: boolean; error?: string };
+type NetworkRead = { events: Event[]; eventRelays?: Map<string, string[]>; incomplete: boolean; error?: string };
 let observing = false;
 function observePools() {
   if (observing) return;
@@ -154,10 +154,12 @@ export class NappletNetwork {
     const budget = new AbortController(), linked = linkAbort([abort, budget.signal]);
     const timer = setTimeout(() => budget.abort(), timeoutMs);
     const events = new Map<string, Event>();
+    const eventRelays = new Map<string, string[]>();
     let bytes = 0;
     try {
       const result = await (auth ? this.authPool : this.pool).query({
         relays, filters, abort: linked.signal, signAuth: auth, timeoutMs: Math.max(1, timeoutMs - 50),
+        onEventSource: (event, relayUrl) => { if (events.has(event.id)) eventRelays.set(event.id, [relayUrl]); },
         onEvent: event => {
           if (events.has(event.id) || !matchFilters(filters, event)) return;
           const weight = eventWeight(event);
@@ -166,7 +168,7 @@ export class NappletNetwork {
         },
       });
       assertNotAborted(abort);
-      return { events: [...events.values()],
+      return { events: [...events.values()], eventRelays,
         incomplete: budget.signal.aborted || !result.relays.length || result.relays.some(relay => relay.status !== 'eose' || relay.reason !== undefined),
         error: !events.size && (budget.signal.aborted || !result.relays.length || result.relays.every(relay => relay.status !== 'eose' || relay.reason !== undefined)) ? 'network-error' : undefined };
     } finally { clearTimeout(timer); linked.dispose(); }

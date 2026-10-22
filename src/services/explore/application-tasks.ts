@@ -22,7 +22,7 @@ export type ApplicationTaskState = {
 };
 type Session = {
   account: string; sourceId: string;
-  life: AbortController; reviewed?: readonly string[]; starting?: Promise<void>;
+  life: AbortController; reviewed?: readonly string[]; starting?: Promise<void>; cleanup?: Promise<void>;
   runtime?: ExploreRuntime | NappletRuntime; delivery?: Record<string, unknown>;
 };
 export const applicationTaskStore = createStore(() => ({ sessions: new Map<string, ApplicationTaskState>() }));
@@ -47,6 +47,8 @@ export const applicationTasks = {
     if (!tasks) throw new Error('napplets.rebuild_required');
     if (!await canReceiveForAccount(account)) throw new Error('account-unavailable');
     if (nappletStore.getState().accountPubkey !== account) throw new Error('session-closed');
+    entry = await resolveFavoriteMetadata(account, entry, new AbortController().signal);
+    if (nappletStore.getState().accountPubkey !== account) throw new Error('session-closed');
     const sourceId = applicationSourceId(entry.address);
     for (const [id, session] of sessions) if (session.account === account && session.sourceId === sourceId) {
       try {
@@ -70,11 +72,14 @@ export const applicationTasks = {
   },
   async start(id: string) {
     const session = sessions.get(id), state = applicationTaskStore.getState().sessions.get(id);
-    if (!session || !state || session.starting || session.runtime) return;
+    if (!session || !state) return;
+    if (session.starting) return session.starting;
+    if (session.runtime) return;
     const { account } = state;
     let { entry } = state;
     const signal = session.life.signal;
-    const current = () => { assertNotAborted(signal); if (sessions.get(id) !== session) throw new Error('session-closed'); };
+    const isCurrent = () => !signal.aborted && sessions.get(id) === session;
+    const current = () => { assertNotAborted(signal); if (!isCurrent()) throw new Error('session-closed'); };
     const confirm = async (prompt: RuntimePrompt, requestSignal?: AbortSignal) => {
       current(); assertNotAborted(requestSignal);
       await platform.napplet.tasks!.focus(id);
@@ -82,6 +87,7 @@ export const applicationTasks = {
       return nappletService.requestApproval(prompt, requestSignal ?? signal);
     };
     const start = async () => {
+      if (session.cleanup) { await session.cleanup; current(); }
       if (!await canReceiveForAccount(account)) throw new Error('account-unavailable');
       current();
       const launch = async (app: ExploreEntry, delivery?: Record<string, unknown>) => {
@@ -112,15 +118,15 @@ export const applicationTasks = {
         domains = [...required, ...optional.filter(domain => Array.isArray(selected) && selected.includes(domain))];
         await setData(scope, 'permissions', 'domains', JSON.stringify(domains)); current();
       }
-      const presented = () => patch(id, { loading: false });
+      const presented = () => { if (isCurrent()) patch(id, { loading: false }); };
       if (entry.release) {
         const release = entry.release;
         await nappletService.install(release, account); current();
         const html = await loadArtifact(release, signal); current();
         const runtime = new NappletRuntime({ accountPubkey: account, release, html, domains,
           theme, confirm, presented,
-          configure: (schema, values) => nappletService.configureExternal(schema, values, value => runtime.saveConfig(value), signal),
-          handlers: async () => nappletStore.getState().installed,
+          configure: (schema, values) => { current(); nappletService.configureExternal(schema, values, value => runtime.saveConfig(value), signal); },
+          handlers: async () => { current(); return nappletStore.getState().installed; },
           invoke: (target, delivery) => launch(fromNapplet(target), delivery),
           openBrowser: url => launch(websiteEntry(url)),
         });
@@ -130,15 +136,15 @@ export const applicationTasks = {
       } else {
         const runtime = new ExploreRuntime(account, { ...entry, required }, {
           theme: () => theme().colors, confirm, presented,
-          focus: () => platform.napplet.tasks!.focus(id),
-          failed: () => patch(id, { loading: false, error: 'napplets.request_failed' }),
-          close: () => { void this.close(id).catch(error => console.warn('[explore] Task cleanup failed', error)); },
-          link: url => { void platform.urlOpener.openExternalUrl(url).catch(() => {}); },
-          configure: (schema, values, save, configSignal) => nappletService.configureExternal(schema, values, save, configSignal),
-          applications: () => readEntries(account),
-          application: async source => (await readEntries(account, source))[0],
+          focus: () => { current(); return platform.napplet.tasks!.focus(id); },
+          failed: () => { if (isCurrent()) patch(id, { loading: false, error: 'napplets.request_failed' }); },
+          close: () => { if (!isCurrent()) return; void this.close(id).catch(error => console.warn('[explore] Task cleanup failed', error)); },
+          link: url => { current(); void platform.urlOpener.openExternalUrl(url).catch(() => {}); },
+          configure: (schema, values, save, configSignal) => { current(); nappletService.configureExternal(schema, values, save, configSignal); },
+          applications: () => { current(); return readEntries(account); },
+          application: async source => { current(); return (await readEntries(account, source))[0]; },
           launch: app => launch(app),
-          navigated: address => patch(id, { entry: { ...entry, key: address, address, title: new URL(address).host } }),
+          navigated: address => { if (isCurrent()) patch(id, { entry: { ...entry, key: address, address, title: new URL(address).host } }); },
         });
         session.runtime = runtime;
         const containerId = await runtime.start(); current(); patch(id, { containerId });
@@ -146,9 +152,9 @@ export const applicationTasks = {
       await visit(account, entry);
     };
     session.starting = start().catch(async error => {
-      if (signal.aborted) return;
+      if (!isCurrent()) return;
       console.warn('[explore] Application task failed', error);
-      if (session.runtime instanceof ExploreRuntime) session.runtime.stop();
+      if (session.runtime instanceof ExploreRuntime) await session.runtime.stop();
       else await session.runtime?.close().catch(cleanup => console.warn('[explore] Task cleanup failed', cleanup));
       session.runtime = undefined;
       patch(id, { containerId: undefined, loading: false, error: error instanceof Error && error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed' });
@@ -160,10 +166,24 @@ export const applicationTasks = {
     if (runtime && applicationTaskStore.getState().sessions.get(id)?.containerId && await runtime.goBack()) return;
     await this.close(id);
   },
+  async restart(id: string, entry: ExploreEntry) {
+    const old = sessions.get(id), previous = applicationTaskStore.getState().sessions.get(id);
+    if (!old || !previous || applicationSourceId(entry.address) !== old.sourceId) throw new Error('session-closed');
+    old.life.abort();
+    const cleanup = Promise.resolve(old.runtime instanceof ExploreRuntime ? old.runtime.stop() : old.runtime?.close());
+    const candidate: Session = { account: old.account, sourceId: old.sourceId, life: new AbortController(), cleanup, delivery: old.delivery };
+    sessions.set(id, candidate);
+    patch(id, { entry, containerId: undefined, loading: true, error: undefined });
+    await this.start(id);
+    const state = applicationTaskStore.getState().sessions.get(id);
+    if (sessions.get(id) === candidate && state?.error) {
+      throw new Error(state.error);
+    }
+  },
   async retry(id: string) {
     const session = sessions.get(id);
     if (!session) return;
-    if (session.runtime instanceof ExploreRuntime) session.runtime.stop(); else await session.runtime?.close();
+    if (session.runtime instanceof ExploreRuntime) await session.runtime.stop(); else await session.runtime?.close();
     session.runtime = undefined;
     patch(id, { containerId: undefined, loading: true, error: undefined });
     await this.start(id);
@@ -174,7 +194,7 @@ export const applicationTasks = {
     if (session) applicationPresence.set(session.account, session.sourceId, false);
     session?.life.abort();
     try {
-      if (session?.runtime instanceof ExploreRuntime) session.runtime.stop(); else await session?.runtime?.close();
+      if (session?.runtime instanceof ExploreRuntime) await session.runtime.stop(); else await session?.runtime?.close();
     } finally {
       applicationTaskStore.setState(state => { const next = new Map(state.sessions); next.delete(id); return { sessions: next }; });
       if (native) await platform.napplet.tasks?.close(id);

@@ -498,6 +498,20 @@
       "when": 1793059200000,
       "tag": "0070_private-favorites",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1793145600000,
+      "tag": "0071_event-backed-applications",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1793232000000,
+      "tag": "0072_event-relay-sources",
+      "breakpoints": true
     }
   ]
 }

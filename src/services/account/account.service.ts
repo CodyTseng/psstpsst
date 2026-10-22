@@ -7,7 +7,7 @@ import type { BunkerPointer } from 'nostr-tools/nip46';
 
 import { db } from '@/db/client';
 import {
-  accounts, exploreEntries, exploreShortcuts, exploreHistory,
+  accounts, exploreEntries, exploreHistory,
   nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingAuthorizations, signingActivity,
   blockedUsers,
   contacts,
@@ -201,7 +201,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
     .where(eq(pendingAttachments.accountPubkey, pubkey));
   await Promise.all(pendingFiles.map((row) => deletePendingAttachmentFile(row.localName)));
   const scoped = [
-    exploreShortcuts, exploreHistory, exploreEntries, nappletData, nappletDataLegacy, nappletUsage, nappletInstallations, signingAuthorizations, signingActivity,
+    exploreHistory, exploreEntries, nappletData, nappletDataLegacy, nappletUsage, nappletInstallations, signingAuthorizations, signingActivity,
     messages,
     groupMemberActions,
     pendingGroupRumors,

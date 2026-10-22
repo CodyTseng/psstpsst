@@ -5,7 +5,7 @@ import { useExplore } from '@/stores/explore.store';
 import { useNapplets } from '@/stores/napplet.store';
 import { exploreService } from '@/services/explore/service';
 import { nappletService } from '@/services/napplet/service';
-import { applicationPresentation } from '@/services/explore/model';
+import { applicationPresentation, fromNapplet } from '@/services/explore/model';
 import { ApplicationRuntimePage } from '@/components/napplet/ApplicationRuntimePage';
 import { ExploreApplicationSheet } from '@/components/napplet/ExploreApplicationSheet';
 import { NappletSurface } from '@/platform/napplet-surface';
@@ -25,6 +25,9 @@ export default function ApplicationWindowScreen() {
   }, [app, napplet.launching, napplet.panel]);
   const close = () => { exploreService.stop(); nappletService.stop(); void platform.napplet.windows?.close(); };
   return <ApplicationRuntimePage windowed active={focused} title={app?.title} application={app ? applicationPresentation(app) : undefined}
+    update={app && explore.account ? { entry: release ? fromNapplet(release) : explore.entry!, account: explore.account,
+      blocked: !!panel || !!napplet.prompt || !!napplet.configuration || !!napplet.panel || napplet.overlayActive,
+      restart: entry => entry.release ? nappletService.restartOpen(napplet.runId, entry.release) : exploreService.restart(explore.runId, entry) } : undefined}
     loading={release ? napplet.launch?.showLoading : explore.loading} error={release ? napplet.launch?.error : explore.error}
     menuEnabled={!!containerId} onClose={close}
     onMore={() => { if (release) nappletService.openPanel('about'); else setPanel('about'); }}

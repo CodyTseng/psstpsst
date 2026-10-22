@@ -703,6 +703,38 @@ remain platform-owned. Browser exports stage bounded files through asynchronous
 ports before the system destination picker. Website notifications have a separate
 native delivery path and never modify messaging badges.
 
+Public application manifests use the shared replaceable-event cache by canonical
+coordinate, with one latest event per application. Immutable kind-5129 applications
+and message references share the event-ID cache. Valid cached releases render
+immediately; stale coordinates refresh asynchronously with the application's
+relay routing and transport budgets. Only completed lookups renew freshness.
+Failed lookups retain usable releases and retry with a bounded delay. Parsed
+manifests are memoized within a bounded process cache; browsing caches public
+metadata without recording visits or publishing it to the local relay.
+
+Favorites are ordered references from the account's encrypted kind-30267 event,
+not a separate membership table. The private-list revision state retains a derived
+decrypted snapshot for offline reads and a durable draft for unsigned local edits.
+Signing and the existing configuration outbox atomically retire the exact draft
+revision. Remote reconciliation cannot overwrite dirty or pending local work.
+History remains device-local. Metadata changes preserve favorite order and recency;
+database change notifications keep sibling hosts' read models current.
+
+Running applications pin their launch manifest and loaded resources. New cache
+versions update lists immediately, but foreground instances require explicit
+restart consent after other approval overlays close. Each target version prompts
+once per running instance; a declined update remains available on the next launch.
+Accepted restarts await release of the old runtime, its container and capability
+connections before initializing the new version. Route-driven and explicit startup
+share one in-flight task for the current launch lifetime. Metadata lookups share
+network work independently of each caller's lifetime; cancellation stops that work
+only after its last consumer leaves.
+
+Application libraries retain their loaded account snapshot across route changes
+and share unfinished initialization. Account lifecycle changes discard that
+snapshot; visible library consumers restore unloaded snapshots. Local Favorites
+reads do not wait behind legacy-library reads.
+
 Discovery queries napp and napplet manifests in bounded pages only from dedicated
 relays for each format, without falling back to general-purpose relays. Results are verified
 and deduplicated in a temporary catalogue, and share the existing detail
@@ -714,7 +746,7 @@ resolving a manifest from explicit hints or, when absent, author write relays pl
 dedicated format relays. Its bounded account-scoped result cache does not admit
 applications to discovery or record visits. Query replacement cancels stale reads.
 Browsing never records a visit or writes to the local relay; adding
-a favorite persists its metadata and shortcut independently of history.
+a favorite persists its event reference independently of history.
 Publisher catalogues additionally include nsites from dedicated relays, with an
 exact author filter and local authorship verification. Their bounded, temporary results share the
 application detail flow without changing saved applications or discovery results.
@@ -727,10 +759,10 @@ stay separate from private messages and mini-app signing grants. Explicit user
 posts use the account identity signer; account lifecycle changes cancel reads,
 signing and publishing before results can enter a replacement session.
 
-Cached entries, explicit shortcut positions, and distinct-address last visits use
-separate account-scoped tables. Favorites synchronize as a private NIP-51
+Favorite membership/order is read from the event snapshot; account-scoped
+metadata projections and distinct-address history remain separate. Favorites synchronize as a private NIP-51
 kind-30267 snapshot through the shared private-list queue, configuration outbox
-and self-event intake. Local membership/order and dirty revision commit before
+and self-event intake. A full local draft and dirty revision commit before
 background encryption/signing; dirty or signed-pending work blocks remote echoes.
 Recency and grants remain device-local. Unresolved references retain membership;
 verified metadata hydrates in bounded workers and refreshes one entry at a time.

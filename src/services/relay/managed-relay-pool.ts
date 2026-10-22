@@ -82,6 +82,8 @@ type ManagedQueryBase = QueryObservers & {
   relays: string[];
   timeoutMs: number;
   onEvent?: (event: Event) => void;
+  /** Source of a verified event accepted by this query, never a queried-only relay. */
+  onEventSource?: (event: Event, relayUrl: string) => void;
   onReceived?: (relayUrl: string, id: string) => void;
   signAuth?: SignAuth;
   abort?: AbortSignal;
@@ -1015,10 +1017,11 @@ export class ManagedRelayPool {
         onerror: options.onerror,
         alreadyHaveEvent: (id) => events.has(id),
         onReceived: options.onReceived,
-        onEvent: (event) => {
+        onEvent: (event, relayUrl) => {
           if (!events.has(event.id)) {
             events.set(event.id, event);
             options.onEvent?.(event);
+            options.onEventSource?.(event, relayUrl);
           }
         },
         onEnd: (results) => {

@@ -28,7 +28,12 @@ function createCatalogue(pubkey: string) {
           network = new NappletNetwork(account);
           const result = await queryApplicationCatalogue(network, pubkey);
           // Relay filters are a request; verify both authorship and signatures locally.
-          const entries = await discoveryEntries(result.events.filter(event => event.pubkey === pubkey));
+          const entries = await discoveryEntries(result.events.filter(event => event.pubkey === pubkey), result.eventRelays);
+          setTimeout(() => {
+            void import('./application-cache').then(async cache => {
+              for (const entry of entries) await cache.cacheApplicationEvent(entry);
+            }).catch(() => {});
+          }, 0);
           store.setState({ entries, loaded: true, error: result.incomplete });
           updatedAt = Date.now();
         } catch { store.setState({ error: true }); }

@@ -74,6 +74,8 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     windowChrome: {
+      getFocusState: async () => bridge.windowFocus.isFocused(),
+      addFocusListener: listener => bridge.windowFocus.onChange(listener),
       setTitle: title => bridge.windowChrome.setTitle(title),
       setTheme: (theme) => bridge.windowChrome.setTheme(theme),
       setScreenshotPreview: (enabled) => bridge.windowChrome.setScreenshotPreview(enabled),

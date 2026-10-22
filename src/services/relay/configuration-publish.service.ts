@@ -1,3 +1,4 @@
+import { isNewerEvent as newer } from '@/lib/nostr/event-version';
 import { and, asc, eq, lte } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
@@ -46,9 +47,6 @@ async function readCached(key: Coordinate, tx: Database = db) {
   )).limit(1))[0]?.event ?? null;
 }
 
-function newer(a: Event, b: Event): boolean {
-  return a.created_at > b.created_at || (a.created_at === b.created_at && a.id < b.id);
-}
 
 /** Durable handoff: cache and pending publication commit together. A late older
  * snapshot cannot replace newer work, and acknowledgements belong to event IDs. */
@@ -75,7 +73,7 @@ export async function enqueueConfigurationEvent(event: Event, commit?: Configura
       createdAt: event.created_at, fetchedAt: Math.floor(now / 1000),
     }).onConflictDoUpdate({
       target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
-      set: { event, createdAt: event.created_at, fetchedAt: Math.floor(now / 1000) },
+      set: { event, relays: [], createdAt: event.created_at, fetchedAt: Math.floor(now / 1000) },
     });
     await commit?.(event, tx);
     return true;
@@ -198,7 +196,7 @@ export function publishConfigurationAndWait(
         pubkey: event.pubkey, kind: key.kind, dTag: key.dTag, event, createdAt: event.created_at, fetchedAt: now,
       }).onConflictDoUpdate({
         target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
-        set: { event, createdAt: event.created_at, fetchedAt: now },
+        set: { event, relays: [], createdAt: event.created_at, fetchedAt: now },
       });
       await commit?.(event, tx);
       await tx.delete(configurationOutbox).where(slot(key));

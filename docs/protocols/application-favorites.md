@@ -22,14 +22,24 @@ data and permission grants remain independent. Known references are retained
 when metadata cannot be fetched; only verified manifests may launch. Hintless
 references use the publisher's write relays plus application-specific sources;
 explicit hints constrain the manifest lookup. Background hydration has at most
-four workers and one attempt per reference per Explore session; opening details
-or launching can retry. Metadata completion refreshes only that entry.
+four workers; overlapping resolution shares an in-flight lookup. Cached
+replaceable manifests refresh asynchronously after their freshness window.
+Metadata completion refreshes only the changed entry.
+
+Event caches persist up to eight observed relay sources alongside each manifest.
+Sources come from verified query delivery, never from the set of queried or
+default relays. Identical event IDs merge observations; replacing a coordinate's
+event resets its sources. Historical rows start empty. Copy and share pointers
+use these observations plus existing address hints, without inventing locations.
 
 Snapshots are bounded to 512 references, 1,048,576 plaintext characters and
 2,097,152 ciphertext characters. Unsupported or malformed snapshots leave local
 favorites intact; partial decoding never clears or silently truncates a list.
 
-A local edit commits membership/order and its dirty revision in one transaction.
+The cached encrypted event owns membership and order. A derived decrypted
+snapshot supports immediate offline reads; it is keyed by event ID and never
+represents a second authoritative membership table. A local edit commits the
+complete pending reference array and its dirty revision in one transaction.
 UI success and its toast depend only on that local commit. The shared private-list
 queue reads fresh plaintext in a later macrotask, encrypts and signs, then
 atomically checks the revision while handing off to the configuration outbox.
@@ -41,6 +51,7 @@ inside the reconciliation transaction after decryption. Events use the account's
 own configuration publication routing, not application catalogue relays. Live
 filters also cover write/discovery relays already shared with the DM subscription.
 
-Migration preserves existing favorite order and marks it dirty for initial
-publication. Private-list revisions are keyed by account, kind and d-tag; existing
+Migration retires the former shortcut projection after preserving ordered
+references as a pending draft or an event-keyed decrypted snapshot. Existing
+unsigned drafts, including an empty collection, retain their revision and intent. Private-list revisions are keyed by account, kind and d-tag; existing
 kind-30000 mute/block revisions retain their original identity and pending state.

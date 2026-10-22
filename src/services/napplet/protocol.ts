@@ -27,6 +27,7 @@ export const MAX_RESOURCE_BYTES = 10 * 1024 * 1024;
 export type NappletRelease = {
   key: string;
   event: Event;
+  eventRelays?: string[];
   hash: string;
   title: string;
   description: string;
@@ -279,10 +280,10 @@ export function resourceMime(bytes: Uint8Array): string {
 /** Share stable app addresses while retaining immutable snapshot identifiers. */
 export function appShareAddress(release: NappletRelease): string {
   const event = release.event;
-  const address = event.kind === 5129 ? neventEncode({ id: event.id, author: event.pubkey, kind: event.kind, relays: MARKET_RELAYS }) : naddrEncode({
+  const address = event.kind === 5129 ? neventEncode({ id: event.id, author: event.pubkey, kind: event.kind, relays: release.eventRelays }) : naddrEncode({
     kind: event.kind, pubkey: event.pubkey,
     identifier: event.kind === 35129 ? event.tags.find((tag) => tag[0] === 'd')?.[1] ?? '' : '',
-    relays: MARKET_RELAYS,
+    relays: release.eventRelays,
   });
   return `nostr:${address}`;
 }

@@ -1,24 +1,22 @@
 import { createStore } from 'zustand/vanilla';
 import { matchFilters, type Event } from 'nostr-tools';
 import { NappletNetwork } from '@/services/napplet/network';
-import { parseManifest } from '@/services/napplet/protocol';
-import { fromNapplet, parseSite, type ExploreEntry } from './model';
+import { parseApplicationEvents } from './application-event';
+import { type ExploreEntry } from './model';
 import { APPLICATION_DISCOVERY_SOURCES, APPLICATION_QUERY_LIMIT } from './catalogue-relays';
 import { RelayTimeline, compareTimelineEvents } from '@/services/relay/relay-timeline';
 
 /** Verify bounded relay results without blocking a frame with a batch of signatures. */
-export async function discoveryEntries(events: Event[]): Promise<ExploreEntry[]> {
+export async function discoveryEntries(events: Event[], eventRelays?: Map<string, string[]>): Promise<ExploreEntry[]> {
   const entries = new Map<string, ExploreEntry>();
-  for (let i = 0; i < Math.min(events.length, 500); i++) {
-    if (i % 4 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0));
-    try {
-      const event = events[i];
-      const app = [5129, 15129, 35129].includes(event.kind)
-        ? fromNapplet(parseManifest(event)) : parseSite(event);
-      const previous = entries.get(app.key)?.manifest;
-      if (!previous || event.created_at > previous.created_at ||
-        (event.created_at === previous.created_at && event.id < previous.id)) entries.set(app.key, app);
-    } catch { /* Ignore unsupported or invalid public manifests. */ }
+  for (const app of await parseApplicationEvents(events.slice(0, 500))) {
+    if (!app?.manifest) continue;
+    const event = app.manifest, previous = entries.get(app.key)?.manifest;
+    if (!previous || event.created_at > previous.created_at ||
+      event.created_at === previous.created_at && event.id < previous.id) {
+      const relays = eventRelays?.get(event.id);
+      entries.set(app.key, relays ? { ...app, eventRelays: relays, release: app.release ? { ...app.release, eventRelays: relays } : undefined } : app);
+    }
   }
   return [...entries.values()].sort(compare);
 }
@@ -79,13 +77,14 @@ export class ApplicationDiscovery {
     return this.read(account, false);
   }
 
-  private async remember(events: Event[]) {
+  private async remember(events: Event[], eventRelays?: Map<string, string[]>) {
     const missing = events.filter(event => !this.parsed.has(event.id));
     if (!missing.length) return;
     for (const event of missing) this.parsed.set(event.id, undefined);
     const changed = new Map<string, ExploreEntry>();
-    for (const entry of await discoveryEntries(missing)) {
+    for (const entry of await discoveryEntries(missing, eventRelays)) {
       this.parsed.set(entry.manifest!.id, entry);
+      setTimeout(() => { void import('./application-cache').then(cache => cache.cacheApplicationEvent(entry)).catch(() => {}); }, 0);
       const previous = this.catalogue.get(entry.key);
       if (!previous || compare(entry, previous) < 0) {
         this.catalogue.set(entry.key, entry);
@@ -119,7 +118,7 @@ export class ApplicationDiscovery {
           const result = await this.timeline.next(async (relay, filter, signal) => {
             network ??= new NappletNetwork(account);
             const result = await network.query([relay], [filter], signal);
-            await this.remember(result.events.filter(event => matchFilters([filter], event)));
+            await this.remember(result.events.filter(event => matchFilters([filter], event)), result.eventRelays);
             return result;
           }, DISPLAY_PAGE_SIZE - page.length);
           await this.remember(result.events);
@@ -157,6 +156,7 @@ export function loadMoreApplications(account: string) { return discovery.loadMor
 
 /** Exact-address results remain separate from the curated discovery catalogue. */
 export function cacheApplicationAddress(account: string, entry: ExploreEntry) {
+  setTimeout(() => { void import('./application-cache').then(cache => cache.cacheApplicationEvent(entry)).catch(() => {}); }, 0);
   discoveryStore.setState(state => ({ addressCache: { account,
     entries: [entry, ...(state.addressCache.account === account ? state.addressCache.entries : []).filter(app => app.key !== entry.key)].slice(0, 64),
   } }));

@@ -42,6 +42,19 @@ describe('ManagedRelayPool', () => {
     jest.useRealTimers();
   });
 
+  test('reports the delivering relay without treating empty queried relays as event sources', async () => {
+    const harness = createHarness(), onEventSource = jest.fn();
+    const pending = harness.pool.query({ relays: [RELAY_A, RELAY_B], filter: { kinds: [1] }, timeoutMs: 1_000, onEventSource });
+    await flushPromises();
+    const event = eventAt('source', 100);
+    harness.relays[0].emitEvent(event);
+    harness.relays[0].emitEose();
+    harness.relays[1].emitEose();
+    await pending;
+    expect(onEventSource.mock.calls).toEqual([[event, RELAY_A]]);
+    harness.pool.destroy();
+  });
+
   test('settles a publish whose connection promise never resolves', async () => {
     const harness = createHarness();
     jest.spyOn(harness.pool, 'ensureRelay').mockReturnValue(new Promise(() => {}));

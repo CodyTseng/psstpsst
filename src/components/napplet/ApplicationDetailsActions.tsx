@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { HeaderActionMenu, HEADER_ACTION_MENU_ICON_SIZE, type HeaderActionMenuAnchor } from '@/components/common/HeaderActionMenu';
 import { IconButton } from '@/components/common/IconButton';
 import { useClipboard } from '@/hooks/use-clipboard';
-import { applicationShareLink, type ExploreEntry } from '@/services/explore/model';
+import { applicationCopyAddress, type ExploreEntry } from '@/services/explore/model';
 import { showToast } from '@/stores/toast.store';
 import { iconStrokeWidth, spacing, uiDensity, useThemeColors } from '@/theme';
 
@@ -43,7 +43,7 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
       onPress={() => { void openMenu().catch(failed); }} />
     <HeaderActionMenu visible={anchor !== null} anchor={anchor} onClose={() => setAnchor(null)} items={[
       { key: 'copy', title: t('common.copy'), icon: <Copy size={size} strokeWidth={iconStrokeWidth.default} color={colors.text} />,
-        onPress: () => { void copyText(applicationShareLink(entry)).then(copied => {
+        onPress: () => { void copyText(applicationCopyAddress(entry)).then(copied => {
           if (copied) showToast(t('common.copied'), { target: 'detail' });
         }); } },
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={colors.text} />,

@@ -51,6 +51,8 @@ export default function ExploreRunScreen() {
   const canOpenWindow = owns && (state.entry?.kind === 'website' || state.entry?.kind === 'nsite')
     && !!(platform.napplet.windows || platform.napplet.tasks);
   return <ApplicationRuntimePage containerId={owns ? state.containerId : undefined} active={focused} title={state.entry?.title}
+    update={owns && state.entry && state.account ? { entry: state.entry, account: state.account, blocked: !!panel || !!prompt || !!configuration || overlayActive,
+      restart: entry => exploreService.restart(id, entry) } : undefined}
     application={state.entry?applicationPresentation(state.entry):undefined}
     onOpenWindow={canOpenWindow ? openInWindow : undefined} openingWindow={windowPending}
     menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.close(id)} onMore={()=>setPanel('about')}

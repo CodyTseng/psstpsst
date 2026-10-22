@@ -1,3 +1,4 @@
+import { useApplicationUpdates, type ApplicationUpdateTarget } from '@/hooks/use-application-updates';
 import { useContext, type ReactNode } from 'react';
 import { ActivityIndicator,StyleSheet,View } from 'react-native';
 import X from 'lucide-react-native/icons/x';
@@ -20,13 +21,15 @@ import { useNappletAppearance } from '@/platform/napplet-appearance';
 import { ApplicationTaskContext } from './ApplicationTaskContext';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
-export function ApplicationRuntimePage({title,application,containerId,active=true,loading,error,hidden=false,windowed=false,menuEnabled,openingWindow=false,onOpenWindow,onClose,onMore,onRetry,children,overlay}:{
+export function ApplicationRuntimePage({title,application,containerId,active=true,loading,error,hidden=false,windowed=false,menuEnabled,openingWindow=false,onOpenWindow,onClose,onMore,onRetry,children,overlay,update}:{
+  update?:ApplicationUpdateTarget;
   containerId?:string|null;active?:boolean;
   title?:string;application?:ApplicationInfo;loading?:boolean;error?:string|null;hidden?:boolean;windowed?:boolean;menuEnabled:boolean;
   openingWindow?:boolean;onOpenWindow?():void;
   onClose():void;onMore():void;onRetry():void;children?:ReactNode;overlay?:ReactNode;
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
+  useApplicationUpdates(update, active && !loading && !error && !hidden);
   const taskId = useContext(ApplicationTaskContext);
   const immersive = IS_ANDROID && taskId !== null;
   const appearance = useNappletAppearance(containerId);

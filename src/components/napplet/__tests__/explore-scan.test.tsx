@@ -21,14 +21,15 @@ import { discoveryStore } from '@/services/explore/discovery';
 const mockNavigate = jest.fn();
 const mockTabsNavigation = { addListener: jest.fn(() => () => {}), getState: () => ({ index: 0, routes: [{ name: 'napplets' }] }) };
 let mockHandoff: string | undefined;
-let mockExplore = { account: 'account', loaded: true, entries: [] as ExploreEntry[] };
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ searchHandoff: mockHandoff }), useIsFocused: () => true, useNavigation: () => mockTabsNavigation }));
+let mockFocused = true;
+let mockExplore: { account: string | null; loaded: boolean; entries: ExploreEntry[] } = { account: 'account', loaded: true, entries: [] };
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ searchHandoff: mockHandoff }), useIsFocused: () => mockFocused, useNavigation: () => mockTabsNavigation }));
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/services/explore/windows', () => ({ tryOpenApplicationWindow: jest.fn(async () => false) }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 jest.mock('@/services/explore/repository', () => ({ readEntries: jest.fn() }));
 jest.mock('@/services/explore/service', () => ({ exploreService: { activate: jest.fn(async () => {}), prepare: jest.fn(() => 7) } }));
-jest.mock('@/services/explore/address-search', () => ({ ...jest.requireActual('@/services/explore/address-search'), resolveApplicationAddress: jest.fn() }));
+jest.mock('@/services/explore/address-search', () => ({ ...jest.requireActual('@/services/explore/address-query'), resolveApplicationAddress: jest.fn() }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { prepareOpen: jest.fn() } }));
 jest.mock('@/hooks/use-explore-share', () => ({ useExploreShare: () => jest.fn() }));
 jest.mock('@/stores/explore.store', () => ({ useExplore: () => mockExplore }));
@@ -52,7 +53,7 @@ jest.mock('@/components/napplet/NappletGrid', () => ({ NappletGrid: ({ header }:
 jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ Widget: () => null }), { virtual: true });
 
 let renderer: ReactTestRenderer;
-beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<NappletsScreen />); }); });
+beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockFocused = true; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<NappletsScreen />); }); });
 afterEach(() => { act(() => renderer?.unmount()); jest.useRealTimers(); });
 
 it('uses the shared header-sized scanner and points empty Favorites to Discover', async () => {
@@ -204,4 +205,29 @@ it('shows empty Favorites for accounts with only recent apps while keeping histo
   expect(renderer.root.findAllByType(NappletGrid)).toHaveLength(0);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.empty_title')).toBe(true);
   expect(renderer.root.findByType(IconButton).props.accessibilityLabel).toBe('napplets.recent');
+});
+
+
+it('restores a discarded Favorites snapshot while its screen stays mounted', async () => {
+  expect(exploreService.activate).not.toHaveBeenCalled();
+  mockExplore = { account: null, loaded: false, entries: [] };
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  expect(exploreService.activate).toHaveBeenCalledWith('account');
+});
+
+it('defers a discarded Favorites reload until focus returns and reuses loaded data afterward', async () => {
+  mockFocused = false;
+  mockExplore = { account: null, loaded: false, entries: [] };
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  expect(exploreService.activate).not.toHaveBeenCalled();
+  mockFocused = true;
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  expect(exploreService.activate).toHaveBeenCalledTimes(1);
+  mockExplore = { account: 'account', loaded: true, entries: [] };
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  mockFocused = false;
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  mockFocused = true;
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  expect(exploreService.activate).toHaveBeenCalledTimes(1);
 });

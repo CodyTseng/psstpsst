@@ -102,8 +102,7 @@ export async function saveInstallation(
         set: {
           manifest: JSON.stringify(release.event),
           artifactHash: release.hash,
-          previousManifest:
-            old?.artifactHash !== release.hash ? (old?.manifest ?? null) : old?.previousManifest,
+          previousManifest: null,
         },
       });
   });

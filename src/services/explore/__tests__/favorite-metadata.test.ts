@@ -1,3 +1,4 @@
+import { clearApplicationTestCache } from '../testing/memory-cache';
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
 import { parseFavoriteReference } from '../favorites-protocol';
 import { resolveFavoriteMetadata } from '../favorite-metadata';
@@ -5,11 +6,15 @@ import { cacheFavoriteMetadata, readEntries } from '../repository';
 import { subscribeFavoritesChanged } from '../favorites-events';
 import { NappletNetwork } from '@/services/napplet/network';
 import { websiteEntry } from '../model';
+jest.mock('@/services/nostr/event-cache-retention', () => ({ pruneEventCache: jest.fn(async () => {}), favoriteCoordinates: '' }));
+jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActual('../testing/memory-cache').replaceableCache);
+jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('../testing/memory-cache').immutableCache);
 jest.mock('../repository', () => ({ cacheFavoriteMetadata: jest.fn(async () => {}), readEntries: jest.fn(async () => []) }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 const secret = generateSecretKey(), author = getPublicKey(secret);
 const query = jest.fn(), routes = jest.fn(), destroy = jest.fn(), mediaServers = jest.fn();
 beforeEach(() => {
+  clearApplicationTestCache();
   jest.clearAllMocks(); query.mockReset(); routes.mockResolvedValue(['wss://write.example/']); mediaServers.mockResolvedValue([]);
   jest.mocked(readEntries).mockResolvedValue([]);
   jest.mocked(NappletNetwork).mockImplementation(() => ({ query, routes, destroy, mediaServers }) as unknown as NappletNetwork);

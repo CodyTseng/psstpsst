@@ -991,8 +991,10 @@ footer. These choosers omit access-review language,
 signing-account labels and raw protocol action names.
 
 Mini-app More opens app information with Copy address, Share, Permissions and
-Reload actions. Copy uses the same public address as sharing and keeps the sheet
-open with brief in-place confirmation after the clipboard accepts the write.
+Reload actions. Copy omits the `nostr:` prefix; sharing includes it. Both retain
+relay hints and use a coordinate for replaceable applications or an event pointer
+for immutable applications. Copy keeps the sheet open with brief in-place
+confirmation after the clipboard accepts the write.
 On iOS, runtime swipe gestures navigate embedded page history without dismissing
 the host route; leaving the runtime uses its explicit Close action.
 On Electron and Android, napps and napplets always open in an independent
@@ -1011,6 +1013,10 @@ Inline websites expose a Solar Linear MaximizeSquareMinimalistic window-opening 
 beside More in the header. Opening a
 window succeeds before the current inline page closes, without changing its
 saved opening preference; failures leave the page available.
+A running app prompts once for each newer release when it is foreground and no
+other approval is visible. Later keeps the current page; Restart uses the normal
+permission review for the new release. Background metadata refresh never replaces
+a running page without consent.
 Independent windows merge application
 identity and menu actions into their native title bar, reserve the system caption
 controls, and omit duplicate page headers. Android opens applications as independent

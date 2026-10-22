@@ -22,7 +22,7 @@ import { iconStrokeWidth } from '@/theme/icons';
 import { ApplicationPanel } from './ApplicationPanel';
 import { ApplicationSettings } from './ApplicationSettings';
 import { ApplicationAccessControls } from './ApplicationAccessControls';
-import { applicationPresentation } from '@/services/explore/model';
+import { applicationCopyAddress, applicationPresentation } from '@/services/explore/model';
 
 export type NappletPanelAction = 'share' | 'reload' | 'publisher';
 
@@ -40,7 +40,7 @@ export function NappletSettings({ release, accountPubkey }: { release: NappletRe
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
-export function NappletPanelActions({ address, entry, account, onAction, onOpenExternal }: { address: string; entry: ExploreEntry; account: string | null; onAction: (action: 'share' | 'settings' | 'reload') => void; onOpenExternal?: () => void }) {
+export function NappletPanelActions({ entry, account, onAction, onOpenExternal }: { entry: ExploreEntry; account: string | null; onAction: (action: 'share' | 'settings' | 'reload') => void; onOpenExternal?: () => void }) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const { copyText, copied } = useClipboard();
@@ -72,7 +72,7 @@ export function NappletPanelActions({ address, entry, account, onAction, onOpenE
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
       width={actionWidth} size={actionSize}
       singleLineLabel labelVariant="micro" icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
-      onPress={() => { if (action.key === 'copy') void copyText(address); else if (action.key === 'favorite') void setFavorite(entry, !favorite); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
+      onPress={() => { if (action.key === 'copy') void copyText(applicationCopyAddress(entry)); else if (action.key === 'favorite') void setFavorite(entry, !favorite); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
   </HorizontalScrollView>;
 }
 

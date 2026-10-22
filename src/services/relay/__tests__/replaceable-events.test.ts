@@ -34,7 +34,8 @@ jest.mock('@/db/client', () => ({
         onConflictDoUpdate: jest.fn(async (config: { set: Partial<Row> }) => {
           const key = mockRowKey(values.pubkey, values.kind, values.dTag);
           const existing = mockStore.get(key);
-          if (existing) Object.assign(existing, config.set);
+          // Provenance SQL is exercised by the real SQLite application-cache tests.
+          if (existing) Object.assign(existing, config.set, { relays: [] });
           else mockStore.set(key, { ...values });
         }),
       })),

@@ -3,10 +3,9 @@ import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { ExploreDiscovery } from '@/components/napplet/ExploreDiscovery';
 import { exploreService } from '@/services/explore/service';
 import { useExplore } from '@/stores/explore.store';
-import { websiteEntry, type ExploreEntry } from '@/services/explore/model';
+import { websiteEntry, needsFavoriteMetadata, type ExploreEntry } from '@/services/explore/model';
 import { resolveApplicationAddress } from '@/services/explore/address-search';
 import { cacheApplicationAddress, discoveryStore } from '@/services/explore/discovery';
-import { needsFavoriteMetadata } from '@/services/explore/favorite-metadata';
 import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
@@ -80,9 +79,9 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const clearance = useScreenHeaderClearance();
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   useEffect(() => {
-    if (account)
+    if (account && focused && (state.account !== account || !state.loaded))
       void exploreService.activate(account).catch(() => setError('napplets.request_failed'));
-  }, [account]);
+  }, [account, focused, state.account, state.loaded]);
   const open = useCallback(
     async (app: ExploreEntry) => {
       setError(null);

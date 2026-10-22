@@ -13,7 +13,7 @@ import typeZoo from './fixtures/type-zoo-legacy.json';
 
 jest.mock('@/services/explore/browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(async () => {}), clearAccountBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
-jest.mock('@/services/signing/source', () => ({ signingSourceFromLegacyKey: (key: string) => `${key}.example` }));
+jest.mock('@/services/signing/source', () => ({ ...jest.requireActual('@/services/signing/source'), signingSourceFromLegacyKey: (key: string) => `${key}.example` }));
 jest.mock('@/db/client', () => ({ db: {} }));
 jest.mock('@/services/account/account-access', () => ({ getAccount: jest.fn(async () => ({ pubkey: 'accountA' })) }));
 jest.mock('../artifacts', () => ({ loadArtifact: jest.fn(async () => '') }));
@@ -65,6 +65,22 @@ it('updates a live runtime through its permission cache', async () => {
   await nappletService.updateSigningRule(app, target, { decision: 'deny', duration: 'always' }, 'accountA');
   expect(active.signingPermissions.edit).toHaveBeenCalledWith(target, { decision: 'deny', duration: 'always' });
   expect(active.close).not.toHaveBeenCalled();
+});
+
+it('waits for old mini-app cleanup before allowing a prepared update to launch', async () => {
+  stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
+  await nappletService.open(app);
+  const active = jest.mocked(NappletRuntime).mock.results.at(-1)!.value;
+  let closed!: () => void;
+  active.close.mockImplementationOnce(() => new Promise<void>(resolve => { closed = resolve; }));
+  const runId = nappletStore.getState().runId;
+  const restarting = nappletService.restartOpen(runId, { ...app, hash: 'v2' });
+  nappletService.startPreparedOpen(runId);
+  expect(active.close).toHaveBeenCalledTimes(1);
+  expect(nappletStore.getState()).toMatchObject({ running: null, launching: true, launch: { pending: false } });
+  expect(NappletRuntime).toHaveBeenCalledTimes(1);
+  closed(); await restarting;
+  expect(nappletStore.getState().launch).toMatchObject({ pending: true, release: { hash: 'v2' } });
 });
 
 function addressFixture(relays: string[] = []) {
@@ -503,4 +519,100 @@ it('discards unstarted details-page consent when the account changes', async () 
   await settleLaunch();
   expect(stored.size).toBe(0);
   expect(NappletRuntime).not.toHaveBeenCalled();
+});
+
+it('waits for one unfinished library load when the same account activates again', async () => {
+  nappletService.deactivate();
+  jest.mocked(installations).mockClear();
+  let ready!: () => void;
+  const pending = new Promise<NappletInstallation[]>(resolve => { ready = () => resolve([app]); });
+  jest.mocked(installations).mockReturnValue(pending);
+  const first = nappletService.activate('accountA');
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(nappletStore.getState()).toMatchObject({ accountPubkey: 'accountA', loaded: false });
+  let completed = false;
+  const second = nappletService.activate('accountA').then(() => { completed = true; });
+  await Promise.resolve();
+  expect(completed).toBe(false);
+  ready();
+  await Promise.all([first, second]);
+  expect(installations).toHaveBeenCalledTimes(2);
+  expect(nappletStore.getState().loaded).toBe(true);
+});
+
+it('makes the account ready for local Favorites without waiting for legacy library rows', async () => {
+  nappletService.deactivate();
+  let finish!: () => void;
+  const pending = new Promise<NappletInstallation[]>(resolve => { finish = () => resolve([app]); });
+  jest.mocked(installations).mockReturnValue(pending);
+  let libraryReady = false;
+  const loading = nappletService.activate('accountA').then(() => { libraryReady = true; });
+  await nappletService.activateAccount('accountA');
+  expect(nappletStore.getState().accountPubkey).toBe('accountA');
+  expect(nappletStore.getState().loaded).toBe(false);
+  expect(libraryReady).toBe(false);
+  finish(); await loading;
+  expect(nappletStore.getState().loaded).toBe(true);
+});
+
+async function pendingLibraryLoad() {
+  nappletService.deactivate();
+  let ready!: () => void, fail!: (error: Error) => void;
+  const pending = new Promise<NappletInstallation[]>((resolve, reject) => {
+    ready = () => resolve([app]); fail = reject;
+  });
+  jest.mocked(installations).mockReturnValueOnce(pending).mockReturnValueOnce(pending);
+  const loading = nappletService.activate('accountA');
+  void loading.catch(() => {});
+  await nappletService.activateAccount('accountA');
+  expect(nappletStore.getState().loaded).toBe(false);
+  stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
+  return { loading, ready, fail };
+}
+
+it('clears launching after an open that waited for library initialization', async () => {
+  const library = await pendingLibraryLoad();
+  const opening = nappletService.open(app);
+  expect(nappletStore.getState().launching).toBe(true);
+  library.ready();
+  await Promise.all([library.loading, opening]);
+  expect(nappletStore.getState()).toMatchObject({ launching: false, running: { release: app } });
+  expect(NappletRuntime).toHaveBeenCalledTimes(1);
+});
+
+it.each(['initialization', 'download'])('reports %s failures when opening before the library is ready', async phase => {
+  const library = await pendingLibraryLoad();
+  const opening = nappletService.open(app);
+  const failed = expect(opening).rejects.toThrow('load-failed');
+  if (phase === 'initialization') library.fail(new Error('load-failed'));
+  else { jest.mocked(loadArtifact).mockRejectedValueOnce(new Error('load-failed')); library.ready(); }
+  await failed;
+  await Promise.allSettled([library.loading]);
+  expect(nappletStore.getState()).toMatchObject({ launching: false, running: null, launch: { error: 'load-failed' } });
+  expect(NappletRuntime).not.toHaveBeenCalled();
+});
+
+it('does not resume a launch closed while library initialization was pending', async () => {
+  const library = await pendingLibraryLoad();
+  const opening = nappletService.open(app);
+  const canceled = expect(opening).rejects.toThrow('session-closed');
+  nappletService.stop();
+  library.ready();
+  await Promise.all([library.loading, canceled]);
+  expect(nappletStore.getState()).toMatchObject({ launching: false, running: null, launch: null, prompt: null });
+  expect(NappletRuntime).not.toHaveBeenCalled();
+  expect(loadArtifact).not.toHaveBeenCalled();
+});
+
+it('starts only the latest application after overlapping opens wait for initialization', async () => {
+  const library = await pendingLibraryLoad();
+  const first = nappletService.open(app);
+  const canceled = expect(first).rejects.toThrow('session-closed');
+  const next = { ...app, title: 'Latest application' };
+  const second = nappletService.open(next);
+  library.ready();
+  await Promise.all([library.loading, canceled, second]);
+  expect(NappletRuntime).toHaveBeenCalledTimes(1);
+  expect(nappletStore.getState()).toMatchObject({ launching: false, running: { release: next } });
 });

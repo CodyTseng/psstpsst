@@ -1,3 +1,5 @@
+import m0072 from './0072_event-relay-sources.sql';
+import m0071 from './0071_event-backed-applications.sql';
 import m0070 from './0070_private-favorites.sql';
 import m0068 from './0068_signing-scope-key.sql';
 import m0067 from './0067_application-relay-auth.sql';
@@ -147,6 +149,8 @@ m0066,
 m0067,
 m0068,
 m0069,
-m0070
+m0070,
+m0071,
+m0072
     }
   }

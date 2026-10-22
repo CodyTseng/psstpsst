@@ -35,7 +35,39 @@ beforeEach(async () => {
   runtime = new ExploreRuntime('account', entry, { confirm, close: () => { }, link: () => { } });
   await runtime.start();
 });
-afterEach(() => { runtime.stop(); debugLog.mockRestore(); warningLog.mockRestore(); });
+afterEach(async () => { await runtime.stop(); debugLog.mockRestore(); warningLog.mockRestore(); });
+
+it('waits for native container cleanup and shares repeated stop calls', async () => {
+  let closed!: () => void;
+  jest.mocked(platform.napplet.close).mockImplementationOnce(() => new Promise<void>(resolve => { closed = resolve; }));
+  const stopping = runtime.stop();
+  expect(runtime.stop()).toBe(stopping);
+  let finished = false;
+  void stopping.then(() => { finished = true; });
+  await Promise.resolve();
+  expect(finished).toBe(false);
+  expect(platform.napplet.close).toHaveBeenCalledTimes(1);
+  closed(); await stopping;
+});
+
+it('waits for a container still opening to be closed before cleanup completes', async () => {
+  await runtime.stop();
+  jest.mocked(platform.napplet.close).mockClear();
+  let opened!: (id: string) => void;
+  jest.mocked(platform.napplet.openPage!).mockImplementationOnce(() => new Promise<string>(resolve => { opened = resolve; }));
+  runtime = new ExploreRuntime('account', entry, { confirm, close: () => {}, link: () => {} });
+  const starting = runtime.start();
+  const canceled = expect(starting).rejects.toThrow('session-closed');
+  const stopping = runtime.stop();
+  let finished = false;
+  void stopping.then(() => { finished = true; });
+  await Promise.resolve();
+  expect(finished).toBe(false);
+  opened('late-container');
+  await Promise.all([stopping, canceled]);
+  expect(platform.napplet.close).toHaveBeenCalledTimes(1);
+  expect(platform.napplet.close).toHaveBeenCalledWith('late-container');
+});
 it('shares remembered decisions on one origin and separates scheme, subdomain and port', async () => {
   message('https://site.example', 'one');
   await flush();
@@ -85,7 +117,7 @@ it('requires consent before returning the account public key', async () => {
   expect(warningLog).toHaveBeenCalledWith('[explore]', 'Site', 'getPublicKey', { error: 'permission-denied' });
 });
 it('allows a napp without identity requirements to request account access and signing', async () => {
-  runtime.stop();
+  await runtime.stop();
   const napp: ExploreEntry = { ...entry, key: 'naddr-test', kind: 'napp', required: [], files: [] };
   runtime = new ExploreRuntime('account', napp, { confirm, close: () => {}, link: () => {} });
   await runtime.start();
@@ -100,7 +132,7 @@ it('allows a napp without identity requirements to request account access and si
   expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.result.kind).toBe(1);
 });
 it('still denies account access for a napp when consent is refused', async () => {
-  runtime.stop();
+  await runtime.stop();
   runtime = new ExploreRuntime('account', { ...entry, kind: 'napp', required: [], files: [] }, { confirm, close: () => {}, link: () => {} });
   await runtime.start();
   confirm.mockResolvedValue(false);
@@ -126,7 +158,7 @@ it('reviews a well-formed relay AUTH event for its destination',async()=>{
 });
 
 it('reads public profiles and relay lists without declared capabilities', async () => {
-  runtime.stop();
+  await runtime.stop();
   runtime = new ExploreRuntime('account', { ...entry, kind: 'napp', required: [], files: [] }, { confirm, close: () => {}, link: () => {} });
   await runtime.start();
   const network = (NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
@@ -152,7 +184,7 @@ it('reads public profiles and relay lists without declared capabilities', async 
 });
 
 it('reviews public-key access separately from launch consent and isolates origins',async()=>{
-  runtime.stop();
+  await runtime.stop();
   runtime=new ExploreRuntime('account',entry,{confirm,close:()=>{},link:()=>{}});
   await runtime.start();
   message('https://site.example','one','getPublicKey');await flush();
@@ -163,7 +195,7 @@ it('reviews public-key access separately from launch consent and isolates origin
 });
 
 it.each([{servers:[]},{servers:['https://old.example/']}])('shares one author-server fallback across missing nsite files: %j',async({servers})=>{
-  runtime.stop();
+  await runtime.stop();
   const app={...entry,kind:'nsite' as const,servers,manifest:{pubkey:'b'.repeat(64)} as import('nostr-tools').Event,
     files:[{path:'/index.html',hash:'a'.repeat(64),mime:'text/html'},{path:'/app.js',hash:'c'.repeat(64),mime:'text/javascript'}]};
   runtime=new ExploreRuntime('account',app,{confirm,close:()=>{},link:()=>{}});
@@ -181,7 +213,7 @@ it.each([{servers:[]},{servers:['https://old.example/']}])('shares one author-se
 });
 
 it('does not open a nsite after cancellation while author servers are loading',async()=>{
-  runtime.stop();jest.mocked(platform.napplet.openPage!).mockClear();
+  await runtime.stop();jest.mocked(platform.napplet.openPage!).mockClear();
   const app={...entry,kind:'nsite' as const,manifest:{pubkey:'b'.repeat(64)} as import('nostr-tools').Event,
     files:[{path:'/index.html',hash:'a'.repeat(64),mime:'text/html'}]};
   runtime=new ExploreRuntime('account',app,{confirm,close:()=>{},link:()=>{}});
@@ -195,7 +227,7 @@ it('does not open a nsite after cancellation while author servers are loading',a
   const cancelled=expect(start).rejects.toThrow();
   await loading;
   expect(network.mediaServers).toHaveBeenCalledTimes(1);
-  runtime.stop();finish(['https://new.example/']);
+  await runtime.stop();finish(['https://new.example/']);
   await cancelled;
   expect(platform.napplet.openPage).not.toHaveBeenCalled();
 });

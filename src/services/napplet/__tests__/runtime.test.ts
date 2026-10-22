@@ -9,6 +9,7 @@ import { NappletNetwork } from '../network';
 import { invalidateSigning } from '@/services/signing/changes';
 import { appSigningScope } from '../signing-permissions';
 
+jest.mock('@/services/explore/browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('@/services/files/media-server.service', () => ({ loadAccountMediaServers: jest.fn(async () => ['https://media.example/']) }));

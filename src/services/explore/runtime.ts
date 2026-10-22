@@ -45,6 +45,8 @@ export class ExploreRuntime {
   private pending = new Set<string>();
   private logWindow = { start: Date.now(), count: 0 };
   private unsubscribe?: () => void;
+  private opening?: Promise<string>;
+  private stopped?: Promise<void>;
   presented=false;
   containerId?: string;
   constructor(readonly account: string, readonly entry: ExploreEntry, private options: {
@@ -168,9 +170,10 @@ export class ExploreRuntime {
       else
         receive(id, raw);
     });
-    this.containerId = await platform.napplet.openPage(page);
+    this.containerId = await (this.opening = platform.napplet.openPage(page));
     if (this.lifetime.signal.aborted) {
-      await platform.napplet.close(this.containerId);
+      await this.stop();
+      this.containerId = undefined;
       throw new Error('session-closed');
     }
     for (const message of early)
@@ -178,7 +181,9 @@ export class ExploreRuntime {
     return this.containerId;
   }
   private enterDocument(message: ExploreMessage) {
-    this.capabilitiesClosed = this.capabilities?.stop() ?? this.capabilitiesClosed; this.capabilities = undefined;
+    this.capabilitiesClosed = Promise.all([this.capabilitiesClosed, this.capabilities?.stop()]).then(() => {});
+    void this.capabilitiesClosed.catch(() => {});
+    this.capabilities = undefined;
     this.nonce = '';
     this.streams.clear();
     this.documentLife.abort();
@@ -446,14 +451,22 @@ export class ExploreRuntime {
     if (!this.containerId) return false;
     return platform.napplet.goBack(this.containerId);
   }
-  stop() {
-    void this.capabilities?.stop(); this.capabilities = undefined;
+  stop(): Promise<void> {
+    if (this.stopped) return this.stopped;
+    const capabilities = this.capabilities?.stop(); this.capabilities = undefined;
     this.streams.clear();
     this.lifetime.abort();
     this.documentLife.abort();
     this.unsubscribe?.();
+    this.unsubscribe = undefined;
+    this.pending.clear();
+    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined; this.permissions = undefined;
     this.network.destroy();
-    if (this.containerId)
-      void platform.napplet.close(this.containerId).catch(() => { });
+    const container = this.containerId ? Promise.resolve(this.containerId) : this.opening;
+    this.containerId = undefined;
+    this.stopped = Promise.all([this.capabilitiesClosed, capabilities, container?.then(id => platform.napplet.close(id))]).then(() => {});
+    // Existing fire-and-forget callers remain safe; restart callers await the same cleanup.
+    void this.stopped.catch(() => {});
+    return this.stopped;
   }
 }

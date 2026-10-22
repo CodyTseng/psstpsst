@@ -11,4 +11,6 @@ export const privateListSyncState = sqliteTable('private_list_sync_state', {
   revision: integer('revision').notNull().default(0),
   dirty: integer('dirty', { mode: 'boolean' }).notNull().default(false),
   eventId: text('event_id'),
+  draft: text('draft', { mode: 'json' }).$type<string[][]>(),
+  snapshot: text('snapshot', { mode: 'json' }).$type<{ eventId: string; tags: string[][] }>(),
 }, (t) => [primaryKey({ columns: [t.accountPubkey, t.kind, t.dTag] })]);

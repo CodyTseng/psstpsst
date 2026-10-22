@@ -34,7 +34,7 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
     headerAction={page==='settings'?<SigningAccountAvatar pubkey={account}/>:undefined}
     scrollResetKey={page??'closed'} maxWidth={contentWidth.focused}
     contentStyle={{gap:spacing.xl,paddingBottom:page==='about'?spacing.md:undefined}}
-    fixedFooter={page==='about'?<NappletPanelActions entry={entry} account={account} address={entry.kind === 'website' ? entry.address : `nostr:${entry.address}`}
+    fixedFooter={page==='about'?<NappletPanelActions entry={entry} account={account}
       onOpenExternal={entry.kind === 'website' ? () => schedule(() => {
         void platform.urlOpener.openExternalUrl(entry.address)
           .then(opened => { if (!opened) showToast(t('napplets.request_failed')); })

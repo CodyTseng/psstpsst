@@ -19,8 +19,8 @@ export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: 
   try {
     if (!platform.napplet.windows && !platform.napplet.tasks) throw new Error('napplets.rebuild_required');
     if (!await canReceiveForAccount(accountPubkey)) throw new Error('account-unavailable');
-    entry = await resolveFavoriteMetadata(accountPubkey, entry, new AbortController().signal);
     if (platform.napplet.tasks) { await applicationTasks.open(entry, accountPubkey, reviewedRequired); return; }
+    entry = await resolveFavoriteMetadata(accountPubkey, entry, new AbortController().signal);
     await platform.napplet.windows!.open({ accountPubkey, address: entry.address, manifest: entry.manifest, servers: entry.servers, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined });
   } catch (error) {
     console.warn('[explore] Application host could not open', error);
@@ -44,6 +44,7 @@ export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEnt
   }
   const reviewedRequired = Array.isArray(launch.reviewedRequired) && launch.reviewedRequired.every(domain => typeof domain === 'string')
     ? launch.reviewedRequired : undefined;
+  entry = await resolveFavoriteMetadata(launch.accountPubkey, entry, new AbortController().signal);
   return { entry, accountPubkey: launch.accountPubkey, reviewedRequired };
 }
 

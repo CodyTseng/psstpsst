@@ -1,34 +1,37 @@
-import { needsFavoriteMetadata, resolveFavoriteMetadata } from './favorite-metadata';
-import { subscribeFavoritesChanged } from './favorites-events';
+import { parseApplicationAddressQuery, resolveApplicationAddress } from './address-search';
+import { refreshApplicationMetadata, subscribeApplicationMetadata } from './application-metadata';
+import { invalidateReplaceableEvents } from '@/services/relay/replaceable-events.service';
 import { platform } from '@/platform';
+import { needsFavoriteMetadata, resolveFavoriteMetadata } from './favorite-metadata';
+import { notifyFavoritesChanged, subscribeFavoritesChanged } from './favorites-events';
 import { createStore } from 'zustand/vanilla';
-import { matchFilters } from 'nostr-tools';
 import { nappletService, nappletStore } from '@/services/napplet/service';
-import { NappletNetwork } from '@/services/napplet/network';
-import { MARKET_RELAYS } from '@/services/napplet/protocol';
 import { registerNappletLifecycle, registerNappletVisit, registerNappletTheme, invalidateNappletSource } from '@/services/napplet/lifecycle';
 import { moveDesktopApp } from '@/services/napplet/desktop-order';
 import { clearBrowserPermissions } from './browser-permission-store';
 import { clearSigningPermissions } from '@/services/signing/repository';
 import { getData, setData } from '@/services/napplet/repository';
 import { readEntries, reorder, visit, forget, queueFavoritesPublication } from './repository';
-import { fromNapplet, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, signedAddress, parseSite, websiteAddress, withVisit, type ExploreEntry } from './model';
+import { fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, websiteEntry, type ExploreEntry } from './model';
 import { ExploreRuntime } from './runtime';
 import { assertNotAborted } from '@/platform/abort';
 import { openApplicationWindow, tryOpenApplicationWindow } from './windows';
 export const exploreStore = createStore(() => ({ account: null as string | null, loaded: false, entries: [] as ExploreEntry[],
   surfaces: [] as string[], runId: 0, entry: null as ExploreEntry | null, containerId: null as string | null, loading: false, error: null as string | null, accessRevision: 0 }));
 let epoch = 0, serial = 0, desktopRevision = 0;
+let activation: { account: string; promise: Promise<void> } | undefined;
 let runtime: ExploreRuntime | undefined;
 let navigatingBack: ExploreRuntime | undefined;
 const parents: { runtime: ExploreRuntime; entry: ExploreEntry; containerId: string }[] = [];
-const readers=new Set<NappletNetwork>();
 let launchLife = new AbortController();
 let reviewedAccess: {runId:number;required:readonly string[]}|undefined;
 export { SUPPORTED_NAPP_DOMAINS } from './model';
 let writes: Promise<unknown> = Promise.resolve();
 let favoritesLife = new AbortController();
 const metadataJobs = new Set<string>();
+let metadataTimer: ReturnType<typeof setInterval> | undefined;
+let stopDatabase: (() => void) | undefined;
+let databaseTimer: ReturnType<typeof setTimeout> | undefined;
 function hydrateFavorites(account: string, entries: ExploreEntry[]) {
   const signal = favoritesLife.signal;
   const unresolved = entries.filter(entry => needsFavoriteMetadata(entry) && (entry.desktopPosition !== null || entry.lastUsedAt !== null));
@@ -39,8 +42,10 @@ function hydrateFavorites(account: string, entries: ExploreEntry[]) {
       if (metadataJobs.has(entry.key)) continue;
       metadataJobs.add(entry.key);
       try { await resolveFavoriteMetadata(account, entry, signal); } catch { /* Keep the saved reference available for retry. */ }
+      finally { metadataJobs.delete(entry.key); }
     }
   };
+  void refreshApplicationMetadata(account, entries.filter(entry => entry.desktopPosition !== null && !!entry.manifest), signal).catch(() => {});
   setTimeout(() => { if (!signal.aborted) for (let i = 0; i < Math.min(4, unresolved.length); i++) void worker(); }, 0);
 }
 const check = (account: string, generation: number) => { if (exploreStore.getState().account !== account || epoch !== generation)
@@ -51,68 +56,44 @@ export const exploreService = {
     return state.account===account && state.runId===runId && !!state.entry;
   },
   async activate(account: string) {
-    if (exploreStore.getState().account === account && exploreStore.getState().loaded)
-      return;
+    if (exploreStore.getState().account === account && exploreStore.getState().loaded) {
+      hydrateFavorites(account, exploreStore.getState().entries); return;
+    }
+    if (activation?.account === account) return activation.promise;
     this.deactivate();
     const generation = epoch;
-    await nappletService.activate(account);
-    if (generation !== epoch)
-      return;
-    exploreStore.setState({ account });
-    const entries = await readEntries(account);
-    check(account, generation);
-    exploreStore.setState({ entries, loaded: true });
-    queueFavoritesPublication(account);
-    hydrateFavorites(account, entries);
-  },
-  deactivate() { favoritesLife.abort(); favoritesLife = new AbortController(); metadataJobs.clear(); for(const reader of readers) reader.destroy();readers.clear();epoch++; this.stop(); exploreStore.setState({ account: null, loaded: false, entries: [] }); },
-  async resolve(value: string): Promise<ExploreEntry> {
-    const { account } = exploreStore.getState();
-    const generation = epoch;
-    if (!account)
-      throw new Error('account-unavailable');
-    const input = value.trim().replace(/^nostr:/, '');
-    if (!/^(naddr|nevent|note)1/i.test(input) && !/^[a-f0-9]{64}$/.test(input)) {
-      const address = websiteAddress(input);
-      return { key: address, address, title: new URL(address).host, kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
-    }
-    const pointer = input.startsWith('naddr1') ? signedAddress(input) : null;
-    if (!pointer) {
-      const release = await nappletService.resolve(value);
+    const promise = (async () => {
+      exploreStore.setState({ account });
+      const [entries] = await Promise.all([readEntries(account), nappletService.activateAccount(account)]);
+      if (generation !== epoch) return;
       check(account, generation);
-      return fromNapplet(release);
-    }
-    const network = new NappletNetwork(account);
-    readers.add(network);
-    try {
-      let relays = [...new Set([...pointer.relays, ...MARKET_RELAYS])];
-      const query = async () => {
-        const response = await network.query(relays, [{ ...pointer.filter, limit: 1 }]);
-        check(account, generation);
-        return response.events.filter(e => matchFilters([pointer.filter], e)).sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id));
-      };
-      let events = await query();
-      if (!events.length && !pointer.relays.length) {
-        relays = await network.publisherRelays(pointer.author);
-        check(account, generation);
-        if (relays.length)
-          events = await query();
-      }
-      const event = events[0];
-      if (!event)
-        throw new Error('napplets.not_found');
-      const app = parseSite(event);
-      if (!app.servers.length) {
-        app.servers = await network.mediaServers(pointer.author);
-        check(account, generation);
-      }
-      if (!app.servers.length)
-        throw new Error('napplets.download_failed');
-      return app;
-    }
-    finally {
-      readers.delete(network);network.destroy();
-    }
+      exploreStore.setState({ entries, loaded: true });
+      queueFavoritesPublication(account);
+      hydrateFavorites(account, entries);
+      metadataTimer = setInterval(() => {
+        if (platform.appState?.currentState() === 'active') hydrateFavorites(account, exploreStore.getState().entries);
+      }, 60_000);
+      stopDatabase = platform.database?.addChangeListener?.(event => {
+        if (!event.external || event.tableName && !['private_list_sync_state','replaceable_events','cached_events','explore_entries','explore_history'].includes(event.tableName)) return;
+        invalidateReplaceableEvents();
+        if (databaseTimer) clearTimeout(databaseTimer);
+        databaseTimer = setTimeout(() => notifyFavoritesChanged(account), 40);
+      });
+    })().finally(() => { if (activation?.promise === promise) activation = undefined; });
+    activation = { account, promise };
+    return promise;
+  },
+  deactivate() { if (metadataTimer) clearInterval(metadataTimer); metadataTimer = undefined; stopDatabase?.(); stopDatabase = undefined; if (databaseTimer) clearTimeout(databaseTimer); activation = undefined; favoritesLife.abort(); favoritesLife = new AbortController(); metadataJobs.clear();epoch++; this.stop(); exploreStore.setState({ account: null, loaded: false, entries: [] }); },
+  async resolve(value: string): Promise<ExploreEntry> {
+    const { account, entries } = exploreStore.getState();
+    if (!account) throw new Error('account-unavailable');
+    const generation = epoch, query = parseApplicationAddressQuery(value);
+    if (query?.type === 'invalid') throw new Error('napplets.invalid_manifest');
+    const resolved = query?.type === 'website' ? websiteEntry(query.key) : query?.type === 'naddr'
+      ? await resolveApplicationAddress(account, query, entries, favoritesLife.signal)
+      : fromNapplet(await nappletService.resolve(value));
+    check(account, generation);
+    return resolved;
   },
   async refreshVisit(account: string, key: string) {
     if (exploreStore.getState().account !== account) return;
@@ -186,64 +167,13 @@ export const exploreService = {
     exploreStore.setState({ runId, entry: app, loading: true, error: null });
     return runId;
   },
-  async start(runId: number) {
-    const { account } = exploreStore.getState();
-    let { entry } = exploreStore.getState();
-    if (runtime) return;
-    const generation = epoch;
-    if (!account || !entry || runId !== exploreStore.getState().runId)
-      return;
-    const signal=launchLife.signal;
-    const current=()=>{check(account,generation);assertNotAborted(signal);if(runId!==exploreStore.getState().runId)throw new Error('session-closed');};
-    try {
-      if (needsFavoriteMetadata(entry)) {
-        entry = await resolveFavoriteMetadata(account, entry, signal);
-        current();
-        exploreStore.setState({ entry });
-      }
-      if (entry.kind === 'napp') {
-        if (entry.required.some(d => !SUPPORTED_NAPP_DOMAINS.includes(d)))
-          throw new Error('napplets.unsupported');
-      }
-      const scope = { accountPubkey: account, appKey: this.signingSource(entry) };
-      const stored = await getData(scope, 'permissions', 'domains');
-      current();
-      const grants: string[] = stored ? JSON.parse(stored) : [];
-      if (entry.required.some(d => !grants.includes(d))) {
-        const reviewed=reviewedAccess?.runId===runId && reviewedAccess.required.length===entry.required.length && entry.required.every(domain=>reviewedAccess!.required.includes(domain));
-        const answer = reviewed?'allow':await nappletService.requestApproval({ title: entry.title, detail: '', accountPubkey: account, application: applicationPresentation(entry) }, signal);
-        current();
-        if (runId !== exploreStore.getState().runId || answer !== 'allow')
-          throw new Error('permission-denied');
-        await setData(scope, 'permissions', 'domains', JSON.stringify(entry.required));
-        current();exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));
-      }
-      current();
-      if (runId !== exploreStore.getState().runId)
-        return;
-      const instance = createRuntime(account, entry, generation, runId);
-      runtime = instance;
-      const containerId = await instance.start();
-      current();
-      if (runtime !== instance || runId !== exploreStore.getState().runId) {
-        instance.stop();
-        return;
-      }
-      exploreStore.setState({ containerId, surfaces: [...parents.map(parent => parent.containerId), containerId], loading: !instance.presented && !exploreStore.getState().error });
-      await this.remember(exploreStore.getState().entry ?? entry, account);
-    }
-    catch (error) {
-      if (epoch === generation && runId === exploreStore.getState().runId) {
-        runtime?.stop();
-        runtime = undefined;
-        exploreStore.setState({ loading: false, error: error instanceof Error && error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed' });
-      }
-    }
+  start(runId: number) {
+    return beginStartup(runId);
   },
   retry(runId:number) {
     const state=exploreStore.getState();
     if(state.runId!==runId || !state.entry || !state.error)return;
-    runtime?.stop();runtime=undefined;
+    void runtime?.stop();runtime=undefined;
     launchLife.abort();launchLife=new AbortController();
     exploreStore.setState({containerId:null,surfaces:parents.map(parent=>parent.containerId),loading:true,error:null});
   },
@@ -254,9 +184,22 @@ export const exploreService = {
   reload(runId: number) {
     const state=exploreStore.getState();
     if(state.runId!==runId || !state.entry || !state.containerId)return;
-    runtime?.stop();runtime=undefined;
+    void runtime?.stop();runtime=undefined;
     launchLife.abort();launchLife=new AbortController();
     exploreStore.setState({containerId:null,surfaces:parents.map(parent=>parent.containerId),loading:true,error:null});
+  },
+  async restart(runId: number, entry: ExploreEntry) {
+    const previous = exploreStore.getState(), old = runtime;
+    if (previous.runId !== runId || previous.entry?.key !== entry.key || !old) throw new Error('session-closed');
+    entry = { ...entry, required: applicationRequirements(entry.kind, entry.required) };
+    launchLife.abort(); launchLife = new AbortController();
+    runtime = undefined; reviewedAccess = undefined;
+    // Reserve startup before publishing state that can trigger route-driven initialization.
+    const start = beginStartup(runId, Promise.resolve(old.stop()));
+    exploreStore.setState({ entry, containerId: null, surfaces: parents.map(parent => parent.containerId), loading: true, error: null });
+    await start;
+    const state = exploreStore.getState();
+    if (state.runId === runId && state.error) throw new Error(state.error);
   },
   async openInWindow(runId: number) {
     const state = exploreStore.getState(), instance = runtime;
@@ -269,7 +212,7 @@ export const exploreService = {
     if (exploreStore.getState().runId !== runId) return;
     const parent = parents.pop();
     if (!parent) { this.stop(runId); return; }
-    runtime?.stop(); runtime = parent.runtime;
+    void runtime?.stop(); runtime = parent.runtime;
     exploreStore.setState({ entry: parent.entry, containerId: parent.containerId, surfaces: [...parents.map(frame => frame.containerId), parent.containerId], loading: false, error: null });
   },
   async goBack(runId: number) {
@@ -289,9 +232,9 @@ export const exploreService = {
       return;
     launchLife.abort();
     reviewedAccess=undefined;
-    runtime?.stop();
+    void runtime?.stop();
     runtime = undefined;
-    for (const parent of parents.splice(0)) parent.runtime.stop();
+    for (const parent of parents.splice(0)) void parent.runtime.stop();
     exploreStore.setState({ containerId: null, surfaces: [], entry: null, loading: false, error: null });
   },
   async reset(app: ExploreEntry, account: string) {
@@ -310,26 +253,92 @@ export const exploreService = {
   },
   signingSource: applicationSigningSource,
 };
+let starting: { runId: number; signal: AbortSignal; promise: Promise<void> } | undefined;
+function beginStartup(runId: number, cleanup?: Promise<void>): Promise<void> {
+  const signal = launchLife.signal;
+  if (starting?.runId === runId && starting.signal === signal) return starting.promise;
+  const promise = launchRuntime(runId, cleanup).finally(() => {
+    if (starting?.promise === promise) starting = undefined;
+  });
+  starting = { runId, signal, promise };
+  return promise;
+}
+async function launchRuntime(runId: number, cleanup?: Promise<void>) {
+  const { account } = exploreStore.getState();
+  let { entry } = exploreStore.getState();
+  if (runtime) return;
+  const generation = epoch;
+  if (!account || !entry || runId !== exploreStore.getState().runId)
+    return;
+  const signal=launchLife.signal;
+  const current=()=>{check(account,generation);assertNotAborted(signal);if(runId!==exploreStore.getState().runId)throw new Error('session-closed');};
+  try {
+    if (cleanup) { await cleanup; current(); entry = exploreStore.getState().entry!; }
+    if (needsFavoriteMetadata(entry)) {
+      entry = await resolveFavoriteMetadata(account, entry, signal);
+      current();
+      exploreStore.setState({ entry });
+    }
+    if (entry.kind === 'napp') {
+      if (entry.required.some(d => !SUPPORTED_NAPP_DOMAINS.includes(d)))
+        throw new Error('napplets.unsupported');
+    }
+    const scope = { accountPubkey: account, appKey: exploreService.signingSource(entry) };
+    const stored = await getData(scope, 'permissions', 'domains');
+    current();
+    const grants: string[] = stored ? JSON.parse(stored) : [];
+    if (entry.required.some(d => !grants.includes(d))) {
+      const reviewed=reviewedAccess?.runId===runId && reviewedAccess.required.length===entry.required.length && entry.required.every(domain=>reviewedAccess!.required.includes(domain));
+      const answer = reviewed?'allow':await nappletService.requestApproval({ title: entry.title, detail: '', accountPubkey: account, application: applicationPresentation(entry) }, signal);
+      current();
+      if (runId !== exploreStore.getState().runId || answer !== 'allow')
+        throw new Error('permission-denied');
+      await setData(scope, 'permissions', 'domains', JSON.stringify(entry.required));
+      current();exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));
+    }
+    current();
+    if (runId !== exploreStore.getState().runId)
+      return;
+    const instance = createRuntime(account, entry, generation, runId);
+    runtime = instance;
+    const containerId = await instance.start();
+    current();
+    if (runtime !== instance || runId !== exploreStore.getState().runId) {
+      await instance.stop();
+      return;
+    }
+    exploreStore.setState({ containerId, surfaces: [...parents.map(parent => parent.containerId), containerId], loading: !instance.presented && !exploreStore.getState().error });
+    await exploreService.remember(exploreStore.getState().entry ?? entry, account);
+  }
+  catch (error) {
+    if (epoch === generation && runId === exploreStore.getState().runId && signal === launchLife.signal && !signal.aborted) {
+      void runtime?.stop();
+      runtime = undefined;
+      exploreStore.setState({ loading: false, error: error instanceof Error && error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed' });
+    }
+  }
+}
 function createRuntime(account: string, entry: ExploreEntry, generation: number, runId: number): ExploreRuntime {
+  const current = () => { check(account, generation); if (runtime !== instance) throw new Error('application-not-active'); };
   const instance = new ExploreRuntime(account, entry, {
     presented: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false }); },
     failed: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false, error: 'napplets.request_failed' }); },
     theme: () => nappletService.currentTheme()?.colors,
-    confirm: nappletService.requestApproval,
+    confirm: (prompt, signal) => { current(); return nappletService.requestApproval(prompt, signal); },
     configure: (schema, values, save, signal) => {
       if (runtime !== instance) throw new Error('application-not-active');
       nappletService.configureExternal(schema, values, save, signal);
     },
-    applications: async () => { check(account, generation); return exploreStore.getState().entries; },
+    applications: async () => { current(); return exploreStore.getState().entries; },
     application: async sourceId => {
-      check(account, generation);
+      current();
       const cached = exploreStore.getState().entries.find(app => app.key === sourceId);
       if (cached) return cached;
       const [app] = await readEntries(account, sourceId); check(account, generation);
       return app;
     },
     launch: async app => {
-      check(account, generation);
+      current();
       app = { ...app, required: applicationRequirements(app.kind, app.required) };
       if (await tryOpenApplicationWindow(app, account)) return;
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
@@ -354,7 +363,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
         exploreStore.setState({ containerId, surfaces: [...parents.map(frame => frame.containerId), containerId], loading: !child.presented });
         await exploreService.remember(app, account);
       } catch (error) {
-        child.stop();
+        await child.stop();
         if (runtime === child) exploreService.close(runId);
         throw error;
       }
@@ -366,7 +375,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
       void exploreService.remember(current, account).catch(() => {});
     },
     close: () => { if (runtime === instance) exploreService.close(runId); },
-    link: url => { void platform.urlOpener.openExternalUrl(websiteAddress(url)).catch(() => {}); },
+    link: url => { current(); void platform.urlOpener.openExternalUrl(websiteAddress(url)).catch(() => {}); },
   });
   return instance;
 }
@@ -388,15 +397,26 @@ subscribeFavoritesChanged((account, key) => {
     if (key) {
       const [app] = await readEntries(account, key);
       check(account, generation);
-      if (app) exploreStore.setState(state => ({ entries: state.entries.map(current => current.key === key
-        ? { ...app, desktopPosition: current.desktopPosition, lastUsedAt: current.lastUsedAt } : current) }));
+      if (app) exploreStore.setState(state => {
+        const next = state.entries.map(current => current.key === key
+          ? { ...app, desktopPosition: current.desktopPosition, lastUsedAt: current.lastUsedAt } : current);
+        const entries = mergeApplicationEntries(state.entries, next);
+        return entries === state.entries ? state : { entries };
+      });
       return;
     }
     const revision = desktopRevision;
     const entries = await readEntries(account);
     check(account, generation);
     if (revision !== desktopRevision) return;
-    exploreStore.setState({ entries });
-    hydrateFavorites(account, entries);
+    const previous = exploreStore.getState().entries;
+    const updated = mergeApplicationEntries(previous, entries);
+    if (updated !== previous) exploreStore.setState({ entries: updated });
+    hydrateFavorites(account, updated);
   })().catch(() => {});
+});
+
+subscribeApplicationMetadata(app => {
+  const state = exploreStore.getState();
+  if (state.account && state.entries.some(entry => entry.key === app.key)) notifyFavoritesChanged(state.account, app.key);
 });

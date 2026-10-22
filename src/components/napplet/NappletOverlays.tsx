@@ -101,7 +101,7 @@ function NappletOverlayContent() {
           onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} />
           : prompt ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={menuOpen}
             onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} /> : null}
-      </View> : showingPanel?.page === 'about' ? <NappletPanelActions entry={fromNapplet(showingPanel.release)} account={accountPubkey} address={appShareAddress(showingPanel.release)} onAction={panelAction} /> : undefined}
+      </View> : showingPanel?.page === 'about' ? <NappletPanelActions entry={fromNapplet(showingPanel.release)} account={accountPubkey} onAction={panelAction} /> : undefined}
     >
       {selectingApplication ? null : prompt ? <>
         {prompt.requester && !prompt.application ? <View style={{ gap: spacing.xs }}>
