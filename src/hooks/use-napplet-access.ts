@@ -10,9 +10,10 @@ export function useNappletAccess(release: NappletRelease | undefined, accountPub
   const [result, setResult] = useState<{ key: string; approved?: boolean; error?: string }>();
   useEffect(() => {
     let active = true;
-    if (release && accountPubkey) void nappletService.domainPermissions(release, accountPubkey)
+    if (release && accountPubkey) void nappletService.activateAccount(accountPubkey)
+      .then(() => active ? nappletService.domainPermissions(release, accountPubkey) : undefined)
       .then((domains) => {
-        if (active) setResult({ key, approved: ['shell', ...release.required].every((domain) => domains.includes(domain)) });
+        if (active && domains) setResult({ key, approved: ['shell', ...release.required].every((domain) => domains.includes(domain)) });
       }).catch(() => { if (active) setResult({ key, error: 'napplets.request_failed' }); });
     return () => { active = false; };
   }, [release, accountPubkey, key]);

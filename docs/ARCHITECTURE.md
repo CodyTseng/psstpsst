@@ -719,6 +719,23 @@ Signing and the existing configuration outbox atomically retire the exact draft
 revision. Remote reconciliation cannot overwrite dirty or pending local work.
 History remains device-local. Metadata changes preserve favorite order and recency;
 database change notifications keep sibling hosts' read models current.
+Favorites reads its saved membership snapshot and only the requested metadata
+pages. Saved local titles render before first-page manifest verification and
+metadata hydration, which run in a later task. List navigation never decrypts
+events or waits for a signer; configuration synchronization prepares the durable
+plaintext snapshot. It does not initialize application runtimes or poll metadata; shared
+metadata events update existing entries directly. Runtime initialization belongs
+to launch and application-management flows. History changes never invalidate
+Favorites membership. History listing has a separate
+page-owned reader and is queried only while its page is open, using bounded
+keyset pages independently of the Favorites read model. Each entry into Favorites
+or History queries its own first page again; account startup does not prepare
+either list. Page metadata reads use the current database rows rather than a
+potentially stale process mirror.
+Application metadata notifications identify one application. Lists replace only
+that item's metadata while preserving other item identities, order, recency and
+pagination cursors. Sibling hosts invalidate and read only the notified cache key;
+table-wide cache notifications never reload these lists.
 
 Running applications pin their launch manifest and loaded resources. New cache
 versions update lists immediately, but foreground instances require explicit

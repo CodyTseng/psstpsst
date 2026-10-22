@@ -24,4 +24,9 @@ export interface ApplicationWindowsPort {
   onAction(listener: (action: ApplicationWindowAction) => void): () => void;
   broadcastSigning(change: ApplicationSigningChange): Promise<void>;
   onSigningChange(listener: (change: ApplicationSigningChange) => void): () => void;
+  /** Public application-cache identity; receivers read only this application's metadata. */
+  broadcastMetadata(key: string): Promise<void>;
+  onMetadataChange(listener: (key: string) => void): () => void;
+  broadcastFavorites(accountPubkey: string): Promise<void>;
+  onFavoritesChange(listener: (accountPubkey: string) => void): () => void;
 }

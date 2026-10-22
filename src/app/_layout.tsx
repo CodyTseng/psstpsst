@@ -2,6 +2,8 @@ import 'react-native-get-random-values';
 import '../global.css';
 import '@/i18n';
 import { connectSigningWindows } from '@/services/signing/changes';
+import { connectApplicationWindows } from '@/services/explore/application-changes';
+import { readChangedApplicationMetadata } from '@/services/explore/application-cache';
 import { useApplicationWindowActions } from '@/hooks/use-application-window-actions';
 import { ApplicationWindowRoot } from '@/components/napplet/ApplicationWindowRoot';
 import { nappletService } from '@/services/napplet/service';
@@ -185,6 +187,7 @@ export default function RootLayout() {
 
 function RootLayoutContent() {
   useEffect(() => { connectSigningWindows(platform.napplet.windows); return () => connectSigningWindows(); }, []);
+  useEffect(() => { connectApplicationWindows(platform.napplet.windows, readChangedApplicationMetadata); return () => connectApplicationWindows(); }, []);
   useApplicationWindowActions();
   const { t } = useTranslation();
   const { success: migrationsApplied, error: migrationError } = useAppMigrations();

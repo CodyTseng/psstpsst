@@ -7,13 +7,14 @@ import { useApplicationWindowActions } from '../use-application-window-actions';
 import { KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
 import type { ExploreEntry } from '@/services/explore/model';
 import type { ApplicationWindowAction } from '@/platform/ports/application-window';
+import { notifyExploreVisit, subscribeExploreVisits } from '@/services/explore/visits';
 
 const mockStart = jest.fn();
 jest.mock('@/stores/forward-draft.store', () => ({ useForwardDraftStore: { getState: () => ({ start: mockStart }) } }));
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: { getState: () => ({ status: 'ready', activePubkey: 'account' }) } }));
 jest.mock('@/services/explore/service', () => ({ exploreService: {} }));
 jest.mock('@/services/explore/application-presence', () => ({ applicationPresence: { observeWindows: () => () => {} } }));
-jest.mock('@/services/explore/visits', () => ({ subscribeExploreVisits: jest.fn() }));
+jest.mock('@/services/explore/visits', () => ({ subscribeExploreVisits: jest.fn(), notifyExploreVisit: jest.fn() }));
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 
@@ -61,4 +62,15 @@ it('keeps window handoffs link-only when the main window creates the draft', () 
   act(() => receive(sent));
   expect(mockStart.mock.calls[0][0].messages[0].content).toBe('nostr:naddr1example');
   expect(router.push).toHaveBeenCalledWith('/forward');
+});
+
+it('forwards committed visits to history without subscribing a Favorites reader', () => {
+  let receive!: (action: ApplicationWindowAction) => void;
+  platform.napplet.windows = { onAction: (listener: typeof receive) => { receive = listener; return () => {}; } } as NonNullable<typeof platform.napplet.windows>;
+  act(() => { renderer = create(<Harness />); });
+  const action = { type: 'visited', accountPubkey: 'account', key: 'app' } as const;
+  act(() => receive(action));
+  expect(notifyExploreVisit).toHaveBeenCalledWith(action);
+  expect(subscribeExploreVisits).not.toHaveBeenCalled();
+  expect(router.push).not.toHaveBeenCalled();
 });

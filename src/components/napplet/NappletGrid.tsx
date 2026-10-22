@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FlatList, View } from 'react-native';
+import { ActivityIndicator, FlatList, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   scrollTo, withTiming, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle,
@@ -14,7 +14,7 @@ import type { ContextMenuAnchor, ContextMenuPlacement } from '@/components/commo
 import { useIsRTL } from '@/i18n/direction';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
 import { impact } from '@/lib/haptics';
-import type { GridApp } from '@/services/explore/model';
+import { FAVORITES_PAGE_SIZE, type GridApp } from '@/services/explore/model';
 import { spacing, useThemeColors } from '@/theme';
 import { manipulationTiming } from '@/theme/motion';
 import { NappletAppMenu } from './NappletAppMenu';
@@ -28,6 +28,9 @@ type Props<T extends GridApp = GridApp> = {
   header?: ReactNode;
   onScrollBeginDrag?: () => void;
   items: T[];
+  visibleCount?: number;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   recent?: T[];
   onOpen: (app: T) => void;
   onMove: (app: T, index: number | null) => void | Promise<void>;
@@ -78,7 +81,7 @@ const EMPTY_RECENT: GridApp[] = [];
 export function NappletGrid<T extends GridApp>(props: Props<T>) {
   return <AppGrid {...props as unknown as Props} />;
 }
-function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
+function AppGrid({ header, onScrollBeginDrag, items, visibleCount: pageCount, loadingMore, onLoadMore, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
   const c = useThemeColors();
   const { t } = useTranslation();
   const rtl = useIsRTL();
@@ -91,6 +94,8 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
   const [dragItems, setDragItems] = useState<Props['items'] | null>(null);
   const dropGeneration = useRef(0);
   const [dragging, setDragging] = useState<GridApp | null>(null);
+  const [visibleCount, setVisibleCount] = useState(FAVORITES_PAGE_SIZE);
+  const visibleItems = useMemo(() => items.slice(0, pageCount ?? visibleCount), [items, pageCount, visibleCount]);
   const [menu, setMenu] = useState<{ app: GridApp; source: Source; anchor: ContextMenuAnchor } | null>(null);
   const [menuPlacement, setMenuPlacement] = useState<ContextMenuPlacement>('above');
   const appsByKey = useMemo(() => new Map([...recent, ...items].map((app) => [app.key, app])), [items, recent]);
@@ -102,6 +107,10 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
   const origin = useSharedValue({ x: 0, y: 0 });
   const bounds = useSharedValue<Rect>({ x: 0, y: 0, width: 0, height: 0 });
   const x = useSharedValue(0), y = useSharedValue(0), active = useSharedValue(false);
+  const loadMore = useCallback(() => {
+    if (onLoadMore) { onLoadMore(); return; }
+    setVisibleCount(count => Math.max(count, Math.min(items.length, count + FAVORITES_PAGE_SIZE)));
+  }, [items.length, onLoadMore]);
   const offset = useSharedValue(0), contentHeight = useSharedValue(0);
   const { columns, iconSize, cellWidth, cellHeight, columnGap, columnStep, gridInset } = useNappletGridMetrics(width);
   const preview = useMemo(() => recent.slice(0, columns), [recent, columns]);
@@ -116,7 +125,8 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
     const row = Math.max(0, Math.floor(contentY / cellHeight));
     return Math.min(itemCount, row * columns + (rtl ? columns - 1 - column : column));
   });
-  const previewBase = dragItems === null || dragItems === items;
+  const previewBase = useMemo(() => dragItems === null || dragItems === items ||
+    dragItems.length === items.length && dragItems.every((app, index) => app.key === items[index].key), [dragItems, items]);
   const drag: Drag = useMemo(() => ({ active, target, selected, sourceIndex, releasedIndex, previewBase, columns, columnStep,
     cellHeight, count: itemCount, rtl }),
     [active, target, selected, sourceIndex, releasedIndex, previewBase, columns, columnStep, cellHeight, itemCount, rtl]);
@@ -129,8 +139,8 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
   useLayoutEffect(() => {
     // Retire the native preview before paint, once the committed cells own their positions.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (dragItems !== null && dragItems !== items) finishDrop();
-  }, [dragItems, items, finishDrop]);
+    if (dragItems !== null && !previewBase) finishDrop();
+  }, [dragItems, previewBase, finishDrop]);
   const measure = useCallback(() => {
     root.current?.measureInWindow((px, py) => origin.set({ x: px, y: py }));
     viewport.current?.measureInWindow((px, py, w, h) => bounds.set({ x: px, y: py, width: w, height: h }));
@@ -170,12 +180,12 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
       ],
     };
   });
-  const select = useCallback((app: GridApp, icon: View | null) => {
+  const select = useCallback((app: GridApp, icon: View | null, index: number) => {
     if (releasedIndex.get() >= 0) return;
     selectedIcon.current = icon;
     suppressPress.current = false; selected.set(app.key);
-    sourceIndex.set(items.findIndex((item) => item.key === app.key));
-  }, [items, selected, sourceIndex, releasedIndex]);
+    sourceIndex.set(index);
+  }, [selected, sourceIndex, releasedIndex]);
   const begin = useCallback((key: string) => {
     const app = appsByKey.get(key);
     if (!app) return;
@@ -250,16 +260,15 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
     selected.set('');
     icon?.measureInWindow((x, y, width, height) => { setMenuPlacement('above'); setMenu({ app, source, anchor: { x, y, width, height } }); });
   }, [selected]);
-  const action = useCallback((app: GridApp, kind: string) => {
-    const index = items.findIndex((item) => item.key === app.key);
+  const action = useCallback((app: GridApp, kind: string, index: number) => {
     if (kind === 'details') onDetails(app);
     else if (kind === 'permissions') onPermissions(app);
     else if (kind === 'share') onShare(app);
-    else if (kind === 'add') void onMove(app, items.length);
+    else if (kind === 'add') void onMove(app, itemCount);
     else if (kind === 'remove') void onMove(app, null);
     else if (kind === 'earlier' && index > 0) void onMove(app, index - 1);
-    else if (kind === 'later' && index >= 0 && index < items.length - 1) void onMove(app, index + 1);
-  }, [items, onMove, onDetails, onPermissions, onShare]);
+    else if (kind === 'later' && index >= 0 && index < itemCount - 1) void onMove(app, index + 1);
+  }, [itemCount, onMove, onDetails, onPermissions, onShare]);
   const renderTile = (app: GridApp, source: Source, index: number) => <GridItem
     key={app.key} app={app} source={source} index={index}
     width={cellWidth} height={cellHeight} iconSize={iconSize} hideLabel={menu?.app.key === app.key && menuPlacement === 'below'} drag={drag}
@@ -269,7 +278,9 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
   }}>
     <View ref={viewport} testID="napplet-desktop" style={{ flex: 1 }} onLayout={measure}>
       {width > 0 ? <Animated.FlatList
-        ref={list} key={columns} data={items} numColumns={columns}
+        ref={list} key={columns} data={visibleItems} numColumns={columns}
+        onEndReached={loadMore} onEndReachedThreshold={0.25}
+        ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} /> : null}
         keyExtractor={(item) => item.key}
         scrollEnabled={!dragging} onScrollBeginDrag={onScrollBeginDrag} onScroll={scroll} scrollEventThrottle={16}
         onContentSizeChange={(_w, h) => contentHeight.set(h)}
@@ -307,16 +318,16 @@ function AppGrid({ header, onScrollBeginDrag, items, recent = EMPTY_RECENT, onOp
     </Animated.View> : null}
     {menu ? <NappletAppMenu inline app={menu.app} anchor={menu.anchor} onClose={() => setMenu(null)}
       onPlacementChange={setMenuPlacement} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare}
-      favorite onFavorite={(app) => action(app, 'remove')} /> : null}
+      favorite onFavorite={(app) => action(app, 'remove', -1)} /> : null}
 
   </View></GestureDetector>;
 }
 
 const GridItem = memo(function GridItem({ app, source, index, width, height, iconSize, hideLabel, drag, onOpen, onSelect, onMenu, onAction }: {
   app: GridApp; source: Source; index: number; width: number; height: number; iconSize: number; hideLabel: boolean; drag: Drag;
-  onOpen: Props['onOpen']; onSelect: (app: GridApp, icon: View | null) => void;
+  onOpen: Props['onOpen']; onSelect: (app: GridApp, icon: View | null, index: number) => void;
   onMenu: (app: GridApp, source: Source, event: DesktopContextMenuEvent, icon: View | null) => void;
-  onAction: (app: GridApp, kind: string) => void;
+  onAction: (app: GridApp, kind: string, index: number) => void;
 }) {
   const { t } = useTranslation();
   const icon = useRef<View>(null);
@@ -327,7 +338,7 @@ const GridItem = memo(function GridItem({ app, source, index, width, height, ico
     transform: source === 'desktop' ? previewTransform(index, previewSlot(index, drag), drag) : [],
   }));
   return <Animated.View testID={`${source}-app-${app.key}`} style={[{ width, height, paddingVertical: spacing.sm }, style]}>
-      <View style={{ flex: 1 }} onPointerDown={() => onSelect(app, icon.current)} onTouchStart={() => onSelect(app, icon.current)} {...(IS_ELECTRON ? {
+      <View style={{ flex: 1 }} onPointerDown={() => onSelect(app, icon.current, index)} onTouchStart={() => onSelect(app, icon.current, index)} {...(IS_ELECTRON ? {
         onContextMenu: (event: DesktopContextMenuEvent) => onMenu(app, source, event, icon.current),
       } : {})}>
         <NappletTile app={app} iconSize={iconSize} iconRef={icon} hideLabel={hideLabel}
@@ -339,7 +350,7 @@ const GridItem = memo(function GridItem({ app, source, index, width, height, ico
             { name: 'later', label: t('napplets.move_later') },
             { name: 'remove', label: t('napplets.remove_from_desktop') },
           ]}
-          onAccessibilityAction={(event) => onAction(app, event.nativeEvent.actionName)}
+          onAccessibilityAction={(event) => onAction(app, event.nativeEvent.actionName, index)}
           onPress={() => onOpen(app)} />
       </View>
     </Animated.View>;

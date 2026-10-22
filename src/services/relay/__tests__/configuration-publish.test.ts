@@ -1052,6 +1052,16 @@ function favorites() {
   const snapshot = (tags: string[][], at = 100) => ({ ...event(30267, 'psstpsst-favorites', at), content: `encrypted:${JSON.stringify(tags)}` });
   return { ...repository, ...sync, websiteEntry, snapshot };
 }
+it('does not decrypt a cached favorites event during list navigation', async () => {
+  const f = favorites(), remote = f.snapshot([['r', 'https://example.com/']]);
+  sqlite.prepare('INSERT INTO replaceable_events(pubkey,kind,d_tag,event,created_at,fetched_at) VALUES (?,?,?,?,?,?)')
+    .run(SELF, 30267, 'psstpsst-favorites', JSON.stringify(remote), remote.created_at, 1);
+  mockSigner.nip44Decrypt.mockImplementationOnce(() => new Promise(() => {}));
+  await expect(f.readFavoriteEntries(SELF)).resolves.toEqual([]);
+  expect(mockSigner.nip44Decrypt).not.toHaveBeenCalled();
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+});
+
 it('commits favorite membership and dirty revision before any deferred encryption or signing', async () => {
   const f = favorites(), app = f.websiteEntry('https://example.com/app');
   await f.reorder(SELF, [app.key], app);

@@ -107,6 +107,18 @@ const bridge: ElectronBridge = {
         return () => { ipcRenderer.removeListener(IPC.applicationWindowAction, handler); };
       },
       broadcastSigning: change => invoke(IPC.applicationSigningChange, change),
+      broadcastMetadata: key => invoke(IPC.applicationMetadataChange, key),
+      broadcastFavorites: account => invoke(IPC.applicationFavoritesChange, account),
+      onFavoritesChange: listener => {
+        const handler = (_event: unknown, account: string) => listener(account);
+        ipcRenderer.on(IPC.applicationFavoritesChange, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationFavoritesChange, handler); };
+      },
+      onMetadataChange: listener => {
+        const handler = (_event: unknown, key: string) => listener(key);
+        ipcRenderer.on(IPC.applicationMetadataChange, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationMetadataChange, handler); };
+      },
       onSigningChange: listener => {
         const handler = (_event: unknown, value: Parameters<typeof listener>[0]) => listener(value);
         ipcRenderer.on(IPC.applicationSigningChange, handler);

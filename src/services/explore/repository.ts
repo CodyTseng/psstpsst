@@ -1,14 +1,87 @@
-import { and, eq, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lt, notInArray, or, sql } from 'drizzle-orm';
 import { db, type Database } from '@/db/client';
 import { exploreEntries as entries, exploreHistory as history } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { markPrivateListDirty, readPrivateListState } from '@/services/relay/private-list-sync.service';
 import { notifyExploreVisit } from './visits';
 import { favoriteReference, parseFavoriteReference, KIND_APP_FAVORITES, FAVORITES_D } from './favorites-protocol';
-import { knownFavoriteSnapshot, readFavoriteSnapshot } from './favorites-snapshot';
+import { knownFavoriteSnapshot, readFavoriteSnapshot, readLocalFavoriteSnapshot } from './favorites-snapshot';
 import { queueFavoritesPublication } from './favorites';
 import { cacheApplicationEvent, parseApplicationEvent, readApplicationCache, withApplicationMetadata } from './application-cache';
-import { websiteEntry, type ExploreEntry } from './model';
+import { FAVORITES_PAGE_SIZE, websiteEntry, type ExploreEntry } from './model';
+import { parseApplicationEvents } from './application-event';
+import { broadcastFavoriteChange } from './favorites-events';
+import { createPerfSpan, profileAsync } from '@/lib/perf/profiler';
+
+/** The encrypted list owns references and order; application metadata is read separately. */
+export async function readFavoriteReferences(account: string): Promise<ExploreEntry[]> {
+  return (await readLocalFavoriteSnapshot(account)).map(({ entry }, index) => ({ ...entry, desktopPosition: index }));
+}
+
+/** Read one requested metadata page without membership, history, writes or networking. */
+export async function readFavoriteMetadata(account: string, page: ExploreEntry[]): Promise<ExploreEntry[]> {
+  if (page.length > FAVORITES_PAGE_SIZE) throw new Error('favorite-page-too-large');
+  if (!page.length) return [];
+  const [cached, rows] = await Promise.all([
+    readApplicationCache(page),
+    db.select().from(entries).where(and(eq(entries.accountPubkey, account), inArray(entries.sourceId, page.map(entry => entry.key)))),
+  ]);
+  const local = new Map(rows.map(row => [row.sourceId, row]));
+  const legacy = rows.flatMap(row => {
+    try { return row.manifest ? [JSON.parse(row.manifest)] : []; } catch { return []; }
+  });
+  for (const app of await parseApplicationEvents(legacy)) if (app && !cached.has(app.key)) cached.set(app.key, app);
+  return page.map(entry => {
+    const row = local.get(entry.key);
+    let fallback = row ? { ...entry, title: row.title } : entry;
+    if (row?.servers && !fallback.servers.length) {
+      try { fallback = { ...fallback, servers: JSON.parse(row.servers) }; } catch { /* Keep the saved reference usable. */ }
+    }
+    return withApplicationMetadata(fallback, cached.get(entry.key) ?? fallback);
+  });
+}
+
+/** Paint saved titles before parsing signed application manifests. */
+export async function readFavoriteEntries(account: string): Promise<ExploreEntry[]> {
+  const span = createPerfSpan('explore.favorites');
+  try {
+    const references = await profileAsync(span, 'membership', () => readFavoriteReferences(account));
+    const page = references.slice(0, FAVORITES_PAGE_SIZE);
+    if (!page.length) return references;
+    const rows = await profileAsync(span, 'saved-titles', () => db.select({ key: entries.sourceId, title: entries.title }).from(entries)
+      .where(and(eq(entries.accountPubkey, account), inArray(entries.sourceId, page.map(entry => entry.key)))));
+    const titles = new Map(rows.map(row => [row.key, row.title]));
+    return references.map((entry, index) => index < FAVORITES_PAGE_SIZE && titles.has(entry.key) ? { ...entry, title: titles.get(entry.key)! } : entry);
+  } finally { span?.end(); }
+}
+
+export type HistoryCursor = { lastUsedAt: number; key: string };
+export type HistoryPage = { entries: ExploreEntry[]; cursor?: HistoryCursor; hasMore: boolean };
+
+/** Keyset pagination remains stable when an earlier history row is removed. */
+export async function readHistoryPage(account: string, cursor?: HistoryCursor): Promise<HistoryPage> {
+  const rows = await db.select({ entry: entries, lastUsedAt: history.lastUsedAt }).from(history)
+    .innerJoin(entries, and(eq(entries.accountPubkey, history.accountPubkey), eq(entries.sourceId, history.sourceId)))
+    .where(and(eq(history.accountPubkey, account), cursor ? or(lt(history.lastUsedAt, cursor.lastUsedAt),
+      and(eq(history.lastUsedAt, cursor.lastUsedAt), gt(history.sourceId, cursor.key))) : undefined))
+    .orderBy(desc(history.lastUsedAt), asc(history.sourceId)).limit(FAVORITES_PAGE_SIZE + 1);
+  const page = rows.slice(0, FAVORITES_PAGE_SIZE);
+  const candidates = page.map(({ entry, lastUsedAt }) => {
+    const reference = entry.kind === 'website' ? websiteEntry(entry.address)
+      : parseFavoriteReference(favoriteReference({ address: entry.address, kind: entry.kind as ExploreEntry['kind'] })).entry;
+    let servers: string[] = reference.servers;
+    try { if (!servers.length) servers = JSON.parse(entry.servers); } catch { /* Keep the saved reference usable. */ }
+    return { ...reference, title: entry.title, servers, lastUsedAt, desktopPosition: null };
+  });
+  const cached = await readApplicationCache(candidates);
+  const legacy = page.flatMap(({ entry }) => {
+    try { return entry.manifest ? [JSON.parse(entry.manifest)] : []; } catch { return []; }
+  });
+  for (const app of await parseApplicationEvents(legacy)) if (app && !cached.has(app.key)) cached.set(app.key, app);
+  const last = page.at(-1);
+  return { entries: candidates.map(app => withApplicationMetadata(app, cached.get(app.key) ?? app)),
+    cursor: last ? { lastUsedAt: last.lastUsedAt, key: last.entry.sourceId } : cursor, hasMore: rows.length > FAVORITES_PAGE_SIZE };
+}
 
 /** Membership/order comes from the encrypted favorite event, never a second relation table. */
 export async function readEntries(account: string, sourceId?: string): Promise<ExploreEntry[]> {
@@ -91,6 +164,7 @@ export async function reorder(account: string, keys: string[], app?: ExploreEntr
     await pruneEntries(tx, account, keys);
   });
   if (app) void cacheApplicationEvent(app, { retain: true }).catch(() => {});
+  broadcastFavoriteChange(account);
   queueFavoritesPublication(account);
 }
 

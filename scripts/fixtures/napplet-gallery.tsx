@@ -70,6 +70,9 @@ const apps = names.map((title, index) => ({
 const { AppButton } = require('../../src/components/common/AppButton') as typeof import('../../src/components/common/AppButton');
 function Gallery() {
   const [recentPage, setRecentPage] = useState(false);
+  const paged = new URLSearchParams(location.search).has('paged');
+  const [pageCount, setPageCount] = useState(50);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [opened, setOpened] = useState<string | null>(null);
   const [keys, setKeys] = useState<string[]>(() => {
     const saved = localStorage.getItem(storageKey);
@@ -116,6 +119,13 @@ function Gallery() {
             </AppText>
             {opened ? <AppButton label="Close app" onPress={() => setOpened(null)} /> : <NappletGrid
               items={items}
+              visibleCount={paged ? pageCount : undefined}
+              loadingMore={loadingPage}
+              onLoadMore={paged ? () => {
+                if (loadingPage || pageCount >= items.length) return;
+                setLoadingPage(true);
+                setTimeout(() => { setPageCount(count => Math.min(items.length, count + 50)); setLoadingPage(false); }, 20);
+              } : undefined}
               bottomInset={48}
               recent={currentRecent}
               onShowRecent={() => setRecentPage(true)} onRemoveRecent={removeRecent} onDetails={details} onPermissions={(app) => { document.title = `Permissions ${app.title}`; }} onShare={(app) => { document.title = `Share ${app.title}`; }} onOpen={open} onMove={move}

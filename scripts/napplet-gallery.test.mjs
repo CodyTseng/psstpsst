@@ -87,6 +87,39 @@ test(
       await tile('desktop', 'Weather').waitFor({ timeout: 10000 }).catch(async (error) => {
         throw new Error(`${error.message}\n${errors.join('\n')}\n${await page.locator('body').innerText()}`);
       });
+      const checkPagination = async (theme = 'light') => {
+        await page.goto(`${address}/?long=1&paged=1&theme=${theme}`);
+        await tile('desktop', 'Weather').waitFor();
+        assert.equal(await tile('desktop', 'App 80').count(), 0, 'later shortcut pages are not mounted initially');
+        const scrollTo = (end) => desktop.locator('div').evaluateAll((nodes, end) => {
+          const scroll = nodes.find((node) => ['auto', 'scroll'].includes(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight);
+          scroll.scrollTop = end ? scroll.scrollHeight : 0;
+        }, end);
+        await scrollTo(true);
+        await page.waitForTimeout(300);
+        await scrollTo(true);
+        await tile('desktop', 'App 80').waitFor();
+        await scrollTo(false);
+        await tile('desktop', 'Weather').waitFor();
+        if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/${theme}-favorites-pagination.png` });
+      };
+      if (process.env.NAPPLET_GALLERY_PAGINATION === '1') {
+        for (const theme of ['light', 'dark']) {
+          await checkPagination(theme);
+          const source = await tile('desktop', 'Weather').boundingBox();
+          const destination = await tile('desktop', 'Calculator').boundingBox();
+          const before = await order();
+          await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+          await page.mouse.down(); await page.waitForTimeout(550);
+          await page.mouse.move(destination.x + destination.width / 2, destination.y + destination.height / 2, { steps: 10 });
+          await page.mouse.up();
+          await page.waitForFunction(() => document.title.startsWith('move:Weather:'));
+          assert.notEqual((await order()).indexOf('Weather'), before.indexOf('Weather'), 'dragging retains the item index after paginated metadata updates');
+        }
+        assert.deepEqual(errors, []);
+        assert.deepEqual(animationWarnings, []);
+        return;
+      }
       const aligned = async () => {
         await page.waitForFunction(() => {
           const recent = document.querySelector('[data-testid^="recent-app-"]')?.getBoundingClientRect();
@@ -449,8 +482,7 @@ test(
       await history.waitFor();
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await tile('desktop', 'App 80').waitFor();
-      await page.goto(`${address}/?long=1`);
-      await tile('desktop', 'Weather').waitFor();
+      await checkPagination();
       const recentBefore = await preview.boundingBox();
       const appBefore = await tile('desktop', 'Weather').boundingBox();
       const pageArea = await desktop.boundingBox();

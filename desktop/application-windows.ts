@@ -107,5 +107,15 @@ export class ApplicationWindows {
       for (const window of [this.options.parent(), ...this.windows()]) if (window && !window.isDestroyed() && window.webContents !== event.sender)
         window.webContents.send(IPC.applicationSigningChange, change);
     });
+    handle(IPC.applicationMetadataChange, (event, key: string) => {
+      if (typeof key !== 'string' || !key.length || key.length > 8192) throw new Error('invalid-metadata-change');
+      for (const window of [this.options.parent(), ...this.windows()]) if (window && !window.isDestroyed() && window.webContents !== event.sender)
+        window.webContents.send(IPC.applicationMetadataChange, key);
+    });
+    handle(IPC.applicationFavoritesChange, (event, account: string) => {
+      if (typeof account !== 'string' || !/^[a-f0-9]{64}$/.test(account)) throw new Error('invalid-favorites-change');
+      for (const window of [this.options.parent(), ...this.windows()]) if (window && !window.isDestroyed() && window.webContents !== event.sender)
+        window.webContents.send(IPC.applicationFavoritesChange, account);
+    });
   }
 }

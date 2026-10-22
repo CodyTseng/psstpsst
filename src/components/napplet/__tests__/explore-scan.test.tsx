@@ -1,4 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { ActivityIndicator } from 'react-native';
 import { naddrEncode } from 'nostr-tools/nip19';
 import NappletsScreen from '../../../app/(app)/(tabs)/napplets';
 import type { ExploreEntry } from '@/services/explore/model';
@@ -28,7 +29,7 @@ jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/services/explore/windows', () => ({ tryOpenApplicationWindow: jest.fn(async () => false) }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 jest.mock('@/services/explore/repository', () => ({ readEntries: jest.fn() }));
-jest.mock('@/services/explore/service', () => ({ exploreService: { activate: jest.fn(async () => {}), prepare: jest.fn(() => 7) } }));
+jest.mock('@/services/explore/service', () => ({ exploreService: { activate: jest.fn(async () => {}), loadFavoriteSearchMetadata: jest.fn(async () => {}), loadMoreFavorites: jest.fn(async () => {}), prepare: jest.fn(() => 7) } }));
 jest.mock('@/services/explore/address-search', () => ({ ...jest.requireActual('@/services/explore/address-query'), resolveApplicationAddress: jest.fn() }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { prepareOpen: jest.fn() } }));
 jest.mock('@/hooks/use-explore-share', () => ({ useExploreShare: () => jest.fn() }));
@@ -55,6 +56,32 @@ jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ 
 let renderer: ReactTestRenderer;
 beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockFocused = true; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<NappletsScreen />); }); });
 afterEach(() => { act(() => renderer?.unmount()); jest.useRealTimers(); });
+
+it('does not flash a spinner or empty state for a quick local Favorites read', async () => {
+  mockExplore = { account: 'account', loaded: false, entries: [] };
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(30); });
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.empty_title')).toBe(false);
+  mockExplore = { account: 'account', loaded: true, entries: [{ key: 'saved', desktopPosition: 0 } as ExploreEntry] };
+  await act(async () => { renderer.update(<NappletsScreen />); await jest.advanceTimersByTimeAsync(150); });
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  expect(renderer.root.findAllByType(NappletGrid)).toHaveLength(1);
+});
+
+it('shows loading feedback when the local Favorites read remains pending', async () => {
+  mockExplore = { account: 'account', loaded: false, entries: [] };
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(150); });
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+});
+
+it('shows the grid when the local Favorites snapshot is ready', async () => {
+  mockExplore = { account: 'account', loaded: true,
+    entries: [{ key: 'favorite', title: 'Saved app', desktopPosition: 0, lastUsedAt: null } as ExploreEntry] };
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  expect(renderer.root.findByType(NappletGrid).props.items).toEqual(mockExplore.entries);
+});
 
 it('uses the shared header-sized scanner and points empty Favorites to Discover', async () => {
   const scanner = renderer.root.findByType(QrScanButton);
@@ -208,14 +235,15 @@ it('shows empty Favorites for accounts with only recent apps while keeping histo
 });
 
 
-it('restores a discarded Favorites snapshot while its screen stays mounted', async () => {
-  expect(exploreService.activate).not.toHaveBeenCalled();
-  mockExplore = { account: null, loaded: false, entries: [] };
+it('queries Favorites once on entry without repeating the query for store updates', async () => {
+  expect(exploreService.activate).toHaveBeenCalledWith('account', { refresh: true });
+  mockExplore = { account: 'account', loaded: true, entries: [] };
   await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(exploreService.activate).toHaveBeenCalledWith('account');
+  expect(exploreService.activate).toHaveBeenCalledTimes(1);
 });
 
-it('defers a discarded Favorites reload until focus returns and reuses loaded data afterward', async () => {
+it('queries Favorites again each time focus returns and does no query while blurred', async () => {
+  jest.mocked(exploreService.activate).mockClear();
   mockFocused = false;
   mockExplore = { account: null, loaded: false, entries: [] };
   await act(async () => { renderer.update(<NappletsScreen />); });
@@ -229,5 +257,5 @@ it('defers a discarded Favorites reload until focus returns and reuses loaded da
   await act(async () => { renderer.update(<NappletsScreen />); });
   mockFocused = true;
   await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(exploreService.activate).toHaveBeenCalledTimes(1);
+  expect(exploreService.activate).toHaveBeenCalledTimes(2);
 });

@@ -53,6 +53,7 @@ export default function ExploreDetailsScreen() {
         const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : required;
         if (await tryOpenApplicationWindow(app, state.account, reviewed)) return;
         if(app.release) {
+          await nappletService.activateAccount(state.account);
           const runId=nappletService.prepareOpen(app.release,state.account,access.approved?undefined:[...new Set(['shell',...app.required])]);
           router.push({pathname:'/napplet-run',params:{runId}});
           return;

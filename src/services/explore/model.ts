@@ -7,6 +7,7 @@ import { parseNostrEventReference } from '@/lib/nostr/event-reference';
 import { normalizeRelayUrls } from '@/lib/nostr/relay-url';
 import { publicUrl, appShareAddress, parseManifest, type NappletRelease } from '@/services/napplet/protocol';
 export type ExploreKind = 'napplet' | 'napp' | 'nsite' | 'website';
+export const FAVORITES_PAGE_SIZE = 50;
 export function needsFavoriteMetadata(entry: Pick<ExploreEntry, 'kind' | 'manifest'>) { return entry.kind !== 'website' && !entry.manifest; }
 
 type ApplicationAddressEntry = Pick<ExploreEntry, 'kind' | 'address' | 'manifest' | 'eventRelays'>;
@@ -171,7 +172,12 @@ export function mergeApplicationEntries(previous: ExploreEntry[], incoming: Expl
     const updated = pending.get(entry.key);
     pending.delete(entry.key);
     if (!updated) { changed = true; continue; }
-    const same = entry.manifest?.id === updated.manifest?.id && entry.title === updated.title && entry.kind === updated.kind &&
+    const same = entry === updated || entry.manifest?.id === updated.manifest?.id && entry.title === updated.title && entry.kind === updated.kind &&
+      entry.description === updated.description && entry.icon?.hash === updated.icon?.hash && entry.icon?.mime === updated.icon?.mime &&
+      (entry.required === updated.required || (entry.required?.length ?? 0) === (updated.required?.length ?? 0) &&
+        (entry.required ?? []).every((value, index) => value === updated.required?.[index])) &&
+      (entry.files === updated.files || (entry.files?.length ?? 0) === (updated.files?.length ?? 0) &&
+        (entry.files ?? []).every((file, index) => file.path === updated.files?.[index].path && file.hash === updated.files?.[index].hash && file.mime === updated.files?.[index].mime)) &&
       entry.address === updated.address && entry.desktopPosition === updated.desktopPosition && entry.lastUsedAt === updated.lastUsedAt &&
       entry.servers.length === updated.servers.length && entry.servers.every((server, index) => server === updated.servers[index]) &&
       (entry.eventRelays?.length ?? 0) === (updated.eventRelays?.length ?? 0) &&

@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { platform } from '@/platform';
-import { exploreService } from '@/services/explore/service';
 import { KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
-import { subscribeExploreVisits } from '@/services/explore/visits';
+import { notifyExploreVisit } from '@/services/explore/visits';
 import { applicationPresence } from '@/services/explore/application-presence';
 import { useInlineApplicationLaunch } from './use-inline-application-launch';
 
@@ -13,16 +12,10 @@ import { useInlineApplicationLaunch } from './use-inline-application-launch';
 export function useApplicationWindowActions() {
   useInlineApplicationLaunch();
   useEffect(() => applicationPresence.observeWindows(), []);
-  useEffect(() => {
-    if (!platform.napplet.tasks) return;
-    return subscribeExploreVisits(({ accountPubkey, key }) => {
-      void exploreService.refreshVisit(accountPubkey, key).catch(error => console.warn('[explore] Task visit could not refresh', error));
-    });
-  }, []);
   useEffect(() => platform.napplet.windows?.onAction(action => {
     if (useActiveAccount.getState().status !== 'ready') return;
     if (action.type === 'visited') {
-      void exploreService.refreshVisit(action.accountPubkey, action.key).catch(() => {});
+      notifyExploreVisit(action);
     } else if (action.type === 'profile') {
       router.push(`/profile/${action.pubkey}`);
     } else if (action.type === 'publisher') {

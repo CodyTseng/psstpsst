@@ -6,6 +6,8 @@ export const IPC = {
   browserOpenExternal: 'browser:open-external',
   applicationWindowClose: 'application-window:close', applicationWindowCloseAll: 'application-window:close-all',
   applicationWindowAction: 'application-window:action', applicationSigningChange: 'application-window:signing-change',
+  applicationMetadataChange: 'application-window:metadata-change',
+  applicationFavoritesChange: 'application-window:favorites-change',
   exploreMessage: 'explore:message', exploreReply: 'explore:reply',
   exploreClearData: 'explore:clear-data',
   exploreOpen: 'explore:open',

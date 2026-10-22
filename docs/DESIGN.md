@@ -887,6 +887,8 @@ transition, with editable chrome fixed only while search is active. Discover
 pull-to-refresh uses the native platform control below the resting search field;
 the field collapses during upward scrolling and stays still during pull/rebound.
 Explore loading indicators use muted gray; refresh indicator sizing stays native.
+Brief local reads do not flash a spinner; pending reads show loading feedback
+only after a short delay, without showing an unresolved empty state.
 Background reloads never open the refresh control. Request errors appear only
 when there are no usable results; partial and cached results stay visible without
 an error banner.
@@ -912,9 +914,11 @@ has no format border, and rows omit format badges. Application information shows
 the format as muted caption text
 beneath the title. Both modes open the shared application
 details. Favorites displays only saved shortcuts in its vertically scrolling
-grid without a redundant section heading. Both Explore modes keep the leading
+grid without a redundant section heading. Favorites reads and reveals local
+application metadata in pages of 50 as the user scrolls. Both Explore modes keep the leading
 header history action, which opens the dedicated recent-use page;
-recent apps do not appear inline in Favorites. History reuses Discover application
+recent apps do not appear inline in Favorites. History loads on entry and appends
+50 older entries at a time as the user scrolls. History reuses Discover application
 rows with artwork, a single-line description and publisher identity. Pressing a
 history row opens application details. Running-state dots remain
 clearly visible, straddle the icon artwork's logical bottom-end corner, and use

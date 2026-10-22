@@ -29,6 +29,21 @@ it('persists a replaceable app once per coordinate and reuses it after process c
   expect(mockDatabase!.sqlite.prepare('SELECT count(*) AS n FROM replaceable_events').get()).toEqual({ n: 1 });
 });
 
+it('queries current database metadata on reopening even when no list consumed a notification', async () => {
+  const cache = modules(), old = cache.parseApplicationEvent(event()), updated = event(35130, 2, 'New Notes');
+  const otherEvent = (at: number) => finalizeEvent({ kind: 35130, created_at: at, content: '',
+    tags: [['d', 'calendar'], ['title', `Calendar ${at}`], ['path', '/index.html', 'a'.repeat(64)]] }, secret);
+  const other = cache.parseApplicationEvent(otherEvent(1)), otherUpdated = otherEvent(2);
+  await cache.cacheApplicationEvent(old); await cache.cacheApplicationEvent(other);
+  await cache.readApplicationCache([old, other]);
+  const update = mockDatabase!.sqlite.prepare('UPDATE replaceable_events SET event=?,created_at=? WHERE pubkey=? AND kind=? AND d_tag=?');
+  update.run(JSON.stringify(updated), updated.created_at, updated.pubkey, updated.kind, 'notes');
+  update.run(JSON.stringify(otherUpdated), otherUpdated.created_at, otherUpdated.pubkey, otherUpdated.kind, 'calendar');
+  expect((await cache.readChangedApplicationMetadata(old))?.manifest?.id).toBe(updated.id);
+  expect((await cache.readApplicationCache([other])).get(other.key)?.manifest?.id).toBe(otherUpdated.id);
+  expect(mockQuery).not.toHaveBeenCalled();
+});
+
 it('persists observed sources, merges identical releases and resets sources when the coordinate changes version', async () => {
   const cache = modules(), old = cache.parseApplicationEvent(event());
   const a = 'wss://actual-a.example/', b = 'wss://actual-b.example/';

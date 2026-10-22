@@ -9,6 +9,7 @@ import { readCachedEvents, readCachedEventRecords, storeCachedEvent } from '@/se
 import { isNewerEvent } from '@/lib/nostr/event-version';
 import type { ExploreEntry } from './model';
 import { parseApplicationEvent, parseApplicationEvents, withApplicationMetadata } from './application-event';
+import { createPerfSpan, profileAsync } from '@/lib/perf/profiler';
 export { parseApplicationEvent, withApplicationMetadata } from './application-event';
 
 export function applicationCoordinate(entry: Pick<ExploreEntry, 'address' | 'kind'>): ReplaceableKey | undefined {
@@ -16,6 +17,11 @@ export function applicationCoordinate(entry: Pick<ExploreEntry, 'address' | 'kin
   const reference = parseNostrEventReference(entry.address);
   if (reference?.author && reference.kind && reference.identifier !== undefined)
     return { pubkey: reference.author, kind: reference.kind, dTag: reference.kind >= 30000 ? reference.identifier : '' };
+}
+
+/** A sibling-host notification reads only the specified application's current row. */
+export async function readChangedApplicationMetadata(entry: ExploreEntry): Promise<ExploreEntry | undefined> {
+  return (await readApplicationCache([entry])).get(entry.key);
 }
 
 export async function cacheApplicationEvent(entry: ExploreEntry, options: { retain?: boolean } = {}): Promise<void> {
@@ -44,28 +50,31 @@ export async function cacheApplicationEvent(entry: ExploreEntry, options: { reta
 }
 
 /** One batched read per cache type; absent manifests remain ordinary saved references. */
-export async function readApplicationCache(entries: ExploreEntry[]): Promise<Map<string, ExploreEntry>> {
-  const coordinates: { key: string; coordinate: ReplaceableKey }[] = [];
-  const ids: { key: string; id: string }[] = [];
-  for (const entry of entries) {
-    const coordinate = applicationCoordinate(entry);
-    if (coordinate) coordinates.push({ key: entry.key, coordinate });
-    else if (entry.kind !== 'website') {
-      const reference = parseNostrEventReference(entry.address);
-      if (reference?.id) ids.push({ key: entry.key, id: reference.id });
+export async function readApplicationCache(entries: Pick<ExploreEntry, 'key' | 'address' | 'kind'>[]): Promise<Map<string, ExploreEntry>> {
+  const span = createPerfSpan('explore.metadata', { count: entries.length });
+  try {
+    const coordinates: { key: string; coordinate: ReplaceableKey }[] = [];
+    const ids: { key: string; id: string }[] = [];
+    for (const entry of entries) {
+      const coordinate = applicationCoordinate(entry);
+      if (coordinate) coordinates.push({ key: entry.key, coordinate });
+      else if (entry.kind !== 'website') {
+        const reference = parseNostrEventReference(entry.address);
+        if (reference?.id) ids.push({ key: entry.key, id: reference.id });
+      }
     }
-  }
-  const [replaceable, immutable] = await Promise.all([
-    getReplaceableEventRecords(coordinates.map(item => item.coordinate)), readCachedEventRecords(ids.map(item => item.id)),
-  ]);
-  const events = [...coordinates.map((item, index) => ({ key: item.key, event: replaceable[index].event, relays: replaceable[index].relays })),
-    ...ids.map(item => ({ key: item.key, event: immutable.get(item.id)?.event, relays: immutable.get(item.id)?.relays }))]
-    .filter((item): item is { key: string; event: Event; relays: string[] | undefined } => !!item.event);
-  const apps = await parseApplicationEvents(events.map(item => item.event));
-  const result = new Map<string, ExploreEntry>();
-  apps.forEach((app, index) => { if (app?.key === events[index].key) {
-    const eventRelays = events[index].relays ?? [];
-    result.set(app.key, { ...app, eventRelays, release: app.release ? { ...app.release, eventRelays } : undefined });
-  } });
-  return result;
+    const [replaceable, immutable] = await profileAsync(span, 'database', () => Promise.all([
+      getReplaceableEventRecords(coordinates.map(item => item.coordinate), { fresh: true }), readCachedEventRecords(ids.map(item => item.id)),
+    ]));
+    const events = [...coordinates.map((item, index) => ({ key: item.key, event: replaceable[index].event, relays: replaceable[index].relays })),
+      ...ids.map(item => ({ key: item.key, event: immutable.get(item.id)?.event, relays: immutable.get(item.id)?.relays }))]
+      .filter((item): item is { key: string; event: Event; relays: string[] | undefined } => !!item.event);
+    const apps = await profileAsync(span, 'verify-and-parse', () => parseApplicationEvents(events.map(item => item.event)));
+    const result = new Map<string, ExploreEntry>();
+    apps.forEach((app, index) => { if (app?.key === events[index].key) {
+      const eventRelays = events[index].relays ?? [];
+      result.set(app.key, { ...app, eventRelays, release: app.release ? { ...app.release, eventRelays } : undefined });
+    } });
+    return result;
+  } finally { span?.end(); }
 }

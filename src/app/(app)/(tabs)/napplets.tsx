@@ -9,7 +9,8 @@ import { cacheApplicationAddress, discoveryStore } from '@/services/explore/disc
 import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
-import { ActivityIndicator, BackHandler, Keyboard, ScrollView, View } from 'react-native';
+import { BackHandler, Keyboard, ScrollView, View } from 'react-native';
+import { DelayedActivityIndicator } from '@/components/common/DelayedActivityIndicator';
 import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
 import { iconStrokeWidth } from '@/theme/icons';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
@@ -78,10 +79,18 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setSearchScrolled(false); }, []);
   const clearance = useScreenHeaderClearance();
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
+  const needsFavorites = tab === 'favorites' || scan !== null;
   useEffect(() => {
-    if (account && focused && (state.account !== account || !state.loaded))
-      void exploreService.activate(account).catch(() => setError('napplets.request_failed'));
-  }, [account, focused, state.account, state.loaded]);
+    if (account && focused && needsFavorites)
+      void exploreService.activate(account, { refresh: true }).catch(() => setError('napplets.request_failed'));
+  }, [account, focused, needsFavorites]);
+  useEffect(() => {
+    if (account && focused && searching && tab === 'favorites' && state.loaded && state.account === account)
+      void exploreService.loadFavoriteSearchMetadata(account).catch(() => setError('napplets.request_failed'));
+  }, [account, focused, searching, tab, state.loaded, state.account]);
+  const loadMoreFavorites = useCallback(() => {
+    if (account) void exploreService.loadMoreFavorites(account).catch(() => setError('napplets.request_failed'));
+  }, [account]);
   const open = useCallback(
     async (app: ExploreEntry) => {
       setError(null);
@@ -89,6 +98,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
         if (needsFavoriteMetadata(app)) app = await exploreService.resolveFavorite(app, account ?? '');
         if (await tryOpenApplicationWindow(app, account ?? '')) return;
         if(app.release) {
+          await nappletService.activateAccount(account ?? '');
           const runId=nappletService.prepareOpen(app.release,account??'');
           navigation.open(`/napplet-run?runId=${runId}`);
         } else {
@@ -102,6 +112,9 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   );
   const showSearchDetails = useCallback((app: ExploreEntry) => {
     navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1`);
+  }, [navigation]);
+  const showFavoriteDetails = useCallback((app: ExploreEntry) => {
+    navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`);
   }, [navigation]);
   const resolveScan = useEffectEvent(async (request: { value: string }, signal: AbortSignal) => {
     const address = parseApplicationAddressQuery(request.value);
@@ -205,16 +218,17 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
           {error ? <AppText align="center" style={{ color: c.danger, padding: spacing.md }}>
             {t(error.startsWith('napplets.') ? error : 'napplets.request_failed')}
           </AppText> : null}
-          {scanLoading || !state.loaded || state.account !== account ? <View>
+          {scanLoading || tab === 'favorites' && (!state.loaded || state.account !== account) ? <View>
             {restingSearch}
-            <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
+            <DelayedActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
           </View> : account && tab === 'discover' ? <ExploreDiscovery scope={tab} favorites={desktop} account={account}
             header={restingSearch} headerHeight={SEARCH_HEIGHT} onScrollBeginDrag={stopEmptySearch}
             bottomInset={bottomInset} onScrollChange={setScrolled} onDetails={showSearchDetails}
             onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (
             <NappletGrid header={restingSearch} onScrollBeginDrag={stopEmptySearch}
+              visibleCount={state.favoriteVisibleCount} loadingMore={state.favoritesLoadingMore} onLoadMore={loadMoreFavorites}
               onPermissions={showPermissions} onShare={share}
-              onDetails={(app) => navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`)}
+              onDetails={showFavoriteDetails}
               items={desktop} onOpen={open} onMove={action} bottomInset={bottomInset} onScrollChange={setScrolled} />
           ) : <ScrollView onScroll={event => setScrolled(event.nativeEvent.contentOffset.y > 0)} scrollEventThrottle={16}
             onScrollBeginDrag={stopEmptySearch} keyboardShouldPersistTaps="handled"

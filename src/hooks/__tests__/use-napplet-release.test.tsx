@@ -4,10 +4,12 @@ import { useNappletRelease } from '../use-napplet-release';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
 
+let mockAccount = 'accountA';
+jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: (select: (state: { activePubkey: string }) => unknown) => select({ activePubkey: mockAccount }) }));
 const app = { key: 'app', hash: 'version', event: { id: 'listing' } } as NappletRelease;
 let mockState: { accountPubkey: string; loaded: boolean; installed: NappletRelease[]; market: NappletRelease[] };
 jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => mockState }));
-jest.mock('@/services/napplet/service', () => ({ nappletService: { resolve: jest.fn() } }));
+jest.mock('@/services/napplet/service', () => ({ nappletService: { resolve: jest.fn(), activate: jest.fn(async () => {}) } }));
 let result: ReturnType<typeof useNappletRelease>;
 let renderer: ReactTestRenderer;
 function Probe({ id }: { id: string }) {
@@ -16,7 +18,7 @@ function Probe({ id }: { id: string }) {
   return null;
 }
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.clearAllMocks(); mockAccount = 'accountA';
   mockState = { accountPubkey: 'accountA', loaded: true, installed: [], market: [] };
 });
 afterEach(() => { act(() => renderer?.unmount()); });
@@ -33,6 +35,7 @@ it('discards an old account lookup after switching accounts', async () => {
   jest.mocked(nappletService.resolve).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
     .mockImplementationOnce(() => new Promise(() => {}));
   act(() => { renderer = create(<Probe id="listing" />); });
+  mockAccount = 'accountB';
   mockState = { ...mockState, accountPubkey: 'accountB' };
   act(() => { renderer.update(<Probe id="listing" />); });
   await act(async () => { finish(app); });
@@ -51,4 +54,15 @@ it('does not carry a resolved release or failure into a different app route', as
   act(() => { renderer.update(<Probe id="listing" />); });
   expect(result.release).toBe(app);
   expect(result.error).toBeUndefined();
+});
+
+it('initializes the account only when an app information or permissions view needs it', async () => {
+  mockState = { ...mockState, accountPubkey: '', loaded: false };
+  await act(async () => { renderer = create(<Probe id="listing" />); });
+  expect(nappletService.activate).toHaveBeenCalledWith('accountA');
+  expect(nappletService.resolve).not.toHaveBeenCalled();
+  jest.mocked(nappletService.resolve).mockResolvedValueOnce(app);
+  mockState = { ...mockState, accountPubkey: 'accountA', loaded: true };
+  await act(async () => { renderer.update(<Probe id="listing" />); });
+  expect(result.release).toBe(app);
 });

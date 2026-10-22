@@ -22,6 +22,11 @@ export function knownFavoriteSnapshot(state: { dirty: boolean; draft: string[][]
 }
 const parseTags = (tags: string[][]) => parseFavoriteSnapshot(JSON.stringify(tags));
 
+/** List navigation reads committed plaintext only; synchronization owns decryption. */
+export async function readLocalFavoriteSnapshot(account: string): Promise<FavoriteReference[]> {
+  return knownFavoriteSnapshot(await readPrivateListState(account, FAVORITES_D, db, KIND_APP_FAVORITES));
+}
+
 /** The snapshot is a derived cache; local drafts and newer events always take precedence. */
 export async function cacheFavoriteSnapshot(account: string, event: Event | null, signer?: Signer): Promise<void> {
   if (!event || event.pubkey !== account || event.kind !== KIND_APP_FAVORITES ||

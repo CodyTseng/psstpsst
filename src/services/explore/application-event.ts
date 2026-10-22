@@ -1,12 +1,26 @@
 import type { Event } from 'nostr-tools';
 import { parseManifest } from '@/services/napplet/protocol';
-import { fromNapplet, parseSite, type ExploreEntry } from './model';
+import { fromNapplet, mergeApplicationEntries, parseSite, type ExploreEntry } from './model';
+import { isNewerEvent } from '@/lib/nostr/event-version';
 
 export function withApplicationMetadata(entry: ExploreEntry, metadata: ExploreEntry): ExploreEntry {
   const servers = metadata.servers.length ? metadata.servers : entry.servers;
   const eventRelays = metadata.eventRelays ?? (entry.manifest?.id === metadata.manifest?.id ? entry.eventRelays : undefined);
   return { ...metadata, eventRelays, address: entry.key === metadata.key ? entry.address : metadata.address, servers, release: metadata.release ? { ...metadata.release, servers, eventRelays } : undefined,
     desktopPosition: entry.desktopPosition, lastUsedAt: entry.lastUsedAt };
+}
+
+/** Preserve list order, visit state and every unaffected item's identity. */
+export function updateApplicationMetadata(entries: ExploreEntry[], metadata: ExploreEntry): ExploreEntry[] {
+  const index = entries.findIndex(entry => entry.key === metadata.key);
+  if (index < 0) return entries;
+  const current = entries[index];
+  if (current.manifest && (!metadata.manifest || isNewerEvent(current.manifest, metadata.manifest))) return entries;
+  const updated = mergeApplicationEntries([current], [withApplicationMetadata(current, metadata)])[0];
+  if (updated === current) return entries;
+  const next = entries.slice();
+  next[index] = updated;
+  return next;
 }
 
 const parsed = new Map<string, ExploreEntry>();

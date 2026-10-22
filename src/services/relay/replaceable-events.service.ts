@@ -99,13 +99,14 @@ function nowSeconds(): number {
 }
 
 /** Reads rows for the given keys, serving/refreshing the mirror. One batched query. */
-async function loadRows(keys: ReplaceableKey[]): Promise<Map<string, CachedRow>> {
+async function loadRows(keys: ReplaceableKey[], fresh = false): Promise<Map<string, CachedRow>> {
   const result = new Map<string, CachedRow>();
   const missing: Required<ReplaceableKey>[] = [];
   const pendingKeys = new Set<string>();
   for (const key of keys) {
     const normalized = normalizeKey(key);
     const cacheKey = cacheKeyOf(normalized);
+    if (fresh) deleteMirror(cacheKey);
     const cached = mirror.get(cacheKey);
     if (cached) {
       result.set(cacheKey, cached);
@@ -169,8 +170,8 @@ export async function getReplaceableEvents(
 }
 
 /** Read manifests and their observed sources as one consistent batched snapshot. */
-export async function getReplaceableEventRecords(keys: ReplaceableKey[]): Promise<{ event: NostrEvent | null; relays: string[] }[]> {
-  const rows = await loadRows(keys);
+export async function getReplaceableEventRecords(keys: ReplaceableKey[], options: { fresh?: boolean } = {}): Promise<{ event: NostrEvent | null; relays: string[] }[]> {
+  const rows = await loadRows(keys, options.fresh);
   return keys.map(key => { const row = rows.get(cacheKeyOf(key)); return { event: row?.event ?? null, relays: row?.relays ?? [] }; });
 }
 

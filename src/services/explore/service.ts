@@ -1,9 +1,9 @@
 import { parseApplicationAddressQuery, resolveApplicationAddress } from './address-search';
-import { refreshApplicationMetadata, subscribeApplicationMetadata } from './application-metadata';
+import { subscribeApplicationMetadata } from './application-metadata';
 import { invalidateReplaceableEvents } from '@/services/relay/replaceable-events.service';
 import { platform } from '@/platform';
 import { needsFavoriteMetadata, resolveFavoriteMetadata } from './favorite-metadata';
-import { notifyFavoritesChanged, subscribeFavoritesChanged } from './favorites-events';
+import { subscribeFavoritesChanged } from './favorites-events';
 import { createStore } from 'zustand/vanilla';
 import { nappletService, nappletStore } from '@/services/napplet/service';
 import { registerNappletLifecycle, registerNappletVisit, registerNappletTheme, invalidateNappletSource } from '@/services/napplet/lifecycle';
@@ -11,14 +11,17 @@ import { moveDesktopApp } from '@/services/napplet/desktop-order';
 import { clearBrowserPermissions } from './browser-permission-store';
 import { clearSigningPermissions } from '@/services/signing/repository';
 import { getData, setData } from '@/services/napplet/repository';
-import { readEntries, reorder, visit, forget, queueFavoritesPublication } from './repository';
-import { fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, websiteEntry, type ExploreEntry } from './model';
+import { readEntries, readFavoriteEntries, readFavoriteReferences, readFavoriteMetadata, reorder, visit, forget } from './repository';
+import { FAVORITES_PAGE_SIZE, fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, websiteEntry, type ExploreEntry } from './model';
+import { updateApplicationMetadata, withApplicationMetadata } from './application-event';
+import { isNewerEvent } from '@/lib/nostr/event-version';
 import { ExploreRuntime } from './runtime';
 import { assertNotAborted } from '@/platform/abort';
 import { openApplicationWindow, tryOpenApplicationWindow } from './windows';
-export const exploreStore = createStore(() => ({ account: null as string | null, loaded: false, entries: [] as ExploreEntry[],
+export const exploreStore = createStore(() => ({ account: null as string | null, loaded: false, favoriteVisibleCount: FAVORITES_PAGE_SIZE, favoritesLoadingMore: false, entries: [] as ExploreEntry[],
   surfaces: [] as string[], runId: 0, entry: null as ExploreEntry | null, containerId: null as string | null, loading: false, error: null as string | null, accessRevision: 0 }));
 let epoch = 0, serial = 0, desktopRevision = 0;
+let pendingDesktopRevision: number | undefined;
 let activation: { account: string; promise: Promise<void> } | undefined;
 let runtime: ExploreRuntime | undefined;
 let navigatingBack: ExploreRuntime | undefined;
@@ -28,25 +31,79 @@ let reviewedAccess: {runId:number;required:readonly string[]}|undefined;
 export { SUPPORTED_NAPP_DOMAINS } from './model';
 let writes: Promise<unknown> = Promise.resolve();
 let favoritesLife = new AbortController();
-const metadataJobs = new Set<string>();
-let metadataTimer: ReturnType<typeof setInterval> | undefined;
+const metadataLoaded = new Set<string>();
+const metadataReads = new Map<string, Promise<void>>();
+let moreFavorites: Promise<void> | undefined;
+let favoritesRead = 0;
 let stopDatabase: (() => void) | undefined;
 let databaseTimer: ReturnType<typeof setTimeout> | undefined;
-function hydrateFavorites(account: string, entries: ExploreEntry[]) {
-  const signal = favoritesLife.signal;
-  const unresolved = entries.filter(entry => needsFavoriteMetadata(entry) && (entry.desktopPosition !== null || entry.lastUsedAt !== null));
-  let cursor = 0;
-  const worker = async () => {
-    while (!signal.aborted && cursor < unresolved.length) {
-      const entry = unresolved[cursor++];
-      if (metadataJobs.has(entry.key)) continue;
-      metadataJobs.add(entry.key);
-      try { await resolveFavoriteMetadata(account, entry, signal); } catch { /* Keep the saved reference available for retry. */ }
-      finally { metadataJobs.delete(entry.key); }
-    }
-  };
-  void refreshApplicationMetadata(account, entries.filter(entry => entry.desktopPosition !== null && !!entry.manifest), signal).catch(() => {});
-  setTimeout(() => { if (!signal.aborted) for (let i = 0; i < Math.min(4, unresolved.length); i++) void worker(); }, 0);
+function favoritesInOrder() {
+  return exploreStore.getState().entries.filter(entry => entry.desktopPosition !== null)
+    .sort((a, b) => a.desktopPosition! - b.desktopPosition!);
+}
+function applyMetadata(metadata: ExploreEntry[]) {
+  if (metadata.length === 1) {
+    exploreStore.setState(state => {
+      const entries = updateApplicationMetadata(state.entries, metadata[0]);
+      return entries === state.entries ? state : { entries };
+    });
+    return;
+  }
+  const byKey = new Map(metadata.map(entry => [entry.key, entry]));
+  exploreStore.setState(state => {
+    const next = state.entries.map(entry => {
+      const updated = byKey.get(entry.key);
+      if (!updated || entry.manifest && (!updated.manifest || isNewerEvent(entry.manifest, updated.manifest))) return entry;
+      return withApplicationMetadata(entry, updated);
+    });
+    const entries = mergeApplicationEntries(state.entries, next);
+    return entries === state.entries ? state : { entries };
+  });
+}
+async function loadMetadata(account: string, page: ExploreEntry[], generation: number) {
+  check(account, generation);
+  const read = favoritesRead;
+  const pending = new Set(page.map(entry => metadataReads.get(entry.key)).filter((work): work is Promise<void> => !!work));
+  const missing = page.filter(entry => !metadataReads.has(entry.key));
+  if (missing.length) {
+    const work = (async () => {
+      const metadata = await readFavoriteMetadata(account, missing);
+      check(account, generation);
+      if (read !== favoritesRead) return;
+      for (const entry of missing) metadataLoaded.add(entry.key);
+      applyMetadata(metadata);
+    })().finally(() => {
+      for (const entry of missing) if (metadataReads.get(entry.key) === work) metadataReads.delete(entry.key);
+    });
+    for (const entry of missing) metadataReads.set(entry.key, work);
+    pending.add(work);
+  }
+  await Promise.all(pending);
+}
+async function loadMissingMetadata(account: string, entries: ExploreEntry[], generation: number) {
+  const missing = entries.filter(entry => !metadataLoaded.has(entry.key));
+  for (let index = 0; index < missing.length; index += FAVORITES_PAGE_SIZE) {
+    check(account, generation);
+    await loadMetadata(account, missing.slice(index, index + FAVORITES_PAGE_SIZE).filter(entry => !metadataLoaded.has(entry.key)), generation);
+  }
+}
+async function refreshFavoriteMembership(account: string, generation: number) {
+  const revision = desktopRevision;
+  const favorites = await readFavoriteReferences(account);
+  check(account, generation);
+  if (revision !== desktopRevision) return;
+  const previous = exploreStore.getState().entries;
+  const saved = new Map(favorites.map(entry => [entry.key, entry]));
+  const previousKeys = new Set(previous.map(entry => entry.key));
+  for (const entry of favorites) if (!previousKeys.has(entry.key)) metadataLoaded.delete(entry.key);
+  const entries = previous.flatMap(entry => {
+    const favorite = saved.get(entry.key);
+    if (favorite) { saved.delete(entry.key); return [{ ...withApplicationMetadata(favorite, entry), lastUsedAt: entry.lastUsedAt }]; }
+    return entry.lastUsedAt !== null ? [{ ...entry, desktopPosition: null }] : [];
+  }).concat([...saved.values()]);
+  const updated = mergeApplicationEntries(previous, entries);
+  if (updated !== previous) exploreStore.setState({ entries: updated });
+  await loadMissingMetadata(account, favoritesInOrder().slice(0, exploreStore.getState().favoriteVisibleCount), generation);
 }
 const check = (account: string, generation: number) => { if (exploreStore.getState().account !== account || epoch !== generation)
   throw new Error('session-closed'); };
@@ -55,56 +112,108 @@ export const exploreService = {
     const state=exploreStore.getState();
     return state.account===account && state.runId===runId && !!state.entry;
   },
-  async activate(account: string) {
-    if (exploreStore.getState().account === account && exploreStore.getState().loaded) {
-      hydrateFavorites(account, exploreStore.getState().entries); return;
-    }
+  async activate(account: string, options: { refresh?: boolean } = {}) {
     if (activation?.account === account) return activation.promise;
-    this.deactivate();
+    const sameAccount = exploreStore.getState().account === account;
+    if (sameAccount && exploreStore.getState().loaded && !options.refresh) return;
+    if (!sameAccount) this.deactivate();
     const generation = epoch;
+    const read = ++favoritesRead;
+    moreFavorites = undefined;
+    metadataLoaded.clear(); metadataReads.clear();
     const promise = (async () => {
       exploreStore.setState({ account });
-      const [entries] = await Promise.all([readEntries(account), nappletService.activateAccount(account)]);
-      if (generation !== epoch) return;
-      check(account, generation);
-      exploreStore.setState({ entries, loaded: true });
-      queueFavoritesPublication(account);
-      hydrateFavorites(account, entries);
-      metadataTimer = setInterval(() => {
-        if (platform.appState?.currentState() === 'active') hydrateFavorites(account, exploreStore.getState().entries);
-      }, 60_000);
+      const revision = desktopRevision;
+      const editing = pendingDesktopRevision !== undefined;
+      const favorites = await readFavoriteEntries(account);
+      if (generation !== epoch || read !== favoritesRead) return;
+      for (const entry of favorites.slice(0, FAVORITES_PAGE_SIZE)) if (entry.kind === 'website' || entry.manifest) metadataLoaded.add(entry.key);
+      if (!editing && revision === desktopRevision) {
+        exploreStore.setState(state => {
+          const previous = new Map(state.entries.map(entry => [entry.key, entry]));
+          const entries = favorites.map(entry => {
+            const cached = previous.get(entry.key);
+            return cached?.manifest && !entry.manifest ? withApplicationMetadata(entry, cached) : entry;
+          });
+          return { entries: mergeApplicationEntries(state.entries, entries), loaded: true,
+            favoriteVisibleCount: FAVORITES_PAGE_SIZE, favoritesLoadingMore: false };
+        });
+      } else {
+        applyMetadata(favorites.slice(0, FAVORITES_PAGE_SIZE));
+        exploreStore.setState({ loaded: true, favoritesLoadingMore: false });
+      }
+      setTimeout(() => {
+        if (generation !== epoch || read !== favoritesRead) return;
+        void loadMissingMetadata(account, favoritesInOrder().slice(0, FAVORITES_PAGE_SIZE), generation).catch(() => {});
+      }, 0);
+      stopDatabase?.();
       stopDatabase = platform.database?.addChangeListener?.(event => {
-        if (!event.external || event.tableName && !['private_list_sync_state','replaceable_events','cached_events','explore_entries','explore_history'].includes(event.tableName)) return;
+        if (!event.external || event.tableName !== 'private_list_sync_state') return;
         invalidateReplaceableEvents();
         if (databaseTimer) clearTimeout(databaseTimer);
-        databaseTimer = setTimeout(() => notifyFavoritesChanged(account), 40);
+        databaseTimer = setTimeout(() => {
+          void (async () => {
+            await writes;
+            check(account, generation);
+            await refreshFavoriteMembership(account, generation);
+          })().catch(() => {});
+        }, 40);
       });
     })().finally(() => { if (activation?.promise === promise) activation = undefined; });
     activation = { account, promise };
     return promise;
   },
-  deactivate() { if (metadataTimer) clearInterval(metadataTimer); metadataTimer = undefined; stopDatabase?.(); stopDatabase = undefined; if (databaseTimer) clearTimeout(databaseTimer); activation = undefined; favoritesLife.abort(); favoritesLife = new AbortController(); metadataJobs.clear();epoch++; this.stop(); exploreStore.setState({ account: null, loaded: false, entries: [] }); },
+  deactivate() {
+    stopDatabase?.(); stopDatabase = undefined;
+    if (databaseTimer) clearTimeout(databaseTimer);
+    databaseTimer = undefined;
+    activation = undefined; moreFavorites = undefined;
+    pendingDesktopRevision = undefined;
+    favoritesLife.abort(); favoritesLife = new AbortController();
+    metadataLoaded.clear(); metadataReads.clear(); favoritesRead++; epoch++; this.stop();
+    exploreStore.setState({ account: null, loaded: false, favoriteVisibleCount: FAVORITES_PAGE_SIZE, favoritesLoadingMore: false, entries: [] });
+  },
+  loadMoreFavorites(account: string) {
+    check(account, epoch);
+    if (activation?.account === account) return activation.promise;
+    if (moreFavorites) return moreFavorites;
+    const state = exploreStore.getState(), entries = favoritesInOrder();
+    const count = Math.min(entries.length, state.favoriteVisibleCount + FAVORITES_PAGE_SIZE);
+    if (count <= state.favoriteVisibleCount) return Promise.resolve();
+    const generation = epoch;
+    const read = favoritesRead;
+    exploreStore.setState({ favoritesLoadingMore: true });
+    const work = loadMissingMetadata(account, entries.slice(state.favoriteVisibleCount, count), generation)
+      .then(async () => {
+        check(account, generation);
+        if (read !== favoritesRead) return;
+        await loadMissingMetadata(account, favoritesInOrder().slice(0, count), generation);
+        check(account, generation);
+        if (read !== favoritesRead) return;
+        exploreStore.setState({ favoriteVisibleCount: count });
+      })
+      .finally(() => { if (moreFavorites === work) {
+        moreFavorites = undefined;
+        if (epoch === generation) exploreStore.setState({ favoritesLoadingMore: false });
+      } });
+    moreFavorites = work;
+    return work;
+  },
+  async loadFavoriteSearchMetadata(account: string) {
+    check(account, epoch);
+    await loadMissingMetadata(account, favoritesInOrder(), epoch);
+  },
   async resolve(value: string): Promise<ExploreEntry> {
     const { account, entries } = exploreStore.getState();
     if (!account) throw new Error('account-unavailable');
     const generation = epoch, query = parseApplicationAddressQuery(value);
     if (query?.type === 'invalid') throw new Error('napplets.invalid_manifest');
+    if (!query) { await nappletService.activateAccount(account); check(account, generation); }
     const resolved = query?.type === 'website' ? websiteEntry(query.key) : query?.type === 'naddr'
       ? await resolveApplicationAddress(account, query, entries, favoritesLife.signal)
       : fromNapplet(await nappletService.resolve(value));
     check(account, generation);
     return resolved;
-  },
-  async refreshVisit(account: string, key: string) {
-    if (exploreStore.getState().account !== account) return;
-    const generation = epoch;
-    const [app] = await readEntries(account, key);
-    if (exploreStore.getState().account !== account || generation !== epoch || !app?.lastUsedAt) return;
-    exploreStore.setState(state => {
-      const existing = state.entries.find(entry => entry.key === key);
-      const updated = existing ? { ...existing, lastUsedAt: Math.max(existing.lastUsedAt ?? 0, app.lastUsedAt!) } : app;
-      return { entries: withVisit(state.entries, updated, updated.lastUsedAt!) };
-    });
   },
   remember(app: ExploreEntry, account: string) {
     const generation = epoch;
@@ -120,17 +229,20 @@ export const exploreService = {
     const generation = epoch;
     check(account, generation);
     const revision=++desktopRevision;
+    pendingDesktopRevision = revision;
     const previous = exploreStore.getState().entries;
     const keys = moveDesktopApp(previous.filter(e => e.desktopPosition !== null).sort((a, b) => a.desktopPosition! - b.desktopPosition!).map(e => e.key), app.key, index);
     const positions = new Map(keys.map((key, i) => [key, i]));
     exploreStore.setState({ entries: (previous.some(e=>e.key===app.key)||index===null?previous:[...previous,{...app,lastUsedAt:null}]).map(e => ({ ...e, desktopPosition: positions.get(e.key) ?? null })) });
+    if (!previous.some(entry => entry.key === app.key) && (app.manifest || app.kind === 'website')) metadataLoaded.add(app.key);
+    void loadMissingMetadata(account, favoritesInOrder().slice(0, exploreStore.getState().favoriteVisibleCount), generation).catch(() => {});
     const work = writes.then(async () => { check(account, generation); await reorder(account, keys, app); });
     writes = work.catch(() => { });
     return work.catch(async error=>{
       await writes;
-      if(epoch===generation && revision===desktopRevision) {const entries=await readEntries(account);if(epoch===generation && revision===desktopRevision) exploreStore.setState({entries});}
+      if(epoch===generation && revision===desktopRevision) await refreshFavoriteMembership(account, generation);
       throw error;
-    });
+    }).finally(() => { if (epoch === generation && pendingDesktopRevision === revision) pendingDesktopRevision = undefined; });
   },
   forget(app: ExploreEntry, account: string) {
     const generation = epoch;
@@ -395,28 +507,22 @@ subscribeFavoritesChanged((account, key) => {
   void (async () => {
     await writes;
     if (key) {
-      const [app] = await readEntries(account, key);
+      const current = exploreStore.getState().entries.find(entry => entry.key === key);
+      if (!current || current.desktopPosition !== null && current.desktopPosition >= exploreStore.getState().favoriteVisibleCount && !metadataLoaded.has(key)) return;
+      const [app] = await readFavoriteMetadata(account, [current]);
       check(account, generation);
-      if (app) exploreStore.setState(state => {
-        const next = state.entries.map(current => current.key === key
-          ? { ...app, desktopPosition: current.desktopPosition, lastUsedAt: current.lastUsedAt } : current);
-        const entries = mergeApplicationEntries(state.entries, next);
-        return entries === state.entries ? state : { entries };
-      });
+      if (app) applyMetadata([app]);
       return;
     }
-    const revision = desktopRevision;
-    const entries = await readEntries(account);
-    check(account, generation);
-    if (revision !== desktopRevision) return;
-    const previous = exploreStore.getState().entries;
-    const updated = mergeApplicationEntries(previous, entries);
-    if (updated !== previous) exploreStore.setState({ entries: updated });
-    hydrateFavorites(account, updated);
+    await refreshFavoriteMembership(account, generation);
   })().catch(() => {});
 });
 
 subscribeApplicationMetadata(app => {
   const state = exploreStore.getState();
-  if (state.account && state.entries.some(entry => entry.key === app.key)) notifyFavoritesChanged(state.account, app.key);
+  if (state.account) applyMetadata([app]);
+}, key => {
+  const state = exploreStore.getState();
+  return state.entries.find(entry => entry.key === key &&
+    (entry.desktopPosition !== null && entry.desktopPosition < state.favoriteVisibleCount || metadataLoaded.has(key)));
 });

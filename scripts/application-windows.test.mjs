@@ -11,7 +11,7 @@ test('Electron application hosts keep independent containers, owned IPC and shar
   const dir = await mkdtemp(path.join(tmpdir(), 'psst-application-windows-'));
   try {
     for (const entry of ['preload', 'napplet-preload']) await build({ entryPoints: [`desktop/${entry}.ts`], bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, `${entry}.js`) });
-    await build({ stdin: { contents: `import ${JSON.stringify(path.resolve('desktop/preload.ts'))};const {contextBridge,ipcRenderer}=require('electron');const events=[];for(const channel of ['napplet:message','application-window:signing-change','application-window:action'])ipcRenderer.on(channel,(_e,...args)=>events.push({channel,args}));contextBridge.exposeInMainWorld('hostTest',{invoke:(...args)=>ipcRenderer.invoke(...args),events:()=>events});`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, 'host-preload.js') });
+    await build({ stdin: { contents: `import ${JSON.stringify(path.resolve('desktop/preload.ts'))};const {contextBridge,ipcRenderer}=require('electron');const events=[];for(const channel of ['napplet:message','application-window:signing-change','application-window:metadata-change','application-window:favorites-change','application-window:action'])ipcRenderer.on(channel,(_e,...args)=>events.push({channel,args}));contextBridge.exposeInMainWorld('hostTest',{invoke:(...args)=>ipcRenderer.invoke(...args),events:()=>events});`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, 'host-preload.js') });
     const entry = `
       import { app, BrowserWindow, webContents, ipcMain } from 'electron';
       import { strict as assert } from 'node:assert';
@@ -52,6 +52,17 @@ test('Electron application hosts keep independent containers, owned IPC and shar
         assert.equal(await Promise.race([firstView.executeJavaScript('navigator.storage.persist()'),pause(2000).then(()=> 'unexpected-storage-prompt')]),true,'persistent storage is granted without a consent sheet');
 
         assert.equal(await firstView.executeJavaScript('document.title'),'First','closing another host preserves this profile protocol');
+        const metadataKey='naddr1metadata-key';
+        await invoke(first,IPC.applicationMetadataChange,metadataKey);await pause(40);
+        assert((await events(parent)).some(e=>e.channel===IPC.applicationMetadataChange&&e.args[0]===metadataKey));
+        assert((await events(second)).some(e=>e.channel===IPC.applicationMetadataChange&&e.args[0]===metadataKey));
+        assert(!(await events(first)).some(e=>e.channel===IPC.applicationMetadataChange),'metadata notifications never echo to the sender');
+        await assert.rejects(invoke(first,IPC.applicationMetadataChange,''),/invalid-metadata-change/);
+        await invoke(first,IPC.applicationFavoritesChange,launch.accountPubkey);await pause(40);
+        assert((await events(parent)).some(e=>e.channel===IPC.applicationFavoritesChange&&e.args[0]===launch.accountPubkey));
+        assert((await events(second)).some(e=>e.channel===IPC.applicationFavoritesChange&&e.args[0]===launch.accountPubkey));
+        assert(!(await events(first)).some(e=>e.channel===IPC.applicationFavoritesChange),'favorite membership notifications never echo to the sender');
+        await assert.rejects(invoke(first,IPC.applicationFavoritesChange,'invalid'),/invalid-favorites-change/);
         const change={accountPubkey:launch.accountPubkey,sourceId:'https://example.com',key:'publish:1'};
         await invoke(first,IPC.applicationSigningChange,change);await pause(40);
         assert((await events(parent)).some(e=>e.channel===IPC.applicationSigningChange&&e.args[0].key===change.key));

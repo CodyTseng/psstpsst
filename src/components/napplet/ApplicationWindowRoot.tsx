@@ -1,5 +1,7 @@
 import { connectSigningWindows } from '@/services/signing/changes';
 import { useInlineApplicationLaunch } from '@/hooks/use-inline-application-launch';
+import { connectApplicationWindows } from '@/services/explore/application-changes';
+import { readChangedApplicationMetadata } from '@/services/explore/application-cache';
 import { useEffect, useState } from 'react';
 import { Stack, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
@@ -24,6 +26,7 @@ import { NappletOverlays } from './NappletOverlays';
 export function ApplicationWindowRoot() {
   useInlineApplicationLaunch();
   useEffect(() => { connectSigningWindows(platform.napplet.windows); return () => connectSigningWindows(); }, []);
+  useEffect(() => { connectApplicationWindows(platform.napplet.windows, readChangedApplicationMetadata); return () => connectApplicationWindows(); }, []);
   useEffect(() => subscribeExploreVisits(visit => {
     void platform.napplet.windows?.action({ type: 'visited', ...visit }).catch(() => {});
   }), []);
@@ -36,7 +39,11 @@ export function ApplicationWindowRoot() {
       await Promise.all([useThemeStore.getState().load(), useLanguageStore.getState().load(), exploreService.activate(accountPubkey)]);
       if (!active) return;
       useActiveAccount.setState({ activePubkey: accountPubkey, status: 'ready' });
-      if (entry.release) nappletService.prepareOpen(entry.release, accountPubkey, reviewedRequired);
+      if (entry.release) {
+        await nappletService.activateAccount(accountPubkey);
+        if (!active) return;
+        nappletService.prepareOpen(entry.release, accountPubkey, reviewedRequired);
+      }
       else exploreService.prepare(entry, accountPubkey, reviewedRequired);
       setReady(true);
     })().catch(error => { console.warn('[explore] Application window could not start', error); if (active) setFailed(true); });
