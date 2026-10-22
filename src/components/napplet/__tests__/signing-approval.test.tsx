@@ -279,8 +279,8 @@ it('identifies a profile event and previews the actual profile values', () => {
   expect(texts).toContain('Cody'); expect(texts).toContain('Hello');
 });
 
-it.each(['get-public-key', 'nip44-encrypt', 'nip04-decrypt'] as const)('reviews %s with the account or peer instead of event metadata', operation => {
-  const request = { operation, relays: [], accountPubkey: 'a'.repeat(64), recipient: operation === 'get-public-key' ? undefined : 'b'.repeat(64), content: '', tags: [], createdAt: 1 };
+it.each(['get-public-key', 'nip44-encrypt', 'nip04-decrypt'] as const)('reviews %s without peer or event metadata', operation => {
+  const request = { operation, relays: [], accountPubkey: 'a'.repeat(64), content: '', tags: [], createdAt: 1 };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).not.toContain('chat.event_reference.kind');
@@ -289,7 +289,7 @@ it.each(['get-public-key', 'nip44-encrypt', 'nip04-decrypt'] as const)('reviews 
     expect(texts).toContain('profile.public_key'); expect(texts).toContain('a'.repeat(64));
   } else {
     expect(texts).toContain(operation.startsWith('nip04') ? 'NIP-04' : 'NIP-44');
-    expect(renderer.root.findByType(SigningIdentity).props.pubkey).toBe('b'.repeat(64));
+    expect(renderer.root.findAllByType(SigningIdentity)).toHaveLength(0);
   }
 });
 
@@ -305,13 +305,13 @@ it('browser sensitive permissions reuse duration controls for both allow and rej
 
 it.each(['nip04-encrypt', 'nip44-encrypt'] as const)('shows the original plaintext in %s approval', operation => {
   const text = '  Exact original\n{"literal":"<message>"}  ';
-  act(() => { renderer = create(<SigningRequestDetails request={{ ...prompt.signing!, operation, kind: undefined, recipient: 'b'.repeat(64), content: text }} />); });
+  act(() => { renderer = create(<SigningRequestDetails request={{ ...prompt.signing!, operation, kind: undefined, recipient: undefined, content: text }} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).toContain('napplets.crypto_plaintext'); expect(texts).toContain(text);
 });
 it('bounds long plaintext until expanded and copies the complete original', async () => {
   const text = 'Private original\n'.repeat(100);
-  const request = { ...prompt.signing!, operation: 'nip44-encrypt' as const, kind: undefined, recipient: 'b'.repeat(64), content: text };
+  const request = { ...prompt.signing!, operation: 'nip44-encrypt' as const, kind: undefined, recipient: undefined, content: text };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   let texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).toContain(text.slice(0, 600)); expect(texts).not.toContain(text);

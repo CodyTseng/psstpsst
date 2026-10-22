@@ -1081,10 +1081,10 @@ Allow/Reject controls; remembered choices apply to uploads by this app to the
 reviewed storage services. Event JSON is not required for upload reviews.
 Public-key access, encryption and decryption reuse the signing approval layout
 and its Once, timed and Always decisions. Reviews identify the account and current
-host-verified source; crypto reviews also identify the algorithm and other party in a distinct summary.
+host-verified source; crypto reviews also identify the algorithm in a distinct summary.
 Public-key reviews show the exact public key the application will receive.
 These operations omit event-kind labels and event JSON. Their remembered rules
-remain separate by method, algorithm and peer and use the shared permission editor.
+remain separate by method and algorithm, apply across peers, and use the shared permission editor.
 Launching an application never grants these signer methods. Application configuration reuses the host's
 settings form and serialized overlay lifecycle. Text clipboard writes do not
 show a host confirmation. File saves identify the file and require consent

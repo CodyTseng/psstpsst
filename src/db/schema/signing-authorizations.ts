@@ -7,6 +7,7 @@ export const signingAuthorizations = sqliteTable('signing_authorizations', {
   accountPubkey: text('account_pubkey').notNull().references(() => accounts.pubkey, { onDelete: 'cascade' }),
   sourceId: text('source_id').notNull(),
   operation: text('operation').notNull().default('publish'),
+  /** Legacy qualifier retained for migrations; current signer rules use an empty value. */
   recipient: text('recipient').notNull().default(''),
   /** Only upload grants bind destinations; relay AUTH grants cover the source. */
   destinations: text('destinations').notNull().default('[]'),

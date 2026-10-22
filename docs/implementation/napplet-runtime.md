@@ -223,7 +223,8 @@ The shared signing service owns rules independently of app KV and UI. Its source
 is the canonical naddr for an app, or a host-verified HTTP(S) website origin (scheme, host and effective port); immutable
 legacy manifests use a canonical event ID. Each durable row binds the account,
 source, event kind and addressable d tag. Signer-access rules additionally distinguish
-methods and crypto peers; Relay AUTH and upload rules bind their destination set.
+methods and crypto algorithms, independently of the peer. Relay AUTH covers all
+relays for the source; upload rules bind their destination set.
 There is no artifact-version condition. Only exact-scope version-3 publication
 rules are imported from the legacy KV backup. A broader migration never follows
 from dropping a legacy condition.

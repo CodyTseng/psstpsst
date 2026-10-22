@@ -90,7 +90,7 @@ export function SigningScopeDetails({ scope }: { scope: SigningScope }) {
     <View style={{ gap: spacing.sm }}>
       {scope.operation === 'encrypt-publish' ? <SigningText>{signingAction({ ...scope, operation: 'publish' }, t)}</SigningText> : null}
       {scope.scopeKey !== undefined ? <SigningText>{t(scope.kind !== undefined && scope.kind >= 30000 && scope.kind < 40000 ? 'napplets.signing_record' : 'napplets.signing_scope_key')}: {scope.scopeKey || t('napplets.signing_unnamed')}</SigningText> : null}
-      {scope.recipient ? <SigningIdentity pubkey={scope.recipient} label={t(isSignerAccess(scope) ? 'napplets.crypto_peer' : 'napplets.signing_recipient')} /> : null}
+      {scope.recipient ? <SigningIdentity pubkey={scope.recipient} label={t('napplets.signing_recipient')} /> : null}
       {scope.operation === 'relay-auth' ? !scope.scopeKey ? <SigningText>{t('napplets.signing_auth_scope')}</SigningText> : null : <>
         <SigningText variant="caption" tone="muted">{t(scope.operation === 'upload' ? 'napplets.upload_destinations' : 'napplets.signing_destinations')}</SigningText>
         {scope.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
@@ -158,7 +158,6 @@ export function SigningRequestDetails({ request, showTitle = true }: {
       <SigningText variant="code">{request.accountPubkey}</SigningText>
     </AppCard> : <AppCard variant="muted" style={{ gap: spacing.md }}>
       <SigningText>{request.operation.startsWith('nip04') ? 'NIP-04' : 'NIP-44'}</SigningText>
-      {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.crypto_peer')} /> : null}
     </AppCard>}
     {request.operation.endsWith('-encrypt') ? <EncryptionPlaintext text={request.content} /> : null}
   </View>;

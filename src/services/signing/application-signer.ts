@@ -25,7 +25,7 @@ export class ApplicationSigner {
   async crypto(algorithm: 'nip04' | 'nip44', operation: 'encrypt' | 'decrypt', peer: unknown, text: unknown): Promise<string> {
     if (typeof peer !== 'string' || !/^[a-f0-9]{64}$/.test(peer) || typeof text !== 'string' || !text || text.length > 100000)
       throw new Error('invalid-crypto-request');
-    const revision = await this.options.permissions.authorizeAccess(`${algorithm}-${operation}`, peer, undefined, operation === 'encrypt' ? text : '');
+    const revision = await this.options.permissions.authorizeAccess(`${algorithm}-${operation}`, undefined, operation === 'encrypt' ? text : '');
     this.current(revision);
     const signer = await this.options.signer(); this.current(revision);
     const key = `${algorithm}${operation === 'encrypt' ? 'Encrypt' : 'Decrypt'}` as 'nip04Encrypt' | 'nip04Decrypt' | 'nip44Encrypt' | 'nip44Decrypt';

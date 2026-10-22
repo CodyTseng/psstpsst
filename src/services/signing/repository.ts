@@ -11,7 +11,7 @@ function storageScope(scope: SigningScope) {
   const canonical = signingScope(scope);
   // Non-event operations have no event kind; the legacy NOT NULL column uses -1.
   return { operation: canonical.operation, kind: canonical.kind ?? -1,
-    scopeKey: canonical.scopeKey ?? '', recipient: isSignerAccess(canonical) ? canonical.recipient ?? '' : '',
+    scopeKey: canonical.scopeKey ?? '', recipient: '',
     destinations: JSON.stringify(canonical.relays) };
 }
 const whereRule = (scope: SigningAccountScope, rule: SigningScope) => {
@@ -29,8 +29,9 @@ export async function readSigningSnapshot(scope: SigningAccountScope): Promise<S
     rules: rules.filter((row) => row.expiresAt === null || row.expiresAt > Date.now()).flatMap((row) => {
       const operation = row.operation as SigningScope['operation'];
       let canonical: SigningScope;
-      const access = { operation, relays: [] as string[], recipient: row.recipient || undefined };
+      const access = { operation, relays: [] as string[] };
       if (isSignerAccess(access)) {
+        if (row.recipient) return [];
         canonical = signingScope(access);
         if (!canRememberSigning(canonical) || row.kind !== -1) return [];
       } else {

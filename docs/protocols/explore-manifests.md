@@ -53,7 +53,7 @@ Event signing uses account/source/kind/d-tag rules. All formats also receive
 NIP-04 and NIP-44 encryption/decryption methods when supported by the account's
 signer. These decisions support Once, timed and Always choices. Public-key,
 encryption and decryption grants remain separate; crypto grants also bind the
-algorithm and peer. Website grants bind the current main-frame origin rather
+algorithm, independently of the peer. Website grants bind the current main-frame origin rather
 than the original launch address. Revocation invalidates cached decisions and
 prevents in-flight public keys or crypto results from being returned.
 

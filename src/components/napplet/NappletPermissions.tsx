@@ -82,7 +82,7 @@ function PermissionRules({ release, sourceId, initiallyExpanded = false }: { rel
           : t(rule.duration === 'session' ? 'napplets.signing_session' : 'napplets.signing_duration_always');
         const scope = [...(rule.scope.kind !== undefined ? [t('chat.event_reference.kind', { kind: rule.scope.kind })] : []), ...(rule.decision === 'ask' ? [] : [status])];
         if (rule.scope.scopeKey !== undefined) scope.push(`${rule.scope.kind !== undefined && rule.scope.kind >= 30000 && rule.scope.kind < 40000 ? 'd' : t('napplets.signing_scope_key')}: ${JSON.stringify(rule.scope.scopeKey)}`);
-        if (rule.scope.recipient) scope.push(`${t('napplets.crypto_peer')}: ${rule.scope.recipient}`);
+        if (rule.scope.recipient) scope.push(`${t('napplets.signing_recipient')}: ${rule.scope.recipient}`);
         if (rule.scope.operation === 'relay-auth' && !rule.scope.scopeKey) scope.push(t('napplets.signing_auth_scope'));
         if (rule.scope.relays.length) scope.push(rule.scope.relays.map(url => new URL(url).host).join(', '));
         return <ListRow key={rule.key} title={signingAction(rule.scope, t)} subtitleMultiline

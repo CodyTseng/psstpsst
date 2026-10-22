@@ -4,7 +4,7 @@ export type SignerAccessScope = {
   kind?: never;
   relays: string[];
   scopeKey?: never;
-  recipient?: string;
+  recipient?: never;
 };
 export type SigningScope = SignerAccessScope | {
   operation: 'sign' | 'publish' | 'encrypt-publish' | 'relay-auth' | 'upload';
@@ -44,8 +44,7 @@ export const isSigningRuleActive = (rule: SigningRule) => rule.duration !== 'tim
   (typeof rule.expiresAt === 'number' && Number.isFinite(rule.expiresAt) && rule.expiresAt > Date.now());
 
 export function signingScope(request: SigningScope): SigningScope {
-  if (isSignerAccess(request)) return { operation: request.operation, relays: [],
-    ...(request.operation !== 'get-public-key' ? { recipient: request.recipient } : {}) };
+  if (isSignerAccess(request)) return { operation: request.operation, relays: [] };
   const qualified = request.scopeKey || (request.kind !== undefined && request.kind >= 30000 && request.kind < 40000)
     ? { scopeKey: request.scopeKey ?? '' } : {};
   if (request.operation === 'relay-auth') return { operation: request.operation, kind: request.kind, relays: [], ...qualified };
@@ -61,8 +60,7 @@ export function signingRuleKey(request: SigningScope): string {
 }
 export function canRememberSigning(request: SigningScope): boolean {
   if (request.scopeKey !== undefined && (typeof request.scopeKey !== 'string' || request.scopeKey.length > 4096)) return false;
-  if (isSignerAccess(request)) return request.operation === 'get-public-key' ||
-    typeof request.recipient === 'string' && /^[a-f0-9]{64}$/.test(request.recipient);
+  if (isSignerAccess(request)) return true;
   if (request.operation === 'relay-auth' || request.operation === 'upload') {
     if (request.kind !== (request.operation === 'relay-auth' ? 22242 : 24242) ||
       (request.operation === 'upload' && !request.relays.length) || request.relays.length > 16) return false;

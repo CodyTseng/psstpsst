@@ -74,6 +74,9 @@ test('desktop migration and reordering preserve recent usage, data and account i
       `, resolveDir: process.cwd(), loader: 'ts' },
       bundle: true, platform: 'node', format: 'cjs', outfile: output,
       plugins: [{ name: 'isolated-database', setup(builder) {
+        // This legacy storage fixture never records an Explore visit with a release.
+        builder.onResolve({ filter: /^@\/services\/explore\/repository$/ }, () => ({ path: 'explore', namespace: 'unused-visit' }));
+        builder.onLoad({ filter: /.*/, namespace: 'unused-visit' }, () => ({ contents: 'export async function visit() { throw new Error("unexpected-explore-visit"); }' }));
         builder.onResolve({ filter: /^@\/db\/client$/ }, () => ({ path: 'database', namespace: 'fixture' }));
         builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const db = globalThis.__nappletDatabaseTest;' }));
       } }],

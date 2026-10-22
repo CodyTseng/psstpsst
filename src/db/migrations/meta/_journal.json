@@ -512,6 +512,13 @@
       "when": 1793232000000,
       "tag": "0072_event-relay-sources",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1793318400000,
+      "tag": "0073_crypto-operation-permissions",
+      "breakpoints": true
     }
   ]
 }

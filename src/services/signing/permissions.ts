@@ -168,8 +168,8 @@ export class SigningPermissions {
     return revision;
   }
 
-  authorizeAccess(operation: SignerAccessOperation, recipient?: string, requestSignal?: AbortSignal, content = ''): Promise<number> {
-    return this.authorize({ operation, recipient, relays: [], accountPubkey: this.scope.accountPubkey,
+  authorizeAccess(operation: SignerAccessOperation, requestSignal?: AbortSignal, content = ''): Promise<number> {
+    return this.authorize({ operation, relays: [], accountPubkey: this.scope.accountPubkey,
       content, tags: [], createdAt: Math.floor(Date.now() / 1000) }, undefined, requestSignal);
   }
 

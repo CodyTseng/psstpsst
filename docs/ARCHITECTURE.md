@@ -811,7 +811,7 @@ storage. Event rules bind an account, a host-verified source, operation, event k
 an optional `scope_key` qualifier. Addressable events derive that qualifier from
 the actual d tag; other operations may use their own trusted scope identifier.
 Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
-service with separate method scopes; crypto scopes also bind the peer. Every
+service with separate method scopes, independent of the cryptographic peer. Every
 call uses the current verified source. Launch access never bypasses signer
 authorization, and revocation invalidates pending results before disclosure.
 Sources are canonical naddr IDs or host-verified HTTP(S) website origins (scheme,
@@ -858,7 +858,7 @@ one account. Electron brokers cross-window messages in its main process; mobile
 keeps a bounded stack of live calling containers behind the foreground handler.
 Only trusted hosts assign endpoint metadata. Teardown cancels action requests and
 closes communication channels. Configuration shares account/source persistence;
-cryptographic requests obtain method- and peer-scoped signer authorization using the identity
+cryptographic requests obtain method-scoped signer authorization using the identity
 signer, never the messaging key.
 Napp launch access includes ordinary web networking, independently of whether
 the signed manifest explicitly names it. This effective requirement participates

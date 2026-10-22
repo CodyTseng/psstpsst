@@ -134,7 +134,7 @@ They use the account's identity signer, including remote NIP-46 signers. They
 never use the separate messaging key or read private conversation tables.
 Public-key access and crypto invocations use the shared signer authorization
 service with Once, timed and Always decisions. Rules bind the account, current
-verified source and method; crypto rules additionally bind the algorithm and peer.
+verified source and method; crypto rules distinguish algorithms but apply across peers.
 Decryption consent explains that readable content reaches the application.
 Signing rules do not grant encryption authority. Invalid peers and oversized
 inputs fail before consent; unavailable signer operations fail explicitly.

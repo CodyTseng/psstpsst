@@ -331,7 +331,8 @@ test.each(['nip04', 'nip44'] as const)('%s encryption reviews the exact plaintex
   const signer = new ApplicationSigner({ accountPubkey: 'accountA', permissions, current: jest.fn(),
     signer: async () => ({ nip04Encrypt: encrypt, nip44Encrypt: encrypt }) as unknown as Signer });
   await expect(signer.crypto(algorithm, 'encrypt', 'b'.repeat(64), text)).resolves.toBe('encrypted-payload');
-  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ operation: `${algorithm}-encrypt`, content: text, recipient: 'b'.repeat(64) }), expect.anything());
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ operation: `${algorithm}-encrypt`, content: text }), expect.anything());
+  expect(confirm).toHaveBeenCalledWith(expect.not.objectContaining({ recipient: expect.anything() }), expect.anything());
   expect(encrypt).toHaveBeenCalledWith('b'.repeat(64), text);
   expect(JSON.stringify([...stored.values()])).not.toContain('Private original');
   expect(JSON.stringify([...activity.values()])).not.toContain('Private original');
@@ -344,4 +345,46 @@ test('rejecting plaintext review prevents the signer from encrypting it', async 
   await expect(signer.crypto('nip44', 'encrypt', 'b'.repeat(64), 'do not encrypt')).rejects.toThrow('permission-denied');
   expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ content: 'do not encrypt' }), expect.anything());
   expect(obtainSigner).not.toHaveBeenCalled();
+});
+
+test.each(['allow-always', 'allow-10m', 'deny-always'])('%s crypto decisions apply across peers and survive reopening', async decision => {
+  const first = create(jest.fn(async () => decision));
+  const decrypt = jest.fn(async () => 'readable content');
+  const use = (permissions: SigningPermissions) => new ApplicationSigner({ accountPubkey: 'accountA', permissions,
+    current: jest.fn(), signer: async () => ({ nip44Decrypt: decrypt }) as unknown as Signer });
+  for (const peer of ['b'.repeat(64), 'c'.repeat(64)]) {
+    const request = use(first.permissions).crypto('nip44', 'decrypt', peer, 'encrypted payload');
+    if (decision === 'deny-always') await expect(request).rejects.toThrow('permission-denied');
+    else await expect(request).resolves.toBe('readable content');
+  }
+  expect(first.confirm).toHaveBeenCalledTimes(1);
+  expect((await first.permissions.snapshot()).rules[0].scope).toEqual({ operation: 'nip44-decrypt', relays: [] });
+  const reopened = create();
+  const request = use(reopened.permissions).crypto('nip44', 'decrypt', 'd'.repeat(64), 'encrypted payload');
+  if (decision === 'deny-always') { await expect(request).rejects.toThrow('permission-denied'); expect(decrypt).not.toHaveBeenCalled(); }
+  else await expect(request).resolves.toBe('readable content');
+  expect(reopened.confirm).not.toHaveBeenCalled();
+});
+
+test('crypto rules keep methods, algorithms, applications and accounts independent', async () => {
+  const first = create();
+  for (const operation of ['nip04-encrypt', 'nip04-decrypt', 'nip44-encrypt', 'nip44-decrypt'] as const) {
+    await first.permissions.authorizeAccess(operation);
+    await first.permissions.authorizeAccess(operation);
+  }
+  expect(first.confirm).toHaveBeenCalledTimes(4);
+  const otherApp = create(undefined, 'accountA', 'other.example');
+  await otherApp.permissions.authorizeAccess('nip44-decrypt');
+  expect(otherApp.confirm).toHaveBeenCalledTimes(1);
+  const otherAccount = create(undefined, 'accountB');
+  await otherAccount.permissions.authorizeAccess('nip44-decrypt');
+  expect(otherAccount.confirm).toHaveBeenCalledTimes(1);
+});
+
+test('invalid crypto peers still fail before asking for authorization', async () => {
+  const { permissions, confirm } = create();
+  const obtainSigner = jest.fn();
+  const signer = new ApplicationSigner({ accountPubkey: 'accountA', permissions, current: jest.fn(), signer: obtainSigner });
+  await expect(signer.crypto('nip44', 'decrypt', 'invalid-peer', 'encrypted payload')).rejects.toThrow('invalid-crypto-request');
+  expect(confirm).not.toHaveBeenCalled(); expect(obtainSigner).not.toHaveBeenCalled();
 });

@@ -9,12 +9,14 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
-test('upgrades retain app data, exact signing scopes, Explore shortcuts and account-scoped history', async () => {
+test('upgrades retain app data, operation-wide signer access, Favorites and account-scoped history', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'psst-signing-db-'));
   const sqlite = new DatabaseSync(':memory:');
   try {
     sqlite.exec('PRAGMA foreign_keys=ON; CREATE TABLE accounts(pubkey TEXT PRIMARY KEY); CREATE TABLE device_preferences(key TEXT PRIMARY KEY,value TEXT);');
     sqlite.exec("INSERT INTO accounts VALUES('A'),('B');");
+    sqlite.exec('CREATE TABLE replaceable_events(pubkey TEXT,kind INTEGER,d_tag TEXT,event TEXT,created_at INTEGER,fetched_at INTEGER,PRIMARY KEY(pubkey,kind,d_tag));');
+    sqlite.exec(readFileSync('src/db/migrations/0029_referenced_events.sql', 'utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0059_napplets.sql', 'utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0060_napplet-desktop.sql', 'utf8'));
     const app = `35129:${'b'.repeat(64)}:composer:notes`;
@@ -54,6 +56,7 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
       export * as schema from ${JSON.stringify(path.resolve('src/db/schema/index.ts'))};
       export { migrateExplore } from ${JSON.stringify(path.resolve('src/db/data-migrations/explore.ts'))};
       export { migrateSigningSources } from ${JSON.stringify(path.resolve('src/db/data-migrations/signing-sources.ts'))};
+      export { migrateApplicationFavorites } from ${JSON.stringify(path.resolve('src/db/data-migrations/application-favorites.ts'))};
       export { normalizeSigningSource,signingSourceFromLegacyKey } from ${JSON.stringify(path.resolve('src/services/signing/source.ts'))};
       export function repository() { return require(${JSON.stringify(path.resolve('src/services/signing/repository.ts'))}); }
       export function browserPermissions() { return require(${JSON.stringify(path.resolve('src/services/explore/browser-permission-store.ts'))}); }
@@ -63,8 +66,18 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     `, loader: 'ts', resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', outfile: output,
       plugins: [{ name: 'db', setup(builder) {
         // This storage fixture does not run deferred crypto/publication jobs.
-        builder.onResolve({ filter: /private-list-sync\.service$|\/favorites$/ }, () => ({ path: 'publication', namespace: 'private-sync' }));
-        builder.onLoad({ filter: /.*/, namespace: 'private-sync' }, () => ({ contents: 'export async function markPrivateListDirty() {} export function queuePrivateListPublication() {} export function queueFavoritesPublication() {}' }));
+        builder.onResolve({ filter: /\/favorites$/ }, () => ({ path: 'publication', namespace: 'private-sync' }));
+        builder.onLoad({ filter: /.*/, namespace: 'private-sync' }, () => ({ contents: 'export function queueFavoritesPublication() {}' }));
+        builder.onResolve({ filter: /configuration-publish\.service$/ }, () => ({ path: 'configuration', namespace: 'isolated-transport' }));
+        builder.onResolve({ filter: /account-access$|account\.service$/ }, () => ({ path: 'signer', namespace: 'isolated-transport' }));
+        builder.onResolve({ filter: /relay-pool$/ }, () => ({ path: 'relay', namespace: 'isolated-transport' }));
+        builder.onResolve({ filter: /^@\/platform$/ }, () => ({ path: 'platform', namespace: 'isolated-transport' }));
+        builder.onLoad({ filter: /.*/, namespace: 'isolated-transport' }, ({ path: module }) => ({ contents: {
+          configuration: 'export async function canApplyConfigurationEvent() { return true; } export async function enqueueConfigurationEvent() { throw new Error("unexpected-publication"); }',
+          signer: 'export async function buildSigner() { throw new Error("unexpected-signer"); }',
+          relay: 'export const relayPool = {};',
+          platform: 'export const platform = {};',
+        }[module] }));
         builder.onResolve({ filter: /^@\/db\/client$/ }, () => ({ path: 'db', namespace: 'fixture' }));
         builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const db = globalThis.__signingDatabaseTest;' }));
       } }],
@@ -113,10 +126,17 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     const scope = { accountPubkey: 'A', sourceId };
     assert.equal(sqlite.prepare('SELECT position FROM explore_shortcuts WHERE account_pubkey=? AND source_id=?').get('A',sourceId).position,2);
     assert.equal(sqlite.prepare('SELECT last_used_at FROM explore_history WHERE account_pubkey=? AND source_id=?').get('A',sourceId).last_used_at,123);
+    sqlite.exec('BEGIN');
+    sqlite.exec(readFileSync('src/db/migrations/0071_event-backed-applications.sql', 'utf8'));
+    await fixture.migrateApplicationFavorites(globalThis.__signingDatabaseTest);
+    sqlite.exec(readFileSync('src/db/migrations/0072_event-relay-sources.sql', 'utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0073_crypto-operation-permissions.sql', 'utf8'));
+    sqlite.exec('COMMIT');
+    assert.equal(sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name IN ('explore_shortcuts','legacy_explore_shortcuts')").get().n, 0);
     const explore=fixture.exploreRepository();
     const website={key:'https://site.example/path',address:'https://site.example/path',title:'Website',kind:'website',description:'',servers:[],required:[],desktopPosition:null,lastUsedAt:null};
     await explore.visit('A',website);await explore.visit('B',website);
-    await explore.reorder('A',[website.key]);await explore.forget('A',website.key);
+    await explore.reorder('A',[website.key],website);await explore.forget('A',website.key);
     assert.equal((await explore.readEntries('A')).find(e=>e.key===website.key).desktopPosition,0);
     assert.equal((await explore.readEntries('A')).find(e=>e.key===website.key).lastUsedAt,null);
     assert.notEqual((await explore.readEntries('B')).find(e=>e.key===website.key).lastUsedAt,null);
@@ -163,19 +183,20 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
     const permissions = new SigningPermissions(scope, async () => { prompts++; return 'allow-always'; }, controller.signal, () => {});
     // Exercise the real repository: memory repositories cannot catch SQL CHECK failures.
     for (const operation of ['get-public-key', 'nip04-encrypt', 'nip04-decrypt', 'nip44-encrypt', 'nip44-decrypt']) {
-      const recipient = operation === 'get-public-key' ? undefined : 'c'.repeat(64);
       const before = prompts;
-      await permissions.authorizeAccess(operation, recipient);
+      await permissions.authorizeAccess(operation, controller.signal);
       const snapshot = await repository.readSigningSnapshot(scope);
       const accessRule = snapshot.rules.find(entry => entry.scope.operation === operation);
       assert.equal(accessRule.duration, 'always');
       assert.equal(accessRule.scope.kind, undefined);
-      assert.equal(accessRule.scope.recipient, recipient);
+      assert.deepEqual(accessRule.scope, { operation, relays: [] });
+      assert.equal(sqlite.prepare('SELECT recipient FROM signing_authorizations WHERE account_pubkey=? AND source_id=? AND operation=?')
+        .get(scope.accountPubkey, scope.sourceId, operation).recipient, '');
       const reloaded = new SigningPermissions(scope, async () => { throw new Error('unexpected-prompt'); }, controller.signal, () => {});
-      await reloaded.authorizeAccess(operation, recipient);
+      await reloaded.authorizeAccess(operation);
       assert.equal(prompts, before + 1, 'durable access grants survive a new permission controller');
       await reloaded.edit(accessRule, { decision: 'deny', duration: 'always' });
-      await assert.rejects(reloaded.authorizeAccess(operation, recipient), /permission-denied/);
+      await assert.rejects(reloaded.authorizeAccess(operation), /permission-denied/);
       await reloaded.edit(accessRule, { decision: 'ask', duration: 'always' });
       assert(!(await repository.readSigningSnapshot(scope)).rules.some(entry => entry.scope.operation === operation));
       const expiresAt = Date.now() + 600000;
@@ -184,7 +205,7 @@ test('upgrades retain app data, exact signing scopes, Explore shortcuts and acco
       assert.equal(timedRule.duration, 'timed');
       assert.equal(timedRule.expiresAt, expiresAt);
       const timed = new SigningPermissions(scope, async () => { throw new Error('unexpected-prompt'); }, controller.signal, () => {});
-      await timed.authorizeAccess(operation, recipient);
+      await timed.authorizeAccess(operation);
       await timed.edit(accessRule, { decision: 'ask', duration: 'always' });
 
     }

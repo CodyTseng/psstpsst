@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { SigningIdentity } from './SigningRequestDetails';
 import { NappletRequiredAccess } from './NappletRequiredAccess';
 import { AppText } from '@/components/common/AppText';
 import { AppCard } from '@/components/common/AppCard';
@@ -51,7 +50,6 @@ export function CapabilityApproval({ prompt, hideActions = false }: { prompt: Qu
       <AppText>{t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt_notice' : 'napplets.crypto_decrypt_notice')}</AppText>
       <AppCard variant="muted" style={{ gap: spacing.md }}>
         <AppText variant="body">{prompt.crypto.algorithm === 'nip04' ? 'NIP-04' : 'NIP-44'}</AppText>
-        <SigningIdentity pubkey={prompt.crypto.peer} label={t('napplets.crypto_peer')} />
       </AppCard>
     </> : <>
       <NappletRequiredAccess release={{ required }} showHeading={false} />
