@@ -10,6 +10,31 @@ function setup() {
 }
 const prompt = { title: 'App', detail: 'Publish a post' };
 
+test('closes the sheet before settling its decision or presenting another request', async () => {
+  const { queue, current } = setup();
+  const first = queue.ask(prompt), settled = jest.fn();
+  void first.then(settled);
+  const second = queue.ask(prompt);
+  queue.answer(current()!.requestId, 'allow-always');
+  expect(current()).toBeNull();
+  await Promise.resolve();
+  expect(settled).not.toHaveBeenCalled();
+  queue.dismissed();
+  await expect(first).resolves.toBe('allow-always');
+  expect(current()).not.toBeNull();
+  queue.cancelAll();
+  await expect(second).resolves.toBe(false);
+});
+
+test('session cancellation discards a decision whose sheet is still closing', async () => {
+  const { queue, current } = setup();
+  const first = queue.ask(prompt);
+  queue.answer(current()!.requestId, 'allow-always');
+  queue.cancelAll(); queue.dismissed();
+  await expect(first).resolves.toBe(false);
+  expect(current()).toBeNull();
+});
+
 test('serializes requests and ignores answers from an obsolete dialog', async () => {
   const { queue, current } = setup();
   const first = queue.ask(prompt);
@@ -17,11 +42,14 @@ test('serializes requests and ignores answers from an obsolete dialog', async ()
   const second = queue.ask(prompt);
   expect(current()!.queued).toBe(1);
   queue.answer(oldId, 'allow');
+  queue.dismissed();
   await expect(first).resolves.toBe('allow');
   const newId = current()!.requestId;
   queue.answer(oldId, 'allow-always');
+  queue.dismissed();
   expect(current()!.requestId).toBe(newId);
   queue.answer(newId, false);
+  queue.dismissed();
   await expect(second).resolves.toBe(false);
   expect(current()).toBeNull();
 });
@@ -35,12 +63,14 @@ test('each request receives 60 seconds only when it reaches the front', async ()
   expect(current()!.expiresAt).toBe(firstDeadline);
   expect(current()!.queued).toBe(1);
   jest.advanceTimersByTime(50000);
+  queue.dismissed();
   await expect(first).resolves.toBe(false);
   expect(current()!.expiresAt).toBe(Date.now() + 60000);
   expect(current()!.queued).toBe(0);
   jest.advanceTimersByTime(59999);
   expect(current()).not.toBeNull();
   queue.answer(current()!.requestId, 'allow');
+  queue.dismissed();
   await expect(second).resolves.toBe('allow');
 });
 
@@ -50,9 +80,11 @@ test('a queued request that becomes visible after a long wait still has its full
   const second = queue.ask(prompt);
   jest.setSystemTime(Date.now() + 60000);
   queue.answer(current()!.requestId, 'allow-always');
+  queue.dismissed();
   await expect(first).resolves.toBe(false);
   expect(current()!.expiresAt).toBe(Date.now() + 60000);
   queue.answer(current()!.requestId, 'allow');
+  queue.dismissed();
   await expect(second).resolves.toBe('allow');
 });
 
@@ -62,6 +94,7 @@ test('account/session cancellation rejects active and queued requests', async ()
   const first = queue.ask(prompt, abort.signal);
   const second = queue.ask(prompt, abort.signal);
   abort.abort();
+  queue.dismissed();
   await expect(first).resolves.toBe(false);
   await expect(second).resolves.toBe(false);
   expect(current()).toBeNull();
@@ -100,5 +133,6 @@ test('sharing defers background approval presentation and starts a fresh review 
   queue.setPaused(false);
   expect(current()!.expiresAt).toBe(Date.now() + 60000);
   queue.answer(current()!.requestId, 'allow');
+  queue.dismissed();
   await expect(pending).resolves.toBe('allow');
 });

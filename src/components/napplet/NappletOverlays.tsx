@@ -33,14 +33,14 @@ export function NappletOverlays() {
     if (!owns) return;
     const state = nappletStore.getState();
     // A task switch can unmount the previous owner's sheet during its exit animation.
-    if (!state.prompt && !state.configuration && !state.panel) nappletService.overlayClosed();
+    if (state.approvalClosing || !state.prompt && !state.configuration && !state.panel) nappletService.overlayClosed();
   }, [owns]);
   return owns ? <NappletOverlayContent /> : null;
 }
 
 function NappletOverlayContent() {
   const openPublisher = useOpenPublisher();
-  const { prompt, configuration, panel, accountPubkey } = useNapplets();
+  const { prompt, approvalClosing, configuration, panel, accountPubkey } = useNapplets();
   const pending = useRef<(() => void) | null>(null);
   const { t } = useTranslation();
   const [choice, setChoice] = useState<{ id: string; value: string }>();
@@ -72,7 +72,7 @@ function NappletOverlayContent() {
   }
   return (
     <BottomSheet<RuntimePromptChoice>
-      visible={!!prompt || !!configuration || !!panel}
+      visible={!approvalClosing && (!!prompt || !!configuration || !!panel)}
       title={selectingApplication ? t('napplets.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'napplets.permissions' : `napplets.browser_${prompt.browser.action}`) : accessPrompt ? t('napplets.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
       headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}

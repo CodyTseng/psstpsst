@@ -2,6 +2,7 @@ import { BrowserActions } from '../browser-actions';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
 import { readBrowserPermissions, saveBrowserPermissions } from '../browser-permission-store';
 import { invalidateSigning } from '@/services/signing/changes';
+import type { BrowserPermissionRule } from '../browser-permission-store';
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn() }));
 jest.mock('@/platform', () => ({ platform: {} }));
@@ -30,6 +31,32 @@ function setup(answer: string | false = 'allow', sourceId = 'https://site.exampl
 beforeEach(() => {
   jest.clearAllMocks(); jest.mocked(readBrowserPermissions).mockResolvedValue([]);
   jest.mocked(saveBrowserPermissions).mockImplementation(async scope => invalidateSigning(scope, 'browser:*'));
+});
+
+it.each(['allow-always', 'allow-1h', 'deny-always'])('rechecks queued browser requests after a %s decision commits', async answer => {
+  let saved: BrowserPermissionRule[] = [], decide!: (answer: string) => void, commit!: () => void;
+  const committed = new Promise<void>(resolve => { commit = resolve; });
+  jest.mocked(readBrowserPermissions).mockImplementation(async () => saved);
+  jest.mocked(saveBrowserPermissions).mockImplementation(async (scope, resources, decision, expiresAt, guard) => {
+    await committed; guard?.();
+    saved = resources.map(resource => ({ resource, decision, expiresAt, updatedAt: Date.now() }));
+    return invalidateSigning(scope, 'browser:*');
+  });
+  const first = setup(answer), second = setup(answer);
+  first.confirm.mockImplementationOnce(() => new Promise<string>(resolve => { decide = resolve; }));
+  try {
+    const request = { action: 'permission' as const, resources: ['clipboard-read'] };
+    const pending = [first.actions.approve(request), second.actions.approve(request)];
+    while (!first.confirm.mock.calls.length) await Promise.resolve();
+    decide(answer);
+    await Promise.resolve();
+    expect(second.confirm).not.toHaveBeenCalled();
+    commit();
+    expect(await Promise.all(pending)).toEqual([answer.startsWith('allow'), answer.startsWith('allow')]);
+    expect(first.confirm).toHaveBeenCalledTimes(1);
+    expect(second.confirm).not.toHaveBeenCalled();
+    expect(saveBrowserPermissions).toHaveBeenCalledTimes(1);
+  } finally { first.life.abort(); second.life.abort(); }
 });
 
 it('allows persistence and copy without displaying an approval or storing a grant', async () => {

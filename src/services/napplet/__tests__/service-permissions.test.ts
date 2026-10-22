@@ -43,6 +43,17 @@ beforeEach(async () => {
 });
 afterEach(() => nappletService.deactivate());
 
+it('requires approval dismissal even when another host panel remains behind it', async () => {
+  nappletStore.setState({ panel: { page: 'about', release: app }, overlayActive: true });
+  const request = nappletService.requestApproval({ title: 'App', detail: 'Request' });
+  const id = nappletStore.getState().prompt!.requestId;
+  nappletService.answer(id, 'allow-always');
+  expect(nappletStore.getState()).toMatchObject({ prompt: null, approvalClosing: true, panel: { page: 'about' } });
+  nappletService.overlayClosed();
+  await expect(request).resolves.toBe('allow-always');
+  expect(nappletStore.getState()).toMatchObject({ approvalClosing: false, panel: { page: 'about' } });
+});
+
 it('serializes independent signing-table edits and isolates accounts', async () => {
   const first = { key: signingRuleKey({ operation: 'publish', kind: 1, relays: [] }), scope: { operation: 'publish' as const, kind: 1, relays: [] } };
   const second = { key: signingRuleKey({ operation: 'publish', kind: 7, relays: [] }), scope: { operation: 'publish' as const, kind: 7, relays: [] } };
@@ -347,6 +358,7 @@ it('grants only required domains when the user leaves optional capabilities disa
   const prompt = nappletStore.getState().prompt!;
   expect(prompt.capabilities).toEqual({ required: ['shell', 'storage'], optional: ['identity'] });
   nappletService.answer(prompt.requestId, 'domains:[]');
+  nappletService.overlayClosed();
   await opening;
   expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['shell', 'storage']);
 });
@@ -494,6 +506,7 @@ it('asks again if the reviewed set does not match the required permissions', asy
   expect(request.capabilities?.required).toEqual(['shell', 'storage']);
   expect(stored.size).toBe(0);
   nappletService.answer(request.requestId, false);
+  nappletService.overlayClosed();
   await settleLaunch();
   expect(NappletRuntime).not.toHaveBeenCalled();
 });
@@ -509,6 +522,7 @@ it('keeps capability grants across upgrades and asks only for newly required acc
   const request = nappletStore.getState().prompt!;
   expect(request.capabilities?.required).toContain('relay');
   nappletService.answer(request.requestId, false);
+  nappletService.overlayClosed();
   await expect(work).rejects.toThrow('permission-denied');
 });
 

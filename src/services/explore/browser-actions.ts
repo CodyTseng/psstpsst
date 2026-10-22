@@ -9,6 +9,7 @@ import { NappDevice } from './device';
 import { readBrowserPermissions, saveBrowserPermissions } from './browser-permission-store';
 import { SIGNING_PERIODS } from '@/services/signing/model';
 import { signingRevision, subscribeSigning } from '@/services/signing/changes';
+import { queueAuthorization } from '@/services/signing/authorization-queue';
 import type { BrowserRequest } from '@/platform/ports/explore';
 
 export class BrowserActions {
@@ -30,6 +31,10 @@ export class BrowserActions {
     return (await this.authorize(request)).allowed;
   }
   async authorize(request: Omit<BrowserRequest, 'id'>): Promise<{ allowed: boolean; expiresAt?: number | null }> {
+    const frozen = JSON.parse(JSON.stringify(request)) as Omit<BrowserRequest, 'id'>;
+    return queueAuthorization(this.scope, [this.options.signal], () => this.authorizeCurrent(frozen));
+  }
+  private async authorizeCurrent(request: Omit<BrowserRequest, 'id'>): Promise<{ allowed: boolean; expiresAt?: number | null }> {
     this.check();
     if (request.url !== undefined && (typeof request.url !== 'string' || request.url.length > 8192) ||
       request.filename !== undefined && (typeof request.filename !== 'string' || request.filename.length > 256) ||

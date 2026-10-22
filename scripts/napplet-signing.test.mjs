@@ -91,6 +91,40 @@ test(
         }
       };
       const address = `http://127.0.0.1:${server.address().port}`;
+      for (const theme of ['light', 'dark']) {
+        for (const duration of ['Always', '1 hour']) {
+          await page.goto(`${address}/?scenario=queued-approvals&theme=${theme}`);
+          await page.getByRole('button', { name: 'Only once', exact: true }).click();
+          await page.getByRole('button', { name: duration, exact: true }).click();
+          await page.getByRole('button', { name: 'Allow', exact: true }).click();
+          await page.waitForFunction(() => window.approvalQueue?.complete);
+          const state = await page.evaluate(() => window.approvalQueue);
+          assert.equal(state.presentations.filter(Boolean).length, 1, 'matching permissions present exactly one sheet');
+          assert.deepEqual(state.results, ['fulfilled', 'fulfilled', 'fulfilled']);
+          assert.equal(await page.getByRole('dialog').count(), 0, 'automatic approvals finish after sheet exit');
+        }
+        await page.goto(`${address}/?scenario=queued-approvals&distinct=1&theme=${theme}`);
+        await page.getByRole('button', { name: 'Only once', exact: true }).click();
+        await page.getByRole('button', { name: 'Always', exact: true }).click();
+        await page.getByRole('button', { name: 'Allow', exact: true }).click();
+        await page.getByText('Encrypt data', { exact: true }).waitFor();
+        const transitions = await page.evaluate(() => window.approvalQueue.presentations);
+        assert.equal(transitions.filter(Boolean).length, 2, 'a different method still needs review');
+        assert.equal(transitions[1], null, 'the previous sheet closes before a different request is presented');
+        await page.getByRole('button', { name: 'Allow', exact: true }).click();
+        await page.waitForFunction(() => window.approvalQueue?.complete);
+        await page.goto(`${address}/?scenario=queued-approvals&underlay=1&theme=${theme}`);
+        await page.getByRole('button', { name: 'Only once', exact: true }).click();
+        await page.getByRole('button', { name: 'Always', exact: true }).click();
+        await page.getByRole('button', { name: 'Allow', exact: true }).click();
+        await page.waitForFunction(() => window.approvalQueue?.complete);
+        assert.equal((await page.evaluate(() => window.approvalQueue.presentations)).filter(Boolean).length, 1,
+          'a host configuration panel does not prevent the approval from dismissing');
+      }
+      if (process.env.NAPPLET_SIGNING_SCENARIO === 'queued-approvals') {
+        assert.deepEqual(errors, []);
+        return;
+      }
       for (const os of ['darwin', 'win32', 'linux']) {
         for (const theme of ['light', 'dark']) {
           await page.setViewportSize({ width: 900, height: 700 });

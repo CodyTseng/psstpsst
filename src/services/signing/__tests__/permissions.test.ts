@@ -4,6 +4,7 @@ import { connectSigningWindows } from '../changes';
 import { SigningPermissions, signingRuleKey, type SigningRequest } from '../permissions';
 import { saveSigningRule } from '../repository';
 import { rules as stored, activity } from '../testing/memory-repository';
+import { PromptQueue, type QueuedPrompt } from '@/services/napplet/prompt-queue';
 
 jest.mock('../repository', () => jest.requireActual('../testing/memory-repository').memoryRepository);
 const controllers: AbortController[] = [];
@@ -11,7 +12,7 @@ const request: SigningRequest = {
   operation: 'publish', kind: 30078, relays: ['wss://one.example/'], scopeKey: 'progress',
   accountPubkey: 'accountA', content: 'private fixture content', tags: [['d', 'progress']], createdAt: 100,
 };
-function create(confirm = jest.fn(async () => 'allow-always' as string | false), account = 'accountA', source = 'app.example') {
+function create(confirm: jest.Mock = jest.fn(async () => 'allow-always' as string | false), account = 'accountA', source = 'app.example') {
   const abort = new AbortController(); controllers.push(abort);
   const permissions = new SigningPermissions(
     { accountPubkey: account, sourceId: source }, confirm, abort.signal, jest.fn(),
@@ -20,6 +21,50 @@ function create(confirm = jest.fn(async () => 'allow-always' as string | false),
 }
 beforeEach(() => { stored.clear(); activity.clear(); jest.clearAllMocks(); });
 afterEach(() => { controllers.splice(0).forEach((value) => value.abort()); });
+
+test.each(['allow-always', 'allow-10m', 'deny-always', 'deny-1h'])('%s dismisses once and rechecks matching queued requests across controllers', async decision => {
+  let visible: QueuedPrompt | null = null, presentations = 0;
+  const queue = new PromptQueue(value => { visible = value; if (value) presentations++; });
+  const confirm = jest.fn((request: SigningRequest, signal?: AbortSignal) => queue.ask({ title: 'App', detail: '', signing: request }, signal));
+  const first = create(confirm), second = create(confirm);
+  const requests = [first.permissions.authorize(request), second.permissions.authorize(request), first.permissions.authorize(request)];
+  const results = Promise.allSettled(requests);
+  while (!visible) await Promise.resolve();
+  queue.answer((visible as QueuedPrompt).requestId, decision);
+  expect(visible).toBeNull();
+  expect(stored.size).toBe(0);
+  queue.dismissed();
+  const outcomes = await results;
+  expect(confirm).toHaveBeenCalledTimes(1);
+  expect(presentations).toBe(1);
+  expect(visible).toBeNull();
+  expect(outcomes.every(result => result.status === (decision.startsWith('allow') ? 'fulfilled' : 'rejected'))).toBe(true);
+});
+
+test('one-time permission decisions still review each queued request after dismissal', async () => {
+  let visible: QueuedPrompt | null = null;
+  const queue = new PromptQueue(value => { visible = value; });
+  const confirm = jest.fn((request: SigningRequest, signal?: AbortSignal) => queue.ask({ title: 'App', detail: '', signing: request }, signal));
+  const value = create(confirm);
+  const first = value.permissions.authorize(request), second = value.permissions.authorize(request);
+  while (!visible) await Promise.resolve();
+  queue.answer((visible as QueuedPrompt).requestId, 'allow');
+  expect(visible).toBeNull(); queue.dismissed();
+  await first;
+  while (!visible) await Promise.resolve();
+  expect(confirm).toHaveBeenCalledTimes(2);
+  queue.answer((visible as QueuedPrompt).requestId, 'allow'); queue.dismissed();
+  await second;
+});
+
+test('queued requests only reuse an exactly matching permission scope', async () => {
+  const value = create();
+  await Promise.all([value.permissions.authorize(request),
+    value.permissions.authorize({ ...request, tags: [['d', 'another-record']] }),
+    value.permissions.authorize(request)]);
+  expect(value.confirm).toHaveBeenCalledTimes(2);
+  expect((await value.permissions.snapshot()).rules).toHaveLength(2);
+});
 
 test('editing a saved rule changes its decision immediately and asking removes all automatic authority', async () => {
   const value = create();

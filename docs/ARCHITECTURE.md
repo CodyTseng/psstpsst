@@ -829,6 +829,12 @@ staged files. Migration retains a read-only backup of old app namespaces and
 imports only rules whose scope can be preserved exactly. Host-owned approval IDs
 bind responses to one request; cancellation invalidates queued approvals before
 a session is replaced.
+Authorization work is serialized by account and verified source across signer and
+browser permission controllers. A decision settles after sheet dismissal, and
+the next request reads authority after that decision has committed.
+Each source queue has one worker. Canceling a waiting request removes only that
+entry; canceling the active caller does not release its processing slot until
+the active work finishes.
 Signing revocation invalidates cached approvals and in-flight signatures, then
 serializes persistent removal without stopping unrelated executions. App access
 changes restart the affected container. Host overlays block app input through

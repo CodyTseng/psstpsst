@@ -14,11 +14,12 @@ export class PromptQueue {
   private serial = 0;
   private paused = false;
   private blockedUntil = 0;
-  constructor(private changed: (prompt: QueuedPrompt | null) => void) {}
+  private dismissing?: { entry: Entry; value: string | false };
+  constructor(private changed: (prompt: QueuedPrompt | null, closing: boolean) => void) {}
 
   ask(value: RuntimePrompt, signal?: AbortSignal): Promise<string | false> {
     if (signal?.aborted || Date.now() < this.blockedUntil) return Promise.resolve(false);
-    if (this.entries.length >= 16) return Promise.reject(new Error('quota-exceeded'));
+    if (this.entries.length + (this.dismissing ? 1 : 0) >= 16) return Promise.reject(new Error('quota-exceeded'));
     return new Promise((resolve) => {
       const id = `approval:${++this.serial}`;
       const abort = () => this.remove(id, false);
@@ -38,7 +39,7 @@ export class PromptQueue {
 
   answer(id: string, value: string | false): void {
     const first = this.entries[0];
-    if (first?.prompt.requestId === id) {
+    if (!this.dismissing && first?.prompt.requestId === id && first.prompt.expiresAt > 0) {
       this.remove(id, Date.now() < first.prompt.expiresAt ? value : false);
     }
   }
@@ -48,11 +49,23 @@ export class PromptQueue {
     this.emit();
   }
 
+  /** The sheet's exit completion releases the decision before another review starts. */
+  dismissed(): void {
+    const closing = this.dismissing;
+    if (!closing) return;
+    this.dismissing = undefined;
+    closing.entry.finish(closing.value);
+    this.emit();
+  }
+
   cancelAll(): void {
     this.paused = false;
     this.blockedUntil = 0;
     const entries = this.entries;
     this.entries = [];
+    const closing = this.dismissing;
+    this.dismissing = undefined;
+    closing?.entry.finish(false);
     for (const entry of entries) { entry.cleanup(); entry.finish(false); }
     this.emit();
   }
@@ -66,17 +79,18 @@ export class PromptQueue {
     if (index < 0) return;
     const [entry] = this.entries.splice(index, 1);
     entry.cleanup();
-    entry.finish(value);
+    if (index === 0 && entry.prompt.expiresAt > 0) this.dismissing = { entry, value };
+    else entry.finish(value);
     this.emit();
   }
 
   private emit() {
-    if (this.paused) { this.changed(null); return; }
+    if (this.paused || this.dismissing) { this.changed(null, !!this.dismissing); return; }
     const first = this.entries[0];
     if (first && first.timer === undefined) {
       first.prompt.expiresAt = Date.now() + 60000;
       first.timer = setTimeout(() => this.remove(first.prompt.requestId, false), 60000);
     }
-    this.changed(first ? { ...first.prompt, queued: this.entries.length - 1 } : null);
+    this.changed(first ? { ...first.prompt, queued: this.entries.length - 1 } : null, false);
   }
 }

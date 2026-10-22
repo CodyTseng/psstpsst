@@ -49,6 +49,7 @@ type State = {
   launch: { release: NappletRelease; reviewedRequired?: readonly string[]; pending: boolean; showLoading: boolean; error: string | null } | null;
   running: { release: NappletRelease; containerId: string } | null;
   prompt: QueuedPrompt | null;
+  approvalClosing: boolean;
   overlayActive: boolean;
   sharing: boolean;
   panel: { page: 'about' | 'settings'; release: NappletRelease } | null;
@@ -65,6 +66,7 @@ export const nappletStore = createStore<State>(() => ({
   launch: null,
   running: null,
   prompt: null,
+  approvalClosing: false,
   configuration: null,
   panel: null,
   overlayActive: false,
@@ -82,7 +84,7 @@ const addressReaders = new Set<NappletNetwork>();
 const signingEdits = new Map<string, Promise<void>>();
 let runtime: NappletRuntime | null = null;
 let runtimeClosing: Promise<void> = Promise.resolve();
-const approvals = new PromptQueue((prompt) => nappletStore.setState({ prompt, ...(prompt ? { overlayActive: true } : {}) }));
+const approvals = new PromptQueue((prompt, approvalClosing) => nappletStore.setState({ prompt, approvalClosing, ...(prompt ? { overlayActive: true } : {}) }));
 let theme: RuntimeTheme | null = null;
 let opening = 0;
 let navigatingBack: NappletRuntime | null = null;
@@ -532,6 +534,7 @@ export const nappletService = {
   overlayClosed() {
     const { prompt, configuration, panel } = nappletStore.getState();
     if (!prompt && !configuration && !panel) nappletStore.setState({ overlayActive: false });
+    approvals.dismissed();
   },
   async reload(release: NappletRelease, expectedAccount: string) {
     check(expectedAccount, generation);

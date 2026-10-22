@@ -9,6 +9,7 @@ import type { PlatformAdapters } from '../../src/platform/ports';
 import { NavigationContext, NavigationRouteContext, PreventRemoveContext } from 'expo-router/react-navigation';
 import { LocalRouteParamsContext } from 'expo-router/build/Route';
 import type { NappletRelease } from '../../src/services/napplet/protocol';
+import type { SigningRule } from '../../src/services/signing/model';
 
 // This fixture renders the shipped approval UI without user data or signer access.
 initPlatformAdapters({
@@ -50,6 +51,7 @@ useThemeStore.setState({ preference: params.get('theme') === 'dark' ? 'dark' : '
 const auth = params.get('scenario') === 'auth';
 const raw = params.get('scenario') === 'raw';
 const scroll = params.get('scenario') === 'scroll';
+const answerApproval = nappletService.answer;
 nappletService.answer = (id, value) => { document.title = JSON.stringify({ id, value }); };
 nappletStore.setState({
   prompt: {
@@ -64,6 +66,39 @@ nappletStore.setState({
     },
   },
 });
+if (params.get('scenario') === 'queued-approvals') {
+  nappletService.answer = answerApproval;
+  nappletStore.setState({ accountPubkey: 'a'.repeat(64), prompt: null, overlayActive: false });
+  if (params.has('underlay')) nappletStore.setState({ configuration: {
+    schema: { type: 'object', properties: {} }, values: {}, requestId: 1,
+  } });
+  const repository = require('../../src/services/signing/repository') as typeof import('../../src/services/signing/repository');
+  const { invalidateSigning } = require('../../src/services/signing/changes') as typeof import('../../src/services/signing/changes');
+  let rules: SigningRule[] = [];
+  repository.readSigningSnapshot = async () => ({ rules: [...rules], activity: [] });
+  repository.saveSigningRule = async (scope, rule, guard) => {
+    guard?.(); rules = [...rules.filter(saved => saved.key !== rule.key), rule];
+    return invalidateSigning(scope, rule.key);
+  };
+  repository.recordSigningActivity = async () => {};
+  const state = { presentations: [] as (string | null)[], results: [] as string[], complete: false };
+  (window as unknown as { approvalQueue: typeof state }).approvalQueue = state;
+  nappletStore.subscribe(value => {
+    const id = value.prompt?.requestId ?? null;
+    if (state.presentations.at(-1) !== id) state.presentations.push(id);
+  });
+  const { SigningPermissions } = require('../../src/services/signing/permissions') as typeof import('../../src/services/signing/permissions');
+  const life = new AbortController(), scope = { accountPubkey: 'a'.repeat(64), sourceId: 'https://app.example' };
+  const controller = () => new SigningPermissions(scope, (signing, signal) => nappletService.requestApproval({
+    title: 'Arcade', detail: '', accountPubkey: scope.accountPubkey, signing,
+    application: { title: 'Arcade', description: '', servers: [], required: [] },
+  }, signal), life.signal, () => {});
+  const first = controller(), second = controller();
+  void Promise.allSettled([first.authorizeAccess('nip44-decrypt'), second.authorizeAccess('nip44-decrypt'),
+    first.authorizeAccess(params.has('distinct') ? 'nip44-encrypt' : 'nip44-decrypt')]).then(results => {
+    state.results = results.map(result => result.status); state.complete = true;
+  });
+}
 if (params.get('scenario') === 'upload') {
   nappletStore.setState({ prompt: { ...nappletStore.getState().prompt!, queued: 0, signing: undefined,
     upload: { filename: 'report.pdf', mimeType: 'application/pdf', size: 2048, sha256: 'c'.repeat(64), servers: ['https://storage.example/'] },

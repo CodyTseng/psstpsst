@@ -1104,6 +1104,8 @@ kind or app-data identifier is categorically blocked from user-approved publicat
 Signing approvals show the remaining seconds in the Reject button, based on
 a fresh review deadline when each request becomes visible. Adding queued requests
 never restarts the active countdown.
+Each decision closes its approval sheet completely before another review opens.
+Queued permissions recheck the latest saved decision and skip review when it applies.
 Closing an approval sheet through its backdrop, X or system Back rejects only
 the current request. Approval sheets expose no bulk rejection or cooldown action;
 ordinary dismissal never blocks later requests.

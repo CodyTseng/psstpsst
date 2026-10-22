@@ -2,6 +2,7 @@ import { assertNotAborted, linkAbort } from '@/platform/abort';
 import { readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
 import { normalizeSigningSource } from './source';
 import { invalidateSigning, signingRevision, subscribeSigning } from './changes';
+import { queueAuthorization } from './authorization-queue';
 
 import { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, SIGNING_PERIODS,
   MAX_SIGNING_RULES as MAX_RULES, isSigningRuleActive as activeRule, isSignerAccess, type SignerAccessOperation,
@@ -93,14 +94,20 @@ export class SigningPermissions {
 
   async authorize(input: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal,
     review?: (request: SigningRequest, signal?: AbortSignal) => Promise<string | false>): Promise<number> {
+    // Freeze before queueing; the caller signs this exact snapshot after consent.
+    const request: SigningRequest = JSON.parse(JSON.stringify(input));
+    return queueAuthorization(this.scope, requestSignal ? [this.signal, requestSignal] : [this.signal],
+      () => this.authorizeCurrent(request, expiresAt, requestSignal, review));
+  }
+
+  private async authorizeCurrent(request: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal,
+    review?: (request: SigningRequest, signal?: AbortSignal) => Promise<string | false>): Promise<number> {
     let revision = this.version;
     const current = () => {
       assertNotAborted(this.signal);
       assertNotAborted(requestSignal);
       if (revision !== this.version) throw new Error('permission-denied');
     };
-    // Freeze the approval payload before any await; the caller signs this same snapshot.
-    const request: SigningRequest = JSON.parse(JSON.stringify(input));
     if (request.accountPubkey !== this.scope.accountPubkey) throw new Error('account-unavailable');
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
     if (request.operation === 'relay-auth' && !request.relays.length) throw new Error('invalid-signing-request');
