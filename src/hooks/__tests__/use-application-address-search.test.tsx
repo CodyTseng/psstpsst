@@ -8,7 +8,7 @@ import type { ExploreEntry } from '@/services/explore/model';
 
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 jest.mock('@/services/explore/repository', () => ({ readEntries: jest.fn() }));
-jest.mock('@/services/explore/address-search', () => ({ ...jest.requireActual('@/services/explore/address-search'), resolveApplicationAddress: jest.fn() }));
+jest.mock('@/services/explore/address-search', () => ({ ...jest.requireActual('@/services/explore/address-query'), resolveApplicationAddress: jest.fn() }));
 jest.mock('@/services/explore/discovery', () => ({ cacheApplicationAddress: jest.fn() }));
 let mockSaved = { account: 'account', entries: [] as ExploreEntry[] };
 jest.mock('@/stores/explore.store', () => ({ useExplore: () => mockSaved }));

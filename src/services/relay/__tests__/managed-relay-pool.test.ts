@@ -1,3 +1,4 @@
+import { setImmediate as nextTurn } from 'node:timers';
 import type { Event, Filter } from 'nostr-tools';
 import type {
   AbstractRelay,
@@ -1212,6 +1213,6 @@ function eventAt(id: string, createdAt: number): Event {
 }
 
 async function flushPromises(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  // Drain the full AUTH promise chain without advancing query or retry deadlines.
+  await new Promise<void>(resolve => nextTurn(resolve));
 }
