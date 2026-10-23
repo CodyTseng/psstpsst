@@ -8,7 +8,7 @@ import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-
 import { AppText } from '@/components/common/AppText';
 import { Avatar } from '@/components/common/Avatar';
 import { GroupAvatar } from '@/components/common/GroupAvatar';
-import { HorizontalFadeScrollView } from '@/components/common/HorizontalFadeScrollView';
+import { HorizontalScrollView } from '@/components/common/HorizontalScrollView';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { useContact } from '@/hooks/use-contacts';
 import { useProfile } from '@/hooks/use-profile';
@@ -128,8 +128,6 @@ function RecipientSummaryIdentity({ target }: { target: ShareTarget }) {
 /** Persistent recipient identity shown above a share confirmation preview. */
 export function RecipientSummary({ label, targets }: { label: string; targets: ShareTarget[] }) {
   const direction = useLanguageDirection();
-  const c = useThemeColors();
-
   return (
     <View
       style={{
@@ -140,15 +138,14 @@ export function RecipientSummary({ label, targets }: { label: string; targets: S
       }}
     >
       <SectionLabel>{label}</SectionLabel>
-      <HorizontalFadeScrollView
-        fadeColor={c.sheetBackground}
-        containerStyle={{ flex: 1 }}
-        contentContainerStyle={{ gap: spacing.lg }}
+      <HorizontalScrollView
+        containerStyle={{ flex: 1, marginEnd: -spacing.lg }}
+        contentContainerStyle={{ gap: spacing.lg, paddingEnd: spacing.lg }}
       >
         {targets.map((target) => (
           <RecipientSummaryIdentity key={shareTargetId(target)} target={target} />
         ))}
-      </HorizontalFadeScrollView>
+      </HorizontalScrollView>
     </View>
   );
 }
@@ -170,7 +167,6 @@ export function SelectedRecipientsRow({
   targets: ShareTarget[];
   onRemove: (id: string) => void;
 }) {
-  const c = useThemeColors();
   const shown = targets.length > 0;
   const progress = useSharedValue(0);
   // Last measured open height. Updated only while shown, so a collapse animates
@@ -198,8 +194,7 @@ export function SelectedRecipientsRow({
           if (shown) contentH.value = e.nativeEvent.layout.height;
         }}
       >
-        <HorizontalFadeScrollView
-          fadeColor={c.background}
+        <HorizontalScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             paddingHorizontal: spacing.lg,
@@ -211,7 +206,7 @@ export function SelectedRecipientsRow({
           {targets.map((target) => (
             <RecipientChip key={shareTargetId(target)} target={target} onRemove={onRemove} />
           ))}
-        </HorizontalFadeScrollView>
+        </HorizontalScrollView>
       </View>
     </Reanimated.View>
   );

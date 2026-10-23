@@ -138,7 +138,6 @@ export const EmojiPickerPanel = memo(function EmojiPickerPanel({
 
       <EmojiPickerTabs
         activePack={resolvedSource}
-        backgroundColor={backgroundColor}
         customPacks={customPacks}
         standaloneCustomEmojis={standaloneCustomEmojis}
         onOpenEmojiPacks={openEmojiPacks}

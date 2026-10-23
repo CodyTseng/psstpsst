@@ -26,7 +26,7 @@ export const wideLayout = {
 export const contentWidth = {
   focused: 480,
   compactSheet: 480,
-  sheet: 640,
+  sheet: 480,
   toast: 480,
   dialog: 320,
 } as const;
@@ -46,6 +46,8 @@ export const bottomChrome = {
  * the two in sync. */
 export const desktopChrome = {
   titlebarHeight: DESKTOP_OS === 'darwin' ? 28 : 40,
+  applicationTitlebarHeight: 44,
+  nativeControlsWidth: DESKTOP_OS === 'darwin' ? 80 : 144,
 } as const;
 
 /** Mobile remains touch-roomy; Electron uses a tighter information density. */
@@ -75,6 +77,7 @@ export const density = {
     sectionHeaderHeight: 34,
     chatNoticeVerticalPadding: 10,
     listRowHeight: 56,
+    listRowCompactHeight: 44,
     listRowTwoLineHeight: 64,
     listRowHorizontalPadding: 18,
     listRowIconGap: 14,
@@ -129,6 +132,7 @@ export const density = {
     sectionHeaderHeight: 32,
     chatNoticeVerticalPadding: 10,
     listRowHeight: 48,
+    listRowCompactHeight: 36,
     listRowTwoLineHeight: 56,
     listRowHorizontalPadding: 16,
     listRowIconGap: 12,

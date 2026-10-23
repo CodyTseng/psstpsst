@@ -49,7 +49,7 @@ export function MediaViewerContextMenu({ children, style, disabled, onCopy, onSa
           setCopying(true);
           void copy().then(
             () => showToast(t('common.copied')),
-            () => showToast(t('attach.copy_failed')),
+            () => showToast(t('attach.copy_failed'), { variant: 'error' }),
           ).finally(() => setCopying(false));
         },
       }] : []),

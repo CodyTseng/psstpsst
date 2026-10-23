@@ -15,11 +15,13 @@ export const replaceableEvents = sqliteTable(
     kind: integer('kind').notNull(),
     dTag: text('d_tag').notNull().default(''),
     event: text('event', { mode: 'json' }).$type<NostrEvent>(),
+    relays: text('relays', { mode: 'json' }).$type<string[]>().notNull().default([]),
     createdAt: integer('created_at'),
     fetchedAt: integer('fetched_at').notNull(),
   },
   (t) => [
     primaryKey({ columns: [t.pubkey, t.kind, t.dTag] }),
     index('idx_replaceable_events_pubkey_kind').on(t.pubkey, t.kind),
+    index('replaceable_cache_freshness').on(t.kind, t.fetchedAt),
   ],
 );

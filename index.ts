@@ -1,4 +1,4 @@
-import { IS_ELECTRON } from './src/lib/platform';
+import { IS_ANDROID, IS_ELECTRON } from './src/lib/platform';
 // Import the registry directly: React Refresh inspects barrel exports and
 // touching the exported platform proxy would install Expo adapters too early.
 import { initPlatformAdapters } from './src/platform/registry';
@@ -14,6 +14,16 @@ if (IS_ELECTRON) {
   const { createElectronAdapters, installElectronScrollbarVisibility } = require('./src/platform/electron') as typeof import('./src/platform/electron');
   installElectronScrollbarVisibility();
   initPlatformAdapters(createElectronAdapters());
+}
+
+if (IS_ANDROID) {
+  // Register the independent task surface on the same trusted ReactHost.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { AppRegistry } = require('react-native') as typeof import('react-native');
+  AppRegistry.registerComponent('PsstApplicationTask', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('./src/components/napplet/ApplicationTaskRoot').ApplicationTaskRoot;
+  });
 }
 
 // Expo Router's custom-entry contract requires this import to remain last.

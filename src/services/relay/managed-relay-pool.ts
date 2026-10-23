@@ -16,10 +16,12 @@ import { IS_ANDROID } from '@/lib/platform';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { platform, type AppStateStatus, type NetworkStateSnapshot } from '@/platform';
 
+import { LifecycleRelay } from './lifecycle-relay';
 import { RelayQueryError } from './relay-query-error';
 
 const CONNECTION_TIMEOUT_MS = 5_000;
 const AUTH_TIMEOUT_MS = 8_000;
+const AUTH_APPROVAL_TIMEOUT_MS = 1_020_000;
 const RELAY_IDLE_TIMEOUT_MS = 30_000;
 const LONG_LIVED_EOSE_TIMEOUT_MS = 2_147_000_000;
 const LIVE_DEDUP_LIMIT = 8_192;
@@ -80,6 +82,8 @@ type ManagedQueryBase = QueryObservers & {
   relays: string[];
   timeoutMs: number;
   onEvent?: (event: Event) => void;
+  /** Source of a verified event accepted by this query, never a queried-only relay. */
+  onEventSource?: (event: Event, relayUrl: string) => void;
   onReceived?: (relayUrl: string, id: string) => void;
   signAuth?: SignAuth;
   abort?: AbortSignal;
@@ -182,6 +186,7 @@ export class ManagedRelayPool {
   private readonly random: () => number;
   private readonly maxConcurrentQueriesPerRelay: number;
   private readonly connections = new Map<string, ManagedConnection>();
+  private readonly authentications = new WeakMap<AbstractRelay, Promise<string>>();
   private readonly subscriptions = new Map<string, LogicalSubscription>();
   private readonly subscriptionIdsByRelay = new Map<string, Set<string>>();
   private readonly activeQueriesByRelay = new Map<string, number>();
@@ -196,7 +201,7 @@ export class ManagedRelayPool {
   constructor(options: ManagedRelayPoolOptions) {
     this.verifyEvent = options.verifyEvent;
     this.relayFactory =
-      options.relayFactory ?? ((url, relayOptions) => new AbstractRelay(url, relayOptions));
+      options.relayFactory ?? ((url, relayOptions) => new LifecycleRelay(url, relayOptions));
     this.random = options.random ?? Math.random;
     this.maxConcurrentQueriesPerRelay = normalizeQueryConcurrency(
       options.maxConcurrentQueriesPerRelay,
@@ -445,6 +450,17 @@ export class ManagedRelayPool {
     }
   }
 
+  /** Drop only unused connection records when a bounded consumer evicts an idle destination. */
+  forgetIdleRelays(relays: string[]): void {
+    for (const url of normalizeRelayUrls(relays)) {
+      if (this.hasSubscriptionDemand(url) || this.activeQueriesByRelay.has(url) || this.queuedQueriesByRelay.has(url)) continue;
+      const connection = this.connections.get(url);
+      if (!connection) continue;
+      this.closeConnection(connection, false);
+      this.connections.delete(url);
+    }
+  }
+
   listConnectionStatus(): Map<string, boolean> {
     const result = new Map<string, boolean>();
     for (const [url, connection] of this.connections) {
@@ -511,11 +527,7 @@ export class ManagedRelayPool {
   }
 
   private observeLifecycle(): void {
-    platform.appState.addChangeListener((nextState) => {
-      const previous = this.appState;
-      this.appState = nextState;
-      if (nextState === 'active' && previous !== 'active') this.recoverConnections();
-    });
+    platform.appState.addChangeListener((nextState) => this.updateAppState(nextState));
 
     platform.networkState.addStateListener((state) => this.handleNetworkState(state));
     void platform.networkState
@@ -525,6 +537,17 @@ export class ManagedRelayPool {
         // The socket remains the source of truth when the OS network hint is
         // unavailable.
       });
+  }
+
+  /** Disposable clients can share one process observer without retaining closed pools. */
+  updateAppState(nextState: AppStateStatus): void {
+    const previous = this.appState;
+    this.appState = nextState;
+    if (nextState === 'active' && previous !== 'active') this.recoverConnections();
+  }
+
+  updateNetworkState(state: NetworkStateSnapshot, initial = false): void {
+    this.handleNetworkState(state, initial);
   }
 
   private handleNetworkState(state: NetworkStateSnapshot, initial = false): void {
@@ -994,10 +1017,11 @@ export class ManagedRelayPool {
         onerror: options.onerror,
         alreadyHaveEvent: (id) => events.has(id),
         onReceived: options.onReceived,
-        onEvent: (event) => {
+        onEvent: (event, relayUrl) => {
           if (!events.has(event.id)) {
             events.set(event.id, event);
             options.onEvent?.(event);
+            options.onEventSource?.(event, relayUrl);
           }
         },
         onEnd: (results) => {
@@ -1026,11 +1050,44 @@ export class ManagedRelayPool {
   }
 
   private authenticate(relay: AbstractRelay, signAuth: SignAuth): Promise<string> {
-    return withBackgroundTimeout(
-      relay.auth(signAuth as (event: EventTemplate) => Promise<VerifiedEvent>),
-      AUTH_TIMEOUT_MS,
-      'auth timed out',
-    );
+    const existing = this.authentications.get(relay);
+    if (existing) return existing;
+    let settled = false;
+    let cancel = () => {};
+    const pending = new Promise<string>((resolve, reject) => {
+      const deadline = (delay: number) => {
+        cancel();
+        cancel = scheduleBackgroundDeadline(() => reject(new Error('auth timed out')), delay);
+      };
+      deadline(AUTH_TIMEOUT_MS);
+      void relay.auth(async template => {
+        // Human review has its own budget; the relay response still gets eight seconds.
+        deadline(AUTH_APPROVAL_TIMEOUT_MS);
+        try {
+          const signed = await signAuth(template);
+          if (settled) throw new Error('auth cancelled');
+          deadline(AUTH_TIMEOUT_MS);
+          return signed as VerifiedEvent;
+        } catch (error) {
+          // The relay SDK swallows signer rejections, so forward them to the caller here.
+          reject(error);
+          throw error;
+        }
+      }).then(resolve, reject);
+    }).catch(error => {
+      // Drop the SDK's cached failed AUTH after callers settle this connection's reads.
+      setTimeout(() => {
+        const connection = this.connections.get(relay.url);
+        if (connection?.relay !== relay) return;
+        this.closeConnection(connection, false);
+        this.scheduleRetry(connection);
+      }, 0);
+      throw error;
+    }).finally(() => {
+      settled = true; cancel(); this.authentications.delete(relay);
+    });
+    this.authentications.set(relay, pending);
+    return pending;
   }
 }
 

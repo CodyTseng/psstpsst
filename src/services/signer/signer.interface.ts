@@ -19,5 +19,8 @@ export interface Signer {
   nip44Encrypt?(peerPubkey: string, plaintext: string): Promise<string>;
   /** NIP-44 decrypt a ciphertext from `peerPubkey` using the identity key. */
   nip44Decrypt?(peerPubkey: string, ciphertext: string): Promise<string>;
+  /** Legacy NIP-04 operations use the identity key, never the messaging key. */
+  nip04Encrypt?(peerPubkey: string, plaintext: string): Promise<string>;
+  nip04Decrypt?(peerPubkey: string, ciphertext: string): Promise<string>;
   destroy?(): void | Promise<void>;
 }

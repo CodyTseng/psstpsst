@@ -1,3 +1,5 @@
+import type { NappletPort } from './napplet';
+export type { NappletPort, NappletBounds } from './napplet';
 import type { ScreenOrientationPort } from './screen-orientation';
 import type { ClipboardPort } from './clipboard';
 import type { ImageCachePort } from './image-cache';
@@ -114,6 +116,7 @@ export type { ZipArchivePort, ZipArchiveSubscription } from './zip-archive';
  * (`platform/expo/`) is the default, a future desktop shell provides its own.
  */
 export interface PlatformAdapters {
+  napplet: NappletPort;
   pushNotifications: PushNotificationsPort;
   bundledNotices: BundledNoticesPort;
   appUpdate: AppUpdatePort;

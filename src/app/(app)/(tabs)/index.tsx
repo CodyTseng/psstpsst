@@ -1,4 +1,5 @@
-import { useIsFocused, useNavigation } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
+import { usePrimaryPaneFocused } from '@/hooks/use-primary-pane-focused';
 import { ChatRound as MessageCircle } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
 import Plus from 'lucide-react-native/icons/plus';
 import { Scanner } from '@solar-icons/react-native/category/security/Linear/Scanner';
@@ -52,6 +53,7 @@ import { useProximityStore } from '@/stores/proximity.store';
 import { useSyncPhase } from '@/stores/sync-status.store';
 import { useScreenshotPreviewStore } from '@/stores/screenshot-preview.store';
 import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
+import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useWalletConnectionHandoffStore } from '@/stores/wallet-connection-handoff.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { bottomBarHeight, headerHeight, spacing, uiDensity, useThemeColors } from '@/theme';
@@ -146,7 +148,7 @@ function RealConversations() {
   // Cursor into the unread conversations: each Chats-tab re-press advances to
   // the next unread; it resets to the first whenever the tab regains focus.
   const unreadCursor = useRef(0);
-  const focused = useIsFocused();
+  const focused = usePrimaryPaneFocused();
   const currentMinute = useMinuteClock(focused);
   const listExtraData = useMemo(
     () => ({ activeConversationKey, currentMinute, unreadIndicatorsEnabled }),
@@ -325,6 +327,16 @@ function RealConversations() {
     }
 
     setSearchActive(false);
+    if (result.kind === 'application') {
+      if (!accountPubkey) return;
+      const handoff = useExploreSearchHandoffStore.getState().start({ account: accountPubkey, value: result.address });
+      router.navigate({ pathname: '/napplets', params: { searchHandoff: String(handoff) } });
+      return;
+    }
+    if (result.kind === 'napplet') {
+      openInDetailPane(`/napplet/${encodeURIComponent(result.address)}`);
+      return;
+    }
     if (result.kind === 'wallet') {
       if (!accountPubkey) return;
       const handoffId = useWalletConnectionHandoffStore.getState().start({

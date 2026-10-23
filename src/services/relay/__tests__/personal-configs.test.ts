@@ -1,5 +1,7 @@
 import type { Event } from 'nostr-tools';
 
+jest.mock('@/services/explore/favorites', () => ({ applyFavoritesEvent: jest.fn(async () => {}), queueFavoritesPublication: jest.fn() }));
+
 type Row = {
   pubkey: string;
   kind: number;
@@ -204,6 +206,7 @@ describe('syncPersonalConfigs', () => {
     expect(call.relays).toEqual(['wss://relay.example']);
     expect(call.filters).toEqual([
       { kinds: [10030, 10063], authors: ['self'] },
+      { kinds: [30267], authors: ['self'], '#d': ['psstpsst-favorites'] },
       { kinds: [30000], authors: ['self'], '#d': ALL_D_TAGS },
     ]);
 
@@ -214,6 +217,8 @@ describe('syncPersonalConfigs', () => {
 
     // Every reconciler got its stored event (null where absent).
     expect(mockApplyMutedEvent).toHaveBeenCalledWith('self', muted, fakeSigner);
+    expect(jest.requireMock('@/services/explore/favorites').applyFavoritesEvent).toHaveBeenCalled();
+    expect(jest.requireMock('@/services/explore/favorites').queueFavoritesPublication).toHaveBeenCalledWith('self', fakeSigner);
     expect(mockApplyContactsEvent).toHaveBeenCalledWith('self', contacts, fakeSigner);
     expect(mockApplyBlockedEvent).toHaveBeenCalledWith('self', null, fakeSigner);
     expect(mockMigrateLocalSavedGroups).toHaveBeenCalledWith('self', fakeSigner);
@@ -233,6 +238,7 @@ describe('syncPersonalConfigs', () => {
     seedFresh(muted, 'psstpsst-muted');
     seedFresh(contacts, 'psstpsst-contacts');
     seedFresh(blocked, 'psstpsst-blocked');
+    seedFresh(makeEvent('self', 30267, 100, 'psstpsst-favorites'), 'psstpsst-favorites');
 
     await service.syncPersonalConfigs('self');
     await jest.runAllTimersAsync();

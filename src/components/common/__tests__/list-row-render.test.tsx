@@ -5,6 +5,7 @@ import { AppText } from '../AppText';
 import { InteractivePressable } from '../InteractivePressable';
 import { ListGroup } from '../ListGroup';
 import { ListRow } from '../ListRow';
+import { InteractionOverlay } from '../InteractionOverlay';
 import { uiDensity } from '@/theme';
 
 // The real store persists through the db (expo-sqlite), which jest-expo leaves
@@ -52,6 +53,27 @@ describe('ListRow layout', () => {
 
     expect(titleContainer?.props.style).toMatchObject({ flexShrink: 0 });
     expect(value.props.style).toMatchObject({ flexShrink: 1 });
+  });
+
+  it('clips a full rectangular interaction layer to the outer card corners', () => {
+    act(() => { renderer = create(<ListRow title="Publisher" active onPress={jest.fn()} />); });
+    const row = renderer!.root.findByType(InteractivePressable);
+    expect(StyleSheet.flatten(row.props.style)).toMatchObject({ overflow: 'hidden' });
+    expect(renderer!.root.findByType(InteractionOverlay).props.borderRadius ?? 0).toBe(0);
+  });
+
+  it('keeps an identity visual fixed beside a shrinking value', () => {
+    act(() => {
+      renderer = create(<ListRow title="Publisher" value="A long publisher name"
+        valueLeading={<View testID="publisher-avatar" />} />);
+    });
+    const avatar = renderer!.root.findByProps({ testID: 'publisher-avatar' });
+    const value = renderer!.root.findAllByType(AppText)[1];
+    expect(avatar.parent?.props.style).toMatchObject({ flexShrink: 0 });
+    expect(value.parent?.findAllByProps({ testID: 'publisher-avatar' }).length).toBeGreaterThan(0);
+    expect(value.props.style).toMatchObject({ flexShrink: 1 });
+    expect(value.parent?.props.style).toMatchObject({ minWidth: 0, flexShrink: 1 });
+    expect(value.props.numberOfLines).toBe(1);
   });
 
   it('can preserve the value and trailing accessory instead', () => {
@@ -215,5 +237,13 @@ describe('ListRow layout', () => {
     const row = renderer!.root.findByType(InteractivePressable);
     expect(row.props.accessibilityRole).toBe('radio');
     expect(row.props.accessibilityState).toEqual({ checked: true });
+  });
+  it('keeps trailing controls enabled when the row itself is not tappable', () => {
+    act(() => { renderer = create(<ListRow title="Permission" trailing={<View />} />); });
+    const row = renderer!.root.findByType(InteractivePressable);
+    expect(row.props.onPress).toBeUndefined();
+    expect(row.props.accessible).toBe(false);
+    expect(row.props.disabled).toBe(false);
+    expect(row.props.hoverFeedback).toBe(false);
   });
 });

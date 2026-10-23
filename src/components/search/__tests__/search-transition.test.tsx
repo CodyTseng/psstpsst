@@ -159,6 +159,40 @@ describe('SearchTransition', () => {
     expect(renderer!.root.findAllByProps({ testID: 'active-chrome' })).toHaveLength(0);
   });
 
+  it('retains the last result props while clearing the query and releases them after the fade', () => {
+    const completions: ((result: { finished: boolean }) => void)[] = [];
+    jest.spyOn(Animated, 'timing').mockImplementation(() => ({
+      start: (completion?: (result: { finished: boolean }) => void) => {
+        if (completion) completions.push(completion);
+      },
+      stop: jest.fn(),
+      reset: jest.fn(),
+    }) as Animated.CompositeAnimation);
+    const renderedQueries: string[] = [];
+    function Results({ query }: { query: string }) {
+      renderedQueries.push(query);
+      return <View testID={query ? 'filtered-results' : 'all-apps-list'} />;
+    }
+    const screen = (query: string) => <SearchTransition active contentActive={!!query.trim()}
+      activeContent={<Results query={query} />} activeChrome={<View testID="editable-search" />}
+      onActivate={onActivate} onCancel={onCancel}>
+      <View testID="favorites-grid" />
+    </SearchTransition>;
+    act(() => { renderer = create(screen('notes')); });
+    act(() => { renderer!.update(screen('photo')); });
+    const results = renderer!.root.findByType(Results);
+    act(() => { renderer!.update(screen('')); });
+    expect(renderer!.root.findByType(Results)).toBe(results);
+    expect(results.props.query).toBe('photo');
+    expect(renderedQueries).not.toContain('');
+    expect(renderer!.root.findAllByProps({ testID: 'all-apps-list' })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ testID: 'favorites-grid' }).parent?.props.pointerEvents).toBe('auto');
+    expect(renderer!.root.findByProps({ testID: 'editable-search' })).toBeTruthy();
+    act(() => completions.at(-1)?.({ finished: true }));
+    expect(renderer!.root.findAllByType(Results)).toHaveLength(0);
+    expect(renderer!.root.findByProps({ testID: 'favorites-grid' })).toBeTruthy();
+  });
+
   it('uses the platform-native modifier for search activation', () => {
     expect(isSearchActivationShortcut({ key: 'k', metaKey: true }, 'darwin')).toBe(true);
     expect(isSearchActivationShortcut({ key: 'k', ctrlKey: true }, 'darwin')).toBe(false);

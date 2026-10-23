@@ -1,5 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import type { BunkerPointer } from 'nostr-tools/nip46';
+import type { AbstractSimplePool } from 'nostr-tools/abstract-pool';
 
 import { db } from '@/db/client';
 import { accounts } from '@/db/schema';
@@ -50,10 +51,11 @@ async function protectNip46BunkerSecret(account: typeof accounts.$inferSelect) {
  * account row and constructs the matching signer. Throws if the account is
  * unknown. Use this instead of repeating getAccount + createSigner.
  */
-export async function buildSigner(accountPubkey: string): Promise<Signer> {
+export async function buildSigner(accountPubkey: string, transport?: AbstractSimplePool): Promise<Signer> {
   const account = await getAccount(accountPubkey);
   if (!account) throw new Error('Account not found');
   return createSigner({
+    transport,
     accountPubkey,
     signerType: account.signerType,
     signerPayload: account.signerPayload,

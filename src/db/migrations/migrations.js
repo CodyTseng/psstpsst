@@ -1,5 +1,21 @@
+import m0075 from './0075_webln-payments.sql';
+import m0073 from './0073_crypto-operation-permissions.sql';
+import m0074 from './0074_application-cache-retention.sql';
+import m0072 from './0072_event-relay-sources.sql';
+import m0071 from './0071_event-backed-applications.sql';
+import m0070 from './0070_private-favorites.sql';
+import m0068 from './0068_signing-scope-key.sql';
+import m0067 from './0067_application-relay-auth.sql';
+import m0066 from './0066_signer-access-kind.sql';
+import m0065 from './0065_authorization-destinations.sql';
+import m0064 from './0064_signer-access.sql';
+import m0063 from './0063_local-relay.sql';
 // This file is required for Expo/React Native SQLite migrations - https://orm.drizzle.team/quick-sqlite/expo
 
+import m0062 from './0062_explore.sql';
+import m0061 from './0061_signing-authorizations.sql';
+import m0060 from './0060_napplet-desktop.sql';
+import m0059 from './0059_napplets.sql';
 import journal from './meta/_journal.json';
 import m0000 from './0000_init.sql';
 import m0001 from './0001_tricky_shard.sql';
@@ -61,7 +77,9 @@ import m0056 from './0056_private-list-sync-state.sql';
 import m0057 from './0057_per-relay-sync-cursors.sql';
 import m0058 from './0058_forward-sync-checkpoints.sql';
 
-  export default {
+  import m0069 from './0069_browser-authorizations.sql';
+
+export default {
     journal,
     migrations: {
       m0000,
@@ -122,6 +140,23 @@ m0054,
 m0055,
 m0056,
 m0057,
-m0058
+m0058,
+m0059,
+m0060,
+m0061,
+m0062,
+m0063,
+m0064,
+m0065,
+m0066,
+m0067,
+m0068,
+m0069,
+m0070,
+m0071,
+m0072,
+m0073,
+m0074,
+m0075
     }
   }

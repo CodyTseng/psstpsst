@@ -36,8 +36,11 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IS_ELECTRON } from '@/lib/platform';
+import { isWideLayoutSize } from '@/lib/layout/wide-layout';
+import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
 import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
 
+import { createSheetContentPan, type SheetContentPanState } from './bottom-sheet-content-gesture';
 import { scheduleBottomSheetInputFocus } from './bottom-sheet-input-focus';
 import { scheduleBottomSheetOpenAnimation } from './bottom-sheet-open-animation';
 import { SheetHeader } from './SheetHeader';
@@ -46,6 +49,8 @@ import { Toast } from './Toast';
 type Props<ItemT = never> = {
   visible: boolean;
   onClose: () => void;
+  /** Allow tapping the backdrop to close the sheet. Default true. */
+  dismissOnBackdropPress?: boolean;
   /** Input to focus after the native Modal becomes keyboard-ready. */
   inputFocusRef?: RefObject<TextInput | null>;
   /** Refocus `inputFocusRef` when an already-open sheet enters a new input step. */
@@ -56,14 +61,13 @@ type Props<ItemT = never> = {
   onClosed?: () => void;
   /** Show the drag grabber handle. Default true. */
   showHandle?: boolean;
-  /** Optional card width cap for a deliberately compact sheet. Defaults to the
-   * app-wide sheet width and still shrinks to the phone viewport. */
+  /** Width cap in two-pane layouts. Single-pane sheets always fill the window. */
   maxWidth?: number;
   /** Task/detail title. When present, BottomSheet renders the standard fixed
    * close/title/action header below the grabber. Omit only for a short,
    * self-explanatory action sheet. */
   title?: string;
-  /** One optional secondary IconButton (accent for Done), with title-bar sizing. */
+  /** One optional title-bar action or passive account identity indicator. */
   headerAction?: ReactNode;
   /** Optional non-scrolling business content below the standard header. It
    * receives the same ungated pull-to-dismiss gesture as the grabber. */
@@ -82,8 +86,8 @@ type Props<ItemT = never> = {
   /** Full-screen content painted above this sheet inside the same native Modal.
    * Use for an immersive child surface that must close back to this sheet. */
   modalOverlay?: ReactNode;
-  /** Merged onto the scrollable content container. Use it when this sheet's
-   * direct content blocks need an explicit gap or additional padding. */
+  /** Merged onto the scrollable content container. Body blocks default to
+   * spacing.lg; list rows retain their own spacing. Do not add header clearance. */
   contentStyle?: StyleProp<ViewStyle>;
   /** Render the body as a virtualized list while retaining the sheet's shared
    * UI-thread scroll/pull-down coordination. Use this for unbounded pickers;
@@ -142,8 +146,9 @@ if (IS_ELECTRON) {
  * is enabled only when it actually overflows (measured), so short sheets behave
  * like a plain card. The drag and the scroll are coordinated on the **UI thread**
  * via reanimated worklets + a shared scroll offset: the *content* pan follows the
- * finger (and dismisses past a threshold) only while the content is at its top,
- * otherwise the content scrolls. Running this on the UI thread (not JS callbacks)
+ * finger (and dismisses past a threshold) only for a downward gesture begun at
+ * the top; a gesture begun in scrolled content remains a scroll until release.
+ * Running this on the UI thread (not JS callbacks)
  * is what keeps the two gestures from wedging the touch system.
  *
  * **The grabber and fixed chrome regions have their own *ungated* dismiss
@@ -153,9 +158,24 @@ if (IS_ELECTRON) {
  * The body remains the sheet's single coordinated vertical ScrollView, so fixed
  * chrome never creates a nested-scroll gesture race.
  */
-export function BottomSheet<ItemT = never>({
+export function BottomSheet<ItemT = never>(props: Props<ItemT>) {
+  const [snapshot, setSnapshot] = useState<Props<ItemT> | null>(props.visible ? props : null);
+  // Retain the last presented content while the native Modal animates out.
+  // Conditional render-time state adjustment avoids an empty committed frame.
+  if (props.visible && snapshot !== props) setSnapshot(props);
+  const notifyClosed = props.onClosed;
+  const onClosed = useCallback(() => {
+    setSnapshot(null);
+    notifyClosed?.();
+  }, [notifyClosed]);
+  return <BottomSheetSurface {...(props.visible ? props : snapshot ?? props)}
+    visible={props.visible} onClose={props.onClose} onClosed={onClosed} modalOverlay={props.modalOverlay} />;
+}
+
+function BottomSheetSurface<ItemT = never>({
   visible,
   onClose,
+  dismissOnBackdropPress = true,
   inputFocusRef,
   inputFocusKey,
   onClosed,
@@ -173,10 +193,12 @@ export function BottomSheet<ItemT = never>({
   listProps,
   children,
 }: Props<ItemT>) {
-  const { height } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const wide = isWideLayoutSize(width, height);
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const [mounted, setMounted] = useState(visible);
+  useOverlayPresentation(visible || mounted);
   const [dragClosing, setDragClosing] = useState(false);
   const modalPresentedRef = useRef(false);
   const cancelInputFocusRef = useRef<(() => void) | null>(null);
@@ -184,6 +206,7 @@ export function BottomSheet<ItemT = never>({
   const translateY = useSharedValue(height);
   const backdrop = useSharedValue(0);
   const scrollY = useSharedValue(0);
+  const contentPanState = useSharedValue<SheetContentPanState>({ phase: 'pending', x: 0, y: 0 });
   // Keyboard movement on the reanimated timeline (`height` 0 → -keyboardHeight,
   // `progress` 0 → 1) so the card rides above a keyboard raised by a field inside
   // it — on the UI thread (smoother than RN's `KeyboardAvoidingView`), and so we
@@ -282,8 +305,8 @@ export function BottomSheet<ItemT = never>({
   //     subheader, and footer. A downward drag there always follows the finger
   //     and dismisses past the threshold, regardless of the body scroll offset.
   //   • the content pan — coordinated with the ScrollView's native gesture (both run
-  //     *simultaneously*): moves the card only while the content is at its top
-  //     (scrollY <= 0) and the drag is downward, otherwise the content scrolls.
+  //     *simultaneously*): only a downward gesture begun at the top can move
+  //     the card. Reaching the top during a scroll never transfers ownership.
   // Coordinating on the UI thread (not JS callbacks) is what stops the two from
   // wedging the touch system.
   const {
@@ -295,7 +318,7 @@ export function BottomSheet<ItemT = never>({
   } = useMemo(() => {
     const settleBack = () => {
       'worklet';
-      translateY.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) });
+      translateY.set(withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) }));
     };
     const dismissFromDrag = () => {
       'worklet';
@@ -334,22 +357,11 @@ export function BottomSheet<ItemT = never>({
           else settleBack();
         });
     const native = Gesture.Native();
-    const content = Gesture.Pan()
-      .activeOffsetY(10)
-      .simultaneousWithExternalGesture(native)
-      .onUpdate((e) => {
-        'worklet';
-        if (scrollY.value <= 0 && e.translationY > 0) translateY.value = e.translationY;
-      })
-      .onEnd((e) => {
-        'worklet';
-        const atTop = scrollY.value <= 0;
-        if (atTop && (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY)) {
-          dismissFromDrag();
-        } else {
-          settleBack();
-        }
-      });
+    const content = createSheetContentPan({
+      native, scrollY, translateY, state: contentPanState,
+      settle: settleBack, dismiss: dismissFromDrag,
+      dismissDistance: DISMISS_DISTANCE, dismissVelocity: DISMISS_VELOCITY,
+    });
     native.simultaneousWithExternalGesture(content);
     return {
       grabberPan: makeUngated(),
@@ -358,10 +370,11 @@ export function BottomSheet<ItemT = never>({
       fixedFooterPan: makeUngated(),
       listGesture: Gesture.Simultaneous(content, native),
     };
-  }, [backdrop, beginDragClose, finishClose, height, scrollY, translateY]);
+  }, [backdrop, beginDragClose, contentPanState, finishClose, height, scrollY, translateY]);
 
   useEffect(() => {
     if (visible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Presentation state outlives visible during the exit animation.
       setMounted(true);
       if (dragClosing) setDragClosing(false);
       // A newly mounted body starts at offset zero; keep the UI-thread gate in
@@ -498,10 +511,11 @@ export function BottomSheet<ItemT = never>({
         style={[{ flexShrink: 1, maxHeight: maxScrollHeight }, scrollStyle]}
         contentContainerStyle={[
           {
-            paddingHorizontal: 16,
+            paddingHorizontal: spacing.lg,
+            gap: spacing.lg,
             paddingTop:
               showHandle || title != null || fixedSubheader != null ? 0 : spacing.xl,
-            paddingBottom: fixedFooter == null ? Math.max(insets.bottom, 24) : 0,
+            paddingBottom: fixedFooter == null ? Math.max(insets.bottom, spacing.xl) : 0,
           },
           contentStyle,
         ]}
@@ -574,7 +588,7 @@ export function BottomSheet<ItemT = never>({
             style={{
               paddingHorizontal: spacing.lg,
               paddingTop: showHandle || title != null ? 0 : spacing.xl,
-              paddingBottom: spacing.sm,
+              paddingBottom: spacing.lg,
             }}
           >
             {fixedSubheader}
@@ -587,7 +601,7 @@ export function BottomSheet<ItemT = never>({
           <View
             style={{
               paddingHorizontal: spacing.lg,
-              paddingTop: spacing.md,
+              paddingTop: spacing.lg,
               paddingBottom: Math.max(insets.bottom, spacing.lg),
             }}
           >
@@ -619,7 +633,7 @@ export function BottomSheet<ItemT = never>({
               backdropStyle,
             ]}
           >
-            <Pressable hoverFeedback={false} style={{ flex: 1 }} onPress={onClose} />
+            <Pressable hoverFeedback={false} style={{ flex: 1 }} onPress={dismissOnBackdropPress ? onClose : undefined} />
           </Animated.View>
           {/* No card-wide pan: drag-to-dismiss lives on the fixed regions and the
               body (listGesture), so a body full
@@ -628,7 +642,7 @@ export function BottomSheet<ItemT = never>({
             style={[
               {
                 width: '100%',
-                maxWidth,
+                maxWidth: wide ? maxWidth : undefined,
                 alignSelf: 'center',
               },
               cardStyle,

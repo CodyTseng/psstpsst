@@ -1,0 +1,21 @@
+{
+  "id": "76a3eaa1aa42b347b788cb3ceaa44294d02e0b7de4896c50167c6e3159e47cf0",
+  "pubkey": "cc8d072efdcc676fcbac14f6cd6825edc3576e55eb786a2a975ee034a6a026cb",
+  "created_at": 1791903330,
+  "kind": 35129,
+  "tags": [
+    ["d", "type-zoo"],
+    ["path", "/index.html", "c42577a0adaeefd89a8ad10ca091c7e6ee406389d541b224a609c00a4908bd4f"],
+    ["x", "4bd81cc0fa173a4385e9ee0c6a277e52860e49258d1119272337c7cfb9d49e43", "aggregate"],
+    ["server", "https://cdn.hzrd149.com"],
+    ["server", "https://blossom.primal.net"],
+    ["server", "https://nostr.download"],
+    ["server", "https://files.sovbit.host"],
+    ["requires", "outbox"],
+    ["requires", "upload"],
+    ["title", "Type Zoo"],
+    ["description", "Original animal editors turn small moments into beautiful typographic cards."]
+  ],
+  "content": "",
+  "sig": "d43deb2ac46797cd9d3faf92aa80f553e3d9a4dd06daace9e80b9885cf710e83a649ad5dc86f5875700d2f5b86116e8c87a735356a84bf69730e219a2fcd0a22"
+}

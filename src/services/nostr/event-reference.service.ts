@@ -1,8 +1,6 @@
-import { inArray, sql } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
-import { db } from '@/db/client';
-import { referencedEvents } from '@/db/schema';
+import { readCachedEvents, storeCachedEvent } from './cached-events.service';
 import type { NostrEventReference } from '@/lib/nostr/event-reference';
 import { DISCOVERY_RELAYS, normalizeRelayUrl } from '@/lib/nostr/relay-url';
 
@@ -12,7 +10,6 @@ import { peerMetaRelays } from '../relay/relay-router';
 
 const MISS_TTL_MS = 30 * 1000;
 const MAX_MEMORY_CACHE_ENTRIES = 256;
-const MAX_PERSISTED_EVENTS = 2_048;
 const QUERY_TIMEOUT_MS = 5_000;
 const MAX_HINT_RELAYS = 5;
 
@@ -135,42 +132,12 @@ async function flushPersistedReads() {
   const waiters = pendingPersistedReads.splice(0);
   const ids = Array.from(new Set(waiters.map((waiter) => waiter.id)));
   try {
-    const rows = await db
-      .select({ id: referencedEvents.id, event: referencedEvents.event })
-      .from(referencedEvents)
-      .where(inArray(referencedEvents.id, ids));
-    const byId = new Map(
-      rows
-        .filter((row) => row.event.id === row.id)
-        .map((row) => [row.id, row.event] as const),
-    );
+    const byId = await readCachedEvents(ids);
     for (const waiter of waiters) waiter.resolve(byId.get(waiter.id) ?? null);
   } catch {
     // A cache read must never prevent the normal relay fallback.
     for (const waiter of waiters) waiter.resolve(null);
   }
-}
-
-async function persistReferencedEvent(event: Event): Promise<void> {
-  const fetchedAt = Math.floor(Date.now() / 1000);
-  await db
-    .insert(referencedEvents)
-    .values({ id: event.id, event, fetchedAt })
-    .onConflictDoUpdate({
-      target: referencedEvents.id,
-      set: { event, fetchedAt },
-    });
-  // Bound raw event storage. The fetched-at index makes this pruning query
-  // proportional to the small tail being removed, not conversation history.
-  await db.run(sql`
-    DELETE FROM ${referencedEvents}
-    WHERE ${referencedEvents.id} IN (
-      SELECT ${referencedEvents.id}
-      FROM ${referencedEvents}
-      ORDER BY ${referencedEvents.fetchedAt} DESC
-      LIMIT -1 OFFSET ${MAX_PERSISTED_EVENTS}
-    )
-  `);
 }
 
 /** Fetch a supported note/nevent pointer. Successful immutable events persist
@@ -207,7 +174,7 @@ export async function fetchReferencedEvent(
       }
 
       if (event) {
-        await persistReferencedEvent(event);
+        await storeCachedEvent(event);
         if (event.kind === 0) await cacheProfileEvent(event);
       }
       writeMemoryCache(key, event);

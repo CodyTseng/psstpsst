@@ -76,6 +76,70 @@ ipcRenderer.on(
 );
 
 const bridge: ElectronBridge = {
+  napplet: {
+    supportsExploreBootstrap: true,
+    windows: {
+      messaging: {
+        connect: endpoint => invoke(IPC.applicationMessagingConnect, endpoint),
+        disconnect: instance => invoke(IPC.applicationMessagingDisconnect, instance),
+        request: (instance, message) => invoke(IPC.applicationMessagingRequest, instance, message),
+        onMessage: listener => {
+          const handler = (_event: unknown, instance: string, message: Parameters<typeof listener>[1]) => listener(instance, message);
+          ipcRenderer.on(IPC.applicationMessagingMessage, handler);
+          return () => { ipcRenderer.removeListener(IPC.applicationMessagingMessage, handler); };
+        },
+      },
+      isHost: process.argv.includes('--psstpsst-application-window=1'),
+      open: launch => invoke(IPC.applicationWindowOpen, launch),
+      launch: () => invoke(IPC.applicationWindowLaunch),
+      running: () => invoke(IPC.applicationWindowsRunning),
+      onRunningChange: listener => {
+        const handler = (_event: unknown, applications: Parameters<typeof listener>[0]) => listener(applications);
+        ipcRenderer.on(IPC.applicationWindowsChanged, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationWindowsChanged, handler); };
+      },
+      close: () => invoke(IPC.applicationWindowClose),
+      closeAll: account => invoke(IPC.applicationWindowCloseAll, account),
+      action: action => invoke(IPC.applicationWindowAction, action),
+      onAction: listener => {
+        const handler = (_event: unknown, value: Parameters<typeof listener>[0]) => listener(value);
+        ipcRenderer.on(IPC.applicationWindowAction, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationWindowAction, handler); };
+      },
+      broadcastSigning: change => invoke(IPC.applicationSigningChange, change),
+      broadcastMetadata: key => invoke(IPC.applicationMetadataChange, key),
+      broadcastFavorites: account => invoke(IPC.applicationFavoritesChange, account),
+      onFavoritesChange: listener => {
+        const handler = (_event: unknown, account: string) => listener(account);
+        ipcRenderer.on(IPC.applicationFavoritesChange, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationFavoritesChange, handler); };
+      },
+      onMetadataChange: listener => {
+        const handler = (_event: unknown, key: string) => listener(key);
+        ipcRenderer.on(IPC.applicationMetadataChange, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationMetadataChange, handler); };
+      },
+      onSigningChange: listener => {
+        const handler = (_event: unknown, value: Parameters<typeof listener>[0]) => listener(value);
+        ipcRenderer.on(IPC.applicationSigningChange, handler);
+        return () => { ipcRenderer.removeListener(IPC.applicationSigningChange, handler); };
+      },
+    },
+    clearPageData: (storageId) => invoke(IPC.exploreClearData, storageId),
+    openPage: (page) => invoke(IPC.exploreOpen, page),
+    capture: (id) => invoke(IPC.nappletCapture, id),
+    goBack: (id) => invoke(IPC.nappletGoBack, id),
+    open: (html) => invoke(IPC.nappletOpen, html), close: (id) => invoke(IPC.nappletClose, id),
+    send: (id, message) => invoke(IPC.nappletSend, id, message),
+    setBounds: (id, bounds, visible, interactive) => invoke(IPC.nappletBounds, id, bounds, visible, interactive),
+    fetch: (id, url, max, accept) => invoke(IPC.nappletFetch, id, url, max, accept), cancel: (id) => invoke(IPC.nappletCancel, id),
+    fetchResponse: (id, url, max, validators) => invoke(IPC.nappletFetch, id, url, max, undefined, { validators }),
+    onMessage: (listener) => {
+      const handler = (_event: unknown, id: string, message: string) => listener(id, message);
+      ipcRenderer.on(IPC.nappletMessage, handler);
+      return () => { ipcRenderer.removeListener(IPC.nappletMessage, handler); };
+    },
+  },
   appUpdate: {
     check: () => invoke(IPC.appUpdateCheck),
     getStatus: () => invoke(IPC.appUpdateGetStatus),
@@ -119,6 +183,7 @@ const bridge: ElectronBridge = {
     copyAttachment: (uri, options) => invoke(IPC.clipboardCopyAttachment, uri, options),
   },
   fileSystem: {
+    updateJson: (uri, patch) => invoke(IPC.fsUpdateJson, uri, patch),
     documentDirectoryUri: () => invoke(IPC.fsDocumentDirectory),
     cacheDirectoryUri: () => invoke(IPC.fsCacheDirectory),
     availableDiskSpace: () => invoke(IPC.fsAvailableDiskSpace),
@@ -245,6 +310,7 @@ const bridge: ElectronBridge = {
     setUnreadCount: (count) => invoke(IPC.traySetUnreadCount, count),
   },
   windowChrome: {
+    setTitle: title => invoke(IPC.windowChromeSetTitle, title),
     setTheme: (theme) => invoke(IPC.windowChromeSetTheme, theme),
     setScreenshotPreview: (enabled) => invoke(IPC.windowChromeSetScreenshotPreview, enabled),
   },
@@ -286,6 +352,7 @@ const bridge: ElectronBridge = {
   system: {
     openRuntimeNotices: () => invoke(IPC.systemOpenRuntimeNotices),
     openExternalUrl: (url) => invoke(IPC.systemOpenExternal, url),
+    openApprovedBrowserUrl: (url) => invoke(IPC.browserOpenExternal, url),
     platform: process.platform,
   },
 };

@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { iconStrokeWidth } from '@/theme/icons';
-import { spacing, useThemeColors } from '@/theme';
+import { spacing, uiDensity, useThemeColors } from '@/theme';
 
 import { IconButton } from './IconButton';
 
@@ -107,10 +107,11 @@ export function PhotoCaptureModal({
         )}
         <IconButton
           variant="overlay"
+          size={uiDensity.headerActionSize}
           onPress={onClose}
           hitSlop={spacing.sm}
           style={{ position: 'absolute', top: insets.top + spacing.sm, start: spacing.lg }}
-          icon={<X strokeWidth={iconStrokeWidth.default} size={20} color={c.onOverlay} />}
+          icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.onOverlay} />}
           accessibilityLabel={accessibilityLabel}
         />
         <View

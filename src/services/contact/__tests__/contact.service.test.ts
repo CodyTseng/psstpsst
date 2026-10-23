@@ -56,7 +56,7 @@ jest.mock('@/db/client', () => {
       account_pubkey TEXT, group_id TEXT, PRIMARY KEY (account_pubkey, group_id)
     );
     CREATE TABLE replaceable_events (
-      pubkey TEXT, kind INTEGER, d_tag TEXT, event TEXT, created_at INTEGER, fetched_at INTEGER,
+      pubkey TEXT, kind INTEGER, d_tag TEXT, event TEXT, relays TEXT NOT NULL DEFAULT '[]', created_at INTEGER, fetched_at INTEGER,
       PRIMARY KEY (pubkey, kind, d_tag)
     );
   `);

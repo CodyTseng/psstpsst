@@ -11,6 +11,7 @@ jest.mock('../AttachmentFile', () => ({ AttachmentFile: () => null }));
 jest.mock('../AttachmentImage', () => ({ AttachmentImage: () => null }));
 jest.mock('../AttachmentVideo', () => ({ AttachmentVideo: () => null }));
 jest.mock('../embedded-media', () => ({ EmbeddedMediaBlock: () => null }));
+jest.mock('../open-message-url', () => ({ openMessageUrl: jest.fn() }));
 jest.mock('../EventReferenceCard', () => ({ EventReferenceCard: () => null }));
 jest.mock('../InvoiceBubble', () => ({ InvoiceBubble: () => null }));
 jest.mock('../MentionCard', () => ({ MentionCard: () => null }));

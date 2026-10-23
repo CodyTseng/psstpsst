@@ -1,4 +1,5 @@
-import { useIsFocused, useNavigation } from 'expo-router';
+import { useNavigation } from 'expo-router';
+import { usePrimaryPaneFocused } from '@/hooks/use-primary-pane-focused';
 import { UserPlus } from '@solar-icons/react-native/category/users/Linear/UserPlus';
 import { UsersGroupRounded as UsersGroup } from '@solar-icons/react-native/category/users/Linear/UsersGroupRounded';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -44,7 +45,7 @@ export default function Contacts() {
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { entries, loaded } = useContactEntries(accountPubkey);
   const hasUnreadRequests = useHasUnreadRequests(accountPubkey ?? '');
-  const focused = useIsFocused();
+  const focused = usePrimaryPaneFocused();
   const navigation = useNavigation();
   const groupedListRef = useRef<ContactSectionListHandle>(null);
   const { open: openInDetailPane, selection } = usePrimaryPaneNavigation();

@@ -124,6 +124,7 @@ async function putBlobToServers(opts: {
   fallbackSize: number;
   signal?: AbortSignal;
   onProgress?: (sentBytes: number, totalBytes: number) => void;
+  expectedSha256?: string;
 }): Promise<PutBlobResult> {
   const errors: string[] = [];
   const failedServers = new Set<string>();
@@ -153,6 +154,12 @@ async function putBlobToServers(opts: {
         thumbhash?: unknown;
         nip94?: unknown;
       };
+      if (opts.expectedSha256 && (json.sha256 !== opts.expectedSha256 ||
+          (json.size !== undefined && json.size !== opts.fallbackSize))) {
+        failedServers.add(base);
+        errors.push(`${server} → mismatched descriptor`);
+        continue;
+      }
       if (!json.url || !json.sha256) {
         failedServers.add(base);
         errors.push(`${server} → malformed descriptor`);
@@ -283,6 +290,26 @@ export async function uploadEncryptedBlob(opts: {
     authB64,
   }).catch(() => {});
   return main;
+}
+
+/** Upload host-approved public bytes without transformations or background mirrors. */
+export async function uploadPublicBlob(opts: {
+  fileUri: string;
+  mime: string;
+  sha256: string;
+  size: number;
+  servers: string[];
+  authorization: Event;
+  signal: AbortSignal;
+  onProgress?: (sentBytes: number, totalBytes: number) => void;
+}): Promise<UploadResult> {
+  const result = await putBlobToServers({
+    servers: opts.servers, fileUri: opts.fileUri, mime: opts.mime,
+    authB64: base64.encode(new TextEncoder().encode(JSON.stringify(opts.authorization))),
+    fallbackSize: opts.size, expectedSha256: opts.sha256,
+    signal: opts.signal, onProgress: opts.onProgress,
+  });
+  return { url: result.url, sha256: result.sha256, size: result.size, server: result.server, dim: result.dim };
 }
 
 /**

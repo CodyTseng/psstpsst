@@ -49,7 +49,7 @@ export function NearbyChatRequestSheet() {
         });
       }
     } catch {
-      showToast(t('nearby.request_failed'));
+      showToast(t('nearby.request_failed'), { variant: 'error' });
     } finally {
       setResponse(null);
     }

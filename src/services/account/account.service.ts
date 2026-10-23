@@ -1,10 +1,14 @@
+import { platform } from '@/platform';
+import { invalidateSigningAccount } from '@/services/signing/changes';
+import { nappletLifecycle } from '../napplet/lifecycle';
 import { eq } from 'drizzle-orm';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
 import type { BunkerPointer } from 'nostr-tools/nip46';
 
 import { db } from '@/db/client';
 import {
-  accounts,
+  accounts, exploreEntries, exploreHistory,
+  nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingAuthorizations, signingActivity,
   blockedUsers,
   contacts,
   conversations,
@@ -189,12 +193,15 @@ export async function setAccountEncryptionPubkey(
  * remain shared.
  */
 async function deleteAccountData(pubkey: string): Promise<void> {
+  invalidateSigningAccount(pubkey);
+  await platform.napplet?.clearPageData?.(pubkey);
   const pendingFiles = await db
     .select({ localName: pendingAttachments.localName })
     .from(pendingAttachments)
     .where(eq(pendingAttachments.accountPubkey, pubkey));
   await Promise.all(pendingFiles.map((row) => deletePendingAttachmentFile(row.localName)));
   const scoped = [
+    exploreHistory, exploreEntries, nappletData, nappletDataLegacy, nappletUsage, nappletInstallations, signingAuthorizations, signingActivity,
     messages,
     groupMemberActions,
     pendingGroupRumors,
@@ -222,6 +229,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
 }
 
 export async function removeAccount(pubkey: string): Promise<void> {
+  nappletLifecycle.removing(pubkey);
   // Revoke while identity signing is still possible. Offline failure preserves
   // the account and a durable pending revocation for a later retry.
   await pushRegistrationService.revokeAccount(pubkey);

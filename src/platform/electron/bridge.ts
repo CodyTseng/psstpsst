@@ -1,3 +1,6 @@
+import type { ApplicationWindowsPort } from '../ports/application-window';
+import type { ExplorePage } from '../ports/explore';
+import type { NappletBounds } from '../ports/napplet';
 import type { SqlBindValue, SqliteQueryMethod } from '../ports/database';
 import type { AppUpdateStatus } from '../ports/app-update';
 import type {
@@ -22,6 +25,21 @@ export type ElectronDirectoryEntry = {
 };
 
 export type ElectronBridge = {
+  napplet: {
+    supportsExploreBootstrap?: boolean;
+    windows: ApplicationWindowsPort;
+    capture(id: string): Promise<string | null>;
+    goBack(id: string): Promise<boolean>;
+    clearPageData(storageId: string): Promise<void>;
+    openPage(page: ExplorePage): Promise<string>;
+    open(html: string): Promise<string>; close(id: string): Promise<void>;
+    send(id: string, message: string): Promise<void>;
+    setBounds(id: string, bounds: NappletBounds, visible: boolean, interactive?: boolean): Promise<void>;
+    fetch(id: string, url: string, maxBytes: number, accept?: string): Promise<string | null | { error: string; code?: string }>;
+    fetchResponse(id: string, url: string, maxBytes: number, validators?: import('../ports/napplet').ResourceValidators): Promise<null | { error: string; code?: string } | { status: 200 | 304; bytes: string; etag?: string; lastModified?: string }>;
+    cancel(id: string): Promise<void>;
+    onMessage(listener: (id: string, message: string) => void): () => void;
+  };
   appUpdate: {
     check(): Promise<AppUpdateStatus>;
     getStatus(): Promise<AppUpdateStatus>;
@@ -64,6 +82,7 @@ export type ElectronBridge = {
     copyAttachment(uri: string, options?: { mimeType?: string; name?: string }): Promise<void>;
   };
   fileSystem: {
+    updateJson(uri: string, patch: import('../ports/file-system').JsonObject): Promise<void>;
     documentDirectoryUri(): Promise<string>;
     cacheDirectoryUri(): Promise<string>;
     availableDiskSpace(): Promise<number>;
@@ -213,6 +232,7 @@ export type ElectronBridge = {
     setUnreadCount(count: number): Promise<void>;
   };
   windowChrome: {
+    setTitle(title: string): Promise<void>;
     setTheme(theme: WindowChromeTheme): Promise<void>;
     setScreenshotPreview(enabled: boolean): Promise<void>;
   };
@@ -238,6 +258,7 @@ export type ElectronBridge = {
   system: {
     openRuntimeNotices(): Promise<void>;
     openExternalUrl(url: string): Promise<void>;
+    openApprovedBrowserUrl(url: string): Promise<void>;
     platform: NodeJS.Platform;
   };
 };

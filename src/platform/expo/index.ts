@@ -1,3 +1,4 @@
+import { nappletAdapter } from './napplet';
 import { screenOrientationAdapter } from './screen-orientation';
 import { clipboardAdapter } from './clipboard';
 import { imageCacheAdapter } from './image-cache';
@@ -108,6 +109,7 @@ function lazyFileSystemAdapter(): FileSystemPort {
     readBase64: (uri) => load().readBase64(uri),
     readBytes: (uri) => load().readBytes(uri),
     writeText: (uri, contents) => load().writeText(uri, contents),
+    updateJson: (uri, patch) => load().updateJson(uri, patch),
     writeBytes: (uri, bytes) => load().writeBytes(uri, bytes),
     openReadHandle: (uri, options) => load().openReadHandle(uri, options),
     openWriteHandle: (uri, options) => load().openWriteHandle(uri, options),
@@ -203,6 +205,7 @@ export function createExpoAdapters(): PlatformAdapters {
   return {
     pushNotifications: pushNotificationsAdapter,
     screenOrientation: screenOrientationAdapter,
+    napplet: nappletAdapter,
     bundledNotices: bundledNoticesAdapter,
     appUpdate: appUpdateAdapter,
     confirmationDialog: confirmationDialogAdapter,

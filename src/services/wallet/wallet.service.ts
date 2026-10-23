@@ -293,19 +293,22 @@ export async function payInvoice(
   authCopy: { prompt: string; cancel: string },
   metadata?: Record<string, unknown>,
   pinAuthorization?: string,
+  guard?: WalletRequestGuard,
 ): Promise<unknown> {
   await authenticatePayment(wallet.accountPubkey, authCopy, pinAuthorization);
-  return callWallet(wallet, 'pay_invoice', metadata ? { invoice, metadata } : { invoice });
+  guard?.check();
+  return callWallet(wallet, 'pay_invoice', metadata ? { invoice, metadata } : { invoice }, guard);
 }
 
 export async function makeInvoice(
   wallet: WalletRow,
   params: { amountMsat: number; description?: string },
+  guard?: WalletRequestGuard,
 ): Promise<{ invoice?: string; payment_request?: string; payment_hash?: string; state?: string; settled_at?: number; preimage?: string }> {
   return callWallet(wallet, 'make_invoice', {
     amount: params.amountMsat,
     description: params.description ?? '',
-  });
+  }, guard);
 }
 
 export async function lookupInvoiceStatus(
@@ -447,10 +450,14 @@ export function getCachedTransactions(walletId: string): Promise<WalletTransacti
     .all();
 }
 
-async function callWallet<T>(wallet: WalletRow, method: string, params: Record<string, unknown>): Promise<T> {
+export type WalletRequestGuard = { check: () => void; beforeSend?: () => Promise<void> };
+
+async function callWallet<T>(wallet: WalletRow, method: string, params: Record<string, unknown>, guard?: WalletRequestGuard): Promise<T> {
   return enqueueWalletRequest(wallet.id, async () => {
+    guard?.check();
     const secret = await getWalletSecret(wallet.accountPubkey, wallet.id);
-    return requestNwc<T>(wallet, secret, method, params);
+    guard?.check();
+    return requestNwc<T>(wallet, secret, method, params, guard);
   });
 }
 
@@ -484,6 +491,7 @@ async function requestNwc<T>(
   secret: Uint8Array,
   method: string,
   params: Record<string, unknown>,
+  guard?: WalletRequestGuard,
 ): Promise<T> {
   const relays = Array.from(new Set(parseJson<string[]>(wallet.relaysJson, []).map(normalizeRelayUrl)));
   const content = await nip04.encrypt(secret, wallet.walletPubkey, JSON.stringify({ method, params }));
@@ -497,6 +505,9 @@ async function requestNwc<T>(
     secret,
   );
 
+  guard?.check();
+  await guard?.beforeSend?.();
+  guard?.check();
   const response = await waitForNwcResponse<T>(wallet.id, method, wallet.walletPubkey, secret, relays, event);
   if (response.error) throw mapNwcError(response.error);
   if (!response.result) return {} as T;

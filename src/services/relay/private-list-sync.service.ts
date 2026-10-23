@@ -8,27 +8,31 @@ import type { Signer } from '../signer/signer.interface';
 import { enqueueConfigurationEvent } from './configuration-publish.service';
 import { getReplaceableEvent } from './replaceable-events.service';
 
-async function readState(accountPubkey: string, dTag: string, tx: Database) {
+export async function readPrivateListState(accountPubkey: string, dTag: string, tx: Database, kind = 30000) {
   return (await tx.select().from(privateListSyncState).where(and(
     eq(privateListSyncState.accountPubkey, accountPubkey),
+    eq(privateListSyncState.kind, kind),
     eq(privateListSyncState.dTag, dTag),
   )).limit(1))[0];
 }
 
 /** Commit this revision in the same transaction as the plaintext edit. */
-export async function markPrivateListDirty(accountPubkey: string, dTag: string, tx: Database): Promise<void> {
-  await tx.insert(privateListSyncState).values({ accountPubkey, dTag, revision: 1, dirty: true })
+export async function markPrivateListDirty(accountPubkey: string, dTag: string, tx: Database, kind = 30000, draft?: string[][]): Promise<void> {
+  await tx.insert(privateListSyncState).values({ accountPubkey, kind, dTag, revision: 1, dirty: true, draft })
     .onConflictDoUpdate({
-      target: [privateListSyncState.accountPubkey, privateListSyncState.dTag],
-      set: { revision: sql`${privateListSyncState.revision} + 1`, dirty: true },
+      target: [privateListSyncState.accountPubkey, privateListSyncState.kind, privateListSyncState.dTag],
+      set: { revision: sql`${privateListSyncState.revision} + 1`, dirty: true, ...(draft !== undefined ? { draft } : {}) },
     });
 }
 
 type Publication = {
   accountPubkey: string;
+  kind?: number;
   dTag: string;
-  title: string;
-  readTags: (tx: Database) => Promise<string[][]>;
+  title?: string;
+  readTags?: (tx: Database) => Promise<string[][]>;
+  validateTags?: (tags: string[][]) => string[][];
+  onCommitted?: (event: import('nostr-tools').Event) => void;
   signer?: Signer;
   eventTags?: string[][];
   sourceEventId?: string;
@@ -39,7 +43,7 @@ const jobs = new Map<string, Job>();
 /** Local writes never await crypto. Each queued attempt reads fresh plaintext;
  * failure leaves its revision dirty and does not request another attempt. */
 export function queuePrivateListPublication(publication: Publication): void {
-  const key = JSON.stringify([publication.accountPubkey, publication.dTag]);
+  const key = JSON.stringify([publication.accountPubkey, publication.kind ?? 30000, publication.dTag]);
   const existing = jobs.get(key);
   if (existing) {
     existing.requested = true;
@@ -64,32 +68,36 @@ export function queuePrivateListPublication(publication: Publication): void {
 }
 
 async function publish(publication: Publication): Promise<void> {
-  const { accountPubkey, dTag } = publication;
+  const { accountPubkey, dTag, kind = 30000 } = publication;
   const signer = publication.signer ?? (await buildSigner(accountPubkey));
   if (!signer.nip44Encrypt) return;
   const snapshot = await db.transaction(async (tx) => {
-    const state = await readState(accountPubkey, dTag, tx);
+    const state = await readPrivateListState(accountPubkey, dTag, tx, kind);
     if (!state?.dirty) return null;
-    return { state, tags: await publication.readTags(tx) };
+    const tags = state.draft ?? await publication.readTags?.(tx);
+    return tags ? { state, tags: publication.validateTags?.(tags) ?? tags } : null;
   });
   if (!snapshot) return;
-  const previous = await getReplaceableEvent({ pubkey: accountPubkey, kind: 30000, dTag });
+  const previous = await getReplaceableEvent({ pubkey: accountPubkey, kind, dTag });
   if (previous && publication.sourceEventId && previous.id !== publication.sourceEventId) return;
   const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(snapshot.tags));
   const event = await signer.signEvent({
-    kind: 30000,
-    tags: publication.eventTags ?? [['d', dTag], ['title', publication.title]],
+    kind,
+    tags: publication.eventTags ?? [['d', dTag], ...(publication.title ? [['title', publication.title]] : [])],
     content,
     created_at: Math.max(Math.floor(Date.now() / 1000), (previous?.created_at ?? 0) + 1),
   });
   if (event.pubkey !== accountPubkey) throw new Error('Private-list signer does not match the account.');
-  await enqueueConfigurationEvent(event, async (_event, tx) => {
-    if ((await readState(accountPubkey, dTag, tx))?.revision !== snapshot.state.revision) {
+  const committed = await enqueueConfigurationEvent(event, async (_event, tx) => {
+    if ((await readPrivateListState(accountPubkey, dTag, tx, kind))?.revision !== snapshot.state.revision) {
       throw new Error('Private-list revision changed while signing.');
     }
-    await tx.update(privateListSyncState).set({ dirty: false, eventId: event.id }).where(and(
+    await tx.update(privateListSyncState).set({ dirty: false, eventId: event.id, draft: null,
+      ...(snapshot.state.draft ? { snapshot: { eventId: event.id, tags: snapshot.tags } } : {}) }).where(and(
       eq(privateListSyncState.accountPubkey, accountPubkey),
+      eq(privateListSyncState.kind, kind),
       eq(privateListSyncState.dTag, dTag),
     ));
   }, previous?.id ?? null);
+  if (committed) publication.onCommitted?.(event);
 }

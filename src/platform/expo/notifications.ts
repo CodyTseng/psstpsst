@@ -4,6 +4,7 @@ import { AppState, Linking } from 'react-native';
 import type { NotificationsPort } from '../ports/notifications';
 
 import { loadLocalNotifications } from './local-notifications';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 let generation = 0;
 
@@ -22,6 +23,10 @@ async function cachedAvatarPath(avatarUrl: string | undefined): Promise<string |
 }
 
 export const notificationsAdapter: NotificationsPort = {
+  async presentWebsite(application, title, body) {
+    const native = requireOptionalNativeModule<{ notifyWebsiteAsync?(application: string, title: string, body: string): Promise<boolean> }>('ExpoNapplet');
+    return native?.notifyWebsiteAsync?.(application, title, body) ?? false;
+  },
   isAvailable: () => loadLocalNotifications() !== null,
 
   shouldNotifyNow: () => AppState.currentState === 'background',

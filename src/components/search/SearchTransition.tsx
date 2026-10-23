@@ -35,13 +35,17 @@ export function SearchTransition({
   children,
 }: Props) {
   const [progress] = useState(() => new Animated.Value(contentActive ? 1 : 0));
-  const [keepActiveMounted, setKeepActiveMounted] = useState(contentActive);
+  const [retainedContent, setRetainedContent] = useState<{ node: ReactNode } | null>(
+    () => contentActive ? { node: activeContent } : null,
+  );
   const restingSurface = useRef<View>(null);
 
   // React retries this component before committing its children, so activating
-  // the overlay records that it must survive a later closing render without
-  // adding an effect-driven intermediate frame.
-  if (contentActive && !keepActiveMounted) setKeepActiveMounted(true);
+  // the overlay retains its last search props through the exit animation.
+  // Otherwise clearing the query replaces fading results with the full list.
+  if (contentActive && (!retainedContent || retainedContent.node !== activeContent)) {
+    setRetainedContent({ node: activeContent });
+  }
 
   useEffect(() => {
     const animation = Animated.timing(progress, {
@@ -50,7 +54,7 @@ export function SearchTransition({
       useNativeDriver: true,
     });
     animation.start(({ finished }) => {
-      if (finished && !contentActive) setKeepActiveMounted(false);
+      if (finished && !contentActive) setRetainedContent(null);
     });
     return () => animation.stop();
   }, [contentActive, progress]);
@@ -98,16 +102,16 @@ export function SearchTransition({
         {children}
       </Animated.View>
 
-      {contentActive || keepActiveMounted ? (
+      {contentActive || retainedContent ? (
         <Animated.View
           pointerEvents={contentActive ? 'auto' : 'none'}
           style={[StyleSheet.absoluteFill, styles.active, { opacity: progress }]}
         >
-          {activeContent}
+          {contentActive ? activeContent : retainedContent?.node}
         </Animated.View>
       ) : null}
 
-      {activeChrome && (active || keepActiveMounted) ? (
+      {activeChrome && (active || retainedContent) ? (
         <View
           pointerEvents={active ? 'box-none' : 'none'}
           style={[StyleSheet.absoluteFill, styles.activeChrome]}

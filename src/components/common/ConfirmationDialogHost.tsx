@@ -9,6 +9,7 @@ import { IS_ELECTRON } from '@/lib/platform';
 import type { ConfirmationDialogOptions, NoticeDialogOptions } from '@/platform';
 import { registerDialogPresenter } from '@/platform/dialog-presenter';
 import { contentWidth, radius, shadow, spacing, useThemeColors } from '@/theme';
+import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
 
 type PendingDialog =
   | {
@@ -33,6 +34,7 @@ export function ConfirmationDialogHost() {
   const c = useThemeColors();
   const [queue, setQueue] = useState<PendingDialog[]>([]);
   const current = queue[0];
+  useOverlayPresentation(IS_ELECTRON && !!current);
   // Identity guard against a double tap settling one dialog twice (which
   // would also drop the next queued dialog).
   const settlingRef = useRef<PendingDialog | null>(null);

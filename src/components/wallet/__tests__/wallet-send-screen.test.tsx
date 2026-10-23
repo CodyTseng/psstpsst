@@ -175,7 +175,7 @@ describe('WalletSendScreen payment options', () => {
     const pasteButton = renderer!.root.findAllByType(RoundOverlayAction)
       .find((button) => button.props.label === 'wallet.paste');
     await act(async () => { await pasteButton!.props.onPress(); });
-    expect(showToast).toHaveBeenCalledWith('common.paste_failed', { target: 'detail' });
+    expect(showToast).toHaveBeenCalledWith('common.paste_failed', { variant: 'error', target: 'detail' });
     expect(renderer!.root.findAllByType(ExternalInvoicePayment)).toHaveLength(0);
     await act(async () => { await pasteButton!.props.onPress(); });
     expect(renderer!.root.findByType(ExternalInvoicePayment).props.invoice).toBe(INVOICE);

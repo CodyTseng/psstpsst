@@ -1,3 +1,4 @@
+import { electronNappletAdapter } from './napplet';
 import { electronImageCacheAdapter } from './image-cache';
 import { getDialogPresenter } from '../dialog-presenter';
 import { electronBundledNoticesAdapter } from './bundled-notices';
@@ -31,6 +32,7 @@ export function createElectronAdapters(): PlatformAdapters {
       addTokenChangedListener: () => () => {},
     },
     screenOrientation: { setVideoActive: async () => {} },
+    napplet: electronNappletAdapter,
     bundledNotices: electronBundledNoticesAdapter,
     appUpdate: {
       check: () => bridge.appUpdate.check(),
@@ -72,6 +74,9 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     windowChrome: {
+      getFocusState: async () => bridge.windowFocus.isFocused(),
+      addFocusListener: listener => bridge.windowFocus.onChange(listener),
+      setTitle: title => bridge.windowChrome.setTitle(title),
       setTheme: (theme) => bridge.windowChrome.setTheme(theme),
       setScreenshotPreview: (enabled) => bridge.windowChrome.setScreenshotPreview(enabled),
     },
@@ -220,6 +225,7 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     urlOpener: {
+      openApprovedBrowserUrl: url => bridge.system.openApprovedBrowserUrl(url).then(() => true, () => false),
       openExternalUrl: (url) => bridge.system.openExternalUrl(url).then(() => true, () => false),
     },
     localization: {

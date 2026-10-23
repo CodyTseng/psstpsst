@@ -1,3 +1,4 @@
+import { NappletOverlays } from '@/components/napplet/NappletOverlays';
 import { Redirect } from 'expo-router';
 
 import { MediaViewer } from '@/components/common/MediaViewer';
@@ -23,6 +24,7 @@ export default function AppLayout() {
       <CustomEmojiSync />
       <CustomEmojiDetailSheet />
       <MediaViewer />
+      <NappletOverlays />
     </>
   );
 }

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,14 +7,10 @@ import {
   CONTEXT_MENU_ICON_SIZE,
   ContextMenu,
   type ContextMenuAnchor,
+  type ContextMenuItem,
 } from './ContextMenu';
 
-export type HeaderActionMenuItem = {
-  key: string;
-  title: string;
-  icon: ReactNode;
-  onPress: () => void;
-};
+export type HeaderActionMenuItem = ContextMenuItem;
 
 type Props = {
   visible: boolean;

@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -11,15 +12,26 @@ import {
 import { View } from 'react-native';
 
 import { AppText } from '@/components/common/AppText';
-import { IS_ELECTRON } from '@/lib/platform';
+import { DESKTOP_OS, IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
-import { desktopChrome, useThemeColors } from '@/theme';
+import { desktopChrome, spacing, uiDensity, useThemeColors } from '@/theme';
 
 const TITLEBAR_HEIGHT = desktopChrome.titlebarHeight;
+type WindowTitlebar = { title?: string; actions?: ReactNode };
+const WindowTitlebarContext = createContext<(value: WindowTitlebar | null) => void>(() => {});
+
+/** Application hosts place their existing actions in the window's single title bar. */
+export function useDesktopWindowTitlebar(value: WindowTitlebar | null) {
+  const setTitlebar = useContext(WindowTitlebarContext);
+  const title = value?.title, actions = value?.actions, enabled = value !== null;
+  useLayoutEffect(() => { if (IS_ELECTRON && enabled) setTitlebar({ title, actions }); }, [setTitlebar, title, actions, enabled]);
+  useLayoutEffect(() => () => { if (IS_ELECTRON && enabled) setTitlebar(null); }, [setTitlebar, enabled]);
+}
+
 const ImmersiveTitlebarContext = createContext<(enabled: boolean) => void>(() => {});
 
 /** Marks a non-interactive Electron surface as a native window drag region. */
-export function useDesktopWindowDragRegion() {
+export function useDesktopWindowDragRegion(draggable = true) {
   const dragRef = useRef<View>(null);
 
   useEffect(() => {
@@ -28,11 +40,11 @@ export function useDesktopWindowDragRegion() {
     // `-webkit-app-region: drag` has no React Native style equivalent; apply it
     // to the host node directly.
     const node = dragRef.current as unknown as HTMLElement | null;
-    node?.style.setProperty('-webkit-app-region', 'drag');
+    node?.style.setProperty('-webkit-app-region', draggable ? 'drag' : 'no-drag');
     return () => {
       node?.style.removeProperty('-webkit-app-region');
     };
-  }, []);
+  }, [draggable]);
 
   return dragRef;
 }
@@ -68,9 +80,19 @@ export function useImmersiveDesktopTitlebarWhileMounted(enabled: boolean) {
  * the centred product name. An immersive route turns it into a transparent
  * overlay so artwork continues beneath the OS caption buttons.
  */
-function DesktopTitlebar({ immersive }: { immersive: boolean }) {
+function DesktopTitlebar({ immersive, application }: { immersive: boolean; application: WindowTitlebar | null }) {
   const c = useThemeColors();
   const dragRef = useDesktopWindowDragRegion();
+  const actionRef = useDesktopWindowDragRegion(false);
+  const height = application ? desktopChrome.applicationTitlebarHeight : TITLEBAR_HEIGHT;
+  const title = application?.title ?? 'PsstPsst';
+  useLayoutEffect(() => {
+    if (DESKTOP_OS === 'darwin') return;
+    const node = actionRef.current as unknown as HTMLElement | null;
+    // Electron exposes the usable title-bar rectangle in CSS pixels, including zoom.
+    node?.style.setProperty('right', `calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - ${desktopChrome.nativeControlsWidth}px)) + ${spacing.sm}px)`);
+  }, [actionRef]);
+  useEffect(() => { void platform.windowChrome.setTitle(title).catch(() => {}); }, [title]);
 
   // Keep the OS-painted frame parts (window background, Windows/Linux caption
   // overlay) on the effective theme, including Settings → Appearance overrides.
@@ -80,14 +102,16 @@ function DesktopTitlebar({ immersive }: { immersive: boolean }) {
       titlebarColor: c.surfaceMuted,
       symbolColor: c.text,
       transparentTitlebar: immersive,
+      titlebarHeight: height,
     });
-  }, [c.background, c.surfaceMuted, c.text, immersive]);
+  }, [c.background, c.surfaceMuted, c.text, immersive, height]);
 
   return (
     <View
       ref={dragRef}
+      testID="desktop-window-titlebar"
       style={{
-        height: TITLEBAR_HEIGHT,
+        height,
         backgroundColor: immersive ? undefined : c.surfaceMuted,
         alignItems: 'center',
         justifyContent: 'center',
@@ -103,10 +127,17 @@ function DesktopTitlebar({ immersive }: { immersive: boolean }) {
       }}
     >
       {immersive ? null : (
-        <AppText variant="caption" style={{ userSelect: 'none' }}>
-          PsstPsst
+        <AppText variant="caption" numberOfLines={1} align="center" style={{ userSelect: 'none', maxWidth: '100%',
+          marginHorizontal: application ? desktopChrome.nativeControlsWidth + uiDensity.headerActionSize + spacing.lg : desktopChrome.nativeControlsWidth }}>
+          {title}
         </AppText>
       )}
+      <View ref={actionRef} style={{ position: 'absolute', top: 0, bottom: 0,
+        // Native caption controls retain their physical OS position in RTL layouts.
+        right: DESKTOP_OS === 'darwin' ? spacing.sm : desktopChrome.nativeControlsWidth,
+        justifyContent: 'center' }}>
+        {application?.actions}
+      </View>
     </View>
   );
 }
@@ -119,13 +150,16 @@ function DesktopTitlebar({ immersive }: { immersive: boolean }) {
 export function DesktopWindowFrame({ children }: { children: ReactNode }) {
   const c = useThemeColors();
   const [immersive, setImmersive] = useState(false);
+  const [titlebar, setTitlebar] = useState<WindowTitlebar | null>(null);
   if (!IS_ELECTRON) return <>{children}</>;
   return (
     <ImmersiveTitlebarContext.Provider value={setImmersive}>
+    <WindowTitlebarContext.Provider value={setTitlebar}>
       <View style={{ flex: 1, backgroundColor: c.background }}>
-        <DesktopTitlebar immersive={immersive} />
+        <DesktopTitlebar immersive={immersive} application={titlebar} />
         <View style={{ flex: 1 }}>{children}</View>
       </View>
+    </WindowTitlebarContext.Provider>
     </ImmersiveTitlebarContext.Provider>
   );
 }

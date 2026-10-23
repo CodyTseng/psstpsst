@@ -102,7 +102,7 @@ export default function SearchUser() {
     try {
       await markAllRequestConversationsAsRead(accountPubkey);
     } catch {
-      showToast(t('contacts.mark_all_read_failed'), { target: 'detail' });
+      showToast(t('contacts.mark_all_read_failed'), { variant: 'error', target: 'detail' });
     } finally {
       setMarkingAllRead(false);
     }

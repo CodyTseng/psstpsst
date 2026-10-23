@@ -1,8 +1,11 @@
+import { createRef } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppInput } from '../AppInput';
 import { AppText } from '../AppText';
+
+jest.mock('react-native/Libraries/Components/Pressable/Pressable', () => ({ default: 'InputShell' }));
 
 jest.mock('@/stores/theme.store', () => ({
   useThemeStore: (selector: (state: { accent: 'blue' }) => unknown) =>
@@ -15,6 +18,21 @@ describe('AppInput field chrome', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  it.each([true, false])('focuses shell clicks only when editable is %s', editable => {
+    const ref = createRef<TextInput>();
+    act(() => {
+      renderer = create(<AppInput ref={ref} multiline editable={editable} />, {
+        createNodeMock: () => ({ focus: jest.fn() }),
+      });
+    });
+    expect(ref.current).toBeTruthy();
+    const focus = jest.spyOn(ref.current!, 'focus').mockImplementation(() => {});
+    focus.mockClear();
+    act(() => { renderer!.root.findByType(Pressable).props.onPress(); });
+    expect(focus).toHaveBeenCalledTimes(editable ? 1 : 0);
+    expect(renderer!.root.findByType(Pressable).props.accessible).toBe(false);
   });
 
   it('renders supporting copy below the field as a muted caption', () => {

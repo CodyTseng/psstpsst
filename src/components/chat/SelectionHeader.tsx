@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { ChromeBackdrop } from '@/components/common/ChromeBackdrop';
-import { headerHeight, useThemeColors } from '@/theme';
+import { headerHeight, spacing, useThemeColors } from '@/theme';
 
 type Props = {
   count: number;
@@ -14,7 +14,7 @@ type Props = {
 
 /**
  * Header shown while the chat is in selection mode (forwarding): a left "Cancel"
- * and a centered "N selected", at the same 56px height as `ChatHeader` so the
+ * and a centered "N selected", at the same platform height as `ChatHeader` so the
  * swap doesn't shift the list.
  */
 export function SelectionHeader({ count, onCancel }: Props) {
@@ -46,7 +46,7 @@ export function SelectionHeader({ count, onCancel }: Props) {
           {t('chat.selected_count', { count })}
         </AppText>
       </View>
-      <View style={{ flexDirection: 'row', paddingHorizontal: 8 }}>
+      <View style={{ flexDirection: 'row', paddingHorizontal: spacing.sm }}>
         <AppButton variant="text" label={t('common.cancel')} onPress={onCancel} />
       </View>
     </View>

@@ -63,7 +63,12 @@ export interface FileWriteHandle {
   close(): Promise<void>;
 }
 
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject;
+
 export interface FileSystemPort {
+  /** Atomically merge a JSON object patch, serialized across all hosts sharing the file. */
+  updateJson(uri: string, patch: JsonObject): Promise<void>;
   /**
    * Absolute URI of the persistent document directory (trailing slash
    * included), or null when the platform provides none.

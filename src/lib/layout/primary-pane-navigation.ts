@@ -1,4 +1,4 @@
-const PRIMARY_PANE_PATHNAMES = new Set(['/', '/contacts', '/me']);
+const PRIMARY_PANE_PATHNAMES = new Set(['/', '/contacts', '/napplets', '/me']);
 
 /** Whether the globally active URL belongs to the persistent tab pane itself. */
 export function isPrimaryPanePathname(pathname: string): boolean {

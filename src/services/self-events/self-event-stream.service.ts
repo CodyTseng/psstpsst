@@ -1,3 +1,7 @@
+import { isNewerEvent as isReplaceableNewer } from '@/lib/nostr/event-version';
+import { cacheProfileEvent } from '../profile/profile.service';
+import { applyFavoritesEvent } from '../explore/favorites';
+import { FAVORITES_D, KIND_APP_FAVORITES } from '../explore/favorites-protocol';
 import type { Event, Filter } from 'nostr-tools';
 
 import { KIND_USER_EMOJI_LIST } from '@/lib/nostr/custom-emoji';
@@ -70,9 +74,11 @@ export type SelfEventStreamConfig = {
 
 /** Delivery lanes. Events sharing a lane are applied strictly one at a time. */
 type Route =
+  | 'profile'
   | 'key-request'
   | 'key-transfer'
   | 'key-announcement'
+  | 'favorites'
   | 'contacts'
   | 'muted'
   | 'blocked'
@@ -108,24 +114,6 @@ function normalizeSet(urls: string[]): Set<string> {
 
 function difference(a: Set<string>, b: Set<string>): string[] {
   return [...a].filter((url) => !b.has(url));
-}
-
-/**
- * The replaceable freshness rule: larger `created_at` wins; on a tie, the
- * smaller id wins. Used only by this dispatch layer's in-memory decisions —
- * `storeReplaceableEvent` (shared infrastructure) deliberately stays
- * first-seen-wins on `created_at >=` (an id comparison isn't worth its SQL
- * cost), so on a same-`created_at`/different-id tie this layer may forward a
- * version the store won't keep. Acceptable: the reconcilers are idempotent.
- */
-function isReplaceableNewer(
-  incoming: { created_at: number; id: string },
-  current: { created_at: number; id: string },
-): boolean {
-  if (incoming.created_at !== current.created_at) {
-    return incoming.created_at > current.created_at;
-  }
-  return incoming.id < current.id;
 }
 
 /**
@@ -205,7 +193,10 @@ class SelfEventStream {
         since: fiveMinAgo,
       },
     ];
+    const favoritesFilter: Filter = { kinds: [KIND_APP_FAVORITES], authors: [self], '#d': [FAVORITES_D] };
     const ownListFilters: Filter[] = [
+      { kinds: [0], authors: [self] },
+      favoritesFilter,
       { kinds: [KIND_FOLLOW_SET], authors: [self], '#d': [...PRIVATE_SET_D_TAGS] },
       { kinds: [KIND_USER_EMOJI_LIST], authors: [self] },
       { kinds: [KIND_BLOSSOM_SERVER_LIST], authors: [self] },
@@ -237,7 +228,13 @@ class SelfEventStream {
       );
     };
 
-    subscribe('self.dm', [...dm], [keyAnnouncementFilter, ...keySyncFilters]);
+    // Each relay must retain the union of its filter demands when lanes overlap.
+    const metadataRelays = new Set([...write, ...normalizeSet(DISCOVERY_RELAYS)]);
+    const dmMetadata = [...dm].filter(relay => metadataRelays.has(relay));
+    const dmKeysOnly = difference(dm, metadataRelays);
+    const keys = [keyAnnouncementFilter, ...keySyncFilters];
+    subscribe('self.dm', dmMetadata.length ? dmMetadata : dmKeysOnly, [...keys, ...(dmMetadata.length ? ownListFilters : [])]);
+    if (dmMetadata.length) subscribe('self.dm.keys', dmKeysOnly, keys);
     subscribe('self.write', writeOnly, [keyAnnouncementFilter, ...keySyncFilters, ...ownListFilters]);
     subscribe('self.discovery', discoveryOnly, [keyAnnouncementFilter, ...ownListFilters]);
   }
@@ -276,6 +273,11 @@ class SelfEventStream {
     this.rememberId(event.id);
 
     switch (event.kind) {
+      case 0:
+        if (!this.isNewerReplaceable(event)) return;
+        this.storeReplaceable(event);
+        this.enqueue('profile', () => cacheProfileEvent(event));
+        return;
       case KIND_CLIENT_KEY_ANNOUNCEMENT:
         this.enqueue('key-request', () => config.handlers.onKeyRequest(event));
         return;
@@ -287,6 +289,14 @@ class SelfEventStream {
         // A new key must stop message intake before another event can decrypt
         // with the old key. This control signal cannot wait behind a UI yield.
         config.handlers.onKeyAnnouncement(event);
+        return;
+      case KIND_APP_FAVORITES:
+        if (dTagOf(event) !== FAVORITES_D || !this.isNewerReplaceable(event)) return;
+        this.storeReplaceable(event);
+        this.enqueue('favorites', async () => {
+          const signer = await this.loadSigner(config);
+          if (signer) await applyFavoritesEvent(config.accountPubkey, event, signer);
+        });
         return;
       case KIND_FOLLOW_SET:
         this.dispatchFollowSet(config, event);

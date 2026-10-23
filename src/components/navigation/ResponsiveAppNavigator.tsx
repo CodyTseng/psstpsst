@@ -45,6 +45,7 @@ export function ResponsiveAppNavigator({ backgroundColor }: Props) {
           && !(route.params && 'input' in route.params && route.params.input);
         return {
           ...NATIVE_SWIPE_BACK_SCREEN_OPTIONS,
+          gestureEnabled: route.name !== 'explore-run' && route.name !== 'napplet-run',
           headerShown: false,
           contentStyle: { backgroundColor },
           animation: opensScanner ? (reducedMotion ? 'fade' : 'slide_from_bottom') : 'default',

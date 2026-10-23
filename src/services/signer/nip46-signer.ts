@@ -1,5 +1,6 @@
 import type { Event, EventTemplate } from 'nostr-tools';
 import { BunkerSigner, type BunkerPointer } from 'nostr-tools/nip46';
+import type { AbstractSimplePool } from 'nostr-tools/abstract-pool';
 
 import { platform } from '@/platform';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
@@ -38,6 +39,7 @@ export class Nip46Signer implements Signer {
   constructor(
     private readonly clientSecretKey: Uint8Array,
     private readonly pointer: BunkerPointer,
+    private readonly transport: AbstractSimplePool = relayPool.underlyingPool,
   ) {}
 
   /** Build the bunker signer and complete the handshake once; concurrent callers
@@ -52,7 +54,7 @@ export class Nip46Signer implements Signer {
       relays: Array.from(new Set(this.pointer.relays.map(normalizeRelayUrl))),
     };
     const signer = BunkerSigner.fromBunker(this.clientSecretKey, pointer, {
-      pool: relayPool.underlyingPool,
+      pool: this.transport,
       onauth: openAuthUrl,
     });
     const pending = (async () => {
@@ -108,6 +110,14 @@ export class Nip46Signer implements Signer {
     return this.request('nip44_encrypt', (signer) =>
       signer.nip44Encrypt(peerPubkey, plaintext),
     );
+  }
+
+  async nip04Encrypt(peerPubkey: string, plaintext: string): Promise<string> {
+    return this.request('nip04_encrypt', signer => signer.nip04Encrypt(peerPubkey, plaintext));
+  }
+
+  async nip04Decrypt(peerPubkey: string, ciphertext: string): Promise<string> {
+    return this.request('nip04_decrypt', signer => signer.nip04Decrypt(peerPubkey, ciphertext));
   }
 
   async nip44Decrypt(peerPubkey: string, ciphertext: string): Promise<string> {

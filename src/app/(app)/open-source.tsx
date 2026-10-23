@@ -5,6 +5,8 @@ import { FlatList, StyleSheet, View } from 'react-native';
 
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
+import { AppButton } from '@/components/common/AppButton';
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { DirectionalChevron } from '@/components/common/DirectionalChevron';
 import { ListRow, ROW_CONTENT_INSET } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
@@ -51,6 +53,7 @@ function ProjectSeparator() {
 export default function OpenSource() {
   const { t } = useTranslation();
   const { catalog, error, retry } = useLicenseCatalog();
+  useErrorToast(error && 'licenses.load_failed');
   const query = useLicenseBrowserStore((state) => state.query);
   const setQuery = useLicenseBrowserStore((state) => state.setQuery);
   const deferredQuery = useDeferredValue(query);
@@ -78,7 +81,7 @@ export default function OpenSource() {
             <AppText variant="caption" tone="muted">{t('licenses.count', { count: projects.length })}</AppText>
           </View>
         ) : null}
-        ListEmptyComponent={error ? <LicenseState title={t('licenses.load_failed')} retry={retry} /> :
+        ListEmptyComponent={error ? <View style={{ padding: spacing.xl }}><AppButton variant="secondary" label={t('common.retry')} onPress={retry} /></View> :
           catalog ? <LicenseState title={t('licenses.no_results')} /> : null}
       />
       <ScreenHeader

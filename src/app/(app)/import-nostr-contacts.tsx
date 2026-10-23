@@ -181,7 +181,7 @@ export default function ImportNostrContacts() {
       showToast(t('import_contacts.imported_count', { count: result.imported }), { target: 'primary' });
       router.replace('/contacts');
     } catch {
-      showToast(t('import_contacts.failed'), { target: 'detail' });
+      showToast(t('import_contacts.failed'), { variant: 'error', target: 'detail' });
     } finally {
       setImporting(false);
     }

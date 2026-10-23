@@ -25,6 +25,10 @@ gradients, emoji in navigation, and bouncy motion.
 
 All colours come from `useThemeColors()` in `src/theme/index.ts`. Components
 must never contain raw hex or rgba values.
+Embedded application safe-area canvases may use validated document colours:
+prefer the current HTML theme colour, then an opaque page background, then the
+host theme. Follow live document and light/dark changes. Status text retains
+contrast; host title bars and approval controls keep their own theme palette.
 
 | Token family | Role |
 | --- | --- |
@@ -55,7 +59,7 @@ accent requires a light/dark pair and a localized name. Other semantic colours
 do not change with the accent.
 
 Use accent sparingly. It is not a page background or default icon colour. Use
-danger for destructive actions and blocking prerequisites that require user action. Use `notification`,
+danger for destructive actions, failure feedback, and blocking prerequisites that require user action. Use `notification`,
 not danger, for unread state.
 The Contacts tab shows a small dot when unread message requests exist, without
 a number. The Chats tab retains its unread message count.
@@ -96,7 +100,7 @@ only in `src/theme/typography.ts`.
 | `body` | Ordinary copy, inputs, and buttons |
 | `caption` | Metadata, labels, and supporting text |
 | `code` | Keys, hashes, addresses, and technical values |
-| `micro` | Tab labels and compact numeric badges only |
+| `micro` | Tab labels, compact action-rail labels, and numeric badges only |
 
 Do not define `fontSize`, `lineHeight`, `letterSpacing`, or `textTransform` in a
 screen. Controlled artwork and emoji sizes remain named theme/component
@@ -107,6 +111,8 @@ anchor, such as an empty state, onboarding prompt, dialog, or pairing code.
 Text beside an icon, avatar, control, or metadata stays start-aligned.
 Captions beneath circular profile actions are centered within equal-width
 columns and wrap to show the full label.
+Action rails use fixed equal-width slots for each icon and caption; labels and
+temporary confirmation text never resize the slots.
 
 Arabic and Persian use RTL. Use `AppText` logical alignment and logical layout
 properties (`start`, `end`, `marginStart`, `paddingEnd`). Directional icons
@@ -123,10 +129,20 @@ padding, or gaps. The sole optical exception is the tighter semantic gap
 between a message bubble and its reaction row.
 
 - The default page and sheet gutter is `spacing.lg` (16px).
+- Sheets fill the window in single-pane layouts. Only two-pane layouts apply
+  the shared `contentWidth.sheet` maximum (480px) and center the sheet.
+  Sheet sizing follows the application's layout breakpoint, including height
+  on touch devices. Approval and payment flows use the same width rule.
+- Sheet headers own `spacing.lg` clearance below their controls. Sheet body
+  blocks default to the same gap; content must not add header-clearance padding.
+  Fixed subheaders and footers use that gap at their body boundary. Lists and
+  grouped controls retain their own internal row spacing.
 - Sections normally use `spacing.xl` separation.
 - Settings lists and forms start `spacing.sm` below the header clearance,
   matching the Me hub in both single-pane and split-pane layouts.
 - Safe-area insets belong to `AppScreen` and navigation chrome, not screens.
+- Embedded web content receives only safe-area insets not already reserved by
+  its host, so websites do not apply the same spacing twice.
 - Headers, lists, bubbles, and the composer align to the same content gutter.
 - Persistent top and bottom chrome uses a hairline border, not a shadow.
 - Scroll-driven top chrome is borderless at the visual top and shows a themed
@@ -141,10 +157,10 @@ between a message bubble and its reaction row.
   share the same spacing so pinning does not shift the text.
 - Do not nest scrolling containers unless the shared component explicitly owns
   that pattern.
-- Compact horizontal rails use `HorizontalFadeScrollView`. Logical-start and
-  logical-end fades appear only while content remains hidden beyond that edge;
-  native and Electron overlay scrollbars stay hidden because the fades are the
-  rail's overflow affordance.
+- Compact horizontal rails use `HorizontalScrollView` without edge fades.
+  Extend the viewport through surrounding gutters so partially visible items
+  reveal overflow; content padding preserves first/last alignment at rest.
+  Native and Electron overlay scrollbars stay hidden.
 - Single-line names and titles truncate within the available width. Adjacent
   status marks, timestamps, and actions retain their space, including in selection mode.
 - In a wide layout, opening a conversation freezes any existing draft preview
@@ -236,8 +252,7 @@ ownership restriction. The summary keeps a single-line height. Failed relay rows
 place to show their failure reason. Targets stay in stable
 identity order while statuses update, with the user's own copy labelled as
 themselves and kept last. Avatar tabs use a compact gap and sit close to the
-selected target detail. An overflowing rail uses the shared translucent
-logical-edge fades while content remains beyond either side. The rail extends through the sheet
+selected target detail. The rail extends through the sheet
 body gutter while its resting tabs retain that gutter, so scrolling content is
 never clipped at the inner padding boundary. Status changes never reorder the
 tabs.
@@ -337,6 +352,37 @@ Language selection uses Lucide's `Languages` glyph.
 Personal identifiers use an unframed `@` glyph so the symbol stays recognizable.
 
 Every icon-only action uses `IconButton` and has an accessibility label.
+Title-bar icon actions use the header control and icon density tokens, including
+floating camera-close controls and task-dialog headers; generic icon-button defaults
+are reserved for body actions.
+
+Human avatars are circular. Mini-app icons are rounded squares at every size,
+including compact identity rows and loading or fallback artwork.
+Signed-site icons use declared artwork or one conventional icon from the signed
+file list; missing or unavailable artwork uses the shared fallback without
+fetching page metadata.
+Website identities retain cached artwork while refreshing in the background;
+temporary network failures must not replace usable artwork with a fallback.
+Mini-app publisher attribution uses a separate labelled information row between
+the app heading and description. Supporting metadata rows fit their visible content with expanded touch targets
+and remain borderless, with text aligned to the surrounding content gutter. Hover and press
+feedback reduce only the identity avatar and name's opacity, without adding a
+background. Publisher rows open that publisher's application catalogue from the
+whole row, across application details and runtime information surfaces.
+Application reviews keep a top-level composer above an avatar-led thread,
+with compact avatars, muted author metadata distinct from the body, accent text reply actions, and logical guides connecting parent and
+reply avatars across rows. Reply actions expand a focused composer directly
+below the selected review while preserving the top-level draft. All review
+composers omit posting-identity captions. Reply composers appear only on demand, omit redundant
+quotes and pair equal-height Cancel and Post
+buttons in one action row.
+Review rows keep metadata, body, and reply actions closely grouped. Composers
+keep their action row close to the input. Separate threads use compact
+whitespace rather than horizontal rules; reply guides carry the hierarchy.
+Application details place a compact primary Open action beside the app identity
+in the scrolling header. Launching and reviewing are independent action
+contexts, each with a primary action. Failed posts retain the draft.
+Review text follows its own writing direction independently of the interface.
 
 ## 8. Component vocabulary
 
@@ -359,7 +405,7 @@ this table records when to choose each primitive.
 | Contact-list destination or identity row | `IdentityListItem` |
 | Contact or conversation row | `ContactListItem` / `ConversationListItem` |
 | Section heading | `SectionLabel` |
-| Scrollable horizontal rail | `HorizontalFadeScrollView` |
+| Scrollable horizontal rail | `HorizontalScrollView` |
 | Summoned task, picker, or form | `BottomSheet` |
 | Short decision or notice | `platform.confirmationDialog` |
 | Small Electron value entry | `InputDialog` |
@@ -399,6 +445,7 @@ glyph; solid danger fills remain reserved for prominent destructive actions.
 Use `ActionRow` for action groups so order, role, spacing, and RTL behaviour do
 not drift. `AppInput` owns its field label above the control and its supporting
 text below it; an error replaces the description in the same slot.
+Clicking unused space inside an editable input focuses its editor.
 Input placeholders share the caret and entered text's alignment and content
 area, excluding inline actions.
 
@@ -515,7 +562,8 @@ At the responsive split threshold, tablets and Electron present a persistent
 primary pane and a detail pane using the same navigation state. Narrow windows
 show the normal single-stack presentation. An unselected detail pane shows only
 a quiet, centered prompt to select a chat, without branding. Resizing must not
-reset navigation, selection, drafts, or scroll state. Tablet primary panes
+reset navigation, selection, drafts, or scroll state. The selected primary tab
+remains interactive while a detail is open, including search. Tablet primary panes
 support direct touch resizing at a thin divider with a compact centred grip and
 a 48-point touch target. Electron primary panes support pointer and keyboard
 resizing there. Double-tapping the divider restores its default position on
@@ -571,7 +619,9 @@ bottom; Reduce Motion removes that displacement.
 A short, self-explanatory action sheet may use handle-only chrome. Every task
 or detail sheet uses the shared fixed sheet header: a close action at the start,
 a truly centred single-line title, and at most one task-scoped action at the end.
-Both sheet-header actions use Lucide icons only, with localized accessibility labels.
+Sheet-header action buttons use Lucide icons only, with localized accessibility
+labels. The trailing slot may instead contain a passive circular account avatar
+with the same outer diameter as the close control.
 They reuse the title bar's icon size and circular control shape, with equal
 insets from the sheet's top and side edges, using the standard sheet gutter.
 The title clears the grabber and stays vertically centred with both actions.
@@ -589,8 +639,17 @@ replace the standard header.
 Search fields keep the same geometry when focused. Focusing an empty search
 keeps the resting content visible; search results replace it only after the
 query contains non-whitespace text.
+Clearing or closing search retains the last results through their exit animation
+instead of rendering an unfiltered list before the resting view returns.
 Dragging a tab's resting list during an empty search exits search mode so its
 search field scrolls with the list.
+
+A sheet body gesture that starts below the scroll origin remains a scroll until
+release, even after reaching the top. Only a fresh downward gesture begun at the
+top can drag the sheet; fixed chrome remains directly draggable.
+
+A closing sheet retains its last presented content and geometry until its exit
+transition completes, including automatic timeout dismissal.
 
 Only one native modal may be presented at a time. Close the current modal and
 start the next action from `onClosed`. Do not coordinate modal sequencing with
@@ -598,6 +657,23 @@ delays guessed at call sites.
 
 Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
+Mini-app chrome places Close at the start and More at the end. System Back
+traverses the embedded application's history before closing it at its root.
+Message web links and public-note cards open in the same built-in application
+container as websites, following the account's website opening preference.
+Custom app protocols in note-link preferences retain their external handoff.
+Mini-app container and initial document canvases follow the host background in
+both themes, including loading and teardown. Apps may supply their own page fill.
+Opening a mini-app enters its container immediately; loading, cancellation and
+recoverable launch errors belong there rather than replacing the app grid.
+Cached apps retain a quiet themed canvas until their first frame. When local
+app code is missing or invalid, show its icon and loading state during download
+and retain that state until the first frame replaces it.
+Native sheets retain the underlying mini-app page behind their normal dimming
+backdrop and block its input through the full sheet exit transition.
+All host sheets and dialogs cover embedded application containers, including
+account switching. Runtime More opens app information and permission management
+inside a sheet for napplets, napps, nsites, and websites.
 Header action menus open below their trigger on all platforms, accounting for
 each platform's modal coordinates.
 With no menu open, Electron Escape cancels an active message reply before page
@@ -664,8 +740,13 @@ a previously declined update.
 - Fast local reads use a blank stable placeholder; genuinely slow remote reads
   may use a skeleton that matches the final layout.
 - An empty state has an icon, a short title, and optional guidance/action.
-- Show recoverable errors where the failed action lives; use a dialog only when
-  the user must decide or acknowledge something.
+- Keep field validation and form errors beside their inputs or form controls.
+  Other failures use the shared bottom error toast; use an alert or sheet when
+  the user must decide, acknowledge, or review recovery details. Never insert
+  standalone error text or banners into page content.
+- Error toasts use a danger-soft surface, danger text, a Solar Linear DangerCircle
+  icon, and a longer reading interval than ordinary confirmations. They preserve the page
+  layout and appear above active sheets and modals.
 - Clipboard actions report failures with a localized toast. Show copied
   confirmation only after the platform accepts the write, on the latest copied
   field, and clear it after two seconds.
@@ -818,12 +899,288 @@ Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
 
+Explore keeps compact Favorites/Discover mode selection beside Scan in its fixed
+header, without a redundant Explore title. Like Chats and Contacts, its resting
+search field belongs to the scrolling content; tapping it opens the shared search
+transition, with editable chrome fixed only while search is active. Discover
+pull-to-refresh uses the native platform control below the resting search field;
+the field collapses during upward scrolling and stays still during pull/rebound.
+Explore loading indicators use muted gray; refresh indicator sizing stays native.
+Brief local reads do not flash a spinner; pending reads show loading feedback
+only after a short delay, without showing an unresolved empty state.
+Background reloads never open the refresh control. Catalogue request errors appear only
+when there are no usable results; partial and cached results stay visible without
+an error banner.
+The first three tabs keep the shared title-row height and begin their search
+fields immediately below that row, without extra top padding.
+Keywords persist across mode changes: Favorites searches saved shortcuts, while
+Discover searches the already-fetched catalogue. Both scopes match application
+names, descriptions and resolved publisher names. Discover keyword matching waits
+for its first catalogue page to resolve; pending searches show loading rather
+than no results. Exact address lookup remains independent of catalogue loading.
+Both Explore and home scanning
+open exact application naddr references in their details page and website URLs
+in their application container, without changing the selected search scope.
+Explicit Lightning/LNURL links retain their wallet flow in the home scanner.
+Empty Favorites opens Discover rather than a separate address-entry task.
+Discover lists verified napps and napplets, excluding nsites, without recording visits or adding
+shortcuts until the user chooses an action. Exact naddr and URL input selects address lookup:
+local matches appear first, naddr hints choose manifest relays, and hintless
+addresses use author write relays plus format-specific sources. Exact lookup
+begins only when the live input parses as a complete address; unfinished or
+malformed edits stay in ordinary local search without validation errors or Retry.
+Domain-like input defaults to HTTPS, preserving its path, query, and fragment.
+Search lookups that fail or find no match show the normal no-results state,
+without error toasts or Retry actions. Explicit scan and open actions retain
+strict address validation. Address results
+remain separate from the curated directory. Scrolling reveals
+more results in newest-first order, with quiet loading feedback at the list end.
+Application rows give artwork and text a comfortable vertical inset. Artwork
+approximates the combined title/description height and aligns with the title top,
+with a single-line description and publisher avatar/name below the title. Artwork
+has no format border. Website rows show a muted web label below the title;
+signed-application rows omit format badges. Application information shows
+the format as muted caption text
+beneath the title. Both modes open the shared application
+details. Favorites displays only saved shortcuts in its vertically scrolling
+grid without a redundant section heading. Favorites reads and reveals local
+application metadata in pages of 50 as the user scrolls. Both Explore modes keep the leading
+header history action, which opens the dedicated recent-use page;
+recent apps do not appear inline in Favorites. History loads on entry and appends
+50 older entries at a time as the user scrolls. History reuses Discover application
+rows with artwork, a single-line description and publisher identity. Pressing a
+history row opens application details. Running-state dots remain
+clearly visible, straddle the icon artwork's logical bottom-end corner, and use
+a page-background ring to separate them from artwork. Compact list icons use a
+smaller dot. Hover and press dim only
+the icon artwork, leaving labels and the page canvas unchanged. Rounded clipping
+belongs to icon artwork, never the caption beneath it. Outer icon
+artwork aligns with the content gutter; wider interaction cells extend into that
+gutter. Responsive grids prioritize recognizable artwork over extra columns:
+icons stay at least 60px and grow to 68px when the pane allows. Column counts and
+distributed gaps adapt around that size. History scrolls vertically with Back navigation in most-recently-used order.
+Launching an app updates only recency. Electron
+opens app menus with right-click and sorts desktop icons by direct dragging.
+Grid menus center on the icon, prefer the space above it, fall back below, and
+shift inward at pane edges. Available menu space excludes native window controls
+and safe areas, including when the overlay spans the full window. App menus follow the shared platform density, icon sizing and stroke conventions.
+Menu width accommodates localized action text within the available viewport.
+The active icon caption hides without changing layout only while its menu is below
+the icon; menus above leave the caption visible. Sorting actions stay out of the visual menu.
+On mobile, holding a desktop icon first opens its menu; moving the held icon dismisses the menu
+and begins sorting. On mobile, opening an app menu by holding gives one light
+haptic at the hold threshold, without repeating during dragging. App cells remain
+unframed in every state, including sorting; icon artwork disables browser-native
+image dragging so it cannot interrupt sorting; other icons preview their new slots
+while dragging; only release commits the order. Released positions stay visible
+until the committed layout takes over, without restoring the old order. Recent
+apps never drag or share desktop selection feedback. Discover and history rows
+share right-click and long-press menus near the pointer or touch position, clamped
+to safe viewport bounds. Right-clicking another visible app replaces the open menu
+and its action target. Menu-enabled row text does not enter text selection
+during a hold. Their menus offer details, permissions, sharing and
+Favorite/Unfavorite. Every history row also offers danger-tone Remove, including
+favorited apps. The application-detail header menu exposes the same permissions,
+sharing and Favorite/Unfavorite actions, plus Copy. History removal belongs to
+the recent-use list, not application details. Runtime menu sheets include Favorite/Unfavorite in their bottom
+action rail. Every menu favorite change confirms success with a bottom toast;
+failures show error feedback. Favorite removal is labelled Unfavorite throughout Explore. Removing recent usage preserves the
+desktop shortcut and application state. Cancelling a drag leaves the desktop intact.
+There is no pin state or browser-style forward/back toolbar. The address entry accepts both Nostr addresses and website URLs. Pointer menus and accessibility actions
+provide equivalent add, move and remove operations. Removing a shortcut preserves
+recent usage, app data, permissions and default task-handler choices. When the
+desktop is empty, omit its entire section, including the heading and guidance.
+
+Website artwork prefers the site's highest-resolution declared icon, then its
+conventional favicon, and falls back to a globe when unavailable. Signed sites
+and napps prefer their explicit artwork, then discover high-resolution icons
+from their verified HTML, Web App Manifest and conventional favicon files.
+
+Explore formats share their detail page, runtime chrome, information panel, and
+permission controls. Format-specific capabilities supply content within those
+shared layouts rather than defining separate page designs.
+Application details prioritize app identity, a readable description and expanded
+required access. The primary action stays fixed above the bottom safe area while information
+scrolls. It always reads Open, regardless of installation or access approval state. Explicit consent on this page replaces the duplicate launch prompt;
+viewing app details alone never grants access. Details and runtime information share the app identity, publisher, description
+and required access. Approval sheets show a compact requester identity and the
+exact requested access, omitting publisher rows and marketing descriptions. Applications with no effective required access open without
+launch consent. First-use consent uses the same sheet across Explore formats,
+identifies the current account with the shared header avatar when account-bound.
+Access confirmation fixes one horizontal action row below the scrolling content,
+with Cancel at the start and Allow at the end. Optional
+access is omitted from app details and launch consent sheets; it stays off until
+enabled in permission management.
+Details have the same layout regardless of format or installation state, without maintenance
+actions or a separate permissions entry. Permission controls live in the management
+view reached from the app menu. Protocol hashes stay out of ordinary app information
+surfaces.
+
+Action handoffs explicitly ask which app should open the requested content
+and name the requesting app. Candidate rows reuse the discovery list's app icon,
+name, description and publisher attribution. Choosing a row opens that app;
+The sheet's Close action dismisses only this handoff, without a duplicate Cancel
+footer. These choosers omit access-review language,
+signing-account labels and raw protocol action names.
+
+Mini-app More opens app information with Copy address, Share, Permissions and
+Reload actions. Copy omits the `nostr:` prefix; sharing includes it. Both retain
+relay hints and use a coordinate for replaceable applications or an event pointer
+for immutable applications. Copy keeps the sheet open with brief in-place
+confirmation after the clipboard accepts the write.
+On iOS, runtime swipe gestures navigate embedded page history without dismissing
+the host route; leaving the runtime uses its explicit Close action.
+On Electron and Android, napps and napplets always open in an independent
+window or task. Nsites and ordinary websites default to the current host;
+their account-scoped opening preference appears on the details page and below
+the identity information in the runtime sheet. Keep the shared header clearance
+and equal section spacing above and below the opening control. Action menus
+omit opening preferences. Website runtime sheets include a default-browser
+action with the Solar Linear Global icon. Preference labels explicitly describe
+the default for future opens, distinct from immediate opening actions.
+Preferences apply to subsequent opens and never move a running page. Independent hosts reuse
+the account/application instance with its state intact. Open applications show a
+small success-green dot beside their icons in app grids and lists; closing the
+last independent instance clears it.
+Inline websites expose a Solar Linear SquareTopDown window-opening action
+beside More in the header. Opening a
+window succeeds before the current inline page closes, without changing its
+saved opening preference; failures leave the page available.
+A running app prompts once for each newer release when it is foreground and no
+other approval is visible. Later keeps the current page; Restart uses the normal
+permission review for the new release. Background metadata refresh never replaces
+a running page without consent.
+Independent windows merge application
+identity and menu actions into their native title bar, reserve the system caption
+controls, and omit duplicate page headers. Android opens applications as independent
+system tasks with their own app-named Recents cards. Independent application
+and website content has no host title bar, Close button or floating More control.
+Pages in the main host retain the shared Close and More header. System Back
+traverses the app's history, then closes its task; switching tasks preserves each running app.
+System back gestures cancel pending webpage touches when the gesture starts,
+so navigation never also triggers a page long press.
+Application management remains available from the host's app list. All formats
+reuse the shared application sheets. Action-rail captions
+use concise labels; accessible action names may retain the full wording.
+Permissions closes the menu before navigating to the dedicated management page.
+Menu actions use square icon controls with single-line micro labels below.
+Keep their equal-width slots compact in an ordered horizontal rail that scrolls
+when needed rather than stretching actions across the available width. Gaps
+between controls stay narrower than the body gutter to reveal overflowing actions.
+Application action rails extend through the sheet gutter; their first and last visible controls
+align with the body gutter at the corresponding scroll boundary. Host permissions expose
+app access and remembered signing decisions. Each rule is one editing target,
+with Ask every time, Automatically allow and Automatically reject choices and
+an independent duration. Saved changes take effect immediately. Choosing Ask
+deletes the persisted decision but keeps its row visible for the current visit;
+the next visit omits it. Status follows the title with semantic colour; long
+titles yield space to it, and Kind/duration shares the title's start edge. Disclosures align
+with section headings. Permission management omits account chrome; protocol hashes
+and history stay out of its default view. Required and optional access remain
+visible in separate sections; optional controls pair switches with explicit
+enabled/disabled text. Saved account and website decisions show their scope,
+decision and duration. Permission sections with no related access, saved
+decisions or activity are hidden once loading resolves. Signing history remains
+accessible through its disclosure even when no rules are saved.
+First use of an undecided optional capability opens an Allow/Reject review for
+that capability. Explicit rejection is remembered; cancellation is not rejection.
+Declared optional appearance, app storage and app settings start enabled while
+retaining their permission switches. Explicitly disabled access stays disabled.
+Permission reset uses the shared danger
+button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
+confirmation or cancellation.
+
+Webpage new-window links, external-app links, downloads and device permissions
+ask before proceeding and identify the current site and target/resource. Downloads
+use a system save destination picker. Native webpage dialogs keep
+the originating site visible. Permission reviews name each concrete requested
+resource, preserving unknown resource names rather than hiding them behind
+generic access wording. Targets and filenames stay separate from permission names. Text and image copying do not show host confirmation;
+clipboard reads require it. Permission queries describe these same decisions.
+
+All approval sheets lead with the operation and a compact requester identity.
+Signing reviews emphasize the event's readable type, kind and content before
+secondary consequences; relevant event, account and authentication targets stay
+visible before the JSON disclosure. Profile and application-data previews expose
+bounded readable fields. Approval bodies use regular body text for identities,
+values and explanations; caption text is reserved for labels and technical
+metadata. Combine event type and kind on one muted metadata line instead of
+adding nested headings. Disclosure and duration controls use regular text;
+header and decision-button emphasis remains shared chrome. Never show a
+pending-request count.
+Keep the requesting app icon and name in a compact body row with balanced
+space between the header controls and the following content. Show the signing
+account only as a circular avatar in the trailing title-bar slot, with an
+accessible account-name label. Keep the event kind visible before disclosure;
+addressable events also show the full d-tag value from the event,
+with empty and missing values distinguishable. Empty content omits the entire
+content field, including its label. A centred disclosure with
+a directional chevron expands directly into the event JSON, followed by relay
+destinations. All signing content, including previews, event JSON, identities
+and relay addresses, disables text selection to preserve scrolling and gestures.
+Event JSON provides an explicit Copy action. Authentication keeps the server identity visible for the decision.
+Public-file upload reviews show the filename, type, size and storage services,
+with a plain-language public-access notice. They reuse the signer duration and
+Allow/Reject controls; remembered choices apply to uploads by this app to the
+reviewed storage services. Event JSON is not required for upload reviews.
+Public-key access, encryption and decryption reuse the signing approval layout
+and its Once, timed and Always decisions. Reviews identify the account and current
+host-verified source; crypto reviews also identify the algorithm in a distinct summary.
+Public-key reviews show the exact public key the application will receive.
+These operations omit event-kind labels and event JSON. Their remembered rules
+remain separate by method and algorithm, apply across peers, and use the shared permission editor.
+Launching an application never grants these signer methods. Application configuration reuses the host's
+settings form and serialized overlay lifecycle. Text clipboard writes do not
+show a host confirmation. File saves identify the file and require consent
+before opening the system destination picker.
+A fixed footer contains a single-level duration menu showing the current choice
+above two horizontal Allow/Reject actions. The menu floats above its trigger
+without changing sheet layout. Duration applies to either decision and defaults
+to one request; remembered decisions retain the displayed operation's scope.
+Every valid ordinary event-signing request, including HTTP authentication,
+profiles, follow lists and application settings, offers the same duration choices.
+Event kind alone never forces one-request authorization. Relay authentication
+and uploads also default to review with the same duration choices; remembered
+AUTH controls state that remembered decisions cover all relays used by this
+application; permission management shows that scope explicitly. Upload decisions
+retain the reviewed storage-service destinations. No event
+kind or app-data identifier is categorically blocked from user-approved publication.
+Signing approvals show the remaining seconds in the Reject button, based on
+a fresh review deadline when each request becomes visible. Adding queued requests
+never restarts the active countdown.
+Each decision closes its approval sheet completely before another review opens.
+Queued permissions recheck the latest saved decision and skip review when it applies.
+Approval sheets ignore backdrop taps to prevent accidental rejection. Closing
+through X or system Back rejects only the current request.
+Approval sheets expose no bulk rejection or cooldown action;
+ordinary dismissal never blocks later requests.
+
+Encryption approval shows the exact plaintext with a bounded preview and an
+explicit full-text disclosure. Approval payloads remain transient and never
+become part of saved grants or permission history.
+
+Website capability prompts use the same duration selector as signing prompts.
+Routine clipboard writes and persistent-storage requests do not show a consent
+sheet. Sensitive capabilities expose one-visit, timed, and permanent decisions;
+screen capture and unknown capabilities require a fresh decision. Saved website
+capabilities can be changed or reset in application permissions.
+
+Wallet access consent identifies the host-verified source without selecting a
+wallet. Payment and invoice reviews reuse the existing wallet confirmation and
+wallet picker sheets, adding the requesting source. Each website payment shows
+the exact signed amount in sats, lets the user choose an eligible wallet, and
+requires confirmation plus system authentication or the account's wallet PIN.
+Wallet sheets use the header close button to cancel and omit a duplicate Cancel
+action. They never offer remembered payment approval. Creating a payment request
+shows its amount and allows editing only within the application's constraints.
+
 ## 12. Hard Rules
 
 Breaking a rule requires explicit approval and a reason in the PR or commit
 message.
 
-1. **No raw colours.** Use theme tokens.
+1. **No raw colours.** Use theme tokens; embedded safe-area canvases may use
+   validated document colours as defined in §2.
 2. **No raw font metrics.** Use `AppText` variants and typography tokens.
 3. **No raw spacing.** Use the spacing scale.
 4. **Use shared primitives.** Every route starts with `AppScreen`; text, inputs,
@@ -835,7 +1192,8 @@ message.
 6. **No page-specific theme.** Read the effective app theme.
 7. **Verify light and dark mode.** New UI must support both.
 8. **Empty states are complete.** Use icon, title, and optional guidance/action.
-9. **Only one primary action per screen.**
+9. **Only one primary action per screen**, except the independent launch and
+   review contexts on application details.
 10. **No emoji decoration in chrome.** Emoji belongs to user content.
 11. **Reuse first.** Extend a shared component instead of duplicating it.
 12. **Only two button primitives.** Use `AppButton` or `IconButton`, never a raw

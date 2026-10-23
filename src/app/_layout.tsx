@@ -1,6 +1,12 @@
 import 'react-native-get-random-values';
 import '../global.css';
 import '@/i18n';
+import { connectSigningWindows } from '@/services/signing/changes';
+import { connectApplicationWindows } from '@/services/explore/application-changes';
+import { readChangedApplicationMetadata } from '@/services/explore/application-cache';
+import { useApplicationWindowActions } from '@/hooks/use-application-window-actions';
+import { ApplicationWindowRoot } from '@/components/napplet/ApplicationWindowRoot';
+import { nappletService } from '@/services/napplet/service';
 // Eagerly evaluate the background-task module so its `defineTask` runs on every
 // bundle load — including a cold launch the OS triggers for the task itself.
 import '@/services/notifications/background-task';
@@ -169,7 +175,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <SafeAreaProvider>
-                <RootLayoutContent />
+                {platform.napplet.windows?.isHost ? <ApplicationWindowRoot /> : <RootLayoutContent />}
               </SafeAreaProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
@@ -180,6 +186,9 @@ export default function RootLayout() {
 }
 
 function RootLayoutContent() {
+  useEffect(() => { connectSigningWindows(platform.napplet.windows); return () => connectSigningWindows(); }, []);
+  useEffect(() => { connectApplicationWindows(platform.napplet.windows, readChangedApplicationMetadata); return () => connectApplicationWindows(); }, []);
+  useApplicationWindowActions();
   const { t } = useTranslation();
   const { success: migrationsApplied, error: migrationError } = useAppMigrations();
   const loadFromStorage = useActiveAccount((s) => s.loadFromStorage);
@@ -217,6 +226,13 @@ function RootLayoutContent() {
     'loading' | 'ready' | 'setup' | 'unlock' | 'error'
   >('loading');
   const secureStorageReady = secureStorageAccess === 'ready';
+  useEffect(() => {
+    nappletService.updateTheme({ colors: { background: c.background, text: c.text, primary: c.accent } });
+    if (!secureStorageReady) nappletService.deactivate();
+    else if (migrationsApplied && activePubkey && status === 'ready') {
+      void nappletService.activate(activePubkey).catch(() => {});
+    }
+  }, [secureStorageReady, migrationsApplied, activePubkey, status, c.background, c.text, c.accent]);
   const isExpoGo = Constants.executionEnvironment === 'storeClient';
   const nativeDirectionMatches = I18nManager.getConstants().isRTL === (direction === 'rtl');
   // Expo Go owns the host process and cannot persist a project's forced native
