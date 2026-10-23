@@ -3,7 +3,7 @@ import { useContext, type ReactNode } from 'react';
 import { ActivityIndicator,StyleSheet,View } from 'react-native';
 import X from 'lucide-react-native/icons/x';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
-import { MaximizeSquareMinimalistic } from '@solar-icons/react-native/category/arrows-action/Linear/MaximizeSquareMinimalistic';
+import { SquareTopDown } from '@solar-icons/react-native/category/arrows-action/Linear/SquareTopDown';
 import { useTranslation } from 'react-i18next';
 import { useDesktopWindowTitlebar } from '@/components/common/DesktopWindowFrame';
 import { AppScreen } from '@/components/common/AppScreen';
@@ -40,7 +40,7 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
     accessibilityLabel={t('napplets.runtime_more')} onPress={onMore} disabled={!menuEnabled || openingWindow}/>;
   const actions = onOpenWindow ? <View style={{flexDirection:'row',alignItems:'center',gap:spacing.xs}}>
     <IconButton size={uiDensity.headerActionSize}
-      icon={<MaximizeSquareMinimalistic size={uiDensity.headerActionIconSize} color={c.text}/>}
+      icon={<SquareTopDown size={uiDensity.headerActionIconSize} color={c.text}/>}
       accessibilityLabel={t('napplets.open_in_new_window')} onPress={onOpenWindow} disabled={!menuEnabled || openingWindow}/>
     {more}
   </View> : more;

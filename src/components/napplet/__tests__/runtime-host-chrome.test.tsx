@@ -8,7 +8,7 @@ import type { ExploreKind } from '@/services/explore/model';
 jest.mock('@/lib/platform', () => ({ IS_ANDROID: true }));
 jest.mock('lucide-react-native/icons/x', () => () => null);
 jest.mock('lucide-react-native/icons/ellipsis', () => () => null);
-jest.mock('@solar-icons/react-native/category/arrows-action/Linear/MaximizeSquareMinimalistic', () => ({ MaximizeSquareMinimalistic: () => null }), { virtual: true });
+jest.mock('@solar-icons/react-native/category/arrows-action/Linear/SquareTopDown', () => ({ SquareTopDown: () => null }), { virtual: true });
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/platform/napplet-appearance', () => ({ useNappletAppearance: () => undefined }));
 jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));

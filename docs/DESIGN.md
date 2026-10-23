@@ -1013,7 +1013,7 @@ Preferences apply to subsequent opens and never move a running page. Independent
 the account/application instance with its state intact. Open applications show a
 small success-green dot beside their icons in app grids and lists; closing the
 last independent instance clears it.
-Inline websites expose a Solar Linear MaximizeSquareMinimalistic window-opening action
+Inline websites expose a Solar Linear SquareTopDown window-opening action
 beside More in the header. Opening a
 window succeeds before the current inline page closes, without changing its
 saved opening preference; failures leave the page available.
