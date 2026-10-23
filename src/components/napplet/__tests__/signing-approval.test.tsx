@@ -175,11 +175,13 @@ it.each([true, false])('checks the embedded repost content address before showin
   }
 });
 
-it('closes the duration menu before dismissing the signing sheet', () => {
+it.each(['light', 'dark'] as const)('blocks backdrop dismissal and closes the duration menu before dismissing the signing sheet in %s mode', (scheme) => {
+  mockScheme = scheme;
   mockPrompt = prompt;
   act(() => { renderer = create(<NappletOverlays />); });
   act(() => { renderer.root.findByType(SigningActions).props.onMenuChange({ x: 180, y: 700 }); });
   const sheet = renderer.root.findByType(jest.requireMock('@/components/common/BottomSheet').BottomSheet);
+  expect(sheet.props.dismissOnBackdropPress).toBe(false);
   act(() => { sheet.props.onClose(); });
   expect(renderer.root.findAllByType(ActionMenuPanel)).toHaveLength(0);
   expect(nappletService.rejectAllRequests).not.toHaveBeenCalled();
@@ -244,6 +246,7 @@ it('keeps launch permissions focused on required capabilities with a fixed decis
   expect(texts).toContain('napplets.capability_resource');
   expect(texts).toContain('napplets.capability_storage');
   expect(renderer.root.findByType(CapabilityApproval).props.hideActions).toBe(true);
+  expect(sheet.props.dismissOnBackdropPress).toBe(false);
   expect(sheet.props.fixedFooter).toBeDefined();
   expect(renderer.root.findByType(SigningAccountAvatar).props.pubkey).toBe('a'.repeat(64));
   act(() => { button('napplets.allow').props.onPress(); });

@@ -1110,8 +1110,9 @@ a fresh review deadline when each request becomes visible. Adding queued request
 never restarts the active countdown.
 Each decision closes its approval sheet completely before another review opens.
 Queued permissions recheck the latest saved decision and skip review when it applies.
-Closing an approval sheet through its backdrop, X or system Back rejects only
-the current request. Approval sheets expose no bulk rejection or cooldown action;
+Approval sheets ignore backdrop taps to prevent accidental rejection. Closing
+through X or system Back rejects only the current request.
+Approval sheets expose no bulk rejection or cooldown action;
 ordinary dismissal never blocks later requests.
 
 Encryption approval shows the exact plaintext with a bounded preview and an

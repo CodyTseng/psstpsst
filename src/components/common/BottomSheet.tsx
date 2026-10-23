@@ -48,6 +48,8 @@ import { Toast } from './Toast';
 type Props<ItemT = never> = {
   visible: boolean;
   onClose: () => void;
+  /** Allow tapping the backdrop to close the sheet. Default true. */
+  dismissOnBackdropPress?: boolean;
   /** Input to focus after the native Modal becomes keyboard-ready. */
   inputFocusRef?: RefObject<TextInput | null>;
   /** Refocus `inputFocusRef` when an already-open sheet enters a new input step. */
@@ -173,6 +175,7 @@ export function BottomSheet<ItemT = never>(props: Props<ItemT>) {
 function BottomSheetSurface<ItemT = never>({
   visible,
   onClose,
+  dismissOnBackdropPress = true,
   inputFocusRef,
   inputFocusKey,
   onClosed,
@@ -628,7 +631,7 @@ function BottomSheetSurface<ItemT = never>({
               backdropStyle,
             ]}
           >
-            <Pressable hoverFeedback={false} style={{ flex: 1 }} onPress={onClose} />
+            <Pressable hoverFeedback={false} style={{ flex: 1 }} onPress={dismissOnBackdropPress ? onClose : undefined} />
           </Animated.View>
           {/* No card-wide pan: drag-to-dismiss lives on the fixed regions and the
               body (listGesture), so a body full
