@@ -159,7 +159,7 @@ test('advertises the host upload rail only to an endpoint granted the upload dom
   await restricted.open();
   try {
     await restricted.receive(JSON.stringify({ type: 'upload.info', id: 'hidden' }));
-    expect(messages()).toEqual([]);
+    expect(messages().at(-1)).toMatchObject({ type: 'upload.info.result', error: 'permission-denied' });
   } finally { await restricted.close(); }
 });
 
@@ -300,7 +300,7 @@ test('the pinned shim intent request and delivery envelopes are preserved', asyn
     await runtime.close();
   }
 });
-test('ungranted domains and reply-shaped messages cannot invoke a handler', async () => {
+test('undeclared domains and reply-shaped messages cannot invoke a handler', async () => {
   const config = options();
   config.domains = ['shell'];
   const runtime = new NappletRuntime(config);
@@ -311,7 +311,7 @@ test('ungranted domains and reply-shaped messages cannot invoke a handler', asyn
       JSON.stringify({ type: 'identity.getPublicKey.result', id: '2', pubkey: 'spoof' }),
     );
     expect(setData).not.toHaveBeenCalled();
-    expect(messages()).toEqual([]);
+    expect(messages()).toEqual([{ type: 'storage.set.result', id: '1', ok: false, error: 'permission-denied' }]);
   } finally {
     await runtime.close();
   }
@@ -511,6 +511,36 @@ async function transferFile(runtime: NappletRuntime, id: string) {
   await runtime.receive(JSON.stringify({ type: 'upload.transfer.end', id, seq: 1 }));
 }
 
+it.each(['pending requests', 'call budget'])('acknowledges upload starts rejected by the %s limit', async limit => {
+  const config = options();
+  let releaseHandlers!: (value: NappletRelease[]) => void;
+  const held = new Promise<NappletRelease[]>(resolve => { releaseHandlers = resolve; });
+  jest.mocked(config.handlers).mockImplementation(() => held);
+  const runtime = new NappletRuntime(config);
+  const pending: Promise<void>[] = [];
+  await runtime.open();
+  try {
+    if (limit === 'pending requests') {
+      for (let index = 0; index < 16; index++)
+        pending.push(runtime.receive(JSON.stringify({ type: 'intent.handlers', id: `held-${index}` })));
+    } else {
+      for (let index = 0; index < 240; index++)
+        await runtime.receive(JSON.stringify({ type: 'theme.get', id: `call-${index}` }));
+    }
+    await runtime.receive(JSON.stringify({ type: 'upload.transfer.start', id: 'limited-upload', seq: -1,
+      size: 3, request: { filename: 'report.txt', mimeType: 'text/plain' } }));
+    expect(messages().filter(message => message.id === 'limited-upload')).toEqual([
+      { type: 'psst.upload.ack', id: 'limited-upload', seq: -1, error: 'quota-exceeded' },
+    ]);
+    expect(config.confirm).not.toHaveBeenCalled();
+    expect(platform.fileSystem.uploadFile).not.toHaveBeenCalled();
+  } finally {
+    releaseHandlers([]);
+    await Promise.all(pending);
+    await runtime.close();
+  }
+});
+
 it('asks for each file as app consent and signs Blossom authentication only after approval', async () => {
   const config = options();
   const runtime = new NappletRuntime(config);
@@ -543,4 +573,146 @@ it('denying an upload never signs its authorization or sends the file', async ()
   expect(platform.fileSystem.uploadFile).not.toHaveBeenCalled();
   expect(sharedRules.size).toBe(0);
   await runtime.close();
+});
+
+describe('optional capabilities requested at call time', () => {
+  let stored: Map<string, string>;
+  beforeEach(() => {
+    stored = new Map([['domains', '["shell"]']]);
+    jest.mocked(getData).mockImplementation(async (_scope, _bucket, key) => stored.get(key) ?? null);
+    jest.mocked(setData).mockImplementation(async (_scope, _bucket, key, value) => {
+      if (value === null) stored.delete(key); else stored.set(key, value);
+    });
+  });
+  afterEach(() => {
+    jest.mocked(getData).mockImplementation(async () => null);
+    jest.mocked(setData).mockImplementation(async () => {});
+  });
+  const optionalOptions = (): RuntimeOptions => ({ ...options(), domains: ['shell'],
+    release: { ...release, optional: ['config', 'theme', 'upload'] }, permissionsChanged: jest.fn() });
+
+  test('exposes declared optional interfaces and resumes configuration after approval', async () => {
+    const config = optionalOptions();
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    try {
+      await runtime.receive(JSON.stringify({ type: 'shell.ready', id: 'ready' }));
+      expect(messages().at(-1)?.capabilities.domains).toEqual(['shell', 'config', 'theme', 'upload']);
+      await runtime.receive(JSON.stringify({ type: 'config.registerSchema', id: 'schema', schema: { type: 'object', properties: {} } }));
+      expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ capabilities: { required: ['config'], optional: [], requested: 'config' } }), runtime.signal);
+      expect(messages()).toContainEqual({ type: 'config.registerSchema.result', id: 'schema', ok: true });
+      expect(JSON.parse(stored.get('domains')!)).toEqual(['shell', 'config']);
+      await runtime.receive(JSON.stringify({ type: 'config.openSettings' }));
+      expect(config.configure).toHaveBeenCalledWith({ type: 'object', properties: {} }, {});
+      expect(config.confirm).toHaveBeenCalledTimes(1);
+    } finally { await runtime.close(); }
+  });
+
+  test('shares concurrent approval and preserves grants for different domains', async () => {
+    const config = optionalOptions();
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    try {
+      await Promise.all(['theme.get', 'theme.get', 'config.get'].map((type, index) => runtime.receive(JSON.stringify({ type, id: String(index) }))));
+      expect(config.confirm).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(stored.get('domains')!)).toEqual(['shell', 'theme', 'config']);
+      expect(messages().filter(message => ['theme.get.result', 'config.values'].includes(message.type))).toHaveLength(3);
+    } finally { await runtime.close(); }
+  });
+
+  test.each(['bytes', 'bytesMany'])('preserves resource.%s cancellation during shared optional consent', async operation => {
+    const config = optionalOptions();
+    config.release = { ...config.release, optional: ['resource'] };
+    let allow!: (value: string) => void;
+    let showPrompt!: () => void;
+    const shown = new Promise<void>(resolve => { showPrompt = resolve; });
+    jest.mocked(config.confirm).mockImplementation(() => new Promise(resolve => {
+      allow = resolve;
+      showPrompt();
+    }));
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    const cancelled = { type: `resource.${operation}`, id: 'cancelled',
+      ...(operation === 'bytes' ? { url: 'https://cancelled.example/' }
+        : { requests: [{ url: 'https://cancelled.example/1' }, { url: 'https://cancelled.example/2' }] }) };
+    try {
+      const first = runtime.receive(JSON.stringify(cancelled));
+      const sibling = runtime.receive(JSON.stringify({ type: 'resource.bytes', id: 'sibling', url: 'https://good.example/' }));
+      await shown;
+      await runtime.receive(JSON.stringify({ type: 'resource.cancel', id: 'cancelled' }));
+      expect(platform.napplet.fetchResource).not.toHaveBeenCalled();
+      allow('allow');
+      await Promise.all([first, sibling]);
+      expect(config.confirm).toHaveBeenCalledTimes(1);
+      expect(platform.napplet.fetchResource).toHaveBeenCalledTimes(1);
+      expect(jest.mocked(platform.napplet.fetchResource).mock.calls[0][0]).toBe('https://good.example/');
+      expect(messages()).toContainEqual({ type: `resource.${operation}.error`, id: 'cancelled', error: 'session-closed' });
+      expect(messages()).toContainEqual(expect.objectContaining({ type: 'resource.bytes.result', id: 'sibling' }));
+      // Completing a cancelled call releases its ID and cancellation state.
+      await runtime.receive(JSON.stringify({ type: 'resource.bytes', id: 'cancelled', url: 'https://retry.example/' }));
+      expect(platform.napplet.fetchResource).toHaveBeenCalledTimes(2);
+      expect(messages().at(-1)).toMatchObject({ type: 'resource.bytes.result', id: 'cancelled' });
+    } finally { await runtime.close(); }
+  });
+
+  test('persists explicit rejection and rejects later calls without prompting', async () => {
+    const config = optionalOptions();
+    jest.mocked(config.confirm).mockResolvedValue('deny');
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    try {
+      for (const id of ['first', 'second']) await runtime.receive(JSON.stringify({ type: 'config.get', id }));
+      expect(config.confirm).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(stored.get('denied-domains')!)).toEqual(['config']);
+      expect(messages().at(-1)).toMatchObject({ type: 'config.values', id: 'second', error: 'permission-denied' });
+      expect(stored.get('domains')).toBe('["shell"]');
+    } finally { await runtime.close(); }
+  });
+
+  test('does not treat cancellation as an explicit rejection', async () => {
+    const config = optionalOptions();
+    jest.mocked(config.confirm).mockResolvedValueOnce(false);
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    try {
+      await runtime.receive(JSON.stringify({ type: 'theme.get', id: 'cancel' }));
+      expect(stored.has('denied-domains')).toBe(false);
+      await runtime.receive(JSON.stringify({ type: 'theme.get', id: 'retry' }));
+      expect(config.confirm).toHaveBeenCalledTimes(2);
+      expect(messages().at(-1)).toMatchObject({ type: 'theme.get.result', id: 'retry' });
+    } finally { await runtime.close(); }
+  });
+
+  test.each([
+    ['identity', 'getPublicKey', 'deny'], ['identity', 'getPublicKey', false],
+    ['inc', 'channel.list', 'deny'], ['inc', 'channel.list', false],
+  ] as const)('returns an error envelope for optional %s.%s after %s', async (domain, operation, answer) => {
+    const config = optionalOptions();
+    config.release = { ...config.release, optional: [domain] };
+    jest.mocked(config.confirm).mockResolvedValue(answer);
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    try {
+      await runtime.receive(JSON.stringify({ type: `${domain}.${operation}`, id: 'denied' }));
+      expect(messages()).toEqual([{ type: `${domain}.${operation}.result`, id: 'denied', ok: false, error: 'permission-denied' }]);
+      expect(stored.get('domains')).toBe('["shell"]');
+      expect(stored.get('denied-domains')).toBe(answer === 'deny' ? JSON.stringify([domain]) : undefined);
+    } finally { await runtime.close(); }
+  });
+
+  test('discards approval after the runtime closes', async () => {
+    const config = optionalOptions();
+    let answer!: (value: string) => void;
+    jest.mocked(config.confirm).mockImplementation(() => new Promise(resolve => { answer = resolve; }));
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    const pending = runtime.receive(JSON.stringify({ type: 'theme.get', id: 'late' }));
+    for (let index = 0; index < 10 && !answer; index++) await new Promise(resolve => setTimeout(resolve, 0));
+    expect(answer).toBeDefined();
+    await runtime.close();
+    answer('allow');
+    await pending;
+    expect(stored.get('domains')).toBe('["shell"]');
+    expect(messages()).toEqual([]);
+  });
 });

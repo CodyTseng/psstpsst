@@ -1,5 +1,5 @@
 import { useErrorToast } from '@/hooks/use-error-toast';
-import { useState,type ReactNode } from 'react';
+import { Fragment,useState,type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AppButton } from '@/components/common/AppButton';
@@ -26,9 +26,9 @@ export function ApplicationSettings({release,sourceId,access,onReset}:{
     } catch {setError(true);} finally {setBusy(false);}
   }
   return <View style={{gap:spacing.xl}}>
+    {access?<Fragment key={`access:${revision}`}>{access}</Fragment>:null}
     <NappletPermissions key={`signing:${revision}`} release={release} sourceId={sourceId} initiallyExpanded/>
     {sourceId || release ? <BrowserPermissions key={`browser:${revision}`} sourceId={sourceId ?? signingSourceFromLegacyKey(release!.key)} /> : null}
-    {access?<View key={`access:${revision}`}>{access}</View>:null}
     <AppButton variant="danger" label={t('napplets.revoke')} loading={busy} onPress={()=>{void reset();}}/>
   </View>;
 }

@@ -1052,7 +1052,15 @@ deletes the persisted decision but keeps its row visible for the current visit;
 the next visit omits it. Status follows the title with semantic colour; long
 titles yield space to it, and Kind/duration shares the title's start edge. Disclosures align
 with section headings. Permission management omits account chrome; protocol hashes
-and history stay out of its default view. Permission reset uses the shared danger
+and history stay out of its default view. Required and optional access remain
+visible in separate sections; optional controls pair switches with explicit
+enabled/disabled text. Saved account and website decisions show their scope,
+decision and duration. Permission sections with no related access, saved
+decisions or activity are hidden once loading resolves. Signing history remains
+accessible through its disclosure even when no rules are saved.
+First use of an undecided optional capability opens an Allow/Reject review for
+that capability. Explicit rejection is remembered; cancellation is not rejection.
+Permission reset uses the shared danger
 button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
 confirmation or cancellation.
 

@@ -560,8 +560,19 @@ export const nappletService = {
     if (domains.some((domain) => !allowed.has(domain))) throw new Error('invalid-permissions');
     const required = ['shell', ...release.required];
     if (required.some((domain) => !domains.includes(domain))) throw new Error('required-permission');
+    const scope = { accountPubkey: expectedAccount, appKey: release.key };
+    const [saved, storedDenied] = await Promise.all([
+      getData(scope, 'permissions', 'domains'), getData(scope, 'permissions', 'denied-domains'),
+    ]);
+    check(expectedAccount, epoch);
+    const previous: string[] = saved ? JSON.parse(saved) : [];
+    const denied: string[] = storedDenied ? JSON.parse(storedDenied) : [];
+    const nextDenied = [...new Set([...denied, ...release.optional.filter(domain => previous.includes(domain) && !domains.includes(domain))])]
+      .filter(domain => !domains.includes(domain));
     invalidateNappletSource(expectedAccount, release.key);
-    await setData({ accountPubkey: expectedAccount, appKey: release.key }, 'permissions', 'domains', JSON.stringify([...new Set(domains)]));
+    await setData(scope, 'permissions', 'denied-domains', JSON.stringify(nextDenied));
+    check(expectedAccount, epoch);
+    await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set(domains)]));
     check(expectedAccount, epoch);
     permissionsChanged();
     const state = nappletStore.getState();
@@ -625,6 +636,8 @@ export const nappletService = {
     check(account, epoch);
     const scope = { accountPubkey: account, appKey: release.key };
     await setData(scope, 'permissions', 'domains', null);
+    check(account, epoch);
+    await setData(scope, 'permissions', 'denied-domains', null);
     check(account, epoch);
     await clearSigningPermissions(appSigningScope(scope));
     await clearBrowserPermissions(appSigningScope(scope));

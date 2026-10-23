@@ -2,6 +2,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { NappletPermissions } from '../NappletPermissions';
 import { SigningRuleEditor } from '../SigningRuleEditor';
 import { ListRow } from '@/components/common/ListRow';
+import { AppButton } from '@/components/common/AppButton';
+import { AppText } from '@/components/common/AppText';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import type { SigningSnapshot } from '@/services/signing/model';
@@ -66,5 +68,30 @@ it('never carries retained asking rows into a different account', async () => {
   await act(async () => { await renderer.root.findByType(SigningRuleEditor).props.onSave({ decision: 'ask', duration: 'always' }); });
   mockAccount = 'accountB'; mockData = { rules: [], activity: [] };
   act(() => { renderer.update(screen()); });
+  expect(rows()).toHaveLength(0);
+});
+
+it('keeps signing history accessible without showing an empty rules section', () => {
+  mockData = { rules: [], activity: [{ scope: source.scope, decision: 'allowed', at: 100 }] };
+  act(() => { renderer.update(screen()); });
+  expect(renderer.root.findAllByType(AppText)).toHaveLength(0);
+  expect(rows()).toHaveLength(0);
+  const disclosure = renderer.root.findByType(AppButton);
+  expect(disclosure.props.label).toBe('napplets.signing_activity');
+  expect(disclosure.props.accessibilityState.expanded).toBe(false);
+  act(() => { disclosure.props.onPress(); });
+  expect(disclosure.props.accessibilityState.expanded).toBe(true);
+  expect(rows()).toHaveLength(1);
+  expect(rows()[0].props.title).toBe('Publish a post');
+  expect(rows()[0].props.subtitle).toContain('napplets.signing_allowed');
+  act(() => { disclosure.props.onPress(); });
+  expect(rows()).toHaveLength(0);
+});
+
+it('hides the section when both rules and signing history are empty', () => {
+  mockData = { rules: [], activity: [] };
+  act(() => { renderer.update(screen()); });
+  expect(renderer.root.findAllByType(AppText)).toHaveLength(0);
+  expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
   expect(rows()).toHaveLength(0);
 });

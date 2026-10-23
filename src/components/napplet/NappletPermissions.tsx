@@ -68,13 +68,13 @@ function PermissionRules({ release, sourceId, initiallyExpanded = false }: { rel
       throw error;
     } finally { setBusy(false); }
   }
+  if (data && rows.length === 0 && activity.length === 0 && !editor) return null;
   return <View style={{ gap: spacing.md }}>
-    {initiallyExpanded ? <AppText variant="subtitle">{t('napplets.permissions_signing')}</AppText> :
+    {initiallyExpanded ? (!data || rows.length ? <AppText variant="subtitle">{t('napplets.permissions_signing')}{data ? ` · ${rows.length}` : ''}</AppText> : null) :
       <AppButton variant="secondary" label={t('napplets.signing_manage')} onPress={() => setExpanded(!expanded)} />}
     {expanded ? <>
-      <AppText variant="caption" tone="muted">{t('napplets.permissions_hint')}</AppText>
+      {rows.length ? <AppText variant="caption" tone="muted">{t('napplets.permissions_hint')}</AppText> : null}
       {!data && !error && !rows.length ? <ActivityIndicator color={c.accent} /> : null}
-      {data && rows.length === 0 ? <AppText tone="muted">{t('napplets.signing_no_rules')}</AppText> : null}
       {rows.length ? <ListGroup>{rows.map((rule) => {
         const status = rule.duration === 'timed' && rule.expiresAt
           ? t('napplets.signing_until', { time: new Date(rule.expiresAt).toLocaleString(i18n?.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })

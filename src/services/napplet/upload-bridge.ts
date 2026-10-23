@@ -14,7 +14,7 @@ function uploadCredit(message,deadline){
  return new Promise((resolve,reject)=>{
   if(Date.now()>=deadline){reject(Error('upload-bridge-timeout'));return;}
   const key=message.id+':'+message.seq;
-  const timer=setTimeout(()=>{uploadCredits.delete(key);reject(Error('upload-bridge-timeout'));},Math.min(10000,deadline-Date.now()));
+  const timer=setTimeout(()=>{uploadCredits.delete(key);reject(Error('upload-bridge-timeout'));},Math.min(message.seq===-1?1020000:10000,deadline-Date.now()));
   uploadCredits.set(key,{resolve,reject,timer});
   try{const raw=JSON.stringify(message);if(raw.length>100000)throw Error('too-large');postHost(raw);}
   catch(error){uploadCredits.delete(key);clearTimeout(timer);reject(error);}
@@ -31,9 +31,10 @@ async function bridgeUpload(message){
  const {data:ignored,...metadata}=request;
  metadata.mimeType=request.mimeType||(blob.type.split(';')[0].trim()||'application/octet-stream');
  uploadBridges.add(message.id);
- const deadline=Date.now()+25000;
+ let deadline=Date.now()+1020000;
  try{
   await uploadCredit({type:'upload.transfer.start',id:message.id,seq:-1,size:blob.size,request:metadata},deadline);
+  deadline=Date.now()+25000;
   let seq=0;
   for(let offset=0;offset<blob.size;offset+=${UPLOAD_CHUNK_BYTES}){
    const bytes=new Uint8Array(await blob.slice(offset,offset+${UPLOAD_CHUNK_BYTES}).arrayBuffer());

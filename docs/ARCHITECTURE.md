@@ -806,8 +806,11 @@ Napplets run under the current persisted account in a separate platform containe
 Changing accounts or locking the application invalidates the execution session
 before new work can start. App storage, grants and settings are scoped by account,
 verified manifest identity. Upgrades retain storage, configuration and capability
-grants; newly required capabilities need fresh consent. Artifact hashes identify
-code and cache entries. Runtime relay AUTH connections and
+grants; newly required capabilities need fresh consent. Declared optional capabilities remain callable before
+authorization, but their first use waits for host consent. Allows and explicit
+denials are account/application-scoped; cancellation is not a saved denial.
+Concurrent requests share authorization, and no operation runs before consent.
+Artifact hashes identify code and cache entries. Runtime relay AUTH connections and
 remote-signer transport never borrow the chat session. Only hash-verified immutable
 artifacts are shared across accounts. Artifact storage groups files by canonical
 application coordinate under `documents/app-artifacts/`, with content hashes

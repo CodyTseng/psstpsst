@@ -19,6 +19,20 @@ conformance to every evolving proposal. The host implements shell, theme,
 storage, resource, link, identity, relay, outbox, upload, intent, inc and config. Unknown
 messages and application-supplied reply envelopes have no authority.
 
+The document exposes supported, declared optional interfaces even before a grant.
+The host gates execution, shares concurrent requests for one capability, and
+serializes decisions by account/source with signing and browser authorization.
+An Allow persists the domain and resumes the original call without reloading.
+Reject persists the domain in `permissions/denied-domains`; later calls fail
+without review. Cancellation and timeout fail only the pending call. Disabling a
+previously granted optional capability in management records rejection; enabling
+it clears rejection. Reset clears grants and denials. Undeclared domains fail
+without prompting. SDK request budgets cover the bounded approval queue, and
+upload byte-transfer deadlines start after access review.
+The generated SDK adapter rejects host error responses before reading success-only
+payloads, including identity public keys, configuration values and INC channel
+lists. Settled requests release their timeout and pending entry immediately.
+
 The reader supports standalone and legacy single-file manifests; see
 [manifest formats](../protocols/napplet-manifests.md). Legacy required domains
 remain required, and an unavailable domain still prevents installation.

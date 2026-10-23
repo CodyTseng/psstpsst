@@ -1,8 +1,5 @@
 import { useErrorToast } from '@/hooks/use-error-toast';
-import { useState } from 'react';
 import { ActivityIndicator,View } from 'react-native';
-import ChevronDown from 'lucide-react-native/icons/chevron-down';
-import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/common/AppText';
 import { AppButton } from '@/components/common/AppButton';
@@ -17,24 +14,30 @@ export function ApplicationAccessControls({required,optional=[],selected,failed=
   onToggle?(domain:string,enabled:boolean):void;onSave?():void;
 }) {
   const {t}=useTranslation(),c=useThemeColors();
-  const [expanded,setExpanded]=useState(false);
   useErrorToast(failed && 'napplets.request_failed');
   const visibleRequired=required.filter(domain=>domain!=='shell');
   const label=(domain:string)=>t(`napplets.capability_${({network:'resource',common:'relay'} as Record<string,string>)[domain]??domain}`,{defaultValue:domain});
-  return <View style={{gap:spacing.md}}>
-    <AppText variant="subtitle">{t('napplets.permissions_access')}</AppText>
-    {optional.length?<AppText variant="caption" tone="muted">{t('napplets.permissions_access_hint')}</AppText>:null}
-    {!selected&&!failed?<ActivityIndicator color={c.accent}/>:null}
-    {selected&&optional.length?<>
-      <ListGroup>{optional.map(domain=><ListRow key={domain} title={label(domain)} trailing={<Toggle value={selected.includes(domain)} disabled={busy}
-        onValueChange={value=>onToggle?.(domain,value)}/>}/>)}</ListGroup>
-      {changed&&onSave?<AppButton label={t('napplets.permissions_save')} loading={busy} onPress={onSave}/>:null}
-    </>:null}
-    {visibleRequired.length?<>
-      <AppButton variant="text" compact compactAxis="none" labelVariant="caption" label={t('napplets.capabilities_required')}
-        accessibilityState={{expanded}} iconRight={expanded?<ChevronUp size={spacing.lg} color={c.text}/>:<ChevronDown size={spacing.lg} color={c.text}/>}
-        onPress={()=>setExpanded(value=>!value)}/>
-      {expanded?<ListGroup>{visibleRequired.map(domain=><ListRow key={domain} title={label(domain)} value={t('napplets.capabilities_required')} valueTone="muted"/>)}</ListGroup>:null}
-    </>:null}
+  if(!visibleRequired.length&&!optional.length)return null;
+  return <View style={{gap:spacing.xl}}>
+    {visibleRequired.length?<View style={{gap:spacing.md}}>
+      <AppText variant="subtitle">{t('napplets.capabilities_required')} · {visibleRequired.length}</AppText>
+      <ListGroup>{visibleRequired.map(domain=><ListRow key={domain} title={label(domain)}
+        value={t('napplets.capabilities_required')} valueTone="muted"/>)}</ListGroup>
+    </View>:null}
+    {optional.length?<View style={{gap:spacing.md}}>
+      <AppText variant="subtitle">{t('napplets.capabilities_optional')} · {optional.length}</AppText>
+      {!selected&&!failed?<ActivityIndicator color={c.accent}/>:null}
+      {selected?<>
+        <ListGroup>{optional.map(domain=>{
+          const enabled=selected.includes(domain);
+          return <ListRow key={domain} title={label(domain)}
+            subtitle={t(enabled?'napplets.permissions_enabled':'napplets.permissions_disabled')}
+            subtitleTone={enabled?'success':'muted'}
+            trailing={<Toggle value={enabled} disabled={busy||!onToggle} accessibilityLabel={label(domain)}
+              onValueChange={value=>onToggle?.(domain,value)}/>}/>;
+        })}</ListGroup>
+        {changed&&onSave?<AppButton label={t('napplets.permissions_save')} loading={busy} onPress={onSave}/>:null}
+      </>:null}
+    </View>:null}
   </View>;
 }

@@ -29,6 +29,8 @@ import { dataEntries, dataKeys, getData, setData, type AppScope } from './reposi
 import { NappletUploads } from './upload';
 import { signingTemplate } from '@/services/signing/event-template';
 import { ApplicationSigner } from '@/services/signing/application-signer';
+import { queueAuthorization } from '@/services/signing/authorization-queue';
+import { NAP_DOMAINS } from './protocol';
 
 export type RuntimePromptChoice = { key: string; title: string; application?: ApplicationListEntry };
 export type RuntimePrompt = {
@@ -45,7 +47,7 @@ export type RuntimePrompt = {
   crypto?: { operation: 'encrypt' | 'decrypt'; algorithm: 'nip04' | 'nip44' };
   device?: { operation: 'save-file' | 'copy-text' };
   browser?: { action: 'window' | 'external' | 'permission' | 'download'; resources?: string[]; url?: string; filename?: string };
-  capabilities?: { required: string[]; optional: string[] };
+  capabilities?: { required: string[]; optional: string[]; requested?: string };
   expiresAt?: number;
 };
 export type RuntimeTheme = {
@@ -132,7 +134,12 @@ export class NappletRuntime {
   private configSubscribed = false;
   private delivery: Record<string, unknown> | null = null;
   private shellReady = false;
+  private readonly availableDomains: string[];
+  private domainRequests = new Map<string, Promise<void>>();
+  private deniedDomains = new Set<string>();
   constructor(private options: RuntimeOptions) {
+    this.availableDomains = [...new Set([...options.domains, ...options.release.optional.filter(domain =>
+      (NAP_DOMAINS as readonly string[]).includes(domain))])];
     this.network = new NappletNetwork(options.accountPubkey);
     this.detachInc = incBroker.attach(this.endpoint, options.accountPubkey, (message) =>
       this.send(message),
@@ -186,7 +193,7 @@ export class NappletRuntime {
     });
     const document = await buildDocument(
       this.options.html,
-      this.options.domains,
+      this.availableDomains,
       this.options.release.title,
       this.options.theme().colors.background,
     );
@@ -272,6 +279,49 @@ export class NappletRuntime {
     if (this.signingPermissions.version !== revision) throw new Error('permission-revoked');
     return event;
   }
+  private async authorizeDomain(domain: string): Promise<void> {
+    this.check();
+    if (this.options.domains.includes(domain) || ['signer', 'clipboard', 'browser'].includes(domain)) return;
+    if (this.deniedDomains.has(domain)) throw new Error('permission-denied');
+    if (!this.options.release.optional.includes(domain) || !this.availableDomains.includes(domain))
+      throw new Error('permission-denied');
+    let pending = this.domainRequests.get(domain);
+    if (!pending) {
+      pending = queueAuthorization(appSigningScope(this.scope), [this.signal], async () => {
+        const saved = await getData(this.scope, 'permissions', 'domains');
+        const granted: string[] = saved ? JSON.parse(saved) : [...this.options.domains];
+        this.check();
+        if (!granted.includes(domain)) {
+          const storedDenied = await getData(this.scope, 'permissions', 'denied-domains');
+          const denied: string[] = storedDenied ? JSON.parse(storedDenied) : [];
+          this.check();
+          if (denied.includes(domain)) {
+            this.deniedDomains.add(domain);
+            throw new Error('permission-denied');
+          }
+          const answer = await this.options.confirm({ title: this.options.release.title, detail: '',
+            app: this.options.release, accountPubkey: this.options.accountPubkey,
+            capabilities: { required: [domain], optional: [], requested: domain } }, this.signal);
+          this.check();
+          if (answer === 'deny') {
+            await setData(this.scope, 'permissions', 'denied-domains', JSON.stringify([...denied, domain]));
+            this.check();
+            this.deniedDomains.add(domain);
+            this.options.permissionsChanged?.();
+          }
+          if (answer !== 'allow') throw new Error('permission-denied');
+          granted.push(domain);
+          await setData(this.scope, 'permissions', 'domains', JSON.stringify(granted));
+          this.check();
+          this.options.permissionsChanged?.();
+        }
+        this.options.domains = [...new Set([...this.options.domains, domain])];
+      });
+      this.domainRequests.set(domain, pending);
+    }
+    try { await pending; this.check(); }
+    finally { if (this.domainRequests.get(domain) === pending) this.domainRequests.delete(domain); }
+  }
   async receive(raw: string): Promise<void> {
     if (this.signal.aborted || raw.length > 1500000) return;
     if (raw === NAPPLET_FRAME_READY_MESSAGE) {
@@ -287,17 +337,18 @@ export class NappletRuntime {
     if (!message || typeof message !== 'object' || typeof message.type !== 'string') return;
     const [domain, ...rest] = message.type.split('.');
     const operation = rest.join('.');
-    if (!requests[domain]?.includes(operation) || !['signer', 'clipboard', 'browser'].includes(domain) && !this.options.domains.includes(domain)) return;
-    if (domain === 'upload' && operation.startsWith('transfer.')) {
-      this.uploads.transfer(message);
+    if (!requests[domain]?.includes(operation)) return;
+    if (domain === 'upload' && operation.startsWith('transfer.') && operation !== 'transfer.start') {
+      if (this.options.domains.includes('upload')) this.uploads.transfer(message);
+      else this.send({ type: 'psst.upload.ack', id: message.id, seq: message.seq, error: 'permission-denied' });
       return;
     }
     if (domain === 'shell') {
       this.shellReady = true;
-      this.result(message, { capabilities: { domains: this.options.domains }, services: [] });
+      this.result(message, { capabilities: { domains: this.availableDomains }, services: [] });
       this.send({
         type: 'shell.init',
-        capabilities: { domains: this.options.domains },
+        capabilities: { domains: this.availableDomains },
         services: [],
       });
       if (this.delivery) {
@@ -322,16 +373,32 @@ export class NappletRuntime {
     )
       return;
     if (message.id) this.pending.add(message.id);
+    const resourceRequest = domain === 'resource' && (operation === 'bytes' || operation === 'bytesMany')
+      ? new AbortController() : undefined;
+    if (resourceRequest) this.resources.set(message.id, resourceRequest);
     try {
+      await this.authorizeDomain(domain);
+      if (resourceRequest) assertNotAborted(resourceRequest.signal);
+      if (domain === 'upload' && operation === 'transfer.start') {
+        this.uploads.transfer(message);
+        return;
+      }
       await this.dispatch(message, domain, operation);
     } catch (error) {
-      if (!this.signal.aborted)
-        this.fail(message, error instanceof Error ? error.message : 'request-failed');
+      if (!this.signal.aborted) {
+        const reason = error instanceof Error ? error.message : 'request-failed';
+        this.fail(message, reason);
+      }
     } finally {
       this.pending.delete(message.id);
+      if (resourceRequest && this.resources.get(message.id) === resourceRequest) this.resources.delete(message.id);
     }
   }
   private fail(message: Message, error: string) {
+    if (message.type === 'upload.transfer.start') {
+      this.send({ type: 'psst.upload.ack', id: message.id, seq: message.seq, error });
+      return;
+    }
     if (
       message.type.endsWith('.subscribe') &&
       ['relay', 'outbox'].includes(message.type.split('.')[0])
@@ -348,7 +415,8 @@ export class NappletRuntime {
       this.result(message, { result: { ok: false, error } });
       return;
     }
-    if (message.type.startsWith('resource.'))
+    if (message.type === 'config.get') this.send({ type: 'config.values', id: message.id, error });
+    else if (message.type.startsWith('resource.'))
       this.send({ type: `${message.type}.error`, id: message.id, error });
     else this.result(message, { ok: false, error });
   }
@@ -597,10 +665,11 @@ export class NappletRuntime {
       this.resourceActive >= 4
     )
       throw new Error('quota-exceeded');
+    const request = this.resources.get(m.id);
+    if (!request) throw new Error('invalid-request');
+    assertNotAborted(request.signal);
     this.counters.resource += urls.length;
     this.resourceActive++;
-    const request = new AbortController();
-    this.resources.set(m.id, request);
     const deadline = new AbortController();
     const timer = setTimeout(() => deadline.abort(), 25000);
     const linked = linkAbort([this.signal, request.signal, deadline.signal]);
@@ -683,7 +752,6 @@ export class NappletRuntime {
     } finally {
       clearTimeout(timer);
       linked.dispose();
-      this.resources.delete(m.id);
       this.resourceActive--;
     }
   }

@@ -20,10 +20,11 @@ export function BrowserPermissions({ sourceId }: { sourceId: string }) {
   const data = useBrowserPermissions(accountPubkey, sourceId);
   useErrorToast(data?.error && 'napplets.request_failed');
   const [editor, setEditor] = useState<{ rule: BrowserPermissionRule; visible: boolean }>();
+  if (data && !data.error && !data.rules?.length && !editor) return null;
   return <View style={{ gap: spacing.md }}>
-    <AppText variant="subtitle">{t('napplets.browser_permission')}</AppText>
+    <AppText variant="subtitle">{t('napplets.browser_permission')}{data?.rules ? ` · ${data.rules.length}` : ''}</AppText>
     {!data ? <ActivityIndicator color={c.accent} /> : data.error ? null
-      : !data.rules?.length ? <AppText tone="muted">{t('napplets.signing_no_rules')}</AppText> : <ListGroup>{data.rules.map(rule =>
+      : !data.rules?.length ? null : <ListGroup>{data.rules.map(rule =>
         <ListRow key={rule.resource} title={browserPermissionLabel(rule.resource, t)}
           subtitle={rule.expiresAt === null ? t('napplets.signing_duration_always') : t('napplets.signing_until', {
             time: new Date(rule.expiresAt).toLocaleString(i18n.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),

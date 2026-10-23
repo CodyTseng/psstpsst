@@ -375,10 +375,12 @@ it('revokes only the selected source rule and resets access independently from a
   expect(signingRules.get(JSON.stringify({ ...source, accountPubkey: 'accountB' }))).toEqual(rules);
   stored.set(key(scope, 'permissions', 'domains'), '["shell"]');
   stored.set(key(scope, 'storage', 'progress'), 'preserve');
+  stored.set(key(scope, 'permissions', 'denied-domains'), '["identity"]');
   await expect(nappletService.revokeSigningRule(app, rules[0].key, 'accountB')).rejects.toThrow('session-closed');
   await nappletService.revoke(app, 'accountA');
   expect(clearBrowserPermissions).toHaveBeenCalledWith(source);
   expect(stored.has(key(scope, 'permissions', 'domains'))).toBe(false);
+  expect(stored.has(key(scope, 'permissions', 'denied-domains'))).toBe(false);
   expect(signingRules.has(JSON.stringify(source))).toBe(false);
   expect(stored.get(key(scope, 'storage', 'progress'))).toBe('preserve');
 });
@@ -415,6 +417,10 @@ it('preserves required domains, reloads changed app access and isolates stale ac
   expect(active.close).toHaveBeenCalledTimes(1);
   expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['shell', 'storage', 'identity']);
   expect(nappletStore.getState().panel?.page).toBe('settings');
+  await nappletService.setDomainPermissions(app, ['shell', 'storage'], 'accountA');
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'denied-domains'))!)).toEqual(['identity']);
+  await nappletService.setDomainPermissions(app, ['shell', 'storage', 'identity'], 'accountA');
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'denied-domains'))!)).toEqual([]);
 });
 
 it('shares without replacing the execution container and resumes only its own session', async () => {

@@ -41,6 +41,7 @@ test(
         await napplet.storage.setItem('key','value');results.stored=await napplet.storage.getItem('key');
         await napplet.config.registerSchema({type:'object',properties:{enabled:{type:'boolean',default:true}}});
         results.config=await napplet.config.get();
+        try{await napplet.config.get();}catch(error){results.configDenied=error.message;}
         const image=await napplet.resource.bytes('https://images.example/image.svg');results.imageType=image.type;
         results.uploadInfo=await napplet.upload.info();
         results.uploadStatuses=[];
@@ -75,6 +76,7 @@ test(
       const messages = [];
       const uploadChunks = [];
       let uploadBytes;
+      let configReads = 0;
       let resolveFirstFrame;
       const firstFrame = new Promise((resolve) => { resolveFirstFrame = resolve; });
       let attemptedNetwork = 0;
@@ -114,7 +116,8 @@ test(
         else if (m.type === 'storage.get') reply.value = 'value';
         else if (m.type === 'config.registerSchema') reply.ok = true;
         else if (m.type === 'config.get')
-          reply = { type: 'config.values', id: m.id, values: { enabled: true } };
+          reply = ++configReads === 2 ? { type: 'config.values', id: m.id, error: 'permission-denied' }
+            : { type: 'config.values', id: m.id, values: { enabled: true } };
         else if (m.type === 'upload.info') reply.info={rails:[{rail:'blossom',enabled:true}]};
         else if (m.type === 'upload.status') reply.status={ok:true,uploadId:m.uploadId,status:'complete',rail:'blossom',url:'https://media.example/file',updatedAt:Date.now()};
         else if (m.type === 'resource.bytes') {
@@ -147,13 +150,14 @@ test(
       assert.equal(result.pubkey, 'a'.repeat(64));
       assert.equal(result.stored, 'value');
       assert.deepEqual(result.config, { enabled: true });
+      assert.equal(result.configDenied, 'permission-denied');
       assert.equal(result.imageType, 'image/png');
       assert.equal(result.upload.status,'pending');
       assert.equal(result.uploadStatus.status,'complete');
       assert.deepEqual(result.uploadStatuses,['complete']);
       assert.equal(uploadChunks.length,3);
       assert.equal(result.domains.includes('dm'), false);
-      assert.equal(await frame.evaluate(() => typeof window.nostr), 'undefined');
+      assert.equal(await frame.evaluate(() => typeof window.nostr?.getPublicKey), 'function');
       assert.ok(messages.some((message) => message.type === 'storage.set'));
       for (const [background, expected, changed, changedExpected] of [
         ['#F2F2F7', 'rgb(242, 242, 247)', '#09090B', 'rgb(9, 9, 11)'],

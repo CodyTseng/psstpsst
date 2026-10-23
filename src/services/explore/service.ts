@@ -361,6 +361,8 @@ export const exploreService = {
     await clearBrowserPermissions({ accountPubkey: account, sourceId });
     check(account, generation);
     await setData({ accountPubkey: account, appKey: sourceId }, 'permissions', 'domains', null);
+    check(account, generation);
+    await setData({ accountPubkey: account, appKey: sourceId }, 'permissions', 'denied-domains', null);
     check(account,generation);exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));
   },
   signingSource: applicationSigningSource,

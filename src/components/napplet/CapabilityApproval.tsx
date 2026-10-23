@@ -16,6 +16,9 @@ export function CapabilityActions({ prompt, duration = 'allow', menuOpen = false
   prompt: QueuedPrompt; duration?: string; menuOpen?: boolean; onMenuChange?: (anchor: ContextMenuAnchor | null) => void;
 }) {
   const { t } = useTranslation();
+  if (prompt.capabilities?.requested) return <ActionRow layout="horizontal"
+    confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
+    dismiss={{ label: t('napplets.signing_reject'), onPress: () => nappletService.answer(prompt.requestId, 'deny') }} />;
   if (prompt.browser?.action === 'permission' && rememberBrowserPermission(prompt.browser.resources ?? []))
     return <PermissionActions prompt={prompt} duration={duration} menuOpen={menuOpen} onMenuChange={onMenuChange}
       remember label={t('napplets.signing_remember')} />;

@@ -117,6 +117,18 @@ it('omits optional capabilities from launch consent and grants only required acc
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'domains:[]');
 });
 
+it.each(['light', 'dark'] as const)('reviews the requested optional capability with explicit Allow/Reject in %s mode', scheme => {
+  mockScheme = scheme;
+  const capability = { ...prompt, signing: undefined,
+    capabilities: { required: ['config'], optional: [], requested: 'config' } };
+  act(() => { renderer = create(<CapabilityApproval prompt={capability} />); });
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toContain('napplets.capability_config');
+  act(() => { void button('napplets.signing_reject').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'deny');
+  act(() => { void button('napplets.allow').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'allow');
+});
+
 it('keeps the fixed footer bound to its request and resets duration before a new request is displayed', () => {
   mockPrompt = prompt;
   act(() => { renderer = create(<NappletOverlays />); });
