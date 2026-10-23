@@ -1,3 +1,4 @@
+import { WebLn } from '../webln';
 import { ExploreRuntime } from '../runtime';
 import { platform } from '@/platform';
 import { NappletNetwork } from '@/services/napplet/network';
@@ -6,6 +7,7 @@ import { invalidateSigning } from '@/services/signing/changes';
 import type { ExploreEntry } from '../model';
 import { loadSiteBlob } from '@/services/napplet/artifacts';
 import { getData } from '@/services/napplet/repository';
+jest.mock('../webln', () => ({ WebLn: jest.fn().mockImplementation(() => ({ handle: jest.fn(async () => true) })) }));
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
@@ -250,4 +252,23 @@ it('does not open a nsite after cancellation while author servers are loading',a
   await runtime.stop();finish(['https://new.example/']);
   await cancelled;
   expect(platform.napplet.openPage).not.toHaveBeenCalled();
+});
+
+
+it('binds WebLN to the host source and replaces its authority on navigation', async () => {
+  message('https://site.example', 'one', 'webln.enable'); await flush();
+  expect(JSON.parse(jest.mocked(platform.napplet.send).mock.calls.at(-1)![1]).reply.error).toBeUndefined();
+  expect(WebLn).toHaveBeenCalledTimes(1);
+  const first = jest.mocked(WebLn).mock.calls[0];
+  expect(first.slice(0, 3)).toEqual(['account', 'https://site.example', 'site.example']);
+  expect(first[3].aborted).toBe(false);
+  message('https://other.example', 'two', 'webln.enable'); await flush();
+  expect(first[3].aborted).toBe(true);
+  expect(jest.mocked(WebLn).mock.calls[1][1]).toBe('https://other.example');
+});
+it('rejects wallet operations on insecure website origins', async () => {
+  message('http://site.example', 'one', 'webln.enable'); await flush();
+  expect(WebLn).not.toHaveBeenCalled();
+  const raw = jest.mocked(platform.napplet.send).mock.calls.at(-1)![1];
+  expect(JSON.parse(raw).reply.error).toBe('insecure-origin');
 });

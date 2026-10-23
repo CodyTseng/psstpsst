@@ -1284,5 +1284,10 @@
     "try_again": "Réessayez",
     "post_failed": "Impossible de publier votre commentaire. Votre brouillon est conservé.",
     "public_as": "Publication publique en tant que {{name}}"
+  },
+  "webln": {
+    "connect_title": "Connecter un portefeuille",
+    "connect_detail": "Autorisez cette page à accéder au portefeuille. Vous choisissez le portefeuille et confirmez chaque demande.",
+    "invoice_title": "Créer une demande de paiement"
   }
 }

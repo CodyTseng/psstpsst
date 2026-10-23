@@ -74,3 +74,21 @@ it('groups initial remote events until EOSE and forwards later events separately
   expect(initial).toHaveBeenCalledWith([{id:'old'}]);expect(live).toHaveBeenCalledWith({id:'new'});
   close();await Promise.resolve();
 });
+
+it.each([true, false])('exposes WebLN with document-correlated replies (napp: %s)', async napp => {
+  const post = jest.fn();
+  const page: any = { __exploreDocumentToken: 'document', __psstExplore: { post } }; page.top = page;
+  new Function('window', 'addEventListener', 'requestAnimationFrame', 'document', exploreBridge(napp))(
+    page, jest.fn(), jest.fn(), documentBeforeReady);
+  const payment = page.webln.sendPayment('invoice');
+  const request = JSON.parse(post.mock.calls[0][0]);
+  expect(request).toMatchObject({ method: 'webln.sendPayment', args: ['invoice'] });
+  page.__exploreReceive({ id: request.id, nonce: 'old-document', result: { preimage: 'wrong' } });
+  page.__exploreReceive({ id: request.id, nonce: request.nonce, result: { preimage: 'proof' } });
+  await expect(payment).resolves.toEqual({ preimage: 'proof' });
+});
+it('never installs wallet authority in a subframe', () => {
+  const page: any = { top: {} };
+  new Function('window', exploreBridge(false))(page);
+  expect(page.webln).toBeUndefined();
+});

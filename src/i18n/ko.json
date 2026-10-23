@@ -1279,5 +1279,10 @@
     "try_again": "다시 시도하세요",
     "post_failed": "댓글을 게시하지 못했습니다. 초안은 유지됩니다.",
     "public_as": "{{name}} 이름으로 공개 게시"
+  },
+  "webln": {
+    "connect_title": "지갑 연결",
+    "connect_detail": "이 페이지의 지갑 접근을 허용합니다. 요청할 때마다 직접 지갑을 선택하고 확인합니다.",
+    "invoice_title": "결제 요청 만들기"
   }
 }

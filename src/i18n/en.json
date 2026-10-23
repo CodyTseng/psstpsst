@@ -1279,5 +1279,10 @@
     "try_again": "Try again",
     "post_failed": "Couldn't publish your comment. Your draft is still here.",
     "public_as": "Posting publicly as {{name}}"
+  },
+  "webln": {
+    "connect_title": "Connect wallet",
+    "connect_detail": "Allow wallet access for this page. You choose the wallet and confirm each request.",
+    "invoice_title": "Create payment request"
   }
 }

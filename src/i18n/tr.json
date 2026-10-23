@@ -1279,5 +1279,10 @@
     "try_again": "Tekrar dene",
     "post_failed": "Yorumun yayınlanamadı. Taslağın korundu.",
     "public_as": "{{name}} olarak herkese açık paylaşım"
+  },
+  "webln": {
+    "connect_title": "Cüzdan bağla",
+    "connect_detail": "Bu sayfanın cüzdana erişmesine izin verin. Her istekte cüzdanı siz seçer ve onaylarsınız.",
+    "invoice_title": "Ödeme isteği oluştur"
   }
 }

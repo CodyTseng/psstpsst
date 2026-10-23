@@ -23,7 +23,9 @@ import { SigningApproval, SigningActions, SigningDurationMenu } from './SigningA
 import { SigningRequester, SigningAccountAvatar, signingRequestTitle } from './SigningRequestDetails';
 import { UploadApproval } from './UploadApproval';
 import { CapabilityActions, CapabilityApproval } from './CapabilityApproval';
+import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import type { RuntimePromptChoice } from '@/services/napplet/runtime';
+import { WalletApproval } from './WalletApproval';
 import { ApplicationChoiceRow } from './ApplicationChoiceRow';
 import { useOwnsApplicationTaskOverlays } from './ApplicationTaskContext';
 
@@ -42,6 +44,10 @@ function NappletOverlayContent() {
   const openPublisher = useOpenPublisher();
   const { prompt, approvalClosing, configuration, panel, accountPubkey } = useNapplets();
   const pending = useRef<(() => void) | null>(null);
+  const [lastWalletPrompt, setLastWalletPrompt] = useState<QueuedPrompt | null>(null);
+  const currentWalletPrompt = prompt?.wallet ? prompt : null;
+  if (currentWalletPrompt !== lastWalletPrompt && (currentWalletPrompt || !approvalClosing)) setLastWalletPrompt(currentWalletPrompt);
+  const walletPrompt = currentWalletPrompt ?? (approvalClosing ? lastWalletPrompt : null);
   const { t } = useTranslation();
   const [choice, setChoice] = useState<{ id: string; value: string }>();
   const [menu, setMenu] = useState<{ id: string; anchor: ContextMenuAnchor }>();
@@ -70,6 +76,8 @@ function NappletOverlayContent() {
     };
     nappletService.closePanel();
   }
+  if (walletPrompt) return <WalletApproval key={walletPrompt.requestId} prompt={walletPrompt}
+    visible={!approvalClosing} onClosed={() => nappletService.overlayClosed()} />;
   return (
     <BottomSheet<RuntimePromptChoice>
       visible={!approvalClosing && (!!prompt || !!configuration || !!panel)}

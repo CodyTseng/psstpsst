@@ -1279,5 +1279,10 @@
     "try_again": "請重試",
     "post_failed": "留言發布失敗，草稿已保留。",
     "public_as": "以 {{name}} 的身分公開留言"
+  },
+  "webln": {
+    "connect_title": "連接錢包",
+    "connect_detail": "允許此頁面存取錢包。每次請求均由您選擇錢包並確認。",
+    "invoice_title": "建立收款請求"
   }
 }

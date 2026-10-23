@@ -526,6 +526,13 @@
       "when": 1793404800000,
       "tag": "0074_application-cache-retention",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1793491200000,
+      "tag": "0075_webln-payments",
+      "breakpoints": true
     }
   ]
 }

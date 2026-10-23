@@ -1,3 +1,4 @@
+import { WalletApproval } from '../WalletApproval';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet, Text } from 'react-native';
 import { SigningApproval, SigningActions } from '../SigningApproval';
@@ -55,14 +56,16 @@ jest.mock('@/components/common/BottomSheet', () => ({
   },
 }));
 let mockPrompt: QueuedPrompt | null = null;
-jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ prompt: mockPrompt, configuration: null }) }));
+let mockApprovalClosing = false;
+jest.mock('../WalletApproval', () => ({ WalletApproval: () => null }));
+jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ prompt: mockPrompt, approvalClosing: mockApprovalClosing, configuration: null }) }));
 
 let renderer: ReactTestRenderer;
 const prompt = {
   requestId: 'request-A', expiresAt: Date.now() + 60000, queued: 0, title: 'Game', detail: '',
   signing: { operation: 'publish', kind: 1, accountPubkey: 'a'.repeat(64), content: 'Hello from the app', tags: [], createdAt: 100, relays: ['wss://relay.example/'] },
 } satisfies QueuedPrompt;
-afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); });
+afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); mockApprovalClosing = false; });
 function selectDuration(value: string) {
   act(() => { renderer.root.findByType(SigningActions).props.onMenuChange({ x: 180, y: 700 }); });
   const menu = renderer.root.findByType(ActionMenuPanel);
@@ -338,4 +341,21 @@ it('bounds long plaintext until expanded and copies the complete original', asyn
   act(() => { renderer.update(<SigningRequestDetails request={{ ...request, content: 'another input'.repeat(100) }} />); });
   texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).not.toContain('another input'.repeat(100));
+});
+
+
+it('retains a dedicated wallet sheet until its dismissal completes', () => {
+  mockPrompt = { ...prompt, signing: undefined, accountPubkey: 'account', wallet: { operation: 'connect' } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  expect(renderer.root.findByType(WalletApproval).props.visible).toBe(true);
+  mockPrompt = null; mockApprovalClosing = true;
+  act(() => { renderer.update(<NappletOverlays />); });
+  const sheet = renderer.root.findByType(WalletApproval);
+  expect(sheet.props.visible).toBe(false);
+  expect(sheet.props.prompt.requestId).toBe(prompt.requestId);
+  act(() => { sheet.props.onClosed(); });
+  expect(nappletService.overlayClosed).toHaveBeenCalled();
+  mockApprovalClosing = false;
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(renderer.root.findAllByType(WalletApproval)).toHaveLength(0);
 });

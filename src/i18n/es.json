@@ -1284,5 +1284,10 @@
     "try_again": "Inténtalo de nuevo",
     "post_failed": "No se pudo publicar tu comentario. Se ha conservado el borrador.",
     "public_as": "Publicando como {{name}} de forma pública"
+  },
+  "webln": {
+    "connect_title": "Conectar cartera",
+    "connect_detail": "Permite que esta página acceda a la cartera. Tú eliges la cartera y confirmas cada solicitud.",
+    "invoice_title": "Crear solicitud de pago"
   }
 }

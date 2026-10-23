@@ -5,6 +5,7 @@ import { NappletNetwork } from '@/services/napplet/network';
 import { SigningPermissions } from '@/services/signing/permissions';
 import { ApplicationSigner } from '@/services/signing/application-signer';
 import { BrowserActions } from './browser-actions';
+import type { WebLn } from './webln';
 import i18n from '@/i18n/core';
 import { signingRevision } from '@/services/signing/changes';
 import { nip19, verifyEvent } from 'nostr-tools';
@@ -39,6 +40,7 @@ export class ExploreRuntime {
   private sync?: NappSync;
   private device?: NappDevice;
   private browser?: BrowserActions;
+  private webLn?: WebLn;
   private permissions?: SigningPermissions;
   private document = '';
   private origin = '';
@@ -188,7 +190,7 @@ export class ExploreRuntime {
     this.nonce = '';
     this.streams.clear();
     this.documentLife.abort();
-    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined;
+    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined; this.webLn = undefined;
     this.documentLife = new AbortController();
     this.pending.clear();
     this.document = message.document;
@@ -223,12 +225,12 @@ export class ExploreRuntime {
       current();
       const result = await this.dispatch(request.method, request.args, current, signal, nonce!);
       current();
-      this.log('debug', method, { durationMs: Date.now() - started,
+      if (!method.startsWith('webln.')) this.log('debug', method, { durationMs: Date.now() - started,
         ...(Array.isArray(result) ? { count: result.length } : {}) });
       await this.reply(document, { id, nonce, result });
     }
     catch (error) {
-      if (!signal.aborted && !isPermissionDenied(error)) this.log('warn', method, { error: error instanceof Error ? error.message.slice(0, 240) : 'request-failed' });
+      if (!method.startsWith('webln.') && !signal.aborted && !isPermissionDenied(error)) this.log('warn', method, { error: error instanceof Error ? error.message.slice(0, 240) : 'request-failed' });
       if (id && !signal.aborted)
         await this.reply(document, { id, nonce, error: error instanceof Error ? error.message : 'request-failed' });
     }
@@ -260,6 +262,20 @@ export class ExploreRuntime {
       } });
   }
   private async dispatch(method: string, args: any[], current: () => void, signal: AbortSignal, nonce: string): Promise<unknown> {
+    if (method.startsWith('webln.')) {
+      if (!this.permissions) throw new Error('invalid-origin');
+      const source = this.entry.kind === 'website' ? this.origin : this.entry.key;
+      if (this.entry.kind === 'website' && new URL(this.origin).protocol !== 'https:') throw new Error('insecure-origin');
+      if (!this.webLn) {
+        // Defer wallet/database initialization until a page actually requests it.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { WebLn } = require('./webln') as typeof import('./webln');
+        current();
+        this.webLn ??= new WebLn(this.account, source, this.entry.kind === 'website' ? new URL(this.origin).host : this.entry.title,
+          signal, this.options.confirm);
+      }
+      return this.webLn.handle(method.slice(6), args);
+    }
     if (method.startsWith('browser.')) return this.browserActions().handle(method.slice(8), args);
     if (method === 'ready') {
       this.presented=true;this.options.presented?.();
@@ -461,7 +477,7 @@ export class ExploreRuntime {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.pending.clear();
-    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined; this.permissions = undefined;
+    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined; this.webLn = undefined; this.permissions = undefined;
     this.network.destroy();
     const container = this.containerId ? Promise.resolve(this.containerId) : this.opening;
     this.containerId = undefined;

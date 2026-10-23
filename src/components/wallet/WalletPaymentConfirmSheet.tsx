@@ -1,7 +1,7 @@
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Check from 'lucide-react-native/icons/check';
 import { Wallet } from '@solar-icons/react-native/category/money/Linear/Wallet';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -9,7 +9,7 @@ import { ActionRow } from '@/components/common/ActionRow';
 import { AppText } from '@/components/common/AppText';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { ListRow } from '@/components/common/ListRow';
-import type { WalletRow } from '@/services/wallet/wallet.service';
+import type { WalletOption } from '@/lib/wallet/approval';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, useThemeColors } from '@/theme';
 
@@ -19,7 +19,14 @@ type Props = {
   visible: boolean;
   amount: string;
   description?: string | null;
-  wallets: WalletRow[];
+  wallets: WalletOption[];
+  requester?: ReactNode;
+  headerAction?: ReactNode;
+  title?: string;
+  amountEditor?: ReactNode;
+  confirmLabel?: string;
+  confirmDisabled?: boolean;
+  dismissOnBackdropPress?: boolean;
   selectedWalletId: string | null;
   onClose: () => void;
   onClosed?: () => void;
@@ -39,6 +46,13 @@ export function WalletPaymentConfirmSheet({
   onClosed,
   onConfirm,
   onSelectWallet,
+  requester,
+  headerAction,
+  title,
+  amountEditor,
+  confirmLabel,
+  confirmDisabled,
+  dismissOnBackdropPress,
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
@@ -88,10 +102,14 @@ export function WalletPaymentConfirmSheet({
         visible={visible && walletPickerPhase === 'idle'}
         onClose={closeSheet}
         onClosed={handleConfirmClosed}
-        title={t('wallet.confirm_payment')}
+        title={title ?? t('wallet.confirm_payment')}
+        headerAction={headerAction}
+        dismissOnBackdropPress={dismissOnBackdropPress}
         contentStyle={{ gap: spacing.xl }}
       >
+        {requester}
         <WalletAmountDisplay amount={amount} />
+        {amountEditor}
         {description ? (
           <AppText variant="body" tone="muted" align="center" numberOfLines={2}>
             {description}
@@ -111,7 +129,7 @@ export function WalletPaymentConfirmSheet({
         />
         <ActionRow
           layout="vertical"
-          confirm={{ label: t('wallet.pay'), disabled: !selectedWallet, onPress: confirmPayment }}
+          confirm={{ label: confirmLabel ?? t('wallet.pay'), disabled: !selectedWallet || confirmDisabled, onPress: confirmPayment }}
         />
       </BottomSheet>
 
@@ -121,6 +139,7 @@ export function WalletPaymentConfirmSheet({
           onClose={closeWalletPicker}
           onClosed={handleWalletPickerClosed}
           title={t('wallet.select_wallet')}
+          dismissOnBackdropPress={dismissOnBackdropPress}
           contentStyle={{ gap: spacing.xl }}
         >
           <View>

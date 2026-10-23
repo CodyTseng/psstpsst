@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { build } from 'esbuild';
 import electron from 'electron';
 
-test('Explore serves verified bundles and binds NIP-07 requests and replies to the real top-level document', {timeout:60000}, async()=>{
+test('Explore serves verified bundles and binds NIP-07 and WebLN requests and replies to the real top-level document', {timeout:60000}, async()=>{
  const dir=await mkdtemp(path.join(tmpdir(),'psst-explore-electron-'));
  try {
   await build({entryPoints:['desktop/napplet-preload.ts'],bundle:true,platform:'node',format:'cjs',external:['electron'],outfile:path.join(dir,'napplet-preload.js')});
@@ -22,7 +22,7 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
    const wait=ms=>new Promise(r=>setTimeout(r,ms));
    app.setPath('userData',${JSON.stringify(path.join(dir,'profile'))});
    app.whenReady().then(async()=>{
-    const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html');if(req.url==='/child'){res.end('<p>Child</p>');return;}res.end('<script>window.result=nostr.getPublicKey();</script><iframe src="/child"></iframe>');});
+    const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html');if(req.url==='/child'){res.end('<p>Child</p>');return;}res.end('<script>window.result=nostr.getPublicKey();window.walletResult=webln.getInfo();</script><iframe src="/child"></iframe>');});
     await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
     const owner=new BrowserWindow({show:false,webPreferences:{preload:${JSON.stringify(path.join(dir,'owner-preload.js'))},sandbox:true,contextIsolation:true,nodeIntegration:false}});
     registerNappletHandlers(e=>e.sender===owner.webContents&&e.senderFrame===owner.webContents.mainFrame,()=>owner);
@@ -31,7 +31,7 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
     const events=()=>owner.webContents.executeJavaScript('testHost.events()');
     const page={sourceId:'account:naddr',network:false,script:'',bootstrap:{napp:false,domains:[],instance:'fixture'},files:[
       {path:'/index.html',mime:'text/html',body:Buffer.from('<script src="/app.js"></script>').toString('base64')},
-      {path:'/app.js',mime:'text/javascript',body:Buffer.from('window.loaded=true;window.result=nostr.getPublicKey();').toString('base64')} ]};
+      {path:'/app.js',mime:'text/javascript',body:Buffer.from('window.loaded=true;window.result=nostr.getPublicKey();window.walletResult=webln.getInfo();').toString('base64')} ]};
     const id=await invoke(IPC.exploreOpen,page);
     let guest=webContents.getAllWebContents().find(w=>w.getURL().includes('.explore.psstpsst.invalid'));assert(guest);
     await invoke(IPC.nappletBounds,id,{x:0,y:0,width:400,height:600},true);
@@ -43,6 +43,15 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
     const envelope=request.message;assert.equal(envelope.origin,new URL(guest.getURL()).origin);
     await invoke(IPC.nappletSend,id,JSON.stringify({document:envelope.document,reply:{id:'1',nonce:JSON.parse(envelope.raw).nonce,result:'key'}}));
     assert.equal(await guest.executeJavaScript('window.result'),'key');
+    let walletRequest;
+    for(let i=0;i<100;i++){walletRequest=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===id&&e.message.raw?.includes('webln.getInfo'));if(walletRequest)break;await wait(20);}
+    assert(walletRequest,'document-start WebLN request must be delivered');
+    const walletEnvelope=walletRequest.message,walletRaw=JSON.parse(walletEnvelope.raw);
+    assert.equal(walletEnvelope.origin,envelope.origin);
+    assert.equal(walletEnvelope.document,envelope.document);
+    await invoke(IPC.nappletSend,id,JSON.stringify({document:walletEnvelope.document,reply:{id:walletRaw.id,nonce:walletRaw.nonce,result:{node:{alias:'Wallet',pubkey:''},methods:['sendPayment']}}}));
+    assert.deepEqual(await guest.executeJavaScript('window.walletResult'),{node:{alias:'Wallet',pubkey:''},methods:['sendPayment']});
+
     assert.equal(await guest.executeJavaScript('typeof require'),'undefined');
     assert.equal(await guest.executeJavaScript('typeof window.__psstNapplet'),'undefined');
     const streaming=await invoke(IPC.exploreOpen,{sourceId:'account:streams',network:false,script:'',bootstrap:{napp:true,domains:['config','inc'],instance:'fixture'},files:[
@@ -72,7 +81,7 @@ test('Explore serves verified bundles and binds NIP-07 requests and replies to t
     await guest.executeJavaScript('location.href="/next"');await wait(250);
     await invoke(IPC.nappletSend,website,JSON.stringify({document:first.message.document,reply:{id:'1',nonce:JSON.parse(first.message.raw).nonce,result:'stale'}}));
     assert.equal(await guest.executeJavaScript('Promise.race([window.result,new Promise(r=>setTimeout(()=>r("pending"),50))])'),'pending');
-    const frame=guest.mainFrame.frames[0];if(frame) assert.equal(await frame.executeJavaScript('typeof window.nostr'),'undefined');
+    const frame=guest.mainFrame.frames[0];if(frame) { assert.equal(await frame.executeJavaScript('typeof window.nostr'),'undefined'); assert.equal(await frame.executeJavaScript('typeof window.webln'),'undefined'); }
     await guest.executeJavaScript('localStorage.setItem("account-secret","A")');
     const openWebsite=async account=>{
       const id=await invoke(IPC.exploreOpen,{url:'http://127.0.0.1:'+port+'/',sourceId:'site',storageId:account,network:true,script:'',bootstrap:{napp:false,domains:[],instance:'fixture'}});

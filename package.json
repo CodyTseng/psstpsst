@@ -148,6 +148,8 @@
     "electron:package:dev": "EXPO_PUBLIC_APP_ENV=development npm run electron:package:base -- --publish never --config.mac.forceCodeSigning=false --config.mac.identity=null --config.mac.hardenedRuntime=false --config.mac.notarize=false",
     "lint": "expo lint",
     "test": "jest --runInBand",
+    "test:webln-ui": "node --test scripts/webln-approvals.test.mjs",
+    "test:webln-database": "node --test scripts/webln-payments.test.mjs",
     "test:dependencies": "node --test scripts/dependency-security.test.mjs",
     "postinstall": "patch-package --error-on-fail && node scripts/generate-napplet-prelude.mjs && node scripts/generate-napp-helpers.mjs",
     "licenses:generate": "node scripts/generate-licenses.mjs",

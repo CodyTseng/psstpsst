@@ -1284,5 +1284,10 @@
     "try_again": "Tente novamente",
     "post_failed": "Não foi possível publicar seu comentário. O rascunho foi mantido.",
     "public_as": "Publicando como {{name}} de forma pública"
+  },
+  "webln": {
+    "connect_title": "Conectar carteira",
+    "connect_detail": "Permita que esta página acesse a carteira. Você escolhe a carteira e confirma cada solicitação.",
+    "invoice_title": "Criar solicitação de pagamento"
   }
 }

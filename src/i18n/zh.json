@@ -1279,5 +1279,10 @@
     "try_again": "请重试",
     "post_failed": "评论发布失败，草稿已保留。",
     "public_as": "以 {{name}} 的身份公开评论"
+  },
+  "webln": {
+    "connect_title": "连接钱包",
+    "connect_detail": "允许此页面访问钱包。每次请求均由您选择钱包并确认。",
+    "invoice_title": "创建收款请求"
   }
 }

@@ -1289,5 +1289,10 @@
     "try_again": "Spróbuj ponownie",
     "post_failed": "Nie udało się opublikować komentarza. Wersja robocza została zachowana.",
     "public_as": "Publikowanie publicznie jako {{name}}"
+  },
+  "webln": {
+    "connect_title": "Połącz portfel",
+    "connect_detail": "Zezwól tej stronie na dostęp do portfela. Przy każdym żądaniu wybierasz portfel i potwierdzasz operację.",
+    "invoice_title": "Utwórz prośbę o płatność"
   }
 }

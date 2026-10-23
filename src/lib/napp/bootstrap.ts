@@ -122,6 +122,14 @@ export function install(options: {
     catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }
   });
   installBrowserCompat(call);
+  (window as any).webln = {
+    enable: () => call('webln.enable'),
+    isEnabled: () => call('webln.isEnabled'),
+    getInfo: () => call('webln.getInfo'),
+    sendPayment: (invoice: string) => call('webln.sendPayment', [invoice]),
+    makeInvoice: (args: unknown) => call('webln.makeInvoice', [args]),
+  };
+
   (window as any).nostr = { getPublicKey: () => call('getPublicKey'), signEvent: (event: unknown) => call('signEvent', [event]) };
   for (const algorithm of ['nip04', 'nip44']) (window as any).nostr[algorithm] = {
     encrypt: (pubkey: string, text: string) => call(`${algorithm}.encrypt`, [pubkey, text]),

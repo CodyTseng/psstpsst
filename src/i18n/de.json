@@ -1279,5 +1279,10 @@
     "try_again": "Versuche es erneut",
     "post_failed": "Dein Kommentar konnte nicht veröffentlicht werden. Dein Entwurf bleibt erhalten.",
     "public_as": "Öffentlich posten als {{name}}"
+  },
+  "webln": {
+    "connect_title": "Wallet verbinden",
+    "connect_detail": "Erlaube dieser Seite den Wallet-Zugriff. Du wählst die Wallet und bestätigst jede Anfrage.",
+    "invoice_title": "Zahlungsanforderung erstellen"
   }
 }

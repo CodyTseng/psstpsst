@@ -1284,5 +1284,10 @@
     "try_again": "Riprova",
     "post_failed": "Impossibile pubblicare il commento. La bozza è stata conservata.",
     "public_as": "Pubblicazione pubblica come {{name}}"
+  },
+  "webln": {
+    "connect_title": "Collega portafoglio",
+    "connect_detail": "Consenti a questa pagina di accedere al portafoglio. Scegli tu il portafoglio e confermi ogni richiesta.",
+    "invoice_title": "Crea richiesta di pagamento"
   }
 }

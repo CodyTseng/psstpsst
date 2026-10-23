@@ -41,3 +41,5 @@ export * from './napplets';
 export * from './signing-authorizations';
 export * from './explore';
 export * from './local-relay';
+
+export * from './webln-payments';

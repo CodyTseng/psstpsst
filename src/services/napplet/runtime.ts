@@ -1,3 +1,4 @@
+import type { WalletApprovalRequest } from '@/lib/wallet/approval';
 import { signingSourceFromLegacyKey } from '@/services/signing/source';
 import { applicationPresentation, type ApplicationInfo, type ApplicationListEntry } from '@/services/explore/model';
 import { NappDevice } from '@/services/explore/device';
@@ -49,6 +50,7 @@ export type RuntimePrompt = {
   device?: { operation: 'save-file' | 'copy-text' };
   browser?: { action: 'window' | 'external' | 'permission' | 'download'; resources?: string[]; url?: string; filename?: string };
   capabilities?: { required: string[]; optional: string[]; requested?: string };
+  wallet?: WalletApprovalRequest;
   expiresAt?: number;
 };
 export type RuntimeTheme = {

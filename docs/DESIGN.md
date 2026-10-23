@@ -1156,6 +1156,15 @@ sheet. Sensitive capabilities expose one-visit, timed, and permanent decisions;
 screen capture and unknown capabilities require a fresh decision. Saved website
 capabilities can be changed or reset in application permissions.
 
+Wallet access consent identifies the host-verified source without selecting a
+wallet. Payment and invoice reviews reuse the existing wallet confirmation and
+wallet picker sheets, adding the requesting source. Each website payment shows
+the exact signed amount in sats, lets the user choose an eligible wallet, and
+requires confirmation plus system authentication or the account's wallet PIN.
+Wallet sheets use the header close button to cancel and omit a duplicate Cancel
+action. They never offer remembered payment approval. Creating a payment request
+shows its amount and allows editing only within the application's constraints.
+
 ## 12. Hard Rules
 
 Breaking a rule requires explicit approval and a reason in the PR or commit
