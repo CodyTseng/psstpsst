@@ -31,6 +31,7 @@ import { signingTemplate } from '@/services/signing/event-template';
 import { ApplicationSigner } from '@/services/signing/application-signer';
 import { queueAuthorization } from '@/services/signing/authorization-queue';
 import { NAP_DOMAINS } from './protocol';
+import { readDomainPermissions } from './domain-permissions';
 
 export type RuntimePromptChoice = { key: string; title: string; application?: ApplicationListEntry };
 export type RuntimePrompt = {
@@ -288,13 +289,9 @@ export class NappletRuntime {
     let pending = this.domainRequests.get(domain);
     if (!pending) {
       pending = queueAuthorization(appSigningScope(this.scope), [this.signal], async () => {
-        const saved = await getData(this.scope, 'permissions', 'domains');
-        const granted: string[] = saved ? JSON.parse(saved) : [...this.options.domains];
+        const { domains: granted, denied } = await readDomainPermissions(this.scope, this.options.release, this.options.domains);
         this.check();
         if (!granted.includes(domain)) {
-          const storedDenied = await getData(this.scope, 'permissions', 'denied-domains');
-          const denied: string[] = storedDenied ? JSON.parse(storedDenied) : [];
-          this.check();
           if (denied.includes(domain)) {
             this.deniedDomains.add(domain);
             throw new Error('permission-denied');

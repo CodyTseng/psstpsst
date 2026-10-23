@@ -1060,6 +1060,8 @@ decisions or activity are hidden once loading resolves. Signing history remains
 accessible through its disclosure even when no rules are saved.
 First use of an undecided optional capability opens an Allow/Reject review for
 that capability. Explicit rejection is remembered; cancellation is not rejection.
+Declared optional appearance, app storage and app settings start enabled while
+retaining their permission switches. Explicitly disabled access stays disabled.
 Permission reset uses the shared danger
 button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
 confirmation or cancellation.

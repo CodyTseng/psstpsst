@@ -25,7 +25,6 @@ import {
 import {
   saveDesktopOrder,
   clearRecent,
-  getData,
   installations,
   markRecent,
   saveInstallation,
@@ -35,6 +34,7 @@ import { NappletRuntime, type RuntimePrompt, type RuntimeTheme } from './runtime
 import type { ConfigSchema } from './config';
 import { assertNotAborted } from '@/platform/abort';
 import { PromptQueue, type QueuedPrompt } from './prompt-queue';
+import { readDomainPermissions, resolveDomainPermissions } from './domain-permissions';
 import { platform } from '@/platform';
 import { appSigningScope, readSigningSnapshot, replaceSigningRule, type SigningRuleTarget, type SigningRuleChange } from './signing-permissions';
 
@@ -105,10 +105,9 @@ async function authorizeRelease(release: NappletRelease, account: string, curren
   const required = [...new Set(['shell', ...release.required])];
   const optional = [...new Set(release.optional.filter((domain) =>
     (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
-  const saved = await getData(scope, 'permissions', 'domains');
+  const { saved, denied, domains } = await readDomainPermissions(scope, release);
   current();
-  let declared = saved ? (JSON.parse(saved) as string[]).filter((domain) =>
-    required.includes(domain) || optional.includes(domain)) : [];
+  let declared = domains;
   if (!saved || required.some((domain) => !declared.includes(domain))) {
     // Details-page consent applies only to the exact required set the user reviewed.
     const reviewed = reviewedRequired && reviewedRequired.length === required.length
@@ -122,7 +121,7 @@ async function authorizeRelease(release: NappletRelease, account: string, curren
     current();
     const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
     if (!Array.isArray(selected)) throw new Error('permission-denied');
-    declared = [...required, ...optional.filter((domain) => selected.includes(domain))];
+    declared = resolveDomainPermissions(release, [...required, ...optional.filter((domain) => selected.includes(domain))], denied);
     await setData(scope, 'permissions', 'domains', JSON.stringify(declared));
     current();
     permissionsChanged();
@@ -546,12 +545,9 @@ export const nappletService = {
   async domainPermissions(release: NappletRelease, expectedAccount: string): Promise<string[]> {
     const epoch = generation;
     check(expectedAccount, epoch);
-    const saved = await getData({ accountPubkey: expectedAccount, appKey: release.key }, 'permissions', 'domains');
+    const { domains } = await readDomainPermissions({ accountPubkey: expectedAccount, appKey: release.key }, release);
     check(expectedAccount, epoch);
-    const granted: unknown = saved ? JSON.parse(saved) : [];
-    if (!Array.isArray(granted) || granted.some((domain) => typeof domain !== 'string')) throw new Error('invalid-permissions');
-    const allowed = new Set(['shell', ...release.required, ...release.optional]);
-    return granted.filter((domain: string) => allowed.has(domain));
+    return domains;
   },
   async setDomainPermissions(release: NappletRelease, domains: string[], expectedAccount: string) {
     const epoch = generation;
@@ -561,12 +557,8 @@ export const nappletService = {
     const required = ['shell', ...release.required];
     if (required.some((domain) => !domains.includes(domain))) throw new Error('required-permission');
     const scope = { accountPubkey: expectedAccount, appKey: release.key };
-    const [saved, storedDenied] = await Promise.all([
-      getData(scope, 'permissions', 'domains'), getData(scope, 'permissions', 'denied-domains'),
-    ]);
+    const { domains: previous, denied } = await readDomainPermissions(scope, release);
     check(expectedAccount, epoch);
-    const previous: string[] = saved ? JSON.parse(saved) : [];
-    const denied: string[] = storedDenied ? JSON.parse(storedDenied) : [];
     const nextDenied = [...new Set([...denied, ...release.optional.filter(domain => previous.includes(domain) && !domains.includes(domain))])]
       .filter(domain => !domains.includes(domain));
     invalidateNappletSource(expectedAccount, release.key);

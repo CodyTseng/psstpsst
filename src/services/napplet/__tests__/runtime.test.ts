@@ -591,7 +591,30 @@ describe('optional capabilities requested at call time', () => {
   const optionalOptions = (): RuntimeOptions => ({ ...options(), domains: ['shell'],
     release: { ...release, optional: ['config', 'theme', 'upload'] }, permissionsChanged: jest.fn() });
 
-  test('exposes declared optional interfaces and resumes configuration after approval', async () => {
+  test.each([
+    ['theme', 'get', 'theme.get.result'], ['storage', 'keys', 'storage.keys.result'], ['config', 'get', 'config.values'],
+  ])('allows default optional %s access without review but honors explicit denial', async (domain, operation, response) => {
+    const config = optionalOptions();
+    config.release = { ...config.release, optional: [domain] };
+    const runtime = new NappletRuntime(config);
+    await runtime.open();
+    try {
+      await runtime.receive(JSON.stringify({ type: `${domain}.${operation}`, id: 'default' }));
+      expect(config.confirm).not.toHaveBeenCalled();
+      expect(messages().at(-1)).toMatchObject({ type: response, id: 'default' });
+      expect(messages().at(-1)?.error).toBeUndefined();
+    } finally { await runtime.close(); }
+    stored.set('denied-domains', JSON.stringify([domain]));
+    const blocked = new NappletRuntime({ ...config, domains: ['shell'] });
+    await blocked.open();
+    try {
+      await blocked.receive(JSON.stringify({ type: `${domain}.${operation}`, id: 'blocked' }));
+      expect(config.confirm).not.toHaveBeenCalled();
+      expect(messages().at(-1)).toMatchObject({ type: response, id: 'blocked', error: 'permission-denied' });
+    } finally { await blocked.close(); }
+  });
+
+  test('exposes default-enabled optional configuration without approval', async () => {
     const config = optionalOptions();
     const runtime = new NappletRuntime(config);
     await runtime.open();
@@ -599,24 +622,23 @@ describe('optional capabilities requested at call time', () => {
       await runtime.receive(JSON.stringify({ type: 'shell.ready', id: 'ready' }));
       expect(messages().at(-1)?.capabilities.domains).toEqual(['shell', 'config', 'theme', 'upload']);
       await runtime.receive(JSON.stringify({ type: 'config.registerSchema', id: 'schema', schema: { type: 'object', properties: {} } }));
-      expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ capabilities: { required: ['config'], optional: [], requested: 'config' } }), runtime.signal);
       expect(messages()).toContainEqual({ type: 'config.registerSchema.result', id: 'schema', ok: true });
-      expect(JSON.parse(stored.get('domains')!)).toEqual(['shell', 'config']);
       await runtime.receive(JSON.stringify({ type: 'config.openSettings' }));
       expect(config.configure).toHaveBeenCalledWith({ type: 'object', properties: {} }, {});
-      expect(config.confirm).toHaveBeenCalledTimes(1);
+      expect(config.confirm).not.toHaveBeenCalled();
     } finally { await runtime.close(); }
   });
 
   test('shares concurrent approval and preserves grants for different domains', async () => {
     const config = optionalOptions();
+    config.release = { ...config.release, optional: ['inc', 'resource'] };
     const runtime = new NappletRuntime(config);
     await runtime.open();
     try {
-      await Promise.all(['theme.get', 'theme.get', 'config.get'].map((type, index) => runtime.receive(JSON.stringify({ type, id: String(index) }))));
+      await Promise.all(['inc.channel.list', 'inc.channel.list', 'resource.info'].map((type, index) => runtime.receive(JSON.stringify({ type, id: String(index) }))));
       expect(config.confirm).toHaveBeenCalledTimes(2);
-      expect(JSON.parse(stored.get('domains')!)).toEqual(['shell', 'theme', 'config']);
-      expect(messages().filter(message => ['theme.get.result', 'config.values'].includes(message.type))).toHaveLength(3);
+      expect(JSON.parse(stored.get('domains')!)).toEqual(['shell', 'inc', 'resource']);
+      expect(messages().filter(message => ['inc.channel.list.result', 'resource.info.result'].includes(message.type))).toHaveLength(3);
     } finally { await runtime.close(); }
   });
 
@@ -657,29 +679,31 @@ describe('optional capabilities requested at call time', () => {
 
   test('persists explicit rejection and rejects later calls without prompting', async () => {
     const config = optionalOptions();
+    config.release = { ...config.release, optional: ['inc'] };
     jest.mocked(config.confirm).mockResolvedValue('deny');
     const runtime = new NappletRuntime(config);
     await runtime.open();
     try {
-      for (const id of ['first', 'second']) await runtime.receive(JSON.stringify({ type: 'config.get', id }));
+      for (const id of ['first', 'second']) await runtime.receive(JSON.stringify({ type: 'inc.channel.list', id }));
       expect(config.confirm).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(stored.get('denied-domains')!)).toEqual(['config']);
-      expect(messages().at(-1)).toMatchObject({ type: 'config.values', id: 'second', error: 'permission-denied' });
+      expect(JSON.parse(stored.get('denied-domains')!)).toEqual(['inc']);
+      expect(messages().at(-1)).toMatchObject({ type: 'inc.channel.list.result', id: 'second', error: 'permission-denied' });
       expect(stored.get('domains')).toBe('["shell"]');
     } finally { await runtime.close(); }
   });
 
   test('does not treat cancellation as an explicit rejection', async () => {
     const config = optionalOptions();
+    config.release = { ...config.release, optional: ['inc'] };
     jest.mocked(config.confirm).mockResolvedValueOnce(false);
     const runtime = new NappletRuntime(config);
     await runtime.open();
     try {
-      await runtime.receive(JSON.stringify({ type: 'theme.get', id: 'cancel' }));
+      await runtime.receive(JSON.stringify({ type: 'inc.channel.list', id: 'cancel' }));
       expect(stored.has('denied-domains')).toBe(false);
-      await runtime.receive(JSON.stringify({ type: 'theme.get', id: 'retry' }));
+      await runtime.receive(JSON.stringify({ type: 'inc.channel.list', id: 'retry' }));
       expect(config.confirm).toHaveBeenCalledTimes(2);
-      expect(messages().at(-1)).toMatchObject({ type: 'theme.get.result', id: 'retry' });
+      expect(messages().at(-1)).toMatchObject({ type: 'inc.channel.list.result', id: 'retry' });
     } finally { await runtime.close(); }
   });
 
@@ -702,11 +726,12 @@ describe('optional capabilities requested at call time', () => {
 
   test('discards approval after the runtime closes', async () => {
     const config = optionalOptions();
+    config.release = { ...config.release, optional: ['inc'] };
     let answer!: (value: string) => void;
     jest.mocked(config.confirm).mockImplementation(() => new Promise(resolve => { answer = resolve; }));
     const runtime = new NappletRuntime(config);
     await runtime.open();
-    const pending = runtime.receive(JSON.stringify({ type: 'theme.get', id: 'late' }));
+    const pending = runtime.receive(JSON.stringify({ type: 'inc.channel.list', id: 'late' }));
     for (let index = 0; index < 10 && !answer; index++) await new Promise(resolve => setTimeout(resolve, 0));
     expect(answer).toBeDefined();
     await runtime.close();

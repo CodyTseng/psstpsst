@@ -9,6 +9,7 @@ import { NappletRuntime, type RuntimePrompt, type RuntimeTheme } from '@/service
 import { loadArtifact } from '@/services/napplet/artifacts';
 import { NAP_DOMAINS, randomId } from '@/services/napplet/protocol';
 import { getData, setData } from '@/services/napplet/repository';
+import { readDomainPermissions, resolveDomainPermissions } from '@/services/napplet/domain-permissions';
 import { ExploreRuntime } from './runtime';
 import { applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, fromNapplet, websiteEntry, type ExploreEntry } from './model';
 import { readEntries, visit } from './repository';
@@ -105,9 +106,11 @@ export const applicationTasks = {
       const optional = entry.release?.optional.filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)) ?? [];
       const sourceId = entry.release?.key ?? applicationSigningSource(entry);
       const scope = { accountPubkey: account, appKey: sourceId };
-      const stored = await getData(scope, 'permissions', 'domains'); current();
+      const access = entry.release ? await readDomainPermissions(scope, entry.release) : undefined;
+      const stored = access ? null : await getData(scope, 'permissions', 'domains'); current();
       const saved: unknown = stored ? JSON.parse(stored) : [];
       let domains = Array.isArray(saved) ? saved.filter((domain): domain is string => typeof domain === 'string' && (required.includes(domain) || optional.includes(domain))) : [];
+      if (access) domains = access.domains;
       if (required.some(domain => !domains.includes(domain))) {
         const reviewed = session.reviewed?.length === required.length && required.every(domain => session.reviewed!.includes(domain));
         const answer = reviewed ? 'allow' : await confirm({ title: entry.title, detail: '', accountPubkey: account,
@@ -116,6 +119,7 @@ export const applicationTasks = {
         if (!answer || (!entry.release && answer !== 'allow') || (entry.release && answer !== 'allow' && !answer.startsWith('domains:'))) throw new Error('permission-denied');
         const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
         domains = [...required, ...optional.filter(domain => Array.isArray(selected) && selected.includes(domain))];
+        if (entry.release && access) domains = resolveDomainPermissions(entry.release, domains, access.denied);
         await setData(scope, 'permissions', 'domains', JSON.stringify(domains)); current();
       }
       const presented = () => { if (isCurrent()) patch(id, { loading: false }); };

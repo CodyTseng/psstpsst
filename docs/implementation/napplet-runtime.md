@@ -23,6 +23,9 @@ The document exposes supported, declared optional interfaces even before a grant
 The host gates execution, shares concurrent requests for one capability, and
 serializes decisions by account/source with signing and browser authorization.
 An Allow persists the domain and resumes the original call without reloading.
+Declared optional `theme`, `storage` and `config` access defaults to enabled in
+both execution and permission management. Explicit denials override these defaults;
+turning off a default-enabled switch records a denial even without a saved grant.
 Reject persists the domain in `permissions/denied-domains`; later calls fail
 without review. Cancellation and timeout fail only the pending call. Disabling a
 previously granted optional capability in management records rejection; enabling

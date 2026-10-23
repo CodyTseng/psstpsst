@@ -2,6 +2,8 @@ import { notifyFavoritesChanged } from '../favorites-events';
 import { exploreService,exploreStore } from '../service';
 import { applicationTasks, applicationTaskStore } from '../application-tasks';
 import { nappletService } from '@/services/napplet/service';
+import { NappletRuntime } from '@/services/napplet/runtime';
+import type { NappletRelease } from '@/services/napplet/protocol';
 import { getData,setData } from '@/services/napplet/repository';
 import { readEntries, readFavoriteEntries, readFavoriteReferences, readFavoriteMetadata, queueFavoritesPublication, reorder, visit } from '../repository';
 import { ExploreRuntime } from '../runtime';
@@ -19,7 +21,7 @@ jest.mock('@/platform',()=>({platform:{database:{addChangeListener:jest.fn(liste
 jest.mock('@/services/account/account-receive-guard',()=>({canReceiveForAccount:jest.fn(async()=>true)}));
 jest.mock('@/services/napplet/artifacts',()=>({loadArtifact:jest.fn()}));
 jest.mock('@/services/napplet/runtime',()=>({NappletRuntime:jest.fn()}));
-jest.mock('@/services/napplet/service',()=>({nappletStore:{getState:()=>({accountPubkey:'account'})},nappletService:{activate:jest.fn(async()=>{}),activateAccount:jest.fn(async()=>{}),stop:jest.fn(),requestApproval:jest.fn(async()=> 'allow'),currentTheme:()=>undefined}}));
+jest.mock('@/services/napplet/service',()=>({nappletStore:{getState:()=>({accountPubkey:'account'})},nappletService:{activate:jest.fn(async()=>{}),activateAccount:jest.fn(async()=>{}),install:jest.fn(async()=>{}),stop:jest.fn(),requestApproval:jest.fn(async()=> 'allow'),currentTheme:()=>undefined}}));
 jest.mock('@/services/napplet/network',()=>({NappletNetwork:jest.fn()}));
 jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn()}));
 jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{})}));
@@ -126,6 +128,27 @@ it('still reviews required access for an independent task',async()=>{
   await applicationTasks.start(id);
   expect(nappletService.requestApproval).toHaveBeenCalledWith(expect.objectContaining({application:expect.objectContaining({required:['network']})}),expect.anything());
   expect(applicationTaskStore.getState().sessions.get(id)?.containerId).toBe('container');
+});
+
+it.each([false, true])('applies default optional access in independent napplet tasks with storage denied: %s', async denied => {
+  const app = { ...entry('napp'), kind: 'napplet' as const };
+  app.release = { key: app.key, required: [], optional: ['theme', 'storage', 'config', 'identity'] } as unknown as NappletRelease;
+  jest.mocked(getData).mockImplementation(async (_scope, bucket, name) => {
+    if (bucket !== 'permissions') return null;
+    if (name === 'domains') return '["shell"]';
+    return name === 'denied-domains' && denied ? '["storage"]' : null;
+  });
+  jest.mocked(NappletRuntime).mockImplementationOnce(function(this: object) {
+    Object.assign(this, { open: jest.fn(async () => 'napplet-container'), close: jest.fn(async () => {}) });
+    return this as NappletRuntime;
+  });
+  await applicationTasks.open(app, 'account');
+  const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  await applicationTasks.start(id);
+  expect(jest.mocked(NappletRuntime).mock.calls.at(-1)![0].domains).toEqual(
+    denied ? ['shell', 'theme', 'config'] : ['shell', 'theme', 'storage', 'config']);
+  expect(applicationTaskStore.getState().sessions.get(id)?.containerId).toBe('napplet-container');
+  expect(nappletService.requestApproval).not.toHaveBeenCalled();
 });
 
 it('refreshes remote favorite order and applies metadata completion without overwriting it', async () => {
