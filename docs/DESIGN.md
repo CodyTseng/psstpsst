@@ -554,7 +554,8 @@ At the responsive split threshold, tablets and Electron present a persistent
 primary pane and a detail pane using the same navigation state. Narrow windows
 show the normal single-stack presentation. An unselected detail pane shows only
 a quiet, centered prompt to select a chat, without branding. Resizing must not
-reset navigation, selection, drafts, or scroll state. Tablet primary panes
+reset navigation, selection, drafts, or scroll state. The selected primary tab
+remains interactive while a detail is open, including search. Tablet primary panes
 support direct touch resizing at a thin divider with a compact centred grip and
 a 48-point touch target. Electron primary panes support pointer and keyboard
 resizing there. Double-tapping the divider restores its default position on
@@ -630,6 +631,8 @@ replace the standard header.
 Search fields keep the same geometry when focused. Focusing an empty search
 keeps the resting content visible; search results replace it only after the
 query contains non-whitespace text.
+Clearing or closing search retains the last results through their exit animation
+instead of rendering an unfiltered list before the resting view returns.
 Dragging a tab's resting list during an empty search exits search mode so its
 search field scrolls with the list.
 
@@ -648,6 +651,9 @@ Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
 Mini-app chrome places Close at the start and More at the end. System Back
 traverses the embedded application's history before closing it at its root.
+Message web links and public-note cards open in the same built-in application
+container as websites, following the account's website opening preference.
+Custom app protocols in note-link preferences retain their external handoff.
 Mini-app container and initial document canvases follow the host background in
 both themes, including loading and teardown. Apps may supply their own page fill.
 Opening a mini-app enters its container immediately; loading, cancellation and
@@ -894,14 +900,17 @@ the field collapses during upward scrolling and stays still during pull/rebound.
 Explore loading indicators use muted gray; refresh indicator sizing stays native.
 Brief local reads do not flash a spinner; pending reads show loading feedback
 only after a short delay, without showing an unresolved empty state.
-Background reloads never open the refresh control. Request errors appear only
+Background reloads never open the refresh control. Catalogue request errors appear only
 when there are no usable results; partial and cached results stay visible without
 an error banner.
 The first three tabs keep the shared title-row height and begin their search
 fields immediately below that row, without extra top padding.
 Keywords persist across mode changes: Favorites searches saved shortcuts, while
 Discover searches the already-fetched catalogue. Both scopes match application
-names, descriptions and resolved publisher names. Both Explore and home scanning
+names, descriptions and resolved publisher names. Discover keyword matching waits
+for its first catalogue page to resolve; pending searches show loading rather
+than no results. Exact address lookup remains independent of catalogue loading.
+Both Explore and home scanning
 open exact application naddr references in their details page and website URLs
 in their application container, without changing the selected search scope.
 Explicit Lightning/LNURL links retain their wallet flow in the home scanner.
@@ -909,13 +918,20 @@ Empty Favorites opens Discover rather than a separate address-entry task.
 Discover lists verified napps and napplets, excluding nsites, without recording visits or adding
 shortcuts until the user chooses an action. Exact naddr and URL input selects address lookup:
 local matches appear first, naddr hints choose manifest relays, and hintless
-addresses use author write relays plus format-specific sources. Address results
+addresses use author write relays plus format-specific sources. Exact lookup
+begins only when the live input parses as a complete address; unfinished or
+malformed edits stay in ordinary local search without validation errors or Retry.
+Domain-like input defaults to HTTPS, preserving its path, query, and fragment.
+Search lookups that fail or find no match show the normal no-results state,
+without error toasts or Retry actions. Explicit scan and open actions retain
+strict address validation. Address results
 remain separate from the curated directory. Scrolling reveals
 more results in newest-first order, with quiet loading feedback at the list end.
 Application rows give artwork and text a comfortable vertical inset. Artwork
 approximates the combined title/description height and aligns with the title top,
 with a single-line description and publisher avatar/name below the title. Artwork
-has no format border, and rows omit format badges. Application information shows
+has no format border. Website rows show a muted web label below the title;
+signed-application rows omit format badges. Application information shows
 the format as muted caption text
 beneath the title. Both modes open the shared application
 details. Favorites displays only saved shortcuts in its vertically scrolling

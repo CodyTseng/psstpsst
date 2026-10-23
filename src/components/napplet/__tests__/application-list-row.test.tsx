@@ -44,3 +44,14 @@ it.each(['napp', 'napplet'] as const)('shows the %s format quietly below the inf
   await act(async () => { renderer = create(<ApplicationInfo release={{ title: 'App', kind, description: '', servers: [], required: [] }} onPublisher={() => {}} />); });
   expect(renderer.root.findByType(NappletIdentity).props.subtitle).toBe(`napplets.formats.${kind}`);
 });
+
+it.each(['light', 'dark'] as const)('identifies website results with a muted web label in %s mode', async scheme => {
+  mockScheme = scheme;
+  const application: ApplicationListEntry = { key: 'https://example.com/', title: 'example.com', kind: 'website', servers: [] };
+  await act(async () => { renderer = create(<ApplicationListRow application={application} onPress={() => {}} />); });
+  const label = renderer.root.findAllByType(AppText).find(node => node.props.children === 'napplets.formats.website');
+  expect(label?.props).toMatchObject({ variant: 'caption', tone: 'muted' });
+  expect(renderer.root.findAllByProps({ testID: 'discovery-publisher' })).toHaveLength(0);
+  await act(async () => { renderer.update(<ApplicationListRow application={{ ...application, kind: 'napp' }} onPress={() => {}} />); });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.formats.website')).toBe(false);
+});

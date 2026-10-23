@@ -19,12 +19,12 @@ import type { NostrEventReference } from '@/lib/nostr/event-reference';
 import { nostrEventUrl } from '@/lib/nostr/event-url';
 import { formatListTime } from '@/lib/time';
 import { canResolveReferencedEvent } from '@/services/nostr/event-reference.service';
-import { platform } from '@/platform';
 import { useChatPrefsStore } from '@/stores/chat-prefs.store';
 import { radius, spacing, useThemeColors } from '@/theme';
 
 import { MessageCardFooter } from './MessageCardFooter';
 import { MentionCard } from './MentionCard';
+import { openMessageUrl } from './open-message-url';
 import type { RemoteContentMode } from './remote-content-policy';
 
 type Props = {
@@ -90,7 +90,7 @@ function ResolvedHeader({ event, loadRemote }: { event: Event; loadRemote: boole
 
 /** A compact neutral card for a public-event reference block. Kind 1 gets a
  * bounded preview, kind 0 reuses MentionCard, and unsupported pointers remain
- * useful external links with their kind number visible. */
+ * useful links with their kind number visible. */
 function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: Props) {
   const { t } = useTranslation();
   const directionalIconStyle = useDirectionalIconStyle();
@@ -113,11 +113,11 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
     <Pressable
       disabled={!loadRemote}
       accessibilityRole="link"
-      accessibilityLabel={t(app ? 'napplets.details' : 'chat.event_reference.open_external')}
+      accessibilityLabel={t(app ? 'napplets.details' : 'napplets.open')}
       fallbackHoverOpacity={false}
       onPress={() => {
         if (app) router.push({ pathname: '/napplet/[id]', params: { id: reference.bech32 } });
-        else void platform.urlOpener.openExternalUrl(href).catch(() => {});
+        else void openMessageUrl(href);
       }}
       style={{
         width: 280,
@@ -159,7 +159,7 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                 <ExternalLink size={14} color={c.accent} style={directionalIconStyle} />
                 <AppText variant="caption" tone="accent" numberOfLines={1}>
-                  {t('chat.event_reference.open_external')}
+                  {t(app ? 'napplets.details' : 'napplets.open')}
                 </AppText>
               </View>
             }

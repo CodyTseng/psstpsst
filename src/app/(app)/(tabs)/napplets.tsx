@@ -15,7 +15,8 @@ import { DelayedActivityIndicator } from '@/components/common/DelayedActivityInd
 import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
 import { iconStrokeWidth } from '@/theme/icons';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
-import { useIsFocused, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { usePrimaryPaneFocused } from '@/hooks/use-primary-pane-focused';
 import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,7 +63,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
   const [query, setQuery] = useState('');
   const [searchActive, setSearchActive] = useState(false);
-  const focused = useIsFocused();
+  const focused = usePrimaryPaneFocused();
   const tabsNavigation = useNavigation();
   const openSearch = useCallback(() => setSearchActive(true), []);
   const closeSearch = useCallback(() => {

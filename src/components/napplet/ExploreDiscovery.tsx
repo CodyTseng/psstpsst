@@ -32,7 +32,8 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const [searchWindow, setSearchWindow] = useState({ key: searchKey, count: 20 });
   const searchCount = searchWindow.key === searchKey ? searchWindow.count : 20;
-  const entries = scope === 'favorites' ? favorites : state.entries;
+  const catalogueReady = scope === 'favorites' || state.loaded;
+  const entries = scope === 'favorites' ? favorites : catalogueReady ? state.entries : EMPTY_ENTRIES;
   const list = useRef<FlatList<ExploreEntry>>(null);
   const scrollOffset = useSharedValue(0);
   const scroll = useAnimatedScrollHandler(event => { scrollOffset.set(event.contentOffset.y); });
@@ -65,26 +66,26 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
     return names;
   }, [publishers, profiles, contacts]);
   const index = useMemo(() => entries.map(app => ({ app, text: `${app.title}\n${app.description}`.toLowerCase() })), [entries]);
-  const matches = useMemo(() => address.active ? [] : terms.length ? index.filter(item => {
+  const matches = useMemo(() => address.active || !catalogueReady ? EMPTY_ENTRIES : terms.length ? index.filter(item => {
     const author = authorNames.get(item.app.manifest?.pubkey ?? item.app.release?.event.pubkey ?? '') ?? '';
     return terms.every(term => item.text.includes(term) || author.includes(term));
-  }).map(item => item.app) : entries, [address.active, index, terms, authorNames, entries]);
+  }).map(item => item.app) : entries, [address.active, catalogueReady, index, terms, authorNames, entries]);
   const data = useMemo(() => address.active ? address.entry ? [address.entry] : [] : searching || scope === 'favorites' ? matches.slice(0, searchCount) : state.visibleEntries, [address.active, address.entry, searching, scope, matches, searchCount, state.visibleEntries]);
   const c = useThemeColors();
   const { t } = useTranslation();
   useEffect(() => { if (scope === 'discover' && !address.active) void discoverApplications(account); }, [account, address.active, scope]);
   const refresh = async () => {
-    if (address.active) { address.retry(); return; }
-    if (scope !== 'discover' || refreshPending.current) return;
+    if (searching || scope !== 'discover' || refreshPending.current) return;
     refreshPending.current = true;
     setPullRefreshing(true);
     try { await discoverApplications(account, true); }
     finally { refreshPending.current = false; setPullRefreshing(false); }
   };
-  const canRefresh = address.active || scope === 'discover';
-  const refreshing = scope === 'discover' && !address.active && pullRefreshing;
-  const error = data.length ? undefined : address.active ? address.error
-    : scope === 'discover' && !searching && state.error ? 'napplets.request_failed' : undefined;
+  const canRefresh = !searching && !address.active && scope === 'discover';
+  const refreshing = canRefresh && pullRefreshing;
+  const cataloguePending = !address.active && scope === 'discover' && !state.loaded && !state.error;
+  const error = !data.length && scope === 'discover' && !searching && !address.active && state.error
+    ? 'napplets.request_failed' : undefined;
   useErrorToast(error, 'primary');
   return <View style={{ flex: 1 }}>
     {header ? <Animated.View testID="explore-search-header" style={[{ overflow: 'hidden' }, headerContainerStyle]}>
@@ -110,7 +111,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
     ListHeaderComponent={error ? <View style={{ padding: spacing.lg, gap: spacing.sm }}>
       <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} />
     </View> : null}
-    ListEmptyComponent={address.active ? address.loading ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} /> : null : scope === 'discover' && !state.loaded && !state.error && !pullRefreshing
+    ListEmptyComponent={address.active && address.loading || cataloguePending && (searching || !pullRefreshing)
       ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
       : searching || scope === 'favorites' || !state.error && !state.loading && !state.hasMore ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
         <Compass size={spacing['3xl']} color={c.textMuted} />

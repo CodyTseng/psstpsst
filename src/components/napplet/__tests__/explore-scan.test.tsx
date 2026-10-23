@@ -25,7 +25,7 @@ const mockTabsNavigation = { addListener: jest.fn(() => () => {}), getState: () 
 let mockHandoff: string | undefined;
 let mockFocused = true;
 let mockExplore: { account: string | null; loaded: boolean; entries: ExploreEntry[] } = { account: 'account', loaded: true, entries: [] };
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ searchHandoff: mockHandoff }), useIsFocused: () => mockFocused, useNavigation: () => mockTabsNavigation }));
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ searchHandoff: mockHandoff }), useIsFocused: () => mockFocused, useNavigation: () => mockTabsNavigation, useRoute: () => ({ key: 'napplets' }) }));
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/services/explore/windows', () => ({ tryOpenApplicationWindow: jest.fn(async () => false) }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));

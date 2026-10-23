@@ -19,7 +19,6 @@ import {
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { IS_ELECTRON } from '@/lib/platform';
 import type { MessageSegment } from '@/lib/text/message-segments';
-import { platform } from '@/platform';
 import type { NearbyAttachmentFetchContext } from '@/services/files/file-attachment.service';
 import { useDelivery, type MessageDelivery } from '@/stores/delivery-status.store';
 import { iconStrokeWidth } from '@/theme/icons';
@@ -40,6 +39,7 @@ import type { MessageBubbleReplyPreview } from './MessageBubble';
 import { MentionCard } from './MentionCard';
 import { MentionText } from './MentionText';
 import { QuotedReply } from './QuotedReply';
+import { openMessageUrl as openUrl } from './open-message-url';
 import {
   attachmentExceedsAutoDownloadLimit,
   messageRemoteContentMode,
@@ -48,11 +48,6 @@ import {
 } from './remote-content-policy';
 
 export type { RemoteContentMode } from './remote-content-policy';
-
-/** Open a tapped link in the system browser; ignore a malformed URL. */
-function openUrl(href: string) {
-  void platform.urlOpener.openExternalUrl(href).catch(() => {});
-}
 
 type Props = {
   content: string;

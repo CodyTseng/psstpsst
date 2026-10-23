@@ -13,7 +13,7 @@ export type ApplicationAddressQuery =
 export function parseApplicationAddressQuery(value: string): ApplicationAddressQuery | null {
   const input = value.trim();
   const isNaddr = /^(?:nostr:)?naddr1/i.test(input);
-  const isUrl = /^(?:https?:\/\/|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#]|$))/i.test(input);
+  const isUrl = /^(?:https?:\/\/|(?:[\p{L}\p{N}-]+\.)+[\p{L}\p{N}-]{2,}(?::\d+)?(?:[/?#]|$))/iu.test(input);
   if (!isNaddr && !isUrl) return null;
   if (input.length > 8192) return { type: 'invalid', key: input };
   try {

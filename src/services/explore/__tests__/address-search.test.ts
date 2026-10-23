@@ -111,3 +111,18 @@ it('discards a late relay result after cancellation and destroys its transport',
   await rejected;
   expect(destroy).toHaveBeenCalled();
 });
+
+it.each([
+  ['example.com', 'https://example.com/'],
+  ['WWW.Example.com:8443/path?q=1#section', 'https://www.example.com:8443/path?q=1#section'],
+  ['例子.中国/路径', new URL('https://例子.中国/路径').href],
+  ['xn--fsqu00a.xn--fiqs8s', 'https://xn--fsqu00a.xn--fiqs8s/'],
+])('recognizes browser-style domain input %s with HTTPS by default', (input, expected) => {
+  expect(parseApplicationAddressQuery(input)).toEqual({ type: 'website', key: expected });
+});
+
+it.each(['photo albums', 'search.example notes', 'user@example.com', 'https://', 'http://'])(
+  'does not resolve %s as a website', input => {
+    expect(parseApplicationAddressQuery(input)?.type).not.toBe('website');
+  },
+);

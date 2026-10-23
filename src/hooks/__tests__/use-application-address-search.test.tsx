@@ -61,15 +61,17 @@ it('cancels the debounce when the user switches back to a keyword', async () => 
   expect(resolveApplicationAddress).not.toHaveBeenCalled();
 });
 
-it('replaces an earlier lookup error when the app subsequently appears in local data', async () => {
-  jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error('napplets.not_found'));
-  await act(async () => { renderer = create(<Harness value={address('app')} />); });
-  await act(async () => { await jest.advanceTimersByTimeAsync(300); });
-  expect(state!.error).toBe('napplets.not_found');
-  await act(async () => { renderer.update(<Harness value={address('app')} entries={[entry('app')]} />); });
-  expect(state!.entry?.title).toBe('app');
-  expect(state!.error).toBeUndefined();
-});
+it.each(['napplets.not_found', 'napplets.invalid_manifest', 'napplets.request_failed'])(
+  'treats %s as no results and still accepts a later local match', async error => {
+    jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error(error));
+    await act(async () => { renderer = create(<Harness value={address('app')} />); });
+    await act(async () => { await jest.advanceTimersByTimeAsync(300); });
+    expect(state!).toMatchObject({ active: true, loading: false });
+    expect(state!.entry).toBeUndefined();
+    await act(async () => { renderer.update(<Harness value={address('app')} entries={[entry('app')]} />); });
+    expect(state!.entry?.title).toBe('app');
+  },
+);
 
 it('resolves a synced signed reference that does not yet have a manifest', async () => {
   const app = { ...entry('pending'), manifest: undefined };
@@ -80,4 +82,38 @@ it('resolves a synced signed reference that does not yet have a manifest', async
   await act(async () => { await jest.advanceTimersByTimeAsync(300); });
   expect(resolveApplicationAddress).toHaveBeenCalled();
   expect(state!.entry?.manifest).toBeDefined();
+});
+
+it.each(['https://', 'http://', 'https://[', 'https://example.com/%', 'naddr1broken'])(
+  'keeps unfinished or malformed live input %s in local search without an error', async value => {
+    await act(async () => { renderer = create(<Harness value={value} />); });
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    expect(state!).toMatchObject({ active: false, loading: false });
+    expect(resolveApplicationAddress).not.toHaveBeenCalled();
+  },
+);
+
+it('starts a debounced website lookup after completing the URL', async () => {
+  const website = { key: 'https://example.com/', address: 'https://example.com/', kind: 'website' } as ExploreEntry;
+  jest.mocked(resolveApplicationAddress).mockResolvedValueOnce(website);
+  await act(async () => { renderer = create(<Harness value="https://" />); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(300); });
+  expect(resolveApplicationAddress).not.toHaveBeenCalled();
+  await act(async () => { renderer.update(<Harness value="https://example.com" />); });
+  expect(state!).toMatchObject({ active: true, loading: true });
+  await act(async () => { await jest.advanceTimersByTimeAsync(299); });
+  expect(resolveApplicationAddress).not.toHaveBeenCalled();
+  await act(async () => { await jest.advanceTimersByTimeAsync(1); });
+  expect(resolveApplicationAddress).toHaveBeenCalledWith('account', { type: 'website', key: website.key }, expect.any(Array), expect.anything());
+  expect(state!).toMatchObject({ entry: website, loading: false });
+});
+
+it('returns to local search after an unsuccessful lookup when editing an incomplete URL', async () => {
+  jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error('napplets.request_failed'));
+  await act(async () => { renderer = create(<Harness value="https://example.com" />); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(300); });
+  expect(state!).toMatchObject({ active: true, loading: false });
+  expect(state!.entry).toBeUndefined();
+  await act(async () => { renderer.update(<Harness value="https://" />); });
+  expect(state!).toMatchObject({ active: false, loading: false });
 });

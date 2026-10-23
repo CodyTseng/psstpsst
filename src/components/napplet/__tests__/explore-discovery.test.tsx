@@ -25,7 +25,7 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
 
 let mockScheme: 'light' | 'dark' = 'light';
-const mockAddressSearch = { active: false, entry: undefined as ExploreEntry | undefined, loading: false, error: undefined as string | undefined, retry: jest.fn() };
+const mockAddressSearch = { active: false, entry: undefined as ExploreEntry | undefined, loading: false };
 jest.mock('@/hooks/use-application-address-search', () => ({ useApplicationAddressSearch: () => mockAddressSearch }));
 let mockProfiles: Record<string, { name: string; displayName?: string }> = {};
 let mockContacts: Record<string, { petname: string }> = {};
@@ -53,7 +53,7 @@ const screen = () => <ExploreDiscovery query={mockQuery} scope={mockScope} favor
 beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = ''; mockScope = 'discover'; mockFavorites = [];
-  Object.assign(mockAddressSearch, { active: false, entry: undefined, loading: false, error: undefined });
+  Object.assign(mockAddressSearch, { active: false, entry: undefined, loading: false });
   mockProfiles = {};
   mockContacts = {};
   Object.assign(mockState, { entries: [], visibleEntries: [], loaded: true, loading: false, loadingMore: false, error: false, hasMore: true });
@@ -253,4 +253,71 @@ it('uses the saved favorite set instead of stale catalogue positions for row men
   mockFavorites = [];
   await act(async () => { renderer.update(screen()); });
   expect(renderer.root.findByType(FlatList).props.renderItem({ item: app }).props.favorite).toBe(false);
+});
+
+
+it.each([
+  ['light', 'favorites'], ['dark', 'favorites'], ['light', 'discover'], ['dark', 'discover'],
+] as const)('shows only no results for an unsuccessful address search in %s %s', async (scheme, scope) => {
+  mockScheme = scheme;
+  mockScope = scope;
+  mockQuery = 'https://example.com/';
+  mockAddressSearch.active = true;
+  mockState.error = true;
+  useToastStore.getState().hide();
+  await act(async () => { renderer = create(screen()); });
+  const list = renderer.root.findByType(FlatList);
+  expect(list.props.data).toEqual([]);
+  expect(list.props.ListHeaderComponent).toBeNull();
+  expect(list.props.refreshControl).toBeUndefined();
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'search.empty')).toBe(true);
+  expect(useToastStore.getState().message).toBeNull();
+  expect(discoverApplications).not.toHaveBeenCalled();
+});
+
+it.each(['light', 'dark'] as const)('waits for the first catalogue page before keyword matching in %s mode', async scheme => {
+  mockScheme = scheme;
+  mockQuery = 'photo';
+  const match = { key: 'photo', title: 'Photo Gallery', description: '' } as ExploreEntry;
+  mockState.loaded = false;
+  mockState.loading = true;
+  mockState.entries = [match];
+  await act(async () => { renderer = create(screen()); });
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([]);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'search.empty')).toBe(false);
+  expect(discoverApplications).toHaveBeenCalledWith('account');
+
+  mockQuery = 'gallery';
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([]);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+
+  mockState.loaded = true;
+  mockState.loading = false;
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([match]);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+
+  mockQuery = 'no match';
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([]);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'search.empty')).toBe(true);
+});
+
+it.each(['favorites', 'address'] as const)('keeps %s searches independent of the first Discover page', async mode => {
+  mockState.loaded = false;
+  mockState.loading = true;
+  const match = { key: 'photo', title: 'Photo Gallery', description: '' } as ExploreEntry;
+  if (mode === 'favorites') {
+    mockScope = 'favorites'; mockQuery = 'photo'; mockFavorites = [match];
+  } else {
+    mockQuery = 'https://example.com/';
+    Object.assign(mockAddressSearch, { active: true, loading: false, entry: match });
+  }
+  await act(async () => { renderer = create(screen()); });
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([match]);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  expect(discoverApplications).not.toHaveBeenCalled();
 });
