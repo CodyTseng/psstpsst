@@ -3,6 +3,15 @@ import { naddrEncode } from 'nostr-tools/nip19';
 import { applicationTestDatabase } from '@/services/explore/testing/database';
 import { migrateApplicationFavorites } from '../data-migrations/application-favorites';
 
+it('keeps current application-cache schemas intact when the repair migration runs', () => {
+  const fixture = applicationTestDatabase();
+  try {
+    const before = fixture.sqlite.prepare("SELECT type,name,sql FROM sqlite_master WHERE name IN ('application_favorite_references','replaceable_cache_freshness') ORDER BY name").all();
+    fixture.sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0074_application-cache-retention.sql`, 'utf8'));
+    expect(fixture.sqlite.prepare("SELECT type,name,sql FROM sqlite_master WHERE name IN ('application_favorite_references','replaceable_cache_freshness') ORDER BY name").all()).toEqual(before);
+  } finally { fixture.sqlite.close(); }
+});
+
 it('preserves ordered unsynced favorites as a revision draft before removing the projection', async () => {
   const fixture = applicationTestDatabase(true);
   try {

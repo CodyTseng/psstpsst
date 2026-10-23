@@ -1,4 +1,5 @@
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
+import { readFileSync } from 'node:fs';
 import type { Event } from 'nostr-tools';
 import type { applicationTestDatabase } from '../testing/database';
 
@@ -17,6 +18,27 @@ const modules = () => ({ ...jest.requireActual('../application-cache'), ...jest.
   typeof import('../application-cache') & typeof import('../application-metadata');
 beforeEach(() => { jest.resetModules(); mockDatabase = undefined; mockQuery.mockReset(); });
 afterEach(() => mockDatabase?.sqlite.close());
+
+it('repairs older application-cache schemas before retaining launch metadata', async () => {
+  const cache = modules(), app = cache.parseApplicationEvent(event());
+  const sqlite = mockDatabase!.sqlite;
+  sqlite.exec('DROP VIEW application_favorite_references; DROP INDEX replaceable_cache_freshness;');
+  const draft = JSON.stringify([['a', `35130:${app.manifest!.pubkey}:notes`]]);
+  sqlite.prepare('INSERT INTO private_list_sync_state(account_pubkey,kind,d_tag,draft,dirty) VALUES (?,?,?,?,1)')
+    .run('account', 30267, 'psstpsst-favorites', draft);
+  await expect(cache.cacheApplicationEvent(app, { retain: true })).rejects.toThrow('Failed query');
+
+  const repair = readFileSync(`${process.cwd()}/src/db/migrations/0074_application-cache-retention.sql`, 'utf8');
+  sqlite.exec(repair);
+  sqlite.exec(repair);
+  await cache.cacheApplicationEvent(app, { retain: true });
+  expect((await cache.readApplicationCache([app])).get(app.key)?.manifest?.id).toBe(app.manifest!.id);
+  expect(sqlite.prepare('SELECT type,reference FROM application_favorite_references').all())
+    .toEqual([{ type: 'a', reference: `35130:${app.manifest!.pubkey}:notes` }]);
+  expect(sqlite.prepare('SELECT draft FROM private_list_sync_state').get()).toEqual({ draft });
+  expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='replaceable_cache_freshness'").get())
+    .toEqual({ name: 'replaceable_cache_freshness' });
+});
 
 it('persists a replaceable app once per coordinate and reuses it after process caches reset', async () => {
   const cache = modules(), app = cache.parseApplicationEvent(event());

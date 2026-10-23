@@ -519,6 +519,13 @@
       "when": 1793318400000,
       "tag": "0073_crypto-operation-permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1793404800000,
+      "tag": "0074_application-cache-retention",
+      "breakpoints": true
     }
   ]
 }

@@ -79,27 +79,33 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const showError = useCallback((key: string) => {
     showToast(t(key.startsWith('napplets.') ? key : 'napplets.request_failed'), { variant: 'error', target: 'primary' });
   }, [t]);
-  const reportBackgroundError = useEffectEvent(() => showError('napplets.request_failed'));
+  const reportBackgroundError = useEffectEvent((error: unknown) => {
+    console.warn('[explore] Favorites load failed', error);
+    showError('napplets.request_failed');
+  });
   const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setSearchScrolled(false); }, []);
   const clearance = useScreenHeaderClearance();
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   const needsFavorites = tab === 'favorites' || scan !== null;
   useEffect(() => {
     if (account && focused && needsFavorites)
-      void exploreService.activate(account, { refresh: true }).catch(() => reportBackgroundError());
+      void exploreService.activate(account, { refresh: true }).catch(error => reportBackgroundError(error));
   }, [account, focused, needsFavorites]);
   useEffect(() => {
     if (account && focused && searching && tab === 'favorites' && state.loaded && state.account === account)
-      void exploreService.loadFavoriteSearchMetadata(account).catch(() => reportBackgroundError());
+      void exploreService.loadFavoriteSearchMetadata(account).catch(error => reportBackgroundError(error));
   }, [account, focused, searching, tab, state.loaded, state.account]);
   const loadMoreFavorites = useCallback(() => {
     if (account) void exploreService.loadMoreFavorites(account).catch(() => showError('napplets.request_failed'));
   }, [account, showError]);
   const open = useCallback(
     async (app: ExploreEntry) => {
+      let stage = 'resolve-metadata';
       try {
         if (needsFavoriteMetadata(app)) app = await exploreService.resolveFavorite(app, account ?? '');
+        stage = 'open-window';
         if (await tryOpenApplicationWindow(app, account ?? '')) return;
+        stage = 'prepare-inline';
         if(app.release) {
           await nappletService.activateAccount(account ?? '');
           const runId=nappletService.prepareOpen(app.release,account??'');
@@ -107,7 +113,8 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
         } else {
           const runId=exploreService.prepare(app,account??'');navigation.open(`/explore-run?runId=${runId}`);
         }
-      } catch {
+      } catch (error) {
+        console.warn('[explore] Application launch failed', { stage, kind: app.kind }, error);
         showError('napplets.request_failed');
       }
     },

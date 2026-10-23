@@ -1,4 +1,5 @@
 import m0073 from './0073_crypto-operation-permissions.sql';
+import m0074 from './0074_application-cache-retention.sql';
 import m0072 from './0072_event-relay-sources.sql';
 import m0071 from './0071_event-backed-applications.sql';
 import m0070 from './0070_private-favorites.sql';
@@ -153,6 +154,7 @@ m0069,
 m0070,
 m0071,
 m0072,
-m0073
+m0073,
+m0074
     }
   }
