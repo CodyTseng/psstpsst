@@ -1,3 +1,4 @@
+import { useToastStore } from '@/stores/toast.store';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ActivityIndicator, FlatList } from 'react-native';
 import { router } from 'expo-router';
@@ -68,5 +69,6 @@ it('rejects array-valued publisher parameters without querying applications', as
   mockPubkey = [pubkey];
   await act(async () => { renderer = create(<PublisherApplicationsScreen />); });
   expect(mockLoad).not.toHaveBeenCalled();
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'new_chat.invalid_npub')).toBe(true);
+  expect(useToastStore.getState()).toMatchObject({ message: 'new_chat.invalid_npub', variant: 'error' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'new_chat.invalid_npub')).toBe(false);
 });

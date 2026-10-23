@@ -96,7 +96,7 @@ export function ForwardTargetScreen({ onClose, stayInSource = false }: { onClose
               } catch {
                 if (!failureShown) {
                   failureShown = true;
-                  showToast(t('share.send_failed'), { target: 'detail' });
+                  showToast(t('share.send_failed'), { variant: 'error', target: 'detail' });
                 }
               }
               await new Promise<void>((resolve) => setTimeout(resolve, 0));

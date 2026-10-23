@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, FlatList, Platform, ScrollView, StyleSheet, View, type ScrollViewProps, type TextInput, type TextStyle } from 'react-native';
 import { ChatRound } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
@@ -39,6 +40,7 @@ function Discussion({ account, target, header, scrollProps }: {
   account: string; target: CommentTarget; header: ReactNode; scrollProps?: ScrollProps;
 }) {
   const state = useApplicationComments(account, target);
+  useErrorToast(state.error && 'comments.load_failed');
   const { t } = useTranslation();
   const colors = useThemeColors();
   const [replyId, setReplyId] = useState<string>();
@@ -58,7 +60,6 @@ function Discussion({ account, target, header, scrollProps }: {
         <CommentComposer account={account} session={state.session} inputRef={input}
           onCancelReply={cancelReply} onSent={sent} />
         {state.error ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing.sm }}>
-          <AppText tone="muted">{t('comments.load_failed')}</AppText>
           <AppButton variant="accentText" compact compactAxis="none" label={t('comments.try_again')}
             onPress={() => { void state.session.load(true); }} />
         </View> : null}

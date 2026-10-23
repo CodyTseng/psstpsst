@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { AppText } from '@/components/common/AppText';
+import { DangerCircle } from '@solar-icons/react-native/category/ui/Linear/DangerCircle';
 import { useIsRTL } from '@/i18n/direction';
 import { toastKeyboardTranslateY } from '@/lib/layout/toast-keyboard-position';
 import { toastPaneInsets } from '@/lib/layout/toast-pane-position';
@@ -22,6 +23,7 @@ import { useToastStore } from '@/stores/toast.store';
 import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
 
 const VISIBLE_MS = 1800;
+const ERROR_VISIBLE_MS = 4500;
 const ENTER_MS = 180;
 const EXIT_MS = 220;
 const ENTER_OFFSET = spacing.sm;
@@ -48,6 +50,8 @@ export function Toast({ managesLifetime = true }: Props = {}) {
   const message = useToastStore((s) => s.message);
   const id = useToastStore((s) => s.id);
   const target = useToastStore((s) => s.target);
+  const variant = useToastStore((s) => s.variant);
+  const isError = variant === 'error';
   const { width, height } = useWindowDimensions();
   const isRTL = useIsRTL();
   // Divider updates only render a host that is displaying a scoped message.
@@ -97,12 +101,12 @@ export function Toast({ managesLifetime = true }: Props = {}) {
           if (finished && managesLifetime) scheduleOnRN(hideToastIfCurrent, id);
         },
       );
-    }, VISIBLE_MS);
+    }, isError ? ERROR_VISIBLE_MS : VISIBLE_MS);
     return () => {
       clearTimeout(timer);
       cancelAnimation(visibility);
     };
-  }, [id, managesLifetime, message, visibility]);
+  }, [id, isError, managesLifetime, message, visibility]);
 
   if (!message) return null;
 
@@ -116,23 +120,29 @@ export function Toast({ managesLifetime = true }: Props = {}) {
           bottom: insets.bottom + 80,
           zIndex: 1,
           alignItems: 'center',
-          paddingHorizontal: 24,
+          paddingHorizontal: spacing.xl,
         },
         animatedStyle,
       ]}
     >
       <View
+        accessibilityRole={isError ? 'alert' : undefined}
+        accessibilityLiveRegion={isError ? 'assertive' : 'polite'}
         style={{
           maxWidth: contentWidth.toast,
-          paddingHorizontal: 16,
-          paddingVertical: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.sm,
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.sm,
           borderRadius: radius.full,
-          backgroundColor: c.surfaceElevated,
+          backgroundColor: isError ? c.dangerSoft : c.surfaceElevated,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.border,
+          borderColor: isError ? c.danger : c.border,
         }}
       >
-        <AppText variant="body" numberOfLines={2}>
+        {isError ? <DangerCircle size={spacing.lg} color={c.danger} style={{ flexShrink: 0 }} /> : null}
+        <AppText variant="body" tone={isError ? 'danger' : 'default'} numberOfLines={isError ? undefined : 2} style={{ flexShrink: 1 }}>
           {message}
         </AppText>
       </View>

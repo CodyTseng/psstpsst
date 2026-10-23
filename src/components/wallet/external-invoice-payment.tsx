@@ -29,7 +29,7 @@ export function ExternalInvoicePayment({
 
   async function openWalletApp() {
     const opened = await platform.urlOpener.openExternalUrl(lightningUri);
-    if (!opened) showToast(t('wallet.open_wallet_failed'), { target: 'detail' });
+    if (!opened) showToast(t('wallet.open_wallet_failed'), { variant: 'error', target: 'detail' });
   }
 
   return (

@@ -53,7 +53,7 @@ export function ReportUserSheet({
       successToastPendingRef.current = true;
       close();
     } catch {
-      showToast(t('report.failed'), { target: 'detail' });
+      showToast(t('report.failed'), { variant: 'error', target: 'detail' });
     } finally {
       setSubmitting(false);
     }

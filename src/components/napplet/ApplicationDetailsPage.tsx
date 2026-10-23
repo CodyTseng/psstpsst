@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { ActivityIndicator,ScrollView,View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AppScreen } from '@/components/common/AppScreen';
@@ -21,9 +22,9 @@ export function ApplicationDetailsPage({application,error,access,unsupported=fal
   actions?:{entry:ExploreEntry;account?:string|null;onShare?:()=>void};
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
+  useErrorToast(error);
   const {scrolled,scrollProps}=useScrolled({resetKey:discussion?`${discussion.account}:${discussion.entry.key}`:undefined});
   const header=<View style={{padding:spacing.lg,paddingTop:clearance+spacing.lg,gap:spacing.xl}}>
-    {error?<AppText tone="danger">{t(error)}</AppText>:null}
     {application?<ApplicationInfo release={application} onPublisher={onPublisher}
       action={<AppButton variant="primary" fullWidth={false} size="sm"
         label={t('napplets.open')}

@@ -25,7 +25,7 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
   const ready = !!owner && state.account === owner && state.loaded;
   const saved = ready ? state.entries.find(app => app.key === entry.key) : undefined;
   const favorite = saved?.desktopPosition != null;
-  const failed = () => showToast(t('napplets.request_failed'), { target: 'detail' });
+  const failed = () => showToast(t('napplets.request_failed'), { variant: 'error', target: 'detail' });
   const setFavorite = useApplicationFavorite(owner, 'detail');
   const trigger = useRef<View>(null);
   const [anchor, setAnchor] = useState<HeaderActionMenuAnchor | null>(null);

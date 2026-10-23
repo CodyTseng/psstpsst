@@ -21,7 +21,7 @@ export function useApplicationFavorite(account: string | null, target?: ToastTar
       if (getExploreState().account === account)
         showToast(t(favorite ? 'napplets.favorited' : 'napplets.unfavorited'), { target });
     } catch {
-      showToast(t('napplets.request_failed'), { target });
+      showToast(t('napplets.request_failed'), { variant: 'error', target });
     }
   }, [account, target, t]);
 }

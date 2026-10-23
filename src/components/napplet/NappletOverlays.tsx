@@ -66,7 +66,7 @@ function NappletOverlayContent() {
           messages: [{ kind: KIND_CHAT, content: appShareAddress(release), tags: [] }] });
         try { nappletService.startShare(account, release); }
         catch { useForwardDraftStore.getState().discard(draftId); }
-      } else void nappletService.reload(release, account).catch(() => showToast(t('napplets.request_failed')));
+      } else void nappletService.reload(release, account).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
     };
     nappletService.closePanel();
   }

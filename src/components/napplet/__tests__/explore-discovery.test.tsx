@@ -5,6 +5,7 @@ import type { ExploreEntry } from '@/services/explore/model';
 import { useProfilesMap } from '@/hooks/use-profile';
 import { AppText } from '@/components/common/AppText';
 import { discoverApplications, loadMoreApplications } from '@/services/explore/discovery';
+import { useToastStore } from '@/stores/toast.store';
 import { darkPalette, lightPalette } from '@/theme';
 
 jest.mock('react-native-reanimated', () => {
@@ -135,7 +136,8 @@ it('shows a catalogue request error only when no content can be displayed', asyn
   const app = { key: 'cached', title: 'Cached app', description: '' } as ExploreEntry;
   mockState.error = true;
   await act(async () => { renderer = create(screen()); });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(true);
+  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.request_failed', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
   mockState.entries = [app]; mockState.visibleEntries = [app];
   await act(async () => { renderer.update(screen()); });
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);

@@ -1,8 +1,8 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { useState,type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AppButton } from '@/components/common/AppButton';
-import { AppText } from '@/components/common/AppText';
 import { BrowserPermissions } from './BrowserPermissions';
 import { signingSourceFromLegacyKey } from '@/services/signing/source';
 import { NappletPermissions } from './NappletPermissions';
@@ -16,6 +16,7 @@ export function ApplicationSettings({release,sourceId,access,onReset}:{
 }) {
   const {t}=useTranslation();
   const [busy,setBusy]=useState(false),[error,setError]=useState(false),[revision,setRevision]=useState(0);
+  useErrorToast(error && 'napplets.request_failed');
   async function reset() {
     if(busy)return;
     setBusy(true);setError(false);
@@ -29,6 +30,5 @@ export function ApplicationSettings({release,sourceId,access,onReset}:{
     {sourceId || release ? <BrowserPermissions key={`browser:${revision}`} sourceId={sourceId ?? signingSourceFromLegacyKey(release!.key)} /> : null}
     {access?<View key={`access:${revision}`}>{access}</View>:null}
     <AppButton variant="danger" label={t('napplets.revoke')} loading={busy} onPress={()=>{void reset();}}/>
-    {error?<AppText tone="danger">{t('napplets.request_failed')}</AppText>:null}
   </View>;
 }

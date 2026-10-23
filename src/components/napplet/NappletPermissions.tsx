@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { updatePermissions } from '@/services/signing/management';
 import { useState } from 'react';
 import { useIsFocused } from 'expo-router/react-navigation';
@@ -46,25 +47,24 @@ function PermissionRules({ release, sourceId, initiallyExpanded = false }: { rel
   const { data, error, accountPubkey } = useNappletPermissions(release, expanded, sourceId);
   const [editor, setEditor] = useState<{ row: EditableSigningRule; visible: boolean }>();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
   const [view, setView] = useState<{ snapshot: typeof data; rows: EditableSigningRule[]; activity: NonNullable<typeof data>['activity'] }>(
     () => ({ snapshot: data, rows: data?.rules ?? [], activity: data?.activity ?? [] }),
   );
   if (data && !busy && view.snapshot !== data) {
     setView((previous) => ({ snapshot: data, rows: mergeRules(previous.rows, data.rules), activity: data.activity }));
   }
+  useErrorToast(expanded && error && 'napplets.request_failed');
   const rows = data && !busy ? mergeRules(view.rows, data.rules) : view.rows;
   const activity = data?.activity ?? view.activity;
   async function save(row: EditableSigningRule, change: SigningRuleChange) {
     if (!accountPubkey || busy) throw new Error('session-closed');
-    setBusy(true); setFailed(false);
+    setBusy(true);
     const pending: EditableSigningRule = { ...row, decision: change.decision, duration: change.duration,
       expiresAt: change.duration === 'timed' ? change.expiresAt : undefined };
     setView((previous) => ({ ...previous, rows: rows.map((entry) => entry.key === row.key ? pending : entry) }));
     try { await (sourceId?updatePermissions({accountPubkey,sourceId},row,change):nappletService.updateSigningRule(release!, row, change, accountPubkey)); }
     catch (error) {
       setView((previous) => ({ ...previous, rows: previous.rows.map((entry) => entry.key === row.key ? row : entry) }));
-      setFailed(true);
       throw error;
     } finally { setBusy(false); }
   }
@@ -73,7 +73,6 @@ function PermissionRules({ release, sourceId, initiallyExpanded = false }: { rel
       <AppButton variant="secondary" label={t('napplets.signing_manage')} onPress={() => setExpanded(!expanded)} />}
     {expanded ? <>
       <AppText variant="caption" tone="muted">{t('napplets.permissions_hint')}</AppText>
-      {error || failed ? <AppText tone="danger">{t('napplets.request_failed')}</AppText> : null}
       {!data && !error && !rows.length ? <ActivityIndicator color={c.accent} /> : null}
       {data && rows.length === 0 ? <AppText tone="muted">{t('napplets.signing_no_rules')}</AppText> : null}
       {rows.length ? <ListGroup>{rows.map((rule) => {

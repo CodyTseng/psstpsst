@@ -49,5 +49,5 @@ it('shows an error instead of a success toast when persistence fails', async () 
   jest.mocked(exploreService.move).mockRejectedValue(new Error('failed'));
   await act(async () => { await toggle(app, true); });
   expect(showToast).toHaveBeenCalledTimes(1);
-  expect(showToast).toHaveBeenCalledWith('napplets.request_failed', { target: 'detail' });
+  expect(showToast).toHaveBeenCalledWith('napplets.request_failed', { variant: 'error', target: 'detail' });
 });

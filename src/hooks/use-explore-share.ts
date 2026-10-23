@@ -18,7 +18,7 @@ export function useExploreShare(account: string | null) {
       router.push('/forward');
     };
     if (platform.napplet.tasks?.active()) {
-      void platform.napplet.tasks.showHost().then(share).catch(() => showToast(t('napplets.request_failed')));
+      void platform.napplet.tasks.showHost().then(share).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
     } else share();
   }, [account, t]);
 }

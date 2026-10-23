@@ -59,7 +59,7 @@ accent requires a light/dark pair and a localized name. Other semantic colours
 do not change with the accent.
 
 Use accent sparingly. It is not a page background or default icon colour. Use
-danger for destructive actions and blocking prerequisites that require user action. Use `notification`,
+danger for destructive actions, failure feedback, and blocking prerequisites that require user action. Use `notification`,
 not danger, for unread state.
 The Contacts tab shows a small dot when unread message requests exist, without
 a number. The Chats tab retains its unread message count.
@@ -726,8 +726,13 @@ a previously declined update.
 - Fast local reads use a blank stable placeholder; genuinely slow remote reads
   may use a skeleton that matches the final layout.
 - An empty state has an icon, a short title, and optional guidance/action.
-- Show recoverable errors where the failed action lives; use a dialog only when
-  the user must decide or acknowledge something.
+- Keep field validation and form errors beside their inputs or form controls.
+  Other failures use the shared bottom error toast; use an alert or sheet when
+  the user must decide, acknowledge, or review recovery details. Never insert
+  standalone error text or banners into page content.
+- Error toasts use a danger-soft surface, danger text, a Solar Linear DangerCircle
+  icon, and a longer reading interval than ordinary confirmations. They preserve the page
+  layout and appear above active sheets and modals.
 - Clipboard actions report failures with a localized toast. Show copied
   confirmation only after the platform accepts the write, on the latest copied
   field, and clear it after two seconds.

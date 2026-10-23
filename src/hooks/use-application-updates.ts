@@ -67,7 +67,7 @@ export function useApplicationUpdates(target: ApplicationUpdateTarget | undefine
     void platform.confirmationDialog.confirm({ title: t('napplets.update_available'),
       message: t('napplets.update_notice', { name: latest.title }), cancelLabel: t('napplets.update_later'), confirmLabel: t('napplets.update_restart'),
     }).then(async accepted => { if (mounted.current) await settle(account, source, version, accepted); })
-      .catch(() => { if (mounted.current) showToast(t('napplets.request_failed')); })
+      .catch(() => { if (mounted.current) showToast(t('napplets.request_failed'), { variant: 'error' }); })
       .finally(() => { prompting.current = false; if (mounted.current) setDecision(value => value + 1); });
   }, [account, source, version, presentable, target?.blocked, latest, decision, t]);
 }

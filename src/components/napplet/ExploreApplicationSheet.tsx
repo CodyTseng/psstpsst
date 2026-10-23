@@ -37,8 +37,8 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
     fixedFooter={page==='about'?<NappletPanelActions entry={entry} account={account}
       onOpenExternal={entry.kind === 'website' ? () => schedule(() => {
         void platform.urlOpener.openExternalUrl(entry.address)
-          .then(opened => { if (!opened) showToast(t('napplets.request_failed')); })
-          .catch(() => showToast(t('napplets.request_failed')));
+          .then(opened => { if (!opened) showToast(t('napplets.request_failed'), { variant: 'error' }); })
+          .catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
       }) : undefined}
       onAction={action=>{
       if(action==='settings')onPageChange('settings');
@@ -49,7 +49,7 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
       settings={<ApplicationSettings access={entry.required.length ? <View style={{ gap: spacing.lg }}>
         <ApplicationAccessControls required={entry.required} selected={entry.required}/>
         {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('napplets.settings')}
-          onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'))); })}/> : null}
+          onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' })); })}/> : null}
       </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}/>}
       onPublisher={()=>{if(entry.manifest)schedule(()=>openPublisher(entry.manifest!.pubkey));}}/>
     {page === 'about' ? <ApplicationOpenSetting entry={entry} account={account} /> : null}

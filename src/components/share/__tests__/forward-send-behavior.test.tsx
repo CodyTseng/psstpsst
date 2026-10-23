@@ -117,7 +117,7 @@ it('keeps queue preparation failures as an exceptional notice', async () => {
   act(() => { renderer = create(<ForwardTargetScreen />); });
   confirm();
   await act(async () => { await jest.runAllTimersAsync(); });
-  expect(mockToast).toHaveBeenCalledWith('share.send_failed', { target: 'detail' });
+  expect(mockToast).toHaveBeenCalledWith('share.send_failed', { variant: 'error', target: 'detail' });
   expect(forwardNoticeStore.getState().notice?.targets).toEqual([target]);
 });
 

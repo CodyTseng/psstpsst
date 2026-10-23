@@ -83,10 +83,10 @@ export const useBackupTaskStore = create<State>((set, get) => ({
         if (presentShare) {
           try {
             const shared = await shareAccountArchive(result.archive);
-            if (!shared) showToast(i18n.t('backup.share_failed'));
+            if (!shared) showToast(i18n.t('backup.share_failed'), { variant: 'error' });
           } catch (error) {
             console.error('[backup] Share failed', error);
-            showToast(i18n.t('backup.share_failed'));
+            showToast(i18n.t('backup.share_failed'), { variant: 'error' });
           }
         } else {
           showToast(i18n.t('backup.archive_ready'));

@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -17,10 +18,11 @@ export function BrowserPermissions({ sourceId }: { sourceId: string }) {
   const c = useThemeColors();
   const accountPubkey = useNappletAccountPubkey();
   const data = useBrowserPermissions(accountPubkey, sourceId);
+  useErrorToast(data?.error && 'napplets.request_failed');
   const [editor, setEditor] = useState<{ rule: BrowserPermissionRule; visible: boolean }>();
   return <View style={{ gap: spacing.md }}>
     <AppText variant="subtitle">{t('napplets.browser_permission')}</AppText>
-    {!data ? <ActivityIndicator color={c.accent} /> : data.error ? <AppText tone="danger">{t('napplets.request_failed')}</AppText>
+    {!data ? <ActivityIndicator color={c.accent} /> : data.error ? null
       : !data.rules?.length ? <AppText tone="muted">{t('napplets.signing_no_rules')}</AppText> : <ListGroup>{data.rules.map(rule =>
         <ListRow key={rule.resource} title={browserPermissionLabel(rule.resource, t)}
           subtitle={rule.expiresAt === null ? t('napplets.signing_duration_always') : t('napplets.signing_until', {

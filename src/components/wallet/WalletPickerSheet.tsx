@@ -120,7 +120,7 @@ export function WalletPickerSheet({
   const listStyle = useAnimatedStyle(() => ({ height: listHeight.value }));
 
   function reportUpdateFailure(): void {
-    showToast(t('wallet.update_failed'), { target: 'detail' });
+    showToast(t('wallet.update_failed'), { variant: 'error', target: 'detail' });
   }
 
   function closeRenameDialog() {

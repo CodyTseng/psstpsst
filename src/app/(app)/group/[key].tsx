@@ -112,7 +112,7 @@ export default function GroupInfoScreen() {
         try {
           await setGroupSaved(accountPubkey, conversation.groupId, false);
         } catch {
-          showToast(t('group.save_failed'), { target: 'detail' });
+          showToast(t('group.save_failed'), { variant: 'error', target: 'detail' });
         }
       }
     }
@@ -130,7 +130,7 @@ export default function GroupInfoScreen() {
     try {
       await setGroupSaved(accountPubkey, conversation.groupId, !saved);
     } catch {
-      showToast(t('group.save_failed'), { target: 'detail' });
+      showToast(t('group.save_failed'), { variant: 'error', target: 'detail' });
     } finally {
       setSaving(false);
     }

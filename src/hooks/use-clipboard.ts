@@ -53,7 +53,7 @@ export function useClipboard<Key extends string = string>({
     } catch {
       if (mounted.current && currentRequest === request.current) {
         resetCopied();
-        showToast(t('common.copy_failed'), toastTarget ? { target: toastTarget } : undefined);
+        showToast(t('common.copy_failed'), { variant: 'error', target: toastTarget });
       }
       return false;
     }
@@ -63,7 +63,7 @@ export function useClipboard<Key extends string = string>({
     try {
       return await platform.clipboard.readText();
     } catch {
-      showToast(t('common.paste_failed'), toastTarget ? { target: toastTarget } : undefined);
+      showToast(t('common.paste_failed'), { variant: 'error', target: toastTarget });
       return null;
     }
   }, [t, toastTarget]);

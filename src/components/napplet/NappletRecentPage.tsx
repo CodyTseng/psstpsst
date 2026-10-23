@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { ActivityIndicator, FlatList, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +27,7 @@ type Props<T extends GridApp> = Omit<RecentAppActions<T>, 'onOpen'> & {
 
 export function NappletRecentPage<T extends GridApp>({ recent, favoritePositions, loaded = true, error, onBack, loadingMore, onLoadMore, onAdd, onUnfavorite, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
+  useErrorToast(error, 'primary');
   const c = useThemeColors();
   const direction = useLanguageDirection();
   const clearance = useScreenHeaderClearance();
@@ -35,7 +37,6 @@ export function NappletRecentPage<T extends GridApp>({ recent, favoritePositions
     <ScreenHeader title={t('napplets.recent')} bordered={scrolled} onBack={onBack} />
     <View testID="napplet-recent-page" style={{ flex: 1, paddingTop: clearance }}>
       {error ? <View style={{ alignItems: 'center', padding: spacing.md, gap: spacing.sm }}>
-        <AppText align="center" style={{ color: c.danger }}>{t(error)}</AppText>
         {onLoadMore ? <AppButton variant="secondary" label={t('common.retry')} onPress={onLoadMore} /> : null}
       </View> : null}
       {!loaded && !error ? <ActivityIndicator color={c.textMuted} style={{ padding: spacing.lg }} /> : <FlatList

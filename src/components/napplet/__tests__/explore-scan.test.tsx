@@ -14,6 +14,7 @@ import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { ExploreDiscovery } from '../ExploreDiscovery';
 import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
+import { useToastStore } from '@/stores/toast.store';
 import { uiDensity } from '@/theme';
 import { resolveApplicationAddress } from '@/services/explore/address-search';
 import { exploreService } from '@/services/explore/service';
@@ -37,7 +38,7 @@ jest.mock('@/stores/explore.store', () => ({ useExplore: () => mockExplore }));
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: (select: (state: { activePubkey: string }) => unknown) => select({ activePubkey: 'account' }) }));
 jest.mock('@/components/navigation/primary-pane-navigation', () => ({ usePrimaryPaneNavigation: () => ({ open: mockNavigate }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, start: 0, end: 0 }) }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('react-i18next', () => { const t = (key: string) => key; return { useTranslation: () => ({ t }) }; });
 jest.mock('@/stores/theme.store', () => ({ useThemeStore: (select: (state: object) => unknown) => select({ accent: 'blue' }) }));
 jest.mock('@/components/common/AppScreen', () => ({ AppScreen: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: ({ left, right, below, titleControl }: { left?: React.ReactNode; right?: React.ReactNode; below?: React.ReactNode; titleControl?: React.ReactNode }) => <>{left}{right}{titleControl}{below}</>, useScreenHeaderClearance: () => 64 }));
@@ -161,14 +162,16 @@ it('reports a failed naddr lookup without launching or recording an application'
   await act(async () => { await jest.advanceTimersByTimeAsync(0); });
   expect(mockNavigate).not.toHaveBeenCalled();
   expect(discoveryStore.getState().addressCache.entries).toEqual([]);
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.not_found')).toBe(true);
+  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.not_found', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.not_found')).toBe(false);
 });
 
 it('keeps invalid scans out of discovery search', async () => {
   await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned('not-an-app-address'); });
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');
   expect(renderer.root.findAllByType(ExploreDiscovery)).toHaveLength(0);
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.invalid_manifest')).toBe(true);
+  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.invalid_manifest', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.invalid_manifest')).toBe(false);
 });
 
 it('opens a home-scanned website directly without changing scope', async () => {
@@ -258,4 +261,14 @@ it('queries Favorites again each time focus returns and does no query while blur
   mockFocused = true;
   await act(async () => { renderer.update(<NappletsScreen />); });
   expect(exploreService.activate).toHaveBeenCalledTimes(2);
+});
+
+it('shows launch failures in an error toast while preserving the Favorites grid', async () => {
+  mockExplore.entries = [{ key: 'saved', desktopPosition: 0, lastUsedAt: null } as ExploreEntry];
+  await act(async () => { renderer.update(<NappletsScreen />); });
+  jest.mocked(exploreService.prepare).mockImplementationOnce(() => { throw new Error('failed'); });
+  await act(async () => { await renderer.root.findByType(NappletGrid).props.onOpen(mockExplore.entries[0]); });
+  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.request_failed', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
+  expect(renderer.root.findByType(NappletGrid).props.items).toEqual(mockExplore.entries);
 });

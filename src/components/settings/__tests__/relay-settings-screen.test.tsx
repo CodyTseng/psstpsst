@@ -81,7 +81,7 @@ it('keeps the draft and shows a save failure even when the input is empty', asyn
   await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
   expect(activePanel().findByType(AppInput).props.error).toBeUndefined();
   expect(activePanel().findAllByType(AppText).some((node) => node.props.children === 'relays.save_error')).toBe(true);
-  expect(showToast).toHaveBeenCalledWith('relays.save_error', { target: 'detail' });
+  expect(showToast).toHaveBeenCalledWith('relays.save_error', { variant: 'error', target: 'detail' });
   expect(activePanel().findByType(AppButton).props.disabled).toBe(false);
   expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://new.example/']);
 });
@@ -116,7 +116,7 @@ it.each(['dm', 'write'] as const)('keeps a failed %s relay draft retryable and c
   await renderSettings(mode);
   act(() => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new.example/']); });
   await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
-  expect(showToast).toHaveBeenLastCalledWith('relays.save_error', { target: 'detail' });
+  expect(showToast).toHaveBeenLastCalledWith('relays.save_error', { variant: 'error', target: 'detail' });
   expect(activePanel().findAllByType(AppText).some((node) => node.props.children === 'relays.save_error')).toBe(true);
   expect(activePanel().findByType(AppButton).props.disabled).toBe(false);
   expect(activePanel().findByType(AppButton).props.loading).toBe(false);

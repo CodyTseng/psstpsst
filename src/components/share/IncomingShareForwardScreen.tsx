@@ -113,8 +113,8 @@ export function IncomingShareForwardScreen() {
           setTimeout(() => {
             void task.run()
               .then((failed) => {
-                if (failed) showToast(t('share.send_failed'), { target: 'detail' });
-              }, () => showToast(t('share.send_failed'), { target: 'detail' }))
+                if (failed) showToast(t('share.send_failed'), { variant: 'error', target: 'detail' });
+              }, () => showToast(t('share.send_failed'), { variant: 'error', target: 'detail' }))
               .finally(() => task.releaseSource(staged.cleanup));
           }, 0);
         } catch {

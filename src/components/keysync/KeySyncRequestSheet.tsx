@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import type { Event } from 'nostr-tools';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +46,7 @@ export function KeySyncRequestSheet() {
   const [pending, setPending] = useState<Event | null>(null);
   const [sendingRequestId, setSendingRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useErrorToast(error);
 
   useEffect(() => {
     const unsubscribeRequest = dmService.onSyncRequest((event) => {
@@ -176,11 +178,6 @@ export function KeySyncRequestSheet() {
         {t('key_sync.request_verify_hint')}
       </AppText>
 
-      {error ? (
-        <AppText variant="caption" tone="danger">
-          {error}
-        </AppText>
-      ) : null}
 
       <ActionRow
         layout="horizontal"

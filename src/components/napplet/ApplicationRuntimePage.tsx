@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { useApplicationUpdates, type ApplicationUpdateTarget } from '@/hooks/use-application-updates';
 import { useContext, type ReactNode } from 'react';
 import { ActivityIndicator,StyleSheet,View } from 'react-native';
@@ -30,6 +31,7 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
   useApplicationUpdates(update, active && !loading && !error && !hidden);
+  useErrorToast(active && !hidden && error ? (error.startsWith('napplets.') ? error : 'napplets.request_failed') : null);
   const taskId = useContext(ApplicationTaskContext);
   const immersive = IS_ANDROID && taskId !== null;
   const appearance = useNappletAppearance(containerId);
@@ -62,7 +64,6 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
           <AppText align="center" tone="muted">{t('napplets.runtime_loading')}</AppText>
         </View>:null}
         {error?<View style={{flex:1,alignItems:'center',justifyContent:'center',padding:spacing.xl,gap:spacing.lg}}>
-          <AppText align="center" tone="muted">{t(error.startsWith('napplets.')?error:'napplets.request_failed')}</AppText>
           <View><AppButton fullWidth={false} label={t('common.retry')} onPress={onRetry}/></View>
         </View>:null}
       </View>

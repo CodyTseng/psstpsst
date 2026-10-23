@@ -1,3 +1,4 @@
+import { showToast } from '@/stores/toast.store';
 import { tryOpenApplicationWindow } from '@/services/explore/windows';
 import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { ExploreDiscovery } from '@/components/napplet/ExploreDiscovery';
@@ -75,25 +76,27 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const scanLoading = scan !== null && scan !== settledScan;
   const [scrolled, setScrolled] = useState(false);
   const [searchScrolled, setSearchScrolled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const showError = useCallback((key: string) => {
+    showToast(t(key.startsWith('napplets.') ? key : 'napplets.request_failed'), { variant: 'error', target: 'primary' });
+  }, [t]);
+  const reportBackgroundError = useEffectEvent(() => showError('napplets.request_failed'));
   const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setSearchScrolled(false); }, []);
   const clearance = useScreenHeaderClearance();
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
   const needsFavorites = tab === 'favorites' || scan !== null;
   useEffect(() => {
     if (account && focused && needsFavorites)
-      void exploreService.activate(account, { refresh: true }).catch(() => setError('napplets.request_failed'));
+      void exploreService.activate(account, { refresh: true }).catch(() => reportBackgroundError());
   }, [account, focused, needsFavorites]);
   useEffect(() => {
     if (account && focused && searching && tab === 'favorites' && state.loaded && state.account === account)
-      void exploreService.loadFavoriteSearchMetadata(account).catch(() => setError('napplets.request_failed'));
+      void exploreService.loadFavoriteSearchMetadata(account).catch(() => reportBackgroundError());
   }, [account, focused, searching, tab, state.loaded, state.account]);
   const loadMoreFavorites = useCallback(() => {
-    if (account) void exploreService.loadMoreFavorites(account).catch(() => setError('napplets.request_failed'));
-  }, [account]);
+    if (account) void exploreService.loadMoreFavorites(account).catch(() => showError('napplets.request_failed'));
+  }, [account, showError]);
   const open = useCallback(
     async (app: ExploreEntry) => {
-      setError(null);
       try {
         if (needsFavoriteMetadata(app)) app = await exploreService.resolveFavorite(app, account ?? '');
         if (await tryOpenApplicationWindow(app, account ?? '')) return;
@@ -105,10 +108,10 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
           const runId=exploreService.prepare(app,account??'');navigation.open(`/explore-run?runId=${runId}`);
         }
       } catch {
-        setError('napplets.request_failed');
+        showError('napplets.request_failed');
       }
     },
-    [account, navigation],
+    [account, navigation, showError],
   );
   const showSearchDetails = useCallback((app: ExploreEntry) => {
     navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1`);
@@ -119,7 +122,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   const resolveScan = useEffectEvent(async (request: { value: string }, signal: AbortSignal) => {
     const address = parseApplicationAddressQuery(request.value);
     if (!account || !address || address.type === 'invalid') {
-      setError('napplets.invalid_manifest');
+      showError('napplets.invalid_manifest');
       setSettledScan(request);
       return;
     }
@@ -136,7 +139,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
         showSearchDetails(app);
       }
     } catch (error) {
-      if (!signal.aborted) setError(error instanceof Error && ['napplets.not_found', 'napplets.invalid_manifest'].includes(error.message)
+      if (!signal.aborted) showError(error instanceof Error && ['napplets.not_found', 'napplets.invalid_manifest'].includes(error.message)
         ? error.message : 'napplets.request_failed');
     } finally {
       if (!signal.aborted) setSettledScan(request);
@@ -160,13 +163,12 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
   }), [tabsNavigation, searchActive, closeSearch]);
   const action = useCallback(
     (app: ExploreEntry, index: number | null) => {
-      setError(null);
       if (index === null) return setFavorite(app, false);
       return exploreService
         .move(app, index, account ?? '')
-        .catch(() => setError('napplets.request_failed'));
+        .catch(() => showError('napplets.request_failed'));
     },
-    [account, setFavorite],
+    [account, setFavorite, showError],
   );
   const toggleFavorite = useCallback((app: ExploreEntry) => {
     void setFavorite(app, !desktop.some(item => item.key === app.key));
@@ -189,15 +191,14 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
         bordered={searching ? searchScrolled : scrolled}
         titleControl={<SegmentedControl compact value={tab}
           options={[{ value: 'favorites', label: t('napplets.favorites') }, { value: 'discover', label: t('napplets.discover') }]}
-          onChange={value => { onTabChange(value); setScrolled(false); setError(null); }} />}
+          onChange={value => { onTabChange(value); setScrolled(false); }} />}
         right={
           <QrScanButton variant="plain" size={uiDensity.headerActionSize} iconSize={uiDensity.headerActionIconSize}
             onScanned={data => {
               closeSearch();
               const value = data.trim();
               const address = parseApplicationAddressQuery(value);
-              if (!address || address.type === 'invalid') { setScan(null); setError('napplets.invalid_manifest'); return; }
-              setError(null);
+              if (!address || address.type === 'invalid') { setScan(null); showError('napplets.invalid_manifest'); return; }
               setScan({ value });
             }}
           />
@@ -215,9 +216,6 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
             onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : null}
         </View>}>
         <View style={{ flex: 1, paddingTop: clearance }}>
-          {error ? <AppText align="center" style={{ color: c.danger, padding: spacing.md }}>
-            {t(error.startsWith('napplets.') ? error : 'napplets.request_failed')}
-          </AppText> : null}
           {scanLoading || tab === 'favorites' && (!state.loaded || state.account !== account) ? <View>
             {restingSearch}
             <DelayedActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
@@ -234,7 +232,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
             onScrollBeginDrag={stopEmptySearch} keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ flexGrow: 1, paddingBottom: bottomInset }}>
             {restingSearch}
-            <Empty onDiscover={() => { setError(null); onTabChange('discover'); setScrolled(false); }} />
+            <Empty onDiscover={() => { onTabChange('discover'); setScrolled(false); }} />
           </ScrollView>}
         </View>
       </SearchTransition>

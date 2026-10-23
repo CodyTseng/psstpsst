@@ -1,3 +1,4 @@
+import { useToastStore } from '@/stores/toast.store';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ApplicationOpenSetting } from '../ApplicationOpenSetting';
 import { Toggle } from '@/components/common/Toggle';
@@ -37,7 +38,8 @@ it('rolls back an optimistic switch when saving fails', async () => {
   expect(renderer.root.findByType(Toggle).props.disabled).toBe(true);
   await act(async () => { fail(new Error('storage-failed')); });
   expect(renderer.root.findByType(Toggle).props.value).toBe(false);
-  expect(JSON.stringify(renderer.toJSON())).toContain('napplets.request_failed');
+  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.request_failed', variant: 'error' });
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('napplets.request_failed');
 });
 
 it.each(['napp', 'napplet'] as const)('omits the opening preference for %s applications', async kind => {

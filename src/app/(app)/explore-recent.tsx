@@ -23,7 +23,7 @@ export default function ExploreRecentScreen() {
   const add = useCallback((app: ExploreEntry) => { void setFavorite(app, true); }, [setFavorite]);
   const unfavorite = useCallback((app: ExploreEntry) => { void setFavorite(app, false); }, [setFavorite]);
   const remove = useCallback((app: ExploreEntry) => {
-    void removeHistory(app).catch(() => showToast(t('napplets.request_failed')));
+    void removeHistory(app).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
   }, [removeHistory, t]);
   const details = useCallback((app: ExploreEntry) => {
     if (account) cacheApplicationAddress(account, app);

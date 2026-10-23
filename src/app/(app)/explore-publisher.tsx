@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -24,12 +25,12 @@ export default function PublisherApplicationsScreen() {
 }
 
 function InvalidPublisher() {
+  useErrorToast('new_chat.invalid_npub');
   const { t } = useTranslation();
   const clearance = useScreenHeaderClearance();
   return <AppScreen edges={['bottom']}>
     <ScreenHeader title={t('napplets.publisher')} />
     <View style={{ padding: spacing.lg, paddingTop: clearance + spacing.lg }}>
-      <AppText tone="danger">{t('new_chat.invalid_npub')}</AppText>
     </View>
   </AppScreen>;
 }
@@ -37,6 +38,7 @@ function InvalidPublisher() {
 function PublisherApplications({ pubkey }: { pubkey: string }) {
   const account = useActiveAccount(state => state.activePubkey);
   const state = usePublisherApplications(pubkey);
+  useErrorToast(state.error && 'napplets.request_failed');
   const { name, profile } = useDisplayName(pubkey);
   const { t } = useTranslation();
   const colors = useThemeColors();
@@ -63,7 +65,6 @@ function PublisherApplications({ pubkey }: { pubkey: string }) {
           paddingHorizontal: spacing.lg, paddingVertical: spacing.lg, gap: spacing.lg }}>
           <SectionLabel>{t('napplets.publisher_apps')}</SectionLabel>
           {state.error ? <View style={{ gap: spacing.sm }}>
-            <AppText tone="muted">{t('napplets.request_failed')}</AppText>
             <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} />
           </View> : null}
         </View>

@@ -45,7 +45,7 @@ export default function ExploreRunScreen() {
     if (openingWindow.current) return;
     openingWindow.current = true; setWindowPending(true);
     try { await exploreService.openInWindow(id); }
-    catch { showToast(t('napplets.request_failed')); }
+    catch { showToast(t('napplets.request_failed'), { variant: 'error' }); }
     finally { openingWindow.current = false; setWindowPending(false); }
   };
   const canOpenWindow = owns && (state.entry?.kind === 'website' || state.entry?.kind === 'nsite')

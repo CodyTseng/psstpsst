@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
 import Animated, { useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -84,6 +85,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   const refreshing = scope === 'discover' && !address.active && pullRefreshing;
   const error = data.length ? undefined : address.active ? address.error
     : scope === 'discover' && !searching && state.error ? 'napplets.request_failed' : undefined;
+  useErrorToast(error, 'primary');
   return <View style={{ flex: 1 }}>
     {header ? <Animated.View testID="explore-search-header" style={[{ overflow: 'hidden' }, headerContainerStyle]}>
       <Animated.View style={headerStyle}>{header}</Animated.View>
@@ -106,7 +108,6 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
     onScroll={scroll} scrollEventThrottle={1}
     contentContainerStyle={{ paddingBottom: bottomInset, flexGrow: 1 }}
     ListHeaderComponent={error ? <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-      <AppText tone="muted" align="center">{t(error)}</AppText>
       <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} />
     </View> : null}
     ListEmptyComponent={address.active ? address.loading ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} /> : null : scope === 'discover' && !state.loaded && !state.error && !pullRefreshing

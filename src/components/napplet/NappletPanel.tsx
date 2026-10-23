@@ -51,7 +51,7 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
     if (!account) return;
     const current = getExploreState();
     if (current.account !== account || !current.loaded)
-      void exploreService.activate(account).catch(() => showToast(t('napplets.request_failed'), { target: 'detail' }));
+      void exploreService.activate(account).catch(() => showToast(t('napplets.request_failed'), { variant: 'error', target: 'detail' }));
   }, [account, t]);
   const actionSize = uiDensity.profileActionSize + spacing.lg;
   const actionWidth = actionSize + spacing.sm;

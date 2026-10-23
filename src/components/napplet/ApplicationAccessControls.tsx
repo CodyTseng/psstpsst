@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { useState } from 'react';
 import { ActivityIndicator,View } from 'react-native';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
@@ -17,6 +18,7 @@ export function ApplicationAccessControls({required,optional=[],selected,failed=
 }) {
   const {t}=useTranslation(),c=useThemeColors();
   const [expanded,setExpanded]=useState(false);
+  useErrorToast(failed && 'napplets.request_failed');
   const visibleRequired=required.filter(domain=>domain!=='shell');
   const label=(domain:string)=>t(`napplets.capability_${({network:'resource',common:'relay'} as Record<string,string>)[domain]??domain}`,{defaultValue:domain});
   return <View style={{gap:spacing.md}}>
@@ -34,6 +36,5 @@ export function ApplicationAccessControls({required,optional=[],selected,failed=
         onPress={()=>setExpanded(value=>!value)}/>
       {expanded?<ListGroup>{visibleRequired.map(domain=><ListRow key={domain} title={label(domain)} value={t('napplets.capabilities_required')} valueTone="muted"/>)}</ListGroup>:null}
     </>:null}
-    {failed?<AppText tone="danger">{t('napplets.request_failed')}</AppText>:null}
   </View>;
 }
