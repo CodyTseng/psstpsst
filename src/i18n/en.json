@@ -1196,6 +1196,7 @@
     "signing_unnamed": "Unnamed record",
     "signing_recipient": "Recipient",
     "signing_destinations": "Destinations",
+    "signing_kind": "Kind",
     "signing_content": "Content",
     "signing_truncated": "Preview shortened. Open full details to read all content.",
     "signing_details": "More information",
@@ -1281,8 +1282,6 @@
     "public_as": "Posting publicly as {{name}}"
   },
   "webln": {
-    "connect_title": "Connect wallet",
-    "connect_detail": "Allow wallet access for this page. You choose the wallet and confirm each request.",
     "invoice_title": "Create payment request"
   }
 }

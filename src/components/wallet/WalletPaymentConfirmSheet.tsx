@@ -105,7 +105,7 @@ export function WalletPaymentConfirmSheet({
         title={title ?? t('wallet.confirm_payment')}
         headerAction={headerAction}
         dismissOnBackdropPress={dismissOnBackdropPress}
-        contentStyle={{ gap: spacing.xl }}
+        contentStyle={{ gap: spacing.lg }}
       >
         {requester}
         <WalletAmountDisplay amount={amount} />
@@ -140,7 +140,7 @@ export function WalletPaymentConfirmSheet({
           onClosed={handleWalletPickerClosed}
           title={t('wallet.select_wallet')}
           dismissOnBackdropPress={dismissOnBackdropPress}
-          contentStyle={{ gap: spacing.xl }}
+          contentStyle={{ gap: spacing.lg }}
         >
           <View>
             {wallets.map((wallet) => {

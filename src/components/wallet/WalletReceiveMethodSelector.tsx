@@ -54,7 +54,7 @@ export function WalletReceiveMethodSelector({ options, selectedId, onSelect }: P
         visible={open}
         onClose={() => setOpen(false)}
         title={t('wallet.select_receive_method')}
-        contentStyle={{ gap: spacing.xl }}
+        contentStyle={{ gap: spacing.lg }}
       >
         <View>
           {options.map((option) => {

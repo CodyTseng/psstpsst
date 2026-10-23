@@ -1201,6 +1201,7 @@
     "signing_unnamed": "Enregistrement sans nom",
     "signing_recipient": "Destinataire",
     "signing_destinations": "Destinations",
+    "signing_kind": "Type",
     "signing_content": "Contenu",
     "signing_truncated": "Aperçu abrégé. Ouvrez la demande complète pour lire tout le contenu.",
     "signing_details": "Afficher la demande complète",
@@ -1286,8 +1287,6 @@
     "public_as": "Publication publique en tant que {{name}}"
   },
   "webln": {
-    "connect_title": "Connecter un portefeuille",
-    "connect_detail": "Autorisez cette page à accéder au portefeuille. Vous choisissez le portefeuille et confirmez chaque demande.",
     "invoice_title": "Créer une demande de paiement"
   }
 }

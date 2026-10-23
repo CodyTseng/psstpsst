@@ -1201,6 +1201,7 @@
     "signing_unnamed": "Registro sem nome",
     "signing_recipient": "Destinatário",
     "signing_destinations": "Destinos",
+    "signing_kind": "Tipo",
     "signing_content": "Conteúdo",
     "signing_truncated": "Prévia reduzida. Abra a solicitação completa para ler todo o conteúdo.",
     "signing_details": "Mostrar solicitação completa",
@@ -1286,8 +1287,6 @@
     "public_as": "Publicando como {{name}} de forma pública"
   },
   "webln": {
-    "connect_title": "Conectar carteira",
-    "connect_detail": "Permita que esta página acesse a carteira. Você escolhe a carteira e confirma cada solicitação.",
     "invoice_title": "Criar solicitação de pagamento"
   }
 }

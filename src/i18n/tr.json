@@ -1196,6 +1196,7 @@
     "signing_unnamed": "Adsız kayıt",
     "signing_recipient": "Alıcı",
     "signing_destinations": "Hedefler",
+    "signing_kind": "Tür",
     "signing_content": "İçerik",
     "signing_truncated": "Önizleme kısaltıldı. Tüm içeriği okumak için tam isteği açın.",
     "signing_details": "Tam isteği göster",
@@ -1281,8 +1282,6 @@
     "public_as": "{{name}} olarak herkese açık paylaşım"
   },
   "webln": {
-    "connect_title": "Cüzdan bağla",
-    "connect_detail": "Bu sayfanın cüzdana erişmesine izin verin. Her istekte cüzdanı siz seçer ve onaylarsınız.",
     "invoice_title": "Ödeme isteği oluştur"
   }
 }

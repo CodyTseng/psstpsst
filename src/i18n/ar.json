@@ -1216,6 +1216,7 @@
     "signing_unnamed": "سجل بلا اسم",
     "signing_recipient": "المستلم",
     "signing_destinations": "الوجهات",
+    "signing_kind": "النوع",
     "signing_content": "المحتوى",
     "signing_truncated": "تم اختصار المعاينة. افتح الطلب الكامل لقراءة المحتوى كله.",
     "signing_details": "عرض الطلب الكامل",
@@ -1301,8 +1302,6 @@
     "public_as": "النشر علنًا باسم {{name}}"
   },
   "webln": {
-    "connect_title": "ربط المحفظة",
-    "connect_detail": "اسمح لهذه الصفحة بالوصول إلى المحفظة. تختار المحفظة وتؤكد كل طلب.",
     "invoice_title": "إنشاء طلب دفع"
   }
 }

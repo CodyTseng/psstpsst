@@ -14,10 +14,9 @@ const methods = ['enable', 'isEnabled', 'getInfo', 'sendPayment', 'makeInvoice']
 const supported = (wallet: WalletRow) => ['getInfo', ...(walletSupportsMethod(wallet, 'pay_invoice') ? ['sendPayment'] : []),
   ...(walletSupportsMethod(wallet, 'make_invoice') ? ['makeInvoice'] : [])];
 
-/** A wallet grant belongs to exactly one host-verified document and selected wallet. */
+/** Document-local initialization; every payment and invoice requires its own review. */
 export class WebLn {
   private enabled = false;
-  private enabledRevision = -1;
   private busy = false;
   constructor(private account: string, private sourceId: string, private title: string, private signal: AbortSignal,
     private confirm: (prompt: RuntimePrompt, signal: AbortSignal) => Promise<string | false>) {}
@@ -36,23 +35,19 @@ export class WebLn {
     this.check();
     if (!methods.includes(method)) throw new Error('unsupported-method');
     if (args.length !== (['sendPayment', 'makeInvoice'].includes(method) ? 1 : 0)) throw new Error('invalid-request');
-    if (method === 'isEnabled') return this.enabled && this.enabledRevision === signingRevision(this.scope());
+    if (method === 'isEnabled') return this.enabled;
     if (this.busy) throw new Error('wallet-request-pending');
     this.busy = true;
     try {
       const revision = signingRevision(this.scope());
       if (method === 'enable') {
-        if (this.enabled && this.enabledRevision === revision) return;
-        this.enabled = false;
-        const wallets = await getWallets(this.account); this.check(revision);
+        if (this.enabled) return;
+        const wallets = await getWallets(this.account); this.check();
         if (!wallets.length) throw new Error('wallet-not-connected');
-        const answer = await this.review(i18n.t('webln.connect_title'), i18n.t('webln.connect_detail'), { wallet: { operation: 'connect' } });
-        this.check(revision);
-        if (answer !== 'allow') throw new Error('permission-denied');
-        this.enabled = true; this.enabledRevision = revision;
+        this.enabled = true;
         return;
       }
-      if (!this.enabled || this.enabledRevision !== revision) throw new Error('webln-not-enabled');
+      if (!this.enabled) throw new Error('webln-not-enabled');
       const wallets = await getWallets(this.account);
       this.check(revision);
       if (!wallets.length) { this.enabled = false; throw new Error('wallet-not-connected'); }

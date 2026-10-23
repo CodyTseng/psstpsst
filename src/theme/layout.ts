@@ -26,7 +26,7 @@ export const wideLayout = {
 export const contentWidth = {
   focused: 480,
   compactSheet: 480,
-  sheet: 640,
+  sheet: 480,
   toast: 480,
   dialog: 320,
 } as const;

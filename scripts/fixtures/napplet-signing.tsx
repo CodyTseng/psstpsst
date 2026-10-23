@@ -74,13 +74,12 @@ if (params.get('scenario') === 'wallet') {
   Object.assign(window, { walletFixture: state });
   const pin = require('../../src/services/wallet/wallet-pin.service') as typeof import('../../src/services/wallet/wallet-pin.service');
   pin.authorizeWalletPin = async () => 'fixture-token';
-  const connect = params.get('operation') === 'connect';
   const i18n = require('../../src/i18n/core').default as typeof import('../../src/i18n/core').default;
   void nappletService.requestApproval({
-    title: i18n.t(connect ? 'webln.connect_title' : 'wallet.confirm_payment'),
-    detail: connect ? i18n.t('webln.connect_detail') : '', accountPubkey: 'a'.repeat(64),
+    title: i18n.t('wallet.confirm_payment'),
+    detail: '', accountPubkey: 'a'.repeat(64),
     requester: { title: 'jumble.social', origin: 'https://jumble.social' },
-    wallet: connect ? { operation: 'connect' } : {
+    wallet: {
       operation: 'payment', amountMsat: 1250000, description: 'Coffee and a sandwich',
       authentication: params.has('pin') ? 'pin' : 'system',
       wallets: [{ id: 'coinos', name: 'ln.coinos.io', customName: null, isDefault: true },

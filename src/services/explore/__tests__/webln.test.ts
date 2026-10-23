@@ -17,7 +17,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   life = new AbortController();
   detach = subscribeSigning(scope, () => {});
-  confirm = jest.fn(async prompt => prompt.wallet?.operation === 'connect' ? 'allow' : JSON.stringify({ walletId: 'wallet', ...(prompt.wallet?.amountRange ? { amountSats: 1 } : {}) }));
+  confirm = jest.fn(async prompt => JSON.stringify({ walletId: 'wallet', ...(prompt.wallet?.amountRange ? { amountSats: 1 } : {}) }));
   bridge = new WebLn(scope.accountPubkey, scope.sourceId, 'Site', life.signal, confirm);
   jest.mocked(getWallets).mockResolvedValue([wallet]);
   jest.mocked(walletAuthenticationMode).mockResolvedValue('system');
@@ -26,16 +26,15 @@ beforeEach(() => {
   });
 });
 afterEach(() => { life.abort(); detach(); });
-async function enable() { confirm.mockResolvedValueOnce('allow'); await bridge.handle('enable', []); }
-it('requires a separate grant and exposes no NWC credentials or Nostr identity', async () => {
+async function enable() { await bridge.handle('enable', []); }
+it('initializes without consent and exposes no NWC credentials or Nostr identity', async () => {
   await expect(bridge.handle('getInfo', [])).rejects.toThrow('webln-not-enabled');
   await enable();
-  expect(confirm.mock.calls[0][0]).toMatchObject({ accountPubkey: 'account', requester: { origin: scope.sourceId } });
+  await enable();
+  expect(confirm).not.toHaveBeenCalled();
   expect(await bridge.handle('getInfo', [])).toEqual({ node: { alias: 'Wallet', pubkey: '' }, methods: ['getInfo', 'sendPayment', 'makeInvoice'] });
 });
-it('does not accept a remembered allow decision as wallet access or payment consent', async () => {
-  confirm.mockResolvedValueOnce('allow-always');
-  await expect(bridge.handle('enable', [])).rejects.toThrow('permission-denied');
+it('does not accept a remembered allow decision as payment consent', async () => {
   await enable(); confirm.mockResolvedValueOnce('allow-always');
   await expect(bridge.handle('sendPayment', [invoiceFixture()])).rejects.toThrow('permission-denied');
   expect(payInvoice).not.toHaveBeenCalled();
@@ -55,7 +54,7 @@ it('rejects stale consent after source permission revocation', async () => {
   await enable(); confirm.mockImplementationOnce(async () => { invalidateSigning(scope); return 'allow'; });
   await expect(bridge.handle('sendPayment', [invoiceFixture()])).rejects.toThrow('permission-revoked');
   expect(payInvoice).not.toHaveBeenCalled();
-  await expect(bridge.handle('isEnabled', [])).resolves.toBe(false);
+  await expect(bridge.handle('isEnabled', [])).resolves.toBe(true);
 });
 it('rechecks after authentication and cancels a replaced document before claiming', async () => {
   await enable();
@@ -145,7 +144,7 @@ it('expires a payment review while authentication is still in progress', async (
     expect(claimWebLnPayment).not.toHaveBeenCalled();
   } finally { clock.mockRestore(); }
 });
-it('does not carry the wallet grant into a new document instance', async () => {
+it('initializes each new document independently', async () => {
   await enable();
   const next = new WebLn(scope.accountPubkey, scope.sourceId, 'Site', new AbortController().signal, confirm);
   await expect(next.handle('isEnabled', [])).resolves.toBe(false);
@@ -162,12 +161,11 @@ it('defers wallet selection until review and uses exactly the reviewed wallet', 
   const second = { ...wallet, id: 'second', name: 'Second', isDefault: true };
   jest.mocked(getWallets).mockResolvedValue([wallet, second]);
   await enable();
-  expect(confirm.mock.calls[0][0]).toMatchObject({ wallet: { operation: 'connect' } });
-  expect(confirm.mock.calls[0][0].choices).toBeUndefined();
+  expect(confirm).not.toHaveBeenCalled();
   confirm.mockResolvedValueOnce(JSON.stringify({ walletId: 'second' }));
   await bridge.handle('sendPayment', [invoiceFixture()]);
-  expect(confirm.mock.calls[1][0].wallet.wallets).toHaveLength(2);
-  expect(confirm.mock.calls[1][0].wallet.wallets[0]).not.toHaveProperty('relaysJson');
+  expect(confirm.mock.calls[0][0].wallet.wallets).toHaveLength(2);
+  expect(confirm.mock.calls[0][0].wallet.wallets[0]).not.toHaveProperty('relaysJson');
   expect(payInvoice).toHaveBeenCalledWith(second, expect.any(String), expect.any(Object), undefined, undefined, expect.any(Object));
 });
 it('refuses unreviewed wallet IDs and missing PIN authorizations', async () => {
@@ -185,5 +183,19 @@ it('offers only eligible wallets even when the default wallet cannot pay', async
   await enable();
   await expect(bridge.handle('getInfo', [])).resolves.toMatchObject({ methods: ['getInfo', 'makeInvoice', 'sendPayment'] });
   await bridge.handle('sendPayment', [invoiceFixture()]);
-  expect(confirm.mock.calls[1][0].wallet.wallets.map((row: { id: string }) => row.id)).toEqual(['wallet']);
+  expect(confirm.mock.calls[0][0].wallet.wallets.map((row: { id: string }) => row.id)).toEqual(['wallet']);
+});
+
+it('keeps initialization enabled when signing permissions change', async () => {
+  await enable(); invalidateSigning(scope);
+  await expect(bridge.handle('isEnabled', [])).resolves.toBe(true);
+  await enable();
+  await expect(bridge.handle('getInfo', [])).resolves.toHaveProperty('methods');
+  expect(confirm).not.toHaveBeenCalled();
+});
+it('rejects initialization without a connected wallet', async () => {
+  jest.mocked(getWallets).mockResolvedValue([]);
+  await expect(bridge.handle('enable', [])).rejects.toThrow('wallet-not-connected');
+  await expect(bridge.handle('isEnabled', [])).resolves.toBe(false);
+  expect(confirm).not.toHaveBeenCalled();
 });

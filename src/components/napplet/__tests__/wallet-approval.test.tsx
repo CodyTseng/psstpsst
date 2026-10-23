@@ -4,7 +4,6 @@ import { WalletApproval } from '../WalletApproval';
 import { ActionRow } from '@/components/common/ActionRow';
 import { AppText } from '@/components/common/AppText';
 import { AppInput } from '@/components/common/AppInput';
-import { BottomSheet } from '@/components/common/BottomSheet';
 import { WalletAmountDisplay } from '@/components/wallet/WalletAmountDisplay';
 import { WalletPaymentConfirmSheet } from '@/components/wallet/WalletPaymentConfirmSheet';
 import { WalletPinSheet } from '@/components/wallet/WalletPinSheet';
@@ -20,7 +19,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 jest.mock('@/services/napplet/service', () => ({ nappletService: { answer: jest.fn() } }));
 jest.mock('@/services/wallet/wallet-pin.service', () => ({ authorizeWalletPin: jest.fn(), consumeWalletPinAuthorization: jest.fn() }));
 jest.mock('@/components/wallet/WalletPinSheet', () => ({ WalletPinSheet: () => null }));
-jest.mock('../SigningRequestDetails', () => ({ SigningAccountAvatar: () => null }));
+jest.mock('../NappletIcon', () => ({ NappletIcon: () => null }));
 jest.mock('lucide-react-native/icons/chevron-down', () => () => null);
 jest.mock('lucide-react-native/icons/check', () => () => null);
 jest.mock('@solar-icons/react-native/category/money/Linear/Wallet', () => ({ Wallet: () => null }), { virtual: true });
@@ -52,17 +51,6 @@ it.each(['light', 'dark'] as const)('reuses payment UI, source information and e
   expect(renderer.root.findByType(ActionRow).props.dismiss).toBeUndefined();
   confirm();
   expect(nappletService.answer).toHaveBeenCalledWith('payment', JSON.stringify({ walletId: 'second' }));
-});
-it('connects with one approval and no wallet picker or redundant cancel', () => {
-  render({ ...prompt, wallet: { operation: 'connect' } });
-  expect(renderer.root.findAllByType(WalletPaymentConfirmSheet)).toHaveLength(0);
-  expect(renderer.root.findByType(ActionRow).props.dismiss).toBeUndefined();
-  const detail = renderer.root.findAllByType(AppText).find(node => node.props.children === prompt.detail)!;
-  expect(detail.props.variant).toBe('body');
-  act(() => { renderer.root.findByType(ActionRow).props.confirm.onPress(); });
-  expect(nappletService.answer).toHaveBeenCalledWith('payment', 'allow');
-  act(() => { renderer.root.findByType(BottomSheet).props.onClose(); });
-  expect(nappletService.answer).toHaveBeenLastCalledWith('payment', false);
 });
 it('binds confirmation to the wallet selected in the existing picker', () => {
   render();

@@ -1201,6 +1201,7 @@
     "signing_unnamed": "Registro sin nombre",
     "signing_recipient": "Destinatario",
     "signing_destinations": "Destinos",
+    "signing_kind": "Tipo",
     "signing_content": "Contenido",
     "signing_truncated": "Vista previa abreviada. Abre la solicitud completa para leer todo el contenido.",
     "signing_details": "Mostrar solicitud completa",
@@ -1286,8 +1287,6 @@
     "public_as": "Publicando como {{name}} de forma pública"
   },
   "webln": {
-    "connect_title": "Conectar cartera",
-    "connect_detail": "Permite que esta página acceda a la cartera. Tú eliges la cartera y confirmas cada solicitud.",
     "invoice_title": "Crear solicitud de pago"
   }
 }

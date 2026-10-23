@@ -1,40 +1,26 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AppText } from '@/components/common/AppText';
 import { AppInput } from '@/components/common/AppInput';
-import { ActionRow } from '@/components/common/ActionRow';
-import { BottomSheet } from '@/components/common/BottomSheet';
 import { WalletPaymentConfirmSheet } from '@/components/wallet/WalletPaymentConfirmSheet';
 import { WalletPinSheet } from '@/components/wallet/WalletPinSheet';
 import { authorizeWalletPin, consumeWalletPinAuthorization } from '@/services/wallet/wallet-pin.service';
 import { nappletService } from '@/services/napplet/service';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import type { WalletApprovalRequest, WalletDecision } from '@/lib/wallet/approval';
-import { contentWidth, spacing } from '@/theme';
+import { spacing } from '@/theme';
 import { satsFromMsat } from '@/lib/wallet/amount';
-import { SigningAccountAvatar } from './SigningRequestDetails';
+import { NappletIdentity } from './NappletIdentity';
 
 type Props = { prompt: QueuedPrompt; visible: boolean; onClosed: () => void };
-type Review = Exclude<WalletApprovalRequest, { operation: 'connect' }>;
 
 export function WalletApproval(props: Props) {
-  const { t } = useTranslation();
-  const { prompt, visible, onClosed } = props;
-  const request = prompt.wallet;
+  const request = props.prompt.wallet;
   if (!request) return null;
-  if (request.operation !== 'connect') return <WalletPaymentApproval {...props} wallet={request} />;
-  return <BottomSheet visible={visible} onClose={() => nappletService.answer(prompt.requestId, false)} onClosed={onClosed}
-    title={prompt.title} headerAction={<SigningAccountAvatar pubkey={prompt.accountPubkey!} />} maxWidth={contentWidth.focused}
-    dismissOnBackdropPress={false} contentStyle={{ gap: spacing.xl }}>
-    <WalletRequester prompt={prompt} />
-    <AppText variant="body" tone="muted">{prompt.detail}</AppText>
-    <ActionRow layout="vertical" confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }} />
-  </BottomSheet>;
+  return <WalletPaymentApproval {...props} wallet={request} />;
 }
 
 /** The existing confirmation, picker and PIN sheets retain their serialized lifecycle. */
-function WalletPaymentApproval({ prompt, wallet, visible, onClosed }: Props & { wallet: Review }) {
+function WalletPaymentApproval({ prompt, wallet, visible, onClosed }: Props & { wallet: WalletApprovalRequest }) {
   const { t } = useTranslation();
   const [selectedWalletId, setSelectedWalletId] = useState(() =>
     wallet.wallets.find(row => row.isDefault)?.id ?? wallet.wallets[0]?.id ?? null);
@@ -83,7 +69,7 @@ function WalletPaymentApproval({ prompt, wallet, visible, onClosed }: Props & { 
   }
   return <>
     <WalletPaymentConfirmSheet visible={visible && phase === 'confirm'}
-      title={prompt.title} headerAction={<SigningAccountAvatar pubkey={prompt.accountPubkey!} />}
+      title={prompt.title}
       requester={<WalletRequester prompt={prompt} />}
       amount={`${wallet.amountRange ? amount : satsFromMsat(wallet.amountMsat)} ${t('wallet.sats_unit')}`}
       description={wallet.description} wallets={wallet.wallets}
@@ -104,8 +90,9 @@ function WalletPaymentApproval({ prompt, wallet, visible, onClosed }: Props & { 
 }
 
 function WalletRequester({ prompt }: { prompt: QueuedPrompt }) {
-  return prompt.requester ? <View style={{ gap: spacing.xs }}>
-    <AppText variant="subtitle">{prompt.requester.title}</AppText>
-    <AppText variant="caption" tone="muted">{prompt.requester.origin}</AppText>
-  </View> : null;
+  const requester = prompt.requester;
+  if (!requester) return null;
+  const application = prompt.application ?? prompt.app ?? { ...requester, servers: [] };
+  return <NappletIdentity release={{ ...application, title: requester.title }} compact
+    iconSize={spacing['2xl'] + spacing.sm} titleVariant="body" subtitle={requester.origin} />;
 }

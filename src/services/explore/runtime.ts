@@ -272,7 +272,10 @@ export class ExploreRuntime {
         const { WebLn } = require('./webln') as typeof import('./webln');
         current();
         this.webLn ??= new WebLn(this.account, source, this.entry.kind === 'website' ? new URL(this.origin).host : this.entry.title,
-          signal, this.options.confirm);
+          signal, (prompt, reviewSignal) => this.options.confirm({ ...prompt,
+            application: this.entry.kind === 'website'
+              ? { title: new URL(this.origin).host, description: '', servers: [], required: [], origin: this.origin }
+              : applicationPresentation(this.entry) }, reviewSignal));
       }
       return this.webLn.handle(method.slice(6), args);
     }

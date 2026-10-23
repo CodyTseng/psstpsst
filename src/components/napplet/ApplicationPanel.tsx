@@ -8,7 +8,7 @@ import { spacing } from '@/theme';
 export function ApplicationPanel({application,page,settings,onPublisher}:{
   application:ApplicationPresentation;page:'about'|'settings';settings:ReactNode;onPublisher():void;
 }) {
-  return <View style={{gap:spacing.lg,paddingTop:spacing.sm}}>
+  return <View style={{gap:spacing.lg}}>
     {page==='about'?<ApplicationInfo release={application} onPublisher={onPublisher}/>:<>
       <NappletIdentity release={application} compact/>
       {settings}

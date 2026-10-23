@@ -1196,6 +1196,7 @@
     "signing_unnamed": "名前のないレコード",
     "signing_recipient": "受信者",
     "signing_destinations": "送信先",
+    "signing_kind": "種類",
     "signing_content": "内容",
     "signing_truncated": "プレビューを省略しています。全内容はリクエストの詳細で確認できます。",
     "signing_details": "リクエスト全体を表示",
@@ -1281,8 +1282,6 @@
     "public_as": "{{name}} として公開投稿"
   },
   "webln": {
-    "connect_title": "ウォレットを接続",
-    "connect_detail": "このページによるウォレットへのアクセスを許可します。リクエストごとにウォレットを選択して確認します。",
     "invoice_title": "支払いリクエストを作成"
   }
 }

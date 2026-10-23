@@ -1196,6 +1196,7 @@
     "signing_unnamed": "未命名记录",
     "signing_recipient": "接收方",
     "signing_destinations": "发布目的地",
+    "signing_kind": "Kind",
     "signing_content": "内容",
     "signing_truncated": "预览已截短，可展开完整请求查看全部内容。",
     "signing_details": "查看更多信息",
@@ -1281,8 +1282,6 @@
     "public_as": "以 {{name}} 的身份公开评论"
   },
   "webln": {
-    "connect_title": "连接钱包",
-    "connect_detail": "允许此页面访问钱包。每次请求均由您选择钱包并确认。",
     "invoice_title": "创建收款请求"
   }
 }

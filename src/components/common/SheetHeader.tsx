@@ -29,7 +29,7 @@ export function SheetHeader({ title, onClose, action, showHandle = true }: Props
   return (
     <View
       style={{
-        height: topInset + uiDensity.headerActionSize + spacing.sm,
+        height: topInset + uiDensity.headerActionSize + spacing.lg,
         justifyContent: 'center',
         pointerEvents: 'box-none',
       }}
@@ -40,7 +40,7 @@ export function SheetHeader({ title, onClose, action, showHandle = true }: Props
           top: topInset,
           start: 0,
           end: 0,
-          bottom: spacing.sm,
+          bottom: spacing.lg,
           alignItems: 'center',
           justifyContent: 'center',
           paddingHorizontal: spacing.lg + uiDensity.headerActionSize + spacing.sm,
@@ -65,7 +65,7 @@ export function SheetHeader({ title, onClose, action, showHandle = true }: Props
           top: topInset,
           start: 0,
           end: 0,
-          bottom: spacing.sm,
+          bottom: spacing.lg,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',

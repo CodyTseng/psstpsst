@@ -7,9 +7,10 @@ host-owned, using the same lifecycle boundary as the existing NIP-07 bridge.
 
 ## Supported interface
 
-- `enable()` asks for wallet access without selecting a wallet. The grant
-  belongs to this document and source permission revision; it is never persisted.
-- `isEnabled()` reports that document grant. Each operation checks wallet
+- `enable()` initializes wallet access without a prompt or wallet selection,
+  after checking that a connected wallet exists. Initialization belongs to the
+  current document and is independent of signer permission changes.
+- `isEnabled()` reports that document's initialization. Each operation checks wallet
   availability; each payment and invoice review offers only eligible wallets.
 - `getInfo()` returns the default wallet's display name and the union of methods
   supported by the account's connected wallets. This does not select a payer.
@@ -32,8 +33,7 @@ invoice features. Invoice text is untrusted content, never host identity.
 ## Payment authority and replay protection
 
 Every debit has a fresh host review displaying the verified source, selected
-wallet, signed amount and bounded description. Wallet access consent uses one
-Allow action; the header close button rejects it. Payment and invoice reviews
+wallet, signed amount and bounded description. Payment and invoice reviews
 reuse the existing wallet confirmation and wallet picker sheets, with the
 requesting source added. The default eligible wallet is preselected, and the
 user may change it before confirming. A structured host decision binds the

@@ -1196,6 +1196,7 @@
     "signing_unnamed": "Névtelen rekord",
     "signing_recipient": "Címzett",
     "signing_destinations": "Célhelyek",
+    "signing_kind": "típus",
     "signing_content": "Tartalom",
     "signing_truncated": "Rövidített előnézet. A teljes tartalom a teljes kérésben olvasható.",
     "signing_details": "Teljes kérés megjelenítése",
@@ -1281,8 +1282,6 @@
     "public_as": "Nyilvános közzététel {{name}} néven"
   },
   "webln": {
-    "connect_title": "Tárca csatlakoztatása",
-    "connect_detail": "Engedélyezd az oldalnak a tárca elérését. Minden kérésnél te választasz tárcát és adsz megerősítést.",
     "invoice_title": "Fizetési kérelem létrehozása"
   }
 }

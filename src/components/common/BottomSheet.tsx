@@ -36,6 +36,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IS_ELECTRON } from '@/lib/platform';
+import { isWideLayoutSize } from '@/lib/layout/wide-layout';
 import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
 import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
 
@@ -60,8 +61,7 @@ type Props<ItemT = never> = {
   onClosed?: () => void;
   /** Show the drag grabber handle. Default true. */
   showHandle?: boolean;
-  /** Optional card width cap for a deliberately compact sheet. Defaults to the
-   * app-wide sheet width and still shrinks to the phone viewport. */
+  /** Width cap in two-pane layouts. Single-pane sheets always fill the window. */
   maxWidth?: number;
   /** Task/detail title. When present, BottomSheet renders the standard fixed
    * close/title/action header below the grabber. Omit only for a short,
@@ -86,8 +86,8 @@ type Props<ItemT = never> = {
   /** Full-screen content painted above this sheet inside the same native Modal.
    * Use for an immersive child surface that must close back to this sheet. */
   modalOverlay?: ReactNode;
-  /** Merged onto the scrollable content container. Use it when this sheet's
-   * direct content blocks need an explicit gap or additional padding. */
+  /** Merged onto the scrollable content container. Body blocks default to
+   * spacing.lg; list rows retain their own spacing. Do not add header clearance. */
   contentStyle?: StyleProp<ViewStyle>;
   /** Render the body as a virtualized list while retaining the sheet's shared
    * UI-thread scroll/pull-down coordination. Use this for unbounded pickers;
@@ -193,7 +193,8 @@ function BottomSheetSurface<ItemT = never>({
   listProps,
   children,
 }: Props<ItemT>) {
-  const { height } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const wide = isWideLayoutSize(width, height);
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
   const [mounted, setMounted] = useState(visible);
@@ -510,10 +511,11 @@ function BottomSheetSurface<ItemT = never>({
         style={[{ flexShrink: 1, maxHeight: maxScrollHeight }, scrollStyle]}
         contentContainerStyle={[
           {
-            paddingHorizontal: 16,
+            paddingHorizontal: spacing.lg,
+            gap: spacing.lg,
             paddingTop:
               showHandle || title != null || fixedSubheader != null ? 0 : spacing.xl,
-            paddingBottom: fixedFooter == null ? Math.max(insets.bottom, 24) : 0,
+            paddingBottom: fixedFooter == null ? Math.max(insets.bottom, spacing.xl) : 0,
           },
           contentStyle,
         ]}
@@ -586,7 +588,7 @@ function BottomSheetSurface<ItemT = never>({
             style={{
               paddingHorizontal: spacing.lg,
               paddingTop: showHandle || title != null ? 0 : spacing.xl,
-              paddingBottom: spacing.sm,
+              paddingBottom: spacing.lg,
             }}
           >
             {fixedSubheader}
@@ -599,7 +601,7 @@ function BottomSheetSurface<ItemT = never>({
           <View
             style={{
               paddingHorizontal: spacing.lg,
-              paddingTop: spacing.md,
+              paddingTop: spacing.lg,
               paddingBottom: Math.max(insets.bottom, spacing.lg),
             }}
           >
@@ -640,7 +642,7 @@ function BottomSheetSurface<ItemT = never>({
             style={[
               {
                 width: '100%',
-                maxWidth,
+                maxWidth: wide ? maxWidth : undefined,
                 alignSelf: 'center',
               },
               cardStyle,

@@ -129,6 +129,14 @@ padding, or gaps. The sole optical exception is the tighter semantic gap
 between a message bubble and its reaction row.
 
 - The default page and sheet gutter is `spacing.lg` (16px).
+- Sheets fill the window in single-pane layouts. Only two-pane layouts apply
+  the shared `contentWidth.sheet` maximum (480px) and center the sheet.
+  Sheet sizing follows the application's layout breakpoint, including height
+  on touch devices. Approval and payment flows use the same width rule.
+- Sheet headers own `spacing.lg` clearance below their controls. Sheet body
+  blocks default to the same gap; content must not add header-clearance padding.
+  Fixed subheaders and footers use that gap at their body boundary. Lists and
+  grouped controls retain their own internal row spacing.
 - Sections normally use `spacing.xl` separation.
 - Settings lists and forms start `spacing.sm` below the header clearance,
   matching the Me hub in both single-pane and split-pane layouts.

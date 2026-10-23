@@ -1196,6 +1196,7 @@
     "signing_unnamed": "Unbenannter Datensatz",
     "signing_recipient": "Empfänger",
     "signing_destinations": "Ziele",
+    "signing_kind": "Art",
     "signing_content": "Inhalt",
     "signing_truncated": "Vorschau gekürzt. Öffne die vollständige Anfrage, um alles zu lesen.",
     "signing_details": "Vollständige Anfrage anzeigen",
@@ -1281,8 +1282,6 @@
     "public_as": "Öffentlich posten als {{name}}"
   },
   "webln": {
-    "connect_title": "Wallet verbinden",
-    "connect_detail": "Erlaube dieser Seite den Wallet-Zugriff. Du wählst die Wallet und bestätigst jede Anfrage.",
     "invoice_title": "Zahlungsanforderung erstellen"
   }
 }

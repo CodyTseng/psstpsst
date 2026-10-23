@@ -1,6 +1,6 @@
 /** Only presentation data crosses the host's approval queue. */
 export type WalletOption = { id: string; name: string; customName: string | null; isDefault: boolean };
-export type WalletApprovalRequest = { operation: 'connect' } | {
+export type WalletApprovalRequest = {
   operation: 'payment' | 'invoice';
   wallets: WalletOption[];
   amountMsat: number;

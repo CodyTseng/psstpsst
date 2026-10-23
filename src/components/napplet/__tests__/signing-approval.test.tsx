@@ -235,18 +235,31 @@ it('disables selection across raw JSON previews, relay addresses and signing ide
 
 it.each([
   [1, [['d', 'actual-record']], null],
-  [10001, [['d', 'actual-record']], 'd: "actual-record"'],
-  [30078, [['d', 'actual-record']], 'd: "actual-record"'],
-  [30078, [['d', '']], 'd: ""'],
-  [30078, [], 'd: napplets.none'],
+  [10001, [['d', 'actual-record']], 'actual-record'],
+  [30078, [['d', 'actual-record']], 'actual-record'],
+  [30078, [['d', '']], 'napplets.signing_unnamed'],
+  [30078, [], 'napplets.none'],
 ] as const)('shows kind %s and its applicable d tag before expanding details', (kind, tags, expected) => {
   const request = { ...prompt.signing!, kind, tags: tags.map((tag) => [...tag]), scopeKey: 'untrusted-derived-record' };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map((node) => node.props.children);
-  expect(texts.some(value => typeof value === 'string' && value.includes('chat.event_reference.kind'))).toBe(true);
-  expect(texts.filter((value) => typeof value === 'string' && value.startsWith('d:'))).toEqual(expected === null ? [] : [expected]);
+  expect(texts).toContain('napplets.signing_kind');
+  expect(texts.some(value => typeof value === 'string' && (value === String(kind) || value.endsWith(` · ${kind}`)))).toBe(true);
+  if (expected === null) expect(texts).not.toContain('d');
+  else {
+    expect(texts).toContain('d');
+    expect(texts).toContain(expected);
+  }
   expect(texts.some((value) => typeof value === 'string' && value.includes('untrusted-derived-record'))).toBe(false);
   expect(renderer.root.findAllByType(AppText).some((node) => node.props.variant === 'code')).toBe(false);
+});
+
+it.each([{ tags: [] }, { tags: [['e', 'referenced-event']] }])('shows an explicit empty content value with tags $tags', ({ tags }) => {
+  const request = { ...prompt.signing!, content: '', tags };
+  act(() => { renderer = create(<SigningRequestDetails request={request} />); });
+  const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
+  expect(texts).toContain('napplets.signing_content');
+  expect(texts).toContain('napplets.none');
 });
 
 it('keeps launch permissions focused on required capabilities with a fixed decision footer', () => {
@@ -287,7 +300,7 @@ it('shows the event type and authentication target before opening event JSON', (
   expect(texts.some(value => typeof value === 'string' && value.includes('napplets.event_http_auth'))).toBe(true);
   expect(texts).toContain('https://service.example/upload');
   expect(texts).toContain('POST');
-  expect(texts).not.toContain('napplets.none');
+  expect(texts).toContain('napplets.none');
 });
 
 it('identifies a profile event and previews the actual profile values', () => {
@@ -345,7 +358,7 @@ it('bounds long plaintext until expanded and copies the complete original', asyn
 
 
 it('retains a dedicated wallet sheet until its dismissal completes', () => {
-  mockPrompt = { ...prompt, signing: undefined, accountPubkey: 'account', wallet: { operation: 'connect' } };
+  mockPrompt = { ...prompt, signing: undefined, accountPubkey: 'account', wallet: { operation: 'payment', wallets: [], amountMsat: 1000, description: '' } };
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findByType(WalletApproval).props.visible).toBe(true);
   mockPrompt = null; mockApprovalClosing = true;

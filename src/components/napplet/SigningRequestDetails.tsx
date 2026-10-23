@@ -39,13 +39,13 @@ export function signingRequestTitle(scope: Pick<SigningScope, 'operation' | 'kin
   return signingAction(scope, t);
 }
 
-export function signingEventType(kind: number, t: TFunction): string {
+export function signingEventType(kind: number, t: TFunction): string | undefined {
   const known: Record<number, string> = {
     0: 'event_profile', 1: 'event_post', 3: 'event_follows', 6: 'event_repost', 7: 'event_reaction',
     10002: 'event_relays', 22242: 'event_relay_auth', 27235: 'event_http_auth',
     30023: 'event_article', 30078: 'event_app_data',
   };
-  return known[kind] ? t(`napplets.${known[kind]}`) : t('chat.event_reference.kind', { kind });
+  return known[kind] ? t(`napplets.${known[kind]}`) : undefined;
 }
 
 export function SigningIdentity({ pubkey, label }: { pubkey: string; label: string }) {
@@ -78,10 +78,8 @@ export function SigningAccountAvatar({ pubkey }: { pubkey: string }) {
 
 export function SigningRequester({ app, application }: { app?: NappletRelease; application?: import('@/services/explore/model').ApplicationInfo }) {
   const identity=application??app;
-  return identity ? <View style={{ paddingTop: spacing.sm,gap:spacing.sm }}>
-    <NappletIdentity release={identity} compact titleVariant="body" />
-    {application?.origin?<SigningText variant="caption" tone="muted">{application.origin}</SigningText>:null}
-  </View> : null;
+  return identity ? <NappletIdentity release={identity} compact iconSize={spacing['2xl'] + spacing.sm}
+    titleVariant="body" subtitle={application?.origin} /> : null;
 }
 
 export function SigningScopeDetails({ scope }: { scope: SigningScope }) {
@@ -135,7 +133,7 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   const c = useThemeColors();
   const [details, setDetails] = useState(false);
   const preview = useMemo(() => previewContent(request), [request]);
-  const references = useMemo(() => request.tags.filter(tag => ['e', 'p', 'a', 'url', 'method', 'relay'].includes(tag[0]) && tag[1]), [request]);
+  const references = useMemo(() => request.tags.filter(tag => ['e', 'a', 'url', 'method', 'relay'].includes(tag[0]) && tag[1]), [request]);
   const [verified, setVerified] = useState<{ request: SigningRequest; text: string }>();
   useEffect(() => {
     let active = true;
@@ -164,34 +162,42 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   const auth = request.operation === 'relay-auth';
   const effect = request.operation === 'sign' ? 'signing_effect_sign' : auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
   const showIdentifier = isReplaceableKind(request.kind) || isAddressableKind(request.kind);
-  const kindLabel = t('chat.event_reference.kind', { kind: request.kind });
   const eventType = signingEventType(request.kind, t);
-  const eventMetadata = eventType === kindLabel ? kindLabel : `${eventType} · ${kindLabel}`;
+  const eventMetadata = eventType ? `${eventType} · ${request.kind}` : String(request.kind);
   const dTag = request.tags.find((tag) => tag[0] === 'd');
   const title = request.kind === 30023 ? request.tags.find((tag) => tag[0] === 'title')?.[1] : undefined;
+  const metadata = <>
+    <View style={{ gap: spacing.sm }}>
+      <SigningText variant="caption" tone="muted">{t('napplets.signing_kind')}</SigningText>
+      <SigningText>{eventMetadata}</SigningText>
+    </View>
+    {showIdentifier ? <View style={{ gap: spacing.sm }}>
+      <SigningText variant="caption" tone="muted">d</SigningText>
+      <SigningText numberOfLines={3}>
+        {dTag ? dTag[1] || t('napplets.signing_unnamed') : t('napplets.none')}
+      </SigningText>
+    </View> : null}
+  </>;
   return <View style={{ gap: spacing.lg }}>
     {showTitle ? <SigningText variant="title">{signingRequestTitle(request, t)}</SigningText> : null}
-    <View style={{ gap: spacing.sm }}>
-      <SigningText variant="caption" tone="muted">{eventMetadata}</SigningText>
-      {showIdentifier ? <SigningText variant="caption" tone="muted">
-        {`d: ${dTag ? JSON.stringify(dTag[1] ?? '') : t('napplets.none')}`}
-      </SigningText> : null}
-    </View>
     {request.operation === 'encrypt-publish' ? <SigningText tone="muted">{t(`napplets.${effect}`)}</SigningText> : null}
-    {auth ? <AppCard variant="muted">
+    {auth ? <AppCard variant="muted" style={{ gap: spacing.lg }}>
+      {metadata}
       <SigningText>{new URL(request.relays[0]).host}</SigningText>
     </AppCard> : <>
       {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.signing_recipient')} /> : null}
-      <AppCard variant="muted" style={{ gap: spacing.sm }}>
+      <AppCard variant="muted" style={{ gap: spacing.lg }}>
+        {metadata}
+        <View style={{ gap: spacing.sm }}>
         <SigningText variant="caption" tone="muted">{t('napplets.signing_content')}</SigningText>
         {title ? <SigningText>{title}</SigningText> : null}
         {preview.fields.length ? preview.fields.map(([key, value]) => <View key={key} style={{ flexDirection: 'row', gap: spacing.md }}>
           <SigningText variant="caption" tone="muted" style={{ flex: 1 }}>{key.slice(0, 80)}</SigningText>
           <SigningText style={{ flex: 2 }}>{String(value).slice(0, 140)}</SigningText>
-        </View>) : previewText || !references.length ? <SigningText>{previewText.slice(0, 600) || t('napplets.none')}</SigningText> : null}
+        </View>) : <SigningText>{previewText.slice(0, 600) || t('napplets.none')}</SigningText>}
+        </View>
         {references.slice(0, 4).map((tag, index) => <View key={index} style={{ gap: spacing.xs }}>
-          <SigningText variant="caption" tone="muted">{tag[0] === 'p' ? t('profile.public_key')
-            : ['e', 'a'].includes(tag[0]) ? t('chat.event_reference.event')
+          <SigningText variant="caption" tone="muted">{['e', 'a'].includes(tag[0]) ? t('chat.event_reference.event')
               : tag[0] === 'method' ? 'HTTP' : t('napplets.signing_destinations')}</SigningText>
           <SigningText numberOfLines={2}>{tag[1].slice(0, 256)}</SigningText>
         </View>)}

@@ -194,7 +194,7 @@ export function WalletPickerSheet({
             ? { gap: spacing.md }
             : wallets.length === 0
               ? { gap: spacing.lg }
-              : undefined
+              : { gap: 0 }
         }
       >
       {renaming && !IS_ELECTRON ? (

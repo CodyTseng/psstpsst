@@ -671,9 +671,10 @@ routes only through ephemeral memory, never URL parameters. Their secrets stay
 in secure storage, and a payment requires system authentication or the
 account's wallet PIN immediately before the request is sent.
 Explore exposes a document-scoped WebLN provider over those NWC connections.
-Wallet access is separate from signer grants. Each debit selects its wallet
-in a fresh host review and requires authentication. Navigation and source permission changes
-invalidate wallet authority; the wallet queue rechecks it immediately before
+Initialization requires no access approval and is independent of signer grants.
+Each debit selects its wallet in a fresh host review and requires authentication.
+Navigation and source permission changes invalidate pending payment consent;
+the wallet queue rechecks it immediately before
 publication. Account-owned payment-hash claims commit before publication and
 survive wallet removal and application-data resets. Uncertain results never
 trigger an automatic retry. Only a verified payment preimage completes a page's

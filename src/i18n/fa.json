@@ -1196,6 +1196,7 @@
     "signing_unnamed": "رکورد بدون نام",
     "signing_recipient": "گیرنده",
     "signing_destinations": "مقصدها",
+    "signing_kind": "نوع",
     "signing_content": "محتوا",
     "signing_truncated": "پیش‌نمایش کوتاه شده است. برای خواندن همه محتوا، درخواست کامل را باز کنید.",
     "signing_details": "نمایش درخواست کامل",
@@ -1281,8 +1282,6 @@
     "public_as": "انتشار عمومی با نام {{name}}"
   },
   "webln": {
-    "connect_title": "اتصال کیف پول",
-    "connect_detail": "به این صفحه اجازه دسترسی به کیف پول را بدهید. شما برای هر درخواست کیف پول را انتخاب و آن را تأیید می‌کنید.",
     "invoice_title": "ایجاد درخواست پرداخت"
   }
 }
