@@ -9,6 +9,8 @@ subscriptions enter the store. One-shot remote queries, metadata reads and ordin
 publications do not insert events. Private-message kinds received on public relay
 subscriptions can be delivered but are never admitted to the local store.
 Submissions are copied, validated, and signature-verified before any write.
+Signing, publication and local ingestion share NIP-01 structure validation,
+without independent content, tag-count, tag-field or timestamp-window limits.
 Encrypted direct-message and gift-wrap kinds are rejected. Duplicate ids are
 ignored. Replaceable and addressable coordinates retain the newest event, with
 the lower id winning timestamp ties. Ephemeral events notify live subscribers

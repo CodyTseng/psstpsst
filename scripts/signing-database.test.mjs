@@ -179,6 +179,19 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     assert.deepEqual(usage, actual, 'quota counters are recomputed and updated atomically');
     const { SigningPermissions } = fixture.permissions();
     const controller = new AbortController();
+    const manyScope = { ...scope, sourceId: 'https://many-rules.example' };
+    const manyRules = new SigningPermissions(manyScope, async () => 'allow-always', controller.signal, () => {});
+    for (let index = 0; index < 80; index++) {
+      await manyRules.authorize({ operation: 'publish', kind: 30078, relays: [],
+        accountPubkey: scope.accountPubkey, content: '', createdAt: 1,
+        tags: [['d', `record-${index}-${'x'.repeat(5000)}`]] });
+    }
+    const restoredRules = new SigningPermissions(manyScope, async () => { throw new Error('unexpected-prompt'); }, controller.signal, () => {});
+    assert.equal((await restoredRules.snapshot()).rules.length, 80, 'all rules survive persistence beyond former count and byte quotas');
+    for (const index of [0, 79]) await restoredRules.authorize({ operation: 'publish', kind: 30078, relays: [],
+      accountPubkey: scope.accountPubkey, content: '', createdAt: 1,
+      tags: [['d', `record-${index}-${'x'.repeat(5000)}`]] });
+
     let prompts = 0;
     const permissions = new SigningPermissions(scope, async () => { prompts++; return 'allow-always'; }, controller.signal, () => {});
     // Exercise the real repository: memory repositories cannot catch SQL CHECK failures.

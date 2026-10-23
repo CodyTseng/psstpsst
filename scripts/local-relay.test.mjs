@@ -55,6 +55,14 @@ test('device-wide local relay persists verified public events, indexes filters a
   const removed=await relay.remove([a.id,'f'.repeat(64)]);assert.deepEqual(removed,[a.id]);
   assert.equal(sqlite.prepare('SELECT count(*) AS n FROM local_relay_tags WHERE event_id=?').get(a.id).n,0);
   close();await relay.add(signed(1,62));assert.equal(seen.length,4);
+  const identifier='record-'+ 'x'.repeat(5000);
+  const large=signed(30078,Math.floor(Date.now()/1000)+365*86400,[['d',identifier],
+    ...Array.from({length:2000},(_,index)=>['p',index.toString(16).padStart(64,'0')]),
+    ['custom',...Array.from({length:32},()=> 'x'.repeat(5000))]],'正文'.repeat(40000));
+  assert.equal(await relay.add(large),true);
+  assert.deepEqual(await relay.event(large.id),JSON.parse(JSON.stringify(large)));
+  assert.equal((await relay.replaceable(30078,large.pubkey,identifier)).id,large.id);
+
   const stats=sqlite.prepare('SELECT events,bytes FROM local_relay_stats').get();
   const totals=sqlite.prepare('SELECT count(*) AS events,sum(bytes) AS bytes FROM local_relay_events').get();
   assert.deepEqual({...stats},{...totals});

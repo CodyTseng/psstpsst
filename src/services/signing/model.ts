@@ -38,7 +38,6 @@ export type SigningRuleChange = {
   expiresAt?: number;
 };
 export type SigningRuleTarget = Pick<SigningRule, 'key' | 'scope'>;
-export const MAX_SIGNING_RULES = 64;
 export const SIGNING_PERIODS = { '10m': 10 * 60000, '1h': 60 * 60000, '24h': 24 * 60 * 60000 } as const;
 export const isSigningRuleActive = (rule: SigningRule) => rule.duration !== 'timed' ||
   (typeof rule.expiresAt === 'number' && Number.isFinite(rule.expiresAt) && rule.expiresAt > Date.now());
@@ -59,11 +58,11 @@ export function signingRuleKey(request: SigningScope): string {
   return JSON.stringify(signingScope(request));
 }
 export function canRememberSigning(request: SigningScope): boolean {
-  if (request.scopeKey !== undefined && (typeof request.scopeKey !== 'string' || request.scopeKey.length > 4096)) return false;
+  if (request.scopeKey !== undefined && typeof request.scopeKey !== 'string') return false;
   if (isSignerAccess(request)) return true;
   if (request.operation === 'relay-auth' || request.operation === 'upload') {
     if (request.kind !== (request.operation === 'relay-auth' ? 22242 : 24242) ||
-      (request.operation === 'upload' && !request.relays.length) || request.relays.length > 16) return false;
+      (request.operation === 'upload' && !request.relays.length)) return false;
     return request.relays.every(value => {
       try { const url = new URL(value); return !!url.hostname && !url.username && !url.password &&
         (request.operation === 'relay-auth' ? ['ws:', 'wss:'] : ['https:']).includes(url.protocol); }
@@ -82,9 +81,7 @@ export function replaceSigningRule(rules: SigningRule[], source: SigningRuleTarg
   if (!canRememberSigning(scope) || !['always', 'timed', 'session'].includes(change.duration) ||
     (change.duration === 'timed' && (!Number.isSafeInteger(change.expiresAt) || change.expiresAt! <= Date.now())))
     throw new Error('invalid-signing-permissions');
-  if (next.length >= MAX_SIGNING_RULES) throw new Error('quota-exceeded');
   next.push({ key, scope, decision: change.decision, duration: change.duration, createdAt: Date.now(),
     ...(change.duration === 'timed' ? { expiresAt: change.expiresAt } : {}) });
-  if (JSON.stringify(next).length > 256 * 1024) throw new Error('quota-exceeded');
   return next;
 }

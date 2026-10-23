@@ -1,4 +1,4 @@
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { signingAuthorizations, signingActivity } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
@@ -22,7 +22,7 @@ const whereRule = (scope: SigningAccountScope, rule: SigningScope) => {
 
 export async function readSigningSnapshot(scope: SigningAccountScope): Promise<SigningSnapshot> {
   const [rules, activity] = await Promise.all([
-    db.select().from(signingAuthorizations).where(whereSource(scope)).limit(64),
+    db.select().from(signingAuthorizations).where(whereSource(scope)),
     db.select().from(signingActivity).where(and(eq(signingActivity.accountPubkey, scope.accountPubkey), eq(signingActivity.sourceId, scope.sourceId))).orderBy(desc(signingActivity.id)).limit(32),
   ]);
   return {
@@ -65,12 +65,6 @@ export async function saveSigningRule(scope: SigningAccountScope, rule: SigningR
     guard?.();
     if (!await canReceiveForAccount(scope.accountPubkey, tx)) throw new Error('account-unavailable');
     await tx.delete(signingAuthorizations).where(and(whereSource(scope), sql`${signingAuthorizations.expiresAt} <= ${Date.now()}`));
-    const existing = await tx.select({ id: signingAuthorizations.id }).from(signingAuthorizations)
-      .where(whereRule(scope, rule.scope)).get();
-    if (!existing) {
-      const size = await tx.select({ total: count() }).from(signingAuthorizations).where(whereSource(scope)).get();
-      if ((size?.total ?? 0) >= 64) throw new Error('quota-exceeded');
-    }
     guard?.();
     const now = Date.now();
     await tx.insert(signingAuthorizations).values({ ...scope, ...value, decision: rule.decision,

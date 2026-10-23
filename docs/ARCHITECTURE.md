@@ -845,6 +845,10 @@ Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
 service with separate method scopes, independent of the cryptographic peer. Every
 call uses the current verified source. Launch access never bypasses signer
 authorization, and revocation invalidates pending results before disclosure.
+Approvals are committed before invoking the signer; signer latency does not
+expire them. Remembered rules have no per-source count or aggregate-size quota.
+Signing, publication and local event ingestion share NIP-01 structure validation;
+transport and cache budgets do not define event validity.
 Sources are canonical naddr IDs or host-verified HTTP(S) website origins (scheme,
 host and effective port), without a source type or code version; immutable legacy listings use canonical event IDs. Durable rules and a
 bounded metadata-only activity journal have separate tables. Session grants stay

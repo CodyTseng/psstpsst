@@ -5,7 +5,7 @@ import { invalidateSigning, signingRevision, subscribeSigning } from './changes'
 import { queueAuthorization } from './authorization-queue';
 
 import { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, SIGNING_PERIODS,
-  MAX_SIGNING_RULES as MAX_RULES, isSigningRuleActive as activeRule, isSignerAccess, type SignerAccessOperation,
+  isSigningRuleActive as activeRule, isSignerAccess, type SignerAccessOperation,
   type SigningScope, type SigningRequest, type SigningRule, type SigningActivity, type SigningSnapshot, type SigningRuleChange, type SigningRuleTarget,
 } from './model';
 export { readSigningSnapshot } from './repository';
@@ -152,13 +152,11 @@ export class SigningPermissions {
         assertNotAborted(this.signal);
         current();
         const next = this.rules.filter((entry) => entry.key !== key && activeRule(entry));
-        if (next.length >= MAX_RULES) throw new Error('quota-exceeded');
         next.push({
           key, scope, decision: approved ? 'allow' : 'deny',
           duration: ttl !== undefined ? 'timed' : answer === 'allow-session' ? 'session' : 'always',
           createdAt: decidedAt, ...(ttl !== undefined ? { expiresAt: decidedAt + ttl } : {}),
         });
-        if (JSON.stringify(next).length > 256 * 1024) throw new Error('quota-exceeded');
         const rule = next[next.length - 1];
         revision = rule.duration === 'session' ? invalidateSigning(this.scope, key) : await saveSigningRule(this.scope, rule, current);
         assertNotAborted(this.signal);

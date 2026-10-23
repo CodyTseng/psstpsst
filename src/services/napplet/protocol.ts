@@ -153,20 +153,13 @@ export function parseManifest(input: unknown): NappletRelease {
 
 /** Conservative byte accounting avoids materializing a second serialized event. */
 export function eventWeight(event: Event): number {
-  if (
-    typeof event.content !== 'string' ||
-    event.content.length > 256000 ||
-    !Array.isArray(event.tags) ||
-    event.tags.length > 512
-  )
-    return Infinity;
+  if (typeof event.content !== 'string' || !Array.isArray(event.tags)) return Infinity;
   let size = 512 + event.content.length * 3;
   for (const tag of event.tags) {
-    if (!Array.isArray(tag) || tag.length > 16) return Infinity;
+    if (!Array.isArray(tag)) return Infinity;
     for (const value of tag) {
-      if (typeof value !== 'string' || value.length > 64000) return Infinity;
+      if (typeof value !== 'string') return Infinity;
       size += value.length * 3 + 8;
-      if (size > 1024 * 1024) return Infinity;
     }
   }
   return size;

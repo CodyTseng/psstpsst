@@ -12,7 +12,7 @@ import Check from 'lucide-react-native/icons/check';
 import { useDisplayName } from '@/hooks/use-display-name';
 import { isSignerAccess, type SigningRequest, type SigningScope } from '@/services/signing/model';
 import type { NappletRelease } from '@/services/napplet/protocol';
-import { isReplaceableKind, isAddressableKind } from 'nostr-tools/kinds';
+import { isAddressableKind } from 'nostr-tools/kinds';
 import { serializeEvent, type UnsignedEvent } from 'nostr-tools';
 import { platform } from '@/platform';
 import { NappletIdentity } from './NappletIdentity';
@@ -161,7 +161,7 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   </View>;
   const auth = request.operation === 'relay-auth';
   const effect = request.operation === 'sign' ? 'signing_effect_sign' : auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
-  const showIdentifier = isReplaceableKind(request.kind) || isAddressableKind(request.kind);
+  const showIdentifier = isAddressableKind(request.kind);
   const eventType = signingEventType(request.kind, t);
   const eventMetadata = eventType ? `${eventType} · ${request.kind}` : String(request.kind);
   const dTag = request.tags.find((tag) => tag[0] === 'd');
@@ -188,14 +188,14 @@ export function SigningRequestDetails({ request, showTitle = true }: {
       {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.signing_recipient')} /> : null}
       <AppCard variant="muted" style={{ gap: spacing.lg }}>
         {metadata}
-        <View style={{ gap: spacing.sm }}>
-        <SigningText variant="caption" tone="muted">{t('napplets.signing_content')}</SigningText>
-        {title ? <SigningText>{title}</SigningText> : null}
-        {preview.fields.length ? preview.fields.map(([key, value]) => <View key={key} style={{ flexDirection: 'row', gap: spacing.md }}>
-          <SigningText variant="caption" tone="muted" style={{ flex: 1 }}>{key.slice(0, 80)}</SigningText>
-          <SigningText style={{ flex: 2 }}>{String(value).slice(0, 140)}</SigningText>
-        </View>) : <SigningText>{previewText.slice(0, 600) || t('napplets.none')}</SigningText>}
-        </View>
+        {request.content.length > 0 ? <View style={{ gap: spacing.sm }}>
+          <SigningText variant="caption" tone="muted">{t('napplets.signing_content')}</SigningText>
+          {title ? <SigningText>{title}</SigningText> : null}
+          {preview.fields.length ? preview.fields.map(([key, value]) => <View key={key} style={{ flexDirection: 'row', gap: spacing.md }}>
+            <SigningText variant="caption" tone="muted" style={{ flex: 1 }}>{key.slice(0, 80)}</SigningText>
+            <SigningText style={{ flex: 2 }}>{String(value).slice(0, 140)}</SigningText>
+          </View>) : previewText ? <SigningText>{previewText.slice(0, 600)}</SigningText> : null}
+        </View> : null}
         {references.slice(0, 4).map((tag, index) => <View key={index} style={{ gap: spacing.xs }}>
           <SigningText variant="caption" tone="muted">{['e', 'a'].includes(tag[0]) ? t('chat.event_reference.event')
               : tag[0] === 'method' ? 'HTTP' : t('napplets.signing_destinations')}</SigningText>

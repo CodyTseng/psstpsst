@@ -229,10 +229,11 @@ The host queues at most 16 approvals, shows one at a time, rejects stale approva
 IDs and cancels requests on session termination. Each approval receives 60 seconds
 when it becomes visible; queued requests have no running review timer. Explicitly
 rejecting the whole queue pauses prompts for one minute or until the execution
-session ends. Routing and post-approval signing each have a 25-second budget; late
-remote signatures are discarded without publication. The injected pinned OUTBOX
-shim extends only publication waits to 1020 seconds to cover the bounded queue
-and these execution budgets.
+session ends. Routing has a 25-second budget before approval. Approved signatures
+are not discarded because the signer takes longer; the signer owns its execution
+timeout. Session cancellation and permission revocation still invalidate pending
+results. The injected pinned OUTBOX shim extends publication waits to 1020 seconds
+to cover queued approvals and remote execution.
 
 Requests default to one-time approval. The user can remember a timed decision
 (10 minutes, one hour or 24 hours) or a permanent decision, then Allow or Reject.
@@ -247,8 +248,8 @@ rules are imported from the legacy KV backup. A broader migration never follows
 from dropping a legacy condition.
 
 Custom kinds retain generic descriptions. Session decisions remain in memory.
-Rules are limited to 64 per account/source and timed decisions expire on every
-use. Durable writes finish before the approval becomes effective. Revocation
+Rules have no per-source count or aggregate-size quota; timed decisions expire
+on every use. Durable writes finish before the approval becomes effective. Revocation
 invalidates all live sessions of that account/source and any pending approval or
 unpublished signature. Resetting app access stops its container and clears its
 capability and signing rules. Upgrades preserve both data and authorizations;
@@ -264,8 +265,10 @@ file metadata and authorizes the host-built Blossom authentication event.
 Authorized publication signs once and reports per-relay outcomes.
 All valid event kinds and app-data identifiers can reach user-approved generic
 publication, including account settings and protocol events.
-Consent expires 60 seconds after presentation; submitted timestamps are
-retained when valid, with future timestamps limited to one day. NIP-44
+Consent expires 60 seconds after presentation. Signing validates the NIP-01
+event structure without imposing content length, tag count, tag-field length,
+or timestamp-window limits. Submitted integer timestamps are preserved;
+relay acceptance policies are not signing requirements. NIP-44
 publishEncrypted is available; NIP-04 is not. This API does not expose messaging
 keys, decrypted chat histories, wallets or arbitrary signing primitives.
 

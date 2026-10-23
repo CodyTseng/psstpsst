@@ -235,7 +235,8 @@ it('disables selection across raw JSON previews, relay addresses and signing ide
 
 it.each([
   [1, [['d', 'actual-record']], null],
-  [10001, [['d', 'actual-record']], 'actual-record'],
+  [3, [['d', 'actual-record']], null],
+  [10001, [['d', 'actual-record']], null],
   [30078, [['d', 'actual-record']], 'actual-record'],
   [30078, [['d', '']], 'napplets.signing_unnamed'],
   [30078, [], 'napplets.none'],
@@ -254,12 +255,13 @@ it.each([
   expect(renderer.root.findAllByType(AppText).some((node) => node.props.variant === 'code')).toBe(false);
 });
 
-it.each([{ tags: [] }, { tags: [['e', 'referenced-event']] }])('shows an explicit empty content value with tags $tags', ({ tags }) => {
-  const request = { ...prompt.signing!, content: '', tags };
+it.each([{ tags: [] }, { tags: [['e', 'referenced-event']] }, { tags: [['p', 'a'.repeat(64)]] }])('omits the empty content field and label with tags $tags', ({ tags }) => {
+  const request = { ...prompt.signing!, kind: 3, content: '', tags };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts).toContain('napplets.signing_content');
-  expect(texts).toContain('napplets.none');
+  expect(texts).not.toContain('napplets.signing_content');
+  expect(texts).not.toContain('napplets.none');
+  expect(texts).not.toContain('d');
 });
 
 it('keeps launch permissions focused on required capabilities with a fixed decision footer', () => {
@@ -300,7 +302,7 @@ it('shows the event type and authentication target before opening event JSON', (
   expect(texts.some(value => typeof value === 'string' && value.includes('napplets.event_http_auth'))).toBe(true);
   expect(texts).toContain('https://service.example/upload');
   expect(texts).toContain('POST');
-  expect(texts).toContain('napplets.none');
+  expect(texts).not.toContain('napplets.none');
 });
 
 it('identifies a profile event and previews the actual profile values', () => {

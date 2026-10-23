@@ -7,6 +7,7 @@ import { invalidateSigning } from '@/services/signing/changes';
 import type { ExploreEntry } from '../model';
 import { loadSiteBlob } from '@/services/napplet/artifacts';
 import { getData } from '@/services/napplet/repository';
+import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 jest.mock('../webln', () => ({ WebLn: jest.fn().mockImplementation(() => ({ handle: jest.fn(async () => true) })) }));
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn(async () => {}) }));
@@ -26,6 +27,19 @@ let warningLog: jest.SpyInstance;
 function message(origin: string, document: string, method = 'signEvent', id = '1') {
   receive('container', JSON.stringify({ type: 'explore.request', origin, document, raw: JSON.stringify({ id, nonce:'test-document', method, args: method === 'signEvent' ? [{ kind: 1, content: 'hello', tags: [], created_at: 1 }] : [] }) }));
 }
+
+it('reviews and signs a complete large event without rewriting its timestamp or content', async () => {
+  const event = { kind: 3, created_at: Math.floor(Date.now() / 1000) + 365 * 86400,
+    content: 'x'.repeat(70000),
+    tags: Array.from({ length: 1000 }, (_, index) => ['p', index.toString(16).padStart(64, '0')]) };
+  receive('container', JSON.stringify({ type: 'explore.request', origin: 'https://site.example', document: 'one',
+    raw: JSON.stringify({ id: 'large-event', nonce: 'test-document', method: 'signEvent', args: [event] }) }));
+  await flush();
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({
+    kind: 3, content: event.content, tags: event.tags, createdAt: event.created_at,
+  }) }), expect.any(AbortSignal));
+  expect(jest.mocked(NappletNetwork).mock.results.at(-1)!.value.sign).toHaveBeenCalledWith(event);
+});
 beforeEach(async () => {
   jest.clearAllMocks();
   debugLog = jest.spyOn(console, 'debug').mockImplementation(() => {});
@@ -109,6 +123,44 @@ it('does not return a signature revoked while the signer was working', async () 
   const response = JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]);
   expect(response.reply.error).toBe('permission-revoked');
   expect(response.reply.result).toBeUndefined();
+});
+
+it('returns a slow signature and retains the remembered decision', async () => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
+  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  network.sign.mockImplementation(async () => { clock.mockReturnValue(61000); return { sig: 'slow' }; });
+  try {
+    message('https://site.example', 'one');
+    await flush();
+    expect(JSON.parse(jest.mocked(platform.napplet.send).mock.calls.at(-1)![1]).reply.result).toEqual({ sig: 'slow' });
+    message('https://site.example', 'two');
+    await flush();
+    expect(confirm).toHaveBeenCalledTimes(1);
+  } finally { clock.mockRestore(); }
+});
+
+it('verifies and publishes large signed events using the shared event structure', async () => {
+  await runtime.stop();
+  runtime = new ExploreRuntime('account', { ...entry, kind: 'napp', key: 'naddr-test', files: [], required: ['relay'] },
+    { confirm, close: () => {}, link: () => {} });
+  await runtime.start();
+  const event = finalizeEvent({ kind: 3, created_at: Math.floor(Date.now() / 1000) + 365 * 86400,
+    content: 'x'.repeat(270000), tags: [
+      ...Array.from({ length: 1000 }, (_, index) => ['p', index.toString(16).padStart(64, '0')]),
+      ['custom', ...Array.from({ length: 32 }, () => 'x'.repeat(5000))],
+    ] }, generateSecretKey());
+  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  network.publish = jest.fn(async () => ({ 'wss://relay.example/': true }));
+  for (const method of ['verifyEvent', 'publish']) {
+    receive('container', JSON.stringify({ type: 'explore.request', origin: 'https://app.explore.psstpsst.invalid', document: 'one',
+      raw: JSON.stringify({ id: method, nonce: 'test-document', method,
+        args: method === 'publish' ? [event, ['wss://relay.example/']] : [event] }) }));
+    await flush();
+    const reply = JSON.parse(jest.mocked(platform.napplet.send).mock.calls.at(-1)![1]).reply;
+    expect(reply.error).toBeUndefined();
+    if (method === 'verifyEvent') expect(reply.result).toBe(true);
+  }
+  expect(network.publish).toHaveBeenCalledWith(event, ['wss://relay.example/']);
 });
 it.each(['getPublicKey', 'signEvent'])('returns a denied %s request without logging a warning', async method => {
   confirm.mockResolvedValue(false);

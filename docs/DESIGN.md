@@ -1112,8 +1112,9 @@ Keep the requesting app icon and name in a compact body row with balanced
 space between the header controls and the following content. Show the signing
 account only as a circular avatar in the trailing title-bar slot, with an
 accessible account-name label. Keep the event kind visible before disclosure;
-replaceable and addressable events also show the full d-tag value from the event,
-with empty and missing values distinguishable. A centred disclosure with
+addressable events also show the full d-tag value from the event,
+with empty and missing values distinguishable. Empty content omits the entire
+content field, including its label. A centred disclosure with
 a directional chevron expands directly into the event JSON, followed by relay
 destinations. All signing content, including previews, event JSON, identities
 and relay addresses, disables text selection to preserve scrolling and gestures.

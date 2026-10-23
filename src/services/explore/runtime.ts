@@ -10,7 +10,8 @@ import i18n from '@/i18n/core';
 import { signingRevision } from '@/services/signing/changes';
 import { nip19, verifyEvent } from 'nostr-tools';
 import { signingTemplate } from '@/services/signing/event-template';
-import { eventWeight, randomId } from '@/services/napplet/protocol';
+import { randomId } from '@/services/napplet/protocol';
+import { isSignedEvent } from '@/lib/nostr/event-validation';
 import { publicEventAddress } from './event-address';
 import { encodeNappletBytes } from '@/platform/napplet-bytes';
 import { loadSiteBlob, recordArtifactVersion } from '@/services/napplet/artifacts';
@@ -310,11 +311,10 @@ export class ExploreRuntime {
         relays: operation === 'relay-auth' ? [event.tags.find(tag => tag[0] === 'relay')![1]] : [],
         accountPubkey: this.account, content: event.content, tags: event.tags, createdAt: event.created_at });
       current();
-      const expires = Date.now() + 25000;
       const signed = await this.network.sign(event);
       current();
       const scope = { accountPubkey: this.account, sourceId: this.entry.kind === 'website' ? this.origin : this.entry.key };
-      if (Date.now() > expires || signingRevision(scope) !== revision)
+      if (signingRevision(scope) !== revision)
         throw new Error('permission-revoked');
       return signed;
     }
@@ -410,7 +410,7 @@ export class ExploreRuntime {
     if (method === 'publish' && !this.entry.required.some(d => ['relay', 'outbox', 'common'].includes(d)))
       throw new Error('permission-denied');
     if (method === 'verifyEvent')
-      return eventWeight(args[0]) < 256 * 1024 && verifyEvent(args[0]);
+      return isSignedEvent(args[0]) && verifyEvent(args[0]);
     if (method === 'query' || method === 'count') {
       return method === 'count' ? localRelay.count(args[0]) : localRelay.query(args[0]);
     }
@@ -449,7 +449,7 @@ export class ExploreRuntime {
     }
     if (method === 'publish') {
       const event = args[0];
-      if (!event || eventWeight(event) > 256 * 1024 || !verifyEvent(event))
+      if (!isSignedEvent(event) || !verifyEvent(event))
         throw new Error('invalid-event');
       const relays = args[1] ?? await this.network.routes([event.pubkey], 'write');
       current();

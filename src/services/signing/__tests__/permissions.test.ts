@@ -22,6 +22,22 @@ function create(confirm: jest.Mock = jest.fn(async () => 'allow-always' as strin
 beforeEach(() => { stored.clear(); activity.clear(); jest.clearAllMocks(); });
 afterEach(() => { controllers.splice(0).forEach((value) => value.abort()); });
 
+test('remembers and edits more than 64 rules with long record identifiers', async () => {
+  const value = create();
+  for (let index = 0; index < 80; index++) {
+    await value.permissions.authorize({ ...request, tags: [['d', `record-${index}-${'x'.repeat(5000)}`]] });
+  }
+  const reopened = create();
+  const snapshot = await reopened.permissions.snapshot();
+  expect(snapshot.rules).toHaveLength(80);
+  for (const index of [0, 79]) {
+    await reopened.permissions.authorize({ ...request, tags: [['d', `record-${index}-${'x'.repeat(5000)}`]] });
+  }
+  expect(reopened.confirm).not.toHaveBeenCalled();
+  await reopened.permissions.edit(snapshot.rules[0], { decision: 'deny', duration: 'always' });
+  await expect(reopened.permissions.authorize({ ...request, tags: [['d', `record-0-${'x'.repeat(5000)}`]] })).rejects.toThrow('permission-denied');
+});
+
 test.each(['allow-always', 'allow-10m', 'deny-always', 'deny-1h'])('%s dismisses once and rechecks matching queued requests across controllers', async decision => {
   let visible: QueuedPrompt | null = null, presentations = 0;
   const queue = new PromptQueue(value => { visible = value; if (value) presentations++; });
@@ -382,6 +398,22 @@ test.each(['nip04', 'nip44'] as const)('%s encryption reviews the exact plaintex
   expect(JSON.stringify([...stored.values()])).not.toContain('Private original');
   expect(JSON.stringify([...activity.values()])).not.toContain('Private original');
   expect(JSON.stringify(await permissions.snapshot())).not.toContain('Private original');
+});
+
+test('commits remembered permission before a slow cryptographic signer returns', async () => {
+  jest.useFakeTimers();
+  let finish!: (value: string) => void;
+  const value = create();
+  const signer = new ApplicationSigner({ accountPubkey: 'accountA', permissions: value.permissions, current: jest.fn(),
+    signer: async () => ({ nip44Encrypt: () => new Promise<string>(resolve => { finish = resolve; }) }) as unknown as Signer });
+  try {
+    const pending = signer.crypto('nip44', 'encrypt', 'b'.repeat(64), 'plaintext');
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(finish).toBeDefined();
+    expect((await value.permissions.snapshot()).rules).toHaveLength(1);
+    finish('slow-result');
+    await expect(pending).resolves.toBe('slow-result');
+  } finally { jest.useRealTimers(); }
 });
 test('rejecting plaintext review prevents the signer from encrypting it', async () => {
   const { permissions, confirm } = create(jest.fn(async () => false));

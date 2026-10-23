@@ -1,4 +1,5 @@
-import { matchFilters, validateEvent, verifyEvent, type Event, type Filter } from 'nostr-tools';
+import { matchFilters, verifyEvent, type Event, type Filter } from 'nostr-tools';
+import { isSignedEvent } from '@/lib/nostr/event-validation';
 import type { SqliteExecutor, SqlBindValue } from '@/platform/ports/database';
 import { localFilters, filterSql } from './filters';
 const MAX_EVENTS = 100000, MAX_BYTES = 128 * 1024 * 1024;
@@ -33,17 +34,14 @@ export class LocalRelay {
         let event: Event;
         try {
             const raw = JSON.stringify(input);
-            if (!raw || raw.length > 256 * 1024)
+            if (!raw)
                 throw new Error();
             event = JSON.parse(raw);
         }
         catch {
             throw new Error('invalid-event');
         }
-        if (!validateEvent(event) || !/^[a-f0-9]{64}$/.test(event.id ?? '') || !/^[a-f0-9]{128}$/.test(event.sig ?? '') ||
-            !Number.isInteger(event.kind) || event.kind < 0 || event.kind > 65535 ||
-            !Number.isSafeInteger(event.created_at) || event.created_at < 0 || event.created_at > Date.now() / 1000 + 86400 ||
-            event.tags.length > 512 || event.tags.some(tag => tag.length > 16 || tag.some(value => value.length > 4096)))
+        if (!isSignedEvent(event))
             throw new Error('invalid-event');
         if (privateKinds.has(event.kind))
             throw new Error('private-event');

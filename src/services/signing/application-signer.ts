@@ -33,13 +33,8 @@ export class ApplicationSigner {
     if (!run) throw new Error('unsupported-encryption');
     // Let the consent UI paint before local cryptographic work starts.
     await new Promise<void>(resolve => setTimeout(resolve, 0)); this.current(revision);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const result = await Promise.race([run.call(signer, peer, text), new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('crypto-timeout')), 25000);
-      })]);
-      this.current(revision);
-      return result;
-    } finally { clearTimeout(timer); }
+    const result = await run.call(signer, peer, text);
+    this.current(revision);
+    return result;
   }
 }

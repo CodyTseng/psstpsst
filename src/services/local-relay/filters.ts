@@ -12,12 +12,12 @@ export function localFilters(input: unknown): Filter[] {
             if (['ids', 'authors', 'kinds'].includes(key) || /^#[a-zA-Z]$/.test(key)) {
                 if (!Array.isArray(items) || items.length > 100 || items.some(item => key === 'kinds'
                     ? !Number.isInteger(item) || item < 0 || item > 65535
-                    : typeof item !== 'string' || item.length > 4096 || ['ids', 'authors', '#e', '#p'].includes(key) && !/^[a-f0-9]{64}$/.test(item)))
+                    : typeof item !== 'string' || ['ids', 'authors', '#e', '#p'].includes(key) && !/^[a-f0-9]{64}$/.test(item)))
                     throw new Error('invalid-filter');
                 filter[key] = [...items];
             }
             else if (['since', 'until', 'limit'].includes(key)) {
-                if (!Number.isSafeInteger(items) || (items as number) < 0)
+                if (!Number.isSafeInteger(items) || key === 'limit' && (items as number) < 0)
                     throw new Error('invalid-filter');
                 filter[key] = key === 'limit' ? Math.min(items as number, 1000) : items;
             }

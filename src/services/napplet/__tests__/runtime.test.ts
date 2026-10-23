@@ -100,6 +100,27 @@ test('NIP-07 works without declared domains and signs without publishing', async
   } finally { await runtime.close(); }
 });
 
+test.each(['signer.signEvent', 'outbox.publish'])('%s preserves large valid events and future timestamps', async type => {
+  const config = options();
+  const runtime = new NappletRuntime(config);
+  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  const event = { kind: 3, created_at: Math.floor(Date.now() / 1000) + 365 * 86400,
+    content: 'x'.repeat(70000), tags: [
+      ...Array.from({ length: 1000 }, (_, index) => ['p', index.toString(16).padStart(64, '0')]),
+      ['custom', ...Array.from({ length: 32 }, () => 'x'.repeat(5000))],
+    ] };
+  jest.mocked(network.sign).mockResolvedValue({ ...event, id: 'event', sig: 'signature' });
+  jest.mocked(network.publish).mockResolvedValue({ 'wss://relay.example/': true });
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type, id: 'large-event', event,
+      options: { toOutbox: false, relays: ['wss://relay.example/'] } }));
+    expect(config.confirm).toHaveBeenCalled();
+    expect(network.sign).toHaveBeenCalledWith(event);
+    expect(messages().at(-1)?.error).toBeUndefined();
+  } finally { await runtime.close(); }
+});
+
 test('NIP-07 refuses account access and invalid events before calling the signer', async () => {
   const config = { ...options(), domains: ['shell'] };
   jest.mocked(config.confirm).mockResolvedValue(false);
@@ -450,7 +471,7 @@ test('closing while a signing request is visible prevents signing and publicatio
   expect(messages()).toEqual([]);
 });
 
-test('late remote signatures are discarded without publishing an expired request', async () => {
+test('approved remote signatures remain usable after a slow signer returns', async () => {
   const now = jest.spyOn(Date, 'now').mockReturnValue(1000);
   const runtime = new NappletRuntime(options());
   runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
@@ -458,12 +479,13 @@ test('late remote signatures are discarded without publishing an expired request
     now.mockReturnValue(31000);
     return { id: 'late-signature' } as never;
   });
+  jest.mocked(runtime.network.publish).mockResolvedValue({ 'wss://relay.example/': true });
   try {
     await runtime.open();
     await runtime.receive(JSON.stringify({ type: 'outbox.publish', id: 'late',
       event: { kind: 1, content: 'Expired', tags: [] } }));
-    expect(runtime.network.publish).not.toHaveBeenCalled();
-    expect(messages()).toContainEqual(expect.objectContaining({ id: 'late', error: 'timeout' }));
+    expect(runtime.network.publish).toHaveBeenCalledTimes(1);
+    expect(messages()).toContainEqual(expect.objectContaining({ id: 'late', ok: true }));
   } finally { await runtime.close(); now.mockRestore(); }
 });
 

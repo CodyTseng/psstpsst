@@ -1,4 +1,5 @@
 import type { WalletApprovalRequest } from '@/lib/wallet/approval';
+import { isEventTemplate } from '@/lib/nostr/event-validation';
 import { signingSourceFromLegacyKey } from '@/services/signing/source';
 import { applicationPresentation, type ApplicationInfo, type ApplicationListEntry } from '@/services/explore/model';
 import { NappDevice } from '@/services/explore/device';
@@ -450,10 +451,9 @@ export class NappletRuntime {
           relays: operation === 'relay-auth' ? [event.tags.find(tag => tag[0] === 'relay')![1]] : [], accountPubkey: this.options.accountPubkey, content: event.content,
           tags: event.tags, createdAt: event.created_at });
         this.check();
-        const expiresAt = Date.now() + 25000;
         const signed = await this.network.sign(event);
         this.check();
-        if (Date.now() > expiresAt || this.signingPermissions.version !== revision)
+        if (this.signingPermissions.version !== revision)
           throw new Error('permission-revoked');
         this.result(m, { result: signed });
       }
@@ -945,38 +945,19 @@ export class NappletRuntime {
     );
   }
   private async publish(m: Message, domain: string, op: string) {
-    let expiresAt = Date.now() + 25000;
+    let routing = true;
+    const routingExpiresAt = Date.now() + 25000;
     let permissionVersion: number | undefined;
     const current = () => {
       this.check();
-      if (Date.now() >= expiresAt) throw new Error('timeout');
+      if (routing && Date.now() >= routingExpiresAt) throw new Error('timeout');
       if (permissionVersion !== undefined && permissionVersion !== this.signingPermissions.version) throw new Error('permission-denied');
     };
     const input = m.event ?? m.template;
-    if (
-      !input ||
-      !Number.isSafeInteger(input.kind) ||
-      input.kind < 0 ||
-      input.kind > 65535 ||
-      typeof input.content !== 'string' ||
-      input.content.length > 64000 ||
-      !Array.isArray(input.tags) ||
-      input.tags.length > 128 ||
-      input.tags.some(
-        (t: unknown) =>
-          !Array.isArray(t) ||
-          t.length > 16 ||
-          t.some((v: unknown) => typeof v !== 'string' || v.length > 4096),
-      )
-    )
-      throw new Error('publication-blocked');
-    if (
-      input.created_at != null &&
-      (!Number.isSafeInteger(input.created_at) ||
-        input.created_at < 0 ||
-        input.created_at > Math.floor(Date.now() / 1000) + 86400)
-    )
+    if (input?.created_at != null && !Number.isSafeInteger(input.created_at))
       throw new Error('invalid-timestamp');
+    const submitted = { ...input, created_at: input?.created_at ?? Math.floor(Date.now() / 1000) };
+    if (!isEventTemplate(submitted)) throw new Error('publication-blocked');
     const opts = m.options ?? {};
     let relays =
       domain === 'outbox' && opts.toOutbox === false
@@ -988,15 +969,16 @@ export class NappletRuntime {
     current();
     if (!relays.length || relays.length > 16) throw new Error('invalid-relays');
     const template: EventTemplate = {
-      kind: input.kind,
-      content: input.content,
-      tags: input.tags.map((tag: string[]) => [...tag]),
-      created_at: input.created_at ?? Math.floor(Date.now() / 1000),
+      kind: submitted.kind,
+      content: submitted.content,
+      tags: submitted.tags.map(tag => [...tag]),
+      created_at: submitted.created_at,
     };
     if (op === 'publishEncrypted' && !/^[a-f0-9]{64}$/.test(m.recipient))
       throw new Error('invalid-recipient');
     if (op === 'publishEncrypted' && m.encryption && m.encryption !== 'nip44')
       throw new Error('unsupported-encryption');
+    routing = false;
     permissionVersion = await this.signingPermissions.authorize({
       operation: op === 'publishEncrypted' ? 'encrypt-publish' : 'publish',
       kind: template.kind, relays, accountPubkey: this.options.accountPubkey,
@@ -1005,7 +987,6 @@ export class NappletRuntime {
         ? { identifier: template.tags.find((tag) => tag[0] === 'd')?.[1] ?? '' } : {}),
       ...(op === 'publishEncrypted' ? { recipient: m.recipient } : {}),
     });
-    expiresAt = Date.now() + 25000;
     current();
     if (op === 'publishEncrypted') {
       if (m.encryption && m.encryption !== 'nip44') throw new Error('unsupported-encryption');
