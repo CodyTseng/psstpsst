@@ -100,12 +100,13 @@ type BubbleBodyBaseProps = Props & {
 // Spacer characters (written as escapes so an editor can't silently turn the
 // wide figure-space into a narrow ASCII space — see blockMetaSpacer below).
 const ZWSP = '\u200b'; // zero-width space — lets the line break before the spacer
-const RLI = '\u2067'; // keeps an appended numeric spacer at logical end in RTL text
+const RLI = '\u2067'; // keeps the metadata spacer at logical end in RTL text
 const PDI = '\u2069';
 const MESSAGE_META_GAP = 2;
 const MESSAGE_META_HOVER_OPACITY = 0.82;
 const MESSAGE_META_PRESSED_OPACITY = 0.5;
-const FIG = ' '; // figure space — width of a digit, approximates the icon gap
+const FIG = '\u2007'; // figure space — width of a digit, approximates the icon gap
+const TIME_WIDTH_SPACER = FIG.repeat(5); // approximate HH:mm without visible glyphs
 const HAN_SCRIPT = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 const ANDROID_HAN_BASELINE_STYLE = { transform: [{ translateY: -2 }] } as const;
 type InlineMessageSegment = Exclude<MessageSegment, { type: 'event' }>;
@@ -313,7 +314,9 @@ function BubbleBodyBase({
   }
 
   function renderInlineText(bodySegments: InlineMessageSegment[], showMeta: boolean) {
-    const metaWidthSpacer = isSelf ? `${FIG}${FIG}${FIG}${time}` : `${FIG}${time}`;
+    const metaWidthSpacer = isSelf
+      ? `${FIG}${FIG}${FIG}${TIME_WIDTH_SPACER}`
+      : `${FIG}${TIME_WIDTH_SPACER}`;
     const blockMetaSpacer = showMeta
       ? `${ZWSP}${isRTL ? `${RLI}${metaWidthSpacer}${PDI}` : metaWidthSpacer}`
       : '';
@@ -442,17 +445,13 @@ function BubbleBodyBase({
                   <Text key={i}>{seg.value}</Text>
                 ),
               )}
-          {/* Paint the spacer in the bubble's own background colour, not
-              opacity:0 / color:'transparent' — Android mishandles both on a
-              nested <Text> span, leaking this spacer as a visible ghost of the
-              real timestamp beneath it. A solid colour that matches the backdrop
-              is always honoured and is invisible against the bubble. */}
+          {/* Reserve metadata width with whitespace only so Android text-colour
+              overrides cannot expose a duplicate timestamp. */}
           <Text
             selectable={false}
             style={{
               fontSize: 11,
               lineHeight: 14,
-              color: bubbleBg,
               includeFontPadding: false,
               textAlignVertical: 'center',
               letterSpacing: liftedSpacerLetterSpacing,
