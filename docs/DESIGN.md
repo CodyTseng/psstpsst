@@ -266,7 +266,10 @@ Message bubbles accept swipe-to-reply from the trailing edge toward the leading
 edge. The physical direction reverses in RTL layouts.
 
 Quoted replies in messages and the composer jump to their source message when
-pressed. The composer's cancel action only dismisses the reply.
+pressed. Smooth scrolling uses message positions within the loaded list,
+not visibility callbacks, and stays within a bounded message span. Other
+sources jump directly without loading the intervening history. The
+composer's cancel action only dismisses the reply.
 Composer quote feedback fills the input's upper region and follows its outer
 top corners, without a separate rounded card.
 

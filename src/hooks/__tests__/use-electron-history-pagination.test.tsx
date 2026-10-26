@@ -32,8 +32,8 @@ describe('Electron history pagination', () => {
   let callback: jest.Mock;
   let listRef: { current: { getScrollableNode: () => typeof node } | null };
 
-  function Harness({ mounted = true }: { mounted?: boolean }) {
-    useElectronHistoryPagination({ listRef, mounted, onHistoryEdge: callback });
+  function Harness({ mounted = true, windowKey = 'tail' }: { mounted?: boolean; windowKey?: string }) {
+    useElectronHistoryPagination({ listRef, mounted, windowKey, onHistoryEdge: callback });
     return null;
   }
 
@@ -111,6 +111,44 @@ describe('Electron history pagination', () => {
       jest.runOnlyPendingTimers();
     });
     expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('rebinds wheel and scrollbar listeners when only the mounted list key changes', () => {
+    const previousNode = node;
+    const previousOwner = owner;
+    act(() => {
+      previousNode.emit('wheel', { deltaY: -100 });
+      previousNode.emit('pointerdown', { button: 0, target: previousNode });
+      owner = eventTarget();
+      node = { ...eventTarget(), ownerDocument: owner, scrollTop: 3200, scrollHeight: 4000, clientHeight: 800 };
+      listRef.current = { getScrollableNode: () => node };
+      renderer.update(<Harness windowKey="anchor:cached" />);
+    });
+    act(() => { jest.runOnlyPendingTimers(); });
+    expect(callback).not.toHaveBeenCalled();
+
+    act(() => {
+      previousNode.emit('wheel', { deltaY: -100 });
+      previousNode.emit('pointerdown', { button: 0, target: previousNode });
+      previousOwner.emit('pointermove', { buttons: 1 });
+      previousOwner.emit('pointerup');
+      jest.runOnlyPendingTimers();
+    });
+    expect(callback).not.toHaveBeenCalled();
+
+    act(() => {
+      node.emit('wheel', { deltaY: -100 });
+      jest.runOnlyPendingTimers();
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
+    callback.mockClear();
+    act(() => {
+      node.emit('pointerdown', { button: 0, target: node });
+      owner.emit('pointermove', { buttons: 1 });
+      owner.emit('pointerup');
+      jest.runOnlyPendingTimers();
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
   });
 
   it('cleans up queued work and reattaches when the focus cover releases the list', () => {

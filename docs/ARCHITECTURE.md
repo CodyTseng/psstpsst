@@ -428,7 +428,11 @@ cause; cursor progress remains unchanged so the next session can retry safely.
   never removes list data or re-queries SQLite. Tail and anchored windows retain
   their loaded pages across in-screen mode switches and release them only with
   the conversation screen session. Anchored windows own independent older and
-  newer cursors; neither direction grows a query from the anchor.
+  newer cursors; neither direction grows a query from the anchor. List data
+  materializes requested rows lazily and shares a position Map with its window.
+  Edge pagination adjusts a window offset and indexes only new history;
+  the bounded live overlap is reindexed when its membership changes;
+  replacing the window resets both data and lookup scope.
 - Message rows carry only a coarse persisted delivery status. Compact,
   account-scoped recipient copies hold the bounded per-relay detail and are
   queried only while the message detail sheet is open. The UI does not infer
@@ -445,7 +449,10 @@ cause; cursor progress remains unchanged so the next session can retry safely.
   resolve with the fetched source page and remain cached for the screen session.
 - Incoming messages are staged while the user reads older history and merged at
   the live tail.
-- List rows subscribe only to their own changing state.
+- List rows subscribe only to their own changing state. Memoized row actions
+  resolve the current committed message window when dispatched. Electron
+  positions mounted targets from current DOM geometry rather than stale
+  virtualized height estimates, excluding header and composer occlusion.
 - Expensive derived values, profiles, keys, and routing metadata use bounded
   caches and in-flight deduplication.
 

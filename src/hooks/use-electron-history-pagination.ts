@@ -10,10 +10,13 @@ const SCROLL_NODE_BIND_RETRY_FRAMES = 60;
 export function useElectronHistoryPagination({
   listRef,
   mounted,
+  windowKey,
   onHistoryEdge,
 }: {
   listRef: RefObject<{ getScrollableNode(): unknown } | null>;
   mounted: boolean;
+  /** Rebind when a keyed list replaces its scroll node without unmounting the hook. */
+  windowKey: string;
   onHistoryEdge: () => void;
 }) {
   const callbackRef = useRef(onHistoryEdge);
@@ -85,5 +88,5 @@ export function useElectronHistoryPagination({
       if (frame !== null) cancelAnimationFrame(frame);
       removeListeners?.();
     };
-  }, [listRef, mounted]);
+  }, [listRef, mounted, windowKey]);
 }

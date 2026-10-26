@@ -74,6 +74,11 @@ import {
   type MessageBubbleReplyPreview,
 } from './MessageBubble';
 import { DatePill, DateSeparator } from './message-date-separator';
+import { LoadedMessageWindowCache } from '@/lib/chat/loaded-message-window';
+import { MessageListData, MessageListRowCache, type ListItem } from './message-list-data';
+import { MessageListCell } from './MessageListCell';
+import { measureMessageScrollOffset } from './message-scroll-layout';
+import { IS_ELECTRON } from '@/lib/platform';
 import { PendingAttachmentBubble } from './PendingAttachmentBubble';
 import { GroupSystemMessage } from './GroupSystemMessage';
 import {
@@ -232,45 +237,8 @@ type Props = {
   interactive?: boolean;
 };
 
-type ListItemSource =
-  | {
-      kind: 'message';
-      message: MessageRow;
-      prepared: PreparedBubbleRenderItem | null;
-    }
-  | { kind: 'pending'; pending: PendingAttachment };
-
-type ListItem = ListItemSource & {
-  /** The adjacent older source. Stored on the item so a prepended history page
-   * changes only the previous boundary cell, not renderItem. */
-  older: ListItemSource | null;
-  newer: ListItemSource | null;
-  boundaryCreatedAt: number | null | undefined;
-  boundaryIsSelf: boolean | null | undefined;
-};
-
-type CachedListItem = {
-  prepared: PreparedBubbleRenderItem | null;
-  olderSource: MessageRow | PendingAttachment | null;
-  newerSource: MessageRow | PendingAttachment | null;
-  boundaryCreatedAt: number | null | undefined;
-  boundaryIsSelf: boolean | null | undefined;
-  item: ListItem;
-};
-
-/** Tapping a reply to an out-of-window target pages older up to this many times,
- * smoothly scrolling to it once it appears. A reply almost always points just up
- * the thread, so this stays small — within it a smooth scroll is short and
- * reliable; past it (a genuinely distant target) we hand off to the focus jump,
- * which is exact regardless of distance. */
-const MAX_SEEK_PAGES = 3;
-
-/** Older rows we want loaded *above* a reply target before scrolling to it, so it
- * can sit mid-screen rather than clamping to the very top (where it would only
- * peek out). One `loadOlder` adds a whole page past the target, so reaching this
- * never takes more than a page. Skipped when there's no older left (top of
- * history). */
-const SEEK_MARGIN = 8;
+/** Bound reply animations by loaded message distance. Never page to seek. */
+const MAX_SMOOTH_REPLY_DISTANCE = 50;
 
 /** Keep normal history releases aligned with FlatList's cell batch. Waiting two
  * frames between batches gives input a chance to run without starving flings. */
@@ -387,21 +355,40 @@ export function MessageList({
     }),
     [t],
   );
-  // A reply target that's out of the window and too far to scroll to: route it
-  // through the **same proven jump** as a search / gallery open by setting a
-  // *local* focus id (merged with the `focusMessageId` prop into `activeFocusId`
-  // below), so it gets the full treatment — wait for the re-anchored window, render
-  // it whole so rows are measured, snap to centre under the cover. Cleared on a
-  // return to the live tail.
-  const [localFocusId, setLocalFocusId] = useState<string | null>(null);
-  // Reply target we're paging *older* toward (the near path: a reply usually
-  // points just up the thread, so we grow the window a few pages until it appears
-  // and scroll to it — no jarring re-anchor). Cleared once found or given up on.
-  const [seekReplyId, setSeekReplyId] = useState<string | null>(null);
-  const seekAttemptsRef = useRef(0);
-  // The jump target driving the focus machinery — the `focusMessageId` prop (a
-  // search / gallery open) or a locally-set far reply, whichever is active.
-  const activeFocusId = focusMessageId ?? localFocusId;
+  // Local requests override the search/gallery target they originated from.
+  // A new object also lets a repeated distant jump to the same id reposition.
+  const [localFocus, setLocalFocus] = useState<{
+    id: string;
+    sourceFocusId: string | undefined;
+    requestId: number;
+  } | null>(null);
+  const currentLocalFocus = localFocus?.sourceFocusId === focusMessageId ? localFocus : null;
+  const activeFocusId = currentLocalFocus?.id ?? focusMessageId ?? null;
+  const activeFocusRequest = currentLocalFocus ?? activeFocusId;
+  const focusHandledRef = useRef<typeof activeFocusRequest>(null);
+  const navigationSequenceRef = useRef(0);
+  const cancelFocusPositioningRef = useRef<(() => void) | null>(null);
+  const scrollRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTargetRef = useRef<{
+    id: string;
+    requestId: number;
+    viewPosition: number;
+    retries: number;
+  } | null>(null);
+  const cancelMessagePositioning = useCallback(() => {
+    navigationSequenceRef.current += 1;
+    cancelFocusPositioningRef.current?.();
+    cancelFocusPositioningRef.current = null;
+    if (scrollRetryTimerRef.current != null) clearTimeout(scrollRetryTimerRef.current);
+    scrollRetryTimerRef.current = null;
+    scrollTargetRef.current = null;
+  }, []);
+  useEffect(() => cancelMessagePositioning, [cancelMessagePositioning]);
+  // RN Web can retain offsets for the same message keys after their indices
+  // change. A direct window replacement needs a fresh measurement cache.
+  const listWindowKey = currentLocalFocus
+    ? `reply:${currentLocalFocus.requestId}`
+    : activeFocusId ?? 'tail';
   const tailMode = activeFocusId == null && !anchored;
   // A small unread tail already fits in the first page, so marking its boundary
   // adds visual noise and can perturb the list after first paint. Only
@@ -587,6 +574,9 @@ export function MessageList({
   const pendingTailScrollAfterReleaseRef = useRef<MessageTailScrollMode>(null);
 
   function handleScrollBeginDrag() {
+    cancelMessagePositioning();
+    focusHandledRef.current = activeFocusRequest;
+    setReady(true);
     userScrollInProgressRef.current = true;
     continuousHistoryPagingRef.current = true;
     // Treat a deliberate gesture as leaving the tail until its final offset is
@@ -660,32 +650,19 @@ export function MessageList({
     }
   }
 
-  // Index (into ascending `messages`) of the released boundary. Everything up
-  // to and including it is rendered; anything newer is staged (held back).
-  // Our own messages are never staged — a freshly-sent bubble must appear in
-  // the same render it lands in `messages` (not a frame later when the effect
-  // advances the boundary), so we extend the boundary to our last own message.
+  const windowScope = `${accountPubkey}\0${conversationKey}\0${listWindowKey}\0${tailJumpVersion}`;
+  const listCaches = useMemo(() => ({
+    scope: windowScope,
+    messages: new LoadedMessageWindowCache((row) => isMessageFromSelf(row, selfPubkey, proximity)),
+    rows: new MessageListRowCache(),
+  }), [windowScope, selfPubkey, proximity]);
+  const messageWindow = listCaches.messages.read(messages);
   const releasedIdx = useMemo(() => {
-    let stored = messages.length - 1;
-    if (releasedNewestId != null) {
-      const i = messages.findIndex((m) => m.id === releasedNewestId);
-      if (i !== -1) stored = i;
-    }
-    let lastSelf = -1;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (isMessageFromSelf(messages[i], selfPubkey, proximity)) {
-        lastSelf = i;
-        break;
-      }
-    }
-    return Math.max(stored, lastSelf);
-  }, [messages, releasedNewestId, selfPubkey, proximity]);
-  // While anchored on a jumped-to message we render the whole bounded window and
-  // skip staging entirely (staging assumes the window follows the live tail).
-  const displayedMessages = useMemo(
-    () => (anchored ? messages : messages.slice(0, releasedIdx + 1)),
-    [messages, releasedIdx, anchored],
-  );
+    const stored = releasedNewestId == null ? messages.length - 1 : messageWindow.position(releasedNewestId);
+    const lastSelf = messageWindow.lastSelf == null ? -1 : messageWindow.position(messageWindow.lastSelf.id);
+    return Math.max(stored < 0 ? messages.length - 1 : stored, lastSelf);
+  }, [messageWindow, messages.length, releasedNewestId]);
+  const displayedCount = anchored ? messages.length : releasedIdx + 1;
   // How many messages are staged just past the boundary — drives the badge.
   const stagedCount = anchored ? 0 : messages.length - (releasedIdx + 1);
 
@@ -695,7 +672,7 @@ export function MessageList({
       setReleasedNewestId(messages[messages.length - 1].id);
   }
 
-  function flash(id: string) {
+  const flash = useCallback((id: string) => {
     flashTickRef.current += 1;
     setFlashTarget({ id, tick: flashTickRef.current });
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
@@ -705,7 +682,7 @@ export function MessageList({
         ? MESSAGE_HIGHLIGHT_REDUCED_CLEAR_MS
         : MESSAGE_HIGHLIGHT_CLEAR_MS,
     );
-  }
+  }, [reducedMotion]);
   useEffect(
     () => () => {
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
@@ -714,17 +691,17 @@ export function MessageList({
   );
 
   // Drives the cover + the "stop waiting" safety net for a jump. Re-armed on every
-  // new focus target. The timeout reveals the conversation even if the target
+  // new focus request. The timeout reveals the conversation even if the target
   // cannot be loaded, so focus navigation cannot leave the screen covered.
   const [focusExpired, setFocusExpired] = useState(false);
-  const prevActiveFocusRef = useRef<string | null>(activeFocusId);
+  const prevActiveFocusRef = useRef(activeFocusRequest);
   useEffect(() => {
     if (activeFocusId == null) {
       prevActiveFocusRef.current = null; // so re-focusing the same id later re-arms
       return;
     }
-    if (activeFocusId !== prevActiveFocusRef.current) {
-      prevActiveFocusRef.current = activeFocusId;
+    if (activeFocusRequest !== prevActiveFocusRef.current) {
+      prevActiveFocusRef.current = activeFocusRequest;
       setReady(false);
       setFocusExpired(false);
     }
@@ -733,9 +710,10 @@ export function MessageList({
       setFocusExpired(true);
     }, 1000);
     return () => clearTimeout(t);
-  }, [activeFocusId]);
+  }, [activeFocusId, activeFocusRequest]);
 
   function scrollToBottom() {
+    cancelMessagePositioning();
     if (anchored) {
       // From a jumped-to (anchored) window, "jump to latest" just **drops the
       // anchor and reloads the live tail** — a fresh small window, never paging
@@ -911,7 +889,7 @@ export function MessageList({
       for (const v of viewableItems) {
         if (v.index == null) continue;
         const it = v.item as ListItem;
-        if (it.kind !== 'message') continue;
+        if (it.kind !== 'message' || !v.isViewable) continue;
         if (isGroupSystemMessage(it.message, groupRef.current)) continue;
         if (v.index > topIdx) {
           topIdx = v.index;
@@ -993,17 +971,21 @@ export function MessageList({
   useEffect(() => {
     if (previousTailJumpRef.current === tailJumpVersion) return;
     previousTailJumpRef.current = tailJumpVersion;
-    setLocalFocusId(null); // a far-reply focus (if any) ends when we return to tail
+    cancelMessagePositioning();
+    setLocalFocus(null); // a far-reply focus (if any) ends when we return to tail
     setReleasedNewestId(null); // show the whole fresh tail
-    const toBottom = () =>
+    const requestId = navigationSequenceRef.current;
+    const toBottom = () => {
+      if (requestId !== navigationSequenceRef.current) return;
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    };
     const raf = requestAnimationFrame(toBottom);
     const timers = [80, 240].map((ms) => setTimeout(toBottom, ms));
     return () => {
       cancelAnimationFrame(raf);
       timers.forEach(clearTimeout);
     };
-  }, [tailJumpVersion]);
+  }, [cancelMessagePositioning, tailJumpVersion]);
 
   // Follow only explicit sends/retries from this mounted page. Watching the
   // pending store itself is incorrect: route params/store subscriptions can
@@ -1039,23 +1021,8 @@ export function MessageList({
       clearTimeout(timer);
     };
   }, [pendingFailureVersion]);
-  // Rows are merged newest-first for the inverted chat list.
-  const messageById = useMemo(() => {
-    const map = new Map<string, MessageRow>();
-    for (const msg of messages) map.set(msg.id, msg);
-    return map;
-  }, [messages]);
-  const displayedAttachmentUrls = useMemo(() => {
-    const urls = new Set<string>();
-    for (const message of displayedMessages) {
-      if (message.kind === 15) urls.add(message.content.trim());
-    }
-    return urls;
-  }, [displayedMessages]);
-  const listItemCache = useMemo(
-    () => new WeakMap<MessageRow | PendingAttachment, CachedListItem>(),
-    [],
-  );
+  const messageById = messageWindow;
+  const listItemCache = listCaches.rows;
 
   // A reply target may sit outside the loaded window: fall back to the
   // separately-fetched `referencedById`. Returns null only when the target
@@ -1065,118 +1032,22 @@ export function MessageList({
     [messageById, referencedById],
   );
 
-  const data = useMemo(() => {
-    // Newest-first. The final upload URL is known before publication, so a
-    // matching placeholder is hidden in the same render that its DB message
-    // first appears. Pending and stored rows are individually sorted, then
-    // merged in O(n) so reserved attachment order is preserved without
-    // repeatedly sorting the full combined window.
-    const pendingItems: ListItemSource[] = [...pendingAttachments]
-      .filter(
-        (p) =>
-          !(p.uploadedUrl && displayedAttachmentUrls.has(p.uploadedUrl)) &&
-          !(
-            p.status === 'sent' &&
-            p.sentRumorId &&
-            messageById.has(p.sentRumorId)
-          ),
-      )
-      .sort(
-        (a, b) =>
-          (b.messageOrderAt ?? (b.startedAt ?? 0) * 1000) -
-          (a.messageOrderAt ?? (a.startedAt ?? 0) * 1000),
-      )
-      .map((p) => ({ kind: 'pending', pending: p }));
-    const messageItems: ListItemSource[] = [];
-    for (let index = displayedMessages.length - 1; index >= 0; index -= 1) {
-      const message = displayedMessages[index];
-      const prepared = bubbleRenderItemsById[message.id] ?? null;
-      messageItems.push({ kind: 'message', message, prepared });
-    }
-    const merged: ListItemSource[] = [];
-    let pendingIndex = 0;
-    let messageIndex = 0;
-    while (pendingIndex < pendingItems.length || messageIndex < messageItems.length) {
-      const pending = pendingItems[pendingIndex];
-      const message = messageItems[messageIndex];
-      const pendingOrder = pending?.kind === 'pending'
-        ? (pending.pending.messageOrderAt ?? (pending.pending.startedAt ?? 0) * 1000)
-        : -Infinity;
-      const messageOrder = message?.kind === 'message'
-        ? message.message.orderAt
-        : -Infinity;
-      if (!message || (pending && pendingOrder >= messageOrder)) {
-        merged.push(pending);
-        pendingIndex += 1;
-      } else {
-        merged.push(message);
-        messageIndex += 1;
-      }
-    }
-    return merged.map((source, index): ListItem => {
-      const older = merged[index + 1] ?? null;
-      const newer = merged[index - 1] ?? null;
-      const sourceRow = source.kind === 'message' ? source.message : source.pending;
-      const olderSource = older == null
-        ? null
-        : older.kind === 'message'
-          ? older.message
-          : older.pending;
-      const newerSource = newer == null
-        ? null
-        : newer.kind === 'message'
-          ? newer.message
-          : newer.pending;
-      const prepared = source.kind === 'message' ? source.prepared : null;
-      const boundaryCreatedAt = older == null ? oldestBoundaryCreatedAt : undefined;
-      const edgeIsSelf = older == null ? boundaryIsSelf : undefined;
-      const cached = listItemCache.get(sourceRow);
-      if (
-        cached?.prepared === prepared &&
-        cached.olderSource === olderSource &&
-        cached.newerSource === newerSource &&
-        cached.boundaryCreatedAt === boundaryCreatedAt &&
-        cached.boundaryIsSelf === edgeIsSelf
-      ) {
-        return cached.item;
-      }
-      const item = {
-        ...source,
-        older,
-        newer,
-        boundaryCreatedAt,
-        boundaryIsSelf: edgeIsSelf,
-      } as ListItem;
-      listItemCache.set(sourceRow, {
-        prepared,
-        olderSource,
-        newerSource,
-        boundaryCreatedAt,
-        boundaryIsSelf: edgeIsSelf,
-        item,
-      });
-      return item;
-    });
-  }, [
-    bubbleRenderItemsById,
-    boundaryIsSelf,
-    displayedMessages,
-    displayedAttachmentUrls,
-    listItemCache,
+  const data = useMemo(() => new MessageListData({
+    window: messageWindow,
+    count: displayedCount,
+    pending: pendingAttachments,
+    prepared: bubbleRenderItemsById,
     oldestBoundaryCreatedAt,
-    pendingAttachments,
-    messageById,
-  ]);
-  // Live mirror so the stable viewability callback can read the current list.
+    boundaryIsSelf,
+    cache: listItemCache,
+  }), [messageWindow, displayedCount, pendingAttachments, bubbleRenderItemsById,
+    oldestBoundaryCreatedAt, boundaryIsSelf, listItemCache]);
   const dataRef = useRef(data);
-  dataRef.current = data;
-
-  const dataIndexById = useMemo(() => {
-    const map = new Map<string, number>();
-    data.forEach((it, i) => {
-      if (it.kind === 'message') map.set(it.message.id, i);
-    });
-    return map;
+  const dataIndexById = data;
+  const dataIndexByIdRef = useRef(dataIndexById);
+  useLayoutEffect(() => {
+    dataRef.current = data;
+    dataIndexByIdRef.current = data;
   }, [data]);
 
   // A direct search/gallery jump waits for its bounded window and target row
@@ -1192,22 +1063,32 @@ export function MessageList({
   useElectronHistoryPagination({
     listRef,
     mounted: !waitingForFocus,
+    windowKey: listWindowKey,
     onHistoryEdge: () => {
       continuousHistoryPagingRef.current = true;
       requestOlderFromScroll();
     },
   });
 
-  // Latest index map for imperative jumps.
-  const dataIndexByIdRef = useRef(dataIndexById);
-  dataIndexByIdRef.current = dataIndexById;
+  const scrollToMeasuredMessage = useCallback((id: string, viewPosition: number, animated: boolean): boolean => {
+    if (!IS_ELECTRON) return false;
+    const measured = measureMessageScrollOffset(
+      listRef.current?.getScrollableNode(), id, viewPosition, topInset, bottomInset,
+    );
+    if (!measured) return false;
+    listRef.current?.scrollToOffset({ offset: measured.offset, animated });
+    return true;
+  }, [topInset, bottomInset]);
 
   /** Centre an item after the bounded focus window has committed, then correct
    * once more after variable-height rows have settled under the cover. */
-  function snapToCentre(id: string, animatedFirst: boolean): () => void {
+  const snapToCentre = useCallback((id: string, animatedFirst: boolean): (() => void) => {
+    const request = { id, requestId: navigationSequenceRef.current, viewPosition: 0.5, retries: 0 };
+    scrollTargetRef.current = request;
     const snap = (animated: boolean) => {
+      if (scrollTargetRef.current !== request || request.requestId !== navigationSequenceRef.current) return;
       const i = dataIndexByIdRef.current.get(id);
-      if (i != null)
+      if (i != null && !scrollToMeasuredMessage(id, 0.5, animated))
         void listRef.current?.scrollToIndex({
           index: i,
           viewPosition: 0.5,
@@ -1220,20 +1101,7 @@ export function MessageList({
       cancelAnimationFrame(raf);
       clearTimeout(timer);
     };
-  }
-
-  /** Smoothly scroll a loaded message to the vertical centre — a single animated
-   * pass, the clean glide used for reply / seek jumps (the target is already in
-   * the window and measured). */
-  function smoothCentre(id: string) {
-    const i = dataIndexByIdRef.current.get(id);
-    if (i != null)
-      void listRef.current?.scrollToIndex({
-        index: i,
-        viewPosition: 0.5,
-        animated: true,
-      });
-  }
+  }, [scrollToMeasuredMessage]);
 
   const firstUnreadId = showUnreadDivider ? firstUnreadMessageId : null;
   const unreadTargetLoaded =
@@ -1293,12 +1161,17 @@ export function MessageList({
    * downward. Inversion flips viewPosition, so a fifth from the top is 0.8. */
   function scrollToUnread() {
     if (firstUnreadId == null || firstUnreadOrderAt == null) return;
+    cancelMessagePositioning();
+    focusHandledRef.current = activeFocusRequest;
+    setReady(true);
     const idx = dataIndexById.get(firstUnreadId);
     if (idx == null) {
-      setLocalFocusId(firstUnreadId);
+      setLocalFocus({ id: firstUnreadId, sourceFocusId: focusMessageId, requestId: navigationSequenceRef.current });
       onFocusAnchor({ id: firstUnreadId, orderAt: firstUnreadOrderAt });
       return;
     }
+    scrollTargetRef.current = { id: firstUnreadId, requestId: navigationSequenceRef.current, viewPosition: 0.8, retries: 0 };
+    if (scrollToMeasuredMessage(firstUnreadId, 0.8, !reducedMotion)) return;
     listRef.current?.scrollToIndex({
       index: idx,
       viewPosition: 0.8,
@@ -1326,43 +1199,53 @@ export function MessageList({
     scrollToBottom();
   }
 
-  /** Scroll to a message by id. A reply target is almost always just up the
-   * thread, so the seek effect **pages older toward it** (rather than re-anchoring,
-   * which would flash the whole list and lose the reader's bearings), ensures
-   * there's room above it to centre on, then scrolls — handling the in-window,
-   * near-top, and out-of-window cases uniformly. Only a genuinely distant target
-   * (past `MAX_SEEK_PAGES`) falls back to a re-anchored jump. */
-  const scrollToMessage = useCallback((id: string) => {
-    if (dataIndexById.get(id) == null && !referencedById[id]) return; // unreachable
-    seekAttemptsRef.current = 0;
-    setSeekReplyId(id);
-  }, [dataIndexById, referencedById, setSeekReplyId]);
+  /** Animate within a bounded span of the loaded list; never query visibility
+   * or load intervening pages to decide whether a target can scroll smoothly. */
+  const scrollToMessage = useCallback((id: string, retainedTarget?: MessageRow, source?: { kind: 'message' | 'pending'; id: string }) => {
+    cancelMessagePositioning();
+    const index = dataIndexById.get(id);
+    // Bubble taps provide their source identity. Composer navigation starts
+    // from the newest loaded edge, without depending on viewability callbacks.
+    const sourceIndex = source == null ? 0
+      : source.kind === 'pending' ? dataIndexById.pendingIndex(source.id)
+        : dataIndexById.get(source.id);
+    const distance = index != null && sourceIndex != null
+      ? Math.abs(index - sourceIndex)
+      : null;
+    if (index != null && distance != null && distance <= MAX_SMOOTH_REPLY_DISTANCE) {
+      focusHandledRef.current = activeFocusRequest;
+      setReady(true);
+      scrollTargetRef.current = { id, requestId: navigationSequenceRef.current, viewPosition: 0.5, retries: 0 };
+      if (!scrollToMeasuredMessage(id, 0.5, !reducedMotion)) {
+        void listRef.current?.scrollToIndex({
+          index, viewPosition: 0.5, animated: !reducedMotion,
+        });
+      }
+      flash(id);
+      return;
+    }
+    const target = resolveTarget(id) ?? retainedTarget;
+    if (!target) return;
+    setLocalFocus({ id, sourceFocusId: focusMessageId, requestId: navigationSequenceRef.current });
+    onFocusAnchor({ id, orderAt: target.orderAt });
+  }, [activeFocusRequest, cancelMessagePositioning, dataIndexById, flash, focusMessageId, onFocusAnchor, reducedMotion, resolveTarget, scrollToMeasuredMessage, setReady, setLocalFocus]);
 
   useImperativeHandle(ref, () => ({
     scrollToMessage(message) {
-      if (dataIndexById.has(message.id) || referencedById[message.id]) {
-        scrollToMessage(message.id);
-        return;
-      }
-      // The composer retains its source even after it leaves the loaded window.
-      // Re-anchor directly without querying or loading the intervening history.
-      setSeekReplyId(null);
-      setLocalFocusId(message.id);
-      onFocusAnchor({ id: message.id, orderAt: message.orderAt });
+      scrollToMessage(message.id, message);
     },
-  }), [dataIndexById, onFocusAnchor, referencedById, scrollToMessage, setSeekReplyId]);
+  }), [scrollToMessage]);
 
   // A jump target (search / gallery open, or a far reply): the window loads
   // centred on it, then the target flashes only once the positioning cover lifts.
-  // Once per focus id, so growing the window afterwards doesn't re-flash. The
+  // Once per request, so growing the window afterwards does not re-flash. The
   // handled guard is committed with the reveal; cancelling the timer can retry.
-  const focusHandledRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeFocusId) {
       focusHandledRef.current = null;
       return;
     }
-    if (focusHandledRef.current === activeFocusId) return;
+    if (focusHandledRef.current === activeFocusRequest) return;
     // Position only once the window is fully loaded and mounted (otherwise the
     // list ref is null / the index isn't final). The whole small window is
     // rendered by now, so `scrollToIndex` is exact.
@@ -1375,60 +1258,20 @@ export function MessageList({
     // Arm the flash in this same commit so loading and hidden positioning consume
     // none of its visible hold/fade duration.
     const revealT = setTimeout(() => {
-      focusHandledRef.current = id;
+      focusHandledRef.current = activeFocusRequest;
       setReady(true);
       flash(id);
     }, 280);
-    return () => {
+    const cleanup = () => {
       cancel();
       clearTimeout(revealT);
     };
-  }, [activeFocusId, dataIndexById, windowLoaded]);
-
-  // Seek a tapped reply target by paging older toward it. Each older page that
-  // lands re-runs this (via `dataIndexById`). We scroll only once the target is
-  // present *and* has `SEEK_MARGIN` older rows above it (or there's no older left)
-  // — so it can sit mid-screen instead of clamping to the very top. MVCP holds the
-  // view steady while paging, so the final move reads as one smooth scroll up — no
-  // flash. If it isn't reached within `MAX_SEEK_PAGES` (too far for a smooth
-  // scroll), hand it to the focus machinery (`localFocusId` + `onFocusAnchor`):
-  // the same proven jump as a search/gallery open — re-anchor, render the small
-  // window whole, snap to centre under the cover — which lands exactly where a
-  // single mid-chat scroll over not-yet-measured rows would not.
-  useEffect(() => {
-    if (!seekReplyId) return;
-    const idx = dataIndexById.get(seekReplyId);
-    const roomAbove =
-      idx != null && (data.length - 1 - idx >= SEEK_MARGIN || !hasMore);
-    if (roomAbove) {
-      const id = seekReplyId;
-      setSeekReplyId(null);
-      smoothCentre(id);
-      flash(id);
-      return;
-    }
-    if (hasMore && seekAttemptsRef.current < MAX_SEEK_PAGES) {
-      seekAttemptsRef.current += 1;
-      onLoadOlder();
-      return;
-    }
-    // Cap hit. If the target did load (just too near the top to centre), scroll to
-    // it best-effort; otherwise it's genuinely distant — jump to it via the focus
-    // machinery.
-    const id = seekReplyId;
-    setSeekReplyId(null);
-    if (idx != null) {
-      smoothCentre(id);
-      flash(id);
-      return;
-    }
-    const target = referencedById[id];
-    if (target) {
-      setLocalFocusId(id);
-      onFocusAnchor({ id, orderAt: target.orderAt });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataIndexById, seekReplyId, hasMore]);
+    cancelFocusPositioningRef.current = cleanup;
+    return () => {
+      cleanup();
+      if (cancelFocusPositioningRef.current === cleanup) cancelFocusPositioningRef.current = null;
+    };
+  }, [activeFocusId, activeFocusRequest, dataIndexById, flash, snapToCentre, windowLoaded]);
 
   const repliedSenderPubkeys = useMemo(() => {
     const set = new Set<string>();
@@ -1436,14 +1279,14 @@ export function MessageList({
       if (group) set.add(m.senderPubkey);
       if (m.replyToId) {
         const target =
-          messageById.get(m.replyToId) ?? referencedById[m.replyToId];
+          referencedById[m.replyToId] ?? messageById.get(m.replyToId);
         if (target) set.add(target.senderPubkey);
       }
     }
     for (const pending of pendingAttachments) {
       if (!pending.replyToId) continue;
       const target =
-        messageById.get(pending.replyToId) ?? referencedById[pending.replyToId];
+        referencedById[pending.replyToId] ?? messageById.get(pending.replyToId);
       if (target) set.add(target.senderPubkey);
     }
     return Array.from(set);
@@ -1480,9 +1323,11 @@ export function MessageList({
       name: profile?.name,
     });
   }, [conversationKey, peerDisplayName, petnameByPubkey, proximity, t]);
-  // Parent callbacks can change while scrolling chrome updates. Cell handlers
-  // read their latest versions without changing FlatList's renderItem identity.
+  // Bubble memo comparators intentionally ignore callback identities. Every
+  // retained row handler must dispatch through this committed action snapshot,
+  // including navigation, so it never closes over an obsolete message window.
   const rowActionsRef = useRef({
+    scrollToMessage,
     onSwipeReply,
     onLongPress,
     onLongPressPending,
@@ -1496,6 +1341,7 @@ export function MessageList({
   });
   useLayoutEffect(() => {
     rowActionsRef.current = {
+      scrollToMessage,
       onSwipeReply,
       onLongPress,
       onLongPressPending,
@@ -1510,7 +1356,7 @@ export function MessageList({
   }, [
     onSwipeReply, onLongPress, onLongPressPending, onTapReaction,
     onShowDelivery, onStopPending, onRetryPending, onCancelPending,
-    onToggleSelect, tailMode,
+    onToggleSelect, tailMode, scrollToMessage,
   ]);
 
   const canSwipeReply = onSwipeReply != null;
@@ -1574,7 +1420,7 @@ export function MessageList({
               )}
               replyTo={replyPreview}
               onPressReply={
-                replyId ? () => scrollToMessage(replyId) : undefined
+                replyId ? () => rowActionsRef.current.scrollToMessage(replyId, undefined, { kind: 'pending', id: item.pending.tempId }) : undefined
               }
               onLongPress={
                 item.pending.status === 'failed' && !selectionMode
@@ -1787,7 +1633,7 @@ export function MessageList({
             }
             onPressReply={
               msg.replyToId
-                ? () => scrollToMessage(msg.replyToId!)
+                ? () => rowActionsRef.current.scrollToMessage(msg.replyToId!, undefined, { kind: 'message', id: msg.id })
                 : undefined
             }
             highlighted={flashTarget?.id === msg.id}
@@ -1826,7 +1672,7 @@ export function MessageList({
       deliveriesByMessageId, firstUnreadId, flashTarget, interactive,
       presentationsByMessageId, profileMap,
       proximity, reactionsByMessageId, remoteContentMode, replySenderName,
-      resolveTarget, scrollToMessage, selectedIds, selectionMode,
+      resolveTarget, selectedIds, selectionMode,
       selectionShiftStyle, selfPubkey, t,
     ],
   );
@@ -1834,6 +1680,7 @@ export function MessageList({
     <View style={{ flex: 1 }}>
       {!waitingForFocus ? (
         <FlatList
+          key={listWindowKey}
           ref={listRef}
           data={data}
           style={{
@@ -1920,6 +1767,7 @@ export function MessageList({
               : `p:${item.pending.tempId}`
           }
           renderItem={renderItem}
+          CellRendererComponent={MessageListCell}
           // Inverted list end = oldest → load an older page.
           onEndReached={() => {
             requestOlderFromScroll();
@@ -1941,12 +1789,26 @@ export function MessageList({
           }}
           onStartReachedThreshold={1}
           onScrollToIndexFailed={(info) => {
-            setTimeout(() => {
-              listRef.current?.scrollToIndex({
-                index: info.index,
-                viewPosition: 0.5,
+            const request = scrollTargetRef.current;
+            if (!request || request.requestId !== navigationSequenceRef.current ||
+                dataIndexByIdRef.current.get(request.id) !== info.index || request.retries >= 3) return;
+            request.retries += 1;
+            if (scrollRetryTimerRef.current != null) clearTimeout(scrollRetryTimerRef.current);
+            // Bring an unmeasured target into the render window before retrying.
+            if (info.index > info.highestMeasuredFrameIndex && info.averageItemLength > 0) {
+              listRef.current?.scrollToOffset({
+                offset: Math.max(0, info.averageItemLength * info.index - scrollMetricsRef.current.viewportHeight / 2),
                 animated: false,
               });
+            }
+            scrollRetryTimerRef.current = setTimeout(() => {
+              scrollRetryTimerRef.current = null;
+              if (scrollTargetRef.current !== request || request.requestId !== navigationSequenceRef.current) return;
+              // Resolve identity again: new rows can move the target's index.
+              const index = dataIndexByIdRef.current.get(request.id);
+              if (index == null) return;
+              if (scrollToMeasuredMessage(request.id, request.viewPosition, false)) return;
+              listRef.current?.scrollToIndex({ index, viewPosition: request.viewPosition, animated: false });
             }, 80);
           }}
           ListFooterComponent={
