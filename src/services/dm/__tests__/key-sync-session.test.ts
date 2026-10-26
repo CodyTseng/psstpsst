@@ -76,7 +76,7 @@ function harness() {
     signEvent: jest.fn(),
   };
   const clientKeypair = {
-    privkey: new Uint8Array(32).fill(1),
+    key: { account: CLIENT_PUBKEY, role: 'ephemeral' },
     pubkey: CLIENT_PUBKEY,
     createdAt: 100,
   };

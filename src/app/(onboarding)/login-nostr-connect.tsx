@@ -4,7 +4,7 @@ import { DirectionalChevron as ChevronRight } from '@/components/common/Directio
 import Check from 'lucide-react-native/icons/check';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
 import X from 'lucide-react-native/icons/x';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -31,6 +31,7 @@ import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import {
   NIP46_DEFAULT_RELAYS,
   startNostrConnect,
+  type NostrConnectSession,
 } from '@/services/signer/nip46-connect.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useScrolled } from '@/hooks/use-scrolled';
@@ -56,34 +57,23 @@ export default function LoginNostrConnect() {
   const [newRelay, setNewRelay] = useState('');
   const [relayError, setRelayError] = useState<string | null>(null);
 
-  // Mint a fresh nostrconnect:// session per attempt / relay set. Construction is
-  // pure (keys + URI, no I/O), so it derives cleanly in render; the relay wait
-  // runs in the effect below.
-  const session = useMemo(() => {
-    void attempt; // re-mint a fresh session whenever the user retries
-    return startNostrConnect({ relays });
-  }, [attempt, relays]);
-  const uri = session.uri;
+  const [ready, setReady] = useState<{ session: NostrConnectSession; attempt: number; relays: string[] } | null>(null);
+  const uri = ready?.attempt === attempt && ready.relays === relays ? ready.session.uri : '';
 
-  // Wait for the signer to connect back. Cancelling on unmount / retry / relay
-  // change aborts the in-flight wait so it doesn't leak a relay subscription.
   useEffect(() => {
     let active = true;
-    session
-      .waitForConnection()
-      .then(async ({ pubkey }) => {
-        if (!active) return;
-        await setActive(pubkey);
-        router.replace('/');
-      })
-      .catch(() => {
-        if (active) setErrored(true);
-      });
-    return () => {
-      active = false;
-      session.cancel();
-    };
-  }, [session, setActive]);
+    let current: NostrConnectSession | undefined;
+    void startNostrConnect({ relays }).then(async next => {
+      current = next;
+      if (!active) { next.cancel(); return; }
+      setReady({ session: next, attempt, relays });
+      const { pubkey } = await next.waitForConnection();
+      if (!active) return;
+      await setActive(pubkey);
+      if (active) router.replace('/');
+    }).catch(() => { if (active) setErrored(true); });
+    return () => { active = false; current?.cancel(); };
+  }, [attempt, relays, setActive]);
 
   function handleRetry() {
     setErrored(false);
@@ -91,10 +81,11 @@ export default function LoginNostrConnect() {
   }
 
   async function handleCopy() {
-    await copyText(uri);
+    if (uri) await copyText(uri);
   }
 
   function handleOpen() {
+    if (!uri) return;
     void platform.urlOpener.openExternalUrl(uri).catch(() => {});
   }
 
@@ -154,7 +145,7 @@ export default function LoginNostrConnect() {
                 padding: spacing.lg,
               }}
             >
-              <QrCode data={uri} size={QR_SIZE} />
+              {uri ? <QrCode data={uri} size={QR_SIZE} /> : <ActivityIndicator color={c.accent} />}
             </Pressable>
 
             <View style={{ alignSelf: 'stretch' }}>
@@ -169,6 +160,7 @@ export default function LoginNostrConnect() {
                     <Copy size={18} color={c.text} />
                   )
                 }
+                disabled={!uri}
                 onPress={handleCopy}
               />
             </View>

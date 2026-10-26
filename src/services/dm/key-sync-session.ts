@@ -1,3 +1,4 @@
+import { vaultAccess } from '@/platform/vault-access';
 import type { Event } from 'nostr-tools';
 
 import { buildSigner, getAccount } from '@/services/account/account.service';
@@ -9,7 +10,7 @@ import {
   publishClientKeyAnnouncement,
   queryEncryptionKeyAnnouncement,
   subscribeToKeyTransfer,
-  type EncryptionKeypair,
+  type ClientKeypair,
 } from '@/services/dm/encryption-key.service';
 import { markSyncRequestProcessed } from '@/services/dm/sync-store';
 import {
@@ -21,7 +22,7 @@ import type { Signer } from '@/services/signer/signer.interface';
 type KeySyncTransport = {
   signer: Signer;
   keyTransferRelays: string[];
-  clientKeypair: EncryptionKeypair;
+  clientKeypair: ClientKeypair;
   expectedEncryptionPubkey: string | null;
   unsubscribe: () => void;
 };
@@ -93,6 +94,7 @@ const defaultDependencies: KeySyncSessionDependencies = {
  */
 export class KeySyncSession {
   private transport: KeySyncTransport | null = null;
+  private clientKeypair: ClientKeypair | null = null;
   private requestWork: Promise<void> | null = null;
   private closed = false;
 
@@ -119,6 +121,9 @@ export class KeySyncSession {
     if (this.closed) return;
     this.closed = true;
     this.transport?.unsubscribe();
+    if (this.clientKeypair) void vaultAccess.execute({ method: 'releaseEphemeral', account: this.clientKeypair.pubkey }).catch(() => {});
+    this.clientKeypair = null;
+    void this.transport?.signer.destroy?.();
     this.transport = null;
   }
 
@@ -147,7 +152,12 @@ export class KeySyncSession {
     if (this.transport) return this.transport;
     this.assertOpen();
 
-    const clientKeypair = this.dependencies.generateClientKeypair();
+    const clientKeypair = this.clientKeypair ?? await this.dependencies.generateClientKeypair();
+    if (this.closed) {
+      void vaultAccess.execute({ method: 'releaseEphemeral', account: clientKeypair.pubkey }).catch(() => {});
+      this.assertOpen();
+    }
+    this.clientKeypair = clientKeypair;
     this.options.onCode(this.dependencies.getVerificationCode(clientKeypair.pubkey));
 
     const signer = await this.dependencies.buildSigner(this.options.accountPubkey);

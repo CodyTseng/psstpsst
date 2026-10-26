@@ -29,4 +29,6 @@ android {
 
 dependencies {
   implementation project(':expo-modules-core')
+  implementation project(':expo-secure-store')
+  implementation 'androidx.biometric:biometric:1.2.0-alpha04'
 }

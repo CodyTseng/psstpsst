@@ -1,13 +1,6 @@
 import type { Event, EventTemplate } from 'nostr-tools';
 
-/**
- * Identity signing abstraction. Implementations:
- *   - NsecSigner   — local privkey from secure store
- *   - Nip46Signer  — remote bunker (Phase 2)
- *
- * PsstPsst services never reach inside; they only call these methods.
- * The DM encryption privkey is NOT a Signer — only the identity privkey is.
- */
+/** Account signing capability, independent of local vault or remote bunker transport. */
 export interface Signer {
   getPublicKey(): Promise<string>;
   signEvent(template: EventTemplate): Promise<Event>;
@@ -19,5 +12,9 @@ export interface Signer {
   nip44Encrypt?(peerPubkey: string, plaintext: string): Promise<string>;
   /** NIP-44 decrypt a ciphertext from `peerPubkey` using the identity key. */
   nip44Decrypt?(peerPubkey: string, ciphertext: string): Promise<string>;
+  /** Legacy NIP-04 operations use the identity key, never the messaging key. */
+  nip04Encrypt?(peerPubkey: string, plaintext: string): Promise<string>;
+  nip04Decrypt?(peerPubkey: string, ciphertext: string): Promise<string>;
+  /** Release this instance or consumer lease; never delete saved credentials. */
   destroy?(): void | Promise<void>;
 }

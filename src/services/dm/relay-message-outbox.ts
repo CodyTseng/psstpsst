@@ -720,7 +720,7 @@ class RelayMessageOutbox {
         const { giftWrap } = await createGiftWrappedMessage({
           rumorTemplate,
           senderIdentityPubkey: job.accountPubkey,
-          senderEncPrivkey: session.encryptionKeypair.privkey,
+          senderEncKey: session.encryptionKeypair.key,
           senderEncPubkey: session.encryptionKeypair.pubkey,
           recipientIdentityPubkey: recipientPubkey,
           recipientEncPubkey,

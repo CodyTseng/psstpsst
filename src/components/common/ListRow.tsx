@@ -2,6 +2,7 @@ import { useContext, useState } from 'react';
 import {
   ActivityIndicator,
   type TextProps,
+  type PressableProps,
   View,
 } from 'react-native';
 
@@ -35,19 +36,29 @@ const VALUE_MAX_WIDTH = '68%';
  * hairline aligns with the title and clears the icon. */
 export const ROW_CONTENT_INSET = ROW_PADDING_H + ICON_SLOT + ICON_GAP; // 60 mobile / 56 Electron
 
-type Variant = 'card' | 'plain' | 'embedded' | 'list';
+type Variant = 'card' | 'plain' | 'embedded' | 'list' | 'inline';
 type TitleTone = 'default' | 'muted' | 'danger' | 'accent';
 type ValueTone = 'default' | 'muted' | 'success' | 'warning' | 'danger';
 type ValuePlacement = 'trailing' | 'below';
 type PreserveColumn = 'title' | 'value';
 type SelectionMode = 'single';
 
-type Props = {
+type Props = Pick<PressableProps, 'onLongPress' | 'accessibilityActions' | 'onAccessibilityAction'> & {
   /** An icon node — rendered as-is in a fixed-width slot (no background).
    * Caller sets its size (≈22) and color (match `titleTone`). */
   icon?: React.ReactNode;
+  /** Artwork can reserve its own width instead of the standard glyph column. */
+  iconWidth?: number;
+  /** Align leading artwork with the top of a multiline text stack. */
+  iconAlign?: 'center' | 'start';
+  /** Optional vertical inset from the shared spacing scale. */
+  verticalPadding?: keyof typeof spacing;
   title: string;
+  /** Non-shrinking status after the title; long titles truncate before it. */
+  titleTrailing?: React.ReactNode;
   subtitle?: string;
+  /** Supporting content with inline status or identity semantics. */
+  subtitleContent?: React.ReactNode;
   subtitleTone?: ValueTone;
   /** Lets a registered supporting description wrap instead of truncating. */
   subtitleMultiline?: boolean;
@@ -55,6 +66,8 @@ type Props = {
   /** Optional factual detail. It is right-aligned by default; long identity
    * values may use `valuePlacement="below"` to span the text column. */
   value?: string;
+  /** Identity visual kept beside a trailing value while its text truncates. */
+  valueLeading?: React.ReactNode;
   /** Custom renderer for a below-placed value whose inline semantics cannot be
    * represented by one text node, such as a verified NIP-05 identifier. */
   belowValue?: React.ReactNode;
@@ -86,8 +99,11 @@ type Props = {
   /** Standalone only — ignored inside a `ListGroup`. `card` = lone bordered row;
    * `plain` = borderless sheet-option row; `embedded` = opaque content whose
    * parent owns the fixed card border/radius (for swipeable wrappers);
-   * `list` = transparent, full-width row with rectangular feedback. */
+   * `list` = transparent, full-width row with rectangular feedback;
+   * `inline` = compact metadata aligned with surrounding text. */
   variant?: Variant;
+  /** Content-height inline metadata; expanded hit slop preserves its touch target. */
+  compact?: boolean;
 };
 
 /**
@@ -96,17 +112,23 @@ type Props = {
  * style — no tinted icon circle, regular-weight title, fixed-height default
  * layout; factual metadata can opt into a multiline right value. Explanatory
  * copy belongs on the screen the row opens. Group ≥2 related rows with
- * {@link ListGroup}. Rows with an Avatar / swipe / unread dot (conversation &
- * contact lists) are a different component.
+ * {@link ListGroup}. Contact and conversation rows with a leading avatar,
+ * swipe actions, or unread indicators use their own identity components.
  */
 export function ListRow({
   icon,
+  iconWidth,
+  iconAlign = 'center',
+  verticalPadding,
   title,
+  titleTrailing,
   subtitle,
+  subtitleContent,
   subtitleTone = 'muted',
   subtitleMultiline = false,
   titleTone = 'default',
   value,
+  valueLeading,
   belowValue,
   valueTone = 'muted',
   valuePlacement = 'trailing',
@@ -116,11 +138,15 @@ export function ListRow({
   trailing,
   trailingOnHover,
   onPress,
+  onLongPress,
+  accessibilityActions,
+  onAccessibilityAction,
   loading,
   disabled,
   active = false,
   selectionMode,
   variant = 'card',
+  compact = false,
 }: Props) {
   const c = useThemeColors();
   const grouped = useContext(ListGroupContext);
@@ -134,7 +160,7 @@ export function ListRow({
     warning: c.warning,
     danger: c.danger,
   }[valueTone];
-  const hasSubtitle = subtitle != null && subtitle.length > 0;
+  const hasSubtitle = subtitleContent != null || (subtitle != null && subtitle.length > 0);
   const hasBelowValue =
     valuePlacement === 'below' &&
     ((value != null && value.length > 0) || belowValue != null);
@@ -143,6 +169,7 @@ export function ListRow({
   const multilineValue =
     hasTrailingValue && valueMultiline;
   const multilineContent = multilineValue || (hasSubtitle && subtitleMultiline);
+  const flexibleHeight = multilineContent || iconWidth !== undefined;
   // Column preservation only applies when title and value compete side by side.
   // A single text stack must yield to its trailing accessory so long labels,
   // subtitles, and identifiers stay inside the row.
@@ -152,19 +179,32 @@ export function ListRow({
   const isCard = !grouped && variant === 'card';
   const isPlain = !grouped && variant === 'plain';
   const isEmbedded = !grouped && variant === 'embedded';
-  const rowRadius = isCard || isPlain ? radius.lg : 0;
+  const isInline = !grouped && variant === 'inline';
+  const compactInline = isInline && compact;
+  const rowHeight = compactInline ? spacing.xl : isInline ? uiDensity.listRowCompactHeight : ROW_HEIGHT;
+  const rowRadius = isCard || isPlain || isInline ? radius.lg : 0;
+  const titleText = <AppText
+    selectable={onLongPress ? false : undefined}
+    variant={hasBelowValue || isInline ? 'caption' : 'subtitle'} weight="regular" numberOfLines={1}
+    style={{ color: hasBelowValue ? c.textMuted : titleColor, userSelect: onLongPress ? 'none' : undefined, ...(titleTrailing ? { flexShrink: 1, minWidth: 0 } : {}) }}>
+    {title}
+  </AppText>;
 
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
+      hitSlop={compactInline ? { top: spacing.md, bottom: spacing.md } : undefined}
       accessible={onPress != null}
       accessibilityRole={selectionMode === 'single' ? 'radio' : undefined}
-      hoverFeedback={trailingOnHover == null ? undefined : false}
+      hoverFeedback={onPress && trailingOnHover == null ? undefined : false}
       onHoverIn={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(true)}
       onHoverOut={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(false)}
       pressFeedback="delayed"
       fallbackHoverOpacity={false}
-      disabled={disabled || (!onPress && trailingOnHover == null)}
+      disabled={disabled || (!onPress && trailingOnHover == null && trailing == null)}
       accessibilityState={
         selectionMode === 'single' ? { checked: active } : { selected: active }
       }
@@ -172,20 +212,21 @@ export function ListRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: ICON_GAP,
-        minHeight: multilineContent
+        minHeight: compactInline ? rowHeight : flexibleHeight
           ? hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
-            : ROW_HEIGHT
+            : rowHeight
           : undefined,
-        height: multilineContent
+        height: flexibleHeight
           ? undefined
           : hasTwoLineContent
             ? ROW_HEIGHT_WITH_SUBTITLE
-            : ROW_HEIGHT,
-        paddingVertical: multilineContent ? spacing.sm : 0,
-        paddingHorizontal: isPlain ? PLAIN_PADDING_H : ROW_PADDING_H,
-        marginHorizontal: isPlain ? -PLAIN_BLEED : 0,
+            : compactInline ? undefined : rowHeight,
+        paddingVertical: verticalPadding ? spacing[verticalPadding] : multilineContent ? spacing.sm : 0,
+        paddingHorizontal: isInline ? spacing.sm : isPlain ? PLAIN_PADDING_H : ROW_PADDING_H,
+        marginHorizontal: isInline ? -spacing.sm : isPlain ? -PLAIN_BLEED : 0,
         borderRadius: rowRadius,
+        overflow: 'hidden',
         borderWidth: isCard ? 1 : 0,
         borderColor: c.border,
         backgroundColor: isCard || isEmbedded ? c.surfaceElevated : 'transparent',
@@ -209,15 +250,16 @@ export function ListRow({
             : trailing;
         return (
           <>
-            {hovered || state.pressed || active ? (
-              <InteractionOverlay borderRadius={rowRadius} />
+            {!isInline && (hovered || state.pressed || active) ? (
+              <InteractionOverlay />
             ) : null}
             {icon ? (
               <View
                 style={{
-                  width: ICON_SLOT,
+                  width: iconWidth ?? ICON_SLOT,
                   alignItems: 'center',
-                  transform: [{ translateX: -ICON_OPTICAL_SHIFT }],
+                  alignSelf: iconAlign === 'start' ? 'flex-start' : undefined,
+                  transform: iconWidth === undefined ? [{ translateX: -ICON_OPTICAL_SHIFT }] : undefined,
                 }}
               >
                 {icon}
@@ -232,14 +274,9 @@ export function ListRow({
                 gap: 2,
               }}
             >
-              <AppText
-                variant={hasBelowValue ? 'caption' : 'subtitle'}
-                weight="regular"
-                numberOfLines={1}
-                style={{ color: hasBelowValue ? c.textMuted : titleColor }}
-              >
-                {title}
-              </AppText>
+              {titleTrailing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                {titleText}<View style={{ flexShrink: 0 }}>{titleTrailing}</View>
+              </View> : titleText}
               {hasBelowValue ? (
                 belowValue ?? (
                   valueEllipsizeMode === 'middle' && value ? (
@@ -260,7 +297,7 @@ export function ListRow({
                     </AppText>
                   )
                 )
-              ) : hasSubtitle ? (
+              ) : hasSubtitle ? subtitleContent ?? (
                 <AppText
                   variant="caption"
                   tone={subtitleTone}
@@ -272,32 +309,36 @@ export function ListRow({
             </View>
 
             {value && valuePlacement === 'trailing' ? (
-              valueEllipsizeMode === 'middle' && !multilineValue ? (
-                <MiddleEllipsizedText
-                  value={value}
-                  color={valueColor}
-                  weight="semibold"
-                  style={{
-                    maxWidth: VALUE_MAX_WIDTH,
-                    flexShrink: preserveColumn === 'value' ? 0 : 1,
-                  }}
-                />
-              ) : (
-                <AppText
-                  variant="body"
-                  weight="semibold"
-                  align="end"
-                  numberOfLines={multilineValue ? undefined : 1}
-                  ellipsizeMode={valueEllipsizeMode}
-                  style={{
-                    maxWidth: VALUE_MAX_WIDTH,
-                    flexShrink: preserveColumn === 'value' ? 0 : 1,
-                    color: valueColor,
-                  }}
-                >
-                  {value}
-                </AppText>
-              )
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+                maxWidth: VALUE_MAX_WIDTH, minWidth: 0,
+                opacity: isInline && !disabled && !loading && (hovered || state.pressed) ? 0.7 : 1,
+                flexShrink: preserveColumn === 'value' ? 0 : 1 }}>
+                {valueLeading ? <View style={{ flexShrink: 0 }}>{valueLeading}</View> : null}
+                {valueEllipsizeMode === 'middle' && !multilineValue ? (
+                  <MiddleEllipsizedText
+                    value={value}
+                    color={valueColor}
+                    weight="semibold"
+                    style={{
+                      flexShrink: preserveColumn === 'value' ? 0 : 1,
+                    }}
+                  />
+                ) : (
+                  <AppText
+                    variant="body"
+                    weight="semibold"
+                    align="end"
+                    numberOfLines={multilineValue ? undefined : 1}
+                    ellipsizeMode={valueEllipsizeMode}
+                    style={{
+                      flexShrink: preserveColumn === 'value' ? 0 : 1,
+                      color: valueColor,
+                    }}
+                  >
+                    {value}
+                  </AppText>
+                )}
+              </View>
             ) : null}
 
             {visibleTrailing ? (

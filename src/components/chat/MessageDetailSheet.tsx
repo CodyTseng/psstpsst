@@ -16,7 +16,7 @@ import { AppText } from '@/components/common/AppText';
 import { AppButton } from '@/components/common/AppButton';
 import { Avatar } from '@/components/common/Avatar';
 import { BottomSheet } from '@/components/common/BottomSheet';
-import { HorizontalFadeScrollView } from '@/components/common/HorizontalFadeScrollView';
+import { HorizontalScrollView } from '@/components/common/HorizontalScrollView';
 import { InteractionOverlay } from '@/components/common/InteractionOverlay';
 import { useMessageDelivery } from '@/hooks/use-message-deliveries';
 import { useLanguageDirection } from '@/i18n/direction';
@@ -206,12 +206,10 @@ export function DeliveryCopyTabs({
   selectedRecipient: string | undefined;
   onSelect: (recipient: string) => void;
 }) {
-  const c = useThemeColors();
   const orderedCopies = orderDeliveryCopies(copies, accountPubkey);
 
   return (
-    <HorizontalFadeScrollView
-      fadeColor={c.sheetBackground}
+    <HorizontalScrollView
       containerStyle={{
         marginHorizontal: -spacing.lg,
       }}
@@ -233,7 +231,7 @@ export function DeliveryCopyTabs({
           onSelect={() => onSelect(copy.recipient)}
         />
       ))}
-    </HorizontalFadeScrollView>
+    </HorizontalScrollView>
   );
 }
 

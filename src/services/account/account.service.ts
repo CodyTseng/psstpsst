@@ -1,10 +1,15 @@
+import { vaultAccess } from '@/platform/vault-access';
+import type { MessagingKey } from '@/platform/ports/key-vault';
+import { endAccountSignerSession } from '@/services/signer/signer-sessions';
+import { platform } from '@/platform';
+import { invalidateSigningAccount } from '@/services/signing/changes';
+import { nappletLifecycle } from '../napplet/lifecycle';
 import { eq } from 'drizzle-orm';
-import { generateSecretKey, getPublicKey } from 'nostr-tools';
-import type { BunkerPointer } from 'nostr-tools/nip46';
 
 import { db } from '@/db/client';
 import {
-  accounts,
+  accounts, exploreEntries, exploreHistory,
+  nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingAuthorizations, signingActivity,
   blockedUsers,
   contacts,
   conversations,
@@ -26,7 +31,6 @@ import {
   savedGroups,
   syncCursors,
 } from '@/db/schema';
-import { bytesToHex, hexToBytes, nsecToPrivkey, privkeyToNsec } from '@/lib/nostr/keys';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 
 import { deleteAllAccountArchives } from '../dm/dm-backup-storage';
@@ -38,11 +42,7 @@ import { deletePendingAttachmentFile } from '../files/pending-attachment-file.se
 import { deleteAccountNearbyFileData } from '../files/nearby-file-upload.service';
 import {
   removeIdentityPrivkey,
-  removeNip46BunkerSecret,
-  removeNip46ClientKey,
-  storeNip46BunkerSecret,
-  storeIdentityPrivkey,
-  storeNip46ClientKey,
+  removeNip46Credentials,
 } from '../signer/signer-factory';
 import {
   deleteDevicePreference,
@@ -88,15 +88,17 @@ export async function clearActiveAccountPubkey(): Promise<void> {
   await deleteDevicePreference(ACTIVE_ACCOUNT_KEY, ACTIVE_ACCOUNT_KEY);
 }
 
-export async function addAccountFromNsec(nsec: string): Promise<{ pubkey: string }> {
-  const privkey = nsecToPrivkey(nsec);
-  const pubkey = getPublicKey(privkey);
+/** Import user-supplied input; only the public identity returns from the vault. */
+export async function importAccountIdentity(nsec: string): Promise<{ pubkey: string }> {
+  const work = vaultAccess.importIdentity(nsec.trim());
+  nsec = '';
+  const imported = await work;
+  return registerImportedIdentity(imported.pubkey);
+}
+
+async function registerImportedIdentity(pubkey: string): Promise<{ pubkey: string }> {
   const now = Math.floor(Date.now() / 1000);
-  await db
-    .insert(accounts)
-    .values({ pubkey, signerType: 'nsec', addedAt: now, sortOrder: now })
-    .onConflictDoNothing();
-  await storeIdentityPrivkey(pubkey, bytesToHex(privkey));
+  await db.insert(accounts).values({ pubkey, signerType: 'nsec', addedAt: now, sortOrder: now }).onConflictDoNothing();
   pushRegistrationService.accountAdded(pubkey);
   return { pubkey };
 }
@@ -105,30 +107,26 @@ export async function addAccountFromNsec(nsec: string): Promise<{ pubkey: string
  * Generate a fresh keypair in memory only. Nothing is persisted until the user
  * confirms the key backup — see {@link persistGeneratedAccount}.
  */
-export function generateAccountKeyMaterial(): {
-  pubkey: string;
-  privkeyHex: string;
-  nsec: string;
-} {
-  const privkey = generateSecretKey();
-  return {
-    pubkey: getPublicKey(privkey),
-    privkeyHex: bytesToHex(privkey),
-    nsec: privkeyToNsec(privkey),
-  };
+export async function generateAccountKeyMaterial(): Promise<MessagingKey> {
+  return await vaultAccess.execute({ method: 'generateEphemeral', purpose: 'account' }) as MessagingKey;
 }
 
-/** Persist a freshly generated account once the user confirmed the key backup. */
-export async function persistGeneratedAccount(privkeyHex: string): Promise<{ pubkey: string }> {
-  const pubkey = getPublicKey(hexToBytes(privkeyHex));
+/** Persist only after the user has backed up the native-owned temporary key. */
+export async function persistGeneratedAccount(pubkey: string): Promise<{ pubkey: string }> {
+  await vaultAccess.execute({ method: 'persistIdentity', account: pubkey });
   const now = Math.floor(Date.now() / 1000);
-  await db
-    .insert(accounts)
-    .values({ pubkey, signerType: 'generated', localSetupPending: true, addedAt: now, sortOrder: now })
-    .onConflictDoNothing();
-  await storeIdentityPrivkey(pubkey, privkeyHex);
+  await db.insert(accounts).values({ pubkey, signerType: 'generated', localSetupPending: true, addedAt: now, sortOrder: now }).onConflictDoNothing();
   pushRegistrationService.accountAdded(pubkey);
   return { pubkey };
+}
+
+/** The trusted platform copies the backup; callers receive no secret material. */
+export async function copyIdentityBackup(pubkey: string, language: string): Promise<boolean> {
+  return vaultAccess.backupIdentity(pubkey, { language });
+}
+
+export async function discardGeneratedAccount(pubkey: string): Promise<void> {
+  await vaultAccess.execute({ method: 'releaseEphemeral', account: pubkey });
 }
 
 /** Clear only after the first key and configuration publications are durable. */
@@ -136,38 +134,16 @@ export async function completeGeneratedAccountSetup(pubkey: string): Promise<voi
   await db.update(accounts).set({ localSetupPending: false }).where(eq(accounts.pubkey, pubkey));
 }
 
-/**
- * Register a NIP-46 remote-signer account after a connection has been
- * established. `pubkey` is the **signing** pubkey reported by the bunker (which
- * may differ from the bunker's own pubkey), `pointer` is the resolved bunker
- * connection. Its non-secret relay/pubkey metadata is serialized in SQLite;
- * its optional secret and `clientSecretKeyHex` are stored in the keychain.
- */
-export async function addRemoteAccount(opts: {
-  pubkey: string;
-  pointer: BunkerPointer;
-  clientSecretKeyHex: string;
-}): Promise<{ pubkey: string }> {
+/** Register only a completed native pairing; client credentials never cross this boundary. */
+export async function addRemoteAccount(session: string): Promise<{ pubkey: string }> {
+  const paired = await vaultAccess.execute({ method: 'commitBunkerPairing', session }) as import('@/platform/ports/key-vault').PairedBunker;
   const now = Math.floor(Date.now() / 1000);
-  const signerPayload = JSON.stringify({
-    ...opts.pointer,
-    relays: Array.from(new Set(opts.pointer.relays.map(normalizeRelayUrl))),
-    secret: null,
-  } satisfies BunkerPointer);
-  await db
-    .insert(accounts)
-    .values({
-      pubkey: opts.pubkey,
-      signerType: 'nip46',
-      signerPayload,
-      addedAt: now,
-      sortOrder: now,
-    })
-    .onConflictDoNothing();
-  await storeNip46ClientKey(opts.pubkey, opts.clientSecretKeyHex);
-  await storeNip46BunkerSecret(opts.pubkey, opts.pointer.secret);
-  pushRegistrationService.accountAdded(opts.pubkey);
-  return { pubkey: opts.pubkey };
+  const signerPayload = JSON.stringify({ ...paired.pointer,
+    relays: Array.from(new Set(paired.pointer.relays.map(normalizeRelayUrl))), secret: null,
+  });
+  await db.insert(accounts).values({ pubkey: paired.pubkey, signerType: 'nip46', signerPayload, addedAt: now, sortOrder: now }).onConflictDoNothing();
+  pushRegistrationService.accountAdded(paired.pubkey);
+  return { pubkey: paired.pubkey };
 }
 
 export async function setAccountEncryptionPubkey(
@@ -189,12 +165,15 @@ export async function setAccountEncryptionPubkey(
  * remain shared.
  */
 async function deleteAccountData(pubkey: string): Promise<void> {
+  invalidateSigningAccount(pubkey);
+  await platform.napplet?.clearPageData?.(pubkey);
   const pendingFiles = await db
     .select({ localName: pendingAttachments.localName })
     .from(pendingAttachments)
     .where(eq(pendingAttachments.accountPubkey, pubkey));
   await Promise.all(pendingFiles.map((row) => deletePendingAttachmentFile(row.localName)));
   const scoped = [
+    exploreHistory, exploreEntries, nappletData, nappletDataLegacy, nappletUsage, nappletInstallations, signingAuthorizations, signingActivity,
     messages,
     groupMemberActions,
     pendingGroupRumors,
@@ -222,9 +201,11 @@ async function deleteAccountData(pubkey: string): Promise<void> {
 }
 
 export async function removeAccount(pubkey: string): Promise<void> {
+  nappletLifecycle.removing(pubkey);
   // Revoke while identity signing is still possible. Offline failure preserves
   // the account and a durable pending revocation for a later retry.
   await pushRegistrationService.revokeAccount(pubkey);
+  await endAccountSignerSession(pubkey);
   await setDevicePreference(accountRemovalPreferenceKey(pubkey), '1');
   // Wallet rows are about to cascade with the account, so enumerate and remove
   // their per-wallet SecureStore credentials while the ids still exist.
@@ -239,8 +220,7 @@ export async function removeAccount(pubkey: string): Promise<void> {
   clearSyncCursorCache(pubkey);
   await db.delete(accounts).where(eq(accounts.pubkey, pubkey));
   await removeIdentityPrivkey(pubkey);
-  await removeNip46ClientKey(pubkey);
-  await removeNip46BunkerSecret(pubkey);
+  await removeNip46Credentials(pubkey);
   await clearAccountKeyMaterial(pubkey);
   await removeProximityIdentity(pubkey);
   await removeKeyRotationInterval(pubkey);

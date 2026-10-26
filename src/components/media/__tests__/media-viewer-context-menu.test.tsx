@@ -56,7 +56,7 @@ it('reports successful image copying', async () => {
 it('reports copying failures', async () => {
   copy.mockRejectedValue(new Error('Unavailable')); render(); open();
   await act(async () => renderer.root.findByType(ContextMenu).props.items[0].onPress());
-  expect(showToast).toHaveBeenCalledWith('attach.copy_failed');
+  expect(showToast).toHaveBeenCalledWith('attach.copy_failed', { variant: 'error' });
 });
 it('suppresses the menu while the viewer is busy or closing', () => {
   render(true); open(); expect(renderer.root.findAllByType(ContextMenu)).toHaveLength(0);

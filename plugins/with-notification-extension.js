@@ -7,10 +7,26 @@ const journal = require('../src/db/migrations/meta/_journal.json');
 
 const TARGET = 'PsstPsstNotificationService';
 
+function vaultBuildSettings() {
+  return {
+    SWIFT_OBJC_BRIDGING_HEADER: `"${TARGET}/ExpoCryptoAcceleratorSecp256k1.h"`,
+    HEADER_SEARCH_PATHS: [
+      '"$(inherited)"',
+      '"$(SRCROOT)/../modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/include"',
+      '"$(SRCROOT)/../modules/expo-crypto-accelerator/android/src/main/cpp/secp256k1/src"',
+    ],
+    GCC_PREPROCESSOR_DEFINITIONS: [
+      '"$(inherited)"', '"ENABLE_MODULE_EXTRAKEYS=1"', '"ENABLE_MODULE_SCHNORRSIG=1"',
+      '"ECMULT_WINDOW_SIZE=15"', '"COMB_BLOCKS=43"', '"COMB_TEETH=6"', '"SECP256K1_NO_API_VISIBILITY_ATTRIBUTES=1"',
+    ],
+  };
+}
+
 module.exports = function withNotificationExtension(config) {
   const identity = config.ios.bundleIdentifier;
   const appGroup = `group.${identity}.notifications`;
-  const keychainGroup = `$(AppIdentifierPrefix)${identity}.notifications`;
+  const legacyKeychainGroup = `$(AppIdentifierPrefix)${identity}.notifications`;
+  const keychainGroup = `$(AppIdentifierPrefix)${identity}.messaging`;
   const extensionId = `${identity}.notifications`;
   const extensionEntitlements = {
     'com.apple.security.application-groups': [appGroup],
@@ -34,11 +50,13 @@ module.exports = function withNotificationExtension(config) {
     // Only messaging credentials explicitly select the notification-sharing group.
     mod.modResults['keychain-access-groups'] = unique([
       `$(AppIdentifierPrefix)${identity}`,
-      ...(mod.modResults['keychain-access-groups'] ?? []), keychainGroup,
+      ...(mod.modResults['keychain-access-groups'] ?? []), legacyKeychainGroup, keychainGroup,
     ]);
     return mod;
   });
   config = withInfoPlist(config, (mod) => {
+    mod.modResults.PsstPsstLegacyKeychainGroup = legacyKeychainGroup;
+    mod.modResults.PsstPsstPrivateKeychainGroup = `$(AppIdentifierPrefix)${identity}`;
     // iOS uses APNs instead of periodic workers; remove their generated capabilities.
     if (Array.isArray(mod.modResults.UIBackgroundModes)) {
       const modes = mod.modResults.UIBackgroundModes.filter(
@@ -81,6 +99,11 @@ module.exports = function withNotificationExtension(config) {
     for (const file of ['NotificationService.swift', 'NotificationRuntime.swift', 'bootstrap.js', 'SharedNotificationContext.swift', 'CommunicationNotification.swift']) {
       await cp(join(root, file.endsWith('Context.swift') || file === 'CommunicationNotification.swift' ? 'modules/expo-local-notifications/ios' : 'ios-notification-extension', file), join(directory, file));
     }
+    for (const file of ['NativeKeyVault.swift', 'ExpoCryptoAcceleratorSecp256k1.h', 'ExpoCryptoAcceleratorSecp256k1.m']) {
+      await cp(join(root, 'modules/expo-crypto-accelerator/ios', file), join(directory, file));
+    }
+    await writeFile(join(directory, 'VaultSecp256k1.c'), '#include "../../modules/expo-crypto-accelerator/ios/ExpoCryptoAcceleratorSecp256k1Lib.c"\n');
+    await writeFile(join(directory, 'VaultChaCha.c'), '#include "../../modules/expo-crypto-accelerator/shared/VaultChaCha.c"\n#include "../../modules/expo-crypto-accelerator/shared/VaultPin.c"\n');
     const { buildNotificationExtension } = await import(pathToFileURL(join(root, 'scripts/build-notification-extension.mjs')).href);
     await buildNotificationExtension(join(directory, 'processor.js'));
     await writeFile(join(directory, 'Info.plist'), plist.default.build({
@@ -110,10 +133,14 @@ module.exports = function withNotificationExtension(config) {
     if (project.pbxTargetByName(TARGET)) {
       const targetId = project.findTargetKey(TARGET);
       const groupId = project.findPBXGroupKey({ name: TARGET });
-      // Existing generated projects also need newly introduced shared sources.
-      if (!project.hasFile('CommunicationNotification.swift')) {
-        project.addSourceFile('CommunicationNotification.swift', { target: targetId }, groupId);
+      // Existing generated projects need new sources and the same native vault settings.
+      for (const file of ['CommunicationNotification.swift', 'NativeKeyVault.swift', 'ExpoCryptoAcceleratorSecp256k1.m', 'VaultSecp256k1.c', 'VaultChaCha.c']) {
+        if (!project.hasFile(file)) project.addSourceFile(file, { target: targetId }, groupId);
       }
+      const configurations = project.pbxXCBuildConfigurationSection();
+      const target = project.pbxNativeTargetSection()[targetId];
+      const list = project.pbxXCConfigurationList()[target.buildConfigurationList];
+      for (const reference of list.buildConfigurations) Object.assign(configurations[reference.value].buildSettings, vaultBuildSettings());
       return mod;
     }
     if (!project.pbxGroupByName('Resources')) {
@@ -138,7 +165,7 @@ module.exports = function withNotificationExtension(config) {
     project.addBuildPhase([], 'PBXSourcesBuildPhase', 'Sources', target.uuid);
     project.addBuildPhase([], 'PBXResourcesBuildPhase', 'Resources', target.uuid);
     project.addBuildPhase([], 'PBXFrameworksBuildPhase', 'Frameworks', target.uuid);
-    for (const file of ['NotificationService.swift', 'NotificationRuntime.swift', 'SharedNotificationContext.swift', 'CommunicationNotification.swift']) {
+    for (const file of ['NotificationService.swift', 'NotificationRuntime.swift', 'SharedNotificationContext.swift', 'CommunicationNotification.swift', 'NativeKeyVault.swift', 'ExpoCryptoAcceleratorSecp256k1.m', 'VaultSecp256k1.c', 'VaultChaCha.c']) {
       project.addSourceFile(file, { target: target.uuid }, group.uuid);
     }
     for (const file of ['bootstrap.js', 'processor.js']) {
@@ -154,6 +181,7 @@ module.exports = function withNotificationExtension(config) {
         DEVELOPMENT_TEAM: config.ios.appleTeamId,
         IPHONEOS_DEPLOYMENT_TARGET: '16.4',
         SWIFT_VERSION: '5.0',
+        ...vaultBuildSettings(),
         TARGETED_DEVICE_FAMILY: '"1,2"',
         APPLICATION_EXTENSION_API_ONLY: 'YES',
         GENERATE_INFOPLIST_FILE: 'NO',

@@ -5,10 +5,12 @@ import {
   KIND_REACTION,
   createGiftWrappedMessage,
   unwrapGiftWrap,
-  unwrapGiftWrapWithKeys,
+  unwrapGiftWrapForAccount,
 } from '../nip17-gift-wrap';
 
-import * as conversationKeys from '../conversation-key-cache';
+import { vaultAccess } from '@/platform/vault-access';
+
+jest.mock('@/platform/vault-access', () => ({ vaultAccess: { execute: jest.fn() } }));
 
 describe('NIP-17 gift wraps', () => {
   test('round-trips a unified proximity identity without duplicate routing tags', async () => {
@@ -153,62 +155,43 @@ async function splitKeyFixture(sealOptions: { tags?: string[][]; content?: strin
 }
 
 describe('relay split-key intake', () => {
-  test('decrypts supported messages with a retained older key', async () => {
-    const { wrapped, recipientEncryption } = await splitKeyFixture();
-    const result = await unwrapGiftWrapWithKeys(wrapped.giftWrap, [
-      { privkey: generateSecretKey() }, { privkey: recipientEncryption },
-    ]);
+  beforeEach(() => jest.clearAllMocks());
+
+  test('delegates key selection and both decryptions to the account vault in one request', async () => {
+    const { wrapped, recipientIdentity } = await splitKeyFixture();
+    const account = getPublicKey(recipientIdentity);
+    jest.mocked(vaultAccess.execute).mockResolvedValue({ status: 'decrypted', seal: wrapped.seal,
+      rumorJson: JSON.stringify(wrapped.rumor), senderEncryptionPubkey: wrapped.seal.tags[0][1] });
+    const result = await unwrapGiftWrapForAccount(wrapped.giftWrap, account);
     expect(result.status).toBe('decrypted');
     if (result.status === 'decrypted') expect(result.value.rumor).toEqual(wrapped.rumor);
+    expect(vaultAccess.execute).toHaveBeenCalledTimes(1);
+    expect(vaultAccess.execute).toHaveBeenCalledWith({ method: 'decryptMessaging', account, event: wrapped.giftWrap });
   });
 
-  test('skips a seal without n before inner decryption or trying further keys', async () => {
-    const { wrapped, recipientEncryption } = await splitKeyFixture({
-      tags: [], content: 'content that must never be decrypted',
-    });
-    const derive = jest.spyOn(conversationKeys, 'getConversationKeyAsync');
-    try {
-      expect(await unwrapGiftWrapWithKeys(wrapped.giftWrap, [
-        { privkey: recipientEncryption }, { privkey: generateSecretKey() },
-      ])).toEqual({ status: 'unsupported', reason: 'missing-encryption-key-tag' });
-      expect(derive).toHaveBeenCalledTimes(1);
-      expect(derive).toHaveBeenCalledWith(recipientEncryption, wrapped.giftWrap.pubkey);
-    } finally {
-      derive.mockRestore();
-    }
+  test.each([
+    { status: 'failed' },
+    { status: 'unsupported', reason: 'missing-encryption-key-tag' },
+  ])('preserves the vault outcome $status without retrying in business code', async outcome => {
+    const { wrapped } = await splitKeyFixture();
+    jest.mocked(vaultAccess.execute).mockResolvedValue(outcome);
+    expect(await unwrapGiftWrapForAccount(wrapped.giftWrap, 'account')).toEqual(outcome);
+    expect(vaultAccess.execute).toHaveBeenCalledTimes(1);
   });
 
-  test('reports supported seals with failed inner decryption as failures', async () => {
-    const { wrapped, recipientEncryption } = await splitKeyFixture({ content: 'invalid ciphertext' });
-    expect(await unwrapGiftWrapWithKeys(wrapped.giftWrap, [{ privkey: recipientEncryption }]))
-      .toEqual({ status: 'failed' });
+  test.each(['invalid JSON', 'mismatched author', 'mismatched hash'])('rejects a decrypted rumor with %s', async corruption => {
+    const { wrapped } = await splitKeyFixture();
+    const rumor = { ...wrapped.rumor };
+    if (corruption === 'mismatched author') rumor.pubkey = getPublicKey(generateSecretKey());
+    if (corruption === 'mismatched hash') rumor.id = '0'.repeat(64);
+    jest.mocked(vaultAccess.execute).mockResolvedValue({ status: 'decrypted', seal: wrapped.seal,
+      rumorJson: corruption === 'invalid JSON' ? '{' : JSON.stringify(rumor), senderEncryptionPubkey: wrapped.seal.tags[0][1] });
+    expect(await unwrapGiftWrapForAccount(wrapped.giftWrap, 'account')).toEqual({ status: 'failed' });
   });
 
-  test('does not classify a present but empty n tag as ordinary NIP-17', async () => {
-    const { wrapped, recipientEncryption } = await splitKeyFixture({ tags: [['n']] });
-    expect(await unwrapGiftWrapWithKeys(wrapped.giftWrap, [{ privkey: recipientEncryption }]))
-      .toEqual({ status: 'failed' });
-  });
-
-  test('cannot classify a seal when the outer wrap is unreadable', async () => {
-    const { wrapped } = await splitKeyFixture({ tags: [] });
-    expect(await unwrapGiftWrapWithKeys(wrapped.giftWrap, [{ privkey: generateSecretKey() }]))
-      .toEqual({ status: 'failed' });
-  });
-
-  test('does not decrypt ordinary NIP-17 with the account identity key', async () => {
-    const senderIdentity = generateSecretKey();
-    const recipientIdentity = generateSecretKey();
-    const recipientEncryption = generateSecretKey();
-    const wrapped = await createGiftWrappedMessage({
-      rumorTemplate: { kind: KIND_CHAT, content: 'ordinary', tags: [], created_at: 1_700_000_011 },
-      senderIdentityPubkey: getPublicKey(senderIdentity),
-      senderEncPrivkey: senderIdentity, senderEncPubkey: getPublicKey(senderIdentity),
-      recipientIdentityPubkey: getPublicKey(recipientIdentity),
-      recipientEncPubkey: getPublicKey(recipientIdentity),
-      signSeal: async (template) => finalizeEvent(template, senderIdentity),
-    });
-    expect(await unwrapGiftWrapWithKeys(wrapped.giftWrap, [{ privkey: recipientEncryption }]))
-      .toEqual({ status: 'failed' });
+  test('preserves vault infrastructure failures instead of treating them as unreadable events', async () => {
+    const { wrapped } = await splitKeyFixture();
+    jest.mocked(vaultAccess.execute).mockRejectedValue(new Error('Storage unavailable'));
+    await expect(unwrapGiftWrapForAccount(wrapped.giftWrap, 'account')).rejects.toThrow('Storage unavailable');
   });
 });

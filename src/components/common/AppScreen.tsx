@@ -3,12 +3,17 @@ import { StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useEffectiveColorScheme, useThemeColors } from '@/theme';
+import type { PageAppearance } from '@/lib/page-appearance';
 
 type Props = {
   children: ReactNode;
   /** Vertical safe-area edges. Horizontal safe areas are always applied so
    * ordinary screens stay clear of landscape notches and rounded corners. */
   edges?: readonly ('top' | 'bottom')[];
+  /** Validated embedded-document color for the host-owned safe-area canvas. */
+  appearance?: PageAppearance;
+  statusBarActive?: boolean;
+  statusBarFollowsAppearance?: boolean;
 };
 
 type HorizontalEdge = 'left' | 'right';
@@ -35,17 +40,22 @@ export function AppScreenHorizontalSafeArea({
 }
 
 /** Screen-level container that paints the themed background edge-to-edge. */
-export function AppScreen({ children, edges = ['top', 'bottom'] }: Props) {
+export function AppScreen({
+  children,
+  edges = ['top', 'bottom'],
+  appearance,
+  statusBarActive = true,
+  statusBarFollowsAppearance = true,
+}: Props) {
   const c = useThemeColors();
   const scheme = useEffectiveColorScheme();
   const horizontalEdges = useContext(HorizontalSafeAreaEdgesContext);
+  const dark = statusBarFollowsAppearance && appearance ? appearance.dark : scheme === 'dark';
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
-      <StatusBar
-        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
-        translucent
-        backgroundColor="transparent"
-      />
+    <View style={{ flex: 1, backgroundColor: appearance?.background ?? c.background }}>
+      {statusBarActive ? (
+        <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
+      ) : null}
       <SafeAreaView style={{ flex: 1 }} edges={[...horizontalEdges, ...edges]}>
         {children}
       </SafeAreaView>

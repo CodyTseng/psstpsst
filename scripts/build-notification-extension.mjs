@@ -27,7 +27,9 @@ export async function buildNotificationExtension(output = resolve(root, 'ios-not
         builder.onResolve({ filter: /(^@\/i18n$|^@\/lib\/platform$|^\.\/registry$)/ }, ({ path, importer }) => {
           if (path === '@/i18n') return { path: resolve(root, 'src/i18n/core.ts') };
           if (path === '@/lib/platform') return { path: resolve(root, 'src/platform/notification-extension/platform-identity.ts') };
-          if (importer === resolve(root, 'src/platform/index.ts')) return { path: resolve(root, 'src/platform/notification-extension/registry.ts') };
+          if (['src/platform/index.ts', 'src/platform/vault-access.ts'].some(file => importer === resolve(root, file))) {
+            return { path: resolve(root, 'src/platform/notification-extension/registry.ts') };
+          }
         });
         builder.onLoad({ filter: /src\/i18n\/[^/]+\.json$/ }, async ({ path }) => {
           const catalog = JSON.parse(await readFile(path, 'utf8'));

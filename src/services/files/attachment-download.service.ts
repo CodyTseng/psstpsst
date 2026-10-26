@@ -59,7 +59,9 @@ async function downloadAttachmentBytesAttempt(opts: DownloadOptions): Promise<Do
     const infoUri = `${uri}.json`;
     let info: PartialInfo | null = null;
     try {
-      info = JSON.parse(await platform.fileSystem.readText(infoUri));
+      if ((await platform.fileSystem.stat(infoUri)).exists) {
+        info = JSON.parse(await platform.fileSystem.readText(infoUri));
+      }
     } catch { /* A missing sidecar starts a fresh download. */ }
     const stat = await platform.fileSystem.stat(uri);
     let offset = stat.exists ? stat.size ?? 0 : 0;

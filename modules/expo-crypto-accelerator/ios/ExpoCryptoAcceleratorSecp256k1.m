@@ -1,5 +1,6 @@
 #import "ExpoCryptoAcceleratorSecp256k1.h"
 
+#import <Security/Security.h>
 #import <secp256k1.h>
 #import <secp256k1_extrakeys.h>
 #import <secp256k1_schnorrsig.h>
@@ -8,7 +9,12 @@ static secp256k1_context *ExpoCryptoAcceleratorContext(void) {
   static secp256k1_context *context = NULL;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    context = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+    context = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
+    uint8_t seed[32];
+    if (SecRandomCopyBytes(kSecRandomDefault, sizeof(seed), seed) != errSecSuccess || !secp256k1_context_randomize(context, seed)) {
+      secp256k1_context_destroy(context); context = NULL;
+    }
+    memset_s(seed, sizeof(seed), 0, sizeof(seed));
   });
   return context;
 }
@@ -60,4 +66,23 @@ BOOL ExpoCryptoAcceleratorVerifySchnorr(const uint8_t signature[64], const uint8
   }
 
   return secp256k1_schnorrsig_verify(context, signature, message, 32, &parsedPubkey) == 1 ? YES : NO;
+}
+
+BOOL PsstVaultPublicKey(const uint8_t secret[32], uint8_t output[32]) {
+  secp256k1_keypair pair;
+  secp256k1_xonly_pubkey pubkey;
+  secp256k1_context *context = ExpoCryptoAcceleratorContext();
+  if (context == NULL || !secp256k1_keypair_create(context, &pair, secret)) return NO;
+  BOOL ok = secp256k1_keypair_xonly_pub(context, &pubkey, NULL, &pair) && secp256k1_xonly_pubkey_serialize(context, output, &pubkey);
+  memset_s(&pair, sizeof(pair), 0, sizeof(pair));
+  return ok;
+}
+
+BOOL PsstVaultSign(const uint8_t secret[32], const uint8_t digest[32], const uint8_t auxiliary[32], uint8_t output[64]) {
+  secp256k1_keypair pair;
+  secp256k1_context *context = ExpoCryptoAcceleratorContext();
+  if (context == NULL || !secp256k1_keypair_create(context, &pair, secret)) return NO;
+  BOOL ok = secp256k1_schnorrsig_sign32(context, output, digest, &pair, auxiliary);
+  memset_s(&pair, sizeof(pair), 0, sizeof(pair));
+  return ok;
 }

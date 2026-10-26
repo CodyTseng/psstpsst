@@ -229,7 +229,7 @@ function AccountSwitcherBody({ onClose, onAddAccount, onHeaderActionChange }: Bo
   }, [showEditToggle, editing, t, onHeaderActionChange, c.accentForeground, c.text]);
 
   return (
-    <>
+    <View>
       {/* Absolutely-positioned rows over an animated-height box, so a drag-reorder
           can slide them and add/remove resizes the sheet smoothly (see SwitcherRow). */}
       <Animated.View style={listStyle}>
@@ -292,7 +292,7 @@ function AccountSwitcherBody({ onClose, onAddAccount, onHeaderActionChange }: Bo
           {t('account.add')}
         </AppText>
       </Pressable>
-    </>
+    </View>
   );
 }
 

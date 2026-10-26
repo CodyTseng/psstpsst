@@ -4,7 +4,7 @@ import type { AppStateStatus } from '@/platform';
 import { dmService } from '../dm.service';
 import { receiveSessionStore, MessagingKeySyncRequiredError } from '../receive-session';
 import { resolveMessagingMetadata, type MessagingMetadata } from '../messaging-metadata';
-import { loadEncryptionKeys } from '../encryption-key.service';
+import { loadEncryptionKeypair, hasEncryptionKey } from '../encryption-key.service';
 import { relayPool, type SubscribeOpts } from '../../relay/relay-pool';
 import { selfEventStream } from '../../self-events/self-event-stream.service';
 import {
@@ -16,7 +16,7 @@ import {
   setForwardSince,
   setPendingForwardScan,
 } from '../sync-store';
-import { unwrapGiftWrapWithKeys, type GiftWrapUnwrapOutcome } from '../../crypto/nip17-gift-wrap';
+import { unwrapGiftWrapForAccount, type GiftWrapUnwrapOutcome } from '../../crypto/nip17-gift-wrap';
 
 const mockProcessedIds = new Set<string>();
 let mockAppState: AppStateStatus = 'background';
@@ -78,7 +78,7 @@ jest.mock('../sync-store', () => ({
   setForwardSince: jest.fn(), setBackwardUntil: jest.fn(),
 }));
 jest.mock('../encryption-key.service', () => ({
-  loadEncryptionKeys: jest.fn(),
+  loadEncryptionKeypair: jest.fn(), hasEncryptionKey: jest.fn(async () => false),
   getEncryptionPubkeyFromEvent: (event: Event) => event.tags.find((tag) => tag[0] === 'n')?.[1],
 }));
 jest.mock('../messaging-metadata', () => ({
@@ -87,7 +87,7 @@ jest.mock('../messaging-metadata', () => ({
 jest.mock('../../crypto/nip17-gift-wrap', () => ({
   KIND_GIFT_WRAP: 1059, KIND_CHAT: 14, KIND_FILE: 15, KIND_REACTION: 7,
   KIND_ENCRYPTION_KEY_ANNOUNCEMENT: 10044,
-  unwrapGiftWrapWithKeys: jest.fn(),
+  unwrapGiftWrapForAccount: jest.fn(),
 }));
 
 const self = 'a'.repeat(64);
@@ -118,12 +118,13 @@ beforeEach(() => {
   mockAppState = 'background';
   receiveSessionStore.setState({ status: 'stopped', accountPubkey: null }, true);
   jest.clearAllMocks();
+  jest.mocked(hasEncryptionKey).mockResolvedValue(false);
   mockProcessedIds.clear();
   mockUserReturnedListeners.clear();
   jest.mocked(relayPool.hasHealthySubscription).mockReturnValue(false);
   jest.mocked(selfEventStream.isHealthy).mockReturnValue(true);
   resolveMetadata.mockResolvedValue(metadata());
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([{ pubkey: oldKey, privkey: new Uint8Array(32), createdAt: 1 }]);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: oldKey, key: { account: 'test-account', role: 'messaging' }, createdAt: 1 });
   jest.mocked(relayPool.subscribe).mockReturnValue(unsubscribe);
   jest.mocked(relayPool.query).mockImplementation(async (opts) => {
     opts.onComplete?.({ eosed: true, status: 'complete', relays: opts.relays.map((url) => ({
@@ -133,7 +134,7 @@ beforeEach(() => {
   });
   jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: null, backwardUntil: 0 });
   jest.mocked(getPendingForwardScan).mockResolvedValue(null);
-  jest.mocked(unwrapGiftWrapWithKeys).mockResolvedValue({ status: 'failed' });
+  jest.mocked(unwrapGiftWrapForAccount).mockResolvedValue({ status: 'failed' });
 });
 afterEach(() => dmService.destroy());
 
@@ -154,9 +155,36 @@ it('waits for the missing key and only opens intake after a new init with that k
   await expect(dmService.init(options)).rejects.toThrow('must be synchronized');
   expect(relayPool.subscribe).not.toHaveBeenCalled();
   expect(getRelaySyncCursor).not.toHaveBeenCalled();
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([{ pubkey: newKey, privkey: new Uint8Array(32), createdAt: 2 }]);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: newKey, key: { account: 'test-account', role: 'messaging' }, createdAt: 2 });
   await dmService.init(options);
   expect(live().relays).toEqual(['wss://fresh.example']);
+});
+
+it('checks historical membership without loading a key list and keeps the current key for sending', async () => {
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: newKey, key: { account: self, role: 'messaging' }, createdAt: 2 });
+  jest.mocked(hasEncryptionKey).mockResolvedValue(true);
+  await dmService.init(options);
+  expect(hasEncryptionKey).toHaveBeenCalledWith(self, oldKey);
+  expect(receiveSessionStore.getState().status).toBe('ready');
+});
+
+it('does not issue a membership query when the announcement matches the current key', async () => {
+  await dmService.init(options);
+  expect(hasEncryptionKey).not.toHaveBeenCalled();
+});
+
+it('does not reopen intake after a historical membership query outlives its session', async () => {
+  const pending = deferred<boolean>();
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: newKey, key: { account: self, role: 'messaging' }, createdAt: 2 });
+  jest.mocked(hasEncryptionKey).mockReturnValueOnce(pending.promise);
+  const starting = dmService.init(options);
+  await flush();
+  expect(hasEncryptionKey).toHaveBeenCalledTimes(1);
+  dmService.destroy();
+  pending.resolve(true);
+  await expect(starting).rejects.toThrow('cancelled');
+  expect(relayPool.subscribe).not.toHaveBeenCalled();
+  expect(receiveSessionStore.getState().status).toBe('stopped');
 });
 
 it('keeps intake closed when metadata lookup fails', async () => {
@@ -182,7 +210,7 @@ it('stops immediately on an unknown key, even if its timestamp predates this lau
   expect(dmService.getAccountPubkey()).toBeNull();
   live().onEvent({ id: 'late', tags: [['p', self]], kind: 1059 } as Event, 'wss://fresh.example');
   await flush();
-  expect(unwrapGiftWrapWithKeys).not.toHaveBeenCalled();
+  expect(unwrapGiftWrapForAccount).not.toHaveBeenCalled();
 });
 
 it('does not pause on an older announcement replay', async () => {
@@ -194,10 +222,10 @@ it('does not pause on an older announcement replay', async () => {
 it('does not mark an in-flight failed decryption processed after rotation', async () => {
   await dmService.init(options);
   const decrypting = deferred<GiftWrapUnwrapOutcome>();
-  jest.mocked(unwrapGiftWrapWithKeys).mockReturnValueOnce(decrypting.promise);
+  jest.mocked(unwrapGiftWrapForAccount).mockReturnValueOnce(decrypting.promise);
   live().onEvent({ id: 'in-flight', tags: [['p', self]], kind: 1059 } as Event, 'wss://fresh.example');
   await flush();
-  expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(1);
+  expect(unwrapGiftWrapForAccount).toHaveBeenCalledTimes(1);
   rotate();
   decrypting.resolve({ status: 'failed' });
   await flush();
@@ -234,7 +262,7 @@ it('checks an already-processed backfill page in one batch', async () => {
   await flush();
 
   expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(['seen-1', 'seen-2']);
-  expect(unwrapGiftWrapWithKeys).not.toHaveBeenCalled();
+  expect(unwrapGiftWrapForAccount).not.toHaveBeenCalled();
 });
 
 it('does not let a cold notification poll pull messages with a missing key', async () => {
@@ -268,8 +296,8 @@ it.each([24, 48])('backfills a new wrap backdated %i hours before the previous c
   try {
     await dmService.init(options);
     await completed.promise;
-    expect(jest.mocked(unwrapGiftWrapWithKeys).mock.calls[0]?.[0]).toEqual(missing);
-    expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(1);
+    expect(jest.mocked(unwrapGiftWrapForAccount).mock.calls[0]?.[0]).toEqual(missing);
+    expect(unwrapGiftWrapForAccount).toHaveBeenCalledTimes(1);
     expect(setForwardSince).toHaveBeenCalledWith(self, 'wss://fresh.example', cutoff);
     expect(setBackwardUntil).not.toHaveBeenCalled();
   } finally {
@@ -301,7 +329,7 @@ it('pages recent notification messages without reading or advancing history curs
   });
   await dmService.pollForNotifications(self);
   expect(markGiftWrapProcessed).not.toHaveBeenCalled();
-  expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(450);
+  expect(unwrapGiftWrapForAccount).toHaveBeenCalledTimes(450);
   expect(getRelaySyncCursor).not.toHaveBeenCalled();
   expect(setForwardSince).not.toHaveBeenCalled();
   expect(setBackwardUntil).not.toHaveBeenCalled();
@@ -344,19 +372,16 @@ it('keeps failed decryption retryable after receiving a new key', async () => {
   await dmService.init(options);
   live().onEvent(event, 'wss://fresh.example');
   await flush();
-  expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(1);
+  expect(unwrapGiftWrapForAccount).toHaveBeenCalledTimes(1);
   expect(markGiftWrapProcessed).not.toHaveBeenCalled();
 
   rotate();
   resolveMetadata.mockResolvedValue(metadata(newKey));
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([
-    { pubkey: newKey, privkey: new Uint8Array(32), createdAt: 2 },
-    { pubkey: oldKey, privkey: new Uint8Array(32), createdAt: 1 },
-  ]);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: newKey, key: { account: 'test-account', role: 'messaging' }, createdAt: 2 });
   await dmService.init(options);
   live().onEvent(event, 'wss://fresh.example');
   await flush();
-  expect(unwrapGiftWrapWithKeys).toHaveBeenCalledTimes(2);
+  expect(unwrapGiftWrapForAccount).toHaveBeenCalledTimes(2);
   expect(markGiftWrapProcessed).not.toHaveBeenCalled();
 });
 
@@ -377,13 +402,13 @@ it('cancels a cold poll query when a new session takes over', async () => {
   expect(queryOptions.abort?.aborted).toBe(true);
   pending.resolve([{ id: 'late-poll', tags: [['p', self]], kind: 1059 } as Event]);
   expect(await polling).toEqual([]);
-  expect(unwrapGiftWrapWithKeys).not.toHaveBeenCalled();
+  expect(unwrapGiftWrapForAccount).not.toHaveBeenCalled();
 });
 
 
 it('marks an authenticated seal without an n tag processed without storing a message', async () => {
   await dmService.init(options);
-  jest.mocked(unwrapGiftWrapWithKeys).mockResolvedValueOnce({
+  jest.mocked(unwrapGiftWrapForAccount).mockResolvedValueOnce({
     status: 'unsupported', reason: 'missing-encryption-key-tag',
   });
   live().onEvent({ id: 'ordinary-nip17', tags: [['p', self]], kind: 1059 } as Event, 'wss://fresh.example');
@@ -394,7 +419,7 @@ it('marks an authenticated seal without an n tag processed without storing a mes
 it('does not persist an unsupported result from a receiver invalidated by rotation', async () => {
   await dmService.init(options);
   const decrypting = deferred<GiftWrapUnwrapOutcome>();
-  jest.mocked(unwrapGiftWrapWithKeys).mockReturnValueOnce(decrypting.promise);
+  jest.mocked(unwrapGiftWrapForAccount).mockReturnValueOnce(decrypting.promise);
   live().onEvent({ id: 'stale-ordinary', tags: [['p', self]], kind: 1059 } as Event, 'wss://fresh.example');
   await flush();
   rotate();
@@ -584,7 +609,7 @@ it('invalidates the service-owned receive state and all relay work on a key chan
   expect(resolveMetadata).not.toHaveBeenCalled();
 
   resolveMetadata.mockResolvedValue(metadata(newKey));
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([{ pubkey: newKey, privkey: new Uint8Array(32), createdAt: 2 }]);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: newKey, key: { account: 'test-account', role: 'messaging' }, createdAt: 2 });
   await dmService.init(options);
   expect(receiveSessionStore.getState()).toEqual({ status: 'ready', accountPubkey: self });
 });
@@ -597,10 +622,8 @@ it('ignores a newer announcement that republishes the same active key', async ()
 });
 
 it('stops an actual remote key change even when that key is retained locally', async () => {
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([
-    { pubkey: oldKey, privkey: new Uint8Array(32), createdAt: 2 },
-    { pubkey: newKey, privkey: new Uint8Array(32), createdAt: 1 },
-  ]);
+  jest.mocked(hasEncryptionKey).mockResolvedValue(true);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: oldKey, key: { account: 'test-account', role: 'messaging' }, createdAt: 2 });
   await dmService.init(options);
   rotate();
   expect(receiveSessionStore.getState().status).toBe('key-required');

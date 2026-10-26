@@ -37,10 +37,12 @@ Pod::Spec.new do |s|
     'USER_HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/vendor/noise-c/src/protocol',
     'HEADER_SEARCH_PATHS' => [
       '$(PODS_TARGET_SRCROOT)/common',
+      '$(PODS_ROOT)/Headers/Public/ExpoCryptoAccelerator',
       '$(PODS_TARGET_SRCROOT)/vendor/noise-c/include',
       '$(PODS_TARGET_SRCROOT)/vendor/noise-c/src',
       '$(PODS_TARGET_SRCROOT)/vendor/noise-c/src/protocol',
     ].join(' '),
   }
   s.dependency 'ExpoModulesCore'
+  s.dependency 'ExpoCryptoAccelerator'
 end

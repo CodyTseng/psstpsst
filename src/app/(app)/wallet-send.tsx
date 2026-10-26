@@ -25,7 +25,6 @@ import { ExternalInvoicePayment } from '@/components/wallet/external-invoice-pay
 import { WalletAmountDisplay } from '@/components/wallet/WalletAmountDisplay';
 import { WalletPaymentConfirmSheet } from '@/components/wallet/WalletPaymentConfirmSheet';
 import { WalletPaymentStatus, type WalletPaymentStatusValue } from '@/components/wallet/WalletPaymentStatus';
-import { WalletPinSheet } from '@/components/wallet/WalletPinSheet';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useWallets } from '@/hooks/use-wallets';
 import { backSafely } from '@/lib/navigation';
@@ -47,11 +46,6 @@ import {
   resolveLnurlPayTarget,
 } from '@/services/wallet/lnurl';
 import { payInvoice, WalletError, type WalletRow } from '@/services/wallet/wallet.service';
-import {
-  authorizeWalletPin,
-  setWalletPin,
-  walletAuthenticationMode,
-} from '@/services/wallet/wallet-pin.service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { spacing, useThemeColors } from '@/theme';
 
@@ -92,8 +86,6 @@ export default function WalletSendScreen() {
   const { scrolled, scrollProps } = useScrolled({ resetKey: step });
   const [resolving, setResolving] = useState(false);
   const [paying, setPaying] = useState(false);
-  const [paymentPinOpen, setPaymentPinOpen] = useState(false);
-  const [paymentPinMode, setPaymentPinMode] = useState<'verify' | 'setup'>('verify');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [permission, requestPermission] = useCameraPermissions();
   const handledScanRef = useRef(false);
@@ -102,8 +94,6 @@ export default function WalletSendScreen() {
   const paymentIntentRef = useRef<PaymentIntent | null>(null);
   const paymentConfirmedRef = useRef(false);
   const paymentWalletRef = useRef<WalletRow | null>(null);
-  const paymentPinAuthorizationRef = useRef<string | null>(null);
-  const paymentPinApprovedRef = useRef(false);
   const preparingExternalInvoiceRef = useRef(false);
 
   useEffect(() => {
@@ -238,54 +228,13 @@ export default function WalletSendScreen() {
     setTimeout(() => void beginPaymentAuthentication(intent), 0);
   }
 
-  async function beginPaymentAuthentication(intent: PaymentIntent) {
-    if (!accountPubkey) {
-      setPaying(false);
-      return;
-    }
-    try {
-      const mode = await walletAuthenticationMode(accountPubkey);
-      if (mode === 'system') {
-        startPayment(intent);
-        return;
-      }
-      setPaymentPinMode(mode === 'pin' ? 'verify' : 'setup');
-      setPaymentPinOpen(true);
-    } catch {
-      setPaying(false);
-      void platform.confirmationDialog.notify({ title: t('wallet.auth_failed'), okLabel: t('common.ok') });
-    }
-  }
-
-  function startPayment(intent: PaymentIntent) {
+  function beginPaymentAuthentication(intent: PaymentIntent) {
     setPaymentStatus('processing');
     setStep('payment');
-    setTimeout(() => void executePayment(intent, paymentPinAuthorizationRef.current), 0);
+    setTimeout(() => void executePayment(intent), 0);
   }
 
-  async function submitPaymentPin(pin: string): Promise<boolean> {
-    if (!accountPubkey) return false;
-    if (paymentPinMode === 'setup') await setWalletPin(accountPubkey, pin);
-    const authorization = await authorizeWalletPin(accountPubkey, pin);
-    if (!authorization) return false;
-    paymentPinAuthorizationRef.current = authorization;
-    paymentPinApprovedRef.current = true;
-    return true;
-  }
-
-  function closePaymentPin() {
-    setPaymentPinOpen(false);
-    if (!paymentPinApprovedRef.current) setPaying(false);
-  }
-
-  function handlePaymentPinClosed() {
-    if (!paymentPinApprovedRef.current) return;
-    paymentPinApprovedRef.current = false;
-    const intent = paymentIntentRef.current;
-    if (intent) startPayment(intent);
-  }
-
-  async function executePayment(intent: PaymentIntent, pinAuthorization: string | null) {
+  async function executePayment(intent: PaymentIntent) {
     const fallbackStep: SendStep = intent === 'lnurl' ? 'amount' : 'review';
     const paymentWallet = paymentWalletRef.current;
     if (!paymentWallet) {
@@ -318,9 +267,7 @@ export default function WalletSendScreen() {
           cancel: t('common.cancel'),
         },
         metadata,
-        pinAuthorization ?? undefined,
       );
-      paymentPinAuthorizationRef.current = null;
       setPaymentStatus('success');
     } catch (err) {
       if (err instanceof LnurlError) {
@@ -398,9 +345,6 @@ export default function WalletSendScreen() {
     paymentIntentRef.current = null;
     paymentConfirmedRef.current = false;
     paymentWalletRef.current = null;
-    paymentPinAuthorizationRef.current = null;
-    paymentPinApprovedRef.current = false;
-    setPaymentPinOpen(false);
     setPaymentWalletId(null);
     setStep('scan');
   }
@@ -760,13 +704,7 @@ export default function WalletSendScreen() {
         onConfirm={confirmPayment}
         onSelectWallet={selectPaymentWallet}
       />
-      <WalletPinSheet
-        visible={paymentPinOpen}
-        mode={paymentPinMode}
-        onClose={closePaymentPin}
-        onClosed={handlePaymentPinClosed}
-        onSubmit={submitPaymentPin}
-      />
+
     </AppScreen>
   );
 }

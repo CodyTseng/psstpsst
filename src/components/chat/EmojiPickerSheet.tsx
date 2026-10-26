@@ -658,7 +658,6 @@ export function EmojiPickerSheet({
           <EmojiPickerTabs
             activePack={null}
             activeCategory={activeSlug}
-            backgroundColor={surfaceColor}
             customPacks={[]}
             standaloneCustomEmojis={[]}
             onSelectPack={ignorePackSelection}

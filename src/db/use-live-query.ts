@@ -10,6 +10,9 @@ import { SQLiteRelationalQuery } from 'drizzle-orm/sqlite-core/query-builders/qu
 import { Subquery } from 'drizzle-orm/subquery';
 import { useEffect, useMemo, useState } from 'react';
 
+import { migrateApplicationFavorites } from './data-migrations/application-favorites';
+import { migrateExplore } from './data-migrations/explore';
+import { migrateSigningSources } from './data-migrations/signing-sources';
 import { platform } from '@/platform';
 
 import type { Database } from './client';
@@ -32,6 +35,7 @@ async function migrateDatabase(db: Database, bundle: MigrationBundle): Promise<v
     const source = bundle.migrations[`m${entry.idx.toString().padStart(4, '0')}`];
     if (!source) throw new Error(`Missing migration: ${entry.tag}`);
     return {
+      index: entry.idx,
       statements: source.split('--> statement-breakpoint'),
       createdAt: entry.when,
     };
@@ -55,6 +59,9 @@ async function migrateDatabase(db: Database, bundle: MigrationBundle): Promise<v
     for (const migration of migrations) {
       if (latestCreatedAt !== undefined && latestCreatedAt >= migration.createdAt) continue;
       for (const statement of migration.statements) await tx.run(sql.raw(statement));
+      if (migration.index === 61) await migrateSigningSources(tx);
+      if (migration.index === 62) await migrateExplore(tx);
+      if (migration.index === 71) await migrateApplicationFavorites(tx);
       await tx.run(
         sql`INSERT INTO __drizzle_migrations (hash, created_at) VALUES (${''}, ${migration.createdAt})`,
       );

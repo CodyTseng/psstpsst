@@ -120,7 +120,7 @@ export function WalletPickerSheet({
   const listStyle = useAnimatedStyle(() => ({ height: listHeight.value }));
 
   function reportUpdateFailure(): void {
-    showToast(t('wallet.update_failed'), { target: 'detail' });
+    showToast(t('wallet.update_failed'), { variant: 'error', target: 'detail' });
   }
 
   function closeRenameDialog() {
@@ -194,7 +194,7 @@ export function WalletPickerSheet({
             ? { gap: spacing.md }
             : wallets.length === 0
               ? { gap: spacing.lg }
-              : undefined
+              : { gap: 0 }
         }
       >
       {renaming && !IS_ELECTRON ? (

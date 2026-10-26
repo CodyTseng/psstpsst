@@ -173,11 +173,11 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
       if (!useProximityStore.getState().discoveries[pubkey]?.signalFresh) return;
       const result = await proximityService.requestChat(accountPubkey, pubkey);
-      if (result === 'declined') showToast(t('nearby.request_declined'), { target: 'detail' });
-      if (result === 'timeout') showToast(t('nearby.request_timeout'), { target: 'detail' });
-      if (result === 'failed') showToast(t('nearby.request_failed'), { target: 'detail' });
+      if (result === 'declined') showToast(t('nearby.request_declined'), { variant: 'error', target: 'detail' });
+      if (result === 'timeout') showToast(t('nearby.request_timeout'), { variant: 'error', target: 'detail' });
+      if (result === 'failed') showToast(t('nearby.request_failed'), { variant: 'error', target: 'detail' });
     } catch {
-      showToast(t('nearby.request_failed'), { target: 'detail' });
+      showToast(t('nearby.request_failed'), { variant: 'error', target: 'detail' });
     } finally {
       setConnectAttemptPending(false);
     }

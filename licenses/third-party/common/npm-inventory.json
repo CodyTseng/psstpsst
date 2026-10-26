@@ -1,6 +1,6 @@
 {
-  "reviewed": "2026-10-11",
-  "lockfileSha256": "f39abc9180e27fce2b69bfa4dbee66230a67f5c61114910bff1e892f44a7d76f",
+  "reviewed": "2026-10-15",
+  "lockfileSha256": "9f23e93e1c9950e0494c5ab4dabe87934627982df53c3441b8247650688b3038",
   "scope": "All locked non-development npm packages on all platforms, plus the shipped Electron runtime. Includes build utilities; not an exact binary inventory.",
   "packages": [
     {
@@ -2466,6 +2466,45 @@
         {
           "source": "https://raw.githubusercontent.com/napi-rs/napi-rs/670e5d319506beb9b7f37683d75b9b4e0edba253/LICENSE",
           "sha256": "3f1ce66533302df3a32edbfdfc0b78f0dd34659e4c1f5817162e5ea3c2297215"
+        }
+      ]
+    },
+    {
+      "name": "@napplet/core",
+      "version": "0.34.0",
+      "license": "MIT",
+      "integrity": "sha512-oU56Qhkc9+VI6CqvekRVbAQkHy2DGzLMGxI3EirDJtfBtXWu6kmvhUkI5DkU3hpfa7MwYpARL4usud5sWa6ZdA==",
+      "repository": "git+https://github.com/sandwichfarm/napplet.git",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "e265646fbf221d880f97c342bd648c50e431d42162a370d155616b6c7114f97c"
+        }
+      ]
+    },
+    {
+      "name": "@napplet/nap",
+      "version": "0.34.0",
+      "license": "MIT",
+      "integrity": "sha512-AzdF8ejO+QbSDEQw2rrQM2ll9fvuPaoxiwu1s1jp+1OwDo5seYqCgevBYjLiQVOA1NzslXnYNVtWxedACq3beQ==",
+      "repository": "git+https://github.com/sandwichfarm/napplet.git",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "e265646fbf221d880f97c342bd648c50e431d42162a370d155616b6c7114f97c"
+        }
+      ]
+    },
+    {
+      "name": "@napplet/shim",
+      "version": "0.32.0",
+      "license": "MIT",
+      "integrity": "sha512-Lz6IWXjXZKTDUOjGnQR4StW+lBzEk830FSzmiJzua70/ME9vpCt2uCQOVXk0xLSbY8RiSwKe23JHLbMb4AYtKQ==",
+      "repository": "git+https://github.com/sandwichfarm/napplet.git",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "sha256": "e265646fbf221d880f97c342bd648c50e431d42162a370d155616b6c7114f97c"
         }
       ]
     },

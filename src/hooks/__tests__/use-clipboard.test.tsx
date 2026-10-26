@@ -67,7 +67,7 @@ it.each(['synchronous', 'asynchronous'])('handles %s copy failures without false
   await expect(copy('private key')).resolves.toBe(false);
   expect(clipboard.copied).toBe(false);
   expect(showToast).toHaveBeenCalledTimes(1);
-  expect(showToast).toHaveBeenCalledWith('common.copy_failed', undefined);
+  expect(showToast).toHaveBeenCalledWith('common.copy_failed', { variant: 'error', target: undefined });
 });
 
 it('distinguishes an empty clipboard from a failed read', async () => {
@@ -76,17 +76,17 @@ it('distinguishes an empty clipboard from a failed read', async () => {
   expect(showToast).not.toHaveBeenCalled();
   jest.mocked(platform.clipboard.readText).mockRejectedValue(new Error('Permission denied'));
   await expect(clipboard.readText()).resolves.toBeNull();
-  expect(showToast).toHaveBeenCalledWith('common.paste_failed', undefined);
+  expect(showToast).toHaveBeenCalledWith('common.paste_failed', { variant: 'error', target: undefined });
 });
 
 it.each(['primary', 'detail'] as const)('scopes copy and paste errors to the %s pane', async (toastTarget) => {
   act(() => { renderer.update(<Harness toastTarget={toastTarget} />); });
   jest.mocked(platform.clipboard.writeText).mockRejectedValue(new Error('Clipboard unavailable'));
   await expect(copy('public key')).resolves.toBe(false);
-  expect(showToast).toHaveBeenLastCalledWith('common.copy_failed', { target: toastTarget });
+  expect(showToast).toHaveBeenLastCalledWith('common.copy_failed', { variant: 'error', target: toastTarget });
   jest.mocked(platform.clipboard.readText).mockRejectedValue(new Error('Clipboard unavailable'));
   await act(async () => { await clipboard.readText(); });
-  expect(showToast).toHaveBeenLastCalledWith('common.paste_failed', { target: toastTarget });
+  expect(showToast).toHaveBeenLastCalledWith('common.paste_failed', { variant: 'error', target: toastTarget });
 });
 
 it('allows retrying after a failed copy', async () => {
@@ -154,4 +154,14 @@ it('can skip feedback state for actions that do not display a copied indicator',
   await expect(copy('chat message')).resolves.toBe(true);
   expect(clipboard.copied).toBe(false);
   expect(jest.getTimerCount()).toBe(0);
+});
+
+it('tracks trusted-platform copies without passing their contents through the hook', async () => {
+  const write = jest.fn(async () => {});
+  await act(async () => { expect(await clipboard.copyWith(write)).toBe(true); });
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(platform.clipboard.writeText).not.toHaveBeenCalled();
+  expect(clipboard.copied).toBe(true);
+  act(() => { jest.advanceTimersByTime(2_000); });
+  expect(clipboard.copied).toBe(false);
 });

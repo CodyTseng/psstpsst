@@ -57,7 +57,7 @@ it.each(['light', 'dark'] as const)('keeps a failed draft retryable and reports 
   const backgrounds = renderer.root.findAllByType(View).map(node => StyleSheet.flatten(node.props.style)?.backgroundColor);
   expect(backgrounds).toContain(palette.background);
   await act(async () => { await saveButton().props.onPress(); });
-  expect(showToast).toHaveBeenLastCalledWith('media_servers.save_error', { target: 'detail' });
+  expect(showToast).toHaveBeenLastCalledWith('media_servers.save_error', { variant: 'error', target: 'detail' });
   expect(backSafely).not.toHaveBeenCalled();
   expect(renderer.root.findByType(SortableUrlList).props.value).toEqual(['https://new.example/']);
   expect(renderer.root.findByType(AppInput).props.error).toBeUndefined();

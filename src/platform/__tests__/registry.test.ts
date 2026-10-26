@@ -13,7 +13,7 @@ describe('platform registry', () => {
     jest.isolateModules(() => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- fresh module instance
       const fresh = require('../registry') as typeof import('../registry');
-      const fake = { secureStorage: { getItem: jest.fn() } } as unknown as PlatformAdapters;
+      const fake = { security: { getItem: jest.fn() } } as unknown as PlatformAdapters;
       fresh.initPlatformAdapters(fake);
       expect(fresh.getPlatform()).toBe(fake);
     });
@@ -23,7 +23,7 @@ describe('platform registry', () => {
     jest.isolateModules(() => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- fresh module instance
       const fresh = require('../registry') as typeof import('../registry');
-      const fake = { secureStorage: { getItem: jest.fn() } } as unknown as PlatformAdapters;
+      const fake = { security: { getItem: jest.fn() } } as unknown as PlatformAdapters;
       fresh.initPlatformAdapters(fake);
       expect(() => fresh.initPlatformAdapters(fake)).toThrow(/already initialized/);
     });
@@ -36,10 +36,19 @@ describe('platform registry', () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- fresh module instance
       const { platform } = require('../index') as typeof import('../index');
       const fake = {
-        secureStorage: { getItem: jest.fn().mockResolvedValue('secret') },
+        security: { accessStatus: jest.fn().mockResolvedValue('available') },
       } as unknown as PlatformAdapters;
       freshRegistry.initPlatformAdapters(fake);
-      expect(platform.secureStorage).toBe(fake.secureStorage);
+      expect(platform.security).toBe(fake.security);
     });
   });
+  it('does not expose vault transport through the public platform facade', () => {
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- fresh module instance
+      const { platform } = require('../index') as typeof import('../index');
+      expect(() => Reflect.get(platform, 'keyVault')).toThrow('vault transport is internal');
+      expect(() => Reflect.get(platform, 'secureStorage')).toThrow();
+    });
+  });
+
 });

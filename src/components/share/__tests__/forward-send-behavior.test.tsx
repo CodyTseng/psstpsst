@@ -117,7 +117,7 @@ it('keeps queue preparation failures as an exceptional notice', async () => {
   act(() => { renderer = create(<ForwardTargetScreen />); });
   confirm();
   await act(async () => { await jest.runAllTimersAsync(); });
-  expect(mockToast).toHaveBeenCalledWith('share.send_failed', { target: 'detail' });
+  expect(mockToast).toHaveBeenCalledWith('share.send_failed', { variant: 'error', target: 'detail' });
   expect(forwardNoticeStore.getState().notice?.targets).toEqual([target]);
 });
 
@@ -151,4 +151,17 @@ it('releases the staged payload without navigating or enqueuing if the account c
   expect(cleanup).toHaveBeenCalledTimes(1);
   expect(mockPrepare).not.toHaveBeenCalled();
   expect(mockPush).not.toHaveBeenCalled();
+});
+
+it('embedded app sharing returns to the live app even for multiple recipients', async () => {
+  const onClose = jest.fn();
+  useForwardDraftStore.getState().start({ accountPubkey: 'account', sourceConversationKey: null,
+    messages: [{ kind: 14, content: 'nostr:app', tags: [] }] });
+  act(() => { renderer = create(<ForwardTargetScreen onClose={onClose} stayInSource />); });
+  const picker = mockPicker.mock.lastCall![0] as { onConfirm: (targets: unknown[]) => void };
+  act(() => { picker.onConfirm([target, { ...target, conversationKey: 'other' }]); });
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(mockPush).not.toHaveBeenCalled(); expect(mockBack).not.toHaveBeenCalled(); expect(mockReplace).not.toHaveBeenCalled();
+  await act(async () => { await jest.runAllTimersAsync(); });
+  expect(mockForward).toHaveBeenCalledTimes(2);
 });

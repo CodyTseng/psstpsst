@@ -42,7 +42,7 @@ import {
   KIND_ENCRYPTION_KEY_ANNOUNCEMENT,
   KIND_KEY_TRANSFER,
   KIND_REACTION,
-  unwrapGiftWrapWithKeys,
+  unwrapGiftWrapForAccount,
   type SignSeal,
 } from '../crypto/nip17-gift-wrap';
 import { nextRumorTimestamp, type RumorTimestamp } from './rumor-clock';
@@ -72,7 +72,8 @@ import {
   getClientPubkeyFromEvent,
   getEncryptionPubkeyFromEvent,
   getKeySyncRelayHints,
-  loadEncryptionKeys,
+  loadEncryptionKeypair,
+  hasEncryptionKey,
   type EncryptionKeypair,
 } from './encryption-key.service';
 import {
@@ -143,7 +144,7 @@ export type RumorIntake = 'live' | 'recovery' | 'history' | 'archive' | 'local';
 
 export type GiftWrapReceiveContext = {
   accountPubkey: string;
-  encryptionKeys: EncryptionKeypair[];
+  encryptionKeypair: EncryptionKeypair | null;
   sourceRelays: string[];
   userPresent: boolean;
   activeConversation: { accountPubkey: string; conversationKey: string } | null;
@@ -235,16 +236,8 @@ export type DmServiceListener = {
 
 export class DmService {
   private accountPubkey: string | null = null;
-  /** The account's encryption keys, newest-first (`[0]` = current). Loaded from
-   * SecureStore on init. Encrypt/announce with `[0]`; decrypt tries the whole
-   * list so messages a peer encrypted to a key we've since rotated away from
-   * still decrypt. */
-  private encryptionKeys: EncryptionKeypair[] = [];
-  /** The current encryption key (newest), or null if none — a read-only view of
-   * `encryptionKeys[0]` so the send/guard paths read it unchanged. */
-  private get encryptionKeypair(): EncryptionKeypair | null {
-    return this.encryptionKeys[0] ?? null;
-  }
+  /** Current public metadata for sending; the vault owns all retained keys. */
+  private encryptionKeypair: EncryptionKeypair | null = null;
   private dmRelays: string[] = [];
   /** Own DM ∪ write relays for 4454/4455 multi-device key transfer. */
   private keyTransferRelays: string[] = [];
@@ -363,16 +356,18 @@ export class DmService {
       });
       checkCurrent();
       if (metadata.accountPubkey !== opts.accountPubkey) throw new Error('Messaging account mismatch.');
-      const keys = await loadEncryptionKeys(opts.accountPubkey);
+      const currentKey = await loadEncryptionKeypair(opts.accountPubkey);
       checkCurrent();
       const remote = metadata.announcement && getEncryptionPubkeyFromEvent(metadata.announcement);
-      if (remote && !keys.some((key) => key.pubkey === remote)) {
+      const haveRemote = !remote || remote === currentKey?.pubkey || (currentKey !== null && await hasEncryptionKey(opts.accountPubkey, remote));
+      checkCurrent();
+      if (remote && !haveRemote) {
         this.pauseForKeySync(opts.accountPubkey, remote);
         throw new MessagingKeySyncRequiredError(remote);
       }
-      if (keys.length === 0) throw new Error('No messaging encryption key is available.');
+      if (!currentKey) throw new Error('No messaging encryption key is available.');
       this.accountPubkey = opts.accountPubkey;
-      this.encryptionKeys = keys;
+      this.encryptionKeypair = currentKey;
       this.latestKeyAnnouncement = metadata.announcement;
       this.dmRelays = metadata.dmRelays;
       // Seed the block-list mirror before the incoming subscription opens, so a
@@ -493,7 +488,7 @@ export class DmService {
       if (!opts.skipInitialHistory) this.startHistoryBackfill();
       relayMessageOutbox.activate({
         accountPubkey: opts.accountPubkey,
-        encryptionKeypair: keys[0]!,
+        encryptionKeypair: currentKey,
         dmRelays: this.dmRelays,
         signSeal: signWithIdentity,
       });
@@ -551,7 +546,7 @@ export class DmService {
     syncStatusStore.getState().reset();
     encryptionKeyWatcher.destroy();
     this.accountPubkey = null;
-    this.encryptionKeys = [];
+    this.encryptionKeypair = null;
     this.dmRelays = [];
     this.keyTransferRelays = [];
   }
@@ -1205,10 +1200,10 @@ export class DmService {
     context: GiftWrapReceiveContext,
     intake: RumorIntake = 'live',
   ): Promise<Rumor[]> {
-    if (!context.isCurrent() || context.encryptionKeys.length === 0) return [];
+    if (!context.isCurrent() || !context.encryptionKeypair) return [];
     const receiver = new DmService();
     receiver.accountPubkey = context.accountPubkey;
-    receiver.encryptionKeys = context.encryptionKeys;
+    receiver.encryptionKeypair = context.encryptionKeypair;
     receiver.activeConversation = context.activeConversation;
     receiver.receivePresence = context.userPresent;
     receiver.independentReceiver = true;
@@ -1268,7 +1263,7 @@ export class DmService {
     const epoch = this.syncEpoch;
     const task = this.processGiftWrapWithContext(giftWrap, intake, {
       accountPubkey,
-      encryptionKeys: this.encryptionKeys,
+      encryptionKeypair: this.encryptionKeypair,
       sourceRelays: Array.from(this.giftWrapSeenOn.get(giftWrap.id)?.relays ?? []),
       userPresent: !platform.notifications.shouldNotifyNow(),
       activeConversation: this.activeConversation,
@@ -1295,8 +1290,8 @@ export class DmService {
     const profile = createPerfSpan('dm.processGiftWrap', { kind: giftWrap.kind });
     let outcome = 'unknown';
     try {
-      const { accountPubkey, encryptionKeys, isCurrent } = context;
-      if (encryptionKeys.length === 0 || !accountPubkey) {
+      const { accountPubkey, encryptionKeypair, isCurrent } = context;
+      if (!encryptionKeypair || !accountPubkey) {
         outcome = 'not-ready';
         return null;
       }
@@ -1323,10 +1318,9 @@ export class DmService {
         outcome = 'failed-in-session';
         return null;
       }
-      // Try keys newest-first: the current key (the common case, one attempt),
-      // then older keys so a peer still encrypting to a rotated-away key can be read.
+      // The vault owns current/history selection and keeps both decryptions on the same key.
       const unwrap = await profileAsync(profile, 'crypto.unwrapGiftWrap', () =>
-        unwrapGiftWrapWithKeys(giftWrap, encryptionKeys, profile),
+        unwrapGiftWrapForAccount(giftWrap, accountPubkey, profile),
       );
       if (!isCurrent()) {
         outcome = 'stale';
@@ -1493,7 +1487,7 @@ export class DmService {
     controller.signal.addEventListener('abort', () => {
       receiver.syncEpoch++;
       receiver.accountPubkey = null;
-      receiver.encryptionKeys = [];
+      receiver.encryptionKeypair = null;
     }, { once: true });
     const cancel = () => controller.abort();
     const sessionSignal = this.receiveAbort?.signal;
@@ -1508,29 +1502,31 @@ export class DmService {
       const metadata = await resolveMessagingMetadata(accountPubkey, {
         signAuth, abort: controller.signal,
       });
-      const keys = await loadEncryptionKeys(accountPubkey);
+      const currentKey = await loadEncryptionKeypair(accountPubkey);
       if (!isCurrent()) return [];
       if (this.accountPubkey === accountPubkey && metadata.announcement) {
         const changed = this.handleEncryptionKeyAnnouncement(metadata.announcement);
         if (changed) throw new MessagingKeySyncRequiredError(changed);
       }
       const remote = metadata.announcement && getEncryptionPubkeyFromEvent(metadata.announcement);
-      if (remote && !keys.some((key) => key.pubkey === remote)) {
+      const haveRemote = !remote || remote === currentKey?.pubkey || (currentKey !== null && await hasEncryptionKey(accountPubkey, remote));
+      if (!isCurrent()) return [];
+      if (remote && !haveRemote) {
         this.pauseForKeySync(accountPubkey, remote);
         throw new MessagingKeySyncRequiredError(remote);
       }
-      if (keys.length === 0) return [];
+      if (!currentKey) return [];
       await loadBlockedIntoCache(accountPubkey);
       if (!isCurrent()) return [];
       configureSyncRelays(accountPubkey, metadata.dmRelays);
       receiver.accountPubkey = accountPubkey;
-      receiver.encryptionKeys = keys;
+      receiver.encryptionKeypair = currentKey;
       receiver.activeConversation = this.activeConversation;
       if (this.accountPubkey !== accountPubkey) {
         // Cold workers have no self-event stream. Keep key invalidation active
         // throughout paging, including a rotation after the metadata snapshot.
         let latest = metadata.announcement;
-        const initialKey = remote ?? keys[0].pubkey;
+        const initialKey = remote ?? currentKey.pubkey;
         stopKeyWatch = relayPool.subscribe({
           label: 'dm.notification-key-watch',
           relays: metadata.announcementRelays.length > 0

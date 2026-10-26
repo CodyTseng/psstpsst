@@ -1,7 +1,7 @@
 import type { NotificationCommunication } from '@/platform/ports/notifications';
 import type { Rumor } from '@/db/schema/types';
 import { DmService, type GiftWrapReceiveContext } from '@/services/dm/dm.service';
-import { loadEncryptionKeys } from '@/services/dm/encryption-key.service';
+import { loadEncryptionKeypair } from '@/services/dm/encryption-key.service';
 import { messageOrderAt, isMessageOrderNewer } from '@/lib/nostr/message-order';
 
 import { resolveApnsGiftWrap } from './apns-gift-wrap';
@@ -25,11 +25,11 @@ export async function processApnsGiftWrap(
   const receiver = new DmService();
   for (const input of await resolveApnsGiftWrap(payload)) {
     if (!runtime.isCurrent()) return null;
-    const encryptionKeys = await loadEncryptionKeys(input.accountPubkey);
+    const encryptionKeypair = await loadEncryptionKeypair(input.accountPubkey);
     const rumors = await receiver.receiveGiftWrap(input.event, {
       ...runtime,
       accountPubkey: input.accountPubkey,
-      encryptionKeys,
+      encryptionKeypair,
       sourceRelays: [input.sourceRelay],
     });
     const qualifying = await evaluateNotificationRumors(rumors, input.accountPubkey, runtime.userPresent);

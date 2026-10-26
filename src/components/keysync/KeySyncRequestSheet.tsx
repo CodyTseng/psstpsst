@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import type { Event } from 'nostr-tools';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +38,7 @@ import { spacing } from '@/theme';
  * background-triggered confirmation — break noted.)
  */
 export function KeySyncRequestSheet() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const activePubkey = useActiveAccount((s) => s.activePubkey);
   const requireResync = useActiveAccount((s) => s.requireResync);
   const pendingRef = useRef<Event | null>(null);
@@ -45,6 +46,7 @@ export function KeySyncRequestSheet() {
   const [pending, setPending] = useState<Event | null>(null);
   const [sendingRequestId, setSendingRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useErrorToast(error);
 
   useEffect(() => {
     const unsubscribeRequest = dmService.onSyncRequest((event) => {
@@ -141,6 +143,7 @@ export function KeySyncRequestSheet() {
         recipientClientPubkey: requestClientPubkey,
         relays: replyRelays,
         requestedEncryptionPubkey: getEncryptionPubkeyFromEvent(request),
+        confirmation: { language: i18n.language },
       });
       void dmService.markSyncRequestProcessed(request.id);
       // A new session request can arrive while the old transfer is publishing.
@@ -176,11 +179,6 @@ export function KeySyncRequestSheet() {
         {t('key_sync.request_verify_hint')}
       </AppText>
 
-      {error ? (
-        <AppText variant="caption" tone="danger">
-          {error}
-        </AppText>
-      ) : null}
 
       <ActionRow
         layout="horizontal"

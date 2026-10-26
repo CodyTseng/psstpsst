@@ -517,19 +517,19 @@ function ConfirmationHeader({ title, onClose }: { title: string; onClose: () => 
   return (
     <View
       style={{
-        minHeight: uiDensity.iconButtonSize,
+        minHeight: uiDensity.headerActionSize,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: uiDensity.iconButtonSize + spacing.sm,
+        paddingHorizontal: uiDensity.headerActionSize + spacing.sm,
       }}
     >
       <IconButton
         variant="plain"
-        size={uiDensity.iconButtonSize}
+        size={uiDensity.headerActionSize}
         onPress={onClose}
         style={{ position: 'absolute', start: 0 }}
         icon={
-          <X strokeWidth={iconStrokeWidth.default} size={CONFIRMATION_ICON_SIZE} color={c.text} />
+          <X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text} />
         }
         accessibilityLabel={t('common.close')}
       />

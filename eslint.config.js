@@ -43,6 +43,16 @@ const ADAPTER_BAN = {
   message: 'Use ports via @/platform — never adapters directly.',
 };
 
+const VAULT_IMPLEMENTATION_BAN = {
+  group: ['@/platform/vault/*', '**/platform/vault/*'],
+  message: 'Vault implementations run only in trusted workers. Use a signer capability.',
+};
+
+const VAULT_ACCESS_BAN = {
+  group: ['@/platform/vault-access', '**/platform/vault-access', '@/platform/registry', '**/platform/registry'],
+  message: 'Vault transport is internal to key-owning services. Use an account signer or lifecycle service.',
+};
+
 const restrict = (...patterns) => ['error', { patterns }];
 
 // Database transactions are asynchronous; await every statement inside an
@@ -113,7 +123,12 @@ module.exports = defineConfig([
     // Baseline for everything under src/: the drizzle seam ban applies to every
     // file not covered by a more specific block below.
     files: ['src/**/*.ts', 'src/**/*.tsx'],
-    rules: { 'no-restricted-imports': restrict(DRIZZLE_BAN) },
+    rules: { 'no-restricted-imports': restrict(DRIZZLE_BAN, VAULT_IMPLEMENTATION_BAN, VAULT_ACCESS_BAN) },
+  },
+  {
+    // Integration tests may substitute the private transport without making it public.
+    files: ['src/**/__tests__/**/*.ts', 'src/**/__tests__/**/*.tsx'],
+    rules: { 'no-restricted-imports': restrict(DRIZZLE_BAN, VAULT_IMPLEMENTATION_BAN) },
   },
   {
     // Ports are pure interface definitions: no platform or app-layer imports.
@@ -154,13 +169,13 @@ module.exports = defineConfig([
     // services/dm/delivery-status.ts), UI binds to it.
     files: ['src/services/**/*.ts'],
     ignores: ['**/__tests__/**'],
-    rules: { 'no-restricted-imports': restrict(EXPO_BAN, RN_BAN, DRIZZLE_BAN, UI_BAN) },
+    rules: { 'no-restricted-imports': restrict(EXPO_BAN, RN_BAN, DRIZZLE_BAN, UI_BAN, VAULT_IMPLEMENTATION_BAN, VAULT_ACCESS_BAN) },
   },
   {
     // The remaining core layers reach OS capabilities through ports only.
     files: ['src/db/**/*.ts', 'src/stores/**/*.ts', 'src/i18n/**/*.ts', 'src/lib/**/*.ts'],
     ignores: ['**/__tests__/**'],
-    rules: { 'no-restricted-imports': restrict(EXPO_BAN, RN_BAN, DRIZZLE_BAN) },
+    rules: { 'no-restricted-imports': restrict(EXPO_BAN, RN_BAN, DRIZZLE_BAN, VAULT_IMPLEMENTATION_BAN, VAULT_ACCESS_BAN) },
   },
   {
     // UI layers read data via hooks/stores (never the raw db handle) and use
@@ -170,12 +185,25 @@ module.exports = defineConfig([
       'src/components/**/*.ts', 'src/components/**/*.tsx',
     ],
     ignores: ['**/__tests__/**'],
-    rules: { 'no-restricted-imports': restrict(DRIZZLE_BAN, DB_HANDLE_BAN, ADAPTER_BAN) },
+    rules: { 'no-restricted-imports': restrict(DRIZZLE_BAN, DB_HANDLE_BAN, ADAPTER_BAN, VAULT_IMPLEMENTATION_BAN, VAULT_ACCESS_BAN) },
   },
   {
     files: ['src/hooks/**/*.ts', 'src/hooks/**/*.tsx'],
     ignores: ['**/__tests__/**'],
-    rules: { 'no-restricted-imports': restrict(DRIZZLE_BAN, ADAPTER_BAN) },
+    rules: { 'no-restricted-imports': restrict(DRIZZLE_BAN, ADAPTER_BAN, VAULT_IMPLEMENTATION_BAN, VAULT_ACCESS_BAN) },
+  },
+  {
+    // These modules own the key lifecycle or implement opaque signer capabilities.
+    files: [
+      'src/services/signer/signer-factory.ts', 'src/services/signer/signer-sessions.ts',
+      'src/services/signer/vault-signer.ts', 'src/services/signer/vault-remote-signer.ts',
+      'src/services/signer/nip46-connect.service.ts', 'src/services/account/account.service.ts',
+      'src/services/dm/encryption-key.service.ts', 'src/services/dm/key-sync-session.ts',
+      'src/services/crypto/nip17-gift-wrap.ts', 'src/services/proximity/proximity-identity.service.ts',
+      'src/services/wallet/wallet.service.ts', 'src/services/wallet/wallet-credentials.service.ts',
+      'src/services/storage/legacy-storage-migration.ts',
+    ],
+    rules: { 'no-restricted-imports': restrict(EXPO_BAN, RN_BAN, DRIZZLE_BAN, UI_BAN, VAULT_IMPLEMENTATION_BAN) },
   },
   {
     // Sanctioned single-point wrappers: each of these files owns its platform

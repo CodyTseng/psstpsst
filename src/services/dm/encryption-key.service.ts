@@ -1,12 +1,11 @@
-import { generateSecretKey, getPublicKey, type Event } from 'nostr-tools';
+import { vaultAccess } from '@/platform/vault-access';
+import { type Event } from 'nostr-tools';
 
-import { bytesToHex, hexToBytes } from '@/lib/nostr/keys';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { verificationCodeFromPubkey } from '@/lib/nostr/verification-code';
-import { createPerfSpan, profileAsync, profileSync } from '@/lib/perf/profiler';
-import { platform } from '@/platform';
+import { createPerfSpan, profileSync } from '@/lib/perf/profiler';
 
-import { nip44Decrypt, nip44Encrypt } from '../crypto/nip44';
+import type { MessagingKey, VaultConsent } from '@/platform/ports/key-vault';
 import {
   KIND_CLIENT_KEY_ANNOUNCEMENT,
   KIND_ENCRYPTION_KEY_ANNOUNCEMENT,
@@ -16,149 +15,18 @@ import { publishConfiguration } from '../relay/configuration-publish.service';
 import { relayPool } from '../relay/relay-pool';
 import type { Signer } from '../signer/signer.interface';
 
-export type EncryptionKeypair = {
-  privkey: Uint8Array;
-  pubkey: string;
-  /** Unix seconds when this key was generated, or first observed for a legacy
-   * / transferred key whose original creation time was unavailable. */
-  createdAt: number;
-};
+export type EncryptionKeypair = MessagingKey;
+export type ClientKeypair = MessagingKey;
 
-type StoredEncryptionKey = {
-  privkey: string;
-  createdAt: number | null;
-};
-
-// All of an account's encryption private keys, newest-first, as JSON records
-// containing the key hex + creation time. keys[0] is the CURRENT key (encrypt +
-// announce with it); the rest are
-// retired keys kept so messages a peer encrypted to a key we've since rotated
-// away from still decrypt. One list replaces the old current-key + history
-// split — adding a key is just an unshift, so there is no separate "archive"
-// step to forget. Per-account: a list shared across accounts would let an
-// observer correlate that those accounts live on one device
-// (account-unlinkability); each account's keys are wiped with it.
-const SECURE_KEY_ENC_KEYS = (accountPubkey: string) => `encryption_keys_${accountPubkey}`;
-
-// Cap on retained keys (newest-first). keys[0] is never dropped; keys past this
-// count are pruned. Bounded by COUNT only — no time window (a retired key is
-// cheap to keep, and automatic rotation uses a conservative cadence).
-const ENC_KEYS_MAX = 10;
-
-function isPrivateKeyHex(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value);
+/** Metadata and opaque references only; private keys stay inside the vault. */
+export async function loadEncryptionKeypair(accountPubkey: string): Promise<EncryptionKeypair | null> {
+  return await vaultAccess.execute({ method: 'getCurrentMessagingKey', account: accountPubkey }) as EncryptionKeypair | null;
 }
-
-async function readKeyList(accountPubkey: string): Promise<StoredEncryptionKey[]> {
-  const raw = await platform.secureStorage.getItem(SECURE_KEY_ENC_KEYS(accountPubkey));
-  if (!raw) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-
-  const now = Math.floor(Date.now() / 1000);
-  let migrated = false;
-  const keys = parsed.flatMap((value, index): StoredEncryptionKey[] => {
-    // Pre-rotation-scheduling installs stored a bare hex array. Give only the
-    // current key a baseline of "first observed now" so an upgrade never
-    // rotates immediately; retired-key timestamps are not used for scheduling.
-    if (isPrivateKeyHex(value)) {
-      migrated = true;
-      return [{ privkey: value.toLowerCase(), createdAt: index === 0 ? now : null }];
-    }
-    if (typeof value !== 'object' || value == null) return [];
-    const record = value as { privkey?: unknown; createdAt?: unknown };
-    if (!isPrivateKeyHex(record.privkey)) return [];
-    return [
-      {
-        privkey: record.privkey.toLowerCase(),
-        createdAt:
-          typeof record.createdAt === 'number' &&
-          Number.isInteger(record.createdAt) &&
-          record.createdAt > 0
-            ? record.createdAt
-            : null,
-      },
-    ];
-  });
-  if (keys[0]?.createdAt == null) {
-    keys[0] = { ...keys[0], createdAt: now };
-    migrated = true;
-  }
-  if (migrated) await writeKeyList(accountPubkey, keys);
-  return keys;
+export async function hasEncryptionKey(accountPubkey: string, pubkey: string): Promise<boolean> {
+  return await vaultAccess.execute({ method: 'hasMessagingKey', account: accountPubkey, pubkey }) as boolean;
 }
-
-async function writeKeyList(accountPubkey: string, keys: StoredEncryptionKey[]): Promise<void> {
-  await platform.secureStorage.setItem(SECURE_KEY_ENC_KEYS(accountPubkey), JSON.stringify(keys));
-}
-
-function toKeypair(stored: StoredEncryptionKey): EncryptionKeypair {
-  const privkey = hexToBytes(stored.privkey);
-  return {
-    privkey,
-    pubkey: getPublicKey(privkey),
-    // `readKeyList` always fills the current key. A retired legacy key can still
-    // lack a meaningful timestamp, but it is never used for rotation scheduling.
-    createdAt: stored.createdAt ?? 0,
-  };
-}
-
-/** All of the account's encryption keys, newest-first (keys[0] = current). */
-export async function loadEncryptionKeys(accountPubkey: string): Promise<EncryptionKeypair[]> {
-  const profile = createPerfSpan('keys.loadEncryptionKeys');
-  try {
-    const keys = await profileAsync(profile, 'secureStore.readKeyList', () =>
-      readKeyList(accountPubkey),
-    );
-    return profileSync(profile, 'crypto.toKeypairs', () => keys.map(toKeypair));
-  } finally {
-    profile?.end();
-  }
-}
-
-/** The account's CURRENT encryption key (the newest), or null if it has none. */
-export async function loadEncryptionKeypair(
-  accountPubkey: string,
-): Promise<EncryptionKeypair | null> {
-  const [stored] = await readKeyList(accountPubkey);
-  return stored ? toKeypair(stored) : null;
-}
-
-/**
- * Prepend a key as the new current one (dedupe + cap to {@link ENC_KEYS_MAX}).
- * Inserting *is* archiving: the previous current key slides to index 1, so no
- * key is ever lost by a forgotten archive step. The single write path for both
- * generating a key and importing one via Key Transfer.
- */
-export async function addEncryptionKey(
-  accountPubkey: string,
-  privkeyHex: string,
-  createdAt = Math.floor(Date.now() / 1000),
-): Promise<void> {
-  const hex = privkeyHex.toLowerCase();
-  const existing = await readKeyList(accountPubkey);
-  const matched = existing.find((key) => key.privkey === hex);
-  const rest = existing.filter((key) => key.privkey !== hex);
-  await writeKeyList(
-    accountPubkey,
-    [
-      { privkey: hex, createdAt: matched?.createdAt ?? createdAt },
-      ...rest,
-    ].slice(0, ENC_KEYS_MAX),
-  );
-}
-
-/** Generate a fresh encryption key and make it the current one (newest in the list). */
 export async function generateEncryptionKeypair(accountPubkey: string): Promise<EncryptionKeypair> {
-  const privkey = generateSecretKey();
-  const createdAt = Math.floor(Date.now() / 1000);
-  await addEncryptionKey(accountPubkey, bytesToHex(privkey), createdAt);
-  return { privkey, pubkey: getPublicKey(privkey), createdAt };
+  return await vaultAccess.execute({ method: 'generateMessaging', account: accountPubkey }) as EncryptionKeypair;
 }
 
 /** Publish kind 10044 with the encryption pubkey in an `n` tag. Signed by the
@@ -183,9 +51,8 @@ export async function publishEncryptionKeyAnnouncement(opts: {
  * relay indefinitely, so reusing one long-lived client key would mean a single
  * leak of that key decrypts *every* key transfer ever addressed to it. A fresh
  * key per exchange caps the blast radius of a leak to one in-flight transfer. */
-export function generateClientKeypair(): EncryptionKeypair {
-  const privkey = generateSecretKey();
-  return { privkey, pubkey: getPublicKey(privkey), createdAt: Math.floor(Date.now() / 1000) };
+export async function generateClientKeypair(): Promise<ClientKeypair> {
+  return await vaultAccess.execute({ method: 'generateEphemeral', purpose: 'key-sync' }) as ClientKeypair;
 }
 
 function findTagValue(event: Event, name: string): string | undefined {
@@ -280,30 +147,18 @@ export async function exportKeyForTransfer(opts: {
   recipientClientPubkey: string;
   relays: string[];
   requestedEncryptionPubkey?: string | null;
+  confirmation: VaultConsent;
 }): Promise<Event> {
-  const encryptionKeys = await loadEncryptionKeys(opts.accountPubkey);
-  const encryptionKeypair = opts.requestedEncryptionPubkey
-    ? encryptionKeys.find((key) => key.pubkey === opts.requestedEncryptionPubkey)
-    : encryptionKeys[0];
-  if (!encryptionKeypair) {
-    throw new Error(
-      opts.requestedEncryptionPubkey
-        ? 'This device does not have the encryption key requested by the other device.'
-        : 'No encryption key is available to transfer.',
-    );
-  }
-  const senderKeypair = generateClientKeypair();
-
-  const content = await nip44Encrypt(
-    bytesToHex(encryptionKeypair.privkey),
-    senderKeypair.privkey,
-    opts.recipientClientPubkey,
-  );
+  const transfer = await vaultAccess.execute({ method: 'exportTransfer', account: opts.accountPubkey,
+    pubkey: opts.requestedEncryptionPubkey ?? null, recipient: opts.recipientClientPubkey,
+    confirmation: opts.confirmation,
+  }) as { content: string; senderPubkey: string };
+  const content = transfer.content;
   const event = await opts.signer.signEvent({
     kind: KIND_KEY_TRANSFER,
     content,
     tags: [
-      ['P', senderKeypair.pubkey],
+      ['P', transfer.senderPubkey],
       // Route the event through inbox relays authenticated as this account. The
       // ephemeral client target remains a second p tag for exact subscription.
       ['p', opts.accountPubkey],
@@ -333,11 +188,11 @@ export async function exportKeyForTransfer(opts: {
  * older events; but a *stale* transfer carries an old privkey whose pubkey no
  * longer equals the latest kind-10044, so it's rejected and we keep waiting.
  *
- * On match, the key is prepended via {@link addEncryptionKey}, which keeps any
+ * On match, the key is prepended inside the vault, which keeps any
  * existing keys (no key is lost — there is no separate archive step). */
 export async function importKeyFromTransfer(
   accountPubkey: string,
-  clientPrivkey: Uint8Array,
+  clientKey: ClientKeypair['key'],
   transferEvent: Event,
   expectedEncryptionPubkey: string | null,
   expectedEncryptionCreatedAt: number | null = null,
@@ -345,25 +200,11 @@ export async function importKeyFromTransfer(
   const senderClientPubkey = getClientPubkeyFromEvent(transferEvent);
   if (!senderClientPubkey) return false;
   try {
-    const decrypted = await nip44Decrypt(
-      transferEvent.content,
-      clientPrivkey,
-      senderClientPubkey,
-    );
-    if (!/^[0-9a-f]{64}$/i.test(decrypted)) return false;
-    const privkeyHex = decrypted.toLowerCase();
-    // Replay / cross-key guard: the key must match the current announcement.
-    // If it doesn't (a stale or unrelated transfer), reject and keep waiting.
-    if (expectedEncryptionPubkey) {
-      const pubkey = getPublicKey(hexToBytes(privkeyHex));
-      if (pubkey !== expectedEncryptionPubkey) return false;
-    }
-    await addEncryptionKey(
-      accountPubkey,
-      privkeyHex,
-      expectedEncryptionCreatedAt ?? Math.floor(Date.now() / 1000),
-    );
-    return true;
+    return await vaultAccess.execute({ method: 'importTransfer', account: accountPubkey,
+      client: clientKey, sender: senderClientPubkey, ciphertext: transferEvent.content,
+      expectedPubkey: expectedEncryptionPubkey,
+      createdAt: expectedEncryptionCreatedAt ?? Math.floor(Date.now() / 1000),
+    }) as boolean;
   } catch {
     return false;
   }
@@ -381,7 +222,7 @@ export async function importKeyFromTransfer(
  * not a time window. */
 export function subscribeToKeyTransfer(opts: {
   accountPubkey: string;
-  clientKeypair: EncryptionKeypair;
+  clientKeypair: ClientKeypair;
   relays: string[];
   signer: Signer;
   expectedEncryptionPubkey: string | null;
@@ -401,7 +242,7 @@ export function subscribeToKeyTransfer(opts: {
     onEvent: (event) => {
       void importKeyFromTransfer(
         opts.accountPubkey,
-        opts.clientKeypair.privkey,
+        opts.clientKeypair.key,
         event,
         opts.expectedEncryptionPubkey,
         opts.expectedEncryptionCreatedAt,
@@ -431,5 +272,5 @@ export function getVerificationCode(clientPubkey: string): string {
  * SQLite and is dropped with the account's other rows in `deleteAccountData`; the
  * client key is ephemeral — never persisted — so there's nothing to wipe.) */
 export async function clearAccountKeyMaterial(accountPubkey: string): Promise<void> {
-  await platform.secureStorage.deleteItem(SECURE_KEY_ENC_KEYS(accountPubkey));
+  await vaultAccess.execute({ method: 'removeMessaging', account: accountPubkey });
 }

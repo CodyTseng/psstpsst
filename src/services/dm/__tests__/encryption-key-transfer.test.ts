@@ -1,16 +1,15 @@
+import { vaultAccess } from '@/platform/vault-access';
 import { getPublicKey, type Event, type EventTemplate } from 'nostr-tools';
 
-import { bytesToHex } from '@/lib/nostr/keys';
 
 import {
-  addEncryptionKey,
   exportKeyForTransfer,
   getKeySyncRelayHints,
   publishClientKeyAnnouncement,
   subscribeToKeyTransfer,
 } from '../encryption-key.service';
-import { nip44Encrypt } from '../../crypto/nip44';
 import { relayPool } from '../../relay/relay-pool';
+jest.mock('@/platform/vault-access', () => ({ vaultAccess: jest.requireMock('@/platform').platform.keyVault }));
 
 const mockSecureItems = new Map<string, string>();
 let mockSubscribeOptions: {
@@ -22,6 +21,7 @@ jest.mock('../../relay/configuration-publish.service', () => ({ publishConfigura
 
 jest.mock('@/platform', () => ({
   platform: {
+    keyVault: { execute: jest.fn(async (command: { method: string }) => command.method === 'exportTransfer' ? { content: 'encrypted-key', senderPubkey: 'f'.repeat(64) } : command.method === 'importTransfer' ? false : null) },
     secureStorage: {
       getItem: jest.fn(async (key: string) => mockSecureItems.get(key) ?? null),
       setItem: jest.fn(async (key: string, value: string) => {
@@ -93,10 +93,7 @@ describe('encryption key transfer routing', () => {
 
   it('sends the exact requested retained key and routes to account plus client', async () => {
     const olderPrivkey = new Uint8Array(32).fill(1);
-    const currentPrivkey = new Uint8Array(32).fill(2);
     const olderPubkey = getPublicKey(olderPrivkey);
-    await addEncryptionKey(ACCOUNT_PUBKEY, bytesToHex(olderPrivkey), 100);
-    await addEncryptionKey(ACCOUNT_PUBKEY, bytesToHex(currentPrivkey), 200);
 
     const event = await exportKeyForTransfer({
       signer: signer(),
@@ -104,13 +101,12 @@ describe('encryption key transfer routing', () => {
       recipientClientPubkey: CLIENT_PUBKEY,
       relays: ['wss://relay.example/'],
       requestedEncryptionPubkey: olderPubkey,
+      confirmation: { language: 'en' },
     });
 
-    expect(nip44Encrypt).toHaveBeenCalledWith(
-      bytesToHex(olderPrivkey),
-      expect.any(Uint8Array),
-      CLIENT_PUBKEY,
-    );
+    expect(vaultAccess.execute).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'exportTransfer', account: ACCOUNT_PUBKEY, pubkey: olderPubkey, recipient: CLIENT_PUBKEY,
+    }));
     expect(event.tags).toEqual(
       expect.arrayContaining([
         ['p', ACCOUNT_PUBKEY],
@@ -139,7 +135,7 @@ describe('encryption key transfer routing', () => {
     subscribeToKeyTransfer({
       accountPubkey: ACCOUNT_PUBKEY,
       clientKeypair: {
-        privkey: new Uint8Array(32).fill(3),
+        key: { account: CLIENT_PUBKEY, role: 'ephemeral' },
         pubkey: CLIENT_PUBKEY,
         createdAt: 100,
       },

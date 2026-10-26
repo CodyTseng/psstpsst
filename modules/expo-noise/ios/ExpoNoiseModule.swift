@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import Foundation
+import ExpoCryptoAccelerator
 
 private struct NoiseKeyPairRecord: Record {
   @Field var privateKey = Data()
@@ -71,35 +72,39 @@ public final class ExpoNoiseModule: Module {
   private var handshakes: [String: NoiseHandshakeBox] = [:]
   private var sessions: [String: NoiseSessionBox] = [:]
 
-  public func definition() -> ModuleDefinition {
-    Name("ExpoNoise")
-
-    AsyncFunction("generateKeyPairAsync") { (seed: Data?) -> NoiseKeyPairRecord in
-      var privateKey = Data(count: 32)
-      var publicKey = Data(count: 32)
-      let error = privateKey.withUnsafeMutableBytes { privateBytes in
-        publicKey.withUnsafeMutableBytes { publicBytes in
-          seed?.withUnsafeBytes { seedBytes in
-            psst_noise_keypair(
-              seedBytes.bindMemory(to: UInt8.self).baseAddress,
-              seedBytes.count,
-              privateBytes.bindMemory(to: UInt8.self).baseAddress,
-              publicBytes.bindMemory(to: UInt8.self).baseAddress
-            )
-          } ?? psst_noise_keypair(
-            nil,
-            0,
-            privateBytes.bindMemory(to: UInt8.self).baseAddress,
-            publicBytes.bindMemory(to: UInt8.self).baseAddress
-          )
-        }
-      }
-      try requireNoiseSuccess(error)
-      return NoiseKeyPairRecord(privateKey: privateKey, publicKey: publicKey)
+  private let identityLock = NSLock()
+  private let identityStore = NativeVaultStorage()
+  private func identityName(_ account: String) throws -> String {
+    guard account.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil else { throw NoiseException("Invalid account") }
+    return "proximity_identity_noise_privkey_" + account
+  }
+  private func identity(_ account: String, create: Bool) throws -> (Data, Data) {
+    let name = try identityName(account)
+    try identityStore.migrateLegacy()
+    let saved = try identityStore.read(name)
+    guard saved != nil || create else { throw NoiseException("Noise credential unavailable") }
+    var seed: Data?
+    if let saved {
+      guard saved.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil else { throw NoiseException("Invalid Noise credential") }
+      seed = Data(stride(from: 0, to: 64, by: 2).map { offset in
+        let start = saved.index(saved.startIndex, offsetBy: offset)
+        return UInt8(saved[start..<saved.index(start, offsetBy: 2)], radix: 16)!
+      })
     }
-
-    AsyncFunction("createHandshakeAsync") {
-      (role: String, staticPrivateKey: Data, fixedEphemeralPrivateKey: Data?) -> String in
+    defer { if seed != nil { seed!.resetBytes(in: 0..<seed!.count) } }
+    var secret = Data(count: 32); var pub = Data(count: 32)
+    let error = secret.withUnsafeMutableBytes { sk in pub.withUnsafeMutableBytes { pk in
+      seed?.withUnsafeBytes { bytes in
+        psst_noise_keypair(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count, sk.bindMemory(to: UInt8.self).baseAddress, pk.bindMemory(to: UInt8.self).baseAddress)
+      } ?? psst_noise_keypair(nil, 0, sk.bindMemory(to: UInt8.self).baseAddress, pk.bindMemory(to: UInt8.self).baseAddress)
+    } }
+    do {
+      try requireNoiseSuccess(error)
+      if saved == nil { try identityStore.write(name, secret.map { String(format: "%02x", $0) }.joined()) }
+      return (secret, pub)
+    } catch { secret.resetBytes(in: 0..<secret.count); throw error }
+  }
+  private func createHandshake(_ role: String, _ staticPrivateKey: Data, _ fixedEphemeralPrivateKey: Data?) throws -> String {
       guard role == "initiator" || role == "responder" else {
         throw NoiseException("Invalid Noise role")
       }
@@ -128,6 +133,56 @@ public final class ExpoNoiseModule: Module {
       let handle = UUID().uuidString.lowercased()
       registryLock.withLock { handshakes[handle] = NoiseHandshakeBox(pointer: pointer) }
       return handle
+  }
+
+  public func definition() -> ModuleDefinition {
+    Name("ExpoNoise")
+
+    AsyncFunction("ensureIdentityAsync") { (account: String) -> Data in
+      try identityLock.withLock {
+        var (secret, pub) = try identity(account, create: true)
+        defer { secret.resetBytes(in: 0..<secret.count) }
+        return pub
+      }
+    }
+    AsyncFunction("createAccountHandshakeAsync") { (account: String, role: String) -> String in
+      try identityLock.withLock {
+        var (secret, _) = try identity(account, create: false)
+        defer { secret.resetBytes(in: 0..<secret.count) }
+        return try createHandshake(role, secret, nil)
+      }
+    }
+    AsyncFunction("removeIdentityAsync") { (account: String) in
+      try identityLock.withLock { try identityStore.remove(identityName(account)) }
+    }
+
+    AsyncFunction("generateKeyPairAsync") { (seed: Data?) -> NoiseKeyPairRecord in
+      var privateKey = Data(count: 32)
+      var publicKey = Data(count: 32)
+      let error = privateKey.withUnsafeMutableBytes { privateBytes in
+        publicKey.withUnsafeMutableBytes { publicBytes in
+          seed?.withUnsafeBytes { seedBytes in
+            psst_noise_keypair(
+              seedBytes.bindMemory(to: UInt8.self).baseAddress,
+              seedBytes.count,
+              privateBytes.bindMemory(to: UInt8.self).baseAddress,
+              publicBytes.bindMemory(to: UInt8.self).baseAddress
+            )
+          } ?? psst_noise_keypair(
+            nil,
+            0,
+            privateBytes.bindMemory(to: UInt8.self).baseAddress,
+            publicBytes.bindMemory(to: UInt8.self).baseAddress
+          )
+        }
+      }
+      try requireNoiseSuccess(error)
+      return NoiseKeyPairRecord(privateKey: privateKey, publicKey: publicKey)
+    }
+
+    AsyncFunction("createHandshakeAsync") {
+      (role: String, staticPrivateKey: Data, fixedEphemeralPrivateKey: Data?) -> String in
+      try createHandshake(role, staticPrivateKey, fixedEphemeralPrivateKey)
     }
 
     AsyncFunction("writeHandshakeAsync") { (handle: String, payload: Data) -> Data in

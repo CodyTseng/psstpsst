@@ -34,6 +34,11 @@ export async function noiseStaticKeyPairFromSeed(
   return port.generateKeyPair(expectLength(seed, 32, 'Noise static private key').slice());
 }
 
+/** Saved static keys remain inside the native module or desktop worker boundary. */
+export async function createAccountNoiseHandshake(account: string, role: NoiseRole, port: NoisePort = platform.noise): Promise<ProximityNoiseHandshake> {
+  return { handle: await port.createAccountHandshake(account, role), port, destroyed: false };
+}
+
 export async function createNoiseHandshake(
   role: NoiseRole,
   staticPrivateKey: Uint8Array,

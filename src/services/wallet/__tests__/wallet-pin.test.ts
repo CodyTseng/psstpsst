@@ -1,81 +1,34 @@
-import {
-  authorizeWalletPin,
-  consumeWalletPinAuthorization,
-  hasWalletPin,
-  removeWalletPin,
-  setWalletPin,
-  verifyWalletPin,
-  walletAuthenticationMode,
-} from '../wallet-pin.service';
-
-const mockSecrets = new Map<string, string>();
-let mockSystemAuthEnrolled = false;
-let mockUuid = 0;
-
-jest.mock('@/platform', () => ({
-  platform: {
-    localAuth: {
-      hasEnrolledAuth: jest.fn(async () => mockSystemAuthEnrolled),
-    },
-    secureStorage: {
-      getItem: jest.fn(async (key: string) => mockSecrets.get(key) ?? null),
-      setItem: jest.fn(async (key: string, value: string) => {
-        mockSecrets.set(key, value);
-      }),
-      deleteItem: jest.fn(async (key: string) => {
-        mockSecrets.delete(key);
-      }),
-    },
-    deviceCrypto: {
-      randomUUID: jest.fn(async () => `test-uuid-${++mockUuid}`),
-    },
-  },
-}));
-
-const ACCOUNT = 'a'.repeat(64);
-
-describe('wallet PIN service', () => {
-  beforeEach(() => {
-    mockSecrets.clear();
-    mockSystemAuthEnrolled = false;
-    mockUuid = 0;
-  });
-
-  it('requires setup without system authentication and verifies the stored PIN', async () => {
-    await expect(walletAuthenticationMode(ACCOUNT)).resolves.toBe('pin_setup_required');
-
-    await setWalletPin(ACCOUNT, '123456');
-
-    await expect(hasWalletPin(ACCOUNT)).resolves.toBe(true);
-    await expect(walletAuthenticationMode(ACCOUNT)).resolves.toBe('pin');
-    await expect(verifyWalletPin(ACCOUNT, '123456')).resolves.toBe(true);
-    await expect(verifyWalletPin(ACCOUNT, '123457')).resolves.toBe(false);
-  });
-
-  it('issues a short-lived one-use authorization bound to the account', async () => {
-    await setWalletPin(ACCOUNT, '123456');
-    const token = await authorizeWalletPin(ACCOUNT, '123456');
-
-    expect(token).not.toBeNull();
-    expect(consumeWalletPinAuthorization('b'.repeat(64), token!)).toBe(false);
-    expect(consumeWalletPinAuthorization(ACCOUNT, token!)).toBe(false);
-
-    const secondToken = await authorizeWalletPin(ACCOUNT, '123456');
-    expect(consumeWalletPinAuthorization(ACCOUNT, secondToken!)).toBe(true);
-    expect(consumeWalletPinAuthorization(ACCOUNT, secondToken!)).toBe(false);
-  });
-
-  it('prefers enrolled system authentication and removes account PIN data', async () => {
-    await setWalletPin(ACCOUNT, '123456');
-    mockSystemAuthEnrolled = true;
-
-    await expect(walletAuthenticationMode(ACCOUNT)).resolves.toBe('system');
-    await removeWalletPin(ACCOUNT);
-    await expect(hasWalletPin(ACCOUNT)).resolves.toBe(false);
-  });
-
-  it('rejects PINs that are not exactly six digits', async () => {
-    await expect(setWalletPin(ACCOUNT, '12345')).rejects.toThrow('exactly 6 digits');
-    await expect(setWalletPin(ACCOUNT, 'abcdef')).rejects.toThrow('exactly 6 digits');
-  });
+// eslint-disable-next-line no-restricted-imports -- This test executes the trusted worker's private PIN operations.
+import { LocalKeyVault } from '@/platform/vault/local-vault';
+import { scryptAsync } from '@noble/hashes/scrypt.js';
+import { bytesToHex } from 'nostr-tools/utils';
+const account = 'a'.repeat(64);
+let values: Map<string, string>, vault: LocalKeyVault;
+beforeEach(() => {
+  values = new Map(); vault = new LocalKeyVault({ getItem: async key => values.get(key) ?? null,
+    setItem: async (key, value) => { values.set(key, value); }, deleteItem: async key => { values.delete(key); } });
+});
+afterEach(() => jest.restoreAllMocks());
+it('keeps PIN setup and verification behind private worker operations', async () => {
+  await expect(vault.walletInternal('hasPin', account)).resolves.toBe(false);
+  await vault.walletInternal('setPin', account, '123456');
+  await expect(vault.walletInternal('verifyPin', account, '123456')).resolves.toBe(true);
+  await expect(vault.execute({ method: 'walletSetPin', account, pin: '654321' } as never)).rejects.toThrow();
+  await expect(vault.walletInternal('setPin', account, '654321')).rejects.toThrow();
+});
+it('retains existing PIN hashes and throttles failed verification attempts', async () => {
+  const salt = 'legacy-wallet-salt'; const digest = bytesToHex(await scryptAsync('123456', salt, { N: 1 << 15, r: 8, p: 1, dkLen: 32 }));
+  values.set(`psstpsst.wallet.pin.${account}`, JSON.stringify({ version: 1, salt, digest }));
+  let now = Date.now(); jest.spyOn(Date, 'now').mockImplementation(() => now);
+  await expect(vault.walletInternal('verifyPin', account, '123456')).resolves.toBe(true);
+  await expect(vault.walletInternal('verifyPin', account, '000000')).resolves.toBe(false);
+  await expect(vault.walletInternal('verifyPin', account, '123456')).resolves.toBe(false);
+  now += 1001;
+  await expect(vault.walletInternal('verifyPin', account, '123456')).resolves.toBe(true);
+});
+it('rejects malformed PINs and removes the PIN through account teardown', async () => {
+  await expect(vault.walletInternal('setPin', account, '12345')).rejects.toThrow();
+  await vault.walletInternal('setPin', account, '123456');
+  await vault.execute({ method: 'walletRemovePin', account });
+  await expect(vault.walletInternal('hasPin', account)).resolves.toBe(false);
 });

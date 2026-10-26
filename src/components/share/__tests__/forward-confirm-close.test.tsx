@@ -14,6 +14,7 @@ jest.mock('@/hooks/use-conversations', () => ({
 jest.mock('@/hooks/use-contact-entries', () => ({
   useContactEntries: () => ({ entries: mockContacts, loaded: true }),
 }));
+jest.mock('@/components/common/use-focused-overlay-dismiss', () => ({ useFocusedOverlayDismiss: jest.fn() }));
 jest.mock('@/hooks/use-scrolled', () => ({ useScrolled: () => ({ scrolled: false, scrollProps: {} }) }));
 jest.mock('@/components/share/ShareConfirmSheet', () => ({
   ShareConfirmSheet: (props: Parameters<typeof mockSheet>[0]) => mockSheet(props),

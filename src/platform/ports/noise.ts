@@ -21,6 +21,9 @@ export type NoiseOpenResult = {
  * handle. No cipher key or nonce state crosses this boundary.
  */
 export interface NoisePort {
+  ensureIdentity(account: string): Promise<Uint8Array>;
+  createAccountHandshake(account: string, role: NoiseRole): Promise<string>;
+  removeIdentity(account: string): Promise<void>;
   generateKeyPair(seed?: Uint8Array): Promise<NoiseKeyPair>;
   createHandshake(
     role: NoiseRole,

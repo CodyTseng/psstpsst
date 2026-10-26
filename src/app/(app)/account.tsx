@@ -1,3 +1,4 @@
+import { copyIdentityBackup } from '@/services/account/account.service';
 import { router } from 'expo-router';
 import { DirectionalChevron as ChevronRight } from '@/components/common/DirectionalChevron';
 import { ChatRound as MessageCircle } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
@@ -11,9 +12,7 @@ import { AppScreen } from '@/components/common/AppScreen';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
-import { useClipboard } from '@/hooks/use-clipboard';
 import { platform } from '@/platform';
-import { exportIdentityNsec } from '@/services/signer/signer-factory';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { spacing, useThemeColors } from '@/theme';
@@ -24,42 +23,16 @@ import { spacing, useThemeColors } from '@/theme';
  */
 export default function AccountSettings() {
   const { scrolled, scrollProps } = useScrolled();
-  const { t } = useTranslation();
-  const { copyText } = useClipboard({ trackCopied: false, toastTarget: 'detail' });
+  const { t, i18n } = useTranslation();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const activePubkey = useActiveAccount((s) => s.activePubkey);
   const removeAccount = useActiveAccount((s) => s.removeAccount);
 
-  function handleExportNsec() {
-    void platform.confirmationDialog
-      .confirm({
-        title: t('settings.export_nsec_title'),
-        message: t('settings.export_nsec_message'),
-        cancelLabel: t('common.cancel'),
-        confirmLabel: t('settings.export_nsec_confirm'),
-        actionLayout: 'vertical',
-      })
-      .then((confirmed) => {
-        if (confirmed) void doExportNsec();
-      });
-  }
-
-  async function doExportNsec() {
+  async function handleExportNsec() {
     if (!activePubkey) return;
-    const nsec = await exportIdentityNsec(activePubkey);
-    if (!nsec) {
-      await platform.confirmationDialog.notify({
-        title: t('settings.export_nsec_failed'),
-        okLabel: t('common.ok'),
-      });
-      return;
-    }
-    if (!await copyText(nsec)) return;
-    await platform.confirmationDialog.notify({
-      title: t('settings.export_nsec_copied'),
-      okLabel: t('common.ok'),
-    });
+    const copied = await copyIdentityBackup(activePubkey, i18n.language);
+    if (copied) await platform.confirmationDialog.notify({ title: t('settings.export_nsec_copied'), okLabel: t('common.ok') });
   }
 
   // Removing is deliberately stronger than signing out: it wipes this account's
@@ -97,7 +70,7 @@ export default function AccountSettings() {
             icon={<FileKey2 size={22} color={c.text} />}
             title={t('settings.export_nsec')}
             trailing={<Copy size={18} color={c.textMuted} />}
-            onPress={handleExportNsec}
+            onPress={() => { void handleExportNsec().catch(() => platform.confirmationDialog.notify({ title: t('settings.export_nsec_failed'), okLabel: t('common.ok') })); }}
           />
           <ListRow
             icon={<MessageCircle size={22} color={c.text} />}

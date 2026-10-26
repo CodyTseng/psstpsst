@@ -1,3 +1,5 @@
+import type { KeyVaultPort } from './key-vault';
+import type { NappletPort } from './napplet';
 import type { ScreenOrientationPort } from './screen-orientation';
 import type { ClipboardPort } from './clipboard';
 import type { ImageCachePort } from './image-cache';
@@ -17,7 +19,6 @@ import type { FileSystemPort } from './file-system';
 import type { FileDropPort } from './file-drop';
 import type { FileSaverPort } from './file-saver';
 import type { ImageManipulatorPort } from './image-manipulator';
-import type { LocalAuthPort } from './local-auth';
 import type { LocalizationPort } from './localization';
 import type { MediaLibraryPort } from './media-library';
 import type { NetworkStatePort } from './network-state';
@@ -25,13 +26,15 @@ import type { NoisePort } from './noise';
 import type { NotificationsPort } from './notifications';
 import type { PushNotificationsPort } from './push-notifications';
 import type { ProximityTransportPort } from './proximity-transport';
-import type { SecureStoragePort } from './secure-storage';
+import type { SecurityPort } from './security';
 import type { SharingPort } from './sharing';
 import type { UrlOpenerPort } from './url-opener';
 import type { UnreadIndicatorPort } from './unread-indicator';
 import type { WindowChromePort } from './window-chrome';
 import type { VideoThumbnailPort } from './video-thumbnail';
 import type { ZipArchivePort } from './zip-archive';
+export type { KeyVaultPort, VaultKey, MessagingKey, VaultCommand, VaultConsent } from './key-vault';
+export type { NappletPort, NappletBounds } from './napplet';
 
 export type { ScreenOrientationPort } from './screen-orientation';
 export type { ClipboardPort } from './clipboard';
@@ -84,7 +87,6 @@ export type {
   ImageManipulatorPort,
   RenderedImage,
 } from './image-manipulator';
-export type { LocalAuthPort } from './local-auth';
 export type { LocalizationPort } from './localization';
 export type { MediaLibraryPort } from './media-library';
 export type { NetworkStatePort, NetworkStateSnapshot } from './network-state';
@@ -101,7 +103,7 @@ export type {
   ProximityTransportPort,
   ProximityTransportSubscription,
 } from './proximity-transport';
-export type { SecureStoragePort } from './secure-storage';
+export type { SecurityPort, SecuritySelection, StorageAccess } from './security';
 export type { SharingPort } from './sharing';
 export type { UrlOpenerPort } from './url-opener';
 export type { UnreadIndicatorPort } from './unread-indicator';
@@ -114,11 +116,13 @@ export type { ZipArchivePort, ZipArchiveSubscription } from './zip-archive';
  * (`platform/expo/`) is the default, a future desktop shell provides its own.
  */
 export interface PlatformAdapters {
+  napplet: NappletPort;
   pushNotifications: PushNotificationsPort;
   bundledNotices: BundledNoticesPort;
   appUpdate: AppUpdatePort;
   confirmationDialog: ConfirmationDialogPort;
-  secureStorage: SecureStoragePort;
+  security: SecurityPort;
+  keyVault: KeyVaultPort;
   notifications: NotificationsPort;
   backgroundTask: BackgroundTaskPort;
   backgroundMessaging: BackgroundMessagingPort;
@@ -132,7 +136,6 @@ export interface PlatformAdapters {
   deviceCrypto: DeviceCryptoPort;
   deepLink: DeepLinkPort;
   zipArchive: ZipArchivePort;
-  localAuth: LocalAuthPort;
   mediaLibrary: MediaLibraryPort;
   clipboard: ClipboardPort;
   sharing: SharingPort;

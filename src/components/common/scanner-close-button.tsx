@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/common/IconButton';
 import { IS_ELECTRON } from '@/lib/platform';
 import { iconStrokeWidth } from '@/theme/icons';
-import { desktopChrome, spacing, useThemeColors } from '@/theme';
+import { desktopChrome, spacing, uiDensity, useThemeColors } from '@/theme';
 
 export function ScannerCloseButton({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
@@ -16,10 +16,11 @@ export function ScannerCloseButton({ onClose }: { onClose: () => void }) {
   return (
     <IconButton
       variant="overlay"
+      size={uiDensity.headerActionSize}
       onPress={onClose}
       hitSlop={spacing.sm}
       style={{ position: 'absolute', top, start: spacing.lg }}
-      icon={<X strokeWidth={iconStrokeWidth.default} size={20} color={c.onOverlay} />}
+      icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.onOverlay} />}
       accessibilityLabel={t('common.close')}
     />
   );

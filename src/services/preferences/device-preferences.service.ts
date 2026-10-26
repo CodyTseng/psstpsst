@@ -33,11 +33,11 @@ export async function getDevicePreference(
   if (rows[0]) return rows[0].value;
   if (!legacySecureStoreKey) return null;
 
-  const legacyValue = await platform.secureStorage.getItem(legacySecureStoreKey);
+  const legacyValue = await platform.security.readLegacyPreference(legacySecureStoreKey);
   if (legacyValue == null) return null;
 
   await setDevicePreference(key, legacyValue);
-  await platform.secureStorage.deleteItem(legacySecureStoreKey);
+  await platform.security.deleteLegacyPreference(legacySecureStoreKey);
   return legacyValue;
 }
 
@@ -68,5 +68,5 @@ export async function deleteDevicePreference(
   legacySecureStoreKey?: string,
 ): Promise<void> {
   await db.delete(devicePreferences).where(eq(devicePreferences.key, key));
-  if (legacySecureStoreKey) await platform.secureStorage.deleteItem(legacySecureStoreKey);
+  if (legacySecureStoreKey) await platform.security.deleteLegacyPreference(legacySecureStoreKey);
 }

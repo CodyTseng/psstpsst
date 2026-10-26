@@ -290,7 +290,7 @@ describe('DeliveryCopyTabs', () => {
     renderer = undefined;
   });
 
-  it('shows logical-edge fades only while tabs remain offscreen there', () => {
+  it('extends avatar tabs through sheet gutters without edge masks', () => {
     const copies: DeliveryCopy[] = [
       { recipient: 'first', self: false, relays: [] },
       { recipient: 'second', self: false, relays: [] },
@@ -307,48 +307,14 @@ describe('DeliveryCopyTabs', () => {
       );
     });
 
-    let scroll = renderer!.root.findByType(ScrollView);
+    const scroll = renderer!.root.findByType(ScrollView);
     expect(
       StyleSheet.flatten(scroll.props.contentContainerStyle).paddingHorizontal,
     ).toBe(spacing.lg);
     expect(renderer!.root.findAll((node) =>
       StyleSheet.flatten(node.props.style)?.marginHorizontal === -spacing.lg
     )).not.toHaveLength(0);
-    act(() => {
-      scroll.props.onLayout({ nativeEvent: { layout: { width: 100 } } });
-      scroll.props.onContentSizeChange(200, 56);
-    });
-    expect(
-      renderer!.root.findAllByType(EdgeFade).map((fade) => fade.props.edge),
-    ).toEqual(['end']);
-
-    scroll = renderer!.root.findByType(ScrollView);
-    act(() => {
-      scroll.props.onScroll({
-        nativeEvent: {
-          contentOffset: { x: 50 },
-          layoutMeasurement: { width: 100 },
-          contentSize: { width: 200 },
-        },
-      });
-    });
-    expect(
-      renderer!.root.findAllByType(EdgeFade).map((fade) => fade.props.edge),
-    ).toEqual(['start', 'end']);
-
-    scroll = renderer!.root.findByType(ScrollView);
-    act(() => {
-      scroll.props.onScroll({
-        nativeEvent: {
-          contentOffset: { x: 100 },
-          layoutMeasurement: { width: 100 },
-          contentSize: { width: 200 },
-        },
-      });
-    });
-    expect(
-      renderer!.root.findAllByType(EdgeFade).map((fade) => fade.props.edge),
-    ).toEqual(['start']);
+    expect(renderer!.root.findAllByType(EdgeFade)).toHaveLength(0);
   });
 
   it('renders the account copy after every recipient tab', () => {

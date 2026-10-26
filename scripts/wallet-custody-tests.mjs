@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict';
+import { scryptSync } from 'node:crypto';
+import { generateSecretKey, getPublicKey, nip04, finalizeEvent, verifyEvent } from 'nostr-tools';
+import { bytesToHex } from 'nostr-tools/utils';
+
+const invoice = 'lnbc10n1p4dc454pp5gf0dfe9rdvcw5gdepcsuwykxf85zznpfkl40dqyf6ypecmj48pxqdq423jhxapqwp6hycmgv9ek2xqrrss9ua7nxltlntqxln8g7vxyxv9u3ecjqhwqwq8ta43wfnd53w3a795aywzmy2z4wn3wkuu43z243xkh72mlcczwcmezytju4zcwguwnlgpdmjwdd';
+/** Run against the actual worker and Swift implementation, including native scrypt. */
+export async function exerciseWalletCustody(call, internal, seed) {
+  const account = getPublicKey(generateSecretKey()), secret = generateSecretKey(), server = generateSecretKey();
+  const peer = getPublicKey(server), relay = 'wss://wallet.example/?a=two+words&z=a%2Bb';
+  const connectionRelay = 'wss://wallet.example?z=a%2Bb&a=two+words';
+  const uri = `nostr+walletconnect://${peer}?secret=${bytesToHex(secret)}&relay=${encodeURIComponent(connectionRelay)}`;
+  const imported = await call({ method: 'walletImport', account, connectionString: uri });
+  assert.equal(imported.error, undefined);
+  assert.deepEqual(Object.keys(imported.value).sort(), ['id', 'relays', 'walletPubkey']);
+  const walletId = imported.value.id;
+  assert.equal(imported.value.walletPubkey, peer); assert.deepEqual(imported.value.relays, [relay]);
+  const request = { method: 'walletRequest', account, walletId, operation: 'get_balance', params: {}, confirmation: { language: 'en' } };
+  const prepared = (await call(request)).value;
+  assert.equal(verifyEvent(prepared.event), true); assert.equal(prepared.event.pubkey, getPublicKey(secret));
+  assert.deepEqual(JSON.parse(await nip04.decrypt(server, prepared.event.pubkey, prepared.event.content)), { method: 'get_balance', params: {} });
+  const response = async (target, key = server, requestId = prepared.event.id) => finalizeEvent({ kind: 23195, created_at: 100,
+    tags: [['e', requestId]], content: await nip04.encrypt(key, getPublicKey(secret), JSON.stringify(target)) }, key);
+  const result = { result_type: 'get_balance', result: { balance: 1000 } };
+  assert.equal((await call({ method: 'walletReceive', account, walletId, requestId: prepared.event.id, event: await response(result, generateSecretKey()) })).value, null);
+  assert.equal((await call({ method: 'walletReceive', account, walletId, requestId: prepared.event.id, event: await response(result, server, 'f'.repeat(64)) })).value, null);
+  const event = await response(result);
+  assert.deepEqual((await call({ method: 'walletReceive', account, walletId, requestId: prepared.event.id, event })).value, result);
+  assert.equal((await call({ method: 'walletReceive', account, walletId, requestId: prepared.event.id, event })).value, null);
+  assert.equal((await call({ ...request, operation: 'unknown' })).error, true);
+  assert.equal((await call({ method: 'crypto', key: { account, role: 'wallet', pubkey: walletId }, operation: 'decrypt', algorithm: 'nip04', peer, text: event.content })).error, true);
+  const payment = { ...request, operation: 'pay_invoice', params: { invoice } };
+  assert.equal((await call({ ...payment, authorized: true, pinAuthorization: 'forged-token' })).error, true);
+  const details = await internal('details', account, payment);
+  assert.deepEqual(details.value, { peer, invoice, amountSats: '1' });
+  assert.equal((await internal('trusted', account, { ...payment, params: { invoice, amount: 999999999 } })).error, true);
+  assert.equal((await internal('trusted', account, { ...payment, params: { invoice, max_fee: 999999999 } })).error, true);
+  const signed = (await internal('trusted', account, payment)).value;
+  assert.equal(verifyEvent(signed.event), true);
+  assert.deepEqual(JSON.parse(await nip04.decrypt(server, signed.event.pubkey, signed.event.content)), { method: 'pay_invoice', params: { invoice } });
+  const auth = { kind: 22242, created_at: 100, content: '', tags: [['relay', relay], ['challenge', 'challenge']] };
+  assert.equal(verifyEvent((await call({ method: 'walletRelayAuth', account, walletId, template: auth })).value), true);
+  assert.equal((await call({ method: 'walletRelayAuth', account, walletId, template: { ...auth, kind: 23194 } })).error, true);
+  const hostile = getPublicKey(generateSecretKey());
+  await internal('trusted', account, { method: 'walletBindLegacy', account, walletId, peer: hostile, relays: ['wss://attacker.example/'] });
+  assert.equal((await call(request)).value.peer, peer);
+  const legacyId = 'nwc_legacy';
+  await seed({ [`psstpsst.nwc.${account.slice(0, 16)}.${legacyId}`]: bytesToHex(secret) });
+  assert.equal((await call({ ...request, walletId: legacyId })).error, true);
+  const binding = { method: 'walletBindLegacy', account, walletId: legacyId, peer, relays: [relay] };
+  assert.equal((await call(binding)).error, true);
+  const migration = { method: 'migrateStorage', accounts: [account], wallets: [{ account, walletId: legacyId, peer, relays: [relay] }] };
+  assert.equal((await call(migration)).error, undefined);
+  assert.equal((await call({ ...migration, wallets: [{ ...migration.wallets[0], peer: hostile, relays: ['wss://attacker.example/'] }] })).error, undefined);
+  assert.equal((await call({ ...request, walletId: legacyId })).value.peer, peer);
+
+  const salt = 'legacy-wallet-pin-salt', digest = scryptSync('123456', salt, 32, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }).toString('hex');
+  await seed({ [`psstpsst.wallet.pin.${account}`]: JSON.stringify({ version: 1, salt, digest }) });
+  assert.equal((await internal('hasPin', account)).value, true);
+  assert.equal((await internal('verifyPin', account, '123456')).value, true);
+  await seed({ [`psstpsst.wallet.pin.${account}`]: JSON.stringify({ version: 1, salt, digest, failures: 8, retryAtMs: Date.now() + 30000 }) });
+  assert.equal((await internal('verifyPin', account, '123456')).value, false);
+  await seed({ [`psstpsst.wallet.pin.${account}`]: JSON.stringify({ version: 1, salt, digest }) });
+  assert.equal((await internal('setPin', account, '654321')).error, true);
+  assert.equal((await call({ method: 'walletSetPin', account, pin: '654321' })).error, true);
+  assert.equal((await internal('verifyPin', account, '000000')).value, false);
+  assert.equal((await internal('verifyPin', account, '123456')).value, false);
+  await call({ method: 'walletRemovePin', account });
+  assert.equal((await internal('hasPin', account)).value, false);
+  assert.equal((await internal('setPin', account, '654321')).error, undefined);
+  assert.equal((await internal('verifyPin', account, '654321')).value, true);
+  await call({ method: 'walletRemovePin', account });
+  await call({ method: 'walletRemove', account, walletId });
+  assert.equal((await call(request)).error, true);
+}

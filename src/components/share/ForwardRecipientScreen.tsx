@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, View } from 'react-native';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { useFocusedOverlayDismiss } from '@/components/common/use-focused-overlay-dismiss';
 import { ChromeDivider } from '@/components/common/ChromeDivider';
 import { AppButton } from '@/components/common/AppButton';
 import { AppInput } from '@/components/common/AppInput';
@@ -31,6 +32,7 @@ type Props = {
   supportedDeliveryKinds: ReadonlySet<ConversationDeliveryKind>;
   sending: boolean;
   onConfirm: (targets: ShareTarget[]) => void;
+  onBack?: () => void;
   excludedRelayPubkey?: string | null;
 };
 
@@ -47,6 +49,7 @@ export function ForwardRecipientScreen({
   supportedDeliveryKinds,
   sending,
   onConfirm,
+  onBack,
   excludedRelayPubkey = null,
 }: Props) {
   const { t } = useTranslation();
@@ -61,6 +64,11 @@ export function ForwardRecipientScreen({
   const [creatingConversation, setCreatingConversation] = useState(false);
   const { scrolled, scrollProps } = useScrolled({ resetKey: creatingConversation });
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const dismissEmbedded = useCallback(() => {
+    if (creatingConversation) setCreatingConversation(false);
+    else onBack?.();
+  }, [creatingConversation, onBack]);
+  useFocusedOverlayDismiss(!!onBack && !confirmOpen, dismissEmbedded);
   const pendingSend = useRef<ShareTarget[] | null>(null);
   const selectProgress = useSharedValue(0);
 
@@ -254,7 +262,7 @@ export function ForwardRecipientScreen({
 
       <ScreenHeader
         title={creatingConversation ? t('new_chat.title') : title}
-        onBack={creatingConversation ? () => setCreatingConversation(false) : undefined}
+        onBack={creatingConversation ? () => setCreatingConversation(false) : onBack}
         right={
           creatingConversation && !multiSelect ? null : multiSelect ? (
             <AppButton

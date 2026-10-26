@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { SecureStorageService } from './secure-storage-service';
 import { Worker } from 'node:worker_threads';
 
 import type { NoisePort } from '../src/platform/ports/noise';
@@ -17,7 +18,7 @@ export class NoiseService implements NoisePort {
   private nextRequestId = 1;
   private closed = false;
 
-  constructor() {
+  constructor(private storage?: SecureStorageService) {
     this.worker.on('message', (response: NoiseWorkerResponse) => {
       const pending = this.pending.get(response.id);
       if (!pending) return;
@@ -31,6 +32,43 @@ export class NoiseService implements NoisePort {
     this.worker.on('exit', (code) => {
       if (!this.closed) this.rejectAll(new Error(`Noise worker exited with code ${code}`));
     });
+  }
+
+  private identityWork = new Map<string, Promise<Uint8Array>>();
+  private identityName(account: string): string {
+    if (!/^[0-9a-f]{64}$/i.test(account)) throw new Error('Invalid account');
+    return `proximity_identity_noise_privkey_${account}`;
+  }
+  ensureIdentity(account: string): Promise<Uint8Array> {
+    const existing = this.identityWork.get(account);
+    if (existing) return existing;
+    const work = (async () => {
+      if (!this.storage) throw new Error('Noise credential storage unavailable');
+      const name = this.identityName(account);
+      const saved = await this.storage.getItem(name);
+      if (saved !== null && !/^[0-9a-f]{64}$/i.test(saved)) throw new Error('Invalid Noise credential');
+      const pair = await this.generateKeyPair(saved === null ? undefined : new Uint8Array(Buffer.from(saved, 'hex')));
+      try {
+        if (saved === null) await this.storage.setItem(name, Buffer.from(pair.privateKey).toString('hex'));
+        return pair.publicKey;
+      } finally { pair.privateKey.fill(0); }
+    })();
+    this.identityWork.set(account, work);
+    void work.finally(() => this.identityWork.delete(account)).catch(() => {});
+    return work;
+  }
+  async createAccountHandshake(account: string, role: Parameters<NoisePort['createHandshake']>[0]): Promise<string> {
+    if (!this.storage) throw new Error('Noise credential storage unavailable');
+    await this.ensureIdentity(account);
+    const saved = await this.storage.getItem(this.identityName(account));
+    if (saved === null || !/^[0-9a-f]{64}$/i.test(saved)) throw new Error('Noise credential unavailable');
+    const bytes = new Uint8Array(Buffer.from(saved, 'hex'));
+    try { return await this.createHandshake(role, bytes); } finally { bytes.fill(0); }
+  }
+  async removeIdentity(account: string): Promise<void> {
+    if (!this.storage) throw new Error('Noise credential storage unavailable');
+    await this.identityWork.get(account)?.catch(() => {});
+    await this.storage.deleteItem(this.identityName(account));
   }
 
   generateKeyPair(seed?: Uint8Array) {

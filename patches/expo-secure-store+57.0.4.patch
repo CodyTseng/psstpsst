@@ -1,0 +1,122 @@
+diff --git a/node_modules/expo-secure-store/ios/SecureStoreModule.swift b/node_modules/expo-secure-store/ios/SecureStoreModule.swift
+--- a/node_modules/expo-secure-store/ios/SecureStoreModule.swift
++++ b/node_modules/expo-secure-store/ios/SecureStoreModule.swift
+@@ -5,6 +5,12 @@
+ import Security
+ 
+ public final class SecureStoreModule: Module {
++  private func assertPublicKey(_ key: String) throws {
++    if ["identity_privkey_", "encryption_keys_", "nip46_client_privkey_", "nip46_bunker_secret_", "nip46_bunker_binding_", "proximity_identity_privkey_", "proximity_identity_noise_privkey_", "wallet_credential_", "psstpsst.nwc.", "psstpsst.wallet.pin."].contains(where: { key.hasPrefix($0) || key.contains("-" + $0) }) {
++      throw NSError(domain: "PsstPsstKeyVault", code: 1, userInfo: [NSLocalizedDescriptionKey: "Credential owned by the key vault"])
++    }
++  }
++
+   public func definition() -> ModuleDefinition {
+     Name("ExpoSecureStore")
+ 
+@@ -17,14 +23,17 @@
+     Constant("WHEN_UNLOCKED_THIS_DEVICE_ONLY") { SecureStoreAccessible.whenUnlockedThisDeviceOnly.rawValue }
+ 
+     AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) -> String? in
++      try assertPublicKey(key)
+       return try get(with: key, options: options)
+     }
+ 
+     Function("getValueWithKeySync") { (key: String, options: SecureStoreOptions) -> String? in
++      try assertPublicKey(key)
+       return try get(with: key, options: options)
+     }
+ 
+     AsyncFunction("setValueWithKeyAsync") { (value: String, key: String, options: SecureStoreOptions) -> Bool in
++      try assertPublicKey(key)
+       guard let key = validate(for: key) else {
+         throw InvalidKeyException()
+       }
+@@ -33,6 +42,7 @@
+     }
+ 
+     Function("setValueWithKeySync") {(value: String, key: String, options: SecureStoreOptions) -> Bool in
++      try assertPublicKey(key)
+       guard let key = validate(for: key) else {
+         throw InvalidKeyException()
+       }
+@@ -41,6 +51,7 @@
+     }
+ 
+     AsyncFunction("deleteValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
++      try assertPublicKey(key)
+       let noAuthSearchDictionary = query(with: key, options: options, requireAuthentication: false)
+       let authSearchDictionary = query(with: key, options: options, requireAuthentication: true)
+       let legacySearchDictionary = query(with: key, options: options)
+diff --git a/node_modules/expo-secure-store/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt b/node_modules/expo-secure-store/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt
+--- a/node_modules/expo-secure-store/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt
++++ b/node_modules/expo-secure-store/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt
+@@ -31,32 +31,41 @@
+   private lateinit var hybridAESEncryptor: HybridAESEncryptor
+   private lateinit var authenticationHelper: AuthenticationHelper
+ 
++  private fun assertPublicKey(key: String) {
++    require(!listOf("identity_privkey_", "encryption_keys_", "nip46_client_privkey_", "nip46_bunker_secret_", "nip46_bunker_binding_", "proximity_identity_privkey_", "proximity_identity_noise_privkey_", "wallet_credential_", "psstpsst.nwc.", "psstpsst.wallet.pin.").any { key.startsWith(it) || key.contains("-$it") }) { "Credential owned by the key vault" }
++  }
++
+   override fun definition() = ModuleDefinition {
+     Name("ExpoSecureStore")
+ 
+     AsyncFunction("setValueWithKeyAsync") Coroutine { value: String?, key: String?, options: SecureStoreOptions ->
+       key ?: throw NullKeyException()
++      assertPublicKey(key)
+       return@Coroutine setItemImpl(key, value, options, false)
+     }
+ 
+     AsyncFunction("getValueWithKeyAsync") Coroutine { key: String, options: SecureStoreOptions ->
++      assertPublicKey(key)
+       return@Coroutine getItemImpl(key, options)
+     }
+ 
+     Function("setValueWithKeySync") { value: String?, key: String?, options: SecureStoreOptions ->
+       key ?: throw NullKeyException()
++      assertPublicKey(key)
+       return@Function runBlocking {
+         return@runBlocking setItemImpl(key, value, options, keyIsInvalidated = false)
+       }
+     }
+ 
+     Function("getValueWithKeySync") { key: String, options: SecureStoreOptions ->
++      assertPublicKey(key)
+       return@Function runBlocking {
+         return@runBlocking getItemImpl(key, options)
+       }
+     }
+ 
+     AsyncFunction("deleteValueWithKeyAsync") { key: String, options: SecureStoreOptions ->
++      assertPublicKey(key)
+       try {
+         deleteItemImpl(key, options)
+       } catch (e: CodedException) {
+@@ -85,7 +94,7 @@
+     }
+   }
+ 
+-  private suspend fun getItemImpl(key: String, options: SecureStoreOptions): String? {
++  suspend fun getItemImpl(key: String, options: SecureStoreOptions): String? {
+     // We use a SecureStore-specific shared preferences file, which lets us do things like enumerate
+     // its entries or clear all of them
+     val prefs: SharedPreferences = getSharedPreferences()
+@@ -175,7 +184,7 @@
+     }
+   }
+ 
+-  private suspend fun setItemImpl(key: String, value: String?, options: SecureStoreOptions, keyIsInvalidated: Boolean) {
++  suspend fun setItemImpl(key: String, value: String?, options: SecureStoreOptions, keyIsInvalidated: Boolean) {
+     val keychainAwareKey = createKeychainAwareKey(key, options.keychainService)
+     val prefs: SharedPreferences = getSharedPreferences()
+ 
+@@ -240,7 +249,7 @@
+     return prefs.edit().putString(key, encryptedItemString).commit()
+   }
+ 
+-  private fun deleteItemImpl(key: String, options: SecureStoreOptions) {
++  fun deleteItemImpl(key: String, options: SecureStoreOptions) {
+     val success = removeItem(
+       getSharedPreferences(),
+       PreferenceManager.getDefaultSharedPreferences(reactContext),

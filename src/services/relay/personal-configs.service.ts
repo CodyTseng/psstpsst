@@ -1,3 +1,5 @@
+import { applyFavoritesEvent, queueFavoritesPublication } from '../explore/favorites';
+import { FAVORITES_D, KIND_APP_FAVORITES } from '../explore/favorites-protocol';
 import { KIND_USER_EMOJI_LIST } from '@/lib/nostr/custom-emoji';
 
 import { buildSigner } from '../account/account.service';
@@ -33,6 +35,7 @@ const KIND_FOLLOW_SET = 30000;
  */
 export async function syncPersonalConfigs(accountPubkey: string): Promise<void> {
   const keys: ReplaceableKey[] = [
+    { pubkey: accountPubkey, kind: KIND_APP_FAVORITES, dTag: FAVORITES_D },
     { pubkey: accountPubkey, kind: KIND_USER_EMOJI_LIST },
     { pubkey: accountPubkey, kind: KIND_BLOSSOM_SERVER_LIST },
     { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: MUTED_D },
@@ -56,7 +59,7 @@ export async function syncPersonalConfigs(accountPubkey: string): Promise<void> 
     relays,
   });
 
-  const [userEmojiList, mediaServers, muted, contacts, blocked] =
+  const [favorites, userEmojiList, mediaServers, muted, contacts, blocked] =
     await getReplaceableEvents(keys);
 
   await Promise.all([
@@ -64,10 +67,12 @@ export async function syncPersonalConfigs(accountPubkey: string): Promise<void> 
     applyUserEmojiListEvent(accountPubkey, userEmojiList),
     ...(signer
       ? [
+          applyFavoritesEvent(accountPubkey, favorites, signer),
           applyMutedEvent(accountPubkey, muted, signer),
           applyContactsEvent(accountPubkey, contacts, signer),
           applyBlockedEvent(accountPubkey, blocked, signer),
         ]
       : []),
   ]);
+  if (signer) queueFavoritesPublication(accountPubkey, signer);
 }

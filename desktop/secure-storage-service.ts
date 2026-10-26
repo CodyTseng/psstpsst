@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { safeStorage } from 'electron';
-import writeFileAtomic = require('write-file-atomic');
+import writeFileAtomic from 'write-file-atomic';
 
 const MAX_KEY_LENGTH = 512;
 const MAX_VALUE_LENGTH = 1024 * 1024;
@@ -71,7 +71,10 @@ export class SecureStorageService {
     return 'password_setup_required';
   }
 
-  async configurePassword(password: string): Promise<void> {
+  configurePassword(password: string, active: () => boolean = () => true): Promise<void> {
+    return this.serialized(() => this.configurePasswordNow(password, active));
+  }
+  private async configurePasswordNow(password: string, active: () => boolean): Promise<void> {
     if (password.length < MIN_PASSWORD_LENGTH || password.length > 256) {
       throw new Error('Application password must contain 8 to 256 characters');
     }
@@ -86,22 +89,37 @@ export class SecureStorageService {
     }
     const salt = randomBytes(16);
     const key = await derivePasswordKey(password, salt);
-    await this.writePasswordValues({}, key, salt);
+    if (!active()) { key.fill(0); throw new Error('Unlock cancelled'); }
+    try {
+      await this.writePasswordValues({}, key, salt);
+      if (!active()) throw new Error('Unlock cancelled');
+    } catch (error) { key.fill(0); throw error; }
     this.passwordKey = key;
     this.passwordSalt = salt;
   }
 
-  async unlockWithPassword(password: string): Promise<boolean> {
+  private unlockAfter = 0;
+  private unlockFailures = 0;
+  unlockWithPassword(password: string, active: () => boolean = () => true): Promise<boolean> {
+    return this.serialized(() => this.unlockWithPasswordNow(password, active));
+  }
+  private async unlockWithPasswordNow(password: string, active: () => boolean): Promise<boolean> {
+    if (Date.now() < this.unlockAfter) return false;
     if (!(await this.passwordFileExists())) return this.osEncryptionAvailable();
     try {
       const envelope = await this.readPasswordEnvelope();
       const salt = Buffer.from(envelope.salt, 'base64');
       const key = await derivePasswordKey(password, salt);
-      await this.decryptPasswordValues(envelope, key);
+      try { await this.decryptPasswordValues(envelope, key); } catch (error) { key.fill(0); throw error; }
+      if (!active()) { key.fill(0); return false; }
+      this.passwordKey?.fill(0);
       this.passwordKey = key;
       this.passwordSalt = salt;
+      this.unlockFailures = 0; this.unlockAfter = 0;
       return true;
     } catch {
+      this.unlockFailures++;
+      this.unlockAfter = Date.now() + Math.min(30_000, 1_000 * 2 ** Math.min(this.unlockFailures - 1, 5));
       return false;
     }
   }
@@ -171,7 +189,8 @@ export class SecureStorageService {
       decipher.update(Buffer.from(envelope.ciphertext, 'base64')),
       decipher.final(),
     ]);
-    const parsed: unknown = JSON.parse(plain.toString('utf8'));
+    let parsed: unknown;
+    try { parsed = JSON.parse(plain.toString('utf8')); } finally { plain.fill(0); }
     if (
       !parsed ||
       typeof parsed !== 'object' ||

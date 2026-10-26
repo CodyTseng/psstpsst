@@ -1,4 +1,5 @@
 import { SquareArrowRightUp as ExternalLink } from '@solar-icons/react-native/category/arrows/Linear/SquareArrowRightUp';
+import { router } from 'expo-router';
 import type { Event } from 'nostr-tools';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,12 +19,12 @@ import type { NostrEventReference } from '@/lib/nostr/event-reference';
 import { nostrEventUrl } from '@/lib/nostr/event-url';
 import { formatListTime } from '@/lib/time';
 import { canResolveReferencedEvent } from '@/services/nostr/event-reference.service';
-import { platform } from '@/platform';
 import { useChatPrefsStore } from '@/stores/chat-prefs.store';
 import { radius, spacing, useThemeColors } from '@/theme';
 
 import { MessageCardFooter } from './MessageCardFooter';
 import { MentionCard } from './MentionCard';
+import { openMessageUrl } from './open-message-url';
 import type { RemoteContentMode } from './remote-content-policy';
 
 type Props = {
@@ -89,7 +90,7 @@ function ResolvedHeader({ event, loadRemote }: { event: Event; loadRemote: boole
 
 /** A compact neutral card for a public-event reference block. Kind 1 gets a
  * bounded preview, kind 0 reuses MentionCard, and unsupported pointers remain
- * useful external links with their kind number visible. */
+ * useful links with their kind number visible. */
 function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: Props) {
   const { t } = useTranslation();
   const directionalIconStyle = useDirectionalIconStyle();
@@ -98,6 +99,7 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
   const resolvable = canResolveReferencedEvent(reference);
   const urlTemplate = useChatPrefsStore((s) => s.nostrEventUrl);
   const href = nostrEventUrl(reference, urlTemplate);
+  const app = reference.kind === 5129 || reference.kind === 15129 || reference.kind === 35129;
   const fallbackLabel =
     reference.kind == null
       ? t('chat.event_reference.event')
@@ -111,9 +113,12 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
     <Pressable
       disabled={!loadRemote}
       accessibilityRole="link"
-      accessibilityLabel={t('chat.event_reference.open_external')}
+      accessibilityLabel={t(app ? 'napplets.details' : 'napplets.open')}
       fallbackHoverOpacity={false}
-      onPress={() => void platform.urlOpener.openExternalUrl(href).catch(() => {})}
+      onPress={() => {
+        if (app) router.push({ pathname: '/napplet/[id]', params: { id: reference.bech32 } });
+        else void openMessageUrl(href);
+      }}
       style={{
         width: 280,
         maxWidth: '100%',
@@ -154,7 +159,7 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                 <ExternalLink size={14} color={c.accent} style={directionalIconStyle} />
                 <AppText variant="caption" tone="accent" numberOfLines={1}>
-                  {t('chat.event_reference.open_external')}
+                  {t(app ? 'napplets.details' : 'napplets.open')}
                 </AppText>
               </View>
             }

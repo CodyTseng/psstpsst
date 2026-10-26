@@ -1,5 +1,13 @@
 package chat.psstpsst.app.noise
 
+import chat.psstpsst.app.cryptoaccelerator.NativeVaultStorage
+import expo.modules.securestore.SecureStoreModule
+import expo.modules.securestore.SecureStoreOptions
+import expo.modules.kotlin.functions.Coroutine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
@@ -66,8 +74,57 @@ class ExpoNoiseModule : Module() {
   private val handshakes = ConcurrentHashMap<String, HandshakeBox>()
   private val sessions = ConcurrentHashMap<String, SessionBox>()
 
+  private val identityMutex = Mutex()
+  private val identityStore by lazy { NativeVaultStorage(appContext.reactContext ?: error("Vault context unavailable")) }
+  private fun identityName(account: String): String {
+    require(Regex("^[0-9a-fA-F]{64}$").matches(account)); return "proximity_identity_noise_privkey_$account"
+  }
+  private suspend fun identity(account: String, create: Boolean): ByteArray {
+    val name = identityName(account)
+    val legacy = appContext.registry.getModule<SecureStoreModule>() ?: error("Secure storage unavailable")
+    identityStore.migrateLegacy(legacy)
+    val saved = identityStore.read(name)
+    legacy.deleteItemImpl(name, SecureStoreOptions())
+    require(saved != null || create) { "Noise credential unavailable" }
+    val seed = saved?.let { value ->
+      require(Regex("^[0-9a-fA-F]{64}$").matches(value))
+      ByteArray(32) { value.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+    }
+    val result = try { generateKeyPairNative(seed) } finally { seed?.fill(0) }
+    try {
+      if (saved == null) identityStore.write(name, result.copyOfRange(0, 32).joinToString("") { "%02x".format(it) })
+      return result
+    } catch (error: Exception) { result.fill(0); throw error }
+  }
+  private fun createHandshake(role: String, staticPrivateKey: ByteArray, ephemeral: ByteArray?): String {
+    require(role == "initiator" || role == "responder") { "Invalid Noise role" }
+    val pointer = createHandshakeNative(role == "initiator", staticPrivateKey, ephemeral)
+    check(pointer != 0L) { "Noise handshake creation failed" }
+    val handle = UUID.randomUUID().toString(); handshakes[handle] = HandshakeBox(pointer); return handle
+  }
+
   override fun definition() = ModuleDefinition {
     Name("ExpoNoise")
+
+    AsyncFunction("ensureIdentityAsync") Coroutine { account: String ->
+      withContext(Dispatchers.IO) { identityMutex.withLock {
+        val pair = identity(account, true)
+        try { pair.copyOfRange(32, 64) } finally { pair.fill(0) }
+      } }
+    }
+    AsyncFunction("createAccountHandshakeAsync") Coroutine { account: String, role: String ->
+      withContext(Dispatchers.IO) { identityMutex.withLock {
+        val pair = identity(account, false); val secret = pair.copyOfRange(0, 32)
+        try { createHandshake(role, secret, null) } finally { pair.fill(0); secret.fill(0) }
+      } }
+    }
+    AsyncFunction("removeIdentityAsync") Coroutine { account: String ->
+      withContext(Dispatchers.IO) { identityMutex.withLock {
+        val name = identityName(account)
+        val legacy = appContext.registry.getModule<SecureStoreModule>() ?: error("Secure storage unavailable")
+        legacy.deleteItemImpl(name, SecureStoreOptions()); identityStore.remove(name)
+      } }
+    }
 
     AsyncFunction("generateKeyPairAsync") { seed: ByteArray? ->
       val result = generateKeyPairNative(seed)
@@ -76,16 +133,7 @@ class ExpoNoiseModule : Module() {
 
     AsyncFunction("createHandshakeAsync") {
       role: String, staticPrivateKey: ByteArray, fixedEphemeralPrivateKey: ByteArray? ->
-      require(role == "initiator" || role == "responder") { "Invalid Noise role" }
-      val pointer = createHandshakeNative(
-        role == "initiator",
-        staticPrivateKey,
-        fixedEphemeralPrivateKey,
-      )
-      check(pointer != 0L) { "Noise handshake creation failed" }
-      val handle = UUID.randomUUID().toString()
-      handshakes[handle] = HandshakeBox(pointer)
-      handle
+      createHandshake(role, staticPrivateKey, fixedEphemeralPrivateKey)
     }
 
     AsyncFunction("writeHandshakeAsync") { handle: String, payload: ByteArray ->

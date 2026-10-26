@@ -1,3 +1,5 @@
+import { endAccountSignerSession } from '@/services/signer/signer-sessions';
+import { nappletLifecycle } from '@/services/napplet/lifecycle';
 import { create } from 'zustand';
 
 import { createPerfSpan, profileAsync } from '@/lib/perf/profiler';
@@ -6,7 +8,6 @@ import {
   clearActiveAccountPubkey,
   getAccount,
   getActiveAccountPubkey,
-  migrateNip46BunkerSecrets,
   removeAccount as removeAccountFromStore,
   setAccountEncryptionPubkey,
   setActiveAccountPubkey,
@@ -32,7 +33,8 @@ import { resolveMessagingMetadataForStartup } from '@/services/dm/messaging-star
 import {
   generateEncryptionKeypair,
   getEncryptionPubkeyFromEvent,
-  loadEncryptionKeys,
+  loadEncryptionKeypair,
+  hasEncryptionKey,
   publishEncryptionKeyAnnouncement,
 } from '@/services/dm/encryption-key.service';
 import {
@@ -118,10 +120,10 @@ async function bootstrapAccount(
       }),
     );
 
-    const keys = await profileAsync(profile, 'db.loadEncryptionKeys', () =>
-      loadEncryptionKeys(pubkey),
+    const currentKey = await profileAsync(profile, 'db.loadEncryptionKeypair', () =>
+      loadEncryptionKeypair(pubkey),
     );
-    onPhase(keys.length === 0 ? 'initializing' : 'fetching_keys');
+    onPhase(!currentKey ? 'initializing' : 'fetching_keys');
     const metadata = await profileAsync(profile, 'relay.resolveMessagingMetadata', () =>
       resolveMessagingMetadataForStartup(pubkey, {
         signAuth: (event) => signer.signEvent(event),
@@ -132,7 +134,7 @@ async function bootstrapAccount(
     const { dmRelays, announcementRelays: keyAnnouncementRelays, announcement } = metadata;
     const remote = announcement ? getEncryptionPubkeyFromEvent(announcement) : null;
 
-    if (keys.length === 0) {
+    if (!currentKey) {
       // No local key. Either this identity already has one on another device
       // (a key is announced → wait for Key Transfer; generating would overwrite
       // the announcement and make the other device's messages undecryptable), or
@@ -165,22 +167,23 @@ async function bootstrapAccount(
       // announced that we don't have at all. Otherwise we're current — or ahead
       // (we still hold the announced key as an older one, e.g. just after a local
       // rotation) — so (re)announce our current key to let the network catch up.
-      const haveRemote = remote != null && keys.some((k) => k.pubkey === remote);
-      if (remote && remote !== keys[0].pubkey && !haveRemote) {
+      const haveRemote = remote != null && (remote === currentKey.pubkey || await hasEncryptionKey(pubkey, remote));
+      checkBootstrap(signal);
+      if (remote && remote !== currentKey.pubkey && !haveRemote) {
         await profileAsync(profile, 'db.setEncryptionPubkey', () =>
           setAccountEncryptionPubkey(pubkey, remote),
         );
         outcome = 'need-sync';
         return { kind: 'need_sync' };
       }
-      if (remote !== keys[0].pubkey) {
+      if (remote !== currentKey.pubkey) {
         await profileAsync(profile, 'db.setEncryptionPubkey', () =>
-          setAccountEncryptionPubkey(pubkey, keys[0].pubkey),
+          setAccountEncryptionPubkey(pubkey, currentKey.pubkey),
         );
         await profileAsync(profile, 'relay.publishKeyAnnouncement', () =>
           publishEncryptionKeyAnnouncement({
             signer,
-            encryptionPubkey: keys[0].pubkey,
+            encryptionPubkey: currentKey.pubkey,
             relays: keyAnnouncementRelays,
           }),
         );
@@ -261,11 +264,11 @@ async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
       outcome = 'local-created';
       return;
     }
-    const keys = await profileAsync(profile, 'db.loadEncryptionKeys', () =>
-      loadEncryptionKeys(pubkey),
+    const currentKey = await profileAsync(profile, 'db.loadEncryptionKeypair', () =>
+      loadEncryptionKeypair(pubkey),
     );
     checkBootstrap(signal);
-    if (keys.length > 0) {
+    if (currentKey != null) {
       await profileAsync(profile, 'holdAtLeast', () => holdAtLeast(startedAt, minHoldMs));
       checkBootstrap(signal);
       useActiveAccount.setState({
@@ -363,15 +366,15 @@ async function backgroundSync(pubkey: string, signal: AbortSignal, localMetadata
       signerType: account.signerType,
       signerPayload: account.signerPayload,
     });
-    const [keys, dmRelays, announcementRelays] = await Promise.all([
-      loadEncryptionKeys(pubkey),
+    const [currentKey, dmRelays, announcementRelays] = await Promise.all([
+      loadEncryptionKeypair(pubkey),
       loadAccountDmRelays(pubkey),
       ownKeyAnnouncementRelays(pubkey),
     ]);
     if (!isCurrent()) return;
-    if (!keys[0]) throw new Error('No messaging encryption key is available.');
+    if (!currentKey) throw new Error('No messaging encryption key is available.');
     await rotateEncryptionKeyIfDue({
-      accountPubkey: pubkey, signer, dmRelays, announcementRelays, currentKey: keys[0],
+      accountPubkey: pubkey, signer, dmRelays, announcementRelays, currentKey,
     });
   } catch (error) {
     // Metadata unavailability retries inside preparation. Other failures keep
@@ -399,7 +402,6 @@ export const useActiveAccount = create<State>((set, get) => ({
     if (get().status === 'loading' || get().status === 'ready') return;
     set({ status: 'loading' });
     try {
-      await migrateNip46BunkerSecrets();
       const pk = await getActiveAccountPubkey();
       if (!pk) {
         set({ activePubkey: null, status: 'ready' });
@@ -424,6 +426,7 @@ export const useActiveAccount = create<State>((set, get) => ({
   },
 
   async setActive(pubkey) {
+    nappletLifecycle.deactivate();
     // Switching identities (this also serves the very first sign-in and adding a
     // second account): tear the whole session down before bringing the target
     // online. Relays especially must be closed — a socket already
@@ -444,12 +447,14 @@ export const useActiveAccount = create<State>((set, get) => ({
     // screen instead — identical to a first sign-in, so *creating* an account looks
     // the same whether it's launched from onboarding or from "Add account" in the
     // switcher. (Read keys before the teardown below — it doesn't touch relays.)
-    const established = isSwitch && (await loadEncryptionKeys(pubkey)).length > 0;
+    const previousAccount = get().activePubkey;
+    const established = isSwitch && (await loadEncryptionKeypair(pubkey)) != null;
     bootstrapAbort?.abort();
     cancelMessagingSendPreparation();
     configurationPublisher.stop();
     dmService.destroy();
     relayPool.destroy();
+    if (previousAccount) await endAccountSignerSession(previousAccount);
     // On a switch to an established account, keep the *old* `activePubkey` until the
     // new one is ready: the navigator stays mounted underneath while the switch
     // overlay (driven by `switchingTo`) fades over it, so there's no unmount/flash —
@@ -471,10 +476,13 @@ export const useActiveAccount = create<State>((set, get) => ({
   },
 
   async signOut() {
+    const previousAccount = get().activePubkey;
+    nappletLifecycle.deactivate();
     // Clear the durable pointer before changing the in-memory session so a
     // failed write cannot appear to sign out and then restore the account on
     // the next launch. Account rows and key material remain intact.
     await clearActiveAccountPubkey();
+    if (previousAccount) await endAccountSignerSession(previousAccount);
     bootstrapAbort?.abort();
     cancelMessagingSendPreparation();
     configurationPublisher.stop();
@@ -491,6 +499,7 @@ export const useActiveAccount = create<State>((set, get) => ({
   },
 
   async removeAccount(pubkey) {
+    nappletLifecycle.removing(pubkey);
     configurationPublisher.stop(pubkey);
     const wasActive = get().activePubkey === pubkey;
     if (wasActive) {
@@ -553,7 +562,7 @@ export const useActiveAccount = create<State>((set, get) => ({
     dmService.destroy();
     // Keep all local keys — they're still needed to decrypt history, and the
     // single key list never drops them. We just record the newer announced key
-    // and gate on Key Transfer: bootstrap sees keys[0] ≠ announcement and stays
+    // and gate on Key Transfer: bootstrap sees currentKey ≠ announcement and stays
     // in need_sync until the new key is imported (prepended).
     await setAccountEncryptionPubkey(pk, newEncryptionPubkey);
     set({ activePubkey: null, status: 'need_sync', syncTargetPubkey: pk });

@@ -24,7 +24,7 @@ jest.mock('../account.service', () => ({
 }));
 jest.mock('../../signer/signer-factory', () => ({ createSigner: async () => ({}) }));
 jest.mock('../../dm/encryption-key.service', () => ({
-  loadEncryptionKeys: async () => mockKeys,
+  loadEncryptionKeypair: async () => mockKeys[0] ?? null,
   generateEncryptionKeypair: jest.fn(async () => {
     const key = { pubkey: 'local-key', privkey: new Uint8Array(32), createdAt: 100 };
     mockKeys = [key];

@@ -12,7 +12,7 @@ import { requestLnurlPayInvoice, resolveLnurlPayTarget } from '@/services/wallet
 const INVOICE = 'lnbc1u1qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 let mockInput = INVOICE;
 let mockCameraGranted = false;
-let mockWallets: Array<{ id: string; isDefault: boolean; name: string; customName: null }> = [];
+let mockWallets: { id: string; isDefault: boolean; name: string; customName: null }[] = [];
 
 jest.mock('expo-router', () => ({
   router: { back: jest.fn(), replace: jest.fn(), push: jest.fn() },
@@ -83,7 +83,6 @@ jest.mock('@/components/wallet/WalletPaymentStatus', () => ({
 jest.mock('@/components/wallet/WalletPaymentConfirmSheet', () => ({
   WalletPaymentConfirmSheet: () => null,
 }));
-jest.mock('@/components/wallet/WalletPinSheet', () => ({ WalletPinSheet: () => null }));
 jest.mock('@/components/wallet/external-invoice-payment', () => ({
   ExternalInvoicePayment: () => null,
 }));
@@ -124,11 +123,7 @@ jest.mock('@/services/wallet/lnurl', () => {
   };
 });
 
-jest.mock('@/services/wallet/wallet-pin.service', () => ({
-  authorizeWalletPin: jest.fn(),
-  setWalletPin: jest.fn(),
-  walletAuthenticationMode: jest.fn(),
-}));
+
 
 jest.mock('@/services/wallet/wallet.service', () => ({
   payInvoice: jest.fn(),
@@ -175,7 +170,7 @@ describe('WalletSendScreen payment options', () => {
     const pasteButton = renderer!.root.findAllByType(RoundOverlayAction)
       .find((button) => button.props.label === 'wallet.paste');
     await act(async () => { await pasteButton!.props.onPress(); });
-    expect(showToast).toHaveBeenCalledWith('common.paste_failed', { target: 'detail' });
+    expect(showToast).toHaveBeenCalledWith('common.paste_failed', { variant: 'error', target: 'detail' });
     expect(renderer!.root.findAllByType(ExternalInvoicePayment)).toHaveLength(0);
     await act(async () => { await pasteButton!.props.onPress(); });
     expect(renderer!.root.findByType(ExternalInvoicePayment).props.invoice).toBe(INVOICE);

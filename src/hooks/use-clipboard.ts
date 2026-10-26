@@ -37,10 +37,10 @@ export function useClipboard<Key extends string = string>({
     };
   }, [clearTimer]);
 
-  const copyText = useCallback(async (text: string, key?: Key): Promise<boolean> => {
+  const copyWith = useCallback(async (write: () => Promise<void | boolean>, key?: Key): Promise<boolean> => {
     const currentRequest = ++request.current;
     try {
-      await platform.clipboard.writeText(text);
+      if (await write() === false) return false;
       if (trackCopied && mounted.current && currentRequest === request.current) {
         clearTimer();
         setConfirmation({ key: key ?? null });
@@ -53,23 +53,27 @@ export function useClipboard<Key extends string = string>({
     } catch {
       if (mounted.current && currentRequest === request.current) {
         resetCopied();
-        showToast(t('common.copy_failed'), toastTarget ? { target: toastTarget } : undefined);
+        showToast(t('common.copy_failed'), { variant: 'error', target: toastTarget });
       }
       return false;
     }
   }, [clearTimer, resetCopied, t, toastTarget, trackCopied]);
 
+  const copyText = useCallback((text: string, key?: Key): Promise<boolean> =>
+    copyWith(() => platform.clipboard.writeText(text), key), [copyWith]);
+
   const readText = useCallback(async (): Promise<string | null> => {
     try {
       return await platform.clipboard.readText();
     } catch {
-      showToast(t('common.paste_failed'), toastTarget ? { target: toastTarget } : undefined);
+      showToast(t('common.paste_failed'), { variant: 'error', target: toastTarget });
       return null;
     }
   }, [t, toastTarget]);
 
   return {
     copyText,
+    copyWith,
     readText,
     copied: confirmation !== null,
     copiedKey: confirmation?.key ?? null,

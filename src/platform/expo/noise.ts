@@ -3,6 +3,9 @@ import type { NoisePort } from '../ports/noise';
 import ExpoNoise from '../../../modules/expo-noise';
 
 export const noiseAdapter: NoisePort = {
+  ensureIdentity: account => ExpoNoise.ensureIdentityAsync(account),
+  createAccountHandshake: (account, role) => ExpoNoise.createAccountHandshakeAsync(account, role),
+  removeIdentity: account => ExpoNoise.removeIdentityAsync(account),
   generateKeyPair: (seed) => ExpoNoise.generateKeyPairAsync(seed ?? null),
   createHandshake: (role, staticPrivateKey, fixedEphemeralPrivateKey) =>
     ExpoNoise.createHandshakeAsync(role, staticPrivateKey, fixedEphemeralPrivateKey ?? null),

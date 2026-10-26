@@ -5,7 +5,6 @@ import { KeyboardAvoidingView, View } from 'react-native';
 import { AppBrandMark } from '@/components/common/AppBrandMark';
 import { AppButton } from '@/components/common/AppButton';
 import { AppContentColumn } from '@/components/common/AppContentColumn';
-import { AppInput } from '@/components/common/AppInput';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '@/lib/platform';
@@ -19,34 +18,17 @@ type Props = {
 
 /** First-run fallback when the OS cannot provide credential-grade secret storage. */
 export function AppPasswordScreen({ mode, onUnlocked }: Props) {
-  const { t } = useTranslation();
-  const [password, setPassword] = useState('');
-  const [confirmation, setConfirmation] = useState('');
+  const { t, i18n } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const validSetup = password.length >= 8 && password === confirmation;
-
   async function submit() {
-    if (submitting || (mode === 'setup' && !validSetup) || !password) return;
-    setSubmitting(true);
-    setError(null);
+    if (submitting) return;
+    setSubmitting(true); setError(null);
     try {
-      if (mode === 'setup') {
-        await platform.secureStorage.configurePassword(password);
-        onUnlocked();
-        return;
-      }
-      if (await platform.secureStorage.unlockWithPassword(password)) {
-        onUnlocked();
-      } else {
-        setError(t('secure_storage.wrong_password'));
-      }
-    } catch {
-      setError(t('secure_storage.failed'));
-    } finally {
-      setSubmitting(false);
-    }
+      if (await platform.security.requestUnlock(mode, { language: i18n.language })) onUnlocked();
+    } catch { setError(t('secure_storage.failed')); }
+    finally { setSubmitting(false); }
   }
 
   return (
@@ -64,40 +46,7 @@ export function AppPasswordScreen({ mode, onUnlocked }: Props) {
               </AppText>
             </View>
 
-            <View style={{ gap: spacing.md }}>
-              <AppInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder={t('secure_storage.password')}
-                secureTextEntry
-                maxLength={256}
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="password"
-                description={
-                  mode === 'setup' ? t('secure_storage.recovery_warning') : undefined
-                }
-                error={mode === 'unlock' ? error ?? undefined : undefined}
-                onSubmitEditing={() => {
-                  if (mode === 'unlock') void submit();
-                }}
-              />
-              {mode === 'setup' ? (
-                <AppInput
-                  value={confirmation}
-                  onChangeText={setConfirmation}
-                  placeholder={t('secure_storage.confirm_password')}
-                  secureTextEntry
-                  maxLength={256}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  textContentType="newPassword"
-                  invalid={confirmation.length > 0 && password !== confirmation}
-                  error={error ?? undefined}
-                  onSubmitEditing={() => void submit()}
-                />
-              ) : null}
-            </View>
+            {error ? <AppText variant="body" tone="danger">{error}</AppText> : null}
           </View>
 
           <AppButton
@@ -105,7 +54,6 @@ export function AppPasswordScreen({ mode, onUnlocked }: Props) {
             variant="primary"
             size="lg"
             loading={submitting}
-            disabled={mode === 'setup' ? !validSetup : !password}
             onPress={() => void submit()}
           />
         </AppContentColumn>

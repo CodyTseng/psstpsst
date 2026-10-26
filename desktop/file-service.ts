@@ -16,6 +16,8 @@ import {
 } from 'electron';
 import sharp from 'sharp';
 import yauzl from 'yauzl';
+import writeFileAtomic from 'write-file-atomic';
+import { updateJson, type JsonObject } from '../src/platform/shared/update-json';
 
 import { readRemoteBody } from '../src/platform/shared/read-remote-body';
 
@@ -157,6 +159,14 @@ export class FileService {
 
   async writeText(uri: string, contents: string): Promise<void> {
     await fs.writeFile(this.resolveMutable(uri), contents, 'utf8');
+  }
+
+  async updateJson(uri: string, patch: JsonObject): Promise<void> {
+    const file = this.resolveMutable(uri);
+    await updateJson(file, patch, async () => {
+      try { return await fs.readFile(file, 'utf8'); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+    }, async text => { await writeFileAtomic(file, text, { encoding: 'utf8' }); });
   }
 
   async writeBytes(uri: string, bytes: Uint8Array): Promise<void> {

@@ -56,6 +56,24 @@ The adapter registry is initialized before routes and services. Expo is the
 mobile default. Electron installs its adapters synchronously from the preload
 bridge before Expo Router evaluates application modules.
 
+Android application tasks use non-exported document Activities with separate
+React surfaces on one trusted ReactHost. Each application owns its runtime,
+WebView and cancellation scope; account services and the serialized approval
+queue remain process-owned. Only the foreground Activity presents that queue.
+Account lifecycle changes and source access revocation close the affected tasks.
+Website opening preferences are host-owned account/site data, separate from
+capability grants. Website keys retain their full shortcut URL; signed site keys
+omit relay hints. Launchers read the saved website choice before selecting a host;
+napps and napplets always use independent native hosts when available.
+Both the main Android Activity and independent application tasks cancel pending
+web input when predictive back starts, using the same native callback.
+Native application hosts deduplicate opens by account and canonical application
+source. Their process-owned instance registry drives focused-window restoration
+and UI running indicators; icons never infer running state from visit history.
+Task intents carry opaque in-memory
+session identifiers, so process death removes stale tasks rather than restoring
+account authority from intent extras.
+
 Electron application-binary updates run in the main process behind the
 `appUpdate` port. The renderer owns localized consent, while automatic download
 and install-on-quit remain disabled so each phase requires an explicit action.
@@ -94,6 +112,13 @@ the renderer's perspective on every runtime.
   and the cached event after decryption.
 - Live queries subscribe through `src/db/use-live-query.ts`; UI never imports
   the Expo SQLite binding.
+
+Storage upgrades run after SQLite setup and secure-storage unlock, before preferences,
+account bootstrap, notification initialization, or application content. The upgrade
+covers inactive accounts, normalizes message keys inside the vault, binds existing
+wallet routing metadata without consent prompts, and moves legacy preferences into
+SQLite. Completion is recorded only after every step succeeds; interrupted work is
+idempotent and retryable, and old records are removed only after successful writes.
 
 Account removal deletes its secrets, managed attachments, archive data, and
 account-scoped database rows. Shared caches are removed only when no remaining
@@ -154,10 +179,70 @@ Encryption-key announcement and synchronization are specified in the
 timestamps, and stable-group events are specified in
 [PsstPsst NIP-17 Extensions](protocols/nip17-extensions.md).
 
-All signing goes through the `Signer` interface. Local private keys, remote
-NIP-46 signers, encryption-key rotation, and device key transfer remain behind
-that boundary. Remote NIP-46 round-trips are bounded; a timeout tears down the
-cached bunker session so a later operation reconnects cleanly.
+All account signing goes through `Signer`. An account owns its implementation;
+consumers hold revocable leases. Closing an application releases only its lease.
+Ending an account session invalidates outstanding results and releases connections
+and cached keys without deleting saved credentials. Only explicit account removal
+or credential replacement deletes or replaces persistent secrets. NIP-46 client keys are generated inside sealed pairing sessions, never supplied by
+callers. A completed handshake installs a client once; subsequent pairing attempts
+cannot replace its key or saved credential. Account removal deletes the complete
+connection credential set. Legacy DB-secret migration fills only an empty slot.
+Saved bunker credentials bind their recipient public key. Startup migration trusts
+existing SQLite routing metadata to establish missing legacy bindings; existing
+bindings cannot be replaced. Subsequent unbound connections require trusted confirmation. Bunker timeouts
+discard the connection and permit a later reconnect.
+
+Stored account identity keys, relay messaging keys, nearby signing/Noise identities and NIP-46 credentials are accessible only
+inside the key vault: an Electron worker or mobile native module. Generic storage
+bridges reject those namespaces. Mobile vault storage uses native-only records separate
+from Expo SecureStore. iOS uses a separate Keychain item class: only messaging keys
+use a dedicated messaging access group; all other credentials use an explicit
+app-private group. The extension has no entitlement to the previous all-shared
+group; only the app retains it for migration. Android uses atomic AES-GCM files
+under its no-backup directory with a dedicated Keystore alias. Legacy
+credentials migrate within native code; old records are removed after the durable
+write. A durable migration marker prevents later SecureStore writes from being
+reimported as vault credentials, including after restart. Noise handshakes consume saved static keys without returning their bytes.
+Wallet NWC secrets and PIN verifiers share native/worker custody. The host relays
+only fixed-method, encrypted requests and verified responses; wallet keys have no
+generic signing or decryption reference. Payment authentication runs in the trusted
+platform before an invoice-bound request can be signed. PIN failure counts and cooldown
+deadlines persist with the verifier across process restarts. Signed NWC request events
+pass through the host transport; wallet-side request deduplication remains necessary
+because encrypted network events can be replayed. Trusted approval derives
+the amount from that invoice and rejects unreviewed monetary override parameters. PIN fields and approval
+state never enter host JavaScript. Startup migration binds legacy wallet credentials
+to their existing SQLite peer and relays without prompting; later requests cannot replace that binding. Wallet migration has its own durable marker and cannot
+reopen completed signer migration.
+The public platform facade excludes raw secret storage and vault transport; only designated key-owning
+services may import the internal transport. Ordinary consumers receive the narrow
+Signer capability. These code boundaries prevent accidental access; native/worker
+validation and the absence of secret-read operations enforce secret custody.
+Trusted platform gateways own request dispatch, input surfaces, confirmations and
+clipboard export. They hold no key storage or business state; key-purpose and
+protocol validation remain inside the vault.
+User-supplied import credentials may pass transiently through host forms. Import
+returns only public metadata, never stored secrets. Identity import has a dedicated
+input-only operation outside generic dispatch.
+Messaging services receive only current-key public metadata and membership-query results;
+the retained key list stays inside the vault. Account message decryption
+selects current and retained keys inside the vault, uses the same key for both envelope layers,
+and returns unreadable events as outcomes rather than infrastructure errors.
+Messaging-key decryption is unavailable through the generic crypto operation.
+Key transfer produces or imports encrypted packages inside the vault. New-account identity material and
+key-sync temporary keys are native-owned and discarded when its task ends.
+All account backup, including newly generated accounts, and outgoing key transfer require trusted platform confirmation with bundled
+localized wording; callers select a language, never supply approval text. Backup
+copies inside that boundary and never returns an nsec to the renderer; it does not
+automatically clear the clipboard. iOS backup writes are local-only to prevent Universal Clipboard synchronization. The existing OS-backed vault and desktop
+password fallback remain the storage protection and unlock mechanisms. Desktop
+password entry uses a separate sandboxed security window; the host receives only
+an unlock outcome. A small allowlist is the only remaining legacy-preference
+reader, and it cannot access credentials.
+Only the main app migrates Keychain records; notifications arriving before the
+first upgraded app launch use the generic fallback.
+Notification processing uses a separate native vault with only messaging
+decryption and fixed event-retrieval authentication authority.
 
 ## 5. Relay routing
 
@@ -179,6 +264,12 @@ URLs, reuses managed connections, applies timeouts, and records per-target
 results. Services do not open ad hoc relay connections.
 Local relay-settings readers sit below routing and publication and never import
 either layer.
+
+`RelayTimeline` owns reusable in-memory event pagination. Each relay/query pair
+has an independent cursor and buffer; ordered merging and event-ID deduplication
+happen before results reach consumers. Callers supply the verified transport and
+own domain parsing, display windows and cache policy. Durable message-history
+coverage remains in the separate account/relay sync cursor store.
 
 Relay addresses share `src/lib/nostr/relay-url.ts` normalization at input,
 metadata, persistence-read, and transport boundaries. Equivalent addresses use
@@ -653,6 +744,17 @@ Wallet connections are non-custodial. NWC connection strings pass between
 routes only through ephemeral memory, never URL parameters. Their secrets stay
 in secure storage, and a payment requires system authentication or the
 account's wallet PIN immediately before the request is sent.
+Explore exposes a document-scoped WebLN provider over those NWC connections.
+Initialization requires no access approval and is independent of signer grants.
+Each debit selects its wallet in a fresh host review and requires authentication.
+Navigation and source permission changes invalidate pending payment consent;
+the wallet queue rechecks it immediately before
+publication. Account-owned payment-hash claims commit before publication and
+survive wallet removal and application-data resets. Uncertain results never
+trigger an automatic retry. Only a verified payment preimage completes a page's
+payment request. Implementation details live in
+[`implementation/webln.md`](implementation/webln.md).
+
 
 ## 13. Change rules
 
@@ -664,3 +766,238 @@ account's wallet PIN immediately before the request is sent.
   `docs/protocols/`. Product, persistence, runtime, and delivery details belong
   under `docs/implementation/`, in code, or in tests.
 - Visual conventions belong in [`DESIGN.md`](./DESIGN.md), not here.
+
+## Explore
+
+Explore opens Nostr application/site addresses and HTTP(S) URLs through isolated
+platform containers. Napplets retain their sealed NAP runtime. Napps and nsites
+load signature-verified multi-file manifests and hash-verified assets; websites
+load their actual URL and receive a bounded NIP-07 bridge. The host alone assigns
+the requesting main-frame origin and document lifetime. Navigation cancels old
+approvals. Navigation start blocks document requests until a trusted commit event;
+requests cannot establish or replace a document lifetime. Native response-download
+policies are separately bound to the pending navigation and its initiating committed
+document. A retained DOM can resume after an uncommitted load ends, with a fresh token
+and lifetime; previously aborted operations stay revoked. Websites expose privileged
+capabilities only over HTTPS. Subframes receive no independent bridge, but same-origin
+frames and scripts share the top-level origin's authority. Untrusted embedded content
+must use an independent origin or an opaque sandbox without same-origin access.
+Remembered permissions trust the application identity or website origin across content
+updates until expiry or revocation; content updates do not establish new trust identities.
+Website signing grants bind the full origin, while
+Nostr applications and sites use canonical naddr identities.
+Protocol-specific route adapters supply data and actions to shared application
+presentation components. Details-page consent is bound to the exact displayed
+requirements; changing requirements invalidates that reviewed launch consent.
+
+Browser UI requests retain host-assigned origin and document authority. Native
+permission, new-window and download callbacks resolve only after core consent;
+document replacement cancels stale callbacks. File pickers and native page dialogs
+remain platform-owned. Browser exports stage bounded files through asynchronous
+ports before the system destination picker. Website notifications have a separate
+native delivery path and never modify messaging badges.
+
+Public application manifests use the shared replaceable-event cache by canonical
+coordinate, with one latest event per application. Immutable kind-5129 applications
+and message references share the event-ID cache. Valid cached releases render
+immediately; stale coordinates refresh asynchronously with the application's
+relay routing and transport budgets. Only completed lookups renew freshness.
+Failed lookups retain usable releases and retry with a bounded delay. Parsed
+manifests are memoized within a bounded process cache; browsing caches public
+metadata without recording visits or publishing it to the local relay.
+
+Favorites are ordered references from the account's encrypted kind-30267 event,
+not a separate membership table. The private-list revision state retains a derived
+decrypted snapshot for offline reads and a durable draft for unsigned local edits.
+Signing and the existing configuration outbox atomically retire the exact draft
+revision. Remote reconciliation cannot overwrite dirty or pending local work.
+History remains device-local. Metadata changes preserve favorite order and recency;
+database change notifications keep sibling hosts' read models current.
+Cross-application action and intent handlers derive membership only from the
+current account's favorites. Installations, history and live endpoints do not
+grant membership. Dispatch rechecks favorites after target selection;
+removing a favorite excludes it from subsequent handoffs without closing its app.
+Favorites reads its saved membership snapshot and only the requested metadata
+pages. Saved local titles render before first-page manifest verification and
+metadata hydration, which run in a later task. List navigation never decrypts
+events or waits for a signer; configuration synchronization prepares the durable
+plaintext snapshot. It does not initialize application runtimes or poll metadata; shared
+metadata events update existing entries directly. Runtime initialization belongs
+to launch and application-management flows. History changes never invalidate
+Favorites membership. History listing has a separate
+page-owned reader and is queried only while its page is open, using bounded
+keyset pages independently of the Favorites read model. Each entry into Favorites
+or History queries its own first page again; account startup does not prepare
+either list. Page metadata reads use the current database rows rather than a
+potentially stale process mirror.
+Application metadata notifications identify one application. Lists replace only
+that item's metadata while preserving other item identities, order, recency and
+pagination cursors. Sibling hosts invalidate and read only the notified cache key;
+table-wide cache notifications never reload these lists.
+
+Running applications pin their launch manifest and loaded resources. New cache
+versions update lists immediately, but foreground instances require explicit
+restart consent after other approval overlays close. Each target version prompts
+once per running instance; a declined update remains available on the next launch.
+Accepted restarts await release of the old runtime, its container and capability
+connections before initializing the new version. Route-driven and explicit startup
+share one in-flight task for the current launch lifetime. Metadata lookups share
+network work independently of each caller's lifetime; cancellation stops that work
+only after its last consumer leaves.
+
+Application libraries retain their loaded account snapshot across route changes
+and share unfinished initialization. Account lifecycle changes discard that
+snapshot; visible library consumers restore unloaded snapshots. Local Favorites
+reads do not wait behind legacy-library reads.
+
+Discovery queries napp and napplet manifests in bounded pages only from dedicated
+relays for each format, without falling back to general-purpose relays. Results are verified
+and deduplicated in a temporary catalogue, and share the existing detail
+presentation. Independent relay cursors and buffered merging preserve newest-first
+ordering as the visible list grows incrementally. Local search reads the verified
+fetched catalogue independently of the visible browsing window and never advances
+relay cursors. Exact-address search checks cached and saved applications before
+resolving a manifest from explicit hints or, when absent, author write relays plus
+dedicated format relays. Its bounded account-scoped result cache does not admit
+applications to discovery or record visits. Query replacement cancels stale reads.
+Browsing never records a visit or writes to the local relay; adding
+a favorite persists its event reference independently of history.
+Publisher catalogues additionally include nsites from dedicated relays, with an
+exact author filter and local authorship verification. Their bounded, temporary results share the
+application detail flow without changing saved applications or discovery results.
+Application sharing sends only the canonical `nostr:` application reference (or
+the URL for unsigned websites), without a title or surrounding prose. Clipboard,
+in-app forwarding and separate-window handoffs preserve the same link.
+Application reviews are public NIP-22 discussions scoped to the verified
+application coordinate or website URL. Their bounded, virtualized read models
+stay separate from private messages and mini-app signing grants. Explicit user
+posts use the account identity signer; account lifecycle changes cancel reads,
+signing and publishing before results can enter a replacement session.
+
+Favorite membership/order is read from the event snapshot; account-scoped
+metadata projections and distinct-address history remain separate. Favorites synchronize as a private NIP-51
+kind-30267 snapshot through the shared private-list queue, configuration outbox
+and self-event intake. A full local draft and dirty revision commit before
+background encryption/signing; dirty or signed-pending work blocks remote echoes.
+Recency and grants remain device-local. Unresolved references retain membership;
+verified metadata hydrates in bounded workers and refreshes one entry at a time.
+See [the favorites wire format](protocols/application-favorites.md).
+Opening changes recency only. The cache is bounded
+by 512 recent addresses plus 512 shortcuts. Existing napplet membership and recency
+migrate atomically. Platform website data uses account-specific profiles; removing
+an account clears its profile as well as its database rows. Old iOS versions without
+named profiles use nonpersistent website data instead of sharing account cookies.
+No browser-style forward/back controls are part of Explore.
+
+The in-process local relay stores explicitly submitted, signature-verified public
+events in a device-wide SQLite cache without account ownership. Only explicit
+event-store writes persist events; remote queries, metadata reads, and relay
+subscriptions do not populate it automatically. Single-letter tag lookups use a
+covering index, and bounded queries filter in SQL before decoding event payloads.
+Local subscriptions observe committed additions only and end with their document.
+Private chat tables and signer credentials never feed this cache; remote relay
+connections and AUTH remain account-bound. No WebSocket listener is opened.
+
+## Napplet isolation
+
+Napplets run under the current persisted account in a separate platform container.
+Changing accounts or locking the application invalidates the execution session
+before new work can start. App storage, grants and settings are scoped by account,
+verified manifest identity. Upgrades retain storage, configuration and capability
+grants; newly required capabilities need fresh consent. Declared optional capabilities remain callable before
+authorization, but their first use waits for host consent. Allows and explicit
+denials are account/application-scoped; cancellation is not a saved denial.
+Concurrent requests share authorization, and no operation runs before consent.
+Artifact hashes identify code and cache entries. Runtime relay AUTH connections never borrow the chat session. Identity-signing
+leases share the account-owned implementation independently of application relay pools. Only hash-verified immutable
+artifacts are shared across accounts. Artifact storage groups files by canonical
+application coordinate under `documents/app-artifacts/`, with content hashes
+identifying originals inside each application's `files/` directory. The application
+directory's outer level is reserved for host-managed materials. See [napplet runtime](implementation/napplet-runtime.md).
+Host-owned cache metadata records version file sets and icon locations through
+serialized atomic merges. It never supplies signing authority or replaces signed
+manifests; runtime files remain hash-verified.
+Website artwork is indexed by canonical origin in a separate website directory.
+Local display files survive restarts; refreshes retain usable artwork and use the
+same bounded public-resource transport as application downloads.
+Mini-app desktop membership and position are explicit account-scoped state,
+independent of launch recency. Desktop edits commit atomically and never change
+app data or grants. The recent preview shows one row; full recent history derives from the bounded
+installation library.
+Signing authorization belongs to the shared signing service, independently of app
+storage. Event rules bind an account, a host-verified source, operation, event kind and
+an optional `scope_key` qualifier. Addressable events derive that qualifier from
+the actual d tag; other operations may use their own trusted scope identifier.
+Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
+service with separate method scopes, independent of the cryptographic peer. Every
+call uses the current verified source. Launch access never bypasses signer
+authorization, and revocation invalidates pending results before disclosure.
+Approvals are committed before invoking the signer; signer latency does not
+expire them. Remembered rules have no per-source count or aggregate-size quota.
+Signing, publication and local event ingestion share NIP-01 structure validation;
+transport and cache budgets do not define event validity.
+Sources are canonical naddr IDs or host-verified HTTP(S) website origins (scheme,
+host and effective port), without a source type or code version; immutable legacy listings use canonical event IDs. Durable rules and a
+bounded metadata-only activity journal have separate tables. Session grants stay
+in memory. Relay AUTH and public-file uploads use explicit signer permissions
+with Once, timed and Always decisions. Relay AUTH grants cover all relays for
+that account/source and leave `scope_key` empty; upload grants retain reviewed
+storage destinations. Legacy relay-specific AUTH decisions merge to the newest
+active decision per account/source, with denial winning timestamp ties.
+File metadata accompanies upload review, and its authorization covers the
+host-built storage authentication event. Upload bytes, temporary files and
+status belong to one execution session; stopping it cancels uploads and cleans
+staged files. Migration retains a read-only backup of old app namespaces and
+imports only rules whose scope can be preserved exactly. Host-owned approval IDs
+bind responses to one request; cancellation invalidates queued approvals before
+a session is replaced.
+Authorization work is serialized by account and verified source across signer and
+browser permission controllers. A decision settles after sheet dismissal, and
+the next request reads authority after that decision has committed.
+Each source queue has one worker. Canceling a waiting request removes only that
+entry; canceling the active caller does not release its processing slot until
+the active work finishes.
+Signing revocation invalidates cached approvals and in-flight signatures, then
+serializes persistent removal without stopping unrelated executions. App access
+changes restart the affected container. Host overlays block app input through
+their full exit. Mobile modals retain the live page underneath; Electron replaces
+its elevated native view with an ephemeral renderer preview while the sheet is open.
+Shared sheet/dialog presentation lifetime covers every embedded application,
+including overlays opened outside the application runtime. Electron hides the
+native view immediately rather than waiting for preview capture or image decoding.
+Sharing is an embedded host flow: the execution container remains mounted but
+hidden, background consent waits until the picker closes, and sending never
+navigates to a destination conversation.
+
+Details-page launch consent stays in the prepared run state and applies only to
+the reviewed required-capability set for that account and artifact. It is never
+carried in route parameters; direct launches still check persisted permissions.
+
+Electron application windows are trusted leaf hosts with independent runtimes and
+overlays. They share the asynchronous database and account-bound website profiles,
+without starting messaging or notification services. Container IPC belongs to its
+actual host window; closing or replacing one host never stops another. Persisted
+signing changes invalidate matching approval caches across hosts. Locking, switching
+accounts or removing their account closes these windows. Sharing and publisher
+navigation return to the main host. Session-only grants remain execution-local.
+
+Napp action handlers and INC endpoints belong to authenticated documents under
+one account. Electron brokers cross-window messages in its main process; mobile
+keeps a bounded stack of live calling containers behind the foreground handler.
+Only trusted hosts assign endpoint metadata. Teardown cancels action requests and
+closes communication channels. Configuration shares account/source persistence;
+cryptographic requests obtain method-scoped signer authorization using the identity
+signer, never the messaging key.
+Napp launch access includes ordinary web networking, independently of whether
+the signed manifest explicitly names it. This effective requirement participates
+in the same visible consent and persisted-grant checks as declared access.
+
+Browser capability decisions live separately from signing grants in
+`browser_authorizations`, keyed by account, verified source, and individual
+resource. Website sources use the current document origin; signed applications
+use their canonical address. One-time access lasts for the current document;
+timed and permanent allow/deny decisions persist. Platform permission-check
+leases never outlive the saved expiry, navigation, or a permission-change
+invalidation. Reset clears both capability and signing decisions. Persistence
+and ordinary clipboard writes need no consent sheet; capture selectors and
+unknown resources never create reusable grants.

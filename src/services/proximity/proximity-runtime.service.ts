@@ -89,7 +89,7 @@ import {
 } from './proximity-file-transfer.service';
 import { parseNearbyFileOffer } from './proximity-file-offer';
 import {
-  createNoiseHandshake,
+  createAccountNoiseHandshake,
   createNoiseSecureSession,
   destroyNoiseHandshake,
   noiseRemoteStaticKey,
@@ -1113,7 +1113,7 @@ class ProximityService {
     ) {
       return;
     }
-    const noise = await createNoiseHandshake('initiator', this.identity!.noisePrivkey);
+    const noise = await createAccountNoiseHandshake(this.identity!.accountPubkey, 'initiator');
     if (
       this.endpointContexts.get(context.endpointId) !== context ||
       context.phase !== 'preparing_client_hello'
@@ -1563,7 +1563,7 @@ class ProximityService {
 
   private async acceptClientHello(context: EndpointContext, payload: Uint8Array): Promise<void> {
     const hello = decodeClientHello(payload);
-    const noise = await createNoiseHandshake('responder', this.identity!.noisePrivkey);
+    const noise = await createAccountNoiseHandshake(this.identity!.accountPubkey, 'responder');
     if (
       this.endpointContexts.get(context.endpointId) !== context ||
       context.phase !== 'connected'

@@ -4,7 +4,7 @@ import type { MessagingMetadata } from '../dm/messaging-metadata';
 import {
   generateEncryptionKeypair,
   getEncryptionPubkeyFromEvent,
-  loadEncryptionKeys,
+  loadEncryptionKeypair,
   publishEncryptionKeyAnnouncement,
 } from '../dm/encryption-key.service';
 import { loadAccountDmRelays, queueInitialDmRelays } from '../relay/relay-list.service';
@@ -35,10 +35,10 @@ async function finishLocalSetup(accountPubkey: string, abort: AbortSignal): Prom
   const signer = await createSigner({
     accountPubkey, signerType: account.signerType, signerPayload: account.signerPayload,
   });
-  const keys = await loadEncryptionKeys(accountPubkey);
+  const currentKey = await loadEncryptionKeypair(accountPubkey);
   checkCurrent();
   // An interrupted setup may already hold its key. Never rotate it on retry.
-  const key = keys[0] ?? await generateEncryptionKeypair(accountPubkey);
+  const key = currentKey ?? await generateEncryptionKeypair(accountPubkey);
   checkCurrent();
   await setAccountEncryptionPubkey(accountPubkey, key.pubkey);
   const metadataKeys = [10044, 10050, 10002].map((kind) => ({ pubkey: accountPubkey, kind }));

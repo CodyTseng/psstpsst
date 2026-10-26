@@ -20,7 +20,7 @@ beforeEach(() => {
   // resetAllMocks clears the hash implementation too.
   jest.requireMock('../file-crypto').sha256Hex.mockResolvedValue('cache-key');
   fs.cacheDirectoryUri.mockResolvedValue('cache/');
-  fs.stat.mockImplementation(async (path) => ({ exists: files.has(path), size: files.get(path)?.length ?? null,
+  fs.stat.mockImplementation(async (path) => ({ exists: files.has(path) || texts.has(path), size: files.get(path)?.length ?? null,
     isDirectory: false, creationTime: null, modificationTime: null }));
   fs.readText.mockImplementation(async (path) => {
     const text = texts.get(path);
@@ -50,6 +50,7 @@ it('reports streamed full-response progress when the server ignores Range', asyn
   expect(progress).toHaveBeenCalledWith(2, 4);
   expect(progress).toHaveBeenLastCalledWith(4, 4);
   expect(files.has(uri)).toBe(true);
+  expect(fs.readText).not.toHaveBeenCalled();
 });
 
 it('keeps completed chunks on pause and continues from their byte offset', async () => {

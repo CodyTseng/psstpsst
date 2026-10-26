@@ -19,7 +19,7 @@ set(SECP256K1_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(secp256k1 EXCLUDE_FROM_ALL)
 
-add_library(expo-crypto-accelerator SHARED crypto_accelerator_jni.cpp)
+add_library(expo-crypto-accelerator SHARED crypto_accelerator_jni.cpp ../../../../shared/VaultChaCha.c ../../../../shared/VaultPin.c)
 
 target_compile_features(expo-crypto-accelerator PRIVATE cxx_std_17)
 target_link_options(expo-crypto-accelerator PRIVATE

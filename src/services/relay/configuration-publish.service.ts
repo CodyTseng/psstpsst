@@ -1,3 +1,4 @@
+import { isNewerEvent as newer } from '@/lib/nostr/event-version';
 import { and, asc, eq, lte } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
@@ -46,9 +47,6 @@ async function readCached(key: Coordinate, tx: Database = db) {
   )).limit(1))[0]?.event ?? null;
 }
 
-function newer(a: Event, b: Event): boolean {
-  return a.created_at > b.created_at || (a.created_at === b.created_at && a.id < b.id);
-}
 
 /** Durable handoff: cache and pending publication commit together. A late older
  * snapshot cannot replace newer work, and acknowledgements belong to event IDs. */
@@ -75,7 +73,7 @@ export async function enqueueConfigurationEvent(event: Event, commit?: Configura
       createdAt: event.created_at, fetchedAt: Math.floor(now / 1000),
     }).onConflictDoUpdate({
       target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
-      set: { event, createdAt: event.created_at, fetchedAt: Math.floor(now / 1000) },
+      set: { event, relays: [], createdAt: event.created_at, fetchedAt: Math.floor(now / 1000) },
     });
     await commit?.(event, tx);
     return true;
@@ -198,7 +196,7 @@ export function publishConfigurationAndWait(
         pubkey: event.pubkey, kind: key.kind, dTag: key.dTag, event, createdAt: event.created_at, fetchedAt: now,
       }).onConflictDoUpdate({
         target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
-        set: { event, createdAt: event.created_at, fetchedAt: now },
+        set: { event, relays: [], createdAt: event.created_at, fetchedAt: now },
       });
       await commit?.(event, tx);
       await tx.delete(configurationOutbox).where(slot(key));
@@ -222,9 +220,9 @@ export async function getPendingConfiguration(accountPubkey: string, kind: numbe
 export async function canApplyConfigurationEvent(
   accountPubkey: string, kind: number, dTag: string, event: Event, tx: Database = db,
 ): Promise<boolean> {
-  if (kind === 30000 && (dTag === 'psstpsst-muted' || dTag === 'psstpsst-blocked')) {
+  if (kind >= 30000 && kind < 40000) {
     const [state] = await tx.select({ dirty: privateListSyncState.dirty }).from(privateListSyncState)
-      .where(and(eq(privateListSyncState.accountPubkey, accountPubkey), eq(privateListSyncState.dTag, dTag)))
+      .where(and(eq(privateListSyncState.accountPubkey, accountPubkey), eq(privateListSyncState.kind, kind), eq(privateListSyncState.dTag, dTag)))
       .limit(1);
     if (state?.dirty) return false;
   }
@@ -381,9 +379,9 @@ export class ConfigurationPublisher {
           ));
         } else {
           await tx.insert(privateListSyncState).values({
-            accountPubkey: row.accountPubkey, dTag: row.dTag, dirty: true, eventId: row.eventId,
+            accountPubkey: row.accountPubkey, kind: row.kind, dTag: row.dTag, dirty: true, eventId: row.eventId,
           }).onConflictDoUpdate({
-            target: [privateListSyncState.accountPubkey, privateListSyncState.dTag],
+            target: [privateListSyncState.accountPubkey, privateListSyncState.kind, privateListSyncState.dTag],
             set: { dirty: true },
             setWhere: eq(privateListSyncState.eventId, row.eventId),
           });

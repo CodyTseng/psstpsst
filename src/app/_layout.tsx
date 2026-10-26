@@ -1,6 +1,12 @@
 import 'react-native-get-random-values';
 import '../global.css';
 import '@/i18n';
+import { connectSigningWindows } from '@/services/signing/changes';
+import { connectApplicationWindows } from '@/services/explore/application-changes';
+import { readChangedApplicationMetadata } from '@/services/explore/application-cache';
+import { useApplicationWindowActions } from '@/hooks/use-application-window-actions';
+import { ApplicationWindowRoot } from '@/components/napplet/ApplicationWindowRoot';
+import { nappletService } from '@/services/napplet/service';
 // Eagerly evaluate the background-task module so its `defineTask` runs on every
 // bundle load — including a cold launch the OS triggers for the task itself.
 import '@/services/notifications/background-task';
@@ -39,6 +45,11 @@ import { DesktopWindowFrame } from '@/components/common/DesktopWindowFrame';
 import { KeySyncScreen } from '@/components/keysync/KeySyncScreen';
 import { AppPasswordScreen } from '@/components/security/AppPasswordScreen';
 import { Toast } from '@/components/common/Toast';
+import { useStorageMigration } from '@/hooks/use-storage-migration';
+import { AppScreen } from '@/components/common/AppScreen';
+import { AppContentColumn } from '@/components/common/AppContentColumn';
+import { AppText } from '@/components/common/AppText';
+import { AppButton } from '@/components/common/AppButton';
 import { useAppMigrations } from '@/hooks/use-app-migrations';
 import { useLanguageDirection } from '@/i18n/direction';
 import { configurePlaybackAudio } from '@/lib/audio/audio-mode';
@@ -67,6 +78,7 @@ import {
   SystemColorSchemeProvider,
   useEffectiveColorScheme,
   useThemeColors,
+  spacing,
 } from '@/theme';
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
@@ -169,7 +181,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <SafeAreaProvider>
-                <RootLayoutContent />
+                {platform.napplet.windows?.isHost ? <ApplicationWindowRoot /> : <RootLayoutContent />}
               </SafeAreaProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
@@ -180,8 +192,11 @@ export default function RootLayout() {
 }
 
 function RootLayoutContent() {
+  useEffect(() => { connectSigningWindows(platform.napplet.windows); return () => connectSigningWindows(); }, []);
+  useEffect(() => { connectApplicationWindows(platform.napplet.windows, readChangedApplicationMetadata); return () => connectApplicationWindows(); }, []);
+  useApplicationWindowActions();
   const { t } = useTranslation();
-  const { success: migrationsApplied, error: migrationError } = useAppMigrations();
+  const { success: databaseReady, error: migrationError } = useAppMigrations();
   const loadFromStorage = useActiveAccount((s) => s.loadFromStorage);
   const status = useActiveAccount((s) => s.status);
   const activePubkey = useActiveAccount((s) => s.activePubkey);
@@ -217,6 +232,15 @@ function RootLayoutContent() {
     'loading' | 'ready' | 'setup' | 'unlock' | 'error'
   >('loading');
   const secureStorageReady = secureStorageAccess === 'ready';
+  const storageMigration = useStorageMigration(databaseReady && secureStorageReady);
+  const migrationsApplied = databaseReady && storageMigration.success;
+  useEffect(() => {
+    nappletService.updateTheme({ colors: { background: c.background, text: c.text, primary: c.accent } });
+    if (!secureStorageReady) nappletService.deactivate();
+    else if (migrationsApplied && activePubkey && status === 'ready') {
+      void nappletService.activate(activePubkey).catch(() => {});
+    }
+  }, [secureStorageReady, migrationsApplied, activePubkey, status, c.background, c.text, c.accent]);
   const isExpoGo = Constants.executionEnvironment === 'storeClient';
   const nativeDirectionMatches = I18nManager.getConstants().isRTL === (direction === 'rtl');
   // Expo Go owns the host process and cannot persist a project's forced native
@@ -244,7 +268,7 @@ function RootLayoutContent() {
 
   useEffect(() => {
     let active = true;
-    void platform.secureStorage
+    void platform.security
       .accessStatus()
       .then((access) => {
         if (!active) return;
@@ -430,6 +454,21 @@ function RootLayoutContent() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <Text>{t('secure_storage.failed')}</Text>
       </View>
+    );
+  }
+
+  if (storageMigration.error) {
+    return (
+      <AppScreen>
+        <AppContentColumn>
+          <View style={{ flex: 1, justifyContent: 'center', padding: spacing.lg, gap: spacing.lg }}>
+            <AppText variant="body" align="center">
+              {t('error.migration_failed', { error: storageMigration.error.message })}
+            </AppText>
+            <AppButton label={t('common.try_again')} onPress={storageMigration.retry} />
+          </View>
+        </AppContentColumn>
+      </AppScreen>
     );
   }
 

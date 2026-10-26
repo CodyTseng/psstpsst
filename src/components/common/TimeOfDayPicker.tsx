@@ -149,7 +149,7 @@ export function TimeOfDayPicker({ visible, onClose, title, initialMinutes, onCon
         visible={visible}
         onClose={onClose}
         title={title}
-        contentStyle={{ paddingTop: spacing.lg, gap: spacing.sm }}
+        contentStyle={{ gap: spacing.sm }}
       >
         <Host
           matchContents

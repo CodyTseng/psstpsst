@@ -34,10 +34,11 @@ for (const { id } of Object.values(identities)) {
   });
 
   const privateGroup = `$(AppIdentifierPrefix)${id}`;
-  const sharedGroup = `${privateGroup}.notifications`;
+  const legacyGroup = `${privateGroup}.notifications`;
+  const sharedGroup = `${privateGroup}.messaging`;
   for (const [scenario, existingGroups] of [
     ['fresh configuration', []],
-    ['previous shared default', [sharedGroup]],
+    ['previous shared default', [legacyGroup]],
     ['existing private and custom groups', [privateGroup, '$(AppIdentifierPrefix)custom', sharedGroup]],
   ]) {
     test(`${id}: preserves private Keychain storage with ${scenario}`, async () => {
@@ -51,10 +52,11 @@ for (const { id } of Object.values(identities)) {
         });
         const entitlements = config._internal.modResults.ios.entitlements;
         assert.deepEqual(entitlements['keychain-access-groups'],
-          [...new Set([privateGroup, ...existingGroups, sharedGroup])]);
+          [...new Set([privateGroup, ...existingGroups, legacyGroup, sharedGroup])]);
         const extension = config.extra.eas.build.experimental.ios.appExtensions[0];
         assert.deepEqual(extension.entitlements['keychain-access-groups'], [sharedGroup]);
         assert.equal(extension.entitlements['keychain-access-groups'].includes(privateGroup), false);
+        assert.equal(extension.entitlements['keychain-access-groups'].includes(legacyGroup), false);
         config = { ...config, mods: undefined, ios: { ...config.ios, entitlements } };
       }
     });

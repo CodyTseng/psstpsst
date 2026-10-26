@@ -19,6 +19,12 @@ final class NotificationRuntime: NSObject, URLSessionDataDelegate, URLSessionWeb
     super.init()
   }
 
+  private lazy var keyVault: NativeKeyVault = {
+    guard let credentials = self.credentialAccess else { return NativeKeyVault() }
+    return NativeKeyVault(read: { try credentials("keyGet", [$0]) as? String },
+      write: { _ = try credentials("keySet", [$0, $1]) }, remove: { _ = try credentials("keyDelete", [$0]) })
+  }()
+
   private static let executionGate = DispatchSemaphore(value: 1)
   private var ownsExecutionGate = false
   private var deadline = Date()
@@ -200,7 +206,7 @@ final class NotificationRuntime: NSObject, URLSessionDataDelegate, URLSessionWeb
       let method = args[2] as! String
       return ["rows": method == "get" ? rows.first ?? NSNull() : rows]
     case "query": return try query(args[0] as! String, args[1] as! [Any], objects: true)
-    case "keyGet", "keySet", "keyDelete": return try credentialAccess?(method, args) ?? keychain(method, args)
+    case "vault": return try keyVault.executeNotification(args[0] as! String)
     default: throw failure()
     }
   }
@@ -249,48 +255,10 @@ final class NotificationRuntime: NSObject, URLSessionDataDelegate, URLSessionWeb
     return rows
   }
 
-  private func keychain(_ method: String, _ args: [Any]) throws -> Any {
-    let key = args[0] as! String
-    guard ["identity_privkey_", "encryption_keys_", "nip46_client_privkey_", "nip46_bunker_secret_"].contains(where: key.hasPrefix),
-      let group = Bundle.main.object(forInfoDictionaryKey: "PsstPsstKeychainGroup") as? String
-    else {
-      // Non-secret legacy preferences are never copied into the extension's keychain.
-      if method == "keyGet" { return NSNull() }
-      throw failure()
-    }
-    let encodedKey = Data(key.utf8)
-    let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: "psstpsst.notifications:no-auth", kSecAttrAccessGroup as String: group,
-      kSecAttrAccount as String: encodedKey, kSecAttrGeneric as String: encodedKey]
-    if method == "keyDelete" {
-      let status = SecItemDelete(query as CFDictionary)
-      guard status == errSecSuccess || status == errSecItemNotFound else { throw failure() }
-      return NSNull()
-    }
-    if method == "keySet" {
-      let value = Data((args[1] as! String).utf8)
-      var insert = query
-      insert[kSecValueData as String] = value
-      insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-      let status = SecItemAdd(insert as CFDictionary, nil)
-      if status == errSecDuplicateItem {
-        guard SecItemUpdate(query as CFDictionary, [kSecValueData as String: value] as CFDictionary) == errSecSuccess else { throw failure() }
-      } else if status != errSecSuccess { throw failure() }
-      return NSNull()
-    }
-    var search = query
-    search[kSecReturnData as String] = true
-    search[kSecMatchLimit as String] = kSecMatchLimitOne
-    var result: CFTypeRef?
-    let status = SecItemCopyMatching(search as CFDictionary, &result)
-    if status == errSecItemNotFound { return NSNull() }
-    guard status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) else { throw failure() }
-    return value
-  }
-
   private func finish(_ result: [String: Any]?) {
     guard !finished else { return }
     finished = true
+    keyVault.clearMemory()
     timers.values.forEach { $0.work.cancel() }
     timers.removeAll()
     if sessionStarted { session.invalidateAndCancel() }

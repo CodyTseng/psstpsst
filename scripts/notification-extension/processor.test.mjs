@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import { buildVaultObjects } from '../key-vault-native-build.mjs';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { randomFillSync, createHash } from 'node:crypto';
@@ -14,12 +16,15 @@ import { build } from 'esbuild';
 import { buildNotificationExtension } from '../build-notification-extension.mjs';
 
 let directory;
+let LocalKeyVault;
 let processor;
 let bootstrap;
 let journal;
 before(async () => {
   directory = await mkdtemp(join(tmpdir(), 'psstpsst-notification-test-'));
   await buildNotificationExtension(join(directory, 'processor.js'));
+  await build({ entryPoints: ['src/platform/vault/local-vault.ts'], bundle: true, platform: 'node', format: 'cjs', outfile: join(directory, 'vault.cjs') });
+  ({ LocalKeyVault } = createRequire(import.meta.url)(join(directory, 'vault.cjs')));
   processor = await readFile(join(directory, 'processor.js'), 'utf8');
   bootstrap = await readFile(resolve('ios-notification-extension/bootstrap.js'), 'utf8');
   journal = JSON.parse(await readFile(resolve('src/db/migrations/meta/_journal.json'), 'utf8'));
@@ -103,6 +108,8 @@ async function database(input, { enabled = true, accepted = true, muted = false,
 }
 
 async function receive(sqlite, input, payload, { present = false, http } = {}) {
+  const vault = new LocalKeyVault({ getItem: async key => input.keys.get(key) ?? null,
+    setItem: async (key, value) => { input.keys.set(key, value); }, deleteItem: async key => { input.keys.delete(key); } });
   const timers = new Set();
   let finish;
   const completed = new Promise((resolve) => { finish = resolve; });
@@ -128,10 +135,10 @@ async function receive(sqlite, input, payload, { present = false, http } = {}) {
       return 1;
     },
     __cancelFetch() {},
-    __nativeCall: (method, args, callback) => queueMicrotask(() => {
+    __nativeCall: (method, args, callback) => queueMicrotask(async () => {
       try {
         let value = null;
-        if (method === 'keyGet') value = input.keys.get(args[0]) ?? null;
+        if (method === 'vault') value = JSON.stringify(await vault.execute(JSON.parse(args[0])));
         else if (method === 'keySet') input.keys.set(args[0], args[1]);
         else if (method === 'keyDelete') input.keys.delete(args[0]);
         else if (method === 'sha256') value = createHash('sha256').update(Buffer.from(args[0])).digest('hex');
@@ -175,6 +182,19 @@ test('independent runtime verifies, decrypts and stores for an inactive account,
     assert.equal(sqlite.prepare('SELECT count(*) AS n FROM processed_gift_wraps').get().n, 1);
     assert.equal((await receive(sqlite, input, { type: 'id', data: { id: input.event.id, p: input.account } })).status, 'suppress');
     assert.equal(sqlite.prepare('SELECT count(*) AS n FROM messages').get().n, 1);
+  } finally { sqlite.close(); }
+});
+
+test('notification intake receives only current metadata while the vault decrypts a retained historical key', async () => {
+  const input = fixture();
+  const name = `encryption_keys_${input.account}`;
+  const retained = JSON.parse(input.keys.get(name));
+  input.keys.set(name, JSON.stringify([{ privkey: Buffer.from(generateSecretKey()).toString('hex'), createdAt: input.rumor.created_at + 1 }, ...retained]));
+  const sqlite = await database(input);
+  try {
+    const result = await receive(sqlite, input, { type: 'event', data: input.event });
+    assert.equal(result.status, 'notify');
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM messages').get().n, 1);
   } finally { sqlite.close(); }
 });
 
@@ -254,8 +274,11 @@ test('native presence lock releases for suspension, recovers from contention and
 
 test('shipping Swift bridge executes the same processor in JavaScriptCore', { skip: process.platform !== 'darwin' }, async () => {
   const executable = join(directory, 'runtime-harness');
+  const vaultObjects = buildVaultObjects(directory);
   execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-module-cache-path', join(directory, 'swift-cache'),
-    '-framework', 'JavaScriptCore', '-lsqlite3',
+    '-framework', 'JavaScriptCore', '-framework', 'Security', '-lsqlite3',
+    '-import-objc-header', 'modules/expo-crypto-accelerator/ios/ExpoCryptoAcceleratorSecp256k1.h',
+    'modules/expo-crypto-accelerator/ios/NativeKeyVault.swift', ...vaultObjects,
     'ios-notification-extension/NotificationRuntime.swift',
     'modules/expo-local-notifications/ios/SharedNotificationContext.swift',
     'scripts/notification-extension/RuntimeHarness.swift', '-o', executable,

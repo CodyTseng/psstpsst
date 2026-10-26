@@ -6,7 +6,7 @@ import { resolveMessagingMetadata } from '../messaging-metadata';
 import { relayPool, type QueryOpts, type QueryCompletion } from '../../relay/relay-pool';
 import { applyOwnDmRelayListEvent, loadAccountDmRelays } from '../../relay/relay-list.service';
 import { getReplaceableEvents } from '../../relay/replaceable-events.service';
-import { loadEncryptionKeys } from '../encryption-key.service';
+import { loadEncryptionKeypair } from '../encryption-key.service';
 
 jest.mock('../../relay/relay-pool', () => ({ relayPool: { query: jest.fn() } }));
 jest.mock('../../relay/configuration-publish.service', () => ({
@@ -23,7 +23,7 @@ jest.mock('../../relay/relay-router', () => ({
 }));
 jest.mock('../encryption-key.service', () => ({
   getEncryptionPubkeyFromEvent: (event: Event) => event.tags.find((tag) => tag[0] === 'n')?.[1],
-  loadEncryptionKeys: jest.fn(async () => []),
+  loadEncryptionKeypair: jest.fn(async () => null),
 }));
 
 const self = 'a'.repeat(64);
@@ -50,7 +50,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getReplaceableEvents).mockResolvedValue([null, null, null]);
   jest.mocked(loadAccountDmRelays).mockResolvedValue(['wss://old.example/']);
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([]);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue(null);
   query.mockImplementation((opts) => reply(opts, []));
 });
 
@@ -110,9 +110,7 @@ it('requeues missing messaging declarations without restoring NIP-65 metadata', 
 it('does not requeue a local declaration when the relay returned the same event', async () => {
   const announcement = event(10044, 22, [['n', key]]);
   jest.mocked(getReplaceableEvents).mockResolvedValue([null, null, announcement]);
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([
-    { pubkey: key, privkey: new Uint8Array(32), createdAt: 1 },
-  ]);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: key, key: { account: 'test-account', role: 'messaging' }, createdAt: 1 });
   query.mockImplementation((opts) => reply(opts, [announcement]));
 
   await resolveMessagingMetadata(self, { signAuth });
@@ -126,9 +124,7 @@ it('does not requeue a local declaration when the relay returned the same event'
 });
 
 it('reconstructs missing key and DM-relay declarations from durable local state', async () => {
-  jest.mocked(loadEncryptionKeys).mockResolvedValue([
-    { pubkey: key, privkey: new Uint8Array(32), createdAt: 1 },
-  ]);
+  jest.mocked(loadEncryptionKeypair).mockResolvedValue({ pubkey: key, key: { account: 'test-account', role: 'messaging' }, createdAt: 1 });
 
   const metadata = await resolveMessagingMetadata(self, { signAuth });
 

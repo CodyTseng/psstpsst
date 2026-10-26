@@ -74,7 +74,7 @@ jest.mock('@/stores/active-account.store', () => ({
     selector({ activePubkey: 'a'.repeat(64), requireResync: async () => {} }),
 }));
 jest.mock('@/theme', () => ({ spacing: { lg: 16 } }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 
 const { KeySyncRequestSheet } = jest.requireActual<typeof import('../KeySyncRequestSheet')>(
   '../KeySyncRequestSheet',

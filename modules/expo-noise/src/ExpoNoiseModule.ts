@@ -8,6 +8,9 @@ import type {
 } from './ExpoNoise.types';
 
 declare class ExpoNoiseModule extends NativeModule {
+  ensureIdentityAsync(account: string): Promise<Uint8Array>;
+  createAccountHandshakeAsync(account: string, role: NoiseRole): Promise<string>;
+  removeIdentityAsync(account: string): Promise<void>;
   generateKeyPairAsync(seed: Uint8Array | null): Promise<NoiseKeyPair>;
   createHandshakeAsync(
     role: NoiseRole,

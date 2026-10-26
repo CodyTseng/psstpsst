@@ -1,5 +1,5 @@
+import { vaultAccess } from '@/platform/vault-access';
 import { eq } from 'drizzle-orm';
-import { generateSecretKey, getPublicKey } from 'nostr-tools';
 
 import { db } from '@/db/client';
 import { proximityAccounts } from '@/db/schema';
@@ -7,26 +7,20 @@ import { bytesToHex, hexToBytes } from '@/lib/nostr/keys';
 import { verificationCodeFromPubkey } from '@/lib/nostr/verification-code';
 import { platform } from '@/platform';
 import type { Signer } from '@/services/signer/signer.interface';
-import { NsecSigner } from '@/services/signer/nsec-signer';
+import { createVaultSigner } from '@/services/signer/vault-signer';
+import type { VaultKey } from '@/platform/ports/key-vault';
+import { removeProximityEnabledPreference } from './proximity-preferences';
 
 import {
   normalizeProximityDisplayName,
   normalizeOrRandomProximityDisplayName,
   randomProximityDisplayName,
 } from './proximity-display-name';
-import {
-  generateNoiseStaticKeyPair,
-  noiseStaticKeyPairFromSeed,
-} from './proximity-noise';
-import { removeProximityEnabledPreference } from './proximity-preferences';
-import { signNoiseBinding } from './proximity-protocol';
 
 export type ProximityIdentity = {
   accountPubkey: string;
   proximityPubkey: string;
   displayName: string;
-  privkey: Uint8Array;
-  noisePrivkey: Uint8Array;
   noisePubkey: Uint8Array;
   noiseBindingSignature: Uint8Array;
 };
@@ -34,32 +28,6 @@ export type ProximityIdentity = {
 const pending = new Map<string, Promise<ProximityIdentity>>();
 const identities = new Map<string, ProximityIdentity>();
 const proximityPubkeys = new Map<string, string>();
-const secretKey = (accountPubkey: string) => `proximity_identity_privkey_${accountPubkey}`;
-const noiseSecretKey = (accountPubkey: string) =>
-  `proximity_identity_noise_privkey_${accountPubkey}`;
-
-async function loadOrCreateNoiseKeyPair(accountPubkey: string) {
-  const storedHex = await platform.secureStorage.getItem(noiseSecretKey(accountPubkey));
-  if (storedHex && /^[0-9a-f]{64}$/.test(storedHex)) {
-    return await noiseStaticKeyPairFromSeed(hexToBytes(storedHex));
-  }
-  const pair = await generateNoiseStaticKeyPair();
-  await platform.secureStorage.setItem(noiseSecretKey(accountPubkey), bytesToHex(pair.privateKey));
-  return pair;
-}
-
-async function withNoiseIdentity(
-  identity: Omit<ProximityIdentity, 'noisePrivkey' | 'noisePubkey' | 'noiseBindingSignature'>,
-): Promise<ProximityIdentity> {
-  const noise = await loadOrCreateNoiseKeyPair(identity.accountPubkey);
-  return {
-    ...identity,
-    noisePrivkey: noise.privateKey,
-    noisePubkey: noise.publicKey,
-    noiseBindingSignature: signNoiseBinding(identity.privkey, noise.publicKey),
-  };
-}
-
 /**
  * Keep the public half available to first-frame consumers without exposing the
  * private key through React state. Live database readers call this as they
@@ -84,42 +52,20 @@ async function loadOrCreate(accountPubkey: string): Promise<ProximityIdentity> {
     .from(proximityAccounts)
     .where(eq(proximityAccounts.accountPubkey, accountPubkey))
     .limit(1);
-  const storedHex = await platform.secureStorage.getItem(secretKey(accountPubkey));
-  if (row && storedHex) {
-    const privkey = hexToBytes(storedHex);
-    if (getPublicKey(privkey) === row.proximityPubkey) {
-      const displayName = normalizeOrRandomProximityDisplayName(
-        row.displayName === verificationCodeFromPubkey(row.proximityPubkey)
-          ? ''
-          : row.displayName,
-      );
-      if (displayName !== row.displayName) {
-        await db
-          .update(proximityAccounts)
-          .set({ displayName, updatedAt: Math.floor(Date.now() / 1000) })
-          .where(eq(proximityAccounts.accountPubkey, accountPubkey));
-      }
-      return withNoiseIdentity({ ...row, displayName, privkey });
-    }
-  }
-
-  const privkey = generateSecretKey();
-  const proximityPubkey = getPublicKey(privkey);
+  const material = await vaultAccess.execute({ method: 'ensureProximity', account: accountPubkey }) as { pubkey: string; key: VaultKey };
+  const proximityPubkey = material.pubkey;
   const now = Math.floor(Date.now() / 1000);
   const displayName = normalizeOrRandomProximityDisplayName(
-    row && row.displayName === verificationCodeFromPubkey(row.proximityPubkey)
-      ? ''
-      : row?.displayName ?? '',
+    row && row.displayName === verificationCodeFromPubkey(row.proximityPubkey) ? '' : row?.displayName ?? '',
   );
-  await platform.secureStorage.setItem(secretKey(accountPubkey), bytesToHex(privkey));
-  await db
-    .insert(proximityAccounts)
-    .values({ accountPubkey, proximityPubkey, displayName, createdAt: row?.createdAt ?? now, updatedAt: now })
-    .onConflictDoUpdate({
-      target: proximityAccounts.accountPubkey,
-      set: { proximityPubkey, displayName, updatedAt: now },
-    });
-  return withNoiseIdentity({ accountPubkey, proximityPubkey, displayName, privkey });
+  if (!row || row.proximityPubkey !== proximityPubkey || row.displayName !== displayName) {
+    await db.insert(proximityAccounts)
+      .values({ accountPubkey, proximityPubkey, displayName, createdAt: row?.createdAt ?? now, updatedAt: now })
+      .onConflictDoUpdate({ target: proximityAccounts.accountPubkey, set: { proximityPubkey, displayName, updatedAt: now } });
+  }
+  const noisePubkey = await platform.noise.ensureIdentity(accountPubkey);
+  const binding = await vaultAccess.execute({ method: 'bindProximityNoise', account: accountPubkey, noisePubkey: bytesToHex(noisePubkey) }) as string;
+  return { accountPubkey, proximityPubkey, displayName, noisePubkey, noiseBindingSignature: hexToBytes(binding) };
 }
 
 export function ensureProximityIdentity(accountPubkey: string): Promise<ProximityIdentity> {
@@ -140,7 +86,8 @@ export function ensureProximityIdentity(accountPubkey: string): Promise<Proximit
 
 /** Reusable event-signing boundary for protocols that explicitly use the local Proximity identity. */
 export async function getProximityEventSigner(accountPubkey: string): Promise<Signer> {
-  return new NsecSigner((await ensureProximityIdentity(accountPubkey)).privkey);
+  const identity = await ensureProximityIdentity(accountPubkey);
+  return createVaultSigner({ account: accountPubkey, role: 'proximity', pubkey: identity.proximityPubkey });
 }
 
 export async function hasProximityIdentity(accountPubkey: string): Promise<boolean> {
@@ -192,8 +139,8 @@ export async function removeProximityIdentity(accountPubkey: string): Promise<vo
   }
   identities.delete(accountPubkey);
   proximityPubkeys.delete(accountPubkey);
-  await platform.secureStorage.deleteItem(secretKey(accountPubkey));
-  await platform.secureStorage.deleteItem(noiseSecretKey(accountPubkey));
+  await vaultAccess.execute({ method: 'removeProximity', account: accountPubkey });
+  await platform.noise.removeIdentity(accountPubkey);
   await db
     .delete(proximityAccounts)
     .where(eq(proximityAccounts.accountPubkey, accountPubkey));

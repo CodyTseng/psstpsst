@@ -149,12 +149,6 @@ export class PushRegistrationService {
       if (failure) throw failure;
       return;
     }
-    // Upgrade messaging credentials before any server can deliver to the extension.
-    for (const accountPubkey of desired.keys()) {
-      for (const prefix of ['identity_privkey_', 'encryption_keys_', 'nip46_client_privkey_', 'nip46_bunker_secret_']) {
-        await platform.secureStorage.getItem(`${prefix}${accountPubkey}`);
-      }
-    }
     const device = await platform.pushNotifications.getDevice();
     if (!device || !this.enabled) return;
     if (!this.installationId) {

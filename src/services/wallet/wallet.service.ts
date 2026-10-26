@@ -1,25 +1,19 @@
+import { vaultAccess } from '@/platform/vault-access';
+import type { ImportedWallet, WalletOperation } from '@/platform/ports/key-vault';
 import { and, asc, desc, eq } from 'drizzle-orm';
 import {
-  finalizeEvent,
-  nip04,
   type Event,
   type EventTemplate,
 } from 'nostr-tools';
-import { bytesToHex, hexToBytes } from 'nostr-tools/utils';
 
 import { db } from '@/db/client';
 import { wallets, walletTransactions } from '@/db/schema';
-import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { walletDescriptionText } from '@/lib/wallet/description';
-import { parseNwcConnectionString } from '@/lib/wallet/nwc';
 import { platform } from '@/platform';
 import { relayPool } from '@/services/relay/relay-pool';
 import { parseBolt11Invoice } from '@/services/wallet/bolt11';
 
-import { nwcSecretKey } from './wallet-credentials.service';
-import { consumeWalletPinAuthorization } from './wallet-pin.service';
 
-const NWC_REQUEST_KIND = 23194;
 const NWC_RESPONSE_KIND = 23195;
 const REQUEST_TIMEOUT_MS = 60000;
 const MIN_REQUEST_GAP_MS = 900;
@@ -84,62 +78,56 @@ type NwcTransaction = {
 };
 
 export async function addWallet(accountPubkey: string, connectionString: string): Promise<WalletRow> {
-  const parsed = parseWalletConnection(connectionString);
+  validateWalletConnectionString(connectionString);
+  const confirmation = walletConsent();
+  if (!await platform.security.ensureWalletProtection(accountPubkey, confirmation)) throw new WalletError('authentication_failed');
+  const importing = vaultAccess.execute({ method: 'walletImport', account: accountPubkey, connectionString });
+  connectionString = '';
+  const imported = await importing as { id: string; walletPubkey: string; relays: string[] };
+  return registerImportedWallet(accountPubkey, imported);
+}
 
-  const now = nowSec();
-  const relays = parsed.relays.map(normalizeRelayUrl);
-  const walletId = `nwc_${accountPubkey.slice(0, 8)}_${parsed.pubkey.slice(0, 12)}_${now}`;
-  const existingWallets = await getWallets(accountPubkey);
-  const sortOrder = existingWallets.reduce((max, wallet) => Math.max(max, wallet.sortOrder), -1) + 1;
-  const secretBytes = hexToBytes(parsed.secret);
+async function registerImportedWallet(accountPubkey: string, imported: ImportedWallet): Promise<WalletRow> {
+  try {
+    const now = nowSec(), relays = imported.relays, walletId = imported.id;
+    const existingWallets = await getWallets(accountPubkey);
+    const sortOrder = existingWallets.reduce((max, wallet) => Math.max(max, wallet.sortOrder), -1) + 1;
+    const info = await requestNwc<NwcInfo>({ id: walletId, accountPubkey, walletPubkey: imported.walletPubkey, relaysJson: JSON.stringify(relays) }, 'get_info', {}).catch(() => null);
 
-  await platform.secureStorage.setItem(
-    nwcSecretKey(accountPubkey, walletId),
-    bytesToHex(secretBytes),
-  );
-
-  const info = await requestNwc<NwcInfo>(
-    {
+    const name = info?.alias || info?.name || shortPubkey(imported.walletPubkey);
+    const displayName = nextAvailableWalletName(existingWallets, name);
+    const row = {
       id: walletId,
       accountPubkey,
-      walletPubkey: parsed.pubkey,
+      walletPubkey: imported.walletPubkey,
       relaysJson: JSON.stringify(relays),
-    },
-    secretBytes,
-    'get_info',
-    {},
-  ).catch(() => null);
+      name,
+      customName: displayName,
+      lud16: info?.lud16 ?? null,
+      capabilitiesJson: info?.methods ? JSON.stringify(info.methods) : null,
+      notificationsJson: info?.notifications ? JSON.stringify(info.notifications) : null,
+      budgetJson: info?.budget ? JSON.stringify(info.budget) : null,
+      balanceMsat: null,
+      isDefault: true,
+      sortOrder,
+      connectedAt: now,
+      updatedAt: now,
+      lastSyncAt: info ? now : null,
+    };
 
-  const name = info?.alias || info?.name || shortPubkey(parsed.pubkey);
-  const displayName = nextAvailableWalletName(existingWallets, name);
-  const row = {
-    id: walletId,
-    accountPubkey,
-    walletPubkey: parsed.pubkey,
-    relaysJson: JSON.stringify(relays),
-    name,
-    customName: displayName,
-    lud16: info?.lud16 ?? null,
-    capabilitiesJson: info?.methods ? JSON.stringify(info.methods) : null,
-    notificationsJson: info?.notifications ? JSON.stringify(info.notifications) : null,
-    budgetJson: info?.budget ? JSON.stringify(info.budget) : null,
-    balanceMsat: null,
-    isDefault: true,
-    sortOrder,
-    connectedAt: now,
-    updatedAt: now,
-    lastSyncAt: info ? now : null,
-  };
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(wallets)
-      .set({ isDefault: false })
-      .where(eq(wallets.accountPubkey, accountPubkey))
-      .run();
-    await tx.insert(wallets).values(row).run();
-  });
-  return row;
+    await db.transaction(async (tx) => {
+      await tx
+        .update(wallets)
+        .set({ isDefault: false })
+        .where(eq(wallets.accountPubkey, accountPubkey))
+        .run();
+      await tx.insert(wallets).values(row).run();
+    });
+    return row;
+  } catch (error) {
+    await vaultAccess.execute({ method: 'walletRemove', account: accountPubkey, walletId: imported.id }).catch(() => {});
+    throw error;
+  }
 }
 
 export function getWallets(accountPubkey: string): Promise<WalletRow[]> {
@@ -203,7 +191,7 @@ export async function removeWallet(accountPubkey: string, walletId: string): Pro
     .delete(wallets)
     .where(and(eq(wallets.accountPubkey, accountPubkey), eq(wallets.id, walletId)))
     .run();
-  await platform.secureStorage.deleteItem(nwcSecretKey(accountPubkey, walletId));
+  await vaultAccess.execute({ method: 'walletRemove', account: accountPubkey, walletId });
 
   if (!wasDefault) return;
   const next = (await getWallets(accountPubkey))[0];
@@ -290,22 +278,23 @@ async function refreshWalletNow(wallet: WalletRow): Promise<WalletRefreshResult>
 export async function payInvoice(
   wallet: WalletRow,
   invoice: string,
-  authCopy: { prompt: string; cancel: string },
+  _authCopy: { prompt: string; cancel: string },
   metadata?: Record<string, unknown>,
-  pinAuthorization?: string,
+  guard?: WalletRequestGuard,
 ): Promise<unknown> {
-  await authenticatePayment(wallet.accountPubkey, authCopy, pinAuthorization);
-  return callWallet(wallet, 'pay_invoice', metadata ? { invoice, metadata } : { invoice });
+  guard?.check();
+  return callWallet(wallet, 'pay_invoice', metadata ? { invoice, metadata } : { invoice }, guard);
 }
 
 export async function makeInvoice(
   wallet: WalletRow,
   params: { amountMsat: number; description?: string },
+  guard?: WalletRequestGuard,
 ): Promise<{ invoice?: string; payment_request?: string; payment_hash?: string; state?: string; settled_at?: number; preimage?: string }> {
   return callWallet(wallet, 'make_invoice', {
     amount: params.amountMsat,
     description: params.description ?? '',
-  });
+  }, guard);
 }
 
 export async function lookupInvoiceStatus(
@@ -447,16 +436,18 @@ export function getCachedTransactions(walletId: string): Promise<WalletTransacti
     .all();
 }
 
-async function callWallet<T>(wallet: WalletRow, method: string, params: Record<string, unknown>): Promise<T> {
+export type WalletRequestGuard = { check: () => void; beforeSend?: () => Promise<void> };
+
+async function callWallet<T>(wallet: WalletRow, method: WalletOperation, params: Record<string, unknown>, guard?: WalletRequestGuard): Promise<T> {
   return enqueueWalletRequest(wallet.id, async () => {
-    const secret = await getWalletSecret(wallet.accountPubkey, wallet.id);
-    return requestNwc<T>(wallet, secret, method, params);
+    guard?.check();
+    return requestNwc<T>(wallet, method, params, guard);
   });
 }
 
 async function callWalletWithRetry<T>(
   wallet: WalletRow,
-  method: string,
+  method: WalletOperation,
   params: Record<string, unknown>,
 ): Promise<T> {
   try {
@@ -473,41 +464,39 @@ async function callWalletWithRetry<T>(
   }
 }
 
-async function getWalletSecret(accountPubkey: string, walletId: string): Promise<Uint8Array> {
-  const value = await platform.secureStorage.getItem(nwcSecretKey(accountPubkey, walletId));
-  if (!value) throw new WalletError('missing_secret');
-  return hexToBytes(value);
+function walletConsent(): { language: string } {
+  // Load only for interactive wallet work; headless consumers do not initialize i18n.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return { language: (require('@/i18n/core') as typeof import('@/i18n/core')).default.language };
 }
 
 async function requestNwc<T>(
   wallet: Pick<WalletRow, 'id' | 'accountPubkey' | 'walletPubkey' | 'relaysJson'>,
-  secret: Uint8Array,
-  method: string,
+  method: WalletOperation,
   params: Record<string, unknown>,
+  guard?: WalletRequestGuard,
 ): Promise<T> {
-  const relays = Array.from(new Set(parseJson<string[]>(wallet.relaysJson, []).map(normalizeRelayUrl)));
-  const content = await nip04.encrypt(secret, wallet.walletPubkey, JSON.stringify({ method, params }));
-  const event = finalizeEvent(
-    {
-      kind: NWC_REQUEST_KIND,
-      created_at: nowSec(),
-      content,
-      tags: [['p', wallet.walletPubkey]],
-    },
-    secret,
-  );
-
-  const response = await waitForNwcResponse<T>(wallet.id, method, wallet.walletPubkey, secret, relays, event);
+  guard?.check();
+  const confirmation = walletConsent();
+  guard?.check();
+  let prepared: { event: Event; peer: string; relays: string[] };
+  try {
+    prepared = await vaultAccess.execute({ method: 'walletRequest', account: wallet.accountPubkey, walletId: wallet.id,
+      operation: method, params, confirmation }) as typeof prepared;
+  } catch { throw new WalletError(method === 'pay_invoice' ? 'authentication_failed' : 'missing_secret'); }
+  guard?.check();
+  await guard?.beforeSend?.();
+  guard?.check();
+  const response = await waitForNwcResponse<T>(wallet, method, prepared.peer, prepared.relays, prepared.event);
   if (response.error) throw mapNwcError(response.error);
   if (!response.result) return {} as T;
   return response.result;
 }
 
 function waitForNwcResponse<T>(
-  walletId: string,
-  method: string,
+  wallet: Pick<WalletRow, 'id' | 'accountPubkey'>,
+  method: WalletOperation,
   walletPubkey: string,
-  secret: Uint8Array,
   relays: string[],
   request: Event,
 ): Promise<NwcResponse<T>> {
@@ -529,11 +518,11 @@ function waitForNwcResponse<T>(
         '#e': [request.id],
         since: nowSec() - 5,
       },
-      signAuth: (authEvt) => signWithNwcSecret(authEvt, secret),
+      signAuth: (authEvt) => signWalletRelayAuth(wallet, authEvt),
       onEvent: async (event) => {
         try {
-          const decrypted = await nip04.decrypt(secret, event.pubkey, event.content);
-          finish(() => resolve(JSON.parse(decrypted) as NwcResponse<T>));
+          const response = await vaultAccess.execute({ method: 'walletReceive', account: wallet.accountPubkey, walletId: wallet.id, requestId: request.id, event }) as NwcResponse<T> | null;
+          if (response) finish(() => resolve(response));
         } catch {
         }
       },
@@ -546,7 +535,7 @@ function waitForNwcResponse<T>(
         relays,
         event: request,
         timeoutMs: 6000,
-        signAuth: (authEvt) => signWithNwcSecret(authEvt, secret),
+        signAuth: (authEvt) => signWalletRelayAuth(wallet, authEvt),
       })
       .then(
         (results) => {
@@ -570,47 +559,16 @@ function waitForNwcResponse<T>(
   });
 }
 
-async function signWithNwcSecret(authEvt: EventTemplate, secret: Uint8Array): Promise<Event> {
-  return finalizeEvent(authEvt, secret);
+async function signWalletRelayAuth(wallet: Pick<WalletRow, 'id' | 'accountPubkey'>, template: EventTemplate): Promise<Event> {
+  return await vaultAccess.execute({ method: 'walletRelayAuth', account: wallet.accountPubkey, walletId: wallet.id, template }) as Event;
 }
 
-async function authenticatePayment(
-  accountPubkey: string,
-  copy: { prompt: string; cancel: string },
-  pinAuthorization?: string,
-): Promise<void> {
-  if (pinAuthorization) {
-    if (!consumeWalletPinAuthorization(accountPubkey, pinAuthorization)) {
-      throw new WalletError('authentication_failed');
-    }
-    return;
-  }
-  const enrolled = await platform.localAuth.hasEnrolledAuth().catch(() => false);
-  if (!enrolled) {
-    throw new WalletError('authentication_unavailable');
-  }
-
-  const authenticated = await platform.localAuth
-    .authenticate({
-      promptMessage: copy.prompt,
-      cancelLabel: copy.cancel,
-    })
-    .catch(() => {
-      throw new WalletError('authentication_failed');
-    });
-  if (!authenticated) throw new WalletError('authentication_failed');
-}
-
+/** Validate the user-supplied text without decoding its private key into business memory. */
 export function validateWalletConnectionString(connectionString: string): void {
-  parseWalletConnection(connectionString);
-}
-
-function parseWalletConnection(connectionString: string): ReturnType<typeof parseNwcConnectionString> {
   try {
-    return parseNwcConnectionString(connectionString);
-  } catch {
-    throw new WalletError('invalid_connection');
-  }
+    const uri = new URL(connectionString.trim());
+    if (uri.protocol !== 'nostr+walletconnect:' || !/^[0-9a-f]{64}$/i.test(uri.hostname) || !uri.searchParams.has('secret') || !uri.searchParams.getAll('relay').length) throw new Error('invalid');
+  } catch { throw new WalletError('invalid_connection'); }
 }
 
 async function cacheTransactions(wallet: WalletRow, txs: NwcTransaction[]): Promise<void> {

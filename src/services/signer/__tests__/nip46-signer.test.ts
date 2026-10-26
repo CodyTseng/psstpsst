@@ -91,6 +91,27 @@ describe('Nip46Signer request bounds', () => {
     await signer.destroy();
   });
 
+  test('keeps credentials and the connected bunker out of public properties', async () => {
+    const bunker = createBunker();
+    mockFromBunker.mockReturnValue(bunker);
+    const input = new Uint8Array(32).fill(1);
+    const pointer = { ...POINTER, relays: [...POINTER.relays], secret: 'connection-secret' };
+    const signer = new Nip46Signer(input, pointer);
+    input.fill(0);
+    pointer.secret = 'replaced-secret';
+    pointer.relays.length = 0;
+
+    await signer.getPublicKey();
+
+    expect(mockFromBunker).toHaveBeenCalledWith(new Uint8Array(32).fill(1), {
+      ...POINTER, secret: 'connection-secret',
+    }, expect.any(Object));
+    expect(Reflect.ownKeys(signer)).toEqual([]);
+    expect(JSON.stringify(signer)).toBe('{}');
+    expect(Reflect.get(signer, 'ensureConnected')).toBeUndefined();
+    await signer.destroy();
+  });
+
   test('times out a stalled connection and reconnects on the next request', async () => {
     const stalled = createBunker({ connect: jest.fn(() => pending<void>()) });
     const recovered = createBunker();
@@ -131,6 +152,26 @@ describe('Nip46Signer request bounds', () => {
     expect(stalled.close).toHaveBeenCalledTimes(1);
     await expect(signer.signEvent(TEMPLATE)).resolves.toBe(EVENT);
     expect(mockFromBunker).toHaveBeenCalledTimes(2);
+  });
+
+  test('destroy permanently ends the instance without allowing reconnection', async () => {
+    const bunker = createBunker(); mockFromBunker.mockReturnValue(bunker);
+    const signer = createSigner();
+    await signer.getPublicKey(); await signer.destroy();
+    await expect(signer.getPublicKey()).rejects.toThrow('destroyed');
+    expect(mockFromBunker).toHaveBeenCalledTimes(1);
+    expect(bunker.close).toHaveBeenCalledTimes(1);
+  });
+
+  test('discards an operation result completed after destruction', async () => {
+    let finish!: (event: Event) => void;
+    const bunker = createBunker({ signEvent: jest.fn(() => new Promise<Event>(resolve => { finish = resolve; })) });
+    mockFromBunker.mockReturnValue(bunker);
+    const signer = createSigner(); await signer.getPublicKey();
+    const work = signer.signEvent(TEMPLATE);
+    const rejected = expect(work).rejects.toThrow('destroyed');
+    await jest.advanceTimersByTimeAsync(0);
+    await signer.destroy(); finish(EVENT); await rejected;
   });
 
   test('reuses a healthy bunker session across bounded operations', async () => {

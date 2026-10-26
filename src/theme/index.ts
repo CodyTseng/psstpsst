@@ -1,3 +1,4 @@
+import { spacing } from './spacing';
 import { Platform, type TextStyle } from 'react-native';
 
 import { IS_ELECTRON } from '@/lib/platform';
@@ -190,31 +191,17 @@ export function useThemeColors(): ThemeColors {
   return resolvePalette(scheme, accent);
 }
 
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  '2xl': 32,
-  '3xl': 48,
-} as const;
+export { spacing } from './spacing';
 
 /** Optical chat spacing that is intentionally tighter than the global scale. */
 export const messageLayout = {
   reactionGap: spacing.xs / 2,
 } as const;
 
-/** Shared trailing fade geometry for compact horizontal tab rails. */
-export const horizontalRailLayout = {
-  fadeWidth: spacing['3xl'],
-} as const;
-
 /** Shared outer alignment for every mode inside the full emoji picker. */
 export const emojiPickerLayout = {
   horizontalGutter: IS_ELECTRON ? spacing.sm : spacing.lg,
   contentTopGap: spacing.xs,
-  endFadeWidth: horizontalRailLayout.fadeWidth,
 } as const;
 
 /** Runtime height (above the home-indicator safe area) of the app's bottom bars — the

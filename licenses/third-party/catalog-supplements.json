@@ -88,5 +88,15 @@
     "files": [
       "licenses/third-party/common/sqlite.txt"
     ]
+  },
+  {
+    "id": "scrypt",
+    "name": "scrypt / libcperciva",
+    "version": "cbdef576b8d4640e86b208fa3f063d4ec449110a",
+    "license": "BSD-2-Clause and bundled notices",
+    "repository": "https://github.com/Tarsnap/scrypt",
+    "files": [
+      "licenses/third-party/common/scrypt.txt"
+    ]
   }
 ]

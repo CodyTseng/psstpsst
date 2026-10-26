@@ -14,7 +14,7 @@ import { RelayQueryError } from '../relay/relay-query-error';
 import type { QueryRelayResult, SignAuth } from '../relay/managed-relay-pool';
 import { parseRelayListMetadata } from '../relay/relay-router';
 import { getReplaceableEvents, storeReplaceableEvent } from '../relay/replaceable-events.service';
-import { getEncryptionPubkeyFromEvent, loadEncryptionKeys } from './encryption-key.service';
+import { getEncryptionPubkeyFromEvent, loadEncryptionKeypair } from './encryption-key.service';
 
 const METADATA_KINDS = [
   KIND_RELAY_LIST_METADATA,
@@ -183,12 +183,12 @@ export async function resolveMessagingMetadata(
   // without an accompanying signed snapshot. Create only the declarations that
   // can be reconstructed without guessing: the current encryption key and DM
   // inbox list. NIP-65 is never repaired automatically.
-  let currentKey: Awaited<ReturnType<typeof loadEncryptionKeys>>[number] | undefined;
+  let currentKey: Awaited<ReturnType<typeof loadEncryptionKeypair>> = null;
   if (
     !latest.has(KIND_ENCRYPTION_KEY_ANNOUNCEMENT) ||
     !latest.has(KIND_DM_RELAY_LIST)
   ) {
-    [currentKey] = await loadEncryptionKeys(accountPubkey);
+    currentKey = await loadEncryptionKeypair(accountPubkey);
     checkAborted();
   }
   if (!latest.has(KIND_ENCRYPTION_KEY_ANNOUNCEMENT)) {

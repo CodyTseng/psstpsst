@@ -2,6 +2,9 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { safeStorage } from 'electron';
+import { SecureStorageService } from '../secure-storage-service';
+
 jest.mock('electron', () => ({
   safeStorage: {
     isEncryptionAvailable: jest.fn(() => false),
@@ -10,9 +13,6 @@ jest.mock('electron', () => ({
     decryptStringAsync: jest.fn(),
   },
 }));
-
-import { safeStorage } from 'electron';
-import { SecureStorageService } from '../secure-storage-service';
 
 const mockSafeStorage = safeStorage as jest.Mocked<typeof safeStorage>;
 
@@ -26,6 +26,7 @@ describe('Electron secure-storage password fallback', () => {
   });
 
   afterEach(async () => {
+    jest.restoreAllMocks();
     await fs.rm(directory, { recursive: true, force: true });
   });
 
@@ -44,7 +45,10 @@ describe('Electron secure-storage password fallback', () => {
     const second = new SecureStorageService(directory);
     await expect(second.accessStatus()).resolves.toBe('password_required');
     await expect(second.unlockWithPassword('wrong password')).resolves.toBe(false);
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 1001);
     await expect(second.unlockWithPassword('correct horse battery staple')).resolves.toBe(true);
+    clock.mockRestore();
     await expect(second.getItem('wallet-key')).resolves.toBe('secret-value');
   });
 
@@ -57,4 +61,27 @@ describe('Electron secure-storage password fallback', () => {
       'Cannot replace',
     );
   });
+  it('does not install an unlock key after the trusted input window closes', async () => {
+    const first = new SecureStorageService(directory);
+    await first.configurePassword('correct horse battery staple');
+    const restarted = new SecureStorageService(directory);
+    await expect(restarted.unlockWithPassword('correct horse battery staple', () => false)).resolves.toBe(false);
+    await expect(restarted.accessStatus()).resolves.toBe('password_required');
+  });
+  it('serializes password setup so a second request cannot replace the vault', async () => {
+    const service = new SecureStorageService(directory);
+    const outcomes = await Promise.allSettled([service.configurePassword('first strong password'), service.configurePassword('second strong password')]);
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
+    const restarted = new SecureStorageService(directory);
+    await expect(restarted.unlockWithPassword('first strong password')).resolves.toBe(true);
+  });
+
+  it('leaves a just-created vault locked when setup is cancelled during its durable write', async () => {
+    const service = new SecureStorageService(directory);
+    let checks = 0;
+    await expect(service.configurePassword('correct horse battery staple', () => ++checks === 1)).rejects.toThrow('cancelled');
+    await expect(service.accessStatus()).resolves.toBe('password_required');
+    await expect(service.unlockWithPassword('correct horse battery staple')).resolves.toBe(true);
+  });
+
 });

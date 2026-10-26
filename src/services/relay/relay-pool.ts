@@ -56,6 +56,7 @@ type QueryBase = QueryObservers & {
   timeoutMs?: number;
   /** Streams verified events so batched callers retain data received before EOSE. */
   onEvent?: (event: Event) => void;
+  onEventSource?: (event: Event, relayUrl: string) => void;
   onReceived?: (relayUrl: string, id: string) => void;
   signAuth?: SignAuth;
   /** Cancels this bounded query without closing shared relay connections. */
@@ -100,6 +101,7 @@ class RelayPool {
       filters,
       timeoutMs: timeout,
       onEvent: opts.onEvent,
+      onEventSource: opts.onEventSource,
       onReceived: opts.onReceived,
       onclose: opts.onclose,
       onerror: opts.onerror,
@@ -171,7 +173,7 @@ class RelayPool {
   }
 }
 
-function verifyEventNativeFirst(event: Event, _relayUrl: string): boolean {
+export function verifyEventNativeFirst(event: Event, _relayUrl: string): boolean {
   const cached = event[verifiedSymbol];
   if (typeof cached === 'boolean') return cached;
 

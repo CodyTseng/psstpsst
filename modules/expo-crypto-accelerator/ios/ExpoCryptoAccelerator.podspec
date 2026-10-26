@@ -9,6 +9,7 @@ Pod::Spec.new do |s|
   s.platforms      = { :ios => '16.4' }
   s.swift_version  = '5.0'
   s.source         = { :git => '' }
+  s.resources      = ['VaultConsent.json']
   s.source_files   = '**/*.{swift,h,m,c}'
   s.pod_target_xcconfig = {
     'HEADER_SEARCH_PATHS' => [

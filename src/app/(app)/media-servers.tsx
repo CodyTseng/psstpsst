@@ -114,7 +114,7 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
       if (useActiveAccount.getState().activePubkey !== accountPubkey || abort.signal.aborted) return;
       const message = t('media_servers.save_error');
       setSaveError(message);
-      showToast(message, { target: 'detail' });
+      showToast(message, { variant: 'error', target: 'detail' });
     } finally {
       saveAbort.current = null;
       setSaving(false);

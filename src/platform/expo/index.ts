@@ -1,3 +1,5 @@
+import { keyVaultAdapter } from './key-vault';
+import { nappletAdapter } from './napplet';
 import { screenOrientationAdapter } from './screen-orientation';
 import { clipboardAdapter } from './clipboard';
 import { imageCacheAdapter } from './image-cache';
@@ -21,13 +23,12 @@ import { deepLinkAdapter } from './deep-link';
 import { documentPickerAdapter } from './document-picker';
 import { fileDropAdapter } from './file-drop';
 import { imageManipulatorAdapter } from './image-manipulator';
-import { localAuthAdapter } from './local-auth';
 import { localizationAdapter } from './localization';
 import { mediaLibraryAdapter } from './media-library';
 import { networkStateAdapter } from './network-state';
 import { notificationsAdapter } from './notifications';
 import { pushNotificationsAdapter } from './push-notifications';
-import { secureStorageAdapter } from './secure-storage';
+import { securityAdapter } from './security';
 import { sharingAdapter } from './sharing';
 import { urlOpenerAdapter } from './url-opener';
 import { unreadIndicatorAdapter } from './unread-indicator';
@@ -108,6 +109,7 @@ function lazyFileSystemAdapter(): FileSystemPort {
     readBase64: (uri) => load().readBase64(uri),
     readBytes: (uri) => load().readBytes(uri),
     writeText: (uri, contents) => load().writeText(uri, contents),
+    updateJson: (uri, patch) => load().updateJson(uri, patch),
     writeBytes: (uri, bytes) => load().writeBytes(uri, bytes),
     openReadHandle: (uri, options) => load().openReadHandle(uri, options),
     openWriteHandle: (uri, options) => load().openWriteHandle(uri, options),
@@ -181,6 +183,9 @@ function lazyNoiseAdapter(): NoisePort {
     return real;
   };
   return {
+    ensureIdentity: account => load().ensureIdentity(account),
+    createAccountHandshake: (account, role) => load().createAccountHandshake(account, role),
+    removeIdentity: account => load().removeIdentity(account),
     generateKeyPair: (seed) => load().generateKeyPair(seed),
     createHandshake: (role, staticPrivateKey, fixedEphemeralPrivateKey) =>
       load().createHandshake(role, staticPrivateKey, fixedEphemeralPrivateKey),
@@ -203,10 +208,12 @@ export function createExpoAdapters(): PlatformAdapters {
   return {
     pushNotifications: pushNotificationsAdapter,
     screenOrientation: screenOrientationAdapter,
+    napplet: nappletAdapter,
     bundledNotices: bundledNoticesAdapter,
     appUpdate: appUpdateAdapter,
     confirmationDialog: confirmationDialogAdapter,
-    secureStorage: secureStorageAdapter,
+    security: securityAdapter,
+    keyVault: keyVaultAdapter,
     notifications: notificationsAdapter,
     backgroundMessaging: backgroundMessagingAdapter,
     backgroundTask: backgroundTaskAdapter,
@@ -220,7 +227,6 @@ export function createExpoAdapters(): PlatformAdapters {
     deviceCrypto: deviceCryptoAdapter,
     deepLink: deepLinkAdapter,
     zipArchive: zipArchiveAdapter,
-    localAuth: localAuthAdapter,
     mediaLibrary: mediaLibraryAdapter,
     clipboard: clipboardAdapter,
     sharing: sharingAdapter,

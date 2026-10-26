@@ -3,7 +3,7 @@ import type { BunkerPointer } from 'nostr-tools/nip46';
 
 import { db } from '@/db/client';
 import { accounts } from '@/db/schema';
-import { createSigner, storeNip46BunkerSecret } from '@/services/signer/signer-factory';
+import { createSigner, migrateNip46BunkerSecret } from '@/services/signer/signer-factory';
 import type { Signer } from '@/services/signer/signer.interface';
 
 /** Account reads and signer construction must not import account lifecycle services. */
@@ -39,7 +39,7 @@ async function protectNip46BunkerSecret(account: typeof accounts.$inferSelect) {
   }
   if (pointer.secret == null) return account;
 
-  await storeNip46BunkerSecret(account.pubkey, pointer.secret);
+  await migrateNip46BunkerSecret(account.pubkey, pointer.secret, pointer.pubkey);
   const signerPayload = JSON.stringify({ ...pointer, secret: null } satisfies BunkerPointer);
   await db.update(accounts).set({ signerPayload }).where(eq(accounts.pubkey, account.pubkey));
   return { ...account, signerPayload };

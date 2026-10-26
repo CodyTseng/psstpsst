@@ -1,4 +1,5 @@
-import { eq, inArray } from 'drizzle-orm';
+import { isNewerEvent } from '@/lib/nostr/event-version';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -58,7 +59,7 @@ async function storeProfileEvent(event: Event): Promise<void> {
   const existing = await getProfile(event.pubkey);
   const existingCreatedAt = existing?.rawEvent?.created_at;
   const now = Math.floor(Date.now() / 1000);
-  if (existingCreatedAt != null && existingCreatedAt >= event.created_at) {
+  if (existingCreatedAt != null && existing?.rawEvent && !isNewerEvent(event, existing.rawEvent)) {
     // The cached event is already this one or newer — but the relay round trip
     // did happen, so refresh the TTL marker. Without this a static profile
     // would go stale every PROFILE_TTL_SECONDS and re-query forever.
@@ -81,7 +82,10 @@ async function storeProfileEvent(event: Event): Promise<void> {
   await db
     .insert(profiles)
     .values({ pubkey: event.pubkey, ...fields })
-    .onConflictDoUpdate({ target: profiles.pubkey, set: fields });
+    .onConflictDoUpdate({ target: profiles.pubkey, set: fields,
+      setWhere: sql`${profiles.rawEvent} IS NULL OR json_extract(${profiles.rawEvent}, '$.created_at') < ${event.created_at}
+        OR (json_extract(${profiles.rawEvent}, '$.created_at') = ${event.created_at} AND json_extract(${profiles.rawEvent}, '$.id') > ${event.id})`,
+    });
 }
 
 /** Seed the shared profile cache from a resolved kind-0 event reference. */
@@ -231,7 +235,10 @@ export async function saveProfile(opts: {
         fetchedAt: Math.floor(Date.now() / 1000),
       };
       await tx.insert(profiles).values({ pubkey: opts.accountPubkey, ...fields })
-        .onConflictDoUpdate({ target: profiles.pubkey, set: fields });
+        .onConflictDoUpdate({ target: profiles.pubkey, set: fields,
+      setWhere: sql`${profiles.rawEvent} IS NULL OR json_extract(${profiles.rawEvent}, '$.created_at') < ${event.created_at}
+        OR (json_extract(${profiles.rawEvent}, '$.created_at') = ${event.created_at} AND json_extract(${profiles.rawEvent}, '$.id') > ${event.id})`,
+    });
     });
   });
 }

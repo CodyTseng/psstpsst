@@ -28,4 +28,6 @@ android {
 
 dependencies {
   implementation project(':expo-modules-core')
+  implementation project(':expo-crypto-accelerator')
+  implementation project(':expo-secure-store')
 }

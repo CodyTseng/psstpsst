@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { Refresh as RefreshCw } from '@solar-icons/react-native/category/arrows/Linear/Refresh';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
@@ -138,6 +139,7 @@ export default function WalletScreen() {
   const displayedBalanceMsat =
     balanceSnapshot?.walletId === defaultWalletId ? balanceSnapshot.balanceMsat : defaultWallet?.balanceMsat ?? null;
   const error = errorSnapshot?.walletId === defaultWalletId ? errorSnapshot.message : null;
+  useErrorToast(error);
   const balanceLabel =
     balanceVisible && displayedBalanceMsat != null
       ? formatNumber(displayedBalanceMsat / 1000)
@@ -194,11 +196,6 @@ export default function WalletScreen() {
                     accessibilityLabel={balanceVisible ? t('wallet.hide_balance') : t('wallet.show_balance')}
                   />
                 </View>
-                {error ? (
-                  <AppText variant="caption" tone="warning" align="center">
-                    {error}
-                  </AppText>
-                ) : null}
               </View>
 
               <View style={{ flexDirection: 'row', gap: spacing.md }}>

@@ -8,6 +8,8 @@ export type WindowChromeTheme = {
   symbolColor: string;
   /** Let renderer content show beneath the native title-bar controls. */
   transparentTitlebar?: boolean;
+  /** Optional toolbar height when application actions share the native title bar. */
+  titlebarHeight?: number;
 };
 
 /**
@@ -15,6 +17,10 @@ export type WindowChromeTheme = {
  * theme. Mobile has no window chrome to style; the Expo adapter is a no-op.
  */
 export interface WindowChromePort {
+  /** Desktop host-window focus; native runtimes supply Activity foreground ownership. */
+  getFocusState(): Promise<boolean>;
+  addFocusListener(listener: (focused: boolean) => void): () => void;
+  setTitle(title: string): Promise<void>;
   setTheme(theme: WindowChromeTheme): Promise<void>;
   /** Size the desktop window for promotional capture, restoring it on exit. */
   setScreenshotPreview(enabled: boolean): Promise<void>;

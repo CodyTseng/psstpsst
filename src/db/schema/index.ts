@@ -27,7 +27,7 @@ export * from './proximity-file-partials';
 export * from './proximity-file-spools';
 export * from './proximity-file-uploads';
 export * from './proximity-peers';
-export * from './referenced-events';
+export * from './cached-events';
 export * from './relay-lists';
 export * from './replaceable-events';
 export * from './saved-groups';
@@ -36,3 +36,10 @@ export * from './stored-files';
 export * from './types';
 export * from './wallets';
 export * from './private-list-sync-state';
+
+export * from './napplets';
+export * from './signing-authorizations';
+export * from './explore';
+export * from './local-relay';
+
+export * from './webln-payments';

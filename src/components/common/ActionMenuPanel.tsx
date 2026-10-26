@@ -61,6 +61,7 @@ export function actionMenuHeight(
       index > 0 && (density === 'touch' || item.separatorBefore),
   ).length;
   return (
+    StyleSheet.hairlineWidth * 2 +
     metrics.menuPaddingV * 2 +
     items.length * metrics.rowHeight +
     separatorCount * StyleSheet.hairlineWidth

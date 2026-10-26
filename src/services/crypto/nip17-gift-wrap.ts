@@ -1,3 +1,5 @@
+import { vaultAccess } from '@/platform/vault-access';
+import type { MessagingDecryption, VaultKey } from '@/platform/ports/key-vault';
 import {
   finalizeEvent,
   generateSecretKey,
@@ -90,17 +92,17 @@ export function buildRumor(template: EventTemplate, senderPubkey: string): Rumor
  */
 async function createSeal(
   rumor: Rumor,
-  senderEncPrivkey: Uint8Array,
+  senderEncPrivkey: Uint8Array | VaultKey,
   senderEncPubkey: string,
   recipientEncPubkey: string,
   signSeal: SignSeal,
   unifiedKey: boolean,
 ): Promise<Event> {
   // Recipient's encryption pubkey is stable → cache the conversation key.
-  const conversationKey = await getConversationKeyAsync(senderEncPrivkey, recipientEncPubkey, {
-    cache: true,
-  });
-  const encryptedContent = nip44.v2.encrypt(JSON.stringify(rumor), conversationKey);
+  const encryptedContent = senderEncPrivkey instanceof Uint8Array
+    ? nip44.v2.encrypt(JSON.stringify(rumor), await getConversationKeyAsync(senderEncPrivkey, recipientEncPubkey, { cache: true }))
+    : await vaultAccess.execute({ method: 'crypto', key: senderEncPrivkey, algorithm: 'nip44',
+      operation: 'encrypt', peer: recipientEncPubkey, text: JSON.stringify(rumor) }) as string;
   return signSeal({
     kind: KIND_SEAL,
     content: encryptedContent,
@@ -144,16 +146,19 @@ export type GiftWrappedMessage = {
 export async function createGiftWrappedMessage(opts: {
   rumorTemplate: EventTemplate;
   senderIdentityPubkey: string;
-  senderEncPrivkey: Uint8Array;
+  senderEncPrivkey?: Uint8Array;
+  senderEncKey?: VaultKey;
   senderEncPubkey: string;
   recipientIdentityPubkey: string;
   recipientEncPubkey: string;
   signSeal: SignSeal;
 }): Promise<GiftWrappedMessage> {
+  const encryptionKey = opts.senderEncKey ?? opts.senderEncPrivkey;
+  if (!encryptionKey) throw new Error('Missing sender encryption key');
   const rumor = buildRumor(opts.rumorTemplate, opts.senderIdentityPubkey);
   const seal = await createSeal(
     rumor,
-    opts.senderEncPrivkey,
+    encryptionKey,
     opts.senderEncPubkey,
     opts.recipientEncPubkey,
     opts.signSeal,
@@ -183,31 +188,30 @@ export type GiftWrapUnwrapOutcome =
   | { status: 'failed' };
 
 /** Generic envelope decoder retained for unified-key Nearby envelopes. Relay
- * account intake uses the stricter `unwrapGiftWrapWithKeys` boundary below. */
+ * account intake uses the stricter `unwrapGiftWrapForAccount` boundary below. */
 export async function unwrapGiftWrap(
   giftWrap: Event,
-  recipientEncPrivkey: Uint8Array,
+  recipientEncPrivkey: Uint8Array | VaultKey,
   profile?: PerfSpan | null,
 ): Promise<UnwrapResult | null> {
-  const outcome = await unwrapGiftWrapAttempt(giftWrap, recipientEncPrivkey, false, profile);
+  const outcome = await unwrapGiftWrapAttempt(giftWrap, recipientEncPrivkey, profile);
   return outcome.status === 'decrypted' ? outcome.value : null;
 }
 
 async function unwrapGiftWrapAttempt(
   giftWrap: Event,
-  recipientEncPrivkey: Uint8Array,
-  requireEncryptionKeyTag: boolean,
+  recipientEncPrivkey: Uint8Array | VaultKey,
   profile?: PerfSpan | null,
 ): Promise<GiftWrapUnwrapOutcome> {
   try {
     if (giftWrap.kind !== KIND_GIFT_WRAP || !verifyEvent(giftWrap)) return { status: 'failed' };
     // Gift wrap's pubkey is the sender's ephemeral one-shot key (different every
     // message) → never cache; it can't repeat.
-    const gwConvKey = await profileAsync(profile, 'crypto.outerKey', () =>
-      getConversationKeyAsync(recipientEncPrivkey, giftWrap.pubkey),
-    );
-    const sealJson = profileSync(profile, 'crypto.outerDecrypt', () =>
-      nip44.v2.decrypt(giftWrap.content, gwConvKey),
+    const sealJson = await profileAsync(profile, 'crypto.outerDecrypt', async () =>
+      recipientEncPrivkey instanceof Uint8Array
+        ? nip44.v2.decrypt(giftWrap.content, await getConversationKeyAsync(recipientEncPrivkey, giftWrap.pubkey))
+        : await vaultAccess.execute({ method: 'crypto', key: recipientEncPrivkey, algorithm: 'nip44',
+          operation: 'decrypt', cache: false, peer: giftWrap.pubkey, text: giftWrap.content }) as string,
     );
     const seal = profileSync(profile, 'crypto.outerParse', () => JSON.parse(sealJson) as Event);
     if (seal.kind !== KIND_SEAL) return { status: 'failed' };
@@ -216,12 +220,6 @@ async function unwrapGiftWrapAttempt(
     if (!profileSync(profile, 'crypto.verifySeal', () => verifyEvent(seal))) return { status: 'failed' };
 
     const encryptionKeyTag = seal.tags.find((tag) => tag[0] === SEAL_ENCRYPTION_PUBKEY_TAG);
-    if (!encryptionKeyTag && requireEncryptionKeyTag) {
-      // Ordinary NIP-17 is outside the relay account protocol. Once the seal
-      // is authenticated, skip it without decrypting its content or trying
-      // further recipient keys; this outcome is safe to persist as processed.
-      return { status: 'unsupported', reason: 'missing-encryption-key-tag' };
-    }
     // Only the generic unified-key decoder may fall back to the seal author.
     // A present but malformed n tag is not evidence of an ordinary NIP-17 seal.
     const senderEncryptionPubkey = encryptionKeyTag ? encryptionKeyTag[1] : seal.pubkey;
@@ -231,13 +229,11 @@ async function unwrapGiftWrapAttempt(
 
     // Sender's encryption pubkey is stable → cache. This is the big receive-path
     // win: every later message from the same sender reuses this conversation key.
-    const sealConvKey = await profileAsync(profile, 'crypto.innerKey', () =>
-      getConversationKeyAsync(recipientEncPrivkey, senderEncryptionPubkey, {
-        cache: true,
-      }),
-    );
-    const rumorJson = profileSync(profile, 'crypto.innerDecrypt', () =>
-      nip44.v2.decrypt(seal.content, sealConvKey),
+    const rumorJson = await profileAsync(profile, 'crypto.innerDecrypt', async () =>
+      recipientEncPrivkey instanceof Uint8Array
+        ? nip44.v2.decrypt(seal.content, await getConversationKeyAsync(recipientEncPrivkey, senderEncryptionPubkey, { cache: true }))
+        : await vaultAccess.execute({ method: 'crypto', key: recipientEncPrivkey, algorithm: 'nip44',
+          operation: 'decrypt', peer: senderEncryptionPubkey, text: seal.content }) as string,
     );
     const rumor = profileSync(profile, 'crypto.innerParse', () => JSON.parse(rumorJson) as Rumor);
 
@@ -258,26 +254,25 @@ async function unwrapGiftWrapAttempt(
   }
 }
 
-/**
- * Try to unwrap a gift wrap with several of our encryption keys in order,
- * returning the first decrypted or definitively unsupported seal. Used so a
- * message a peer encrypted to an
- * encryption key we've since rotated away from still decrypts as long as we
- * retained that old key.
- *
- * Deliberately tag-agnostic: we do NOT pick a key off the gift wrap's `p` tags
- * (a future format may carry only the identity pubkey there). The caller passes
- * the current key first, so the overwhelmingly common case decrypts on the very
- * first attempt; retired keys are only tried when the current key fails.
- */
-export async function unwrapGiftWrapWithKeys(
+/** The vault selects and retains messaging keys; business code validates the decrypted rumor. */
+export async function unwrapGiftWrapForAccount(
   giftWrap: Event,
-  keys: { privkey: Uint8Array }[],
+  account: string,
   profile?: PerfSpan | null,
 ): Promise<GiftWrapUnwrapOutcome> {
-  for (const key of keys) {
-    const result = await unwrapGiftWrapAttempt(giftWrap, key.privkey, true, profile);
-    if (result.status !== 'failed') return result;
+  const result = await profileAsync(profile, 'crypto.decryptMessaging', () =>
+    vaultAccess.execute({ method: 'decryptMessaging', account, event: giftWrap }),
+  ) as MessagingDecryption;
+  if (result.status !== 'decrypted') return result;
+  try {
+    const rumor = JSON.parse(result.rumorJson) as Rumor;
+    if (!validateEvent(rumor) || !Number.isSafeInteger(rumor.created_at) || rumor.created_at < 0 ||
+      !Number.isSafeInteger(rumor.kind) || rumor.kind < 0 ||
+      result.seal.pubkey !== rumor.pubkey || rumor.id !== getEventHash(rumor)) return { status: 'failed' };
+    return { status: 'decrypted', value: {
+      giftWrap, seal: result.seal, rumor, senderEncryptionPubkey: result.senderEncryptionPubkey,
+    } };
+  } catch {
+    return { status: 'failed' };
   }
-  return { status: 'failed' };
 }

@@ -90,7 +90,19 @@ export function createNoiseTestPort(): NoisePort {
     return value;
   };
 
+  const identities = new Map<string, NoiseKeyPair>();
   return {
+    async ensureIdentity(account) {
+      let pair = identities.get(account);
+      if (!pair) { pair = pureJsCrypto.generateX25519KeyPair(); identities.set(account, pair); }
+      return pair.publicKey.slice();
+    },
+    async createAccountHandshake(account, role) {
+      const pair = identities.get(account);
+      if (!pair) throw new Error('Noise credential unavailable');
+      return this.createHandshake(role, pair.privateKey);
+    },
+    async removeIdentity(account) { identities.get(account)?.privateKey.fill(0); identities.delete(account); },
     async generateKeyPair(seed) {
       return seed ? keyPair(seed) : pureJsCrypto.generateX25519KeyPair();
     },

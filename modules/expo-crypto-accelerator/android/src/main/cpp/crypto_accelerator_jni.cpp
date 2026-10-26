@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <cstdio>
 #include <mutex>
 #include <string>
 
@@ -69,7 +70,16 @@ std::string to_string(JNIEnv* env, jstring value) {
 
 secp256k1_context* get_context() {
   std::call_once(context_once, [] {
-    secp_context = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+    secp_context = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
+    std::array<unsigned char, 32> seed{};
+    FILE* random = std::fopen("/dev/urandom", "rb");
+    bool seeded = random && std::fread(seed.data(), 1, seed.size(), random) == seed.size();
+    if (random) std::fclose(random);
+    if (!seeded || !secp256k1_context_randomize(secp_context, seed.data())) {
+      secp256k1_context_destroy(secp_context); secp_context = nullptr;
+    }
+    volatile unsigned char* wipe = seed.data();
+    for (size_t i = 0; i < seed.size(); i++) wipe[i] = 0;
   });
   return secp_context;
 }
@@ -181,4 +191,71 @@ Java_chat_psstpsst_app_cryptoaccelerator_ExpoCryptoAcceleratorModule_verifySchno
              &pubkey) == 1
            ? JNI_TRUE
            : JNI_FALSE;
+}
+
+extern "C" void PsstVaultChaCha(const uint8_t*, const uint8_t*, const uint8_t*, uint32_t, uint8_t*);
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_chat_psstpsst_app_cryptoaccelerator_ExpoCryptoAcceleratorModule_vaultPublicNative(JNIEnv* env, jobject, jstring hex) {
+  std::array<unsigned char, 32> key{}, output{};
+  secp256k1_keypair pair;
+  secp256k1_xonly_pubkey pub;
+  if (!parse_hex_32(to_string(env, hex), key) || !get_context() || !secp256k1_keypair_create(get_context(), &pair, key.data())) {
+    throw_illegal_argument(env, "Invalid private key"); return nullptr;
+  }
+  secp256k1_keypair_xonly_pub(get_context(), &pub, nullptr, &pair);
+  secp256k1_xonly_pubkey_serialize(get_context(), output.data(), &pub);
+  volatile unsigned char* wipe = reinterpret_cast<volatile unsigned char*>(&pair);
+  for (size_t i = 0; i < sizeof(pair); i++) wipe[i] = 0;
+  std::fill(key.begin(), key.end(), 0);
+  jbyteArray result = env->NewByteArray(32);
+  env->SetByteArrayRegion(result, 0, 32, reinterpret_cast<const jbyte*>(output.data()));
+  return result;
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_chat_psstpsst_app_cryptoaccelerator_ExpoCryptoAcceleratorModule_vaultSignNative(JNIEnv* env, jobject, jstring hex, jstring digest, jbyteArray auxiliary) {
+  std::array<unsigned char, 32> key{}, message{}, aux{};
+  std::array<unsigned char, 64> output{};
+  secp256k1_keypair pair;
+  if (!parse_hex_32(to_string(env, hex), key) || !parse_hex_32(to_string(env, digest), message) || env->GetArrayLength(auxiliary) != 32 || !get_context() || !secp256k1_keypair_create(get_context(), &pair, key.data())) {
+    throw_illegal_argument(env, "Invalid signing request"); return nullptr;
+  }
+  env->GetByteArrayRegion(auxiliary, 0, 32, reinterpret_cast<jbyte*>(aux.data()));
+  int ok = secp256k1_schnorrsig_sign32(get_context(), output.data(), message.data(), &pair, aux.data());
+  volatile unsigned char* wipe = reinterpret_cast<volatile unsigned char*>(&pair);
+  for (size_t i = 0; i < sizeof(pair); i++) wipe[i] = 0;
+  std::fill(key.begin(), key.end(), 0);
+  if (!ok) { throw_runtime_exception(env, "Signing failed"); return nullptr; }
+  jbyteArray result = env->NewByteArray(64);
+  env->SetByteArrayRegion(result, 0, 64, reinterpret_cast<const jbyte*>(output.data()));
+  return result;
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_chat_psstpsst_app_cryptoaccelerator_ExpoCryptoAcceleratorModule_vaultChaChaNative(JNIEnv* env, jobject, jbyteArray key, jbyteArray nonce, jbyteArray input) {
+  if (env->GetArrayLength(key) != 32 || env->GetArrayLength(nonce) != 12) { throw_illegal_argument(env, "Invalid cipher request"); return nullptr; }
+  jsize size = env->GetArrayLength(input);
+  jbyte* k = env->GetByteArrayElements(key, nullptr);
+  jbyte* n = env->GetByteArrayElements(nonce, nullptr);
+  jbyte* data = env->GetByteArrayElements(input, nullptr);
+  jbyteArray result = env->NewByteArray(size);
+  jbyte* output = env->GetByteArrayElements(result, nullptr);
+  PsstVaultChaCha(reinterpret_cast<uint8_t*>(k), reinterpret_cast<uint8_t*>(n), reinterpret_cast<uint8_t*>(data), size, reinterpret_cast<uint8_t*>(output));
+  env->ReleaseByteArrayElements(key, k, JNI_ABORT); env->ReleaseByteArrayElements(nonce, n, JNI_ABORT);
+  env->ReleaseByteArrayElements(input, data, JNI_ABORT); env->ReleaseByteArrayElements(result, output, 0);
+  return result;
+}
+
+extern "C" int PsstVaultPinDigest(const uint8_t*, size_t, const uint8_t*, size_t, uint8_t*);
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_chat_psstpsst_app_cryptoaccelerator_ExpoCryptoAcceleratorModule_pinDigestNative(JNIEnv* env, jobject, jstring pin, jstring salt) {
+  std::string password = to_string(env, pin), selectedSalt = to_string(env, salt);
+  std::array<unsigned char, 32> output{};
+  int ok = PsstVaultPinDigest(reinterpret_cast<const uint8_t*>(password.data()), password.size(), reinterpret_cast<const uint8_t*>(selectedSalt.data()), selectedSalt.size(), output.data());
+  std::fill(password.begin(), password.end(), 0);
+  if (!ok) { throw_runtime_exception(env, "PIN verification unavailable"); return nullptr; }
+  jbyteArray result = env->NewByteArray(32);
+  env->SetByteArrayRegion(result, 0, 32, reinterpret_cast<const jbyte*>(output.data()));
+  std::fill(output.begin(), output.end(), 0); return result;
 }

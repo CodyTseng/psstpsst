@@ -1,3 +1,4 @@
+import type { VaultCommand } from '../ports/key-vault';
 import { createAsyncDatabase } from '../create-async-database';
 import type { PlatformAdapters, SqliteDriver, SqliteExecutor } from '../ports';
 import { initPlatformAdapters } from './registry';
@@ -72,16 +73,39 @@ const unsupported = new Proxy({}, {
     return () => Promise.reject(new Error(`Unavailable in notification extension: ${String(method)}`));
   },
 });
+function notificationVaultCommand(command: VaultCommand): void {
+  const auth = (template: import('nostr-tools').EventTemplate) => {
+    const url = template.tags.find(tag => tag[0] === 'u')?.[1];
+    if (template.kind !== 27235 || template.content !== '' || template.tags.length !== 2 ||
+      template.tags.find(tag => tag[0] === 'method')?.[1] !== 'GET' ||
+      !/^https:\/\/relay\.psstpsst\.chat\/v1\/events\/[0-9a-f]{64}$/.test(url ?? ''))
+      throw new Error('Notification signing is restricted to event retrieval');
+  };
+  if (command.method === 'signEvent') { auth(command.template); return; }
+  if (command.method === 'crypto') {
+    if (command.operation !== 'decrypt' || command.algorithm !== 'nip44') throw new Error('Unsupported notification cryptography');
+    return;
+  }
+  if (command.method === 'bunkerRequest') {
+    if (command.operation === 'sign_event') auth(JSON.parse(command.params[0]));
+    else if (command.operation !== 'connect' && command.operation !== 'get_public_key') throw new Error('Unsupported notification bunker request');
+    return;
+  }
+  if (command.method === 'publicKey' || command.method === 'getCurrentMessagingKey' || command.method === 'hasMessagingKey' || command.method === 'decryptMessaging' || command.method === 'endSession') return;
+  throw new Error('Unsupported notification vault operation');
+}
 const adapters = new Proxy({
+  keyVault: { importIdentity: async () => { throw new Error('Identity import is unavailable in notifications'); }, execute: (command: VaultCommand) => { notificationVaultCommand(command); return call<string>('vault', JSON.stringify(command)).then(value => JSON.parse(value)); }, backupIdentity: async () => false },
   database,
   appState: { currentState: () => 'extension', addChangeListener: () => () => {} },
   notifications: { isAvailable: () => false, shouldNotifyNow: () => true, addUserReturnedListener: () => () => {} },
   localization: { preferredLanguageTag: () => __locale },
-  secureStorage: {
+  security: {
     accessStatus: async () => 'available',
-    getItem: (key: string) => call('keyGet', key),
-    setItem: (key: string, value: string) => call('keySet', key, value),
-    deleteItem: (key: string) => call('keyDelete', key),
+    requestUnlock: async () => false,
+    ensureWalletProtection: async () => false,
+    readLegacyPreference: async () => { throw new Error('Preferences belong to SQLite'); },
+    deleteLegacyPreference: async () => { throw new Error('Preferences belong to SQLite'); },
   },
   cryptoAccelerator: {
     isAvailable: () => false,

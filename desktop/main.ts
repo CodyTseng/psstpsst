@@ -1,3 +1,10 @@
+import { resolveDevelopmentRendererOrigin } from './renderer-origin';
+import { CredentialSecurityService } from './credential-security';
+import { isLegacyPreferenceKey } from '../src/platform/ports/security';
+import { KeyVaultService } from './key-vault-service';
+import { DesktopVaultGateway } from './vault-gateway';
+import { ApplicationWindows } from './application-windows';
+import { registerNappletHandlers } from './napplet-service';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -23,7 +30,6 @@ import {
   protocol,
   shell,
   screen,
-  systemPreferences,
   Tray,
   webContents,
   type IpcMainInvokeEvent,
@@ -81,12 +87,20 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow: BrowserWindow | null = null;
+const applicationWindows = new ApplicationWindows({
+  create: () => createWindow(true), parent: () => mainWindow, trusted: isTrustedSender,
+  url: () => `${(DEVELOPMENT_RENDERER_ORIGIN ?? 'app://renderer').replace(/\/$/, '')}/application-window`,
+  cleanup: owner => { void databaseService?.cleanupOwner(owner); void fileService?.cleanupOwner(owner); },
+});
 let windowStateStore: WindowStateStore | null = null;
 const screenshotPreviewWindow = new ScreenshotPreviewWindow();
 let databaseService: DatabaseService | null = null;
 let fileService: FileService | null = null;
 let clipboardSnapshots: ClipboardSnapshots | null = null;
 let secureStorageService: SecureStorageService | null = null;
+let keyVaultService: KeyVaultService | null = null;
+let credentialSecurity: CredentialSecurityService | null = null;
+let vaultGateway: DesktopVaultGateway | null = null;
 let proximityService: ProximityService | null = null;
 let noiseService: NoiseService | null = null;
 let appUpdateService: DesktopAppUpdater | null = null;
@@ -112,7 +126,7 @@ const trayUnreadIcons = new Map<string, NativeImage>();
 let pendingDeepLink: string | null = null;
 
 const APP_SCHEME = APP_IDENTITY.scheme;
-const DEVELOPMENT_RENDERER_ORIGIN = resolveDevelopmentRendererOrigin();
+const DEVELOPMENT_RENDERER_ORIGIN = resolveDevelopmentRendererOrigin(app.isPackaged, process.env.PSSTPSST_RENDERER_URL);
 const NOTIFICATION_ICON_MAX_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_DELAY_MS = 5_000;
 
@@ -129,24 +143,6 @@ const TITLEBAR_OVERLAY_HEIGHT = process.platform === 'darwin' ? 28 : 40;
 // Vertically centres the 12px-diameter traffic lights in the 28px strip:
 // (28 - 12) / 2. The x offset keeps the `hiddenInset` default.
 const TRAFFIC_LIGHT_POSITION = { x: 12, y: 8 } as const;
-
-function resolveDevelopmentRendererOrigin(): string | null {
-  const value = process.env.PSSTPSST_RENDERER_URL;
-  if (!value) return null;
-  const url = new URL(value);
-  if (
-    url.protocol !== 'http:' ||
-    url.hostname !== 'localhost' ||
-    url.username ||
-    url.password ||
-    url.pathname !== '/' ||
-    url.search ||
-    url.hash
-  ) {
-    throw new Error(`Unsupported Electron development renderer URL: ${value}`);
-  }
-  return url.origin;
-}
 
 function isTrustedRendererLocation(value: string): boolean {
   try {
@@ -215,7 +211,7 @@ function scheduleBackgroundTask(minimumIntervalMinutes: number): void {
 }
 
 function isTrustedSender(event: IpcMainInvokeEvent): boolean {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return false;
+  if (event.sender !== mainWindow?.webContents && !applicationWindows.owns(event.sender)) return false;
   if (event.senderFrame !== event.sender.mainFrame) return false;
   return isTrustedRendererLocation(event.senderFrame.url);
 }
@@ -302,6 +298,8 @@ async function loadNotificationIcon(value: unknown): Promise<NativeImage | undef
 }
 
 function registerIpcHandlers(): void {
+  applicationWindows.register();
+  registerNappletHandlers(isTrustedSender, () => mainWindow);
   handle(IPC.appUpdateCheck, async () => {
     if (!appUpdateService || !app.isPackaged || IS_DEVELOPMENT_APP) {
       throw new Error('Application updates are unavailable');
@@ -373,21 +371,28 @@ function registerIpcHandlers(): void {
     services().database.streamClose(event.sender.id, validateString(id, 'stream id', 100)),
   );
 
-  handle(IPC.secureGet, (_event, key) => services().secure.getItem(validateString(key, 'key', 512)));
-  handle(IPC.secureAccessStatus, () => services().secure.accessStatus());
-  handle(IPC.secureConfigurePassword, (_event, password) =>
-    services().secure.configurePassword(validateString(password, 'application password', 256)),
-  );
-  handle(IPC.secureUnlockWithPassword, (_event, password) =>
-    services().secure.unlockWithPassword(validateString(password, 'application password', 256)),
-  );
-  handle(IPC.secureSet, (_event, key, value) =>
-    services().secure.setItem(validateString(key, 'key', 512), validateString(value, 'value')),
-  );
-  handle(IPC.secureDelete, (_event, key) =>
-    services().secure.deleteItem(validateString(key, 'key', 512)),
-  );
-
+  handle(IPC.vaultImportIdentity, (event, nsec) => vaultGateway!.importIdentity(event, nsec));
+  handle(IPC.vaultExecute, (event, command) => vaultGateway!.execute(event, command));
+  handle(IPC.vaultBackup, (event, account, selection) => vaultGateway!.backupIdentity(event, account, selection));
+  handle(IPC.securityStatus, () => services().secure.accessStatus());
+  handle(IPC.securityUnlock, (event, mode, selection) => {
+    if (mode !== 'setup' && mode !== 'unlock') throw new Error('Invalid unlock mode');
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (!owner) throw new Error('Missing security owner');
+    return credentialSecurity!.unlock(owner, mode, selection?.language);
+  });
+  handle(IPC.securityWallet, (event, account, selection) => {
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (!owner) throw new Error('Missing security owner');
+    return credentialSecurity!.ensureWallet(owner, validateString(account, 'account', 64), selection?.language);
+  });
+  const preferenceKey = (value: unknown) => {
+    const key = validateString(value, 'legacy preference', 128);
+    if (!isLegacyPreferenceKey(key)) throw new Error('Not a legacy preference');
+    return key;
+  };
+  handle(IPC.legacyPreferenceRead, (_event, key) => services().secure.getItem(preferenceKey(key)));
+  handle(IPC.legacyPreferenceDelete, (_event, key) => services().secure.deleteItem(preferenceKey(key)));
   handle(IPC.proximityRequestPermissions, () => proximityService!.requestPermissions());
   handle(IPC.proximityStartAdvertising, (_event, profile) =>
     proximityService!.startAdvertising(validateString(profile, 'proximity profile', 16 * 1024)),
@@ -435,12 +440,16 @@ function registerIpcHandlers(): void {
     if (process.platform === 'darwin') app.setBadgeCount(count);
     return setTrayUnreadCount(count);
   });
+  handle(IPC.windowChromeSetTitle, (event, title) => {
+    BrowserWindow.fromWebContents(event.sender)?.setTitle(validateString(title, 'window title', 256));
+  });
   handle(IPC.windowChromeSetTheme, (event, theme) => {
     const value = (theme ?? {}) as {
       backgroundColor?: unknown;
       titlebarColor?: unknown;
       symbolColor?: unknown;
       transparentTitlebar?: unknown;
+      titlebarHeight?: unknown;
     };
     const backgroundColor = validateHexColor(value.backgroundColor, 'window background');
     const titlebarColor = validateHexColor(value.titlebarColor, 'title bar background');
@@ -451,17 +460,21 @@ function registerIpcHandlers(): void {
     ) {
       throw new TypeError('Invalid transparent title bar flag');
     }
+    if (value.titlebarHeight !== undefined && (!Number.isInteger(value.titlebarHeight) || Number(value.titlebarHeight) < 28 || Number(value.titlebarHeight) > 80)) throw new TypeError('Invalid title bar height');
+    const titlebarHeight = Number(value.titlebarHeight ?? TITLEBAR_OVERLAY_HEIGHT);
     const transparentTitlebar = value.transparentTitlebar === true;
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return;
     window.setBackgroundColor(backgroundColor);
     // macOS keeps its inset traffic lights over the renderer's title strip;
     // Windows/Linux draw native caption buttons onto this themed overlay.
-    if (process.platform !== 'darwin') {
+    if (process.platform === 'darwin') {
+      window.setWindowButtonPosition({ x: TRAFFIC_LIGHT_POSITION.x, y: TRAFFIC_LIGHT_POSITION.y + (titlebarHeight - TITLEBAR_OVERLAY_HEIGHT) / 2 });
+    } else {
       window.setTitleBarOverlay({
         color: transparentTitlebar ? 'rgba(0, 0, 0, 0)' : titlebarColor,
         symbolColor,
-        height: TITLEBAR_OVERLAY_HEIGHT,
+        height: titlebarHeight,
       });
     }
   });
@@ -508,6 +521,7 @@ function registerIpcHandlers(): void {
       validateString(contents, 'file contents', 64 * 1024 * 1024),
     ),
   );
+  handle(IPC.fsUpdateJson, (_event, uri, patch) => services().files.updateJson(validateString(uri, 'file URI'), patch));
   handle(IPC.fsWriteBytes, (_event, uri, bytes) =>
     services().files.writeBytes(validateString(uri, 'file URI'), validateBytes(bytes, 'file bytes')),
   );
@@ -725,6 +739,13 @@ function registerIpcHandlers(): void {
     if (!noiseService) throw new Error('Noise service has not initialized');
     const handleValue = (value: unknown) => validateString(value, 'Noise handle', 100);
     switch (method) {
+      case 'ensureIdentity': return noiseService.ensureIdentity(validateString(args[0], 'account', 64));
+      case 'removeIdentity': return noiseService.removeIdentity(validateString(args[0], 'account', 64));
+      case 'createAccountHandshake': {
+        const role = args[1];
+        if (role !== 'initiator' && role !== 'responder') throw new Error('Invalid Noise role');
+        return noiseService.createAccountHandshake(validateString(args[0], 'account', 64), role);
+      }
       case 'generateKeyPair': {
         const seed = args[0];
         if (seed == null) return noiseService.generateKeyPair();
@@ -968,20 +989,6 @@ function registerIpcHandlers(): void {
     pendingDeepLink = null;
     return value;
   });
-  handle(IPC.localAuthHasEnrolled, () =>
-    process.platform === 'darwin' && systemPreferences.canPromptTouchID(),
-  );
-  handle(IPC.localAuthAuthenticate, async (_event, reason) => {
-    if (process.platform !== 'darwin' || !systemPreferences.canPromptTouchID()) return false;
-    try {
-      await systemPreferences.promptTouchID(
-        validateString(reason, 'authentication reason', 256),
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  });
   handle(IPC.backgroundRegister, async (_event, value) => {
     const minutes = Number(value);
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) {
@@ -1021,6 +1028,11 @@ function registerIpcHandlers(): void {
       open: (url) => shell.openExternal(url),
     });
   });
+  handle(IPC.browserOpenExternal, async (_event, value) => {
+    const url = new URL(validateString(value, 'external URL', 8192));
+    if (['javascript:', 'data:', 'file:', 'app:', 'about:', 'chrome:', 'devtools:', 'shell:', 'powershell:', 'cmd:', 'psstpsst-file:'].includes(url.protocol)) throw new Error('invalid-external-url');
+    await shell.openExternal(url.href);
+  });
 }
 
 async function registerProtocols(): Promise<void> {
@@ -1057,13 +1069,13 @@ async function registerProtocols(): Promise<void> {
   });
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(application = false): BrowserWindow {
   // The renderer may take a moment to report the effective theme; guess from
   // the OS scheme so the pre-paint frame and caption overlay start close.
   const initialChrome = nativeTheme.shouldUseDarkColors
     ? WINDOW_CHROME_COLORS.dark
     : WINDOW_CHROME_COLORS.light;
-  const saved = windowStateStore?.state;
+  const saved = application ? undefined : windowStateStore?.state;
   const bounds = saved
     ? fitWindowBounds(saved.bounds, screen.getDisplayMatching(saved.bounds).workArea)
     : null;
@@ -1096,7 +1108,8 @@ function createWindow(): BrowserWindow {
       webSecurity: true,
       backgroundThrottling: false,
       additionalArguments: [
-        `--psstpsst-proximity-available=${proximityService?.isAvailable() ? '1' : '0'}`,
+        `--psstpsst-proximity-available=${!application && proximityService?.isAvailable() ? '1' : '0'}`,
+        `--psstpsst-application-window=${application ? '1' : '0'}`,
       ],
     },
   });
@@ -1125,7 +1138,7 @@ function createWindow(): BrowserWindow {
     if (saved?.maximized) window.maximize();
     window.show();
     const captureState = () => {
-      if (!screenshotPreviewWindow.active) windowStateStore?.capture(window);
+      if (!application && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
     };
     window.on('resize', captureState);
     window.on('move', captureState);
@@ -1159,7 +1172,8 @@ function createWindow(): BrowserWindow {
     if (!isTrustedRendererLocation(url)) event.preventDefault();
   });
   window.on('close', (event) => {
-    if (!screenshotPreviewWindow.active) windowStateStore?.capture(window);
+    if (!application && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
+    if (application) return;
     void windowStateStore?.flush();
     if (shuttingDown) return;
     event.preventDefault();
@@ -1253,16 +1267,22 @@ async function start(): Promise<void> {
   );
   await clipboardSnapshots.start();
   secureStorageService = new SecureStorageService(userDataPath);
+  keyVaultService = new KeyVaultService(secureStorageService);
+  credentialSecurity = new CredentialSecurityService(secureStorageService, keyVaultService);
+  vaultGateway = new DesktopVaultGateway(keyVaultService, credentialSecurity, isTrustedSender);
   proximityService = new ProximityService(
     ProximityService.executable(process.resourcesPath, path.resolve(__dirname, '..')),
     (name, value) => mainWindow?.webContents.send(IPC.proximityEvent, name, value),
   );
   await proximityService.initialize();
-  noiseService = new NoiseService();
+  noiseService = new NoiseService(secureStorageService);
   process.env.PSSTPSST_PROXIMITY_AVAILABLE = proximityService.isAvailable() ? '1' : '0';
   databaseService = new DatabaseService(
     path.join(userDataPath, 'psstpsst.db'),
-    (owner) => owner.send(IPC.databaseChanged, {}),
+    (owner) => {
+      const recipients = new Set([owner, mainWindow?.webContents, ...applicationWindows.windows().map(window => window.webContents)]);
+      for (const recipient of recipients) if (recipient && !recipient.isDestroyed()) recipient.send(IPC.databaseChanged, {});
+    },
     (id) => webContents.fromId(id) ?? null,
   );
   const updateCheckPath = path.join(userDataPath, 'update-check.json');
@@ -1293,6 +1313,7 @@ async function start(): Promise<void> {
       const results = await Promise.allSettled([
         databaseService?.close() ?? Promise.resolve(),
         noiseService?.close() ?? Promise.resolve(),
+    keyVaultService?.destroy() ?? Promise.resolve(),
       ]);
       for (const result of results) {
         if (result.status === 'rejected') {
@@ -1391,6 +1412,7 @@ app.on('before-quit', (event) => {
     windowStateStore?.flush() ?? Promise.resolve(),
     databaseService?.close() ?? Promise.resolve(),
     noiseService?.close() ?? Promise.resolve(),
+    keyVaultService?.destroy() ?? Promise.resolve(),
   ]);
   void closeServices
     .catch(() => undefined)

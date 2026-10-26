@@ -7,6 +7,8 @@
  * the operating system accepted the URL so action-local UI can show feedback.
  */
 export interface UrlOpenerPort {
+  /** Called only after the host has reviewed a webpage's explicit external-app request. */
+  openApprovedBrowserUrl?(url: string): Promise<boolean>;
   /** Open a URL in the system handler. Resolves false instead of rejecting. */
   openExternalUrl(url: string): Promise<boolean>;
 }

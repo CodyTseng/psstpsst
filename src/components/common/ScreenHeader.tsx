@@ -24,6 +24,8 @@ type Props = {
   /** Optional trailing accessory (an `IconButton plain` or `AppButton
    * variant="text"`); balances the back chevron. */
   right?: React.ReactNode;
+  /** Symmetric title clearance for wider accessory groups. */
+  titleSideInset?: number;
   /** Optional leading accessory for a tab root (e.g. the Nearby action). Only
    * used when `back` is false — a pushed screen's left slot is the Back chevron. */
   left?: React.ReactNode;
@@ -62,6 +64,7 @@ export function useScreenHeaderClearance(belowHeight = 0) {
 export function ScreenHeader({
   title,
   titleControl,
+  titleSideInset = spacing['3xl'] + spacing.xl,
   onBack,
   right,
   left,
@@ -111,7 +114,7 @@ export function ScreenHeader({
               alignItems: 'center',
               justifyContent: 'center',
               // Keep the centered title clear of the side accessories.
-              paddingHorizontal: 72,
+              paddingHorizontal: titleSideInset,
             }]}
           >
             {titleControl ? (

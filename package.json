@@ -6,7 +6,10 @@
   "expo": {
     "autolinking": {
       "ios": {
-        "exclude": ["expo-background-task", "expo-task-manager"]
+        "exclude": [
+          "expo-background-task",
+          "expo-task-manager"
+        ]
       },
       "android": {
         "buildFromSource": [
@@ -22,6 +25,7 @@
     "@expo/ui": "~57.0.18",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@libp2p/noise": "1.0.1",
+    "@napplet/shim": "0.32.0",
     "@noble/ciphers": "^2.2.0",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
@@ -95,6 +99,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@react-native/jest-preset": "^0.86.3",
     "@types/archiver": "^8.0.0",
     "@types/better-sqlite3": "^9.6.0",
@@ -129,7 +134,7 @@
     "ios:build": "EXPO_PUBLIC_APP_ENV=production expo run:ios --configuration Release --device --no-bundler",
     "ios:archive": "mkdir -p release && EXPO_PUBLIC_APP_ENV=production xcodebuild -workspace ios/PsstPsst.xcworkspace -scheme PsstPsst -configuration Release -destination 'generic/platform=iOS' -archivePath \"$PWD/release/PsstPsst.xcarchive\" -allowProvisioningUpdates archive",
     "web": "EXPO_PUBLIC_APP_ENV=development expo start --web",
-    "electron:build:main": "esbuild desktop/main.ts desktop/preload.ts desktop/database-worker.ts desktop/noise-worker.ts --bundle --platform=node --format=cjs --target=node22 --outdir=desktop/dist --external:electron --external:electron-updater --external:better-sqlite3 --external:sharp",
+    "electron:build:main": "esbuild desktop/main.ts desktop/preload.ts desktop/napplet-preload.ts desktop/database-worker.ts desktop/noise-worker.ts desktop/key-vault-worker.ts desktop/security-input-preload.ts --bundle --platform=node --format=cjs --target=node22 --outdir=desktop/dist --external:electron --external:electron-updater --external:better-sqlite3 --external:sharp",
     "electron:build:renderer": "node scripts/build-electron-renderer.mjs",
     "electron:build:native": "node scripts/build-electron-proximity.mjs && node scripts/build-electron-notifications.mjs",
     "electron:build": "npm run electron:build:main && npm run electron:build:renderer",
@@ -143,13 +148,21 @@
     "electron:package:dev": "EXPO_PUBLIC_APP_ENV=development npm run electron:package:base -- --publish never --config.mac.forceCodeSigning=false --config.mac.identity=null --config.mac.hardenedRuntime=false --config.mac.notarize=false",
     "lint": "expo lint",
     "test": "jest --runInBand",
+    "test:webln-ui": "node --test scripts/webln-approvals.test.mjs",
+    "test:webln-database": "node --test scripts/webln-payments.test.mjs",
     "test:dependencies": "node --test scripts/dependency-security.test.mjs",
-    "postinstall": "patch-package --error-on-fail",
+    "postinstall": "patch-package --error-on-fail && node scripts/generate-vault-consent.mjs && node scripts/generate-napplet-prelude.mjs && node scripts/generate-napp-helpers.mjs",
     "licenses:generate": "node scripts/generate-licenses.mjs",
     "licenses:refresh": "node scripts/generate-licenses.mjs --refresh",
     "licenses:check": "node scripts/generate-licenses.mjs --check",
     "licenses:test": "node --test scripts/licenses/*.test.mjs",
-    "test:notification-extension": "node --test scripts/notification-extension/processor.test.mjs"
+    "test:notification-extension": "node --test scripts/notification-extension/processor.test.mjs",
+    "napplet:prelude": "node scripts/generate-napplet-prelude.mjs && node scripts/generate-napp-helpers.mjs",
+    "test:napplet-browser": "node --test scripts/napplet-browser.test.mjs scripts/page-appearance.test.mjs",
+    "test:napplet-electron": "node --test scripts/napplet-electron.test.mjs scripts/explore-electron.test.mjs scripts/application-windows.test.mjs",
+    "test:napplet-gallery": "node --test scripts/napplet-gallery.test.mjs",
+    "test:napplet-signing": "node --test scripts/napplet-signing.test.mjs",
+    "test:napplet-database": "node --test scripts/napplet-database.test.mjs scripts/signing-database.test.mjs"
   },
   "jest": {
     "preset": "jest-expo",

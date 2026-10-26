@@ -5,8 +5,9 @@ import { dmService } from '@/services/dm/dm.service';
 import { resolveMessagingMetadata, type MessagingMetadata } from '@/services/dm/messaging-metadata';
 import { initializeGeneratedAccount } from '@/services/account/generated-account-setup';
 import { getAccount } from '@/services/account/account.service';
-import { loadEncryptionKeys } from '@/services/dm/encryption-key.service';
+import { loadEncryptionKeypair, hasEncryptionKey } from '@/services/dm/encryption-key.service';
 import { waitForMessagingSendReadiness } from '@/services/dm/messaging-send-readiness';
+jest.mock('@/services/signer/signer-sessions', () => ({ endAccountSignerSession: jest.fn(async () => {}) }));
 
 jest.mock('@/services/account/generated-account-setup', () => ({ initializeGeneratedAccount: jest.fn() }));
 jest.mock('@/services/relay/configuration-publish.service', () => ({ configurationPublisher: { start: jest.fn(), stop: jest.fn() } }));
@@ -29,7 +30,7 @@ jest.mock('@/services/dm/messaging-metadata', () => ({
   MessagingMetadataUnavailableError: class extends Error {},
 }));
 jest.mock('@/services/dm/encryption-key.service', () => ({
-  loadEncryptionKeys: jest.fn(), publishEncryptionKeyAnnouncement: jest.fn(),
+  loadEncryptionKeypair: jest.fn(), hasEncryptionKey: jest.fn(async () => false), publishEncryptionKeyAnnouncement: jest.fn(),
   getEncryptionPubkeyFromEvent: (event: Event) => event.tags[0][1],
 }));
 
@@ -40,7 +41,7 @@ function metadata(key = 'old-key'): MessagingMetadata {
   };
 }
 const resolveMetadata = jest.mocked(resolveMessagingMetadata);
-const loadKeys = jest.mocked(loadEncryptionKeys);
+const loadKeys = jest.mocked(loadEncryptionKeypair);
 function hold<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => { resolve = done; });
@@ -50,11 +51,12 @@ async function flush() { for (let i = 0; i < 50; i++) await Promise.resolve(); }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(hasEncryptionKey).mockResolvedValue(false);
   jest.mocked(getAccount).mockResolvedValue({ signerType: 'nsec', signerPayload: '', localSetupPending: false } as never);
   jest.mocked(initializeGeneratedAccount).mockReset();
   jest.mocked(dmService.init).mockReset();
   useActiveAccount.setState({ activePubkey: null, status: 'idle', syncTargetPubkey: null, error: null });
-  loadKeys.mockResolvedValue([{ pubkey: 'old-key', privkey: new Uint8Array(32), createdAt: 1 }]);
+  loadKeys.mockResolvedValue({ pubkey: 'old-key', key: { account: 'test-account', role: 'messaging' }, createdAt: 1 });
   resolveMetadata.mockResolvedValue(metadata());
 });
 afterEach(async () => { await useActiveAccount.getState().signOut(); });
@@ -79,11 +81,21 @@ it('waits for key transfer, rechecks metadata, and initializes only with the new
   await flush();
   expect(useActiveAccount.getState().status).toBe('need_sync');
   expect(dmService.init).not.toHaveBeenCalled();
-  loadKeys.mockResolvedValue([{ pubkey: 'new-key', privkey: new Uint8Array(32), createdAt: 2 }]);
+  loadKeys.mockResolvedValue({ pubkey: 'new-key', key: { account: 'test-account', role: 'messaging' }, createdAt: 2 });
   await useActiveAccount.getState().completeSync();
   expect(resolveMetadata).toHaveBeenCalledTimes(2);
   expect(dmService.init).toHaveBeenCalledTimes(1);
   expect(useActiveAccount.getState().status).toBe('ready');
+});
+
+it('does not request key sync when the announcement is a retained historical key', async () => {
+  resolveMetadata.mockResolvedValue(metadata('retained-key'));
+  jest.mocked(hasEncryptionKey).mockResolvedValue(true);
+  await useActiveAccount.getState().loadFromStorage();
+  await flush();
+  expect(hasEncryptionKey).toHaveBeenCalledWith('account', 'retained-key');
+  expect(useActiveAccount.getState().status).toBe('ready');
+  expect(dmService.init).toHaveBeenCalled();
 });
 
 it('does not reopen a signed-out account after its metadata query returns', async () => {
@@ -149,7 +161,7 @@ it('does not use local creation setup for an imported account even if a marker i
 });
 
 it('keeps an imported account without a local key waiting for remote key discovery', async () => {
-  loadKeys.mockResolvedValue([]);
+  loadKeys.mockResolvedValue(null);
   const remote = hold<MessagingMetadata>();
   resolveMetadata.mockReturnValueOnce(remote.promise);
   const signingIn = useActiveAccount.getState().setActive('account');

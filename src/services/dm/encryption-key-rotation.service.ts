@@ -84,7 +84,7 @@ export function rotateEncryptionKey(context: RotationContext): Promise<Encryptio
 
 /** Startup check. This runs after the account has reconciled its latest remote
  * announcement, outside the blocking boot path. Missing legacy timestamps are
- * normalized by `loadEncryptionKeys`, so upgrades start a fresh interval rather
+ * normalized by `loadEncryptionKeypair`, so upgrades start a fresh interval rather
  * than rotating unexpectedly on first launch. */
 export async function rotateEncryptionKeyIfDue(
   context: RotationContext & { currentKey: EncryptionKeypair; now?: number },

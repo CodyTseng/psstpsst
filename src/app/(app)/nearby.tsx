@@ -297,11 +297,11 @@ export default function NearbyPage() {
     if (result === 'accepted') {
       enterChat(peer.proximityPubkey, peer.displayName);
     } else if (result === 'declined') {
-      showToast(t('nearby.request_declined'), { target: 'detail' });
+      showToast(t('nearby.request_declined'), { variant: 'error', target: 'detail' });
     } else if (result === 'failed') {
-      showToast(t('nearby.request_failed'), { target: 'detail' });
+      showToast(t('nearby.request_failed'), { variant: 'error', target: 'detail' });
     } else {
-      showToast(t('nearby.request_timeout'), { target: 'detail' });
+      showToast(t('nearby.request_timeout'), { variant: 'error', target: 'detail' });
     }
   }
 
@@ -338,7 +338,7 @@ export default function NearbyPage() {
         })
         .catch(() => {
           setStarting(false);
-          showToast(t('nearby.feature_update_failed'), { target: 'detail' });
+          showToast(t('nearby.feature_update_failed'), { variant: 'error', target: 'detail' });
         });
     }, 0);
   }
@@ -354,7 +354,7 @@ export default function NearbyPage() {
       setError(null);
       setFeatureSetting({ accountPubkey, enabled: next });
     } catch {
-      showToast(t('nearby.feature_update_failed'), { target: 'detail' });
+      showToast(t('nearby.feature_update_failed'), { variant: 'error', target: 'detail' });
     } finally {
       setFeatureToggleBusy(false);
     }

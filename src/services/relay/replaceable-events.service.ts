@@ -1,3 +1,4 @@
+import { isNewerEvent } from '@/lib/nostr/event-version';
 import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Filter } from 'nostr-tools';
 
@@ -6,6 +7,7 @@ import { replaceableEvents, type NostrEvent } from '@/db/schema';
 
 import { relayPool } from './relay-pool';
 import { RelayQueryError } from './relay-query-error';
+import { boundedEventRelays, mergeEventRelaySources } from '../nostr/event-relay-sources';
 
 /** Default freshness window for cached replaceable events; callers may override per kind. */
 export const REPLACEABLE_DEFAULT_TTL_SECONDS = 24 * 3600;
@@ -26,14 +28,17 @@ export type ReplaceableKey = {
 
 export type EnsureReplaceableFreshOpts = {
   ttlSeconds: number;
+  query?: (relays: string[], filters: Filter[]) => Promise<NostrEvent[] | { events: NostrEvent[]; eventRelays?: Map<string, string[]> }>;
   /** Shared relay set, or a per-key resolver (peer outbox ∪ discovery, etc.). */
   relays: string[] | ((key: ReplaceableKey) => Promise<string[]>);
   /** Called once after a refresh persisted anything (stored events or miss marks). */
   onUpdated?: () => void;
+  onEventStored?: (event: NostrEvent, relays: string[]) => void;
 };
 
 type CachedRow = {
   event: NostrEvent | null;
+  relays: string[];
   createdAt: number | null;
   fetchedAt: number;
 };
@@ -43,6 +48,11 @@ type CachedRow = {
 // module keeps it in sync, so it can also serve as the freshest-known row.
 const MIRROR_LIMIT = 4096;
 const mirror = new Map<string, CachedRow>();
+const mirrorSizes = new Map<string, number>();
+let mirrorBytes = 0;
+function deleteMirror(key: string) {
+  mirror.delete(key); mirrorBytes -= mirrorSizes.get(key) ?? 0; mirrorSizes.delete(key);
+}
 
 // Concurrent refreshes of the same key share one in-flight query.
 const inflight = new Map<string, Promise<void>>();
@@ -57,7 +67,7 @@ function cacheKeyOf(key: ReplaceableKey): string {
 
 /** Invalidate after a transaction writes the durable cache alongside outbox work. */
 export function invalidateReplaceableEvent(key: ReplaceableKey): void {
-  mirror.delete(cacheKeyOf(key));
+  deleteMirror(cacheKeyOf(key));
 }
 
 /** NIP-33 addressable kinds take their `d` tag; plain replaceable kinds use ''. */
@@ -73,11 +83,15 @@ function cacheKeyOfEvent(event: NostrEvent): string {
 }
 
 function setMirror(cacheKey: string, row: CachedRow): void {
-  if (!mirror.has(cacheKey) && mirror.size >= MIRROR_LIMIT) {
+  deleteMirror(cacheKey);
+  const size = (row.event ? JSON.stringify(row.event).length * 2 : 0) + JSON.stringify(row.relays).length * 2;
+  if (size > 16 * 1024 * 1024) return;
+  while (mirror.size >= MIRROR_LIMIT || mirrorBytes + size > 16 * 1024 * 1024) {
     const oldest = mirror.keys().next().value;
-    if (oldest !== undefined) mirror.delete(oldest);
+    if (oldest === undefined) break;
+    deleteMirror(oldest);
   }
-  mirror.set(cacheKey, row);
+  mirror.set(cacheKey, row); mirrorSizes.set(cacheKey, size); mirrorBytes += size;
 }
 
 function nowSeconds(): number {
@@ -85,33 +99,37 @@ function nowSeconds(): number {
 }
 
 /** Reads rows for the given keys, serving/refreshing the mirror. One batched query. */
-async function loadRows(keys: ReplaceableKey[]): Promise<Map<string, CachedRow>> {
+async function loadRows(keys: ReplaceableKey[], fresh = false): Promise<Map<string, CachedRow>> {
   const result = new Map<string, CachedRow>();
   const missing: Required<ReplaceableKey>[] = [];
+  const pendingKeys = new Set<string>();
   for (const key of keys) {
     const normalized = normalizeKey(key);
     const cacheKey = cacheKeyOf(normalized);
+    if (fresh) deleteMirror(cacheKey);
     const cached = mirror.get(cacheKey);
     if (cached) {
       result.set(cacheKey, cached);
-    } else if (!missing.some((m) => cacheKeyOf(m) === cacheKey)) {
-      missing.push(normalized);
+    } else if (!pendingKeys.has(cacheKey)) {
+      pendingKeys.add(cacheKey); missing.push(normalized);
     }
   }
-  if (missing.length > 0) {
+  for (let offset = 0; offset < missing.length; offset += 128) {
+    const batch = missing.slice(offset, offset + 128);
     const rows = await db
       .select({
         pubkey: replaceableEvents.pubkey,
         kind: replaceableEvents.kind,
         dTag: replaceableEvents.dTag,
         event: replaceableEvents.event,
+        relays: replaceableEvents.relays,
         createdAt: replaceableEvents.createdAt,
         fetchedAt: replaceableEvents.fetchedAt,
       })
       .from(replaceableEvents)
       .where(
         or(
-          ...missing.map((key) =>
+          ...batch.map((key) =>
             and(
               eq(replaceableEvents.pubkey, key.pubkey),
               eq(replaceableEvents.kind, key.kind),
@@ -124,6 +142,7 @@ async function loadRows(keys: ReplaceableKey[]): Promise<Map<string, CachedRow>>
       const cacheKey = cacheKeyOf(row);
       const cached: CachedRow = {
         event: row.event,
+        relays: row.relays ?? [],
         createdAt: row.createdAt,
         fetchedAt: row.fetchedAt,
       };
@@ -133,6 +152,9 @@ async function loadRows(keys: ReplaceableKey[]): Promise<Map<string, CachedRow>>
   }
   return result;
 }
+
+/** Discard process mirrors after external database writes. */
+export function invalidateReplaceableEvents() { mirror.clear(); mirrorSizes.clear(); mirrorBytes = 0; }
 
 /** Latest stored event for one key, or null (never stored, or a cached miss). Reads only. */
 export async function getReplaceableEvent(key: ReplaceableKey): Promise<NostrEvent | null> {
@@ -147,45 +169,59 @@ export async function getReplaceableEvents(
   return keys.map((key) => rows.get(cacheKeyOf(key))?.event ?? null);
 }
 
+/** Read manifests and their observed sources as one consistent batched snapshot. */
+export async function getReplaceableEventRecords(keys: ReplaceableKey[], options: { fresh?: boolean } = {}): Promise<{ event: NostrEvent | null; relays: string[] }[]> {
+  const rows = await loadRows(keys, options.fresh);
+  return keys.map(key => { const row = rows.get(cacheKeyOf(key)); return { event: row?.event ?? null, relays: row?.relays ?? [] }; });
+}
+
 /**
  * Upserts a replaceable event, newest-wins by `created_at`. `fetched_at` always
  * moves to now — both for genuinely newer events and for older duplicates seen
  * on a relay, which still count as a fresh confirmation. Returns true when the
  * stored event actually changed.
  */
-export async function storeReplaceableEvent(event: NostrEvent): Promise<boolean> {
+export async function storeReplaceableEvent(event: NostrEvent, options: { confirmed?: boolean; relays?: string[] } = {}): Promise<boolean> {
   const key = { pubkey: event.pubkey, kind: event.kind, dTag: dTagOfEvent(event) };
   const cacheKey = cacheKeyOfEvent(event);
   const existing = (await loadRows([key])).get(cacheKey);
-  const fetchedAt = nowSeconds();
+  const fetchedAt = options.confirmed === false ? existing?.fetchedAt ?? 0 : nowSeconds();
+  const relays = boundedEventRelays(options.relays);
 
-  if (existing && existing.createdAt != null && existing.createdAt >= event.created_at) {
+  if (existing?.event && !isNewerEvent(event, existing.event)) {
     await db
       .insert(replaceableEvents)
-      .values({ ...key, event: existing.event, createdAt: existing.createdAt, fetchedAt })
+      .values({ ...key, event: existing.event, relays: existing.relays, createdAt: existing.createdAt, fetchedAt })
       .onConflictDoUpdate({
         target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
-        set: { fetchedAt },
+        set: { fetchedAt: options.confirmed === false ? sql`MAX(${replaceableEvents.fetchedAt},${fetchedAt})` : fetchedAt,
+          ...(relays.length ? { relays: sql`CASE WHEN json_extract(${replaceableEvents.event},'$.id')=${event.id}
+            THEN ${mergeEventRelaySources(replaceableEvents.relays, relays)} ELSE ${replaceableEvents.relays} END` } : {}),
+        },
       });
-    setMirror(cacheKey, { ...existing, fetchedAt });
+    deleteMirror(cacheKey);
+    await loadRows([key]);
     return false;
   }
 
   await db
     .insert(replaceableEvents)
-    .values({ ...key, event, createdAt: event.created_at, fetchedAt })
+    .values({ ...key, event, relays, createdAt: event.created_at, fetchedAt })
     .onConflictDoUpdate({
       target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
-      set: { event, createdAt: event.created_at, fetchedAt },
+      set: { event, relays: sql`CASE WHEN json_extract(${replaceableEvents.event},'$.id')=${event.id}
+        THEN ${mergeEventRelaySources(replaceableEvents.relays, relays)} ELSE ${JSON.stringify(relays)} END`, createdAt: event.created_at, fetchedAt },
       // Guards the read-then-write window against an interleaved newer event.
       setWhere: or(
         isNull(replaceableEvents.createdAt),
         lt(replaceableEvents.createdAt, event.created_at),
+        sql`(${replaceableEvents.createdAt} = ${event.created_at} AND json_extract(${replaceableEvents.event}, '$.id') >= ${event.id})`,
       ),
     });
-  setMirror(cacheKey, { event, createdAt: event.created_at, fetchedAt });
+  deleteMirror(cacheKey);
+  const stored = (await loadRows([key])).get(cacheKey);
   if (event.kind === KIND_EMOJI_SET) await pruneEmojiPackCache();
-  return true;
+  return stored?.event?.id === event.id;
 }
 
 /** Evicts kind-30030 rows beyond {@link MAX_PERSISTED_EMOJI_PACKS}, keeping the
@@ -209,7 +245,6 @@ async function pruneEmojiPackCache(): Promise<void> {
 export async function markReplaceableFetched(key: ReplaceableKey): Promise<void> {
   const normalized = normalizeKey(key);
   const cacheKey = cacheKeyOf(normalized);
-  const existing = (await loadRows([normalized])).get(cacheKey);
   const fetchedAt = nowSeconds();
   await db
     .insert(replaceableEvents)
@@ -218,11 +253,8 @@ export async function markReplaceableFetched(key: ReplaceableKey): Promise<void>
       target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
       set: { fetchedAt },
     });
-  setMirror(cacheKey, {
-    event: existing?.event ?? null,
-    createdAt: existing?.createdAt ?? null,
-    fetchedAt,
-  });
+  deleteMirror(cacheKey);
+  await loadRows([normalized]);
 }
 
 /**
@@ -291,16 +323,19 @@ async function refreshStaleKeys(
       const requested = new Set(group.keys.map(cacheKeyOf));
       const received = new Set<string>();
       if (group.relays.length === 0) throw new RelayQueryError([]);
-      const events = await relayPool.query({
-        label: 'replaceable-refresh',
-        relays: group.relays,
-        filters: buildFilters(group.keys),
+      const filters = buildFilters(group.keys);
+      const eventRelays = new Map<string, string[]>();
+      const response = opts.query ? await opts.query(group.relays, filters) : await relayPool.query({
+        label: 'replaceable-refresh', relays: group.relays, filters,
+        onEventSource: (event, relay) => { eventRelays.set(event.id, [relay]); },
       });
+      const events = Array.isArray(response) ? response : response.events;
+      const sources = Array.isArray(response) ? eventRelays : response.eventRelays;
       for (const event of events) {
         const cacheKey = cacheKeyOfEvent(event);
         if (!requested.has(cacheKey)) continue; // merged filters over-match cross products
         received.add(cacheKey);
-        await storeReplaceableEvent(event);
+        if (await storeReplaceableEvent(event, { relays: sources?.get(event.id) })) opts.onEventStored?.(event, sources?.get(event.id) ?? []);
       }
       for (const key of group.keys) {
         if (!received.has(cacheKeyOf(key))) await markReplaceableFetched(key);

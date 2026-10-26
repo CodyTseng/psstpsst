@@ -2,8 +2,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { router } from 'expo-router';
 
 import AddWalletScreen from '@/app/(app)/wallet-add';
-import { walletAuthenticationMode } from '@/services/wallet/wallet-pin.service';
 import { addWallet, validateWalletConnectionString } from '@/services/wallet/wallet.service';
+import { AppInput } from '@/components/common/AppInput';
+import { AppButton } from '@/components/common/AppButton';
+import { platform } from '@/platform';
 import { useWalletConnectionHandoffStore } from '@/stores/wallet-connection-handoff.store';
 
 let mockHandoffId = '';
@@ -34,10 +36,7 @@ jest.mock('@/platform', () => ({
   platform: { confirmationDialog: { notify: jest.fn(async () => {}) } },
 }));
 jest.mock('@/services/profile/profile.service', () => ({ getProfile: jest.fn() }));
-jest.mock('@/services/wallet/wallet-pin.service', () => ({
-  setWalletPin: jest.fn(),
-  walletAuthenticationMode: jest.fn(),
-}));
+
 jest.mock('@/services/wallet/wallet.service', () => ({
   addWallet: jest.fn(),
   validateWalletConnectionString: jest.fn(),
@@ -60,6 +59,7 @@ describe('AddWalletScreen scanner handoff', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockHandoffId = '';
     useWalletConnectionHandoffStore.setState({ pending: null });
   });
 
@@ -78,7 +78,6 @@ describe('AddWalletScreen scanner handoff', () => {
         connectionString,
       }),
     );
-    jest.mocked(walletAuthenticationMode).mockResolvedValueOnce('system');
     jest.mocked(addWallet).mockResolvedValueOnce({
       id: 'wallet',
       lud16: null,
@@ -94,10 +93,30 @@ describe('AddWalletScreen scanner handoff', () => {
     });
 
     expect(validateWalletConnectionString).toHaveBeenCalledWith(connectionString);
-    expect(walletAuthenticationMode).toHaveBeenCalledWith('account');
     expect(addWallet).toHaveBeenCalledWith('account', connectionString);
     expect(router.dismissTo).toHaveBeenCalledWith('/wallet');
     expect(router.back).not.toHaveBeenCalled();
     expect(useWalletConnectionHandoffStore.getState().pending).toBeNull();
+  });
+
+  it('manual import sends the input to the vault service and clears the form', async () => {
+    const connectionString = 'nostr+walletconnect://manual';
+    jest.mocked(addWallet).mockResolvedValueOnce({ id: 'wallet', lud16: null } as Awaited<ReturnType<typeof addWallet>>);
+    act(() => { renderer = create(<AddWalletScreen />); });
+    act(() => { renderer!.root.findByType(AppInput).props.onChangeText(connectionString); });
+    await act(async () => { await renderer!.root.findByType(AppButton).props.onPress(); });
+    expect(addWallet).toHaveBeenCalledWith('account', connectionString);
+    expect(renderer!.root.findByType(AppInput).props.value).toBe('');
+    expect(router.dismissTo).toHaveBeenCalledWith('/wallet');
+  });
+
+  it('does not retain a submitted connection string after a failed import', async () => {
+    jest.mocked(addWallet).mockRejectedValueOnce(new Error('Import failed'));
+    act(() => { renderer = create(<AddWalletScreen />); });
+    act(() => { renderer!.root.findByType(AppInput).props.onChangeText('nostr+walletconnect://manual'); });
+    await act(async () => { await renderer!.root.findByType(AppButton).props.onPress(); });
+    expect(renderer!.root.findByType(AppInput).props.value).toBe('');
+    expect(router.dismissTo).not.toHaveBeenCalled();
+    expect(platform.confirmationDialog.notify).toHaveBeenCalled();
   });
 });

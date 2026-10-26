@@ -127,7 +127,7 @@ export function NpubQrSheet({ visible, onClose, npub, name, nip05, toastTarget }
       visible={visible}
       onClose={onClose}
       title={t('profile.show_qr')}
-      contentStyle={{ gap: spacing.xl, alignItems: 'center' }}
+      contentStyle={{ gap: spacing.lg, alignItems: 'center' }}
     >
       <NpubShareCard ref={cardRef} npub={npub} name={name} nip05={nip05} />
 

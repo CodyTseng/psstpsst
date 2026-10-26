@@ -1,3 +1,4 @@
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { SquareArrowRightUp } from '@solar-icons/react-native/category/arrows/Linear/SquareArrowRightUp';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -6,6 +7,7 @@ import { FlatList, View } from 'react-native';
 
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
+import { AppButton } from '@/components/common/AppButton';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
@@ -45,7 +47,9 @@ export default function OpenSourceProject() {
   const { catalog, error: catalogError, retry: retryCatalog } = useLicenseCatalog();
   const project = typeof id === 'string' ? catalog?.byId.get(id) : undefined;
   const { chunks, error, retry } = useProjectNotices(project);
+  useErrorToast((catalogError || error) && 'licenses.load_failed');
   const [linkError, setLinkError] = useState(false);
+  useErrorToast(linkError && 'licenses.link_failed');
   const titleClearance = useScreenHeaderClearance();
   const { scrolled, scrollProps } = useScrolled({ resetKey: id });
   const external = <SquareArrowRightUp size={18} color={c.textMuted} style={direction} />;
@@ -89,13 +93,12 @@ export default function OpenSourceProject() {
                   void openRuntimeNotices().catch(() => setLinkError(true));
                 }} />
             ) : null}
-            {linkError ? <AppText tone="danger">{t('licenses.link_failed')}</AppText> : null}
             <SectionLabel>{t('licenses.notices')}</SectionLabel>
           </View>
         ) : null}
-        ListEmptyComponent={catalogError ? <LicenseState title={t('licenses.load_failed')} retry={retryCatalog} /> :
+        ListEmptyComponent={catalogError ? <View style={{ padding: spacing.xl }}><AppButton variant="secondary" label={t('common.retry')} onPress={retryCatalog} /></View> :
           catalog && !project ? <LicenseState title={t('licenses.not_found')} /> :
-          error ? <LicenseState title={t('licenses.load_failed')} retry={retry} /> :
+          error ? <View style={{ padding: spacing.xl }}><AppButton variant="secondary" label={t('common.retry')} onPress={retry} /></View> :
           project ? <View style={{ padding: spacing.xl }} /> : null}
       />
       <ScreenHeader title={t('licenses.details')} bordered={scrolled} />

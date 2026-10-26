@@ -31,6 +31,7 @@
     "asarUnpack": [
       "dist/native/**/*",
       "dist/database-worker.js",
+      "dist/key-vault-worker.js",
       "node_modules/better-sqlite3/**/*",
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*"

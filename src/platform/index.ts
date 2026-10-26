@@ -32,7 +32,6 @@ export type {
   ImageCachePort,
   ImageEncodeFormat,
   ImageManipulatorPort,
-  LocalAuthPort,
   LocalizationPort,
   MediaLibraryPort,
   NetworkStatePort,
@@ -52,7 +51,7 @@ export type {
   ProximityTransportSubscription,
   RenderedImage,
   ScreenOrientationPort,
-  SecureStoragePort,
+  SecurityPort,
   SharingPort,
   UrlOpenerPort,
   UnreadIndicatorPort,
@@ -73,8 +72,10 @@ export { initPlatformAdapters } from './registry';
  * runtime, leaving room for a future out-of-process desktop backend without
  * changing call sites.
  */
-export const platform = new Proxy({} as PlatformAdapters, {
+export const platform = new Proxy({} as Omit<PlatformAdapters, 'keyVault'>, {
   get(_target, prop: string) {
+    if (prop === 'keyVault') throw new Error('Use a signer capability; vault transport is internal');
+    if (prop === 'secureStorage') throw new Error('Raw credential storage is private; use a security operation');
     return getPlatform()[prop as keyof PlatformAdapters];
   },
 });

@@ -1,129 +1,122 @@
-import { generateSecretKey, getPublicKey } from 'nostr-tools';
-import {
-  BUNKER_REGEX,
-  BunkerSigner,
-  createNostrConnectURI,
-  parseBunkerInput,
-} from 'nostr-tools/nip46';
+import { vaultAccess } from '@/platform/vault-access';
+import { verifyEvent, type Event } from 'nostr-tools';
+import { BUNKER_REGEX, parseBunkerInput } from 'nostr-tools/nip46';
 
-import { bytesToHex } from '@/lib/nostr/keys';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { platform } from '@/platform';
-
+import type { BunkerPairing, PairingResponse } from '@/platform/ports/key-vault';
 import { addRemoteAccount } from '../account/account.service';
-import { relayPool } from '../relay/relay-pool';
-import {
-  NIP46_PAIRING_TIMEOUT_MS,
-  withNip46Timeout,
-} from './nip46-timeout';
+import { ManagedRelayPool } from '../relay/managed-relay-pool';
+import { NIP46_PAIRING_TIMEOUT_MS, withNip46Timeout } from './nip46-timeout';
 
-/** Default relays the two sides rendezvous on for the Nostr Connect (app-
- * initiated) flow — widely-replicated public relays most signers already speak
- * to. The user can override this via the screen's advanced setting. */
 export const NIP46_DEFAULT_RELAYS = ['wss://relay.damus.io/', 'wss://nos.lol/'];
 
-const APP_NAME = 'PsstPsst';
+/** Relay transport sees only public metadata and encrypted, native-signed messages. */
+class PairingTransport {
+  private pool = new ManagedRelayPool({ verifyEvent: event => verifyEvent(event) });
+  private closed = false;
+  private stop?: () => void;
+  private pending?: { resolve(): void; reject(error: Error): void };
+  private peerReady: Promise<void>;
+  private resolvePeer?: () => void;
+  private rejectPeer?: (error: Error) => void;
+  private receiving: Promise<void> = Promise.resolve();
 
-function openAuthUrl(url: string): void {
-  void platform.urlOpener.openExternalUrl(url).catch((error) => {
-    console.warn('[nip46] Failed to open the authorization URL.', error);
-  });
-}
-
-/**
- * Connect to a bunker from a pasted `bunker://…` URL, then persist the account
- * and return its signing pubkey. We connect here (rather than lazily) because
- * the signing pubkey isn't known until the handshake completes — the bunker
- * reports it, and it may differ from the pubkey embedded in the URI. The
- * temporary connection is closed afterwards; the next use (bootstrap) reconnects
- * lazily with the same authorised client key.
- */
-export async function loginWithBunker(input: string): Promise<{ pubkey: string }> {
-  const trimmed = input.trim();
-  // Bunker links only — `parseBunkerInput` would also resolve a `name@domain`
-  // NIP-05, which we deliberately don't accept here.
-  if (!BUNKER_REGEX.test(trimmed)) throw new Error('invalid');
-  const pointer = await parseBunkerInput(trimmed);
-  if (!pointer) throw new Error('invalid');
-  pointer.relays = Array.from(new Set(pointer.relays.map(normalizeRelayUrl)));
-
-  const clientSecretKey = generateSecretKey();
-  const signer = BunkerSigner.fromBunker(clientSecretKey, pointer, {
-    pool: relayPool.underlyingPool,
-    onauth: openAuthUrl,
-  });
-  try {
-    await withNip46Timeout(signer.connect(), 'connection');
-    const pubkey = await withNip46Timeout(signer.getPublicKey(), 'get_public_key');
-    await addRemoteAccount({
-      pubkey,
-      pointer: signer.bp,
-      clientSecretKeyHex: bytesToHex(clientSecretKey),
+  constructor(readonly pairing: BunkerPairing, private relays: string[], peer: string | null) {
+    this.peerReady = peer ? Promise.resolve() : new Promise((resolve, reject) => {
+      this.resolvePeer = resolve; this.rejectPeer = reject;
     });
-    return { pubkey };
-  } finally {
-    await signer.close().catch(() => {});
+    void this.peerReady.catch(() => {});
+    this.stop = this.pool.subscribe({ label: 'bunker-pairing', relays,
+      filter: { kinds: [24133], ...(peer ? { authors: [peer] } : {}), '#p': [pairing.clientPubkey], limit: 0 },
+      onEvent: event => {
+        // Keep discovery and handshake replies in wire order across native round trips.
+        this.receiving = this.receiving.then(() => this.receive(event)).catch(() => {});
+      },
+    });
+  }
+
+  private current(): void { if (this.closed) throw new Error('Pairing session ended'); }
+
+  private async receive(event: Event): Promise<void> {
+    this.current();
+    const result = await vaultAccess.execute({ method: 'bunkerPairingReceive', session: this.pairing.session, event }) as PairingResponse;
+    this.current();
+    if (result.type === 'ignored') return;
+    if (result.type === 'peer') { this.resolvePeer?.(); return; }
+    if (result.type === 'auth') {
+      try {
+        const url = new URL(result.url);
+        if (url.protocol === 'http:' || url.protocol === 'https:') await platform.urlOpener.openExternalUrl(url.toString());
+      } catch { /* Invalid authorization URLs disclose no result or credential. */ }
+      return;
+    }
+    if (result.type === 'rejected') this.pending?.reject(new Error('Bunker rejected pairing'));
+    else this.pending?.resolve();
+  }
+
+  private async exchange(operation: 'connect' | 'get_public_key'): Promise<void> {
+    this.current();
+    const event = await vaultAccess.execute({ method: 'bunkerPairingRequest', session: this.pairing.session, operation }) as Event;
+    this.current();
+    const response = new Promise<void>((resolve, reject) => { this.pending = { resolve, reject }; });
+    void response.catch(() => {});
+    const work = Promise.any(this.pool.underlyingPool.publish(this.relays, event, { maxWait: 60_000 })).then(() => response);
+    try { await withNip46Timeout(work, operation, undefined, () => this.close()); }
+    finally { this.pending = undefined; }
+    this.current();
+  }
+
+  async connect(): Promise<{ pubkey: string }> {
+    try {
+      await this.peerReady; this.current();
+      await this.exchange('connect');
+      await this.exchange('get_public_key');
+      this.current();
+      const result = await addRemoteAccount(this.pairing.session);
+      this.current();
+      return result;
+    } finally { this.close(); }
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.stop?.(); this.pool.destroy();
+    const error = new Error('Pairing session ended');
+    this.pending?.reject(error); this.rejectPeer?.(error);
+    void vaultAccess.execute({ method: 'cancelBunkerPairing', session: this.pairing.session }).catch(() => {});
   }
 }
 
+export async function loginWithBunker(input: string): Promise<{ pubkey: string }> {
+  const trimmed = input.trim();
+  if (!BUNKER_REGEX.test(trimmed)) throw new Error('invalid');
+  const pointer = await parseBunkerInput(trimmed);
+  if (!pointer) throw new Error('invalid');
+  const relays = Array.from(new Set(pointer.relays.map(normalizeRelayUrl)));
+  const pairing = await vaultAccess.execute({ method: 'beginBunkerPairing', peer: pointer.pubkey,
+    secret: pointer.secret ?? null, relays }) as BunkerPairing;
+  const transport = new PairingTransport(pairing, relays, pointer.pubkey);
+  return withNip46Timeout(transport.connect(), 'connection', NIP46_PAIRING_TIMEOUT_MS, () => transport.close());
+}
+
 export type NostrConnectSession = {
-  /** The `nostrconnect://…` URI — render it as a QR and as a tappable deep link. */
   uri: string;
-  /** Resolves with the signing pubkey once a signer connects back; rejects if
-   * cancelled. Persists the account before resolving. */
-  waitForConnection: () => Promise<{ pubkey: string }>;
-  /** Abort an in-flight `waitForConnection`. */
-  cancel: () => void;
+  waitForConnection(): Promise<{ pubkey: string }>;
+  cancel(): void;
 };
 
-/**
- * Start the Nostr Connect (app-initiated) flow: mint a fresh client key, build a
- * `nostrconnect://` URI for the user to open in / scan with their signer, and
- * wait for the signer to connect back. The same client key is persisted so the
- * account reconnects on later launches.
- */
-export function startNostrConnect(opts?: { relays?: string[] }): NostrConnectSession {
-  const relays = Array.from(new Set(
-    (opts?.relays?.length ? opts.relays : NIP46_DEFAULT_RELAYS).map(normalizeRelayUrl),
-  ));
-  const clientSecretKey = generateSecretKey();
-  const clientPubkey = getPublicKey(clientSecretKey);
-  // A one-time secret the signer must echo back so we accept only the bunker we
-  // invited (not any relay eavesdropper replaying the URI).
-  const secret = bytesToHex(generateSecretKey());
-  const uri = createNostrConnectURI({
-    clientPubkey,
-    relays,
-    secret,
-    name: APP_NAME,
-  });
-
-  const controller = new AbortController();
-
-  const waitForConnection = async (): Promise<{ pubkey: string }> => {
-    const signer = await withNip46Timeout(
-      BunkerSigner.fromURI(
-        clientSecretKey,
-        uri,
-        { pool: relayPool.underlyingPool, onauth: openAuthUrl },
-        controller.signal,
-      ),
-      'connection',
-      NIP46_PAIRING_TIMEOUT_MS,
-      () => controller.abort(),
-    );
-    try {
-      const pubkey = await withNip46Timeout(signer.getPublicKey(), 'get_public_key');
-      await addRemoteAccount({
-        pubkey,
-        pointer: signer.bp,
-        clientSecretKeyHex: bytesToHex(clientSecretKey),
-      });
-      return { pubkey };
-    } finally {
-      await signer.close().catch(() => {});
-    }
-  };
-
-  return { uri, waitForConnection, cancel: () => controller.abort() };
+/** Client key generation, nonce verification and credential persistence stay in the vault. */
+export async function startNostrConnect(opts?: { relays?: string[] }): Promise<NostrConnectSession> {
+  const relays = Array.from(new Set((opts?.relays?.length ? opts.relays : NIP46_DEFAULT_RELAYS).map(normalizeRelayUrl)));
+  const pairing = await vaultAccess.execute({ method: 'beginBunkerPairing', peer: null, secret: null, relays }) as BunkerPairing;
+  if (!pairing.uri) {
+    await vaultAccess.execute({ method: 'cancelBunkerPairing', session: pairing.session });
+    throw new Error('Invalid pairing invitation');
+  }
+  const transport = new PairingTransport(pairing, relays, null);
+  const work = withNip46Timeout(transport.connect(), 'connection', NIP46_PAIRING_TIMEOUT_MS, () => transport.close());
+  void work.catch(() => {});
+  return { uri: pairing.uri, waitForConnection: () => work, cancel: () => transport.close() };
 }

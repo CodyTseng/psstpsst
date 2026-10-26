@@ -17,6 +17,7 @@ async function readRendererBytes(uri: string): Promise<Uint8Array> {
 }
 
 export const electronFileSystemAdapter: FileSystemPort = {
+  updateJson: (uri, patch) => getElectronBridge().fileSystem.updateJson(uri, patch),
   documentDirectoryUri: () => getElectronBridge().fileSystem.documentDirectoryUri(),
   cacheDirectoryUri: () => getElectronBridge().fileSystem.cacheDirectoryUri(),
   availableDiskSpace: () => getElectronBridge().fileSystem.availableDiskSpace(),
