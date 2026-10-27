@@ -45,7 +45,7 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
       else schedule(()=>exploreService.reload(runId));
     }}/>:undefined}>
     <ApplicationPanel application={applicationPresentation(entry)} page={page??'about'}
-      settings={<ApplicationSettings access={entry.required.length ? <View style={{ gap: spacing.lg }}>
+      settings={<ApplicationSettings accountPubkey={account} access={entry.required.length ? <View style={{ gap: spacing.lg }}>
         <ApplicationAccessControls required={entry.required} selected={entry.required}/>
         {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('napplets.settings')}
           onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' })); })}/> : null}

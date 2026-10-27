@@ -11,8 +11,8 @@ import { platform } from '@/platform';
 import { spacing } from '@/theme';
 
 /** Shared signing controls and reset flow; capability-specific controls are an optional slot. */
-export function ApplicationSettings({release,sourceId,access,onReset}:{
-  release?:NappletRelease;sourceId?:string;access?:ReactNode;onReset():Promise<void>;
+export function ApplicationSettings({accountPubkey,release,sourceId,access,onReset}:{
+  accountPubkey:string;release?:NappletRelease;sourceId?:string;access?:ReactNode;onReset():Promise<void>;
 }) {
   const {t}=useTranslation();
   const [busy,setBusy]=useState(false),[error,setError]=useState(false),[revision,setRevision]=useState(0);
@@ -27,8 +27,8 @@ export function ApplicationSettings({release,sourceId,access,onReset}:{
   }
   return <View style={{gap:spacing.xl}}>
     {access?<Fragment key={`access:${revision}`}>{access}</Fragment>:null}
-    <NappletPermissions key={`signing:${revision}`} release={release} sourceId={sourceId} initiallyExpanded/>
-    {sourceId || release ? <BrowserPermissions key={`browser:${revision}`} sourceId={sourceId ?? signingSourceFromLegacyKey(release!.key)} /> : null}
+    <NappletPermissions accountPubkey={accountPubkey} key={`signing:${revision}`} release={release} sourceId={sourceId} initiallyExpanded/>
+    {sourceId || release ? <BrowserPermissions accountPubkey={accountPubkey} key={`browser:${revision}`} sourceId={sourceId ?? signingSourceFromLegacyKey(release!.key)} /> : null}
     <AppButton variant="danger" label={t('napplets.revoke')} loading={busy} onPress={()=>{void reset();}}/>
   </View>;
 }

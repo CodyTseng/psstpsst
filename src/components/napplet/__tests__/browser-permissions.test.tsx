@@ -18,7 +18,7 @@ jest.mock('@/theme', () => ({ spacing: { md: 12, lg: 16 }, useThemeColors: () =>
 let renderer: ReactTestRenderer;
 afterEach(() => { act(() => renderer.unmount()); jest.clearAllMocks(); });
 it('edits the individual website permission and can restore asking', async () => {
-  act(() => { renderer = create(<BrowserPermissions sourceId="https://site.example" />); });
+  act(() => { renderer = create(<BrowserPermissions accountPubkey="account" sourceId="https://site.example" />); });
   const row = renderer.root.findByType(ListRow);
   expect(row.props.title).toBe('napplets.browser_clipboard_read');
   act(() => { row.props.onPress(); });

@@ -15,16 +15,14 @@ import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { signingAction } from './SigningRequestDetails';
 import { spacing, useThemeColors } from '@/theme';
-import { useNappletAccountPubkey } from '@/stores/napplet.store';
 import type { SigningRule, SigningRuleChange } from '@/services/signing/model';
 import { DirectionalChevron } from '@/components/common/DirectionalChevron';
 import { SigningRuleEditor, type EditableSigningRule } from './SigningRuleEditor';
 
 /** Cleared rows belong to this focused visit, never to persisted permissions. */
-export function NappletPermissions(props: { release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
+export function NappletPermissions(props: { accountPubkey: string; release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
   const focused = useIsFocused();
-  const account = useNappletAccountPubkey();
-  return focused ? <PermissionRules key={`${account}:${props.release?.key ?? props.sourceId}:${props.release?.hash}`} {...props} /> : null;
+  return focused ? <PermissionRules key={`${props.accountPubkey}:${props.release?.key ?? props.sourceId}:${props.release?.hash}`} {...props} /> : null;
 }
 
 function mergeRules(previous: EditableSigningRule[], saved: SigningRule[]): EditableSigningRule[] {
@@ -39,12 +37,12 @@ function mergeRules(previous: EditableSigningRule[], saved: SigningRule[]): Edit
   return [...result, ...remaining.values()];
 }
 
-function PermissionRules({ release, sourceId, initiallyExpanded = false }: { release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
+function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded = false }: { accountPubkey: string; release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
   const { t, i18n } = useTranslation();
   const c = useThemeColors();
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [history, setHistory] = useState(false);
-  const { data, error, accountPubkey } = useNappletPermissions(release, expanded, sourceId);
+  const { data, error } = useNappletPermissions(accountPubkey, release, expanded, sourceId);
   const [editor, setEditor] = useState<{ row: EditableSigningRule; visible: boolean }>();
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<{ snapshot: typeof data; rows: EditableSigningRule[]; activity: NonNullable<typeof data>['activity'] }>(

@@ -35,7 +35,7 @@ export function NappletPanel({ release, page, accountPubkey, onAction }: {
 }
 
 export function NappletSettings({ release, accountPubkey }: { release: NappletRelease; accountPubkey: string }) {
-  return <ApplicationSettings release={release}
+  return <ApplicationSettings accountPubkey={accountPubkey} release={release}
     access={release.required.some(domain=>domain!=='shell')||release.optional.length?<DomainPermissions release={release} accountPubkey={accountPubkey}/>:undefined}
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }

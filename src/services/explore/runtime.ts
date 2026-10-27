@@ -71,8 +71,7 @@ export class ExploreRuntime {
     configure?: (schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal) => void;
     applications?: () => Promise<ExploreEntry[]>;
     launch?: (entry: ExploreEntry) => Promise<void>;
-  }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network,
-    (phase, details) => this.log('debug', `stream.${phase}`, details)); }
+  }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network); }
   async start() {
     if (!platform.napplet.openPage)
       throw new Error('napplets.rebuild_required');
@@ -233,7 +232,6 @@ export class ExploreRuntime {
   }
   private async request(message: ExploreMessage) {
     const document = message.document, signal = this.documentLife.signal;
-    const started = Date.now();
     let method = 'invalid-request';
     let id: string | undefined;
     let nonce: string | undefined;
@@ -251,8 +249,6 @@ export class ExploreRuntime {
       current();
       const result = await this.dispatch(request.method, request.args, current, signal, nonce!);
       current();
-      if (!method.startsWith('webln.')) this.log('debug', method, { durationMs: Date.now() - started,
-        ...(Array.isArray(result) ? { count: result.length } : {}) });
       await this.reply(document, { id, nonce, result });
     }
     catch (error) {
@@ -265,7 +261,7 @@ export class ExploreRuntime {
         this.pending.delete(id);
     }
   }
-  private log(level: 'debug' | 'warn', method: string, details: object) {
+  private log(level: 'warn', method: string, details: object) {
     if (Date.now() - this.logWindow.start >= 10000) this.logWindow = { start: Date.now(), count: 0 };
     if (++this.logWindow.count > 60) return;
     console[level]('[explore]', this.entry.title, method, details);
@@ -378,11 +374,8 @@ export class ExploreRuntime {
       }
       const data = this.data ??= new NappData(this.account, this.network, signal);
       if (method === 'sync') {
-        this.log('debug', 'sync.request', { authors: Array.isArray(args[0]) ? args[0].length : typeof args[0],
-          kinds: args[1], since: args[2]?.since, until: args[2]?.until, limit: args[2]?.limit });
-        this.sync ??= new NappSync(data, (phase, details) => this.log('debug', `sync.${phase}`, details));
-        const result = await this.sync.run(args[0], args[1], args[2] ?? {});
-        this.log('debug', 'sync.result', result); return result;
+        this.sync ??= new NappSync(data);
+        return this.sync.run(args[0], args[1], args[2] ?? {});
       }
       if (method === 'relayHealth') return relayHealth(data, args[0]);
       const operation = method.slice(6);

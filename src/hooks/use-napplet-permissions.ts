@@ -4,11 +4,10 @@ import { subscribeSigning } from '@/services/signing/changes';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import type { SigningSnapshot } from '@/services/signing/model';
-import { useNappletAccountPubkey, useNappletPermissionRevision } from '@/stores/napplet.store';
+import { useNappletPermissionRevision } from '@/stores/napplet.store';
 import { useIsFocused } from 'expo-router/react-navigation';
 
-export function useNappletPermissions(release: NappletRelease | undefined, enabled = true, sourceId?: string) {
-  const accountPubkey = useNappletAccountPubkey();
+export function useNappletPermissions(accountPubkey: string, release: NappletRelease | undefined, enabled = true, sourceId?: string) {
   const permissionsRevision = useNappletPermissionRevision();
   const focused = useIsFocused();
   const [expiryTick, setExpiryTick] = useState(0);

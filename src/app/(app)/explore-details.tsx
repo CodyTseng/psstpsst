@@ -40,7 +40,7 @@ export default function ExploreDetailsScreen() {
   const publisherPending=!!loadPublisher&&!publisherApps.loaded&&!publisherApps.error;
   const message=error??metadata.error??access.error??(!app&&publisherApps.error?'napplets.request_failed':state.loaded&&!app&&!publisherPending?'napplets.not_found':undefined);
   if(permissions==='1')return <ApplicationPermissionsPage application={application} error={message}>
-    {app&&state.account?<ApplicationSettings access={required.length?<ApplicationAccessControls required={required} selected={required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,state.account!)}/>:null}
+    {app&&state.account?<ApplicationSettings accountPubkey={state.account} access={required.length?<ApplicationAccessControls required={required} selected={required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,state.account!)}/>:null}
   </ApplicationPermissionsPage>;
   return <ApplicationDetailsPage application={metadata.unresolved?undefined:application} access={metadata.unresolved?{loaded:false,approved:false}:access} error={message}
     actions={app?{entry:app,account:state.account,onShare:state.account?()=>share(app):undefined}:undefined}

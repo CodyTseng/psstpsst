@@ -32,7 +32,7 @@ jest.mock('lucide-react-native/icons/chevron-down', () => () => null);
 jest.mock('@/theme', () => ({ spacing: { xs: 4, sm: 8, md: 12, lg: 16 }, useThemeColors: () => ({ accent: 'accent', textMuted: 'muted' }) }));
 const release = { key: 'app', hash: 'v1' } as NappletRelease;
 let renderer: ReactTestRenderer;
-const screen = () => <NappletPermissions release={release} initiallyExpanded />;
+const screen = () => <NappletPermissions accountPubkey={mockAccount} release={release} initiallyExpanded />;
 const rows = () => renderer.root.findAllByType(ListRow);
 beforeEach(() => {
   jest.clearAllMocks(); mockFocused = true; mockAccount = 'accountA'; mockData = { rules: [source], activity: [] };

@@ -7,16 +7,14 @@ import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { DirectionalChevron } from '@/components/common/DirectionalChevron';
 import { useBrowserPermissions } from '@/hooks/use-browser-permissions';
-import { useNappletAccountPubkey } from '@/stores/napplet.store';
 import { clearBrowserPermissions, saveBrowserPermissions, type BrowserPermissionRule } from '@/services/explore/browser-permission-store';
 import { browserPermissionLabel } from '@/services/explore/browser-permissions';
 import { PermissionRuleEditor } from './SigningRuleEditor';
 import { spacing, useThemeColors } from '@/theme';
 
-export function BrowserPermissions({ sourceId }: { sourceId: string }) {
+export function BrowserPermissions({ accountPubkey, sourceId }: { accountPubkey: string; sourceId: string }) {
   const { t, i18n } = useTranslation();
   const c = useThemeColors();
-  const accountPubkey = useNappletAccountPubkey();
   const data = useBrowserPermissions(accountPubkey, sourceId);
   useErrorToast(data?.error && 'napplets.request_failed');
   const [editor, setEditor] = useState<{ rule: BrowserPermissionRule; visible: boolean }>();
