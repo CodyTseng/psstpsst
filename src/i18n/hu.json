@@ -1172,6 +1172,7 @@
     "download_failed": "Az ellenőrzött app nem tölthető le.",
     "not_found": "Az app nem található. Ellenőrizd a címet és a hálózatot.",
     "unsupported": "Az app nem elérhető képességeket igényel.",
+    "capability_unsupported": "{{name}} (nem támogatott)",
     "rebuild_required": "Ez a build nem tartalmazza az appfuttatót. Építsd újra a natív alkalmazást.",
     "capability_shell": "Gazdakörnyezet",
     "capability_theme": "Megjelenés",

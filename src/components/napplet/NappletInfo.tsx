@@ -17,7 +17,7 @@ export function NappletInfo({ release, onPublisher, notice }: { release: Napplet
   return <ApplicationInfo release={applicationPresentation(release)} onPublisher={onPublisher} notice={notice} />;
 }
 
-export function ApplicationInfo({release,onPublisher,notice,action}:{release:ApplicationPresentation;onPublisher():void;notice?:ReactNode;action?:ReactNode}) {
+export function ApplicationInfo({release,onPublisher,notice,action,unsupported}:{release:ApplicationPresentation;onPublisher():void;notice?:ReactNode;action?:ReactNode;unsupported?:readonly string[]}) {
   const { t } = useTranslation();
   return <View testID="napplet-info" style={{ gap: spacing.lg }}>
     <NappletIdentity release={release} action={action} subtitle={release.kind ? t(`napplets.formats.${release.kind}`) : undefined} />
@@ -25,7 +25,7 @@ export function ApplicationInfo({release,onPublisher,notice,action}:{release:App
     {release.description.trim() ? <AppText>{release.description}</AppText> : null}
     {release.origin?<AppText variant="caption" tone="muted" selectable>{release.origin}</AppText>:null}
     {notice}
-    <NappletRequiredAccess release={release} />
+    <NappletRequiredAccess release={release} unsupported={unsupported} />
   </View>;
 }
 function PublisherRow({pubkey,onPress}:{pubkey:string;onPress:()=>void}) {

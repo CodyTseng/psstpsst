@@ -1172,6 +1172,7 @@
     "download_failed": "Doğrulanmış uygulama indirilemedi.",
     "not_found": "Uygulama bulunamadı. Adresi ve ağ bağlantısını kontrol edin.",
     "unsupported": "Bu uygulama kullanılamayan özellikler gerektiriyor.",
+    "capability_unsupported": "{{name}} (desteklenmiyor)",
     "rebuild_required": "Bu derleme uygulama çalışma ortamını içermiyor. Yerel uygulamayı yeniden derleyin.",
     "capability_shell": "Ana uygulama ortamı",
     "capability_theme": "Görünüm",

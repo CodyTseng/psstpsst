@@ -1177,6 +1177,7 @@
     "download_failed": "Não foi possível transferir a aplicação verificada.",
     "not_found": "Aplicação não encontrada. Verifique o endereço e a ligação à rede.",
     "unsupported": "Esta aplicação necessita de funcionalidades indisponíveis.",
+    "capability_unsupported": "{{name}} (não suportado)",
     "rebuild_required": "Esta compilação não inclui o ambiente de execução das aplicações. Volte a compilar a aplicação nativa.",
     "capability_shell": "Ambiente anfitrião",
     "capability_theme": "Aspeto",

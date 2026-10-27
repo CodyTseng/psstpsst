@@ -1177,6 +1177,7 @@
     "download_failed": "Impossible de télécharger l’application vérifiée.",
     "not_found": "Application introuvable. Vérifiez l’adresse et la connexion réseau.",
     "unsupported": "Cette application nécessite des fonctions indisponibles.",
+    "capability_unsupported": "{{name}} (non pris en charge)",
     "rebuild_required": "Cette version ne contient pas l’environnement d’exécution des applications. Recompilez l’application native.",
     "capability_shell": "Environnement hôte",
     "capability_theme": "Apparence",

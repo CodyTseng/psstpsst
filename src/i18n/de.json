@@ -1172,6 +1172,7 @@
     "download_failed": "Die geprüfte App konnte nicht heruntergeladen werden.",
     "not_found": "Die App wurde nicht gefunden. Prüfe Adresse und Netzwerkverbindung.",
     "unsupported": "Diese App benötigt nicht verfügbare Funktionen.",
+    "capability_unsupported": "{{name}} (nicht unterstützt)",
     "rebuild_required": "Dieser Build enthält die App-Laufzeit nicht. Erstelle die native Anwendung neu.",
     "capability_shell": "Host-Umgebung",
     "capability_theme": "Darstellung",

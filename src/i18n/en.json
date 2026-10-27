@@ -1172,6 +1172,7 @@
     "download_failed": "The verified app could not be downloaded.",
     "not_found": "The app could not be found. Check the address and network connection.",
     "unsupported": "This app requires capabilities that are not available.",
+    "capability_unsupported": "{{name}} (not supported)",
     "rebuild_required": "This build does not include the app runtime. Rebuild the native application.",
     "capability_shell": "Host environment",
     "capability_theme": "Appearance",

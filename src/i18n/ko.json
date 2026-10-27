@@ -1172,6 +1172,7 @@
     "download_failed": "검증된 앱을 다운로드하지 못했습니다.",
     "not_found": "앱을 찾지 못했습니다. 주소와 네트워크 연결을 확인하세요.",
     "unsupported": "이 앱에 필요한 기능을 사용할 수 없습니다.",
+    "capability_unsupported": "{{name}} (지원되지 않음)",
     "rebuild_required": "이 빌드에는 앱 실행 환경이 없습니다. 네이티브 앱을 다시 빌드하세요.",
     "capability_shell": "호스트 환경",
     "capability_theme": "화면 모드",

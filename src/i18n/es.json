@@ -1177,6 +1177,7 @@
     "download_failed": "No se pudo descargar la aplicación verificada.",
     "not_found": "No se encontró la aplicación. Comprueba la dirección y la conexión de red.",
     "unsupported": "Esta aplicación necesita funciones que no están disponibles.",
+    "capability_unsupported": "{{name}} (no compatible)",
     "rebuild_required": "Esta compilación no incluye el entorno de aplicaciones. Vuelve a compilar la aplicación nativa.",
     "capability_shell": "Entorno del anfitrión",
     "capability_theme": "Apariencia",

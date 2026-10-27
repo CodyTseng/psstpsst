@@ -1008,6 +1008,10 @@ from their verified HTML, Web App Manifest and conventional favicon files.
 Explore formats share their detail page, runtime chrome, information panel, and
 permission controls. Format-specific capabilities supply content within those
 shared layouts rather than defining separate page designs.
+Application details reveal their body after application metadata and the initial
+access check settle; comments load independently.
+Unavailable capabilities have a parenthesized status and danger tone in the required-access list, with one
+section-level explanation rather than a duplicate list.
 Application details prioritize app identity, a readable description and expanded
 required access. The primary action stays fixed above the bottom safe area while information
 scrolls. It always reads Open, regardless of installation or access approval state. Explicit consent on this page replaces the duplicate launch prompt;

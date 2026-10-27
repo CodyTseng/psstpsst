@@ -42,10 +42,10 @@ export default function ExploreDetailsScreen() {
   if(permissions==='1')return <ApplicationPermissionsPage application={application} error={message}>
     {app&&state.account?<ApplicationSettings access={required.length?<ApplicationAccessControls required={required} selected={required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,state.account!)}/>:null}
   </ApplicationPermissionsPage>;
-  return <ApplicationDetailsPage application={application} access={metadata.unresolved?{loaded:false,approved:false}:access} error={message}
+  return <ApplicationDetailsPage application={metadata.unresolved?undefined:application} access={metadata.unresolved?{loaded:false,approved:false}:access} error={message}
     actions={app?{entry:app,account:state.account,onShare:state.account?()=>share(app):undefined}:undefined}
     discussion={app&&state.account?{entry:app,account:state.account}:undefined}
-    unsupported={app?.release?app.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain)):app?.kind==='napp'&&app.required.some(domain=>!SUPPORTED_NAPP_DOMAINS.includes(domain))}
+    unsupported={app?.release?app.required.filter(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain)):app?.kind==='napp'?app.required.filter(domain=>!SUPPORTED_NAPP_DOMAINS.includes(domain)):[]}
     onPublisher={()=>{if(app?.manifest)openPublisher(app.manifest.pubkey);}}
     onOpen={async()=>{
       if(!app||!state.account)return;

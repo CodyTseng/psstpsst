@@ -1182,6 +1182,7 @@
     "download_failed": "Nie udało się pobrać zweryfikowanej aplikacji.",
     "not_found": "Nie znaleziono aplikacji. Sprawdź adres i połączenie sieciowe.",
     "unsupported": "Ta aplikacja wymaga niedostępnych funkcji.",
+    "capability_unsupported": "{{name}} (nieobsługiwane)",
     "rebuild_required": "Ta kompilacja nie zawiera środowiska aplikacji. Przebuduj aplikację natywną.",
     "capability_shell": "Środowisko hosta",
     "capability_theme": "Wygląd",

@@ -1172,6 +1172,7 @@
     "download_failed": "無法下載經過驗證的應用。",
     "not_found": "未找到應用，請檢查地址和網路連線。",
     "unsupported": "此應用需要暫不支援的能力。",
+    "capability_unsupported": "{{name}}（不支援）",
     "rebuild_required": "當前版本未包含應用執行時，請重新構建原生應用。",
     "capability_shell": "宿主環境",
     "capability_theme": "外觀",

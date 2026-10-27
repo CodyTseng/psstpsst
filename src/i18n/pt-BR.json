@@ -1177,6 +1177,7 @@
     "download_failed": "Não foi possível baixar o app verificado.",
     "not_found": "App não encontrado. Confira o endereço e a conexão de rede.",
     "unsupported": "Este app precisa de recursos que não estão disponíveis.",
+    "capability_unsupported": "{{name}} (não compatível)",
     "rebuild_required": "Esta compilação não inclui o ambiente dos apps. Recompile o aplicativo nativo.",
     "capability_shell": "Ambiente do host",
     "capability_theme": "Aparência",

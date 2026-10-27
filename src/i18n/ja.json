@@ -1172,6 +1172,7 @@
     "download_failed": "検証済みアプリをダウンロードできませんでした。",
     "not_found": "アプリが見つかりません。アドレスとネットワーク接続を確認してください。",
     "unsupported": "このアプリには利用できない機能が必要です。",
+    "capability_unsupported": "{{name}}（未対応）",
     "rebuild_required": "このビルドにはアプリ実行環境が含まれていません。ネイティブアプリを再ビルドしてください。",
     "capability_shell": "ホスト環境",
     "capability_theme": "外観",

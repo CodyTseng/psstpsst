@@ -1172,6 +1172,7 @@
     "download_failed": "无法下载经过验证的应用。",
     "not_found": "未找到应用，请检查地址和网络连接。",
     "unsupported": "此应用需要暂不支持的能力。",
+    "capability_unsupported": "{{name}}（不支持）",
     "rebuild_required": "当前版本未包含应用运行时，请重新构建原生应用。",
     "capability_shell": "宿主环境",
     "capability_theme": "外观",

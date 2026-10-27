@@ -22,7 +22,7 @@ export default function NappletDetailScreen() {
     actions={entry?{entry,account:accountPubkey,onShare:accountPubkey?()=>share(entry):undefined}:undefined}
     discussion={entry&&accountPubkey?{entry,account:accountPubkey}:undefined}
     access={access} error={error??loadError??access.error}
-    unsupported={release?.required.some(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain))}
+    unsupported={release?.required.filter(domain=>!(NAP_DOMAINS as readonly string[]).includes(domain))}
     onPublisher={()=>{if(release)openPublisher(release.event.pubkey);}}
     onOpen={async()=>{
       if(!release)return;
