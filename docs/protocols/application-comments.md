@@ -40,6 +40,10 @@ duplicate-only timestamp-boundary pages up to 500 events. The visible model is
 bounded to the newest 500 comments. Roots are newest first; replies within each
 thread are chronological. Missing parents remain visible and are attached when
 subsequent pages supply them. Visible indentation is capped at three levels.
+Each relay contributes independently: returned comments or a normal empty
+response are usable even when other relays fail. Incompleteness alone is not a
+load failure and does not trigger further pagination. Reads fail only when no
+events arrive and no relay completes successfully, or the operation throws.
 
 Live arrivals are deduplicated and verified in small batches, yielding between
 chunks. Ordering is updated incrementally; input state never belongs to the

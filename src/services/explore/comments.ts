@@ -136,8 +136,8 @@ export class ApplicationCommentsSession {
           }
           const timestamps = result.events.map(event => event.created_at).filter(value => Number.isSafeInteger(value) && value >= 0);
           if (timestamps.length) this.cursor = Math.min(...timestamps, ...(refresh && this.cursor !== undefined ? [this.cursor] : []));
-          this.store.setState({ loaded: true, error: result.incomplete,
-            hasMore: this.index.size < MAX_THREAD_COMMENTS && (result.events.length >= limit || result.incomplete) });
+          this.store.setState({ loaded: true, error: false,
+            hasMore: this.index.size < MAX_THREAD_COMMENTS && result.events.length >= limit });
           break;
         }
       } catch {

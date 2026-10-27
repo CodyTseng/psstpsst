@@ -47,6 +47,40 @@ it('loads verified comments and deduplicates live arrivals', async () => {
   expect(session.store.getState()).toMatchObject({ loaded: true, loading: false, error: false, hasMore: false });
 });
 
+it('shows verified partial results without an error or repeated pagination', async () => {
+  const event = finalizeEvent(commentTemplate(target, 'Review'), secret);
+  query.mockResolvedValueOnce({ events: [event], incomplete: true });
+  session.start(); await session.load();
+  expect(session.store.getState().rows.map(row => row.comment.event.id)).toEqual([event.id]);
+  expect(session.store.getState()).toMatchObject({ loaded: true, loading: false, error: false, hasMore: false });
+  await session.load();
+  expect(query).toHaveBeenCalledTimes(1);
+});
+
+it('accepts a successful empty response despite other relays failing', async () => {
+  query.mockResolvedValueOnce({ events: [], incomplete: true });
+  session.start(); await session.load();
+  expect(session.store.getState()).toMatchObject({ rows: [], loaded: true, error: false, hasMore: false });
+});
+
+it('retains retry feedback when all relays fail without returning events', async () => {
+  query.mockResolvedValueOnce({ events: [], incomplete: true, error: 'network-error' });
+  session.start(); await session.load();
+  expect(session.store.getState()).toMatchObject({ rows: [], error: true });
+  const event = finalizeEvent(commentTemplate(target, 'Review'), secret);
+  query.mockResolvedValueOnce({ events: [event], incomplete: true });
+  await session.load(true);
+  expect(session.store.getState()).toMatchObject({ loaded: true, error: false });
+  expect(session.store.getState().rows).toHaveLength(1);
+});
+
+it('keeps pagination available for a full partial page', async () => {
+  const events = Array.from({ length: 100 }, (_, i) => finalizeEvent(commentTemplate(target, `Review ${i}`), secret));
+  query.mockResolvedValueOnce({ events, incomplete: true });
+  session.start(); await session.load();
+  expect(session.store.getState()).toMatchObject({ loaded: true, error: false, hasMore: true });
+});
+
 it('signs with the selected account and adds its review only after relay acknowledgement', async () => {
   session.start(); await session.load();
   let acknowledge!: (result: Record<string, boolean>) => void;

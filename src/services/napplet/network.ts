@@ -166,7 +166,7 @@ export class NappletNetwork {
       assertNotAborted(abort);
       return { events: [...events.values()], eventRelays,
         incomplete: budget.signal.aborted || !result.relays.length || result.relays.some(relay => relay.status !== 'eose' || relay.reason !== undefined),
-        error: !events.size && (budget.signal.aborted || !result.relays.length || result.relays.every(relay => relay.status !== 'eose' || relay.reason !== undefined)) ? 'network-error' : undefined };
+        error: !events.size && !result.relays.some(relay => relay.status === 'eose' && relay.reason === undefined) ? 'network-error' : undefined };
     } finally { clearTimeout(timer); linked.dispose(); }
   }
   async replaceable(pubkey: string, kind: number, signal?: AbortSignal): Promise<Event | null> {

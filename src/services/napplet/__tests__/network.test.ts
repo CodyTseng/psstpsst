@@ -33,7 +33,7 @@ it.each([
   } finally { network.destroy(); }
 });
 
-it('preserves events from a hinted relay while other relays end their initial read', async () => {
+it.each(['eose', 'connection-failed'] as const)('preserves events from a hinted relay when another relay reports %s', async status => {
   const network = new NappletNetwork('account');
   const subscriptions = new Map<string, ManagedSubscribeOptions>();
   jest.spyOn(network.pool, 'subscribe').mockImplementation(options => { subscriptions.set(options.relays[0], options); return () => {}; });
@@ -44,9 +44,26 @@ it('preserves events from a hinted relay while other relays end their initial re
     publisher.onEvent({ ...event, id: 'd'.repeat(64), tags: [['d', 'app/应用']] }, relay);
     publisher.onEvent(event, relay);
     publisher.onEnd?.([{ url: relay, status: 'eose', received: 1 }]);
-    subscriptions.get('wss://market.example/')!.onEnd?.([{ url: 'wss://market.example/', status: 'eose', received: 0 }]);
-    await expect(pending).resolves.toMatchObject({ events: [event], eventRelays: new Map([[event.id, [relay]]]), incomplete: false });
+    subscriptions.get('wss://market.example/')!.onEnd?.([{ url: 'wss://market.example/', status, received: 0 }]);
+    await expect(pending).resolves.toMatchObject({ events: [event], eventRelays: new Map([[event.id, [relay]]]), incomplete: status !== 'eose', error: undefined });
     expect(publisher.filters).toEqual([{ authors: [author], kinds: [35129], '#d': ['App/应用'], limit: 1 }]);
+  } finally { network.destroy(); }
+});
+
+it('preserves a successful empty response when another relay exceeds the read budget', async () => {
+  const network = new NappletNetwork('account');
+  const subscriptions = new Map<string, ManagedSubscribeOptions>();
+  jest.spyOn(network.pool, 'subscribe').mockImplementation(options => {
+    const url = options.relays[0];
+    subscriptions.set(url, options);
+    const aborted = () => options.onEnd?.([{ url, status: 'closed', received: 0, reason: 'query aborted' }]);
+    options.abort?.addEventListener('abort', aborted, { once: true });
+    return () => options.abort?.removeEventListener('abort', aborted);
+  });
+  try {
+    const pending = network.query([relay, 'wss://slow.example/'], [{ kinds: [1111] }], undefined, undefined, 100);
+    subscriptions.get(relay)!.onEnd?.([{ url: relay, status: 'eose', received: 0 }]);
+    await expect(pending).resolves.toMatchObject({ events: [], incomplete: true, error: undefined });
   } finally { network.destroy(); }
 });
 
