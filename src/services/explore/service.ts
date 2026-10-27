@@ -35,6 +35,40 @@ let favoritesLife = new AbortController();
 const metadataLoaded = new Set<string>();
 const metadataReads = new Map<string, Promise<void>>();
 let moreFavorites: Promise<void> | undefined;
+const favoriteHydration = {
+  pending: new Map<string, ExploreEntry>(),
+  active: new Set<string>(),
+  attempted: new Set<string>(),
+};
+
+/** Missing cross-device manifests resolve in the background, independently of local pagination. */
+function hydrateFavorites(account: string, page: ExploreEntry[], generation: number) {
+  const signal = favoritesLife.signal;
+  for (const entry of page) {
+    if (!needsFavoriteMetadata(entry) || favoriteHydration.attempted.has(entry.key)) continue;
+    favoriteHydration.attempted.add(entry.key);
+    if (!favoriteHydration.active.has(entry.key)) favoriteHydration.pending.set(entry.key, entry);
+  }
+  const next = () => {
+    if (signal.aborted) return;
+    while (favoriteHydration.active.size < 4 && favoriteHydration.pending.size) {
+      const [key, entry] = favoriteHydration.pending.entries().next().value!;
+      favoriteHydration.pending.delete(key);
+      favoriteHydration.active.add(key);
+      void resolveFavoriteMetadata(account, entry, signal).then(resolved => {
+        check(account, generation);
+        applyMetadata([resolved]);
+      }).catch(() => {
+        // Keep the reference; the next Favorites visit may retry an unavailable manifest.
+      }).finally(() => {
+        if (signal.aborted) return;
+        favoriteHydration.active.delete(key);
+        next();
+      });
+    }
+  };
+  next();
+}
 let favoritesRead = 0;
 let stopDatabase: (() => void) | undefined;
 let databaseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -81,11 +115,23 @@ async function loadMetadata(account: string, page: ExploreEntry[], generation: n
   }
   await Promise.all(pending);
 }
-async function loadMissingMetadata(account: string, entries: ExploreEntry[], generation: number) {
+async function loadMissingMetadata(account: string, entries: ExploreEntry[], generation: number, hydrate = true) {
+  const read = favoritesRead;
   const missing = entries.filter(entry => !metadataLoaded.has(entry.key));
   for (let index = 0; index < missing.length; index += FAVORITES_PAGE_SIZE) {
     check(account, generation);
+    if (read !== favoritesRead) return;
     await loadMetadata(account, missing.slice(index, index + FAVORITES_PAGE_SIZE).filter(entry => !metadataLoaded.has(entry.key)), generation);
+  }
+  check(account, generation);
+  if (read !== favoritesRead) return;
+  if (hydrate) {
+    const keys = new Set(entries.map(entry => entry.key));
+    const current = new Map(exploreStore.getState().entries.filter(entry => keys.has(entry.key)).map(entry => [entry.key, entry]));
+    hydrateFavorites(account, entries.flatMap(entry => {
+      const latest = current.get(entry.key);
+      return latest ? [latest] : [];
+    }), generation);
   }
 }
 async function refreshFavoriteMembership(account: string, generation: number) {
@@ -122,6 +168,8 @@ export const exploreService = {
     const read = ++favoritesRead;
     moreFavorites = undefined;
     metadataLoaded.clear(); metadataReads.clear();
+    // Rebuild queued work for the new page window without losing occupied worker slots.
+    favoriteHydration.pending.clear(); favoriteHydration.attempted.clear();
     const promise = (async () => {
       exploreStore.setState({ account });
       const revision = desktopRevision;
@@ -171,6 +219,7 @@ export const exploreService = {
     activation = undefined; moreFavorites = undefined;
     pendingDesktopRevision = undefined;
     favoritesLife.abort(); favoritesLife = new AbortController();
+    favoriteHydration.pending.clear(); favoriteHydration.active.clear(); favoriteHydration.attempted.clear();
     metadataLoaded.clear(); metadataReads.clear(); favoritesRead++; epoch++; this.stop();
     exploreStore.setState({ account: null, loaded: false, favoriteVisibleCount: FAVORITES_PAGE_SIZE, favoritesLoadingMore: false, entries: [] });
   },
@@ -202,7 +251,7 @@ export const exploreService = {
   },
   async loadFavoriteSearchMetadata(account: string) {
     check(account, epoch);
-    await loadMissingMetadata(account, favoritesInOrder(), epoch);
+    await loadMissingMetadata(account, favoritesInOrder(), epoch, false);
   },
   async resolve(value: string): Promise<ExploreEntry> {
     const { account, entries } = exploreStore.getState();

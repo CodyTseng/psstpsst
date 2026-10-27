@@ -819,7 +819,11 @@ grant membership. Dispatch rechecks favorites after target selection;
 removing a favorite excludes it from subsequent handoffs without closing its app.
 Favorites reads its saved membership snapshot and only the requested metadata
 pages. Saved local titles render before first-page manifest verification and
-metadata hydration, which run in a later task. List navigation never decrypts
+metadata hydration, which run in a later task. Visible signed references missing
+local manifests resolve remotely in bounded background workers, allowing each
+device to fetch its own artwork without delaying local pagination. Failed
+resolutions retain the saved reference and retry on a later Favorites visit.
+List navigation never decrypts
 events or waits for a signer; configuration synchronization prepares the durable
 plaintext snapshot. It does not initialize application runtimes or poll metadata; shared
 metadata events update existing entries directly. Runtime initialization belongs

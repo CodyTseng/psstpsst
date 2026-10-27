@@ -1,3 +1,4 @@
+import { needsFavoriteMetadata, resolveFavoriteMetadata } from '../favorite-metadata';
 import { notifyFavoritesChanged } from '../favorites-events';
 import { exploreService,exploreStore } from '../service';
 import { applicationTasks, applicationTaskStore } from '../application-tasks';
@@ -26,7 +27,7 @@ jest.mock('@/services/napplet/network',()=>({NappletNetwork:jest.fn()}));
 jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn()}));
 jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{})}));
 jest.mock('@/services/napplet/repository',()=>({getData:jest.fn(async()=>null),setData:jest.fn(async()=>{})}));
-jest.mock('../favorite-metadata', () => ({ needsFavoriteMetadata: () => false, resolveFavoriteMetadata: async (_account: string, entry: unknown) => entry }));
+jest.mock('../favorite-metadata', () => ({ needsFavoriteMetadata: jest.fn((entry: ExploreEntry) => entry.kind !== 'website' && !entry.manifest), resolveFavoriteMetadata: jest.fn(async (_account: string, entry: ExploreEntry) => entry) }));
 jest.mock('../repository',()=>({queueFavoritesPublication:jest.fn(),readEntries:jest.fn(async()=>[]),readFavoriteEntries:jest.fn(async()=>[]),readFavoriteReferences:jest.fn(async()=>[]),readFavoriteMetadata:jest.fn(async(_account:string,page:ExploreEntry[])=>page),visit:jest.fn(async()=>{}),fromNapplet:jest.fn(),reorder:jest.fn(),forget:jest.fn()}));
 jest.mock('../runtime',()=>({ExploreRuntime:jest.fn().mockImplementation(function(this: object){Object.assign(this,{start:jest.fn(async()=> 'container'),stop:jest.fn(),presented:true});})}));
 const website:ExploreEntry={key:'https://site.example/path',address:'https://site.example/path',title:'Site',kind:'website',required:[],description:'',servers:[],lastUsedAt:null,desktopPosition:null};
@@ -35,7 +36,7 @@ function entry(kind:'website'|'nsite'|'napp'):ExploreEntry {
   const key=naddrEncode({kind:kind==='napp'?35130:35128,pubkey:'a'.repeat(64),identifier:'test'});
   return {...website,kind,key,address:key};
 }
-beforeEach(async()=>{jest.clearAllMocks();jest.mocked(getData).mockResolvedValue(null);jest.mocked(nappletService.requestApproval).mockResolvedValue('allow');await exploreService.activate('account');});
+beforeEach(async()=>{jest.clearAllMocks();jest.mocked(needsFavoriteMetadata).mockReturnValue(false);jest.mocked(resolveFavoriteMetadata).mockImplementation(async (_account, app) => app);jest.mocked(getData).mockResolvedValue(null);jest.mocked(nappletService.requestApproval).mockResolvedValue('allow');await exploreService.activate('account');});
 afterEach(async()=>{exploreService.deactivate();for(const id of applicationTaskStore.getState().sessions.keys())await applicationTasks.close(id);});
 it('keeps websites inline by default and opens a task for an explicit window choice', async () => {
   expect(await tryOpenApplicationWindow(website, 'account')).toBe(false);
@@ -493,4 +494,193 @@ it('waits for old task resources to close and shares initialization with the tas
   closed(); await Promise.all([restarting, surface]);
   expect(ExploreRuntime).toHaveBeenCalledTimes(2);
   expect(old.stop).toHaveBeenCalledTimes(1);
+});
+
+describe('cross-device favorite hydration', () => {
+  beforeEach(() => {
+    jest.mocked(needsFavoriteMetadata).mockImplementation(app => app.kind !== 'website' && !app.manifest);
+  });
+
+it('hydrates a cross-device favorite in the background so its icon can download locally', async () => {
+  exploreService.deactivate();
+  jest.useFakeTimers();
+  const app = { ...entry('napp'), desktopPosition: 0 };
+  const sibling = { ...website, desktopPosition: 1 };
+  let finish!: (app: ExploreEntry) => void;
+  jest.mocked(readFavoriteEntries).mockResolvedValueOnce([app, sibling]);
+  jest.mocked(resolveFavoriteMetadata).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  try {
+    await exploreService.activate('account');
+    expect(exploreStore.getState()).toMatchObject({ loaded: true, entries: [app, sibling] });
+    expect(resolveFavoriteMetadata).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(resolveFavoriteMetadata).toHaveBeenCalledWith('account', app, expect.any(AbortSignal));
+    const unchanged = exploreStore.getState().entries[1];
+    finish({ ...app, title: 'Remote app', icon: { hash: 'f'.repeat(64), mime: 'image/png' }, servers: ['https://media.example/'],
+      manifest: { id: 'b'.repeat(64), kind: 35130, pubkey: 'a'.repeat(64), created_at: 1,
+        content: '', tags: [['d', 'test']], sig: 'c'.repeat(128) } });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(exploreStore.getState().entries[0]).toMatchObject({ title: 'Remote app', icon: { hash: 'f'.repeat(64) }, desktopPosition: 0, lastUsedAt: null });
+    expect(exploreStore.getState().entries[1]).toBe(unchanged);
+    expect(nappletService.activateAccount).not.toHaveBeenCalled();
+    expect(queueFavoritesPublication).not.toHaveBeenCalled();
+    expect(visit).not.toHaveBeenCalled();
+  } finally { jest.useRealTimers(); }
+});
+
+it('hydrates newly synced references while Favorites is already open', async () => {
+  jest.useFakeTimers();
+  const app = { ...entry('napp'), desktopPosition: 0 };
+  jest.mocked(readFavoriteReferences).mockResolvedValueOnce([app]);
+  try {
+    notifyFavoritesChanged('account');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(resolveFavoriteMetadata).toHaveBeenCalledWith('account', app, expect.any(AbortSignal));
+    expect(exploreStore.getState().entries).toEqual([app]);
+    expect(queueFavoritesPublication).not.toHaveBeenCalled();
+  } finally { jest.useRealTimers(); }
+});
+
+it('limits remote hydration to four workers and to requested favorite pages', async () => {
+  exploreService.deactivate();
+  jest.useFakeTimers();
+  const favorites = Array.from({ length: 55 }, (_, index) => ({ ...entry('napp'), key: `remote-${index}`, desktopPosition: index }));
+  const finish: ((app: ExploreEntry) => void)[] = [];
+  jest.mocked(readFavoriteEntries).mockResolvedValueOnce(favorites);
+  jest.mocked(resolveFavoriteMetadata).mockImplementation(() => new Promise(resolve => { finish.push(resolve); }));
+  try {
+    await exploreService.activate('account');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(4);
+    await exploreService.loadMoreFavorites('account');
+    expect(exploreStore.getState().favoriteVisibleCount).toBe(55);
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(4);
+    finish[0](favorites[0]);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(5);
+    expect(jest.mocked(resolveFavoriteMetadata).mock.calls[4][1].key).toBe('remote-4');
+  } finally { jest.useRealTimers(); }
+});
+
+it('rebuilds queued hydration for the first page on revisit while retaining active workers', async () => {
+  exploreService.deactivate();
+  jest.useFakeTimers();
+  const favorites = Array.from({ length: 55 }, (_, index) => ({ ...entry('napp'), key: `remote-${index}`, desktopPosition: index }));
+  const active = new Map<string, () => void>();
+  jest.mocked(readFavoriteEntries).mockResolvedValueOnce(favorites);
+  jest.mocked(resolveFavoriteMetadata).mockImplementation((_account, app) => new Promise(resolve => {
+    active.set(app.key, () => { active.delete(app.key); resolve(app); });
+  }));
+  try {
+    await exploreService.activate('account');
+    await jest.advanceTimersByTimeAsync(0);
+    await exploreService.loadMoreFavorites('account');
+    expect(active.size).toBe(4);
+    const added = { ...entry('napp'), key: 'new-first', desktopPosition: 0 };
+    const refreshed = [added, ...favorites.filter(app => app.key !== 'remote-4')]
+      .map((app, index) => ({ ...app, desktopPosition: index }));
+    let finishRead!: (entries: ExploreEntry[]) => void;
+    jest.mocked(readFavoriteEntries).mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+    const refresh = exploreService.activate('account', { refresh: true });
+    active.get('remote-0')!();
+    await jest.advanceTimersByTimeAsync(0);
+    // No queued old-page work starts while the replacement snapshot is still loading.
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(4);
+    finishRead(refreshed);
+    await refresh;
+    await jest.advanceTimersByTimeAsync(0);
+    expect(exploreStore.getState().favoriteVisibleCount).toBe(50);
+    expect(jest.mocked(resolveFavoriteMetadata).mock.calls[4][1].key).toBe('new-first');
+    expect(active.size).toBe(4);
+    while (active.size) {
+      active.values().next().value!();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(active.size).toBeLessThanOrEqual(4);
+    }
+    const requested = jest.mocked(resolveFavoriteMetadata).mock.calls.map(call => call[1].key);
+    expect(requested).not.toContain('remote-4');
+    for (let index = 50; index < 55; index++) expect(requested).not.toContain(`remote-${index}`);
+    for (const key of ['remote-1', 'remote-2', 'remote-3']) expect(requested.filter(value => value === key)).toHaveLength(1);
+  } finally { jest.useRealTimers(); }
+});
+
+it('ignores delayed pagination hydration from the previous Favorites visit', async () => {
+  exploreService.deactivate();
+  jest.useFakeTimers();
+  const favorites = Array.from({ length: 55 }, (_, index) => ({ ...entry(index < 50 ? 'website' : 'napp'), key: `saved-${index}`, desktopPosition: index }));
+  jest.mocked(readFavoriteEntries).mockResolvedValueOnce(favorites).mockResolvedValueOnce(favorites);
+  let finish!: (entries: ExploreEntry[]) => void;
+  try {
+    await exploreService.activate('account');
+    await jest.advanceTimersByTimeAsync(0);
+    jest.mocked(readFavoriteMetadata).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const more = exploreService.loadMoreFavorites('account');
+    await exploreService.activate('account', { refresh: true });
+    await jest.advanceTimersByTimeAsync(0);
+    finish(favorites.slice(50));
+    await more;
+    await jest.advanceTimersByTimeAsync(0);
+    expect(exploreStore.getState().favoriteVisibleCount).toBe(50);
+    expect(resolveFavoriteMetadata).not.toHaveBeenCalled();
+  } finally { jest.useRealTimers(); }
+});
+
+it('does not fetch offscreen manifests just to search saved favorites', async () => {
+  exploreService.deactivate();
+  jest.useFakeTimers();
+  const favorites = Array.from({ length: 55 }, (_, index) => index < 50
+    ? { ...website, key: `website-${index}`, desktopPosition: index }
+    : { ...entry('napp'), key: `remote-${index}`, desktopPosition: index });
+  jest.mocked(readFavoriteEntries).mockResolvedValueOnce(favorites);
+  try {
+    await exploreService.activate('account');
+    await jest.advanceTimersByTimeAsync(0);
+    await exploreService.loadFavoriteSearchMetadata('account');
+    expect(resolveFavoriteMetadata).not.toHaveBeenCalled();
+    await exploreService.loadMoreFavorites('account');
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(5);
+  } finally { jest.useRealTimers(); }
+});
+
+it('retries unavailable cross-device metadata on the next Favorites visit', async () => {
+  exploreService.deactivate();
+  jest.useFakeTimers();
+  const app = { ...entry('napp'), desktopPosition: 0 };
+  jest.mocked(readFavoriteEntries).mockResolvedValue([app]);
+  jest.mocked(resolveFavoriteMetadata).mockRejectedValue(new Error('offline'));
+  try {
+    await exploreService.activate('account');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(exploreStore.getState().entries).toEqual([app]);
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(1);
+    await exploreService.activate('account', { refresh: true });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(2);
+  } finally {
+    jest.mocked(readFavoriteEntries).mockResolvedValue([]);
+    jest.useRealTimers();
+  }
+});
+
+it('cancels queued hydration on account replacement and ignores delayed old results', async () => {
+  exploreService.deactivate();
+  jest.useFakeTimers();
+  const favorites = Array.from({ length: 5 }, (_, index) => ({ ...entry('napp'), key: `old-${index}`, desktopPosition: index }));
+  let finish!: (app: ExploreEntry) => void;
+  jest.mocked(readFavoriteEntries).mockResolvedValueOnce(favorites);
+  jest.mocked(resolveFavoriteMetadata).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  try {
+    await exploreService.activate('account');
+    await jest.advanceTimersByTimeAsync(0);
+    const signal = jest.mocked(resolveFavoriteMetadata).mock.calls[0][2];
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(4);
+    await exploreService.activate('other-account');
+    expect(signal.aborted).toBe(true);
+    finish({ ...favorites[3], title: 'Old account' });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(exploreStore.getState()).toMatchObject({ account: 'other-account', entries: [] });
+    expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(4);
+  } finally { jest.useRealTimers(); }
+});
+
 });
