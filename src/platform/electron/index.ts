@@ -51,6 +51,7 @@ export function createElectronAdapters(): PlatformAdapters {
         getDialogPresenter()?.notify(options) ?? bridge.dialogs.notify(options),
     },
     database: electronDatabaseAdapter,
+    get localRelayEvents() { return getElectronBridge().localRelayEvents; },
     security: bridge.security,
     keyVault: bridge.keyVault,
     imageCache: electronImageCacheAdapter,

@@ -16,10 +16,10 @@ import { fetchBlob } from './artifacts';
 import { reconcileConfig, validateSchema, validateValues, type ConfigSchema } from './config';
 import { buildDocument } from './document';
 import { NappletNetwork, relayUrls } from './network';
+import { relayFilters } from './filters';
 import { SigningPermissions, appSigningScope, type SigningRequest } from './signing-permissions';
 import { subscribeSigning } from '@/services/signing/changes';
 import {
-  boundedFilters,
   eventWeight,
   randomId,
   MAX_RESOURCE_BYTES,
@@ -323,7 +323,7 @@ export class NappletRuntime {
     finally { if (this.domainRequests.get(domain) === pending) this.domainRequests.delete(domain); }
   }
   async receive(raw: string): Promise<void> {
-    if (this.signal.aborted || raw.length > 1500000) return;
+    if (this.signal.aborted) return;
     if (raw === NAPPLET_FRAME_READY_MESSAGE) {
       if (!this.presented) { this.presented = true; this.options.presented?.(); }
       return;
@@ -363,10 +363,6 @@ export class NappletRuntime {
     }
     if (Date.now() - this.counters.start > 60000)
       this.counters = { start: Date.now(), calls: 0, resource: 0 };
-    if (++this.counters.calls > 240 || this.pending.size >= 16) {
-      this.fail(message, 'quota-exceeded');
-      return;
-    }
     if (
       message.id &&
       (typeof message.id !== 'string' || message.id.length > 128 || this.pending.has(message.id))
@@ -758,8 +754,8 @@ export class NappletRuntime {
     if (['close', 'publish', 'publishEncrypted'].includes(op))
       return this.eventRequest(m, domain, op, this.signal);
     const timeout = new AbortController();
-    const budget = Math.min(20000, Math.max(200, Number(m.options?.timeoutMs) || 10000));
-    const timer = setTimeout(() => timeout.abort(), budget - 100);
+    const budget = Number.isFinite(m.options?.timeoutMs) && m.options.timeoutMs > 0 ? m.options.timeoutMs : 10000;
+    const timer = setTimeout(() => timeout.abort(), budget);
     const linked = linkAbort([this.signal, timeout.signal]);
     try {
       await this.eventRequest(m, domain, op, linked.signal);
@@ -791,7 +787,7 @@ export class NappletRuntime {
       });
       return;
     }
-    const filters = boundedFilters(
+    const filters = relayFilters(
       op === 'getEvent' ? { ids: [text(m.eventId)], limit: 1 } : m.filters,
     );
     const authors = [...new Set(filters.flatMap((filter) => filter.authors ?? []))];
@@ -810,36 +806,30 @@ export class NappletRuntime {
     this.check();
     if (op === 'subscribe') {
       const id = text(m.subId, 128);
-      if (this.streams.size >= 8 || this.streams.has(id)) throw new Error('quota-exceeded');
-      let events = 0;
+      if (this.streams.has(id)) throw new Error('invalid-subscription');
       let stopped = false;
       let refreshing = false;
       let currentRoutes = relays;
       const seen = new Set<string>();
-      let queuedBytes = 0;
-      const queue: { message: Message; bytes: number }[] = [];
+      const queue: ({ message: Message; bytes: number } | undefined)[] = [];
+      let head = 0;
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
       const flush = () => {
         flushTimer = null;
         if (stopped || this.signal.aborted) return;
         let bytes = 0;
-        for (let count = 0; queue.length && count < 8 && bytes < 128 * 1024; count++) {
-          const entry = queue.shift()!;
-          queuedBytes -= entry.bytes;
+        for (let count = 0; head < queue.length && count < 8 && bytes < 128 * 1024; count++) {
+          const entry = queue[head]!;
+          queue[head++] = undefined;
           bytes += entry.bytes;
           this.send(entry.message);
         }
-        if (queue.length) flushTimer = setTimeout(flush, 16);
+        if (head === queue.length) { queue.length = 0; head = 0; }
+        else if (head >= 1024 && head * 2 >= queue.length) { queue.splice(0, head); head = 0; }
+        if (head < queue.length) flushTimer = setTimeout(flush, 16);
       };
       const enqueue = (message: Message, bytes: number) => {
-        if (queue.length >= 256 || queuedBytes + bytes > 4 * 1024 * 1024) {
-          this.streams.get(id)?.();
-          this.streams.delete(id);
-          this.send({ type: `${domain}.closed`, subId: id, reason: 'quota-exceeded' });
-          return;
-        }
         queue.push({ message, bytes });
-        queuedBytes += bytes;
         if (!flushTimer) flushTimer = setTimeout(flush, 0);
       };
       const attach = () =>
@@ -853,12 +843,6 @@ export class NappletRuntime {
               if (stopped || seen.has(event.id) || !matchFilters(filters, event)) return;
               if (seen.size >= 8192) seen.delete(seen.values().next().value!);
               seen.add(event.id);
-              if (++events > 10000) {
-                this.streams.get(id)?.();
-                this.streams.delete(id);
-                this.send({ type: `${domain}.closed`, subId: id, reason: 'quota-exceeded' });
-                return;
-              }
               enqueue(
                 { type: `${domain}.event`, subId: id, result: { event } },
                 eventWeight(event),
@@ -911,6 +895,7 @@ export class NappletRuntime {
         if (timer) clearInterval(timer);
         if (flushTimer) clearTimeout(flushTimer);
         queue.length = 0;
+        head = 0;
         stopSubscription();
         seen.clear();
       };
@@ -967,7 +952,7 @@ export class NappletRuntime {
     if (opts.toInboxes) relays.push(...(await this.network.routes(opts.toInboxes, 'read', true)));
     relays = [...new Set(relays)];
     current();
-    if (!relays.length || relays.length > 16) throw new Error('invalid-relays');
+    if (!relays.length) throw new Error('invalid-relays');
     const template: EventTemplate = {
       kind: submitted.kind,
       content: submitted.content,

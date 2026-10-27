@@ -13,7 +13,7 @@ export const LIST_KINDS: Record<string, number> = {
 export const SET_KINDS: Record<string, number> = { loadFollowSets: 30000, loadRelaySets: 30002, loadEmojiSets: 30030 };
 export const isPublicKey = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export function normalizePublicKey(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 1024) throw new Error('invalid-pubkey');
+  if (typeof value !== 'string') throw new Error('invalid-pubkey');
   if (/^[a-f0-9]{64}$/i.test(value)) return value.toLowerCase();
   const decoded = nip19.decode(value.replace(/^nostr:/, ''));
   if (decoded.type === 'npub') return decoded.data;

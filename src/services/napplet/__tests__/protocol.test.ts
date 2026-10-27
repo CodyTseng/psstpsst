@@ -1,6 +1,7 @@
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { naddrEncode } from 'nostr-tools/nip19';
-import { appShareAddress, boundedFilters, parseAppAddress, parseManifest, publicUrl } from '../protocol';
+import { appShareAddress, parseAppAddress, parseManifest, publicUrl } from '../protocol';
+import { relayFilters } from '../filters';
 import { validateSchema, validateValues } from '../config';
 import typeZoo from './fixtures/type-zoo-legacy.json';
 
@@ -92,11 +93,15 @@ test.each([
   'https://example.local/',
   'https://[::1]/',
 ])('rejects unsafe resource URL %s', (url) => expect(() => publicUrl(url)).toThrow());
-test('filters cannot allocate unbounded histories or inject arbitrary fields', () => {
-  expect(boundedFilters({ kinds: [1], limit: 100000 })[0].limit).toBe(200);
-  expect(() => boundedFilters({ ids: Array(101).fill('a') })).toThrow();
-  expect(() => boundedFilters({ limit: -1 })).toThrow();
-  expect(() => boundedFilters({ arbitrary: true })).toThrow();
+test('remote filters preserve relay extensions and leave limits and strings to the relay', () => {
+  const filter = { kinds: [1], ids: Array(101).fill('a'), '#d': ['x'.repeat(5000)], search: 'x'.repeat(5000), limit: 100000, extension: true };
+  expect(relayFilters(filter)).toEqual([filter]);
+  expect(relayFilters(Array.from({ length: 9 }, () => filter))).toHaveLength(9);
+  expect(relayFilters({ authors: [] })).toEqual([{ authors: [] }]);
+  expect(relayFilters({ kinds: [1] })).toEqual([{ kinds: [1] }]);
+  expect(relayFilters([])).toEqual([]);
+  expect(() => relayFilters(null)).toThrow('invalid-filter');
+  expect(() => relayFilters([[]])).toThrow('invalid-filter');
 });
 test('configuration validation rejects active references and invalid values', () => {
   expect(() =>

@@ -71,7 +71,8 @@ export class ExploreRuntime {
     configure?: (schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal) => void;
     applications?: () => Promise<ExploreEntry[]>;
     launch?: (entry: ExploreEntry) => Promise<void>;
-  }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network); }
+  }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network,
+    (phase, details) => this.log('debug', `stream.${phase}`, details)); }
   async start() {
     if (!platform.napplet.openPage)
       throw new Error('napplets.rebuild_required');
@@ -128,7 +129,7 @@ export class ExploreRuntime {
     }
     assertNotAborted(this.lifetime.signal);
     const receive = (id: string, raw: string) => {
-      if (id !== this.containerId || raw.length > 2 * 1024 * 1024)
+      if (id !== this.containerId)
         return;
       let message: ExploreMessage;
       try {
@@ -193,8 +194,7 @@ export class ExploreRuntime {
     }[] = [];
     this.unsubscribe = platform.napplet.addMessageListener((id, raw) => {
       if (!this.containerId) {
-        if (early.length < 32)
-          early.push({ id, raw });
+        early.push({ id, raw });
       }
       else
         receive(id, raw);
@@ -241,7 +241,7 @@ export class ExploreRuntime {
       throw new Error('session-closed'); };
     try {
       const request = JSON.parse(message.raw ?? '');
-      if (typeof request.nonce !== 'string' || request.nonce.length > 64 || typeof request.id !== 'string' || request.id.length > 128 || !Array.isArray(request.args) || request.args.length > 4 || this.pending.has(request.id) || this.pending.size >= 16)
+      if (typeof request.nonce !== 'string' || typeof request.id !== 'string' || !Array.isArray(request.args) || this.pending.has(request.id))
         throw new Error('invalid-request');
       id = request.id;nonce=request.nonce;
       if (this.nonce && nonce !== this.nonce) throw new Error('invalid-document-token');
@@ -273,7 +273,6 @@ export class ExploreRuntime {
   private async reply(document: string, reply: unknown) {
     if (this.containerId && document === this.document && !this.lifetime.signal.aborted) {
       const raw = JSON.stringify({ document, reply });
-      if (raw.length > 2 * 1024 * 1024) throw new Error('reply-too-large');
       await platform.napplet.send(this.containerId, raw);
     }
   }
@@ -355,6 +354,21 @@ export class ExploreRuntime {
       this.device ??= new NappDevice(application, this.account, signal, this.options.confirm);
       return this.device.handle('copyText', args);
     }
+    if (method === 'storeSubscribe') {
+      const document = this.document;
+      await this.streams.open(method, args, signal,
+        message => this.reply(document, { ...message, nonce }),
+        async () => { throw new Error('unsupported-method'); });
+      return true;
+    }
+    if (method === 'streamClose') { this.streams.close(String(args[0]));return true; }
+    if (method === 'storeAdd') { const added = await localRelay.add(args[0]);current();return added; }
+    if (method === 'storeRemove') return localRelay.remove(args[0]);
+    if (method === 'storeEvent') return await localRelay.event(args[0]) ?? null;
+    if (method === 'storeReplaceable') return await localRelay.replaceable(args[0],args[1],args[2]) ?? null;
+    if (method === 'query' || method === 'count') {
+      return method === 'count' ? localRelay.count(args[0]) : localRelay.query(args[0]);
+    }
     if (!napp)
       throw new Error('unsupported-method');
     if (method === 'sync' || method === 'relayHealth' || method.startsWith('utils.')) {
@@ -363,7 +377,13 @@ export class ExploreRuntime {
         return this.device.handle(method.slice(6), args);
       }
       const data = this.data ??= new NappData(this.account, this.network, signal);
-      if (method === 'sync') { this.sync ??= new NappSync(data); return this.sync.run(args[0], args[1], args[2] ?? {}); }
+      if (method === 'sync') {
+        this.log('debug', 'sync.request', { authors: Array.isArray(args[0]) ? args[0].length : typeof args[0],
+          kinds: args[1], since: args[2]?.since, until: args[2]?.until, limit: args[2]?.limit });
+        this.sync ??= new NappSync(data, (phase, details) => this.log('debug', `sync.${phase}`, details));
+        const result = await this.sync.run(args[0], args[1], args[2] ?? {});
+        this.log('debug', 'sync.result', result); return result;
+      }
       if (method === 'relayHealth') return relayHealth(data, args[0]);
       const operation = method.slice(6);
       if (Object.hasOwn(LIST_KINDS, operation)) return data.list(operation, args[0]);
@@ -401,7 +421,7 @@ export class ExploreRuntime {
       }, this.instance);
       return this.capabilities.handle(method === 'instance' ? 'ready' : method, args);
     }
-    if (method === 'storeSubscribe' || method === 'relaySubscribe' || method === 'outboxSubscribe') {
+    if (method === 'relaySubscribe' || method === 'outboxSubscribe') {
       const document=this.document;
       await this.streams.open(method,args,signal,
         message=>this.reply(document,{...message,nonce}),
@@ -418,11 +438,6 @@ export class ExploreRuntime {
         });
       return true;
     }
-    if (method === 'streamClose') { this.streams.close(String(args[0]));return true; }
-    if (method === 'storeAdd') { await localRelay.add(args[0]);current();return null; }
-    if (method === 'storeRemove') return localRelay.remove(args[0]);
-    if (method === 'storeEvent') return await localRelay.event(args[0]) ?? null;
-    if (method === 'storeReplaceable') return await localRelay.replaceable(args[0],args[1],args[2]) ?? null;
     if (method === 'close') {
       setTimeout(this.options.close, 0);
       return true;
@@ -440,9 +455,6 @@ export class ExploreRuntime {
       throw new Error('permission-denied');
     if (method === 'verifyEvent')
       return isSignedEvent(args[0]) && verifyEvent(args[0]);
-    if (method === 'query' || method === 'count') {
-      return method === 'count' ? localRelay.count(args[0]) : localRelay.query(args[0]);
-    }
     if (method === 'profile' || method === 'relayList') {
       const pubkey = method === 'profile' && typeof args[0] === 'object' ? args[0]?.pubkey : args[0];
       if (typeof pubkey !== 'string' || !/^[a-f0-9]{64}$/.test(pubkey)) throw new Error('invalid-pubkey');

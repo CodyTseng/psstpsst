@@ -11,7 +11,7 @@ test('Electron application hosts keep independent containers, owned IPC and shar
   const dir = await mkdtemp(path.join(tmpdir(), 'psst-application-windows-'));
   try {
     for (const entry of ['preload', 'napplet-preload']) await build({ entryPoints: [`desktop/${entry}.ts`], bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, `${entry}.js`) });
-    await build({ stdin: { contents: `import ${JSON.stringify(path.resolve('desktop/preload.ts'))};const {contextBridge,ipcRenderer}=require('electron');const events=[];for(const channel of ['napplet:message','application-window:signing-change','application-window:metadata-change','application-window:favorites-change','application-window:action'])ipcRenderer.on(channel,(_e,...args)=>events.push({channel,args}));contextBridge.exposeInMainWorld('hostTest',{invoke:(...args)=>ipcRenderer.invoke(...args),events:()=>events});`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, 'host-preload.js') });
+    await build({ stdin: { contents: `import ${JSON.stringify(path.resolve('desktop/preload.ts'))};const {contextBridge,ipcRenderer}=require('electron');const events=[];for(const channel of ['napplet:message','application-window:signing-change','application-window:metadata-change','application-window:favorites-change','application-window:action','local-relay:event'])ipcRenderer.on(channel,(_e,...args)=>events.push({channel,args}));contextBridge.exposeInMainWorld('hostTest',{invoke:(...args)=>ipcRenderer.invoke(...args),events:()=>events});`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: path.join(dir, 'host-preload.js') });
     const entry = `
       import { app, BrowserWindow, webContents, ipcMain } from 'electron';
       import { strict as assert } from 'node:assert';
@@ -39,6 +39,11 @@ test('Electron application hosts keep independent containers, owned IPC and shar
         assert.equal(await invoke(parent,IPC.applicationWindowLaunch),null);
         await invoke(first,IPC.applicationWindowOpen,{...launch,accountPubkey:'b'.repeat(64)});
         const second=manager.windows()[1];assert(second);
+        const publicAddition={origin:'first-host',event:{id:'c'.repeat(64),pubkey:'a'.repeat(64),sig:'d'.repeat(128),kind:1,created_at:100,content:'x'.repeat(2*1024*1024+1024),tags:[]}};
+        await first.webContents.executeJavaScript('psstpsstDesktop.localRelayEvents.publish('+JSON.stringify(publicAddition)+')');await pause(40);
+        for(const owner of [parent,second])assert((await events(owner)).some(e=>e.channel===IPC.localRelayEvent&&e.args[0].event.content.length===publicAddition.event.content.length));
+        assert(!(await events(first)).some(e=>e.channel===IPC.localRelayEvent),'public additions never echo to their origin host');
+        await assert.rejects(invoke(first,IPC.localRelayEvent,{...publicAddition,event:{...publicAddition.event,kind:4}}),/invalid-local-relay-event/);
         const bundle=title=>({sourceId:'same-app',storageId:'same-account',network:false,script:'',files:[{path:'/index.html',mime:'text/html',body:Buffer.from('<title>'+title+'</title><p>'+title+'</p>').toString('base64')}]});
         const firstId=await invoke(first,IPC.exploreOpen,bundle('First'));
         const secondId=await invoke(second,IPC.exploreOpen,bundle('Second'));

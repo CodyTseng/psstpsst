@@ -4,6 +4,7 @@ import type { ExplorePage } from '../ports/explore';
 import type { NappletBounds } from '../ports/napplet';
 import type { SqlBindValue, SqliteQueryMethod } from '../ports/database';
 import type { AppUpdateStatus } from '../ports/app-update';
+import type { LocalRelayEventsPort } from '../ports/local-relay-events';
 import type {
   ConfirmationDialogOptions,
   NoticeDialogOptions,
@@ -26,6 +27,7 @@ export type ElectronDirectoryEntry = {
 };
 
 export type ElectronBridge = {
+  localRelayEvents: LocalRelayEventsPort;
   keyVault: KeyVaultPort;
   napplet: {
     supportsExploreBootstrap?: boolean;

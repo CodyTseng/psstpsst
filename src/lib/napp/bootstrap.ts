@@ -39,7 +39,7 @@ export function install(options: {
   const pending = new Map<string, {
     resolve: (v: unknown) => void;
     reject: (e: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
+    timer: ReturnType<typeof setTimeout> | undefined;
   }>();
   const streams = new Map<string, (value: any) => void>();
   const handlers = new Map<string, Function | undefined>();
@@ -75,7 +75,7 @@ export function install(options: {
   };
   const post = (raw: string) => {
     if (!(window as any).__exploreDocumentCommitted) {
-      if (queued.length < 32) queued.push(raw);
+      queued.push(raw);
       return;
     }
     transmit(raw);
@@ -124,12 +124,9 @@ export function install(options: {
   addEventListener('message', (event) => { if (event.source === window && event.data?.__psstExploreReply)
     receive(event.data.__psstExploreReply); });
   const call = (method: string, args: unknown[] = []) => new Promise<any>((resolve, reject) => {
-    if (pending.size >= 16)
-      return reject(new Error('quota-exceeded'));
     const id = String(++serial);
     const raw = JSON.stringify({ id, nonce, method, args });
-    if (raw.length > 1500000) return reject(new Error('quota-exceeded'));
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('request-timeout')); }, 1020000);
+    const timer = method === 'sync' ? undefined : setTimeout(() => { pending.delete(id); reject(new Error('request-timeout')); }, 1020000);
     pending.set(id, { resolve, reject, timer });
     try { post(raw); }
     catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }
@@ -148,6 +145,56 @@ export function install(options: {
     encrypt: (pubkey: string, text: string) => call(`${algorithm}.encrypt`, [pubkey, text]),
     decrypt: (pubkey: string, text: string) => call(`${algorithm}.decrypt`, [pubkey, text]),
   };
+  const openStream = (method: string, args: unknown[], receive: (message: any) => void) => {
+    const id = `stream:${++serial}`;
+    streams.set(id, receive);
+    const close = () => { if (streams.delete(id)) void call('streamClose', [id]).catch(() => {}); };
+    void call(method, [id,...args]).catch(error => { receive({ phase:'closed',error:error.message });close(); });
+    return close;
+  };
+  const storeSubscribe = (filters: unknown) => {
+    const queue: any[] = [];
+    let head = 0;
+    const waiting: { resolve: (value: IteratorResult<any>) => void; reject: (error: Error) => void }[] = [];
+    let closed = false, failure: Error | undefined;
+    const finish = (error?: Error) => {
+      if (closed) return;
+      closed=true;failure=error;queue.length=0;head=0;close();
+      for(const waiter of waiting.splice(0)) if(error) waiter.reject(error);else waiter.resolve({done:true,value:undefined});
+    };
+    const close = openStream('storeSubscribe',[filters], message => {
+      if(closed)return;
+      if(message.phase==='closed'){finish(new Error(message.error??'subscription-closed'));return;}
+      const event=message.event;
+      const waiter=waiting.shift();
+      if(waiter)waiter.resolve({done:false,value:event});
+      else {
+        queue.push(event);
+      }
+    });
+    return {
+      [Symbol.asyncIterator]() { return this; },
+      next(): Promise<IteratorResult<any>> {
+        if(failure)return Promise.reject(failure);
+        if(head<queue.length){
+          const event=queue[head];queue[head++]=undefined;
+          if(head===queue.length){queue.length=0;head=0;}
+          else if(head>=1024&&head*2>=queue.length){queue.splice(0,head);head=0;}
+          return Promise.resolve({done:false,value:event});
+        }
+        if(closed)return Promise.resolve({done:true,value:undefined});
+        return new Promise((resolve,reject)=>waiting.push({resolve,reject}));
+      },
+      return() { finish();return Promise.resolve({done:true as const,value:undefined}); },
+      throw(error: Error) { finish(error);return Promise.reject(error); },
+    };
+  };
+  (window as any).nostrdb = { query: (filters: unknown) => call('query', [filters]), event: (id: string) => call('storeEvent', [id]).then(event=>event??undefined),
+    count: (filters: unknown) => call('count', [filters]), add:(event:unknown)=>call('storeAdd',[event]),
+    remove:(ids:string[])=>call('storeRemove',[ids]),
+    replaceable:(kind:number,author:string,identifier?:string)=>call('storeReplaceable',[kind,author,identifier]).then(event=>event??undefined),
+    subscribe:storeSubscribe, supports:async()=>[],
+  };
   if (options.napp) {
     const napRequests = new Set(['config.registerSchema', 'config.get', 'config.subscribe', 'config.unsubscribe', 'config.openSettings',
       'inc.emit', 'inc.subscribe', 'inc.unsubscribe', 'inc.channel.open', 'inc.channel.list', 'inc.channel.emit', 'inc.channel.broadcast', 'inc.channel.close']);
@@ -164,66 +211,19 @@ export function install(options: {
     };
     addEventListener('error', event => reportError(event.error ?? event.message));
     addEventListener('unhandledrejection', event => reportError(event.reason));
-    const openStream = (method: string, args: unknown[], receive: (message: any) => void) => {
-      if (streams.size >= 8) throw new Error('subscription-quota-exceeded');
-      const id = `stream:${++serial}`;
-      streams.set(id, receive);
-      const close = () => { if (streams.delete(id)) void call('streamClose', [id]).catch(() => {}); };
-      void call(method, [id,...args]).catch(error => { receive({ phase:'closed',error:error.message });close(); });
-      return close;
-    };
-    const storeSubscribe = (filters: unknown) => {
-      const queue: any[] = [];
-      const waiting: { resolve: (value: IteratorResult<any>) => void; reject: (error: Error) => void }[] = [];
-      let closed = false, failure: Error | undefined, bytes = 0;
-      const finish = (error?: Error) => {
-        if (closed) return;
-        closed=true;failure=error;queue.length=0;bytes=0;close();
-        for(const waiter of waiting.splice(0)) if(error) waiter.reject(error);else waiter.resolve({done:true,value:undefined});
-      };
-      const close = openStream('storeSubscribe',[filters], message => {
-        if(closed)return;
-        if(message.phase==='closed'){finish(new Error(message.error??'subscription-closed'));return;}
-        const event=message.event;
-        const waiter=waiting.shift();
-        if(waiter)waiter.resolve({done:false,value:event});
-        else {
-          bytes+=JSON.stringify(event).length*2;
-          if(queue.length>=128||bytes>2*1024*1024){finish(new Error('subscription-overflow'));return;}
-          queue.push(event);
-        }
-      });
-      return {
-        [Symbol.asyncIterator]() { return this; },
-        next(): Promise<IteratorResult<any>> {
-          if(failure)return Promise.reject(failure);
-          if(queue.length){const event=queue.shift();bytes-=JSON.stringify(event).length*2;return Promise.resolve({done:false,value:event});}
-          if(closed)return Promise.resolve({done:true,value:undefined});
-          if(waiting.length>=16)return Promise.reject(new Error('quota-exceeded'));
-          return new Promise((resolve,reject)=>waiting.push({resolve,reject}));
-        },
-        return() { finish();return Promise.resolve({done:true as const,value:undefined}); },
-        throw(error: Error) { finish(error);return Promise.reject(error); },
-      };
-    };
     const relaySubscribe = (relays: string[], filter: unknown, options: any = {}, outbox = false) => {
-      let initial: any[] = [], bytes = 0;
       const reasons: Record<string,string> = {};
       const close=openStream(outbox ? 'outboxSubscribe' : 'relaySubscribe',[relays,filter,{maxEoseTimeout:options.maxEoseTimeout,label:options.label}],message=>{
         try {
-          if(message.phase==='initial') {
-            bytes+=JSON.stringify(message.event).length*2;
-            if(initial.length>=1000||bytes>2*1024*1024)throw new Error('subscription-overflow');
-            initial.push(message.event);
-          } else if(message.phase==='eose') { const events=initial;initial=[];bytes=0;options.eoseEventsCallback?.(events); }
-          else if(message.phase==='event')options.liveEventCallback?.(message.event);
+          if(message.phase==='event')options.liveEventCallback?.(message.event);
+          else if(message.phase==='eose')options.eoseCallback?.(message.url);
           else if(message.phase==='relayClosed') {
             reasons[message.url]=message.reason;
             if(!outbox && relays.every(url=>reasons[new URL(url).href]!==undefined))options.closedCallback?.(reasons);
           } else if(message.phase==='closed'){close();options.closedCallback?.(message.reasons ?? {host:message.error??'subscription-closed'});}
         } catch(error){close();reportError(error);}
       });
-      return ()=>{initial=[];close();};
+      return close;
     };
     const saveFile = async (name: string, data: Blob | ArrayBuffer | ArrayBufferView, type?: string) => {
       const blob = data instanceof Blob ? data : undefined;
@@ -247,7 +247,7 @@ export function install(options: {
       get __popstate_last_idx() { return previousIndex; },
       close: () => call('close'), link: (url: string) => call('link', [url]),
       registerAction: (name: string, handler?: Function) => {
-        if (typeof name !== 'string' || !name || name.length > 128 || handlers.size >= 64 && !handlers.has(name)) throw new Error('invalid-action');
+        if (typeof name !== 'string' || !name) throw new Error('invalid-action');
         handlers.set(name, handler);
         void call('registerAction', [name]).catch(reportError);
       },
@@ -272,12 +272,6 @@ export function install(options: {
       'loadMediaFollows', 'loadFavoritePodcasts', 'loadAuthoredPodcasts', 'fetchFavoriteRelaysWithSets', 'fetchEmojisWithSets',
       'fetchFavoriteFollowSetsWithSets', 'loadFollowSets', 'loadRelaySets', 'loadEmojiSets'])
       (window as any).napp.utils[method] = (pubkey: string) => call(`utils.${method}`, [pubkey]);
-    (window as any).nostrdb = { query: (filters: unknown) => call('query', [filters]), event: (id: string) => call('storeEvent', [id]).then(event=>event??undefined),
-      count: (filters: unknown) => call('count', [filters]), add:(event:unknown)=>call('storeAdd',[event]).then(()=>{}),
-      remove:(ids:string[])=>call('storeRemove',[ids]),
-      replaceable:(kind:number,author:string,identifier?:string)=>call('storeReplaceable',[kind,author,identifier]).then(event=>event??undefined),
-      subscribe:storeSubscribe, supports:async()=>[],
-    };
     let ready: Promise<void> | undefined;
     Object.defineProperty((window as any).napp, 'ready', { get() {
       if (!ready) {

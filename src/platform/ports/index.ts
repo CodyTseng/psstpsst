@@ -12,6 +12,7 @@ import type { BackgroundMessagingPort } from './background-messaging';
 import type { CryptoAcceleratorPort } from './crypto-accelerator';
 import type { ConfirmationDialogPort } from './confirmation-dialog';
 import type { SqliteDriver } from './database';
+import type { LocalRelayEventsPort } from './local-relay-events';
 import type { DeviceCryptoPort } from './device-crypto';
 import type { DeepLinkPort } from './deep-link';
 import type { DocumentPickerPort } from './document-picker';
@@ -127,6 +128,7 @@ export interface PlatformAdapters {
   backgroundTask: BackgroundTaskPort;
   backgroundMessaging: BackgroundMessagingPort;
   database: SqliteDriver;
+  localRelayEvents?: LocalRelayEventsPort;
   fileSystem: FileSystemPort;
   imageCache: ImageCachePort;
   fileDrop: FileDropPort;

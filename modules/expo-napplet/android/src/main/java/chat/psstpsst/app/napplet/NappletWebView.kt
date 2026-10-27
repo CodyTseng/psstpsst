@@ -188,7 +188,7 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       WebViewCompat.addWebMessageListener(web, "__nappletHost", setOf(ORIGIN)) { _, message, source, mainFrame, _ ->
         if (mainFrame && source.toString().trimEnd('/') == ORIGIN) {
           val raw = message.data
-          if (raw != null && raw.length <= 1500000) onMessage(raw)
+          if (raw != null) onMessage(raw)
         }
       }
     }
@@ -207,7 +207,7 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
     WebViewCompat.removeWebMessageListener(web,"__nappletHost")
     WebViewCompat.addWebMessageListener(web,"__nappletHost",setOf("*")) { _, message, source, main, _ ->
       if(!documentNavigating && main && source.scheme in setOf("http","https") && origin(source.toString()) == origin(committedPageUrl ?: "")) {
-        message.data?.let { raw -> if(raw.length <= 1500000 && runCatching { JSONObject(raw).optString("documentToken") == document }.getOrDefault(false)) onMessage(envelope("explore.request",raw)) }
+        message.data?.let { raw -> if(runCatching { JSONObject(raw).optString("documentToken") == document }.getOrDefault(false)) onMessage(envelope("explore.request",raw)) }
       }
     }
     startScript?.remove()

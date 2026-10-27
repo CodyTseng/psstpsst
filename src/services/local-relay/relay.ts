@@ -1,10 +1,22 @@
 import { matchFilters, verifyEvent, type Event, type Filter } from 'nostr-tools';
 import { isSignedEvent } from '@/lib/nostr/event-validation';
 import type { SqliteExecutor, SqlBindValue } from '@/platform/ports/database';
+import type { LocalRelayEventsPort } from '@/platform/ports/local-relay-events';
 import { localFilters, filterSql } from './filters';
-const MAX_EVENTS = 100000, MAX_BYTES = 128 * 1024 * 1024;
+const MAX_BYTES = 1024 * 1024 * 1024;
 const privateKinds = new Set([4, 13, 14, 15, 1059]);
 const yieldTask = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+type Listener = { filters: Filter[]; event: (event: Event) => void };
+type RelayState = { writes: Promise<unknown>; listeners: Set<Listener>; origin: string; disconnect?: () => void };
+const states = new WeakMap<SqliteExecutor, RelayState>();
+function stateFor(database: SqliteExecutor): RelayState {
+    let state = states.get(database);
+    if (!state) {
+        state = { writes: Promise.resolve(), listeners: new Set(), origin: `${Date.now()}:${Math.random()}` };
+        states.set(database, state);
+    }
+    return state;
+}
 export function eventCoordinate(event: Pick<Event, 'kind' | 'pubkey' | 'tags'>): string | null {
     if (event.kind >= 30000 && event.kind < 40000)
         return `${event.kind}:${event.pubkey}:${event.tags.find(tag => tag[0] === 'd')?.[1] ?? ''}`;
@@ -18,16 +30,19 @@ async function rows<T>(executor: SqliteExecutor, sql: string, params: SqlBindVal
 }
 /** In-process public-event relay. Persistence never contains account ownership or private chat rows. */
 export class LocalRelay {
-    private writes: Promise<unknown> = Promise.resolve();
-    private listeners = new Set<{
-        filters: Filter[];
-        event: (event: Event) => void;
-    }>();
-    constructor(private database: SqliteExecutor, private verify: (event: Event) => boolean | Promise<boolean> = verifyEvent) { }
+    private state: RelayState;
+    constructor(private database: SqliteExecutor, private verify: (event: Event) => boolean | Promise<boolean> = verifyEvent,
+        private events?: LocalRelayEventsPort) { this.state = stateFor(database); }
     private write<T>(work: () => Promise<T>): Promise<T> {
-        const result = this.writes.catch(() => { }).then(work);
-        this.writes = result;
+        const result = this.state.writes.catch(() => { }).then(work);
+        this.state.writes = result;
         return result;
+    }
+    private notify(event: Event) {
+        for (const listener of this.state.listeners) if (matchFilters(listener.filters, event)) {
+            try { listener.event(JSON.parse(JSON.stringify(event))); }
+            catch { /* One consumer must not interrupt others. */ }
+        }
     }
     async add(input: unknown): Promise<boolean> {
         // JSON cloning strips nostr-tools' cached verification symbol and freezes the submitted snapshot.
@@ -82,23 +97,19 @@ export class LocalRelay {
                     }
                     for (;;) {
                         const stats = (await rows<{
-                            events: number;
                             bytes: number;
-                        }>(tx, 'SELECT events,bytes FROM local_relay_stats WHERE id=1', [], ['events', 'bytes']))[0];
-                        if (stats.events <= MAX_EVENTS && stats.bytes <= MAX_BYTES)
+                        }>(tx, 'SELECT bytes FROM local_relay_stats WHERE id=1', [], ['bytes']))[0];
+                        if (stats.bytes <= MAX_BYTES)
                             break;
                         await tx.execute('DELETE FROM local_relay_events WHERE id IN (SELECT id FROM local_relay_events ORDER BY stored_at,id LIMIT 256)', [], 'run');
                     }
                     return true;
                 });
-            if (accepted)
-                for (const listener of this.listeners)
-                    if (matchFilters(listener.filters, event)) {
-                        try {
-                            listener.event(JSON.parse(JSON.stringify(event)));
-                        }
-                        catch { /* One consumer must not interrupt others. */ }
-                    }
+            if (accepted) {
+                this.notify(event);
+                try { await this.events?.publish({ origin: this.state.origin, event }); }
+                catch (error) { console.warn('[local-relay] Cross-context notification failed', error); }
+            }
             return accepted;
         });
     }
@@ -107,23 +118,15 @@ export class LocalRelay {
         type Candidate = {
             id: string;
             created_at: number;
-            bytes: number;
         };
         const candidates = new Map<string, Candidate>();
         for (const filter of filters) {
             const where = filterSql(filter);
-            const found = await rows<Candidate>(this.database, `SELECT id,created_at,bytes FROM local_relay_events WHERE ${where.sql} ORDER BY created_at DESC,id LIMIT ?`, [...where.params, filter.limit ?? 100], ['id', 'created_at', 'bytes']);
+            const found = await rows<Candidate>(this.database, `SELECT id,created_at FROM local_relay_events WHERE ${where.sql} ORDER BY created_at DESC,id LIMIT ?`, [...where.params, filter.limit ?? 100], ['id', 'created_at']);
             for (const row of found)
                 candidates.set(row.id, row);
         }
-        const selected: string[] = [];
-        let bytes = 0;
-        for (const row of [...candidates.values()].sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id))) {
-            if (selected.length >= 1000 || bytes + row.bytes > 2 * 1024 * 1024)
-                break;
-            bytes += row.bytes;
-            selected.push(row.id);
-        }
+        const selected = [...candidates.values()].sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id)).slice(0, 1000).map(row => row.id);
         const events = new Map<string, Event>();
         for (let offset = 0; offset < selected.length; offset += 32) {
             const ids = selected.slice(offset, offset + 32);
@@ -142,6 +145,8 @@ export class LocalRelay {
     }
     async count(input: unknown): Promise<number> {
         const filters = localFilters(input).map(filterSql);
+        if (!filters.length)
+            return 0;
         return (await rows<{
             count: number;
         }>(this.database, `SELECT count(*) AS count FROM local_relay_events WHERE ${filters.map(f => `(${f.sql})`).join(' OR ')}`, filters.flatMap(f => f.params), ['count']))[0].count;
@@ -158,22 +163,30 @@ export class LocalRelay {
         return (await this.query(filter))[0];
     }
     async remove(ids: string[]): Promise<string[]> {
-        if (!Array.isArray(ids) || ids.length > 100 || ids.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)))
+        if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)))
             throw new Error('invalid-ids');
         if (!ids.length)
             return [];
         return this.write(() => this.database.transaction(async (tx) => {
-            const placeholders = ids.map(() => '?').join(',');
-            const found = await rows<{
-                id: string;
-            }>(tx, `SELECT id FROM local_relay_events WHERE id IN (${placeholders})`, ids, ['id']);
-            await tx.execute(`DELETE FROM local_relay_events WHERE id IN (${placeholders})`, ids, 'run');
-            return found.map(row => row.id);
+            const removed: string[] = [];
+            for (let offset = 0; offset < ids.length; offset += 100) {
+                const batch = ids.slice(offset, offset + 100), placeholders = batch.map(() => '?').join(',');
+                const found = await rows<{ id: string }>(tx, `SELECT id FROM local_relay_events WHERE id IN (${placeholders})`, batch, ['id']);
+                await tx.execute(`DELETE FROM local_relay_events WHERE id IN (${placeholders})`, batch, 'run');
+                removed.push(...found.map(row => row.id));
+            }
+            return removed;
         }));
     }
     subscribe(input: unknown, event: (event: Event) => void): () => void {
-        const listener = { filters: localFilters(input).map(({ limit, ...filter }) => filter), event };
-        this.listeners.add(listener);
-        return () => { this.listeners.delete(listener); };
+        const listener = { filters: localFilters(input).filter(filter => !Object.hasOwn(filter, 'search')).map(({ limit, ...filter }) => filter), event };
+        this.state.listeners.add(listener);
+        if (!this.state.disconnect && this.events) this.state.disconnect = this.events.subscribe(message => {
+            if (message.origin !== this.state.origin && isSignedEvent(message.event) && !privateKinds.has(message.event.kind)) this.notify(message.event);
+        });
+        return () => {
+            this.state.listeners.delete(listener);
+            if (!this.state.listeners.size) { this.state.disconnect?.(); this.state.disconnect = undefined; }
+        };
     }
 }

@@ -890,11 +890,14 @@ named profiles use nonpersistent website data instead of sharing account cookies
 No browser-style forward/back controls are part of Explore.
 
 The in-process local relay stores explicitly submitted, signature-verified public
-events in a device-wide SQLite cache without account ownership. Only explicit
-event-store writes persist events; remote queries, metadata reads, and relay
-subscriptions do not populate it automatically. Single-letter tag lookups use a
+events in a device-wide SQLite cache without account ownership. Explicit local
+submissions, Napp sync and Napp relay/outbox subscriptions populate it;
+one-shot remote queries and metadata reads do not. Single-letter tag lookups use a
 covering index, and bounded queries filter in SQL before decoding event payloads.
 Local subscriptions observe committed additions only and end with their document.
+Committed public additions are broadcast between trusted host runtimes through
+the platform event port; receiver contexts notify subscribers without re-ingesting
+or re-broadcasting events.
 Private chat tables and signer credentials never feed this cache; remote relay
 connections and AUTH remain account-bound. No WebSocket listener is opened.
 

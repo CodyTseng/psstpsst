@@ -1,4 +1,5 @@
 export const IPC = {
+  localRelayEvent: 'local-relay:event',
   applicationMessagingConnect: 'application-messaging:connect', applicationMessagingDisconnect: 'application-messaging:disconnect',
   applicationMessagingRequest: 'application-messaging:request', applicationMessagingMessage: 'application-messaging:message',
   applicationWindowOpen: 'application-window:open', applicationWindowLaunch: 'application-window:launch',

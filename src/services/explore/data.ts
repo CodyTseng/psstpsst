@@ -3,7 +3,7 @@ import { platform } from '@/platform';
 import { assertNotAborted } from '@/platform/abort';
 import { localRelay } from '@/services/local-relay';
 import { NappletNetwork, relayUrls } from '@/services/napplet/network';
-import { publicUrl, eventWeight } from '@/services/napplet/protocol';
+import { publicUrl } from '@/services/napplet/protocol';
 import { publicEventAddress } from './event-address';
 import { metadataFilters } from '@/services/napplet/metadata-batch';
 import { isPublicKey, normalizePublicKey, LIST_KINDS, SET_KINDS, listItems, resolvedSet, type SetPointer } from './lists';
@@ -60,9 +60,11 @@ export class NappData {
     }).finally(() => this.inflight.delete(key));
     this.inflight.set(key, job); return job;
   }
-  async query(relays: string[], filters: Filter[], timeout = 10000) {
+  async query(relays: string[], filters: Filter[], timeout = 10000, onEvent?: (event: Event) => void) {
     this.check();
-    const response = await this.network.query(relays, filters, this.signal, undefined, timeout);
+    const response = await (onEvent
+      ? this.network.query(relays, filters, this.signal, undefined, timeout, onEvent)
+      : this.network.query(relays, filters, this.signal, undefined, timeout));
     this.check();
     if (response.error) throw new Error(response.error);
     return response;
@@ -72,7 +74,6 @@ export class NappData {
     return this.memo(`metadata:${pubkey}:${kind}`, () => {
       if (kind === 10002) return this.network.replaceable(pubkey, kind, this.signal);
       return new Promise((resolve, reject) => {
-        if (this.metadataQueue.length >= 128) { reject(new Error('quota-exceeded')); return; }
         this.metadataQueue.push({ pubkey, kind, resolve, reject });
         this.metadataTimer ??= setTimeout(() => { this.metadataTimer = undefined; void this.flushMetadata(); }, 8);
       });
@@ -140,7 +141,7 @@ export class NappData {
     if (!isPublicKey(pubkey) || kind === undefined) throw new Error('invalid-set-request');
     return this.memo(`sets:${pubkey}:${kind}`, async () => {
       const relays = await this.network.routes([pubkey], 'write', false, this.signal);
-      const events = (await this.query(relays, [{ authors: [pubkey], kinds: [kind], limit: 200 }])).events;
+      const events = (await this.query(relays, [{ authors: [pubkey], kinds: [kind] }])).events;
       const result = new Map<string, ReturnType<typeof resolvedSet>>();
       for (const event of events) {
         const identifier = event.tags.find(tag => tag[0] === 'd')?.[1] ?? '';
@@ -155,7 +156,6 @@ export class NappData {
     if (!list) throw new Error('unsupported-method');
     const { items } = await this.list(list, pubkey);
     const pointers = items.filter(item => item && typeof item === 'object' && 'identifier' in item) as SetPointer[];
-    if (pointers.length > 128) throw new Error('too-many-sets');
     const resolved = new Map<SetPointer, unknown>();
     let offset = 0;
     await Promise.all(Array.from({ length: Math.min(pointers.length, 4) }, async () => {
@@ -181,15 +181,12 @@ export class NappData {
     });
   }
   async loadEvents(input: unknown): Promise<Event[]> {
-    if (!Array.isArray(input) || input.length > 1000) throw new Error('invalid-event-ids');
+    if (!Array.isArray(input)) throw new Error('invalid-event-ids');
     const ids = [...new Set(input.filter(isPublicKey))];
     if (!ids.length) return [];
     const result = new Map<string, Event>();
-    let bytes = 0;
     const collect = (event: Event) => {
       if (result.has(event.id)) return;
-      bytes += eventWeight(event);
-      if (bytes > 2 * 1024 * 1024) throw new Error('reply-too-large');
       result.set(event.id, event);
     };
     for (let offset = 0; offset < ids.length; offset += 100) {
@@ -258,19 +255,19 @@ export class NappData {
   }
   async user(request: unknown) {
     const raw = typeof request === 'string' ? request : (request as any)?.pubkey;
-    if (typeof raw !== 'string' || raw.length > 1024) throw new Error('invalid-pubkey');
+    if (typeof raw !== 'string') throw new Error('invalid-pubkey');
     const identity = await this.resolveIdentifier(raw);
     if (!identity) throw new Error('invalid-pubkey');
     const hints = typeof request === 'object' && request ? relayUrls((request as any).relays, []) : [];
     const event = identity.relays.length || hints.length
-      ? (await this.query([...new Set([...hints, ...identity.relays])].slice(0, 8), [{ kinds: [0], authors: [identity.pubkey], limit: 1 }])).events.reduce<Event | null>((best, e) => !best || newer(e, best) ? e : best, null)
+      ? (await this.query([...new Set([...hints, ...identity.relays])], [{ kinds: [0], authors: [identity.pubkey], limit: 1 }])).events.reduce<Event | null>((best, e) => !best || newer(e, best) ? e : best, null)
       : await this.metadata(identity.pubkey, 0);
     if (event) return this.index(event);
     const npub = nip19.npubEncode(identity.pubkey);
     return { pubkey: identity.pubkey, npub, metadata: {}, lastUpdated: 0, shortName: `${npub.slice(0, 8)}…${npub.slice(-4)}` };
   }
   async searchLocal(term: string, limit = 20): Promise<any[]> {
-    if (typeof term !== 'string' || term.length > 256) throw new Error('invalid-search');
+    if (typeof term !== 'string') throw new Error('invalid-search');
     this.seeded ??= (async () => {
       const events = await localRelay.query({ kinds: [0], limit: 1000 });
       for (let i = 0; i < events.length; i++) { this.check(); this.index(events[i]); if (i % 8 === 7 || events[i].content.length > 16000) await pause(); }
@@ -283,18 +280,19 @@ export class NappData {
     return result;
   }
   async searchRemote(term: string, limit = 20): Promise<any[]> {
-    if (typeof term !== 'string' || term.length > 256) throw new Error('invalid-search');
+    if (typeof term !== 'string') throw new Error('invalid-search');
     if (!term.trim()) return [];
     const list = await this.list('loadSearchRelays', this.account);
-    const relays = list.items.length ? list.items.slice(0, 4) : ['wss://relay.vertexlab.io/', 'wss://search.nostrarchives.com/'];
+    const relays = list.items.length ? list.items : ['wss://relay.vertexlab.io/', 'wss://search.nostrarchives.com/'];
     const events = (await this.query(relays, [{ kinds: [0], search: term.trim(), limit }], 4000)).events;
     const users = new Map<string, any>();
     for (const event of events) { users.set(event.pubkey, this.index(event)); if (users.size >= limit) break; }
     return [...users.values()];
   }
   async findAuthors(term: string, options: any = {}) {
-    if (typeof term !== 'string' || term.length > 256 || !options || typeof options !== 'object') throw new Error('invalid-search');
-    const limit = Math.max(1, Math.min(Number.isSafeInteger(options.limit) ? options.limit : 20, 100));
+    if (typeof term !== 'string' || !options || typeof options !== 'object') throw new Error('invalid-search');
+    const limit = Number.isSafeInteger(options.limit) && options.limit >= 0 ? options.limit : 20;
+    if (limit === 0) return [];
     const [followList, muteList] = await Promise.all([this.list('loadFollowsList', this.account), this.list('loadMuteList', this.account)]);
     const follows = new Set<string>(followList.items), muted = new Set(muteList.items.filter(item => item.label === 'pubkey').map(item => item.value));
     const users = new Map<string, any>();
@@ -302,7 +300,7 @@ export class NappData {
     if (/^[a-f0-9]{64}$/.test(normalized) || /^(?:nostr:)?(?:npub|nprofile)1/.test(normalized) || options.nip05 === true && normalized.includes('@')) {
       const user = await this.user(normalized); users.set(user.pubkey, user);
     } else if (normalized) {
-      for (const user of await this.searchLocal(normalized, 100)) users.set(user.pubkey, user);
+      for (const user of await this.searchLocal(normalized, Infinity)) users.set(user.pubkey, user);
       if (options.remote === true) for (const user of await this.searchRemote(normalized, limit)) users.set(user.pubkey, user);
     } else {
       const keys = [...follows].filter(pubkey => !muted.has(pubkey)).slice(0, limit);

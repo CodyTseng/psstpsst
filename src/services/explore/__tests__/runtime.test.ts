@@ -8,6 +8,7 @@ import type { ExploreEntry } from '../model';
 import { loadSiteBlob } from '@/services/napplet/artifacts';
 import { getData } from '@/services/napplet/repository';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
+import { localRelay } from '@/services/local-relay';
 jest.mock('../webln', () => ({ WebLn: jest.fn().mockImplementation(() => ({ handle: jest.fn(async () => true) })) }));
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn(async () => {}) }));
@@ -66,6 +67,43 @@ it('waits for native container cleanup and shares repeated stop calls', async ()
   expect(finished).toBe(false);
   expect(platform.napplet.close).toHaveBeenCalledTimes(1);
   closed(); await stopping;
+});
+
+it('serves the local database API to ordinary websites and preserves add results', async () => {
+  for (const [id, method, args, expected] of [
+    ['read-db', 'query', [{kinds:[1]}], [{id:'event'}]],
+    ['add-db', 'storeAdd', [{id:'event'}], true],
+  ] as const) {
+    receive('container',JSON.stringify({type:'explore.request',origin:'https://site.example',document:'one',
+      raw:JSON.stringify({id,nonce:'test-document',method,args})}));
+    await flush();
+    const reply=JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply;
+    expect(reply.error).toBeUndefined();expect(reply.result).toEqual(expected);
+  }
+  jest.mocked(localRelay.add).mockResolvedValueOnce(false);
+  receive('container',JSON.stringify({type:'explore.request',origin:'https://site.example',document:'one',
+    raw:JSON.stringify({id:'duplicate-db',nonce:'test-document',method:'storeAdd',args:[{id:'event'}]})}));
+  await flush();expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.result).toBe(false);
+  expect(confirm).not.toHaveBeenCalled();
+});
+
+it('releases website local-store listeners when their iterator closes', async () => {
+  let deliver!: (event: any) => void;
+  const cleanup = jest.fn();
+  jest.mocked(localRelay.subscribe).mockImplementationOnce((_filters, listener) => { deliver=listener;return cleanup; });
+  const request = async (id: string, method: string, args: unknown[]) => {
+    receive('container',JSON.stringify({type:'explore.request',origin:'https://site.example',document:'one',
+      raw:JSON.stringify({id,nonce:'test-document',method,args})}));
+    await flush();
+    return JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply;
+  };
+  expect((await request('subscribe-db','storeSubscribe',['website-stream',{kinds:[1]}])).result).toBe(true);
+  deliver({id:'before-close'});await flush();
+  expect((await request('close-db','streamClose',['website-stream'])).result).toBe(true);
+  expect(cleanup).toHaveBeenCalledTimes(1);
+  const sends = jest.mocked(platform.napplet.send).mock.calls.length;
+  deliver({id:'after-close'});await flush();
+  expect(platform.napplet.send).toHaveBeenCalledTimes(sends);
 });
 
 it('waits for a container still opening to be closed before cleanup completes', async () => {

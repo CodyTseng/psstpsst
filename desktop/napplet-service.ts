@@ -327,7 +327,7 @@ export function registerNappletHandlers(
   });
   ipcMain.on(IPC.exploreMessage,(event,raw:string)=>{
     const found=[...views.entries()].find(([,entry])=>entry.page && event.sender===entry.view.webContents && event.senderFrame===entry.view.webContents.mainFrame);
-    if(!found || found[1].navigating || typeof raw!=='string' || raw.length>1500000) return;
+    if(!found || found[1].navigating || typeof raw!=='string') return;
     const [id,entry]=found;
     try { if (JSON.parse(raw).documentToken !== entry.document) return; } catch { return; }
     const url=event.senderFrame!.url;
@@ -389,7 +389,7 @@ export function registerNappletHandlers(
   });
   handle(IPC.nappletSend, (_owner: BrowserWindow, id: string, message: string) => {
     const entry = views.get(id);
-    if (!entry || typeof message !== 'string' || message.length > 40 * 1024 * 1024) return;
+    if (!entry || typeof message !== 'string') return;
     if (entry.page) {
       let envelope; try { envelope=JSON.parse(message); } catch { return; }
       if(envelope.document!==entry.document) return;
@@ -409,7 +409,7 @@ export function registerNappletHandlers(
         event.senderFrame === entry.view.webContents.mainFrame &&
         event.senderFrame.url === entry.url,
     );
-    if (found && typeof message === 'string' && message.length <= 1500000) {
+    if (found && typeof message === 'string') {
       if (message === NAPPLET_FRAME_READY_MESSAGE) {
         const entry = found[1];
         if (!entry.painted) {

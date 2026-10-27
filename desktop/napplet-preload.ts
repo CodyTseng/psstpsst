@@ -11,7 +11,7 @@ const explore = !!encoded || !!descriptor;
 if (process.isMainFrame && !explore) {
   contextBridge.exposeInMainWorld('__psstNapplet', {
     post: (raw: string) => {
-      if (typeof raw === 'string' && raw.length <= 1500000)
+      if (typeof raw === 'string')
         ipcRenderer.send(IPC.nappletMessage, raw);
     },
   });
@@ -21,12 +21,12 @@ if (process.isMainFrame && !explore) {
   });
 }
 
-// Remote documents receive only a bounded message transport, never Electron APIs.
+// Remote documents receive only a document-bound message transport, never Electron APIs.
 if (process.isMainFrame && explore) {
   const nonce=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
   contextBridge.exposeInMainWorld('__exploreDocumentToken',nonce);
   contextBridge.exposeInMainWorld('__psstExplore', {
-    post: (raw: string) => { if (typeof raw === 'string' && raw.length <= 1500000) { try {const message=JSON.parse(raw);message.nonce=nonce;ipcRenderer.send(IPC.exploreMessage,JSON.stringify(message));}catch{/* Invalid page messages have no authority. */} } },
+    post: (raw: string) => { if (typeof raw === 'string') { try {const message=JSON.parse(raw);message.nonce=nonce;ipcRenderer.send(IPC.exploreMessage,JSON.stringify(message));}catch{/* Invalid page messages have no authority. */} } },
   });
   ipcRenderer.on(IPC.exploreReply, (_event, raw: string) => {
     let response;try{response=JSON.parse(raw);}catch{return;}

@@ -31,7 +31,17 @@ test('device-wide local relay persists verified public events, indexes filters a
   assert.equal(seen.length,2);assert.equal((await relay.event(a.id)).content,'note');
   assert.deepEqual((await relay.query([{'#p':['b'.repeat(64)]},{ids:[b.id]}])).map(e=>e.id),[b.id,a.id]);
   assert.deepEqual(await relay.query({ids:[]}),[]);assert.deepEqual(await relay.query({limit:0}),[]);
+  assert.deepEqual(await relay.query([]),[]);assert.equal(await relay.count([]),0);
+  const manyAuthors=Array.from({length:101},(_,index)=>index.toString(16).padStart(64,'0'));
+  manyAuthors.push(a.pubkey);
+  assert.deepEqual((await relay.query({authors:manyAuthors})).map(event=>event.id),[b.id,a.id]);
+  assert.equal(await relay.count(Array.from({length:9},()=>({ids:[a.id]}))),1);
+  assert.deepEqual(await relay.query({'#e':['non-hex-reference'],'#p':['non-hex-key']}),[]);
   assert.equal(await relay.count({kinds:[1],limit:1}),2);
+  assert.deepEqual(await relay.query({limit:-1}),[]);
+  assert.equal((await relay.query({limit:100000})).length,2);
+  let searchDelivered=false;
+  const closeSearch=relay.subscribe({search:'note'},()=>{searchDelivered=true;});
   assert.equal((await relay.query({kinds:[1],since:10,until:10}))[0].id,a.id);
   assert.equal((await relay.query({'#t':['nostr'],'#T':['topic']}))[0].id,a.id);
   assert.equal(await relay.count({'#T':['topic']}),1);
@@ -50,8 +60,10 @@ test('device-wide local relay persists verified public events, indexes filters a
   const ephemeral=signed(20001,50);let live;const stop=relay.subscribe({kinds:[20001]},event=>{live=event;});
   await relay.add(ephemeral);assert.equal(live.id,ephemeral.id);assert.equal(await relay.event(ephemeral.id),undefined);stop();
   const secondAccountView=new LocalRelay(executor);assert.equal((await secondAccountView.event(a.id)).id,a.id);
+  const secondSeen=[];const closeSecond=secondAccountView.subscribe({kinds:[1]},event=>secondSeen.push(event.id));
   const concurrent=[signed(1,60,[], 'one',other),signed(1,61,[], 'two',other)];
   await Promise.all(concurrent.map(event=>relay.add(event)));assert.equal(await relay.count({authors:[concurrent[0].pubkey]}),2);
+  assert.deepEqual(secondSeen,concurrent.map(event=>event.id));closeSecond();
   const removed=await relay.remove([a.id,'f'.repeat(64)]);assert.deepEqual(removed,[a.id]);
   assert.equal(sqlite.prepare('SELECT count(*) AS n FROM local_relay_tags WHERE event_id=?').get(a.id).n,0);
   close();await relay.add(signed(1,62));assert.equal(seen.length,4);
@@ -62,11 +74,30 @@ test('device-wide local relay persists verified public events, indexes filters a
   assert.equal(await relay.add(large),true);
   assert.deepEqual(await relay.event(large.id),JSON.parse(JSON.stringify(large)));
   assert.equal((await relay.replaceable(30078,large.pubkey,identifier)).id,large.id);
+  const oversized=signed(30078,100,[['d','over-two-mib']],'x'.repeat(2*1024*1024+1024));
+  assert.equal(await relay.add(oversized),true);
+  assert.equal((await relay.event(oversized.id)).content.length,oversized.content.length);
+  assert.equal((await relay.replaceable(30078,oversized.pubkey,'over-two-mib')).id,oversized.id);
+  assert.equal((await relay.query({ids:[oversized.id]}))[0].id,oversized.id);
+
+  const receivers=new Set();let published=0;
+  const transport={async publish(message){published++;for(const listener of receivers)listener(message);},subscribe(listener){receivers.add(listener);return()=>receivers.delete(listener);}};
+  const contextA=new LocalRelay({...executor},undefined,transport),contextB=new LocalRelay({...executor},undefined,transport);
+  const fromA=[],fromB=[],stopA=contextA.subscribe({kinds:[9]},event=>fromA.push(event)),stopB=contextB.subscribe({kinds:[9]},event=>fromB.push(event));
+  const shared=signed(9,110);
+  await contextA.add(shared);
+  assert.equal(fromA.length,1);assert.equal(fromB.length,1);assert.equal(published,1);
+  assert.equal((await contextB.event(shared.id)).id,shared.id);
+  await contextB.add(shared);assert.equal(published,1);
+  stopA();stopB();assert.equal(receivers.size,0);
 
   const stats=sqlite.prepare('SELECT events,bytes FROM local_relay_stats').get();
   const totals=sqlite.prepare('SELECT count(*) AS events,sum(bytes) AS bytes FROM local_relay_events').get();
   assert.deepEqual({...stats},{...totals});
-  await assert.rejects(relay.query({search:'text'}),/unsupported-filter/);
+  assert.deepEqual(await relay.query({search:'text'}),[]);
+  assert.equal(await relay.count({search:'text'}),0);
+  assert.deepEqual((await relay.query([{search:'text'},{ids:[b.id]}])).map(event=>event.id),[b.id]);
+  assert.equal(searchDelivered,false);closeSearch();
   await assert.rejects(relay.query({'#client':['example']}),/unsupported-filter/);
   await assert.rejects(relay.query({authors:['not-a-key']}),/invalid-filter/);
   const plan=sqlite.prepare('EXPLAIN QUERY PLAN SELECT event_id FROM local_relay_tags WHERE name=? AND value=?').all('p','b'.repeat(64));
@@ -89,5 +120,17 @@ test('device-wide local relay persists verified public events, indexes filters a
   const start=performance.now();
   assert.equal((await relay.query({kinds:[1],'#p':[p],'#t':['topic1'],limit:50})).length,50);
   console.log('100k-event, two-tag query:',(performance.now()-start).toFixed(1),'ms');
+  const excessiveIds=Array.from({length:40000},(_,i)=>(i+1).toString(16).padStart(64,'0'));
+  assert.equal(await relay.count({ids:excessiveIds}),1000);
+  assert.deepEqual((await relay.query({ids:excessiveIds,limit:2})).map(event=>event.id),[excessiveIds[999],excessiveIds[998]]);
+  const excessiveAuthors=Array.from({length:40000},(_,i)=>i.toString(16).padStart(64,'0'));
+  excessiveAuthors[0]=a.pubkey;excessiveAuthors[1000]=concurrent[0].pubkey;
+  assert.equal(await relay.count({authors:excessiveAuthors}),await relay.count({authors:[a.pubkey]}));
+  const excessiveTags=Array.from({length:40000},(_,i)=>'unmatched-'+i);
+  excessiveTags[0]='topic1';excessiveTags[1000]='topic2';
+  assert.equal(await relay.count({'#t':excessiveTags}),await relay.count({'#t':['topic1']}));
+  const removals=Array.from({length:150},(_,i)=>(i+1).toString(16).padStart(64,'0'));
+  assert.equal((await relay.remove([...removals,removals[0],'f'.repeat(64)])).length,150);
+  assert.equal(await relay.count({ids:removals}),0);
  }finally{sqlite.close();await rm(dir,{recursive:true,force:true});}
 });

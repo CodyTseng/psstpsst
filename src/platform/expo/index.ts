@@ -1,5 +1,6 @@
 import { keyVaultAdapter } from './key-vault';
 import { nappletAdapter } from './napplet';
+import { localRelayEventsAdapter } from './local-relay-events';
 import { screenOrientationAdapter } from './screen-orientation';
 import { clipboardAdapter } from './clipboard';
 import { imageCacheAdapter } from './image-cache';
@@ -218,6 +219,7 @@ export function createExpoAdapters(): PlatformAdapters {
     backgroundMessaging: backgroundMessagingAdapter,
     backgroundTask: backgroundTaskAdapter,
     database: lazyDatabaseAdapter(),
+    localRelayEvents: localRelayEventsAdapter,
     imageCache: imageCacheAdapter,
     fileSystem: lazyFileSystemAdapter(),
     fileDrop: fileDropAdapter,

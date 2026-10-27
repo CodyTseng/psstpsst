@@ -283,11 +283,25 @@ private final class PublicFetch {
 }
 
 public class ExpoNappletModule: Module {
+  private var relayObserver: NSObjectProtocol?
   private var requests: [String: PublicFetch] = [:]
   private let views = NSMapTable<NSString, NappletView>(keyOptions: .strongMemory, valueOptions: .weakMemory)
   private let lock = NSLock()
   public func definition() -> ModuleDefinition {
     Name("ExpoNapplet")
+    Events("onLocalRelayEvent")
+    OnCreate {
+      self.relayObserver = LocalRelayEvents.subscribe { [weak self] message in
+        self?.sendEvent("onLocalRelayEvent", ["message": message])
+      }
+    }
+    OnDestroy {
+      if let observer = self.relayObserver { LocalRelayEvents.unsubscribe(observer) }
+      self.relayObserver = nil
+    }
+    AsyncFunction("broadcastLocalRelayEventAsync") { (message: String) in
+      LocalRelayEvents.publish(message)
+    }
     AsyncFunction("notifyWebsiteAsync") { (application: String, title: String, body: String) async throws -> Bool in
       guard application.count <= 256, title.count <= 256, body.count <= 4096 else { return false }
       let center = UNUserNotificationCenter.current()
@@ -356,7 +370,7 @@ private final class MessageProxy: NSObject, WKScriptMessageHandler {
   weak var owner: NappletView?
   func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
     guard message.frameInfo.isMainFrame,
-      let raw = message.body as? String, raw.utf8.count <= 1500000 else { return }
+      let raw = message.body as? String else { return }
     guard let owner else { return }
     if owner.isExplore { owner.receive(raw, origin: message.frameInfo.securityOrigin) }
     else if message.frameInfo.securityOrigin.host == "napplet.psstpsst.invalid" { owner.onMessage(["message": raw]) }

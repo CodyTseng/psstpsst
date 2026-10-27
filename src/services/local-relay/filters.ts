@@ -1,25 +1,29 @@
 import type { Filter } from 'nostr-tools';
 import type { SqlBindValue } from '@/platform/ports/database';
+const MAX_FILTER_VALUES = 1000;
 export function localFilters(input: unknown): Filter[] {
     const filters = Array.isArray(input) ? input : [input];
-    if (!filters.length || filters.length > 8)
-        throw new Error('invalid-filter');
     return filters.map(value => {
         if (!value || typeof value !== 'object' || Array.isArray(value))
             throw new Error('invalid-filter');
         const filter: Record<string, any> = {};
         for (const [key, items] of Object.entries(value)) {
             if (['ids', 'authors', 'kinds'].includes(key) || /^#[a-zA-Z]$/.test(key)) {
-                if (!Array.isArray(items) || items.length > 100 || items.some(item => key === 'kinds'
+                if (!Array.isArray(items)) throw new Error('invalid-filter');
+                const values = items.slice(0, MAX_FILTER_VALUES);
+                if (values.some(item => key === 'kinds'
                     ? !Number.isInteger(item) || item < 0 || item > 65535
-                    : typeof item !== 'string' || ['ids', 'authors', '#e', '#p'].includes(key) && !/^[a-f0-9]{64}$/.test(item)))
+                    : typeof item !== 'string' || ['ids', 'authors'].includes(key) && !/^[a-f0-9]{64}$/.test(item)))
                     throw new Error('invalid-filter');
-                filter[key] = [...items];
+                filter[key] = values;
+            }
+            else if (key === 'search' && typeof items === 'string') {
+                filter[key] = items;
             }
             else if (['since', 'until', 'limit'].includes(key)) {
-                if (!Number.isSafeInteger(items) || key === 'limit' && (items as number) < 0)
+                if (!Number.isSafeInteger(items))
                     throw new Error('invalid-filter');
-                filter[key] = key === 'limit' ? Math.min(items as number, 1000) : items;
+                filter[key] = key === 'limit' ? Math.max(0, Math.min(items as number, 1000)) : items;
             }
             else
                 throw new Error(`unsupported-filter: ${key.slice(0, 40)}`);
@@ -37,6 +41,10 @@ export function filterSql(filter: Filter): {
     for (const [key, value] of Object.entries(filter)) {
         if (key === 'limit')
             continue;
+        if (key === 'search') {
+            terms.push('0');
+            continue;
+        }
         if (Array.isArray(value)) {
             if (!value.length) {
                 terms.push('0');

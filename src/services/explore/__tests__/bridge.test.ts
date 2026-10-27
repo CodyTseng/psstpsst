@@ -18,6 +18,19 @@ it.each([true, false])('injects NIP-07 before page scripts (napp: %s)', async (n
   await expect(result).resolves.toBe('account');
 });
 
+it.each([true, false])('exposes the complete local database API and preserves add results (napp: %s)', async napp => {
+  const post = jest.fn();
+  const page: any = { __exploreDocumentCommitted: true, __exploreDocumentToken: 'document', __psstExplore: { post } };page.top = page;
+  new Function('window','addEventListener','requestAnimationFrame','document','navigator',exploreBridge(napp))(page,jest.fn(),jest.fn(),documentBeforeReady,{});
+  expect(Object.keys(page.nostrdb).sort()).toEqual(['add','count','event','query','remove','replaceable','subscribe','supports']);
+  for (const result of [true, false]) {
+    const added = page.nostrdb.add({id:'event'}), request = JSON.parse(post.mock.calls.at(-1)![0]);
+    page.__exploreReceive({id:request.id,nonce:request.nonce,result});
+    await expect(added).resolves.toBe(result);
+  }
+  await expect(page.nostrdb.supports()).resolves.toEqual([]);
+});
+
 it('forwards uncaught napp errors and promise rejections to host diagnostics', () => {
   const post = jest.fn();
   const page: any = { __exploreDocumentCommitted: true, __exploreNativeDocumentToken: 'native-document', __exploreDocumentToken: 'document', __psstExplore: { post } };
@@ -58,7 +71,7 @@ it('delivers local subscriptions as async iterators and closes the host stream o
   await Promise.resolve();
 });
 
-it('groups initial remote events until EOSE and forwards later events separately', async () => {
+it('forwards every remote event immediately and reports each relay EOSE separately', async () => {
   const requests: any[]=[];
   const page: any={__exploreDocumentCommitted:true,__exploreNativeDocumentToken:'native-document',__exploreDocumentToken:'document',__psstExplore:{post:(raw:string)=>{
     const request=JSON.parse(raw);requests.push(request);
@@ -66,12 +79,13 @@ it('groups initial remote events until EOSE and forwards later events separately
   }}};
   page.top=page;
   new Function('window','addEventListener','requestAnimationFrame','document','navigator',exploreBridge(true))(page,jest.fn(),jest.fn(),documentBeforeReady, {});
-  const initial=jest.fn(),live=jest.fn();
-  const close=page.napp.utils.subscribe(['wss://relay.example/'],{kinds:[1]}, {eoseEventsCallback:initial,liveEventCallback:live});
+  const eose=jest.fn(),live=jest.fn();
+  const close=page.napp.utils.subscribe(['wss://relay.example/'],{kinds:[1]}, {eoseCallback:eose,liveEventCallback:live});
   const streamId=requests[0].args[0];
-  const emit=(phase:string,event?:unknown)=>page.__exploreReceive({type:'stream',streamId,nonce:'document',phase,event});
-  emit('initial',{id:'old'});expect(initial).not.toHaveBeenCalled();emit('eose');emit('event',{id:'new'});
-  expect(initial).toHaveBeenCalledWith([{id:'old'}]);expect(live).toHaveBeenCalledWith({id:'new'});
+  const emit=(phase:string,event?:unknown,url?:string)=>page.__exploreReceive({type:'stream',streamId,nonce:'document',phase,event,url});
+  emit('event',{id:'old'});expect(live).toHaveBeenCalledWith({id:'old'});expect(eose).not.toHaveBeenCalled();
+  emit('eose',undefined,'wss://relay.example/');emit('event',{id:'new'});
+  expect(eose).toHaveBeenCalledWith('wss://relay.example/');expect(live).toHaveBeenCalledWith({id:'new'});
   close();await Promise.resolve();
 });
 

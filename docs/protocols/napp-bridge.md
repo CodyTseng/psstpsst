@@ -60,23 +60,48 @@ pointers, plus optional relay and author hints. `loadEvents` batches missing IDs
 into queries. Publication returns `{published, failed, relays}`, with per-relay
 outcomes, after the host's existing authorization checks.
 
-`napp.sync(authors, kinds, options)` imports verified public events from up to two
-write relays per author. Completed ranges and identical limited queries are
+`napp.sync(authors, kinds, options)` imports verified public events from selected
+write relays, saving each received event before EOSE in both full and limited
+syncs. Full ranges combine authors and kinds in one filter per relay and
+missing-range group and prioritize groups covering more authors; limited calls
+preserve per-author/kind limits.
+All source relays for a limited author/kind share one admission budget; each
+distinct incoming event reserves a slot before being queued for persistence.
+Completed ranges and identical limited queries are
 remembered for the current document. Full range requests subtract already-fetched
 intervals; interrupted or saturated pages never become completed coverage.
 Concurrent work for one author/kind is serialized. Syncs share at most 16 active
-REQs per process. Each call admits at most 16 authors, 16 kinds, 10,000 events and
-two minutes of work; each interval has a 20-page budget. Timestamp buckets too
-large for pagination fail explicitly. Coverage is execution-local and is rebuilt
+REQs per process. Author and kind counts, requested limits, total event counts
+and page counts are not capped. Timestamp buckets too large for safe pagination
+fail explicitly. Coverage is execution-local and is rebuilt
 after navigation or restart.
 
-`napp.outbox(filter, options)` requires authors, routes each author only to their
-write relays and returns `{close}`. It shares `utils.subscribe` callback shapes:
-initial deduplicated events at EOSE, subsequent live events and terminal relay
-reasons. Both APIs save accepted public events before delivering them, allowing
+`napp.outbox(filter, options)` requires authors without imposing an author-count
+limit. It fetches all authors' relay lists before grouping requests by relay.
+Missing write lists or lists exceeding eight destinations use default relays;
+up to four candidates per author participate in greedy grouping. Groups with
+more authors take priority. When there are more than ten candidates, a group
+covering fewer than ten authors is omitted only if every author already has
+two retained destinations. It returns `{close}` and shares `utils.subscribe`
+callbacks: `liveEventCallback(event)` receives every deduplicated event as it
+arrives, including historical events; `eoseCallback(relayUrl)` independently
+reports each relay's EOSE without waiting for other relays. Failures and timeouts
+do not generate synthetic EOSE notifications. There is no initial
+event batch or `eoseEventsCallback`. Terminal relay reasons use `closedCallback`.
+Both APIs save accepted public events before delivering them, allowing
 `nostrdb.query/subscribe` to observe them. Private-message event kinds never enter
 the device-wide public cache. Closing the document cancels subscriptions and
 queued deliveries.
+
+Remote filters preserve extension fields, strings and requested limits for the
+relay to interpret. Local queries cap limits at 1,000; unsupported `search`
+filters match nothing, including in local subscriptions.
+
+Data calls have no host-imposed author, relay, identifier, set, subscription or
+pending-RPC count limits. Remote query results are not truncated by event count.
+Batching, concurrency scheduling and idle/cache eviction are internal mechanisms;
+they must not reject valid protocol requests or silently discard requested data.
+Protocol-defined bounds and explicit local query limits still apply.
 
 `napp.relays.health(urls)` returns NIP-66 monitor projections for up to 200 relays.
 Recent check-ins within two hours mean online; older check-ins within a week mean
@@ -89,7 +114,8 @@ incrementally as public profiles are loaded or stored. Its index retains at most
 2,000 profiles and 4 MiB. Remote author search uses public NIP-50 relay queries;
 this does not enable the independent `nostrdb` search extension. Author picking
 ranks public follows first, excludes public mutes and optionally verifies public
-identifiers. It never substitutes private PsstPsst contacts.
+identifiers. Local candidates are filtered and ranked before applying the result
+limit. It never substitutes private PsstPsst contacts.
 
 `saveFile` accepts Blob and buffer inputs, obtains file-specific consent, and
 streams credited chunks into a host-owned temporary file before the system

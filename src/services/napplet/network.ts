@@ -18,10 +18,11 @@ import type { Signer } from '@/services/signer/signer.interface';
 import { MARKET_RELAYS, eventWeight, publicUrl } from './protocol';
 import { RelayBudget } from './relay-budget';
 import { metadataFilters } from './metadata-batch';
+import { groupOutboxAuthors, outboxWriteRelays } from './outbox-routing';
 
 export function relayUrls(values: unknown, fallback = MARKET_RELAYS): string[] {
   const urls = values == null ? fallback : values;
-  if (!Array.isArray(urls) || urls.length > 8 || urls.some((v) => typeof v !== 'string'))
+  if (!Array.isArray(urls) || urls.some((v) => typeof v !== 'string'))
     throw new Error('invalid-relays');
   return [...new Set(urls.map((v) => publicUrl(v, true)))];
 }
@@ -103,8 +104,7 @@ export class NappletNetwork {
     auth?: (event: EventTemplate) => Promise<Event>,
   ): () => void {
     assertNotAborted(this.lifetime.signal); assertNotAborted(options.abort);
-    const release = this.destinations.tryAcquire(options.relays);
-    if (!release) throw new Error('relay-quota-exceeded');
+    const release = this.destinations.retain(options.relays);
     const linked = linkAbort(options.abort ? [this.lifetime.signal, options.abort] : [this.lifetime.signal]);
     let closed = false, close = () => {};
     const finish = () => {
@@ -126,6 +126,7 @@ export class NappletNetwork {
     signal?: AbortSignal,
     auth?: (event: EventTemplate) => Promise<Event>,
     timeoutMs = 10000,
+    onEvent?: (event: Event) => void,
   ): Promise<NetworkRead> {
     assertNotAborted(this.lifetime.signal); assertNotAborted(signal);
     const linked = linkAbort(signal ? [this.lifetime.signal, signal] : [this.lifetime.signal]);
@@ -134,33 +135,26 @@ export class NappletNetwork {
       if (linked.signal.aborted) { release(); linked.dispose(); return Promise.reject(new Error('session-closed')); }
       const remaining = deadline - Date.now();
       if (remaining <= 0) { release(); linked.dispose(); return Promise.resolve({ events: [] as Event[], incomplete: true, error: 'network-error' }); }
-      return this.readQuery(relays, filters, linked.signal, auth, remaining).finally(() => { linked.dispose(); release(); });
+      return this.readQuery(relays, filters, linked.signal, auth, remaining, onEvent).finally(() => { linked.dispose(); release(); });
     };
-    let release: (() => void) | undefined;
-    try { release = this.destinations.tryAcquire(relays); } catch (error) { linked.dispose(); throw error; }
-    if (release) return execute(release);
-    return this.destinations.acquire(relays, linked.signal, timeoutMs).then(execute, error => {
-      linked.dispose();
-      if (error instanceof Error && error.message === 'relay-queue-timeout') return { events: [] as Event[], incomplete: true, error: 'network-error' };
-      throw error;
-    });
+    try { return execute(this.destinations.retain(relays)); }
+    catch (error) { linked.dispose(); throw error; }
   }
   private async readQuery(relays: string[], filters: Filter[], abort: AbortSignal,
-    auth: ((event: EventTemplate) => Promise<Event>) | undefined, timeoutMs: number): Promise<NetworkRead> {
+    auth: ((event: EventTemplate) => Promise<Event>) | undefined, timeoutMs: number,
+    onEvent?: (event: Event) => void): Promise<NetworkRead> {
     const budget = new AbortController(), linked = linkAbort([abort, budget.signal]);
     const timer = setTimeout(() => budget.abort(), timeoutMs);
     const events = new Map<string, Event>();
     const eventRelays = new Map<string, string[]>();
-    let bytes = 0;
     try {
       const result = await (auth ? this.authPool : this.pool).query({
         relays, filters, abort: linked.signal, signAuth: auth, timeoutMs: Math.max(1, timeoutMs - 50),
         onEventSource: (event, relayUrl) => { if (events.has(event.id)) eventRelays.set(event.id, [relayUrl]); },
         onEvent: event => {
           if (events.has(event.id) || !matchFilters(filters, event)) return;
-          const weight = eventWeight(event);
-          if (events.size >= 500 || bytes + weight > 4 * 1024 * 1024) { budget.abort(); return; }
-          bytes += weight; events.set(event.id, event);
+          events.set(event.id, event);
+          onEvent?.(event);
         },
       });
       assertNotAborted(abort);
@@ -175,13 +169,11 @@ export class NappletNetwork {
     if (cached && cached.expires > Date.now()) return cached.event;
     let request = this.pendingMetadata.get(key);
     if (!request || request.batch?.controller.signal.aborted) {
-      if (this.pendingMetadata.size >= 128 && !this.pendingMetadata.has(key)) throw new Error('quota-exceeded');
       request = { key, pubkey, kind, waiters: new Set() };
       this.pendingMetadata.set(key, request); this.metadataQueue.add(request);
       this.metadataTimer ??= setTimeout(() => { this.metadataTimer = undefined; void this.flushMetadata(); }, 8);
     }
     const pending = request;
-    if (pending.waiters.size >= 64) throw new Error('quota-exceeded');
     return new Promise((resolve, reject) => {
       const linked = linkAbort(signal ? [this.lifetime.signal, signal] : [this.lifetime.signal]);
       const cancel = () => {
@@ -272,7 +264,22 @@ export class NappletNetwork {
       .flatMap((tag) => {
         try { return [publicUrl(tag[1], true)]; }
         catch { return []; }
-      }) ?? [])].slice(0, 4);
+      }) ?? [])];
+  }
+  async outboxRoutes(authors: string[], signal: AbortSignal): Promise<Map<string, string[]>> {
+    const lists = new Map<string, string[]>();
+    // Bound concurrent metadata work without limiting the total author count.
+    for (let offset = 0; offset < authors.length; offset += 64) {
+      assertNotAborted(signal); assertNotAborted(this.lifetime.signal);
+      const batch = authors.slice(offset, offset + 64);
+      const events = await Promise.all(batch.map(author => this.replaceable(author, 10002, signal).catch(() => {
+        assertNotAborted(signal); assertNotAborted(this.lifetime.signal); return null;
+      })));
+      for (let index = 0; index < batch.length; index++) lists.set(batch[index], outboxWriteRelays(events[index]));
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+    }
+    assertNotAborted(signal); assertNotAborted(this.lifetime.signal);
+    return groupOutboxAuthors(lists);
   }
   async routes(
     pubkeys: string[],
@@ -280,7 +287,7 @@ export class NappletNetwork {
     required = false,
     signal?: AbortSignal,
   ): Promise<string[]> {
-    if (pubkeys.length > 16 || pubkeys.some((p) => !/^[a-f0-9]{64}$/.test(p)))
+    if (pubkeys.some((p) => !/^[a-f0-9]{64}$/.test(p)))
       throw new Error('invalid-authors');
     const urls = new Set<string>();
     for (let offset = 0; offset < pubkeys.length; offset += 4) {
@@ -300,14 +307,12 @@ export class NappletNetwork {
                 } catch {
                   return [];
                 }
-              })
-              .slice(0, 4) ?? [];
+              }) ?? [];
           if (required && !candidates.length) throw new Error('recipient-relays-unavailable');
           for (const url of candidates.length ? candidates : MARKET_RELAYS) urls.add(url);
         }),
       );
     }
-    if (urls.size > 16) throw new Error('too-many-relays');
     return urls.size ? [...urls] : required ? [] : MARKET_RELAYS;
   }
   async publish(
@@ -317,7 +322,7 @@ export class NappletNetwork {
   ) {
     assertNotAborted(this.lifetime.signal);
     const deadline = Date.now() + 8000;
-    const release = await this.destinations.acquire(relays, this.lifetime.signal, 8000);
+    const release = this.destinations.retain(relays);
     try {
       assertNotAborted(this.lifetime.signal);
       const results = await Promise.all(

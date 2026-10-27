@@ -4,6 +4,8 @@ import { IPC } from './ipc-channels';
 import { ApplicationMessagingBroker } from '../src/services/explore/messaging-broker';
 import type { ApplicationEndpoint, ApplicationEnvelope } from '../src/platform/ports/application-messaging';
 import { applicationSourceId, applicationInstanceKey } from '../src/lib/application-identity';
+import { isSignedEvent } from '../src/lib/nostr/event-validation';
+import type { LocalRelayEvent } from '../src/platform/ports/local-relay-events';
 
 /** Only host renderers enter this registry; application WebContentsViews never do. */
 export class ApplicationWindows {
@@ -26,6 +28,12 @@ export class ApplicationWindows {
     const handle = (channel: string, callback: (event: IpcMainInvokeEvent, ...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => {
       if (!this.options.trusted(event)) throw new Error('untrusted-application-host');
       return callback(event, ...args);
+    });
+    handle(IPC.localRelayEvent, (event, message: LocalRelayEvent) => {
+      if (!message || typeof message.origin !== 'string' || !isSignedEvent(message.event) || [4, 13, 14, 15, 1059].includes(message.event.kind))
+        throw new Error('invalid-local-relay-event');
+      for (const window of [this.options.parent(), ...this.windows()]) if (window && !window.isDestroyed() && !window.webContents.isDestroyed() && window.webContents !== event.sender)
+        window.webContents.send(IPC.localRelayEvent, message);
     });
     handle(IPC.applicationMessagingConnect, (event, endpoint: ApplicationEndpoint) => {
       const window = this.host(event.sender), launch = window && this.hosts.get(window);

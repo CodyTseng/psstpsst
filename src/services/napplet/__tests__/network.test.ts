@@ -1,7 +1,7 @@
 import type { Event } from 'nostr-tools';
 import type { ManagedSubscribeOptions, QueryRelayResult } from '@/services/relay/managed-relay-pool';
 import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
-import { NappletNetwork } from '../network';
+import { NappletNetwork, relayUrls } from '../network';
 
 jest.mock('@/lib/platform', () => ({ IS_ANDROID: true }));
 jest.mock('@/services/relay/relay-pool', () => ({ verifyEventNativeFirst: jest.fn() }));
@@ -14,6 +14,38 @@ jest.mock('@/platform', () => ({ platform: {
 
 const author = 'a'.repeat(64);
 const relay = 'wss://publisher.example/';
+
+it('preserves explicit relay lists beyond the former eight-relay cap', () => {
+  const urls = Array.from({ length: 30 }, (_, i) => `wss://relay-${i}.example/`);
+  expect(relayUrls(urls)).toEqual(urls);
+});
+
+it('queries every requested relay and returns more than 500 events', async () => {
+  const network = new NappletNetwork('account');
+  const urls = Array.from({ length: 30 }, (_, i) => `wss://relay-${i}.example/`);
+  const query = jest.spyOn(network.pool, 'query').mockImplementation(async options => {
+    for (let i = 0; i < 600; i++) options.onEvent?.({ id: String(i), kind: 1, tags: [], content: '' } as unknown as Event);
+    return { events: [], status: 'complete' as const, relays: urls.map(url => ({ url, status: 'eose' as const, received: 20 })) };
+  });
+  try {
+    const received = jest.fn();
+    const result = await network.query(urls, [{ kinds: [1], limit: 100000 }], undefined, undefined, 10000, received);
+    expect(query.mock.calls[0][0].relays).toEqual(urls);
+    expect(result.events).toHaveLength(600);expect(result.incomplete).toBe(false);
+    expect(received).toHaveBeenCalledTimes(600);
+  } finally { network.destroy(); }
+});
+
+it('fetches relay metadata for every outbox author before producing grouped routes', async () => {
+  const network = new NappletNetwork('account');
+  const authors = Array.from({ length: 150 }, (_, i) => i.toString(16).padStart(64, '0'));
+  const lookup = jest.spyOn(network, 'replaceable').mockImplementation(async () => ({ tags: [['r', 'wss://shared-a.example/'], ['r', 'wss://shared-b.example/']] } as Event));
+  try {
+    const groups = await network.outboxRoutes(authors, new AbortController().signal);
+    expect(lookup).toHaveBeenCalledTimes(150);
+    expect([...groups.values()]).toEqual([authors, authors]);
+  } finally { network.destroy(); }
+});
 
 it.each([
   [{ url: relay, status: 'eose', received: 0 }, false, undefined],

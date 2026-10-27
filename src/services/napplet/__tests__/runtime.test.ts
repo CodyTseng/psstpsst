@@ -1,5 +1,6 @@
 import { rules as sharedRules, activity as sharedActivity } from '@/services/signing/testing/memory-repository';
-import type { EventTemplate } from 'nostr-tools';
+import type { Event, EventTemplate } from 'nostr-tools';
+import type { ManagedSubscribeOptions } from '@/services/relay/managed-relay-pool';
 import { NappletRuntime, type RuntimeOptions } from '../runtime';
 import { NAP_DOMAINS, type NappletRelease } from '../protocol';
 import { platform } from '@/platform';
@@ -79,6 +80,34 @@ function options(accountPubkey = 'accountA'): RuntimeOptions {
 }
 const messages = () =>
   jest.mocked(platform.napplet.send).mock.calls.map(([, raw]) => JSON.parse(raw));
+
+test('drains a large historical backlog in order, accepts new events and releases queued events on close', async () => {
+  jest.useFakeTimers();
+  const runtime = new NappletRuntime(options()), stop = jest.fn();
+  let subscription!: ManagedSubscribeOptions;
+  runtime.network.subscribe = jest.fn(input => { subscription=input;return stop; });
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({type:'relay.subscribe',id:'subscribe-history',subId:'history',relay:'wss://relay.example/',filters:{kinds:[1]}}));
+    expect(subscription).toBeDefined();
+    const emit = (index: number) => subscription.onEvent({id:String(index),kind:1,pubkey:'a'.repeat(64),created_at:index,content:'note',tags:[],sig:''} as Event,'wss://relay.example/');
+    for (let i=0;i<10000;i++) emit(i);
+    subscription.onEose?.();
+    await jest.advanceTimersByTimeAsync(16*100);
+    const partial=messages().filter(message=>message.type==='relay.event');
+    expect(partial.length).toBeGreaterThan(0);expect(partial.length).toBeLessThan(10000);
+    for (let i=10000;i<10010;i++) emit(i);
+    await jest.runAllTimersAsync();
+    const delivered=messages().filter(message=>message.type==='relay.event'||message.type==='relay.eose');
+    expect(delivered.filter(message=>message.type==='relay.event').map(message=>message.result.event.id)).toEqual(Array.from({length:10010},(_,i)=>String(i)));
+    expect(delivered[10000].type).toBe('relay.eose');
+    for (let i=10010;i<10020;i++) emit(i);
+    await runtime.receive(JSON.stringify({type:'relay.close',id:'close-history',subId:'history'}));
+    await jest.runAllTimersAsync();
+    expect(messages().filter(message=>message.type==='relay.event')).toHaveLength(10010);
+    expect(stop).toHaveBeenCalledTimes(1);
+  } finally { await runtime.close();jest.useRealTimers(); }
+});
 beforeEach(() => {
   jest.clearAllMocks(); sharedRules.clear(); sharedActivity.clear();
 });
@@ -562,7 +591,7 @@ async function transferFile(runtime: NappletRuntime, id: string) {
   await runtime.receive(JSON.stringify({ type: 'upload.transfer.end', id, seq: 1 }));
 }
 
-it.each(['pending requests', 'call budget'])('acknowledges upload starts rejected by the %s limit', async limit => {
+it.each(['pending requests', 'call budget'])('accepts upload starts beyond the former %s limit', async limit => {
   const config = options();
   let releaseHandlers!: (value: NappletRelease[]) => void;
   const held = new Promise<NappletRelease[]>(resolve => { releaseHandlers = resolve; });
@@ -581,7 +610,7 @@ it.each(['pending requests', 'call budget'])('acknowledges upload starts rejecte
     await runtime.receive(JSON.stringify({ type: 'upload.transfer.start', id: 'limited-upload', seq: -1,
       size: 3, request: { filename: 'report.txt', mimeType: 'text/plain' } }));
     expect(messages().filter(message => message.id === 'limited-upload')).toEqual([
-      { type: 'psst.upload.ack', id: 'limited-upload', seq: -1, error: 'quota-exceeded' },
+      { type: 'psst.upload.ack', id: 'limited-upload', seq: -1 },
     ]);
     expect(config.confirm).not.toHaveBeenCalled();
     expect(platform.fileSystem.uploadFile).not.toHaveBeenCalled();

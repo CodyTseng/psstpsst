@@ -213,39 +213,6 @@ export function parseAppAddress(value: string): { filters: Filter[]; relays: str
   throw new Error('napplets.invalid_manifest');
 }
 
-export function boundedFilters(value: unknown): Filter[] {
-  const filters = Array.isArray(value) ? value : [value];
-  if (!filters.length || filters.length > 8) throw new Error('invalid-filter');
-  return filters.map((input) => {
-    if (!input || typeof input !== 'object' || Array.isArray(input))
-      throw new Error('invalid-filter');
-    const filter: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(input)) {
-      if (['ids', 'authors', 'kinds'].includes(key) || /^#[a-zA-Z]$/.test(key)) {
-        if (
-          !Array.isArray(item) ||
-          !item.length ||
-          item.length > 100 ||
-          item.some((v) =>
-            key === 'kinds'
-              ? !Number.isSafeInteger(v) || v < 0
-              : typeof v !== 'string' || v.length > 256,
-          )
-        )
-          throw new Error('invalid-filter');
-        filter[key] = item;
-      } else if (['since', 'until', 'limit'].includes(key)) {
-        if (!Number.isSafeInteger(item) || (item as number) < 0) throw new Error('invalid-filter');
-        filter[key] = item;
-      } else if (key === 'search' && typeof item === 'string' && item.length <= 256)
-        filter[key] = item;
-      else throw new Error('invalid-filter');
-    }
-    filter.limit = Math.min((filter.limit as number | undefined) ?? 50, 200);
-    return filter as Filter;
-  });
-}
-
 export function resourceMime(bytes: Uint8Array): string {
   if (bytes.length >= 6 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0 && (bytes[4] || bytes[5])) return 'image/x-icon';
   const head = new TextDecoder().decode(bytes.slice(0, 512));

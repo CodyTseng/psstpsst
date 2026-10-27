@@ -67,6 +67,10 @@ test('Explore serves verified bundles and binds NIP-07 and WebLN requests and re
     const streamEnvelope=streamRequest.message,streamRaw=JSON.parse(streamEnvelope.raw);
     await invoke(IPC.nappletSend,streaming,JSON.stringify({document:streamEnvelope.document,reply:{type:'stream',nonce:streamRaw.nonce,streamId:streamRaw.args[0],phase:'event',event:{id:'stored'}}}));
     assert.deepEqual(await guest.executeJavaScript('window.nextEvent'),{done:false,value:{id:'stored'}});
+    const largeContent='x'.repeat(2*1024*1024+1024);
+    await guest.executeJavaScript('window.nextLargeEvent=iterator.next();void 0');
+    await invoke(IPC.nappletSend,streaming,JSON.stringify({document:streamEnvelope.document,reply:{type:'stream',nonce:streamRaw.nonce,streamId:streamRaw.args[0],phase:'event',event:{id:'large-stored',content:largeContent}}}));
+    assert.equal(await guest.executeJavaScript('window.nextLargeEvent.then(result=>result.value.content.length)'),largeContent.length);
     await guest.executeJavaScript('window.iterator.return()');
     for(let i=0;i<100;i++){
       if((await events()).some(e=>e.id===streaming&&JSON.parse(e.raw).raw?.includes('streamClose')))break;
@@ -79,6 +83,18 @@ test('Explore serves verified bundles and binds NIP-07 and WebLN requests and re
     for(let i=0;i<100;i++){first=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===website&&e.message.raw?.includes('getPublicKey'));if(first)break;await wait(20);}
     assert(first);assert.equal(first.message.origin,'http://127.0.0.1:'+port);
     const oldRequest=JSON.parse(first.message.raw);
+    assert.equal(await guest.executeJavaScript('typeof window.nostrdb.add'),'function','ordinary websites receive the local database API');
+    await guest.executeJavaScript('window.largeAdd=nostrdb.add({id:"large",content:"x".repeat(2*1024*1024+1024)});void 0');
+    let addRequest;
+    for(let i=0;i<100;i++){
+      addRequest=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===website&&e.message.raw?.includes('storeAdd'));
+      if(addRequest)break;await wait(20);
+    }
+    assert(addRequest,'large add requests must pass the document transport');
+    const addRaw=JSON.parse(addRequest.message.raw);
+    assert.equal(addRaw.args[0].content.length,largeContent.length);
+    await invoke(IPC.nappletSend,website,JSON.stringify({document:addRequest.message.document,reply:{id:addRaw.id,nonce:addRaw.nonce,result:false}}));
+    assert.equal(await guest.executeJavaScript('window.largeAdd'),false,'database add keeps its boolean result across the full transport');
     await guest.executeJavaScript('location.href="/next"');await wait(50);
     await guest.executeJavaScript('window.__psstExplore.post('+JSON.stringify(JSON.stringify({...oldRequest,id:'transition-probe'}))+')');
     await wait(50);

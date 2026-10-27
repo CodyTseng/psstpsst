@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import type { ElectronBridge } from '../src/platform/electron/bridge';
 import type { AppUpdateStatus } from '../src/platform/ports/app-update';
+import type { LocalRelayEvent } from '../src/platform/ports/local-relay-events';
 import { IPC } from './ipc-channels';
 import { unwrapVaultReply, type VaultReply } from './vault-failure';
 
@@ -77,6 +78,14 @@ ipcRenderer.on(
 );
 
 const bridge: ElectronBridge = {
+  localRelayEvents: {
+    publish: message => invoke(IPC.localRelayEvent, message),
+    subscribe: listener => {
+      const receive = (_event: unknown, message: LocalRelayEvent) => listener(message);
+      ipcRenderer.on(IPC.localRelayEvent, receive);
+      return () => { ipcRenderer.removeListener(IPC.localRelayEvent, receive); };
+    },
+  },
   napplet: {
     supportsExploreBootstrap: true,
     windows: {

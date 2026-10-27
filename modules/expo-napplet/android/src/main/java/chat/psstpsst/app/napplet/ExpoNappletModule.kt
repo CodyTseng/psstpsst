@@ -23,7 +23,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 private class FetchTask { @Volatile var call: Call? = null; val cancelled = AtomicBoolean(false) }
 
+private object LocalRelayEvents {
+  val listeners = java.util.concurrent.CopyOnWriteArraySet<(String) -> Unit>()
+  fun publish(message: String) { listeners.forEach { it(message) } }
+}
+
 class ExpoNappletModule : Module() {
+  private val relayListener: (String) -> Unit = { message -> sendEvent("onLocalRelayEvent", mapOf("message" to message)) }
   private var websiteNotification = 0
   private val views = mutableMapOf<String, WeakReference<NappletView>>()
   private val executor = Executors.newFixedThreadPool(4)
@@ -116,9 +122,13 @@ class ExpoNappletModule : Module() {
         temporary.delete()
       }
     }
-    Events("onTaskActive", "onTaskClosed")
+    Events("onTaskActive", "onTaskClosed", "onLocalRelayEvent")
+    AsyncFunction("broadcastLocalRelayEventAsync") { message: String -> LocalRelayEvents.publish(message) }
     OnActivityResult { _, result -> BrowserPickers.result(result.requestCode, result.resultCode, result.data) }
-    OnCreate { ApplicationTasks.emit = { event, payload -> sendEvent(event, payload) } }
+    OnCreate {
+      ApplicationTasks.emit = { event, payload -> sendEvent(event, payload) }
+      LocalRelayEvents.listeners.add(relayListener)
+    }
     OnActivityEntersForeground {
       ApplicationTasks.foreground((appContext.currentActivity as? ApplicationTaskActivity)?.applicationTaskId)
     }
@@ -204,7 +214,7 @@ class ExpoNappletModule : Module() {
       Prop("surfaceId") { view: NappletView, id: String -> views[id] = WeakReference(view) }
       OnViewDestroys { view: NappletView -> views.entries.removeAll { it.value.get() === view }; view.dispose() }
     }
-    OnDestroy { ApplicationTasks.emit = null; calls.values.forEach { it.cancelled.set(true); it.call?.cancel() }; executor.shutdownNow() }
+    OnDestroy { LocalRelayEvents.listeners.remove(relayListener); ApplicationTasks.emit = null; calls.values.forEach { it.cancelled.set(true); it.call?.cancel() }; executor.shutdownNow() }
   }
 }
 
