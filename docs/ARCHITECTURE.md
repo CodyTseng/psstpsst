@@ -907,6 +907,15 @@ connections and AUTH remain account-bound. No WebSocket listener is opened.
 
 ## Napplet isolation
 
+Unsigned local napps have account-owned `local~` identities, independent browser
+profiles and immutable hashed file versions. Installation commits only after
+target-specific access review and an atomic version comparison. Replacements
+clear signer/browser authorization in that transaction and invalidate old
+documents after commit. Document-owned authorization writes check the installed
+version, including across sibling hosts. Failed transitions retain old grants. Local desktop
+membership never enters synchronized signed favorites. Local code never gains
+the installer's permissions or a fabricated publisher identity.
+
 Napplets run under the current persisted account in a separate platform container.
 Changing accounts or locking the application invalidates the execution session
 before new work can start. App storage, grants and settings are scoped by account,

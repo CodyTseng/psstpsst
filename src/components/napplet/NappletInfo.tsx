@@ -22,6 +22,7 @@ export function ApplicationInfo({release,onPublisher,notice,action,unsupported}:
   return <View testID="napplet-info" style={{ gap: spacing.lg }}>
     <NappletIdentity release={release} action={action} subtitle={release.kind ? t(`napplets.formats.${release.kind}`) : undefined} />
     {release.publisher?<PublisherRow pubkey={release.publisher} onPress={onPublisher}/>:null}
+    {release.local ? <AppText variant="caption" tone="muted">{t('napplets.local_unsigned_notice')}</AppText> : null}
     {release.description.trim() ? <AppText>{release.description}</AppText> : null}
     {release.origin?<AppText variant="caption" tone="muted" selectable>{release.origin}</AppText>:null}
     {notice}

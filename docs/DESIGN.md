@@ -1202,6 +1202,10 @@ These isolated surfaces use platform controls rather than host React primitives.
 
 ## 12. Hard Rules
 
+Pinned compatibility UI kits may retain their upstream visual tokens inside an
+embedded application document. They never style host chrome or trusted approval
+surfaces; their exposed surface and text colors follow the effective host theme.
+
 Breaking a rule requires explicit approval and a reason in the PR or commit
 message.
 

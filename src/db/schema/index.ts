@@ -43,3 +43,4 @@ export * from './explore';
 export * from './local-relay';
 
 export * from './webln-payments';
+export * from './local-applications';

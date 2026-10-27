@@ -48,7 +48,7 @@ export class NappCapabilities {
           if (this.configSubscribed) void this.pushConfig().catch(() => {});
         } else void this.options.send(message).catch(() => { void this.stop(); });
       });
-      await this.messaging.connect({ instance: this.instance, accountPubkey: this.account, sourceId: this.entry.key, title: this.entry.title,
+      await this.messaging.connect({ instance: this.instance, accountPubkey: this.account, sourceId: this.entry.key, title: this.entry.title.slice(0, 200),
         domains: this.entry.required, actions: [], auxiliary: !!this.entry.manifest?.tags.some(t => t[0] === 'mode' && t[1] === 'auxiliary') });
       this.check();
     })();
@@ -98,7 +98,7 @@ export class NappCapabilities {
     const runningSources = new Set(available.map(endpoint => endpoint.sourceId));
     const applications = options.instance ? [] : [...known.values()].filter(app => app.kind === 'napp' &&
       !runningSources.has(app.key) && !!app.manifest?.tags.some(t => t[0] === 'mode' && t[1] === 'auxiliary') === !!options.auxiliary &&
-      app.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string)));
+      (app.local?.actions.some(pattern => matchesAction(pattern, name as string)) || app.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string))));
     this.check();
     const choices = [...available.map(endpoint => {
       const app = known.get(endpoint.sourceId);
@@ -119,7 +119,7 @@ export class NappCapabilities {
     if (!current) throw new Error('handler-unavailable');
     let target = available.find(e => `instance:${e.instance}` === selected)?.instance;
     if (!target) {
-      if (!current.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string))) throw new Error('handler-unavailable');
+      if (!current.local?.actions.some(pattern => matchesAction(pattern, name as string)) && !current.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string))) throw new Error('handler-unavailable');
       await this.options.launch(current); this.check();
       target = await this.request({ type: 'wait', sourceId: current.key, name });
       const favorites = await this.options.applications();

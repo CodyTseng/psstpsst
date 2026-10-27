@@ -232,5 +232,10 @@ module.exports = defineConfig([
   },
   {
     ignores: ["dist/*"],
+  },
+  {
+    // Preserve the pinned upstream UI kit byte-for-byte.
+    files: ['src/lib/napp/vendor/ui.ts'],
+    rules: { '@typescript-eslint/array-type': 'off' },
   }
 ]);

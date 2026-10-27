@@ -27,6 +27,7 @@ import { NappSync } from './sync';
 import { NappDevice } from './device';
 import { LIST_KINDS, SET_KINDS } from './lists';
 import { relayHealth } from './relay-health';
+import type { LocalInstaller } from './local-installer';
 const isPermissionDenied = (error: unknown) => error instanceof Error && error.message === 'permission-denied';
 export class ExploreRuntime {
   private lifetime = new AbortController();
@@ -42,6 +43,8 @@ export class ExploreRuntime {
   private device?: NappDevice;
   private browser?: BrowserActions;
   private webLn?: WebLn;
+  private installer?: LocalInstaller;
+  private stopLocalWatch?: () => void;
   private permissions?: SigningPermissions;
   private document = '';
   private documentActive = false;
@@ -71,11 +74,13 @@ export class ExploreRuntime {
     configure?: (schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal) => void;
     applications?: () => Promise<ExploreEntry[]>;
     launch?: (entry: ExploreEntry) => Promise<void>;
+    installed?: (entry: ExploreEntry) => void;
+    replaced?: (entry?: ExploreEntry) => void;
   }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network); }
   async start() {
     if (!platform.napplet.openPage)
       throw new Error('napplets.rebuild_required');
-    const page: ExplorePage = { storageId: this.account, sourceId: `${this.account}:${this.entry.key}`, network: this.entry.kind !== 'napp' || this.entry.required.includes('network'),
+    const page: ExplorePage = { storageId: this.entry.local ? `${this.account}:${this.entry.key}` : this.account, sourceId: `${this.account}:${this.entry.key}`, network: this.entry.kind !== 'napp' || this.entry.required.includes('network'),
       script: '', bootstrap: { napp: this.entry.kind === 'napp', theme: this.options.theme?.(), domains: this.entry.required, instance: this.instance } };
     page.labels = { ok: i18n.t('common.ok'), cancel: i18n.t('common.cancel'), allow: i18n.t('napplets.allow') };
     if (this.entry.kind === 'website')
@@ -83,10 +88,14 @@ export class ExploreRuntime {
     else {
       page.files = [];
       const artifactFiles = (this.entry.files ?? []).map(file => `files/${file.hash}.blob`);
-      await recordArtifactVersion(this.entry, artifactFiles, false);
+      if (!this.entry.local) await recordArtifactVersion(this.entry, artifactFiles, false);
       let total = 0;
       let mediaServers: Promise<string[]> | undefined;
       const load = async (hash: string) => {
+        if (this.entry.local) {
+          const { loadLocalApplicationFile } = await import('./local-applications');
+          return loadLocalApplicationFile(this.account, this.entry, hash, this.lifetime.signal);
+        }
         try { return await loadSiteBlob(this.entry, hash, this.lifetime.signal); }
         catch (error) {
           assertNotAborted(this.lifetime.signal);
@@ -101,10 +110,11 @@ export class ExploreRuntime {
       };
       // A small worker pool bounds network and memory pressure; blobs remain hash-verified.
       const paths = [...(this.entry.files ?? [])];
+      let nextFile = 0;
       const files = page.files;
       const worker = async () => {
-        while (paths.length) {
-          const file = paths.shift()!;
+        while (nextFile < paths.length) {
+          const file = paths[nextFile++];
           await new Promise<void>(r => setTimeout(r, 0));
           let bytes: Uint8Array;
           try { bytes = await load(file.hash); }
@@ -124,7 +134,7 @@ export class ExploreRuntime {
       };
       await Promise.all([worker(), worker(), worker()]);
       assertNotAborted(this.lifetime.signal);
-      await recordArtifactVersion(this.entry, artifactFiles, true);
+      if (!this.entry.local) await recordArtifactVersion(this.entry, artifactFiles, true);
     }
     assertNotAborted(this.lifetime.signal);
     const receive = (id: string, raw: string) => {
@@ -206,6 +216,16 @@ export class ExploreRuntime {
     }
     for (const message of early)
       receive(message.id, message.raw);
+    if (this.entry.local) {
+      const { watchLocalApplication } = await import('./local-applications');
+      assertNotAborted(this.lifetime.signal);
+      this.stopLocalWatch = watchLocalApplication(this.account, this.entry, latest => {
+        // Revoke old document authority before any new version is presented.
+        this.documentLife.abort();
+        if (this.options.replaced) this.options.replaced(latest);
+        else void this.stop();
+      });
+    }
     return this.containerId;
   }
   private enterDocument(message: ExploreMessage) {
@@ -215,7 +235,7 @@ export class ExploreRuntime {
     this.nonce = '';
     this.streams.clear();
     this.documentLife.abort();
-    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined; this.webLn = undefined;
+    this.data = undefined; this.sync = undefined; this.device = undefined; this.browser = undefined; this.webLn = undefined; this.installer = undefined;
     this.documentLife = new AbortController();
     this.pending.clear();
     this.document = message.document;
@@ -227,7 +247,8 @@ export class ExploreRuntime {
       return;
     }
     const application = this.entry.kind === 'website' ? { title:new URL(this.origin).host,description:'',servers:[],required:[],origin:this.origin } : applicationPresentation(this.entry);
-    this.permissions = new SigningPermissions({ accountPubkey: this.account, sourceId }, (signing, signal) => this.options.confirm({ title: application.title, detail: '', signing, application,
+    this.permissions = new SigningPermissions({ accountPubkey: this.account, sourceId,
+      ...(this.entry.local ? { localVersion: this.entry.local.version } : {}) }, (signing, signal) => this.options.confirm({ title: application.title, detail: '', signing, application,
       requester: { title: application.title, origin: sourceId } }, signal ?? this.documentLife.signal), this.documentLife.signal, () => { });
   }
   private async request(message: ExploreMessage) {
@@ -276,7 +297,7 @@ export class ExploreRuntime {
     return this.browser ??= this.createBrowserActions(this.origin);
   }
   private createBrowserActions(origin: string) {
-    return new BrowserActions({ account: this.account, sourceId: this.entry.kind === 'website' ? origin : this.entry.key,
+    return new BrowserActions({ account: this.account, sourceId: this.entry.kind === 'website' ? origin : this.entry.key, localVersion: this.entry.local?.version,
       permissionsChanged: () => { void this.reply(this.document, { type: 'browser.permissions-changed' }).catch(() => {}); }, signal: this.documentLife.signal, confirm: this.options.confirm,
       application: this.entry.kind === 'website' ? { title: new URL(origin).host, description: '', servers: [], required: [], origin } : applicationPresentation(this.entry),
       open: async address => {
@@ -367,6 +388,13 @@ export class ExploreRuntime {
     }
     if (!napp)
       throw new Error('unsupported-method');
+    if (method.startsWith('dev.installLocal.')) {
+      if (!this.entry.required.includes('dev')) throw new Error('permission-denied');
+      const { LocalInstaller } = await import('./local-installer'); current();
+      this.installer ??= new LocalInstaller(this.account, this.entry, signal, this.options.confirm,
+        app => this.options.installed?.(app));
+      return this.installer.handle(method.slice('dev.installLocal.'.length), args);
+    }
     if (method === 'sync' || method === 'relayHealth' || method.startsWith('utils.')) {
       if (method.startsWith('utils.saveFile.') || method === 'utils.copyText') {
         this.device ??= new NappDevice(applicationPresentation(this.entry), this.account, signal, this.options.confirm);
@@ -510,6 +538,7 @@ export class ExploreRuntime {
     const capabilities = this.capabilities?.stop(); this.capabilities = undefined;
     this.streams.clear();
     this.lifetime.abort();
+    this.stopLocalWatch?.(); this.stopLocalWatch = undefined;
     this.documentLife.abort();
     this.unsubscribe?.();
     this.unsubscribe = undefined;

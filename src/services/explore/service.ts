@@ -19,6 +19,7 @@ import { isNewerEvent } from '@/lib/nostr/event-version';
 import { ExploreRuntime } from './runtime';
 import { assertNotAborted } from '@/platform/abort';
 import { openApplicationWindow, tryOpenApplicationWindow } from './windows';
+import { removeLocalApplication } from './local-applications';
 export const exploreStore = createStore(() => ({ account: null as string | null, loaded: false, favoriteVisibleCount: FAVORITES_PAGE_SIZE, favoritesLoadingMore: false, entries: [] as ExploreEntry[],
   surfaces: [] as string[], runId: 0, entry: null as ExploreEntry | null, containerId: null as string | null, loading: false, error: null as string | null, accessRevision: 0 }));
 let epoch = 0, serial = 0, desktopRevision = 0;
@@ -145,7 +146,14 @@ async function refreshFavoriteMembership(account: string, generation: number) {
   for (const entry of favorites) if (!previousKeys.has(entry.key)) metadataLoaded.delete(entry.key);
   const entries = previous.flatMap(entry => {
     const favorite = saved.get(entry.key);
-    if (favorite) { saved.delete(entry.key); return [{ ...withApplicationMetadata(favorite, entry), lastUsedAt: entry.lastUsedAt }]; }
+    if (favorite) {
+      saved.delete(entry.key);
+      if (favorite.local?.version !== entry.local?.version) {
+        metadataLoaded.delete(entry.key);
+        return [{ ...favorite, lastUsedAt: entry.lastUsedAt }];
+      }
+      return [{ ...withApplicationMetadata(favorite, entry), lastUsedAt: entry.lastUsedAt }];
+    }
     return entry.lastUsedAt !== null ? [{ ...entry, desktopPosition: null }] : [];
   }).concat([...saved.values()]);
   const updated = mergeApplicationEntries(previous, entries);
@@ -197,7 +205,9 @@ export const exploreService = {
       }, 0);
       stopDatabase?.();
       stopDatabase = platform.database?.addChangeListener?.(event => {
-        if (!event.external || event.tableName !== 'private_list_sync_state') return;
+        // Electron broadcasts unscoped notifications for writes from sibling windows.
+        if (event.tableName && event.tableName !== 'local_applications' &&
+          !(event.external && event.tableName === 'private_list_sync_state')) return;
         invalidateReplaceableEvents();
         if (databaseTimer) clearTimeout(databaseTimer);
         databaseTimer = setTimeout(() => {
@@ -256,6 +266,12 @@ export const exploreService = {
   async resolve(value: string): Promise<ExploreEntry> {
     const { account, entries } = exploreStore.getState();
     if (!account) throw new Error('account-unavailable');
+    if (value.startsWith('local~')) {
+      const { readLocalApplication } = await import('./local-applications');
+      const local = await readLocalApplication(account, value);
+      if (!local) throw new Error('napplets.not_found');
+      return local;
+    }
     const generation = epoch, query = parseApplicationAddressQuery(value);
     if (query?.type === 'invalid') throw new Error('napplets.invalid_manifest');
     if (!query) { await nappletService.activateAccount(account); check(account, generation); }
@@ -399,6 +415,14 @@ export const exploreService = {
     for (const parent of parents.splice(0)) void parent.runtime.stop();
     exploreStore.setState({ containerId: null, surfaces: [], entry: null, loading: false, error: null });
   },
+  async uninstallLocal(app: ExploreEntry, account: string) {
+    if (!app.local) throw new Error('invalid-local-application');
+    const generation = epoch;
+    await this.reset(app, account);
+    await removeLocalApplication(account, app.key);
+    exploreStore.setState(state => state.account === account && epoch === generation
+      ? { entries: state.entries.filter(entry => entry.key !== app.key) } : state);
+  },
   async reset(app: ExploreEntry, account: string) {
     const generation = epoch;
     check(account, generation);
@@ -438,7 +462,7 @@ async function launchRuntime(runId: number, cleanup?: Promise<void>) {
   const current=()=>{check(account,generation);assertNotAborted(signal);if(runId!==exploreStore.getState().runId)throw new Error('session-closed');};
   try {
     if (cleanup) { await cleanup; current(); entry = exploreStore.getState().entry!; }
-    if (needsFavoriteMetadata(entry)) {
+    if (entry.local || needsFavoriteMetadata(entry)) {
       entry = await resolveFavoriteMetadata(account, entry, signal);
       current();
       exploreStore.setState({ entry });
@@ -488,7 +512,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
     check(account, generation);
     if (runtime !== instance && !parents.some(parent => parent.runtime === instance)) throw new Error('application-not-active');
   };
-  const instance = new ExploreRuntime(account, entry, {
+  const callbacks: ConstructorParameters<typeof ExploreRuntime>[2] = {
     presented: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false }); },
     failed: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false, error: 'napplets.request_failed' }); },
     theme: () => nappletService.currentTheme()?.colors,
@@ -505,6 +529,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
     },
     launch: async app => {
       current();
+      if (app.local) { app = await resolveFavoriteMetadata(account, app, launchLife.signal); current(); }
       app = { ...app, required: applicationRequirements(app.kind, app.required) };
       if (await tryOpenApplicationWindow(app, account)) return;
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
@@ -534,6 +559,20 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
         throw error;
       }
     },
+    installed: app => {
+      if (epoch !== generation) return;
+      void exploreService.remember(app, account).then(() => callbacks.launch?.(app))
+        .catch(() => { /* A committed install remains available in history if opening fails. */ });
+    },
+    replaced: app => {
+      if (runtime === instance) {
+        if (app) void exploreService.restart(runId, app).catch(() => {});
+        else exploreService.close(runId);
+      } else {
+        const parent = parents.find(parent => parent.runtime === instance);
+        if (parent) { void instance.stop(); parents.splice(parents.indexOf(parent), 1); }
+      }
+    },
     navigated: url => {
       if (epoch !== generation || runtime !== instance) return;
       const address = websiteAddress(url), current = { ...entry, key: address, address, title: new URL(address).host };
@@ -542,7 +581,8 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
     },
     close: () => { if (runtime === instance) exploreService.close(runId); },
     link: url => { current(); void platform.urlOpener.openExternalUrl(websiteAddress(url)).catch(() => {}); },
-  });
+  };
+  const instance = new ExploreRuntime(account, entry, callbacks);
   return instance;
 }
 registerNappletLifecycle((account) => { if (!account || exploreStore.getState().account === account)

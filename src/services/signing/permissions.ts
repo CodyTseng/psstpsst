@@ -1,5 +1,5 @@
 import { assertNotAborted, linkAbort } from '@/platform/abort';
-import { readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
+import { assertCurrentSigningSource, readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
 import { normalizeSigningSource } from './source';
 import { invalidateSigning, signingRevision, subscribeSigning } from './changes';
 import { queueAuthorization } from './authorization-queue';
@@ -102,6 +102,7 @@ export class SigningPermissions {
 
   private async authorizeCurrent(request: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal,
     review?: (request: SigningRequest, signal?: AbortSignal) => Promise<string | false>): Promise<number> {
+    if (this.scope.localVersion !== undefined) await assertCurrentSigningSource(this.scope);
     let revision = this.version;
     const current = () => {
       assertNotAborted(this.signal);

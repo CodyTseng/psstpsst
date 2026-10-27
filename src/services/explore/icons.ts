@@ -8,6 +8,7 @@ export { loadWebsiteIcon, websiteIconOrigin } from './website-icons';
 
 export type WebsiteIconSource = { origin?: string; key?: string };
 export type ApplicationIconSource = Pick<NappletRelease, 'icon' | 'servers'> & WebsiteIconSource & {
+  localIcon?: { account: string; appId: string; version: string; hash: string };
   manifest?: Pick<Event, 'id' | 'kind' | 'pubkey' | 'tags'>;
   files?: readonly SiteFile[];
 };
@@ -45,11 +46,21 @@ function cachedIcon(key: string, load: (signal: AbortSignal) => Promise<string |
 }
 
 export function applicationIconKey(source: ApplicationIconSource): string {
+  if (source.localIcon) return JSON.stringify(source.localIcon);
   return websiteIconOrigin(source) ?? source.manifest?.id ?? `${source.icon?.hash ?? ''}:${source.icon?.mime ?? ''}`;
 }
 
 /** Signed sites use declared artwork or one conventional file, without reading page metadata. */
 export function loadApplicationIcon(source: ApplicationIconSource): Promise<string | undefined> {
+  if (source.localIcon) {
+    const icon = source.localIcon;
+    return cachedIcon(JSON.stringify(icon), async signal => {
+      const { loadLocalFile } = await import('./local-applications');
+      const bytes = await loadLocalFile(icon.account, icon.appId, icon.version, icon.hash, signal, MAX_ICON_BYTES);
+      const mime = resourceMime(bytes);
+      return /^image\//.test(mime) ? `data:${mime};base64,${base64.encode(bytes)}` : undefined;
+    });
+  }
   const origin = websiteIconOrigin(source);
   if (origin) return loadWebsiteIcon(origin);
   if (!source.files || !source.manifest) return loadIcon(source);

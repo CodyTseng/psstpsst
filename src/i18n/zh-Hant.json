@@ -1274,7 +1274,15 @@
     "browser_protected_media": "播放受保護的媒體",
     "signing_auth_remember": "記住所有中繼的決定",
     "signing_auth_scope": "所有中繼",
-    "signing_scope_key": "權限範圍"
+    "signing_scope_key": "權限範圍",
+    "capability_ui": "應用介面元件",
+    "capability_dev": "安裝和替換本機應用",
+    "local_install_notice": "此應用想要安裝一個本機應用，並授予下列存取權限。",
+    "local_replace_notice": "此應用想要替換一個本機應用，並重新載入其已開啟的視窗。",
+    "local_unsigned_notice": "此本機應用沒有經過驗證的發佈者。簽名和付款需要另行批准。",
+    "local_other_installer_notice": "此應用由其他來源安裝。替換後的程式碼將能存取此應用已儲存的資料。",
+    "local_uninstall": "解除安裝本機應用",
+    "local_uninstall_notice": "移除此本機應用及其資料和權限？"
   },
   "comments": {
     "title": "評價",

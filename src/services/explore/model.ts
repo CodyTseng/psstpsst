@@ -8,11 +8,12 @@ import { normalizeRelayUrls } from '@/lib/nostr/relay-url';
 import { publicUrl, appShareAddress, parseManifest, type NappletRelease } from '@/services/napplet/protocol';
 export type ExploreKind = 'napplet' | 'napp' | 'nsite' | 'website';
 export const FAVORITES_PAGE_SIZE = 50;
-export function needsFavoriteMetadata(entry: Pick<ExploreEntry, 'kind' | 'manifest'>) { return entry.kind !== 'website' && !entry.manifest; }
+export function needsFavoriteMetadata(entry: Pick<ExploreEntry, 'kind' | 'manifest' | 'local'>) { return entry.kind !== 'website' && !entry.local && !entry.manifest; }
 
 type ApplicationAddressEntry = Pick<ExploreEntry, 'kind' | 'address' | 'manifest' | 'eventRelays'>;
 
 export function applicationCopyAddress(entry: ApplicationAddressEntry): string {
+  if (entry.address.startsWith('local~')) return entry.address;
   if (entry.kind === 'website') return entry.address;
   const reference = parseNostrEventReference(entry.address);
   const event = entry.manifest;
@@ -32,7 +33,7 @@ export function applicationShareLink(entry: ApplicationAddressEntry): string {
   const address = applicationCopyAddress(entry);
   return entry.kind === 'website' ? address : `nostr:${address}`;
 }
-export const SUPPORTED_NAPP_DOMAINS = ['identity','network','storage','theme','link','relay','outbox','common','config','inc'];
+export const SUPPORTED_NAPP_DOMAINS = ['identity','network','storage','theme','link','relay','outbox','common','config','inc','ui','dev'];
 
 export function applicationSigningSource(app: Pick<ExploreEntry, 'kind' | 'address' | 'key'>): string {
   return app.kind === 'website' ? new URL(app.address).origin : normalizeSigningSource(app.key);
@@ -43,6 +44,8 @@ export type SiteFile = {
   mime: string;
 };
 export type ExploreEntry = {
+  local?: { version: string; installer: string; actions: string[] };
+  localIcon?: { account: string; appId: string; version: string; hash: string };
   key: string;
   address: string;
   title: string;
@@ -62,25 +65,26 @@ export type ExploreEntry = {
   desktopPosition: number | null;
   lastUsedAt: number | null;
 };
-export type ApplicationInfo = Pick<ExploreEntry, 'title' | 'description' | 'servers' | 'icon' | 'required' | 'files' | 'manifest'> & {
+export type ApplicationInfo = Pick<ExploreEntry, 'title' | 'description' | 'servers' | 'icon' | 'required' | 'files' | 'manifest' | 'localIcon'> & {
+  local?: boolean;
   publisher?: string;
   origin?: string;
   kind?: ExploreKind;
 };
-export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon' | 'files' | 'manifest'> & { publisher?: string; key?: string; description?: string };
+export type ApplicationListEntry = Pick<ExploreEntry, 'title' | 'kind' | 'servers' | 'icon' | 'files' | 'manifest' | 'localIcon'> & { publisher?: string; key?: string; description?: string };
 export function applicationListEntry(entry: ExploreEntry): ApplicationListEntry {
-  return { key: entry.key, title: entry.title, description: entry.description, kind: entry.kind, servers: entry.servers, icon: entry.icon, files: entry.files, manifest: entry.manifest, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
+  return { key: entry.key, title: entry.title, description: entry.description, kind: entry.kind, servers: entry.servers, icon: entry.icon, localIcon: entry.localIcon, files: entry.files, manifest: entry.manifest, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
 }
 export function applicationRequirements(kind: ExploreKind, declared: readonly string[]): string[] {
   return [...new Set([...(kind === 'napp' ? ['network'] : []), ...declared])];
 }
 export function applicationPresentation(entry: ExploreEntry | NappletRelease): ApplicationInfo {
-  return { title:entry.title,description:entry.description,kind:'kind' in entry?entry.kind:'napplet',required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
+  return { localIcon: 'localIcon' in entry ? entry.localIcon : undefined, local: 'local' in entry && !!entry.local, title:entry.title,description:entry.description,kind:'kind' in entry?entry.kind:'napplet',required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
     files:'files' in entry?entry.files:undefined,manifest:'event' in entry?entry.event:entry.manifest,
     publisher:'event' in entry?entry.event.pubkey:entry.manifest?.pubkey,
     origin:'kind' in entry&&entry.kind==='website'?new URL(entry.address).origin:undefined };
 }
-export type GridApp = Pick<ExploreEntry, 'key' | 'title' | 'servers' | 'icon' | 'desktopPosition' | 'lastUsedAt' | 'files' | 'manifest'>;
+export type GridApp = Pick<ExploreEntry, 'key' | 'title' | 'servers' | 'icon' | 'desktopPosition' | 'lastUsedAt' | 'files' | 'manifest' | 'local' | 'localIcon'>;
 export function websiteAddress(value: string): string {
   const url = new URL(value.includes('://') ? value : `https://${value}`);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !url.hostname || value.length > 8192)
@@ -174,6 +178,11 @@ export function mergeApplicationEntries(previous: ExploreEntry[], incoming: Expl
     if (!updated) { changed = true; continue; }
     const same = entry === updated || entry.manifest?.id === updated.manifest?.id && entry.title === updated.title && entry.kind === updated.kind &&
       entry.description === updated.description && entry.icon?.hash === updated.icon?.hash && entry.icon?.mime === updated.icon?.mime &&
+      entry.local?.version === updated.local?.version && entry.local?.installer === updated.local?.installer &&
+      (entry.local?.actions === updated.local?.actions || (entry.local?.actions.length ?? 0) === (updated.local?.actions.length ?? 0) &&
+        (entry.local?.actions ?? []).every((action, index) => action === updated.local?.actions[index])) &&
+      entry.localIcon?.account === updated.localIcon?.account && entry.localIcon?.appId === updated.localIcon?.appId &&
+      entry.localIcon?.version === updated.localIcon?.version && entry.localIcon?.hash === updated.localIcon?.hash &&
       (entry.required === updated.required || (entry.required?.length ?? 0) === (updated.required?.length ?? 0) &&
         (entry.required ?? []).every((value, index) => value === updated.required?.[index])) &&
       (entry.files === updated.files || (entry.files?.length ?? 0) === (updated.files?.length ?? 0) &&

@@ -1279,7 +1279,15 @@
     "browser_protected_media": "Reprodução de conteúdos protegidos",
     "signing_auth_remember": "Lembrar para todos os relays",
     "signing_auth_scope": "Todos os relays",
-    "signing_scope_key": "Âmbito da permissão"
+    "signing_scope_key": "Âmbito da permissão",
+    "capability_ui": "Application interface components",
+    "capability_dev": "Install and replace local apps",
+    "local_install_notice": "This application wants to install a local app with the access listed below.",
+    "local_replace_notice": "This application wants to replace a local app and reload its open windows.",
+    "local_unsigned_notice": "This is a local app without a verified publisher. Signing and payments require separate approval.",
+    "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
+    "local_uninstall": "Uninstall local app",
+    "local_uninstall_notice": "Remove this local app, its data and permissions?"
   },
   "comments": {
     "title": "Avaliações",

@@ -25,6 +25,7 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
   private var touchActive = false
   private var touchCancelled = false
   private var page: JSONObject? = null
+  @Volatile private var pageFiles: Pair<String, Map<String, JSONObject>> = "" to emptyMap()
   private var pageValue = ""
   private var pageOrigin = ""
   private var documentNavigating = true
@@ -158,16 +159,14 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         page?.let { config ->
           if (config.has("url")) return null
-          if (origin(request.url.toString()) == pageOrigin) {
-            val files=config.optJSONArray("files") ?: JSONArray()
+          val bundle = pageFiles
+          if (origin(request.url.toString()) == bundle.first) {
             val path=request.url.path ?: "/"
-            for(i in 0 until files.length()) {
-              val file=files.getJSONObject(i)
-              if(file.getString("path") == path || file.getString("path") == "${path}index.html" && path.endsWith("/")) {
+            val file = bundle.second[path] ?: if (path.endsWith("/")) bundle.second["${path}index.html"] else null
+            if (file != null) {
                 val bytes=android.util.Base64.decode(file.getString("body"),android.util.Base64.DEFAULT)
                 val network=if(config.optBoolean("network")) "https: http: wss: ws:" else ""
                 return WebResourceResponse(file.getString("mime"),"UTF-8",200,"OK",mapOf("Content-Security-Policy" to "default-src 'self' data: blob: $network; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: $network; style-src 'self' 'unsafe-inline' $network; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'"),java.io.ByteArrayInputStream(bytes))
-              }
             }
             return WebResourceResponse("text/plain","UTF-8",404,"Not Found",emptyMap(),java.io.ByteArrayInputStream(byteArrayOf()))
           }
@@ -203,6 +202,13 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
     WebViewCompat.setProfile(web,"explore-$profileHash")
     val hash=java.security.MessageDigest.getInstance("SHA-256").digest(config.getString("sourceId").toByteArray()).joinToString("") { "%02x".format(it) }
     pageOrigin="https://$hash.explore.psstpsst.invalid"
+    val files = config.optJSONArray("files") ?: JSONArray()
+    pageFiles = pageOrigin to buildMap {
+      for (i in 0 until files.length()) {
+        val file = files.getJSONObject(i)
+        put(file.getString("path"), file)
+      }
+    }
     settings.domStorageEnabled=true
     WebViewCompat.removeWebMessageListener(web,"__nappletHost")
     WebViewCompat.addWebMessageListener(web,"__nappletHost",setOf("*")) { _, message, source, main, _ ->
@@ -214,6 +220,7 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
     startScript=WebViewCompat.addDocumentStartJavaScript(web,config.getString("script"),setOf("*"))
     loadUrl(if(config.has("url")) config.getString("url") else "$pageOrigin/index.html")
   }
+  fun usesStorageId(value: String): Boolean = page?.let { it.optString("storageId", it.optString("sourceId")) == value } ?: false
   fun loadDocument(value: String) {
     if (value.isEmpty() || value == html || page != null) return
     html = value

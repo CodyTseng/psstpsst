@@ -11,12 +11,13 @@ import { SIGNING_PERIODS } from '@/services/signing/model';
 import { signingRevision, subscribeSigning } from '@/services/signing/changes';
 import { queueAuthorization } from '@/services/signing/authorization-queue';
 import type { BrowserRequest } from '@/platform/ports/explore';
+import { assertCurrentSigningSource } from '@/services/signing/repository';
 
 export class BrowserActions {
   private device: NappDevice;
   private tickets = new Map<string, number>();
   private permissions = new Map<string, number>();
-  constructor(private options: { application: ApplicationInfo; account: string; sourceId: string; signal: AbortSignal;
+  constructor(private options: { application: ApplicationInfo; account: string; sourceId: string; signal: AbortSignal; localVersion?: string;
     confirm(prompt: RuntimePrompt, signal: AbortSignal): Promise<string | false>; open(url: string): Promise<void>; permissionsChanged?(): void }) {
     this.device = new NappDevice(options.application, options.account, options.signal, options.confirm);
     const detach = subscribeSigning(this.scope, change => {
@@ -25,7 +26,8 @@ export class BrowserActions {
     });
     options.signal.addEventListener('abort', detach, { once: true });
   }
-  private get scope() { return { accountPubkey: this.options.account, sourceId: this.options.sourceId }; }
+  private get scope() { return { accountPubkey: this.options.account, sourceId: this.options.sourceId,
+    ...(this.options.localVersion !== undefined ? { localVersion: this.options.localVersion } : {}) }; }
   private check() { assertNotAborted(this.options.signal); }
   async approve(request: Omit<BrowserRequest, 'id'>): Promise<boolean> {
     return (await this.authorize(request)).allowed;
@@ -35,6 +37,7 @@ export class BrowserActions {
     return queueAuthorization(this.scope, [this.options.signal], () => this.authorizeCurrent(frozen));
   }
   private async authorizeCurrent(request: Omit<BrowserRequest, 'id'>): Promise<{ allowed: boolean; expiresAt?: number | null }> {
+    if (this.options.localVersion !== undefined) await assertCurrentSigningSource(this.scope);
     this.check();
     if (request.url !== undefined && (typeof request.url !== 'string' || request.url.length > 8192) ||
       request.filename !== undefined && (typeof request.filename !== 'string' || request.filename.length > 256) ||

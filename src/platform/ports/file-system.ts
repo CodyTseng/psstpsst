@@ -136,7 +136,7 @@ export interface FileSystemPort {
    * Copy a file. Without `overwrite`, an existing destination is an error.
    */
   copy(fromUri: string, toUri: string, options?: { overwrite?: boolean }): Promise<void>;
-  /** Move/rename a file. */
+  /** Move/rename a file or directory (including its contents) to the destination path. */
   move(fromUri: string, toUri: string): Promise<void>;
   /**
    * Delete a file, or a directory with everything inside it. Without

@@ -158,6 +158,14 @@ export const applicationTasks = {
             return apps;
           },
           launch: app => launch(app),
+          installed: app => {
+            void visit(account, app).then(() => this.open(app, account)).catch(() => {});
+          },
+          replaced: app => {
+            if (!isCurrent()) return;
+            if (app) void this.restart(id, app).catch(() => {});
+            else void this.close(id).catch(() => {});
+          },
           navigated: address => { if (isCurrent()) patch(id, { entry: { ...entry, key: address, address, title: new URL(address).host } }); },
         });
         session.runtime = runtime;

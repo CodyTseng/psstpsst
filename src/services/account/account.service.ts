@@ -216,6 +216,8 @@ export async function removeAccount(pubkey: string): Promise<void> {
   await deleteAccountAttachments(pubkey);
   await deleteAccountNearbyFileData(pubkey);
   await deleteAllAccountArchives(pubkey);
+  const { removeAccountLocalApplications } = await import('../explore/local-applications');
+  await removeAccountLocalApplications(pubkey);
   await deleteAccountData(pubkey);
   clearSyncCursorCache(pubkey);
   await db.delete(accounts).where(eq(accounts.pubkey, pubkey));

@@ -1,7 +1,38 @@
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { decode, naddrEncode, neventEncode } from 'nostr-tools/nip19';
 import { applicationCopyAddress, applicationShareLink, mergeApplicationEntries, websiteEntry, parseSite, sitePath, websiteAddress, signedAddress, withVisit } from '../model';
+import type { ExploreEntry } from '../model';
+import { updateApplicationMetadata } from '../application-event';
 const key = generateSecretKey();
+const localReference = (): ExploreEntry => ({ ...websiteEntry('https://local.invalid/'), key: 'local~hello', address: 'local~hello', kind: 'napp',
+  local: { version: 'v1', installer: 'builder', actions: ['profile'] },
+  localIcon: { account: 'account', appId: 'local~hello', version: 'v1', hash: 'icon' } });
+
+it('retains lightweight local references when equivalent metadata is reconstructed', () => {
+  const entry = localReference(), previous = [entry];
+  const copy = { ...entry, local: { ...entry.local!, actions: [...entry.local!.actions] }, localIcon: { ...entry.localIcon! } };
+  expect(mergeApplicationEntries(previous, [copy])).toBe(previous);
+});
+
+it.each(['version', 'installer', 'actions'] as const)('refreshes local %s without requiring file maps or display changes', field => {
+  const entry = localReference(), previous = [entry];
+  const updated = { ...entry, local: { ...entry.local!, [field]: field === 'actions' ? ['view'] : 'changed' } };
+  expect(entry.files).toBeUndefined();
+  expect(mergeApplicationEntries(previous, [updated])[0]).toBe(updated);
+  expect(updateApplicationMetadata(previous, updated)[0].local).toBe(updated.local);
+});
+
+it.each(['account', 'appId', 'version', 'hash'] as const)('refreshes a local icon when its %s changes', field => {
+  const entry = localReference(), previous = [entry];
+  const updated = { ...entry, localIcon: { ...entry.localIcon!, [field]: 'changed' } };
+  expect(mergeApplicationEntries(previous, [updated])[0]).toBe(updated);
+  expect(updateApplicationMetadata(previous, updated)[0].localIcon).toBe(updated.localIcon);
+});
+
+it('drops removed local metadata and icon descriptors', () => {
+  const entry = localReference(), updated = { ...entry, local: undefined, localIcon: undefined };
+  expect(mergeApplicationEntries([entry], [updated])[0]).toBe(updated);
+});
 const manifest = (kind = 35130, extra: string[][] = []) => finalizeEvent({ kind, created_at: 1, content: 'A site', tags: [['d', 'demo'], ['path', '/index.html', 'a'.repeat(64)], ['path', '/app.js', 'b'.repeat(64)], ['server', 'https://media.example/'], ...extra] }, key);
 
 it.each([15128, 15129, 35128, 35129, 35130])('shares replaceable kind %s by coordinate while retaining relay hints', kind => {

@@ -49,6 +49,7 @@ export type RuntimePrompt = {
   upload?: { filename: string; mimeType: string; size: number; sha256: string; servers: string[] };
   crypto?: { operation: 'encrypt' | 'decrypt'; algorithm: 'nip04' | 'nip44' };
   device?: { operation: 'save-file' | 'copy-text' };
+  installation?: { target: ApplicationInfo; id: string; replacing: boolean; otherInstaller: boolean };
   browser?: { action: 'window' | 'external' | 'permission' | 'download'; resources?: string[]; url?: string; filename?: string };
   capabilities?: { required: string[]; optional: string[]; requested?: string };
   wallet?: WalletApprovalRequest;

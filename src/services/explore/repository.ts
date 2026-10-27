@@ -1,21 +1,25 @@
 import { and, asc, desc, eq, gt, inArray, lt, notInArray, or, sql } from 'drizzle-orm';
 import { db, type Database } from '@/db/client';
-import { exploreEntries as entries, exploreHistory as history } from '@/db/schema';
+import { exploreEntries as entries, exploreHistory as history, localApplications } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { markPrivateListDirty, readPrivateListState } from '@/services/relay/private-list-sync.service';
 import { notifyExploreVisit } from './visits';
 import { favoriteReference, parseFavoriteReference, KIND_APP_FAVORITES, FAVORITES_D } from './favorites-protocol';
-import { knownFavoriteSnapshot, readFavoriteSnapshot, readLocalFavoriteSnapshot } from './favorites-snapshot';
+import { knownFavoriteSnapshot, readLocalFavoriteSnapshot } from './favorites-snapshot';
 import { queueFavoritesPublication } from './favorites';
 import { cacheApplicationEvent, parseApplicationEvent, readApplicationCache, withApplicationMetadata } from './application-cache';
 import { FAVORITES_PAGE_SIZE, websiteEntry, type ExploreEntry } from './model';
 import { parseApplicationEvents } from './application-event';
 import { broadcastFavoriteChange } from './favorites-events';
 import { createPerfSpan, profileAsync } from '@/lib/perf/profiler';
+import { readLocalApplications } from './local-applications';
 
 /** The encrypted list owns references and order; application metadata is read separately. */
 export async function readFavoriteReferences(account: string): Promise<ExploreEntry[]> {
-  return (await readLocalFavoriteSnapshot(account)).map(({ entry }, index) => ({ ...entry, desktopPosition: index }));
+  const result = (await readLocalFavoriteSnapshot(account)).map(({ entry }) => entry);
+  const locals = (await readLocalApplications(account, undefined, true, true)).sort((a, b) => a.desktopPosition! - b.desktopPosition! || a.key.localeCompare(b.key));
+  for (const local of locals) result.splice(Math.min(local.desktopPosition!, result.length), 0, local);
+  return result.map((entry, index) => ({ ...entry, desktopPosition: index }));
 }
 
 /** Read one requested metadata page without membership, history, writes or networking. */
@@ -26,6 +30,7 @@ export async function readFavoriteMetadata(account: string, page: ExploreEntry[]
     readApplicationCache(page),
     db.select().from(entries).where(and(eq(entries.accountPubkey, account), inArray(entries.sourceId, page.map(entry => entry.key)))),
   ]);
+  for (const local of await readLocalApplications(account, page.filter(app => app.key.startsWith('local~')).map(app => app.key), false, true)) cached.set(local.key, local);
   const local = new Map(rows.map(row => [row.sourceId, row]));
   const legacy = rows.flatMap(row => {
     try { return row.manifest ? [JSON.parse(row.manifest)] : []; } catch { return []; }
@@ -66,12 +71,15 @@ export async function readHistoryPage(account: string, cursor?: HistoryCursor): 
       and(eq(history.lastUsedAt, cursor.lastUsedAt), gt(history.sourceId, cursor.key))) : undefined))
     .orderBy(desc(history.lastUsedAt), asc(history.sourceId)).limit(FAVORITES_PAGE_SIZE + 1);
   const page = rows.slice(0, FAVORITES_PAGE_SIZE);
-  const candidates = page.map(({ entry, lastUsedAt }) => {
-    const reference = entry.kind === 'website' ? websiteEntry(entry.address)
-      : parseFavoriteReference(favoriteReference({ address: entry.address, kind: entry.kind as ExploreEntry['kind'] })).entry;
+  const locals = new Map((await readLocalApplications(account, page.map(item => item.entry.sourceId).filter(key => key.startsWith('local~')), false, true)).map(app => [app.key, app]));
+  const candidates = page.flatMap(({ entry, lastUsedAt }) => {
+    const local = locals.get(entry.sourceId);
+    if (entry.sourceId.startsWith('local~') && !local) return [];
+    const reference = local ?? (entry.kind === 'website' ? websiteEntry(entry.address)
+      : parseFavoriteReference(favoriteReference({ address: entry.address, kind: entry.kind as ExploreEntry['kind'] })).entry);
     let servers: string[] = reference.servers;
     try { if (!servers.length) servers = JSON.parse(entry.servers); } catch { /* Keep the saved reference usable. */ }
-    return { ...reference, title: entry.title, servers, lastUsedAt, desktopPosition: null };
+    return [{ ...reference, title: local?.title || entry.title, servers, lastUsedAt, desktopPosition: null }];
   });
   const cached = await readApplicationCache(candidates);
   const legacy = page.flatMap(({ entry }) => {
@@ -86,11 +94,12 @@ export async function readHistoryPage(account: string, cursor?: HistoryCursor): 
 /** Membership/order comes from the encrypted favorite event, never a second relation table. */
 export async function readEntries(account: string, sourceId?: string): Promise<ExploreEntry[]> {
   const [favorites, rows] = await Promise.all([
-    readFavoriteSnapshot(account),
+    readFavoriteReferences(account).then(apps => apps.map(entry => ({ entry }))),
     db.select({ entry: entries, lastUsed: history.lastUsedAt }).from(entries)
       .leftJoin(history, and(eq(history.accountPubkey, entries.accountPubkey), eq(history.sourceId, entries.sourceId)))
       .where(and(eq(entries.accountPubkey, account), sourceId ? eq(entries.sourceId, sourceId) : undefined)).limit(sourceId ? 1 : 1024),
   ]);
+  const locals = new Map((await readLocalApplications(account, sourceId ? [sourceId] : undefined, false, true)).map(app => [app.key, app]));
   const positions = new Map(favorites.map((favorite, index) => [favorite.entry.key, index]));
   const candidates = new Map(favorites.filter(item => !sourceId || item.entry.key === sourceId).map(item => [item.entry.key, item.entry]));
   const recency = new Map<string, number | null>();
@@ -98,7 +107,8 @@ export async function readEntries(account: string, sourceId?: string): Promise<E
     recency.set(entry.sourceId, lastUsed);
     try {
       let app = candidates.get(entry.sourceId);
-      if (entry.manifest) {
+      if (locals.has(entry.sourceId)) app = locals.get(entry.sourceId);
+      else if (entry.manifest) {
         app = parseApplicationEvent(JSON.parse(entry.manifest));
         if (app.key !== entry.sourceId) continue;
         // One-time promotion of legacy account-local manifests into the shared cache.
@@ -110,6 +120,9 @@ export async function readEntries(account: string, sourceId?: string): Promise<E
       if (entry.servers && !app.servers.length) app = { ...app, servers: JSON.parse(entry.servers) };
       candidates.set(app.key, app);
     } catch { /* Corrupt legacy metadata does not discard a saved reference. */ }
+  }
+  for (const local of locals.values()) if (local.desktopPosition !== null) {
+    candidates.set(local.key, local);
   }
   const cached = await readApplicationCache([...candidates.values()]);
   return [...candidates.values()].map(app => ({ ...withApplicationMetadata(app, cached.get(app.key) ?? app),
@@ -125,6 +138,7 @@ async function storeEntry(tx: Database, account: string, app: ExploreEntry) {
 async function pruneEntries(tx: Database, account: string, favoriteKeys: string[]) {
   await tx.delete(entries).where(and(eq(entries.accountPubkey, account),
     notInArray(entries.sourceId, tx.select({ id: history.sourceId }).from(history).where(eq(history.accountPubkey, account))),
+    notInArray(entries.sourceId, tx.select({ id: localApplications.appId }).from(localApplications).where(eq(localApplications.accountPubkey, account))),
     favoriteKeys.length ? notInArray(entries.sourceId, favoriteKeys) : undefined));
 }
 
@@ -152,20 +166,27 @@ export async function reorder(account: string, keys: string[], app?: ExploreEntr
   const state = await readPrivateListState(account, FAVORITES_D, db, KIND_APP_FAVORITES);
   const current = knownFavoriteSnapshot(state);
   const references = new Map(current.map(item => [item.entry.key, item.tag]));
-  if (app && !references.has(app.key)) references.set(app.key, favoriteReference(app));
-  const tags = keys.map(key => { const reference = references.get(key); if (!reference) throw new Error('invalid-favorite'); return reference; });
-  if (JSON.stringify(tags) === JSON.stringify(current.map(item => item.tag))) return;
+  const locals = await readLocalApplications(account, undefined, false, true);
+  const localKeys = new Set(locals.map(app => app.key));
+  if (app && !app.local && !references.has(app.key)) references.set(app.key, favoriteReference(app));
+  const tags = keys.filter(key => !localKeys.has(key)).map(key => { const reference = references.get(key); if (!reference) throw new Error('invalid-favorite'); return reference; });
+  const signedChanged = JSON.stringify(tags) !== JSON.stringify(current.map(item => item.tag));
   await db.transaction(async tx => {
     if (!await canReceiveForAccount(account, tx)) throw new Error('account-unavailable');
     const latest = await readPrivateListState(account, FAVORITES_D, tx, KIND_APP_FAVORITES);
     if ((latest?.revision ?? 0) !== (state?.revision ?? 0) || latest?.eventId !== state?.eventId) throw new Error('favorites-changed');
-    await markPrivateListDirty(account, FAVORITES_D, tx, KIND_APP_FAVORITES, tags);
+    if (signedChanged) await markPrivateListDirty(account, FAVORITES_D, tx, KIND_APP_FAVORITES, tags);
+    for (const local of locals) {
+      const index = keys.indexOf(local.key), position = index < 0 ? null : index;
+      if (local.desktopPosition !== position) await tx.update(localApplications).set({ desktopPosition: position })
+        .where(and(eq(localApplications.accountPubkey, account), eq(localApplications.appId, local.key)));
+    }
     if (app && keys.includes(app.key)) await storeEntry(tx, account, app);
     await pruneEntries(tx, account, keys);
   });
   if (app) void cacheApplicationEvent(app, { retain: true }).catch(() => {});
   broadcastFavoriteChange(account);
-  queueFavoritesPublication(account);
+  if (signedChanged) queueFavoritesPublication(account);
 }
 
 export { queueFavoritesPublication } from './favorites';

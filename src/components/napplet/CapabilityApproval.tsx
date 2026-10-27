@@ -35,7 +35,16 @@ export function CapabilityApproval({ prompt, hideActions = false }: { prompt: Qu
   const browser = prompt.browser;
   const required = prompt.capabilities?.required ?? prompt.application?.required ?? prompt.app?.required ?? [];
   return <View style={{ gap: spacing.lg }}>
-    {browser ? <AppCard variant="muted" style={{ gap: spacing.md }}>
+    {prompt.installation ? <>
+      <AppText>{t(prompt.installation.replacing ? 'napplets.local_replace_notice' : 'napplets.local_install_notice')}</AppText>
+      <AppCard variant="muted" style={{ gap: spacing.md }}>
+        <AppText variant="subtitle">{prompt.installation.target.title}</AppText>
+        <AppText variant="code">{prompt.installation.id}</AppText>
+        <AppText variant="caption" tone="muted">{t('napplets.local_unsigned_notice')}</AppText>
+        {prompt.installation.otherInstaller ? <AppText tone="danger">{t('napplets.local_other_installer_notice')}</AppText> : null}
+      </AppCard>
+      <NappletRequiredAccess release={{ required: prompt.installation.target.required }} />
+    </> : browser ? <AppCard variant="muted" style={{ gap: spacing.md }}>
       {browser.action === 'permission' ? <>
         {browser.resources?.length ? [...new Set(browser.resources)].map(resource =>
           <AppText key={resource} variant="body">{browserPermissionLabel(resource, t)}</AppText>)

@@ -224,7 +224,7 @@ export function registerNappletHandlers(
   });
   handle(IPC.exploreOpen, async (owner: BrowserWindow, page: ExplorePage) => {
     if (!page || typeof page.sourceId !== 'string' || typeof page.script !== 'string' || page.script.length > 32000 ||
-      (page.files && (page.files.length > 512 || JSON.stringify(page.files).length > 48 * 1024 * 1024))) throw new Error('invalid-page');
+      (page.files && (page.files.length > 5000 || JSON.stringify(page.files).length > 48 * 1024 * 1024))) throw new Error('invalid-page');
     if (page.bootstrap && (JSON.stringify(page.bootstrap).length > 8192 || typeof page.bootstrap.napp !== 'boolean' ||
       typeof page.bootstrap.instance !== 'string' || page.bootstrap.instance.length > 128 ||
       !Array.isArray(page.bootstrap.domains) || page.bootstrap.domains.length > 32 || page.bootstrap.domains.some(domain => typeof domain !== 'string' || domain.length > 64) ||

@@ -14,17 +14,19 @@ import { tryOpenApplicationWindow } from '../windows';
 import { platform } from '@/platform';
 import { refreshApplicationMetadata } from '../application-metadata';
 import { notifyApplicationChange } from '../application-changes';
+import { removeLocalApplication } from '../local-applications';
 let mockDatabaseListener: (event: { tableName?: string; external?: boolean }) => void;
 jest.mock('../application-metadata', () => ({ refreshApplicationMetadata: jest.fn(async () => {}), subscribeApplicationMetadata: jest.requireActual('../application-changes').subscribeApplicationChanges }));
 jest.mock('@/services/relay/replaceable-events.service', () => ({ invalidateReplaceableEvents: jest.fn() }));
 jest.mock('../browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(async () => {}) }));
+jest.mock('../local-applications', () => ({ removeLocalApplication: jest.fn(async () => {}) }));
 jest.mock('@/platform',()=>({platform:{database:{addChangeListener:jest.fn(listener=>{mockDatabaseListener=listener;return jest.fn();})},urlOpener:{openExternalUrl:jest.fn()},napplet:{tasks:{open:jest.fn(async()=>{}),focus:jest.fn(async()=>{}),close:jest.fn(async()=>{}),onClosed:jest.fn()}}}}));
 jest.mock('@/services/account/account-receive-guard',()=>({canReceiveForAccount:jest.fn(async()=>true)}));
 jest.mock('@/services/napplet/artifacts',()=>({loadArtifact:jest.fn()}));
 jest.mock('@/services/napplet/runtime',()=>({NappletRuntime:jest.fn()}));
 jest.mock('@/services/napplet/service',()=>({nappletStore:{getState:()=>({accountPubkey:'account'})},nappletService:{activate:jest.fn(async()=>{}),activateAccount:jest.fn(async()=>{}),install:jest.fn(async()=>{}),stop:jest.fn(),requestApproval:jest.fn(async()=> 'allow'),currentTheme:()=>undefined}}));
 jest.mock('@/services/napplet/network',()=>({NappletNetwork:jest.fn()}));
-jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn()}));
+jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn(),invalidateNappletSource:jest.fn()}));
 jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{})}));
 jest.mock('@/services/napplet/repository',()=>({getData:jest.fn(async()=>null),setData:jest.fn(async()=>{})}));
 jest.mock('../favorite-metadata', () => ({ needsFavoriteMetadata: jest.fn((entry: ExploreEntry) => entry.kind !== 'website' && !entry.manifest), resolveFavoriteMetadata: jest.fn(async (_account: string, entry: ExploreEntry) => entry) }));
@@ -38,6 +40,39 @@ function entry(kind:'website'|'nsite'|'napp'):ExploreEntry {
 }
 beforeEach(async()=>{jest.clearAllMocks();jest.mocked(needsFavoriteMetadata).mockReturnValue(false);jest.mocked(resolveFavoriteMetadata).mockImplementation(async (_account, app) => app);jest.mocked(getData).mockResolvedValue(null);jest.mocked(nappletService.requestApproval).mockResolvedValue('allow');await exploreService.activate('account');});
 afterEach(async()=>{exploreService.deactivate();for(const id of applicationTaskStore.getState().sessions.keys())await applicationTasks.close(id);});
+it.each(['other', 'account'])('does not update a new %s session after an old uninstall completes', async nextAccount => {
+  const app: ExploreEntry = { ...website, key: 'local~hello', address: 'local~hello', kind: 'napp',
+    local: { version: 'a'.repeat(64), installer: website.key, actions: [] } };
+  exploreStore.setState({ entries: [app] });
+  let finish!: () => void, started!: () => void;
+  const removing = new Promise<void>(resolve => { started = resolve; });
+  jest.mocked(removeLocalApplication).mockImplementationOnce(async () => {
+    started(); await new Promise<void>(resolve => { finish = resolve; });
+  });
+  const pending = exploreService.uninstallLocal(app, 'account');
+  await Promise.race([removing, pending]);
+  try {
+    exploreService.deactivate();
+    const independent = { ...app, title: 'Independent installation' };
+    jest.mocked(readFavoriteEntries).mockResolvedValueOnce([independent]);
+    await exploreService.activate(nextAccount);
+    const before = exploreStore.getState();
+    finish(); await pending;
+    expect(removeLocalApplication).toHaveBeenCalledWith('account', app.key);
+    expect(exploreStore.getState()).toBe(before);
+    expect(exploreStore.getState().entries).toEqual([independent]);
+  } finally { finish(); await pending; }
+});
+
+it('removes only the uninstalled entry when its account session remains active', async () => {
+  const app: ExploreEntry = { ...website, key: 'local~hello', address: 'local~hello', kind: 'napp',
+    local: { version: 'a'.repeat(64), installer: website.key, actions: [] } };
+  exploreStore.setState({ entries: [app, website] });
+  await exploreService.uninstallLocal(app, 'account');
+  expect(removeLocalApplication).toHaveBeenCalledWith('account', app.key);
+  expect(exploreStore.getState().entries).toEqual([website]);
+});
+
 it('keeps websites inline by default and opens a task for an explicit window choice', async () => {
   expect(await tryOpenApplicationWindow(website, 'account')).toBe(false);
   expect(platform.napplet.tasks!.open).not.toHaveBeenCalled();
@@ -345,6 +380,51 @@ it('ignores history changes and applies global metadata events without rereading
     expect(readFavoriteReferences).not.toHaveBeenCalled();
     expect(readFavoriteMetadata).not.toHaveBeenCalled();
     expect(readEntries).not.toHaveBeenCalled();
+  } finally { jest.useRealTimers(); }
+});
+
+it.each([{}, { tableName: 'local_applications' }, { external: true, tableName: 'local_applications' }])(
+  'reconciles local replacements and uninstallations after database notification %j', async event => {
+    exploreService.deactivate();
+    jest.useFakeTimers();
+    try {
+      const local: ExploreEntry = { ...website, key: 'local~hello', address: 'local~hello', kind: 'napp', desktopPosition: 0, lastUsedAt: 123,
+        local: { version: 'a'.repeat(64), installer: website.key, actions: [] },
+        localIcon: { account: 'account', appId: 'local~hello', version: 'a'.repeat(64), hash: 'b'.repeat(64) },
+        files: [{ path: '/index.html', hash: 'b'.repeat(64), mime: 'text/html' }] };
+      const other = { ...website, desktopPosition: 1 };
+      jest.mocked(readFavoriteEntries).mockResolvedValueOnce([local, other]);
+      await exploreService.activate('account');
+      await jest.advanceTimersByTimeAsync(0);
+      const unchanged = exploreStore.getState().entries[1];
+      const replacement = { ...local, files: undefined, local: { ...local.local!, version: 'c'.repeat(64) },
+        localIcon: { ...local.localIcon!, version: 'c'.repeat(64) } };
+      jest.mocked(readFavoriteReferences).mockClear();
+      jest.mocked(readFavoriteReferences).mockResolvedValueOnce([replacement, other]);
+      mockDatabaseListener(event); mockDatabaseListener(event); mockDatabaseListener(event);
+      await jest.advanceTimersByTimeAsync(40);
+      expect(readFavoriteReferences).toHaveBeenCalledTimes(1);
+      expect(readFavoriteReferences).toHaveBeenCalledWith('account');
+      expect(exploreStore.getState().entries[0]).toMatchObject({ local: replacement.local, localIcon: replacement.localIcon, lastUsedAt: 123 });
+      expect(exploreStore.getState().entries[0].files).toBeUndefined();
+      expect(exploreStore.getState().entries[1]).toBe(unchanged);
+      jest.mocked(readFavoriteReferences).mockResolvedValueOnce([{ ...other, desktopPosition: 0 }]);
+      mockDatabaseListener(event);
+      await jest.advanceTimersByTimeAsync(40);
+      expect(exploreStore.getState().entries.filter(entry => entry.desktopPosition !== null).map(entry => entry.key)).toEqual([other.key]);
+    } finally { jest.useRealTimers(); }
+  },
+);
+
+it('cancels queued unscoped reconciliation when switching accounts', async () => {
+  jest.useFakeTimers();
+  try {
+    jest.mocked(readFavoriteReferences).mockClear();
+    mockDatabaseListener({});
+    await exploreService.activate('other');
+    await jest.advanceTimersByTimeAsync(100);
+    expect(exploreStore.getState().account).toBe('other');
+    expect(readFavoriteReferences).not.toHaveBeenCalled();
   } finally { jest.useRealTimers(); }
 });
 

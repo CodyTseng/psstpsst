@@ -128,7 +128,29 @@ The standard `navigator.clipboard.writeText` method uses the same host
 transport across Electron, Android and iOS, including ordinary websites and nsites.
 It returns a promise that settles after the native clipboard write, not after enqueueing.
 
-UI-kit injection and private PsstPsst chat access remain outside this bridge.
+Private PsstPsst chat access remains outside this bridge.
+
+## UI kit and local installation
+
+The `ui` and `dev` contracts follow nostrapps commit
+`08a7f6f3335da56d86acc715567812ca11b7c873`.
+Granted `ui` access injects the pinned launcher kit as `napp.ui` before app
+scripts, with its stylesheet before application styles. The full pinned helper
+surface is retained. `fonts()` uses system-font fallbacks without remote loading.
+Author helpers use public-data APIs and existing action authorization.
+
+Granted `dev` access exposes `napp.dev.installLocal(files)` for HTML napps.
+Files accept Blob, ArrayBuffer, typed-array or string data and optional MIME
+types. The result is `{ nappId: "local~<id>" }`, or `null` on cancelled review.
+Every installation/replacement reviews the target's own access; another
+installer's target also receives a saved-data warning. New code does not inherit
+the installer's grants or a replaced app's signer/browser authorizations.
+WASM-only and alternate napplet installation formats fail explicitly.
+
+Local application identities are account-owned and unsigned, independently of
+signed listings. Replacements atomically commit a complete hashed file map and
+invalidate old documents before reload. Installation does not automatically sign
+or publish anything. See [implementation and limits](../implementation/napp-ui-dev.md).
 
 ## Actions
 

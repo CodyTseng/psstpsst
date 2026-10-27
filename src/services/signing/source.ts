@@ -2,6 +2,7 @@ import { decode, naddrEncode, neventEncode } from 'nostr-tools/nip19';
 
 /** Canonical addresses exclude relay hints; website origins come from host-verified page URLs. */
 export function normalizeSigningSource(value: string): string {
+  if (/^local~[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) return value;
   const input = value.replace(/^nostr:/, '');
   if (/^(naddr|nevent)1/i.test(input)) {
     const decoded = decode(input);

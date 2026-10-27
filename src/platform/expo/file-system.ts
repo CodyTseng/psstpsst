@@ -25,13 +25,10 @@ import type {
  * overwrite flag, downloads, and millisecond-precision stat times.
  */
 
-function statSync(uri: string): FileStat {
-  // Probing File first relies on the constructor NOT throwing for directories:
-  // today the native module only validates path type in `validateType()` (with
-  // an upstream TODO to move that into the constructor). If a future
-  // expo-file-system moves it, probe `Directory` first instead.
-  const file = new File(uri);
-  if (file.exists) {
+async function stat(uri: string): Promise<FileStat> {
+  const path = Paths.info(uri);
+  if (path.exists && !path.isDirectory) {
+    const file = new File(uri);
     const info = file.info();
     return {
       exists: true,
@@ -41,14 +38,15 @@ function statSync(uri: string): FileStat {
       modificationTime: info.modificationTime ?? null,
     };
   }
-  const directory = new Directory(uri);
-  if (directory.exists) {
+  if (path.exists && path.isDirectory) {
+    // Directory.info() calculates recursive size synchronously; keep that work off the JS thread.
+    const info = await LegacyFileSystem.getInfoAsync(uri);
     return {
-      exists: true,
-      isDirectory: true,
+      exists: info.exists,
+      isDirectory: info.exists && info.isDirectory,
       size: null,
       creationTime: null,
-      modificationTime: null,
+      modificationTime: info.exists ? info.modificationTime * 1000 : null,
     };
   }
   return {
@@ -109,7 +107,7 @@ export const fileSystemAdapter: FileSystemPort = {
   cacheDirectoryUri: () => Promise.resolve(LegacyFileSystem.cacheDirectory),
   availableDiskSpace: () => Promise.resolve(Paths.availableDiskSpace),
 
-  stat: (uri) => Promise.resolve(statSync(uri)),
+  stat,
 
   makeDirectory: (uri, options) => {
     if (options?.idempotent) {
@@ -176,7 +174,10 @@ export const fileSystemAdapter: FileSystemPort = {
   copy: (fromUri, toUri, options) =>
     new File(fromUri).copy(new File(toUri), { overwrite: options?.overwrite }),
 
-  move: (fromUri, toUri) => new File(fromUri).move(new File(toUri)),
+  move: async (fromUri, toUri) => {
+    if (Paths.info(fromUri).isDirectory) await new Directory(fromUri).move(new Directory(toUri));
+    else await new File(fromUri).move(new File(toUri));
+  },
 
   delete: (uri, options) =>
     LegacyFileSystem.deleteAsync(uri, { idempotent: options?.idempotent }),

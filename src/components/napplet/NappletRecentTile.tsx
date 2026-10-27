@@ -51,7 +51,7 @@ export function NappletRecentTile<T extends GridApp>({ app, width, height, iconS
       accessibilityActions={[
         { name: 'details', label: t('napplets.details') },
         { name: 'permissions', label: t('napplets.permissions_manage') },
-        { name: 'share', label: t('share.title') },
+        ...(!app.local ? [{ name: 'share', label: t('share.title') }] : []),
         ...(app.desktopPosition === null ? [
           { name: 'add', label: t('napplets.add_to_desktop') },
         ] : []),
@@ -61,7 +61,7 @@ export function NappletRecentTile<T extends GridApp>({ app, width, height, iconS
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'details') onDetails(app);
         else if (event.nativeEvent.actionName === 'permissions') onPermissions(app);
-        else if (event.nativeEvent.actionName === 'share') onShare(app);
+        else if (event.nativeEvent.actionName === 'share' && !app.local) onShare(app);
         else if (event.nativeEvent.actionName === 'add' && app.desktopPosition === null) onAdd(app);
         else if (event.nativeEvent.actionName === 'unfavorite') onUnfavorite(app);
         else if (event.nativeEvent.actionName === 'remove') onRemove(app);

@@ -14,3 +14,4 @@ policy, and tests. Interoperable event and wire formats belong in
 - [`relay-message-delivery.md`](./relay-message-delivery.md)
 
 - [Napplet runtime](napplet-runtime.md): account-isolated application hosting, capabilities and lifecycle.
+- [Napp UI and local installation](napp-ui-dev.md): UI-kit compatibility, local app installation, isolation and validation.

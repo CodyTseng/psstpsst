@@ -1274,7 +1274,15 @@
     "browser_protected_media": "播放受保护的媒体",
     "signing_auth_remember": "记住所有中继的决定",
     "signing_auth_scope": "所有中继",
-    "signing_scope_key": "权限范围"
+    "signing_scope_key": "权限范围",
+    "capability_ui": "应用界面组件",
+    "capability_dev": "安装和替换本地应用",
+    "local_install_notice": "此应用想要安装一个本地应用，并授予下列访问权限。",
+    "local_replace_notice": "此应用想要替换一个本地应用，并重新加载其已打开的窗口。",
+    "local_unsigned_notice": "此本地应用没有经过验证的发布者。签名和付款需要另行批准。",
+    "local_other_installer_notice": "此应用由其他来源安装。替换后的代码将能访问此应用已保存的数据。",
+    "local_uninstall": "卸载本地应用",
+    "local_uninstall_notice": "移除此本地应用及其数据和权限？"
   },
   "comments": {
     "title": "评价",

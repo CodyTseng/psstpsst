@@ -16,6 +16,7 @@ notices offline and provides project source links.
 | Solar Icons and its React Native wrapper | [icon attribution](./licenses/third-party/common/solar-icons-attribution.txt), [wrapper MIT license](./licenses/third-party/common/solar-wrapper-MIT.txt) |
 | Noise-C and embedded cryptographic implementations | [original licenses and source notices](./licenses/third-party/common/noise-c.txt) |
 | libsecp256k1 | [original licenses and source notices](./licenses/third-party/common/secp256k1.txt) |
+| Nostrapps embedded napp UI kit (`08a7f6f3335da56d86acc715567812ca11b7c873`) | [Unlicense](./src/lib/napp/vendor/LICENSE), [source provenance](./src/lib/napp/vendor/README.md) |
 | React Native, Hermes, and reviewed mobile native libraries | [native notices](./licenses/third-party/common/mobile-native.txt) |
 | Electron | [MIT license](./licenses/third-party/desktop/electron-MIT.txt) |
 | sharp | [Apache-2.0 license](./licenses/third-party/desktop/sharp-Apache-2.0.txt) |

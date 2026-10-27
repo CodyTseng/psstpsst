@@ -25,6 +25,20 @@ let runtime: ExploreRuntime;
 let confirm: jest.Mock;
 let debugLog: jest.SpyInstance;
 let warningLog: jest.SpyInstance;
+it.each(['website', 'napp'] as const)('rejects a forged installer RPC from a %s without dev access', async kind => {
+  if (kind === 'napp') {
+    await runtime.stop();
+    runtime = new ExploreRuntime('account', { ...entry, kind: 'napp', key: 'naddr-test', files: [], required: ['ui'] },
+      { confirm, close: () => {}, link: () => {} });
+    await runtime.start();
+  }
+  const origin = kind === 'napp' ? 'https://app.explore.psstpsst.invalid' : 'https://site.example';
+  message(origin, 'forged-install', 'dev.installLocal.begin', 'forged');
+  await flush();
+  const response = JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)[1]).reply;
+  expect(response.error).toBe(kind === 'napp' ? 'permission-denied' : 'unsupported-method');
+  expect(confirm).not.toHaveBeenCalled();
+});
 function message(origin: string, document: string, method = 'signEvent', id = '1') {
   receive('container', JSON.stringify({ type: 'explore.navigation', phase: 'commit', origin, document }));
   receive('container', JSON.stringify({ type: 'explore.request', origin, document, raw: JSON.stringify({ id, nonce:'test-document', method, args: method === 'signEvent' ? [{ kind: 1, content: 'hello', tags: [], created_at: 1 }] : [] }) }));

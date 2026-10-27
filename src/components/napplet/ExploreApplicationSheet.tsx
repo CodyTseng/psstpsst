@@ -49,7 +49,8 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
         <ApplicationAccessControls required={entry.required} selected={entry.required}/>
         {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('napplets.settings')}
           onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' })); })}/> : null}
-      </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}/>}
+      </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}
+        onUninstall={entry.local ? async()=>{await exploreService.uninstallLocal(entry,account);close();} : undefined}/>}
       onPublisher={()=>{if(entry.manifest)schedule(()=>openPublisher(entry.manifest!.pubkey));}}/>
     {page === 'about' ? <ApplicationOpenSetting entry={entry} account={account} /> : null}
   </BottomSheet>;

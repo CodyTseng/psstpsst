@@ -198,6 +198,7 @@ class ExpoNappletModule : Module() {
     }
     AsyncFunction("cancelResourceAsync") { id: String -> calls[id]?.let { it.cancelled.set(true); it.call?.cancel() }; Unit }
     AsyncFunction("clearPageDataAsync") { storageId: String ->
+      for (reference in views.values) reference.get()?.let { if (it.usesStorageId(storageId)) it.dispose() }
       if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
         val hash=java.security.MessageDigest.getInstance("SHA-256").digest(storageId.toByteArray()).joinToString("") { "%02x".format(it) }
         androidx.webkit.ProfileStore.getInstance().deleteProfile("explore-$hash")
@@ -223,6 +224,7 @@ class NappletView(context: Context, appContext: AppContext) : ExpoView(context, 
   private val web = NappletWebView(context) { raw -> onMessage(mapOf("message" to raw)) }
   init { addView(web, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
   fun loadPage(value: String) = web.loadPage(value)
+  fun usesStorageId(value: String) = web.usesStorageId(value)
   fun load(value: String) = web.loadDocument(value)
   fun reply(value: String) = web.reply(value)
   fun navigateBack() = web.navigateBack()

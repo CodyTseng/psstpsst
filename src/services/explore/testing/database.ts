@@ -10,7 +10,7 @@ export function applicationTestDatabase(legacy = false) {
   sqlite.exec("PRAGMA foreign_keys=ON; CREATE TABLE accounts(pubkey TEXT PRIMARY KEY); INSERT INTO accounts VALUES ('account'),('other');");
   sqlite.exec(`CREATE TABLE replaceable_events(pubkey TEXT,kind INTEGER,d_tag TEXT,event TEXT,created_at INTEGER,fetched_at INTEGER,
     PRIMARY KEY(pubkey,kind,d_tag)); CREATE TABLE device_preferences(key TEXT PRIMARY KEY,value TEXT);`);
-  for (const migration of ['0029_referenced_events', '0059_napplets', '0056_private-list-sync-state', '0062_explore', '0070_private-favorites', '0071_event-backed-applications', '0072_event-relay-sources']) {
+  for (const migration of ['0029_referenced_events', '0059_napplets', '0060_napplet-desktop', '0061_signing-authorizations', '0056_private-list-sync-state', '0062_explore', '0070_private-favorites', '0071_event-backed-applications', '0072_event-relay-sources', '0076_local-applications']) {
     if (!legacy || !/^007[12]_/.test(migration)) sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/${migration}.sql`, 'utf8'));
   }
   let tail = Promise.resolve();

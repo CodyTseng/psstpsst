@@ -2,6 +2,7 @@ import { decode, naddrEncode, neventEncode } from 'nostr-tools/nip19';
 
 /** Window identity ignores Nostr relay hints and keeps website shortcut URLs distinct. */
 export function applicationSourceId(address: string): string {
+  if (/^local~[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(address)) return address;
   const value = address.replace(/^nostr:/, '');
   if (/^(naddr|nevent)1/i.test(value)) {
     const pointer = decode(value);

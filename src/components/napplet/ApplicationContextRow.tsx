@@ -40,14 +40,14 @@ function ContextRow<T extends MenuApplication>({ app, favorite, testID, onFavori
       accessibilityActions={[
         { name: 'details', label: t('napplets.details') },
         { name: 'permissions', label: t('napplets.permissions_manage') },
-        { name: 'share', label: t('share.title') },
+        ...(!app.local ? [{ name: 'share', label: t('share.title') }] : []),
         { name: 'favorite', label: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop') },
         ...(onRemove ? [{ name: 'remove', label: t('common.remove') }] : []),
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'details') onDetails(app);
         else if (event.nativeEvent.actionName === 'permissions') onPermissions(app);
-        else if (event.nativeEvent.actionName === 'share') onShare(app);
+        else if (event.nativeEvent.actionName === 'share' && !app.local) onShare(app);
         else if (event.nativeEvent.actionName === 'favorite') onFavorite(app);
         else if (event.nativeEvent.actionName === 'remove') onRemove?.(app);
       }} />

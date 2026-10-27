@@ -67,6 +67,12 @@ export async function refreshApplicationMetadata(account: string, entries: Explo
 
 /** Cache hits return immediately; a stale coordinate refreshes without delaying navigation. */
 export async function resolveApplicationMetadata(account: string, entry: ExploreEntry, signal: AbortSignal): Promise<ExploreEntry> {
+  if (entry.key.startsWith('local~')) {
+    const { readLocalApplication } = await import('./local-applications');
+    const local = await readLocalApplication(account, entry.key); assertNotAborted(signal);
+    if (!local) throw new Error('napplets.not_found');
+    return withApplicationMetadata(entry, local);
+  }
   if (entry.kind === 'website') return entry;
   assertNotAborted(signal);
   if (entry.manifest) await cacheApplicationEvent(entry);

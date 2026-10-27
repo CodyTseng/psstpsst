@@ -61,7 +61,7 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
       : <Copy size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> },
     ...(onOpenExternal ? [{ key: 'browser' as const, label: t('napplets.browser_short'), accessibilityLabel: t('napplets.browser_open_default'),
       icon: <Global size={spacing.xl} color={c.text} /> }] : []),
-    { key: 'share', label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> },
+    ...(!entry.local ? [{ key: 'share' as const, label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> }] : []),
     ...(account ? [{ key: 'favorite' as const, label: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'), icon: <Star size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> }] : []),
     { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
     { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },

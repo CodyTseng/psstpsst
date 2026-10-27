@@ -131,6 +131,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     await fixture.migrateApplicationFavorites(globalThis.__signingDatabaseTest);
     sqlite.exec(readFileSync('src/db/migrations/0072_event-relay-sources.sql', 'utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0073_crypto-operation-permissions.sql', 'utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0076_local-applications.sql', 'utf8'));
     sqlite.exec('COMMIT');
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name IN ('explore_shortcuts','legacy_explore_shortcuts')").get().n, 0);
     const explore=fixture.exploreRepository();

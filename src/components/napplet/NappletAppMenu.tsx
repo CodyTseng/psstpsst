@@ -35,7 +35,7 @@ export function NappletAppMenu<T extends GridApp>({ app, anchor, inline, point, 
     onClose={onClose} onPlacementChange={onPlacementChange} items={[
       { key: 'details', title: t('napplets.details'), icon: <Info size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onDetails(app) },
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={c.text} />, onPress: () => onPermissions(app) },
-      { key: 'share', title: t('share.title'), icon: <Share size={size} color={c.text} />, onPress: () => onShare(app) },
+      ...(!app.local ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={c.text} />, onPress: () => onShare(app) }] : []),
       ...(onFavorite ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'), icon: <Star size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onFavorite(app) }] : []),
       ...(onRemove ? [{ key: 'remove', title: t('common.remove'), tone: 'danger' as const, separatorBefore: true,
         icon: <Trash size={size} strokeWidth={iconStrokeWidth.default} color={c.danger} />, onPress: () => onRemove(app) }] : []),

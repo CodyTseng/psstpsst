@@ -48,7 +48,7 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
         }); } },
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={colors.text} />,
         onPress: () => router.push(entry.release ? `/napplet-permissions/${entry.release.event.id}` : `/explore-details?key=${encodeURIComponent(entry.key)}&permissions=1`) },
-      ...(onShare ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={colors.text} />, onPress: onShare }] : []),
+      ...(onShare && !entry.local ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={colors.text} />, onPress: onShare }] : []),
       ...(ready ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'),
         icon: <Star size={size} strokeWidth={iconStrokeWidth.default} color={colors.text} />,
         onPress: () => { void setFavorite(saved ?? entry, !favorite); } }] : []),

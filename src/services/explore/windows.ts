@@ -33,7 +33,12 @@ export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEnt
   const launch: ApplicationWindowLaunch | null | undefined = await platform.napplet.windows?.launch();
   if (!launch || !await canReceiveForAccount(launch.accountPubkey)) throw new Error('account-unavailable');
   let entry: ExploreEntry;
-  if (launch.manifest) entry = [5129, 15129, 35129].includes(launch.manifest.kind) ? fromNapplet(parseManifest(launch.manifest)) : parseSite(launch.manifest);
+  if (launch.address.startsWith('local~')) {
+    const { readLocalApplication } = await import('./local-applications');
+    const local = await readLocalApplication(launch.accountPubkey, launch.address);
+    if (!local) throw new Error('napplets.not_found');
+    entry = local;
+  } else if (launch.manifest) entry = [5129, 15129, 35129].includes(launch.manifest.kind) ? fromNapplet(parseManifest(launch.manifest)) : parseSite(launch.manifest);
   else {
     const address = websiteAddress(launch.address);
     entry = { key: address, address, title: new URL(address).host, kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };

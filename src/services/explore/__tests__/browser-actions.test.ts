@@ -5,6 +5,7 @@ import { invalidateSigning } from '@/services/signing/changes';
 import type { BrowserPermissionRule } from '../browser-permission-store';
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn() }));
+jest.mock('@/services/signing/repository', () => ({ assertCurrentSigningSource: jest.fn(async () => {}) }));
 jest.mock('@/platform', () => ({ platform: {} }));
 
 it('preserves the exact resource names and target in the host approval', async () => {

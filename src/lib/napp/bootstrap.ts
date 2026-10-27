@@ -272,6 +272,35 @@ export function install(options: {
       'loadMediaFollows', 'loadFavoritePodcasts', 'loadAuthoredPodcasts', 'fetchFavoriteRelaysWithSets', 'fetchEmojisWithSets',
       'fetchFavoriteFollowSetsWithSets', 'loadFollowSets', 'loadRelaySets', 'loadEmojiSets'])
       (window as any).napp.utils[method] = (pubkey: string) => call(`utils.${method}`, [pubkey]);
+    if (options.domains.includes('dev')) (window as any).napp.dev = {
+      installLocal: async (files: { path: string; data: Blob | ArrayBuffer | ArrayBufferView | string; type?: string }[]) => {
+        if (!Array.isArray(files) || !files.length || files.length > 5000) throw new Error('invalid-install-files');
+        let total = 0;
+        const parts = files.map(file => {
+          const value = file?.data;
+          const blob = value instanceof Blob ? value : typeof value === 'string' ? new Blob([value])
+            : value instanceof ArrayBuffer ? new Blob([value]) : ArrayBuffer.isView(value)
+              ? new Blob([new Uint8Array(value.buffer, value.byteOffset, value.byteLength) as Uint8Array<ArrayBuffer>]) : undefined;
+          if (!blob || typeof file.path !== 'string') throw new Error('invalid-install-files');
+          total += blob.size;
+          if (total > 32 * 1024 * 1024) throw new Error('installation-too-large');
+          return { path: file.path, blob, type: file.type || blob.type || undefined };
+        });
+        const transfer = await call('dev.installLocal.begin', [parts.map(file => ({ path: file.path, size: file.blob.size, type: file.type }))]);
+        try {
+          for (const [index, file] of parts.entries()) {
+            // Empty files still send one credited chunk so the host can advance its file index.
+            for (let offset = 0; offset < Math.max(1, file.blob.size); offset += transfer.chunkBytes) {
+              const bytes = new Uint8Array(await file.blob.slice(offset, offset + transfer.chunkBytes).arrayBuffer());
+              let binary = '';
+              for (let at = 0; at < bytes.length; at += 8192) binary += String.fromCharCode(...bytes.subarray(at, at + 8192));
+              await call('dev.installLocal.chunk', [transfer.id, index, btoa(binary)]);
+            }
+          }
+          return await call('dev.installLocal.finish', [transfer.id]);
+        } catch (error) { await call('dev.installLocal.cancel', [transfer.id]).catch(() => {}); throw error; }
+      },
+    };
     let ready: Promise<void> | undefined;
     Object.defineProperty((window as any).napp, 'ready', { get() {
       if (!ready) {

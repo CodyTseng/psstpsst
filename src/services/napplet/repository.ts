@@ -2,7 +2,7 @@ import { visit } from '@/services/explore/repository';
 import { fromNapplet } from '@/services/explore/model';
 import { notifyNappletVisit } from './lifecycle';
 import { and, asc, count, desc, eq, isNotNull } from 'drizzle-orm';
-import { db } from '@/db/client';
+import { db, type Database } from '@/db/client';
 import { nappletData, nappletInstallations, nappletUsage } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { parseManifest, type NappletInstallation, type NappletRelease } from './protocol';
@@ -179,10 +179,11 @@ export async function setData(
   bucket: string,
   key: string,
   value: string | null,
+  transaction?: Database,
 ): Promise<void> {
   if (key.length > 256 || (value != null && value.length > 1024 * 1024))
     throw new Error('quota-exceeded');
-  await db.transaction(async (tx) => {
+  const write = async (tx: Database) => {
     if (!(await canReceiveForAccount(scope.accountPubkey, tx)))
       throw new Error('account-unavailable');
     const where = and(scopeWhere(scope, bucket), eq(nappletData.key, key));
@@ -222,5 +223,7 @@ export async function setData(
         ],
         set: { bytes: total, count },
       });
-  });
+  };
+  if (transaction) await write(transaction);
+  else await db.transaction(write);
 }
