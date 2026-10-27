@@ -77,6 +77,7 @@ import { DatePill, DateSeparator } from './message-date-separator';
 import { LoadedMessageWindowCache } from '@/lib/chat/loaded-message-window';
 import { MessageListData, MessageListRowCache, type ListItem } from './message-list-data';
 import { MessageListCell } from './MessageListCell';
+import { MessageScrollControl, type MessageScrollControlHandle } from './MessageScrollControl';
 import { measureMessageScrollOffset } from './message-scroll-layout';
 import { IS_ELECTRON } from '@/lib/platform';
 import { PendingAttachmentBubble } from './PendingAttachmentBubble';
@@ -524,9 +525,7 @@ export function MessageList({
   } | null>(null);
   const flashTickRef = useRef(0);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Show a "scroll to bottom" button once scrolled up far enough.
-  const [showScrollDown, setShowScrollDown] = useState(false);
-  const showScrollDownRef = useRef(false);
+  const scrollControlRef = useRef<MessageScrollControlHandle>(null);
   // Inverted lists open pinned to the bottom on the very first frame, so a
   // normal open needs no cover. The one exception is opening straight into a
   // search jump (`focusMessageId`): the anchored window first lays out at its
@@ -565,15 +564,31 @@ export function MessageList({
   // common at-bottom case).
   const [releasedNewestId, setReleasedNewestId] = useState<string | null>(null);
   // Whether the reader is close enough to the bottom that new messages should
-  // join the visible tail immediately. This matches the scroll-down control's
-  // appearance threshold, so an absent control never flashes in for one arrival.
+  // join the visible tail immediately, independently of scroll direction.
   const nearTailRef = useRef(true);
   // The newest tail message we've already accounted for, so we can tell a real
   // new arrival from an older page being prepended.
   const prevNewestRef = useRef<{ id: string; orderAt: number } | null>(null);
   const pendingTailScrollAfterReleaseRef = useRef<MessageTailScrollMode>(null);
 
+  const updateTailPosition = useCallback((offsetY: number) => {
+    scrollControlRef.current?.updateOffset(offsetY);
+    nearTailRef.current = isNearMessageTail(offsetY);
+    atBottomRef.current = !userScrollInProgressRef.current && offsetY < 24;
+  }, []);
+
+  const updateScrollPosition = useCallback((event: NativeScrollEvent) => {
+    const metrics = scrollMetricsRef.current;
+    const movingOlder = event.contentOffset.y > metrics.offsetY;
+    metrics.offsetY = event.contentOffset.y;
+    metrics.viewportHeight = event.layoutMeasurement.height;
+    metrics.contentHeight = event.contentSize.height;
+    updateTailPosition(metrics.offsetY);
+    return movingOlder;
+  }, [updateTailPosition]);
+
   function handleScrollBeginDrag() {
+    scrollControlRef.current?.beginUserScroll();
     cancelMessagePositioning();
     focusHandledRef.current = activeFocusRequest;
     setReady(true);
@@ -625,13 +640,7 @@ export function MessageList({
       contentSize,
       layoutMeasurement,
     } = event.nativeEvent;
-    nearTailRef.current = isNearMessageTail(contentOffset.y);
-    atBottomRef.current = contentOffset.y < 24;
-    scrollMetricsRef.current = {
-      offsetY: contentOffset.y,
-      viewportHeight: layoutMeasurement.height,
-      contentHeight: contentSize.height,
-    };
+    updateScrollPosition(event.nativeEvent);
     if (atBottomRef.current) clearFloatingActive();
     else scheduleFloatingDateHide();
 
@@ -948,6 +957,7 @@ export function MessageList({
 
     const fromSelf = isMessageFromSelf(newest, selfPubkey, proximity);
     if (fromSelf || nearTailRef.current) {
+      scrollControlRef.current?.suppressForAutoScroll();
       // MVCP preserves the visible row but no longer owns auto-following. Arm an
       // instant correction at the exact tail, or an animated one within the
       // near-tail band, after the released row joins the native list.
@@ -976,8 +986,13 @@ export function MessageList({
     setReleasedNewestId(null); // show the whole fresh tail
     const requestId = navigationSequenceRef.current;
     const toBottom = () => {
-      if (requestId !== navigationSequenceRef.current) return;
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      if (requestId !== navigationSequenceRef.current || !listRef.current) return;
+      listRef.current.scrollToOffset({ offset: 0, animated: false });
+      // A replacement list can already be at zero and emit no scroll event.
+      // Commit its known position instead of retaining the old window's flags.
+      userScrollInProgressRef.current = false;
+      scrollMetricsRef.current.offsetY = 0;
+      updateTailPosition(0);
     };
     const raf = requestAnimationFrame(toBottom);
     const timers = [80, 240].map((ms) => setTimeout(toBottom, ms));
@@ -985,16 +1000,17 @@ export function MessageList({
       cancelAnimationFrame(raf);
       timers.forEach(clearTimeout);
     };
-  }, [cancelMessagePositioning, tailJumpVersion]);
+  }, [cancelMessagePositioning, tailJumpVersion, updateTailPosition]);
 
   // Follow only explicit sends/retries from this mounted page. Watching the
   // pending store itself is incorrect: route params/store subscriptions can
   // populate one frame after mount, making existing items look newly sent and
   // producing a visible entry scroll.
   const previousPendingTailVersionRef = useRef(pendingTailVersion);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pendingTailVersion === previousPendingTailVersionRef.current) return;
     previousPendingTailVersionRef.current = pendingTailVersion;
+    scrollControlRef.current?.suppressForAutoScroll();
     requestAnimationFrame(() =>
       listRef.current?.scrollToOffset({ offset: 0, animated: true }),
     );
@@ -1064,6 +1080,7 @@ export function MessageList({
     listRef,
     mounted: !waitingForFocus,
     windowKey: listWindowKey,
+    onUserInput: () => scrollControlRef.current?.beginUserScroll(),
     onHistoryEdge: () => {
       continuousHistoryPagingRef.current = true;
       requestOlderFromScroll();
@@ -1184,20 +1201,8 @@ export function MessageList({
     (!unreadTargetLoaded || unreadDir === 'above');
   const unreadBelow =
     !anchored && unreadDir === 'below' && firstUnreadId != null;
-  const showFloatingScrollDown =
-    showScrollDown ||
-    stagedCount > 0 ||
-    unreadAbove ||
-    unreadBelow ||
-    hasMoreNewer;
 
-  function handleFloatingScrollDown() {
-    if ((unreadAbove || unreadBelow) && stagedCount === 0) {
-      scrollToUnread();
-      return;
-    }
-    scrollToBottom();
-  }
+  const showUnreadAction = unreadAbove || unreadBelow;
 
   /** Animate within a bounded span of the loaded list; never query visibility
    * or load intervening pages to decide whether a target can scroll smoothly. */
@@ -1727,12 +1732,7 @@ export function MessageList({
           onMomentumScrollEnd={handleScrollSettled}
           onScroll={(e) => {
             const y = e.nativeEvent.contentOffset.y;
-            const movingOlder = y > scrollMetricsRef.current.offsetY;
-            scrollMetricsRef.current = {
-              offsetY: y,
-              viewportHeight: e.nativeEvent.layoutMeasurement.height,
-              contentHeight: e.nativeEvent.contentSize.height,
-            };
+            const movingOlder = updateScrollPosition(e.nativeEvent);
             if (movingOlder && userScrollInProgressRef.current &&
                 isNearMessageHistoryEdge({
                   offsetY: y,
@@ -1741,15 +1741,7 @@ export function MessageList({
                 })) {
               requestOlderFromScroll();
             }
-            const nearTail = isNearMessageTail(y);
-            const show = !nearTail;
-            if (showScrollDownRef.current !== show) {
-              showScrollDownRef.current = show;
-              setShowScrollDown(show);
-            }
-            nearTailRef.current = nearTail;
             const atBottom = y < 24;
-            atBottomRef.current = !userScrollInProgressRef.current && atBottom;
             // Cross the React boundary only when the floating-date visibility
             // changes. Gesture-end callbacks arm the idle fade once per scroll.
             if (atBottom) {
@@ -1847,75 +1839,69 @@ export function MessageList({
       </Animated.View>
       {/* Single bottom-right scroll control. The badge means staged messages
           that arrived while reading history; it is not the unread-divider count. */}
-      <View
-        style={{
-          position: 'absolute',
-          end: spacing.lg,
-          bottom: bottomInset + spacing.lg,
-          alignItems: 'center',
-          gap: 10,
-        }}
+      <MessageScrollControl
+        key={`scroll-control:${listWindowKey}`}
+        ref={scrollControlRef}
+        pinned={showUnreadAction || (showNewMessageIndicators && stagedCount > 0)}
+        hasNewer={hasMoreNewer}
+        bottomInset={bottomInset}
       >
-        {/* A bidirectional jump can page toward the present; this remains the
-            shortcut straight back to the live tail. */}
-        {showFloatingScrollDown ? (
-          <View>
+        <View>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: radius.full,
+              ...shadow.float,
+            }}
+          >
             <View
               style={{
-                width: 40,
-                height: 40,
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
                 borderRadius: radius.full,
-                ...shadow.float,
+                overflow: 'hidden',
+                pointerEvents: 'none',
               }}
             >
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  left: 0,
-                  borderRadius: radius.full,
-                  overflow: 'hidden',
-                  pointerEvents: 'none',
-                }}
-              >
-                <FrostedBackdrop surface="surfaceElevated" />
-              </View>
-              <IconButton
-                accessibilityLabel={t(
-                  unreadAbove && stagedCount === 0
-                    ? 'chat.scroll_to_unread'
-                    : 'chat.scroll_to_latest',
-                )}
-                icon={
-                  unreadAbove && stagedCount === 0 ? (
-                    <ChevronUp strokeWidth={iconStrokeWidth.default} size={22} color={c.text} />
-                  ) : (
-                    <ChevronDown strokeWidth={iconStrokeWidth.default} size={22} color={c.text} />
-                  )
-                }
-                onPress={handleFloatingScrollDown}
-                size={40}
-                variant="plain"
-                style={{ zIndex: 1 }}
-              />
+              <FrostedBackdrop surface="surfaceElevated" />
             </View>
-            {showNewMessageIndicators && stagedCount > 0 ? (
-              <View
-                style={{
-                  position: 'absolute',
-                  top: -8,
-                  end: -8,
-                  pointerEvents: 'none',
-                }}
-              >
-                <CountBadge count={stagedCount} tone="notification" />
-              </View>
-            ) : null}
+            <IconButton
+              accessibilityLabel={t(
+                showUnreadAction
+                  ? 'chat.scroll_to_unread'
+                  : 'chat.scroll_to_latest',
+              )}
+              icon={
+                unreadAbove ? (
+                  <ChevronUp strokeWidth={iconStrokeWidth.default} size={22} color={c.text} />
+                ) : (
+                  <ChevronDown strokeWidth={iconStrokeWidth.default} size={22} color={c.text} />
+                )
+              }
+              onPress={showUnreadAction ? scrollToUnread : scrollToBottom}
+              size={40}
+              variant="plain"
+              style={{ zIndex: 1 }}
+            />
           </View>
-        ) : null}
-      </View>
+          {!showUnreadAction && showNewMessageIndicators && stagedCount > 0 ? (
+            <View
+              style={{
+                position: 'absolute',
+                top: -8,
+                end: -8,
+                pointerEvents: 'none',
+              }}
+            >
+              <CountBadge count={stagedCount} tone="notification" />
+            </View>
+          ) : null}
+        </View>
+      </MessageScrollControl>
       {!ready ? (
         <View
           style={{

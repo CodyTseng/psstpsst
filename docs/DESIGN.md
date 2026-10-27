@@ -285,6 +285,12 @@ pressed. Smooth scrolling uses message positions within the loaded list,
 not visibility callbacks, and stays within a bounded message span. Other
 sources jump directly without loading the intervening history. The
 composer's cancel action only dismisses the reply.
+The scroll-to-latest control fades in when scrolling toward newer messages and
+fades out when scrolling toward older messages. Its animation is independent of
+scroll distance. Automatic scrolling after sending never reveals the control.
+New arrivals keep it visible until the reader returns to the live tail.
+An offscreen first-unread message takes priority: show only the jump-to-unread
+action, independently of scroll direction, while that action is available.
 Composer quote feedback fills the input's upper region and follows its outer
 top corners, without a separate rounded card.
 

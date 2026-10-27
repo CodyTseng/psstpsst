@@ -30,10 +30,11 @@ describe('Electron history pagination', () => {
     clientHeight: number;
   };
   let callback: jest.Mock;
+  let input: jest.Mock;
   let listRef: { current: { getScrollableNode: () => typeof node } | null };
 
   function Harness({ mounted = true, windowKey = 'tail' }: { mounted?: boolean; windowKey?: string }) {
-    useElectronHistoryPagination({ listRef, mounted, windowKey, onHistoryEdge: callback });
+    useElectronHistoryPagination({ listRef, mounted, windowKey, onHistoryEdge: callback, onUserInput: input });
     return null;
   }
 
@@ -42,6 +43,7 @@ describe('Electron history pagination', () => {
     owner = eventTarget();
     node = { ...eventTarget(), ownerDocument: owner, scrollTop: 3200, scrollHeight: 4000, clientHeight: 800 };
     callback = jest.fn();
+    input = jest.fn();
     listRef = { current: { getScrollableNode: () => node } };
     act(() => { renderer = create(<Harness />); });
   });
@@ -59,6 +61,47 @@ describe('Electron history pagination', () => {
       });
     }
     expect(callback).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports deliberate input but ignores automatic scroll events', () => {
+    act(() => { node.emit('scroll'); });
+    expect(input).not.toHaveBeenCalled();
+    act(() => { node.emit('wheel', { deltaY: 80 }); });
+    expect(input).toHaveBeenCalledTimes(1);
+    act(() => { node.emit('wheel', { deltaY: 0 }); });
+    act(() => { node.emit('wheel', { deltaY: 80, ctrlKey: true }); });
+    expect(input).toHaveBeenCalledTimes(1);
+    act(() => { node.emit('pointerdown', { button: 0, target: node }); });
+    expect(input).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '])(
+    'uses the shared input and pagination path for %s', key => {
+      act(() => { node.emit('keydown', { key }); });
+      expect(input).toHaveBeenCalledTimes(1);
+      act(() => { jest.runOnlyPendingTimers(); });
+      expect(callback).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('ignores typing, action keys, shortcuts, composition, and prevented keyboard events', () => {
+    const events = [
+      { key: 'a' }, { key: 'Enter' }, { key: 'ArrowDown', defaultPrevented: true },
+      { key: 'ArrowDown', ctrlKey: true }, { key: 'ArrowDown', metaKey: true },
+      { key: 'ArrowDown', altKey: true }, { key: 'ArrowDown', shiftKey: true },
+      { key: 'ArrowDown', isComposing: true },
+      { key: 'PageDown', target: { closest: () => ({}) } },
+    ];
+    act(() => {
+      for (const event of events) node.emit('keydown', event);
+      // Composer input is outside the list and cannot bubble through its node.
+      owner.emit('keydown', { key: 'PageDown' });
+      jest.runOnlyPendingTimers();
+    });
+    expect(input).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+    act(() => { node.emit('keydown', { key: ' ', shiftKey: true, target: { closest: () => null } }); });
+    expect(input).toHaveBeenCalledTimes(1);
   });
 
   it('binds after the FlatList scroll node becomes available', () => {
@@ -117,6 +160,7 @@ describe('Electron history pagination', () => {
     const previousNode = node;
     const previousOwner = owner;
     act(() => {
+      previousNode.emit('keydown', { key: 'PageUp' });
       previousNode.emit('wheel', { deltaY: -100 });
       previousNode.emit('pointerdown', { button: 0, target: previousNode });
       owner = eventTarget();
@@ -127,7 +171,9 @@ describe('Electron history pagination', () => {
     act(() => { jest.runOnlyPendingTimers(); });
     expect(callback).not.toHaveBeenCalled();
 
+    input.mockClear();
     act(() => {
+      previousNode.emit('keydown', { key: 'PageUp' });
       previousNode.emit('wheel', { deltaY: -100 });
       previousNode.emit('pointerdown', { button: 0, target: previousNode });
       previousOwner.emit('pointermove', { buttons: 1 });
@@ -135,6 +181,8 @@ describe('Electron history pagination', () => {
       jest.runOnlyPendingTimers();
     });
     expect(callback).not.toHaveBeenCalled();
+
+    expect(input).not.toHaveBeenCalled();
 
     act(() => {
       node.emit('wheel', { deltaY: -100 });

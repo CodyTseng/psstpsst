@@ -1,6 +1,6 @@
 /**
- * The scroll-to-latest control appears only beyond this inverted-list offset.
- * Inside the same band, incoming messages follow the live tail immediately.
+ * Within this inverted-list offset, incoming messages follow the live tail
+ * immediately and the ordinary scroll-to-latest control stays hidden.
  */
 export const MESSAGE_TAIL_FOLLOW_THRESHOLD = 300;
 

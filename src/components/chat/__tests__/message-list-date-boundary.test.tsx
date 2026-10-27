@@ -6,6 +6,7 @@ import { MessageList, type MessageListHandle } from '../MessageList';
 import { MessageBubble } from '../MessageBubble';
 import { PendingAttachmentBubble } from '../PendingAttachmentBubble';
 import { DateSeparator } from '../message-date-separator';
+import { IconButton } from '@/components/common/IconButton';
 
 let mockPreference = 'light';
 let mockReducedMotion = false;
@@ -17,14 +18,18 @@ jest.mock('@/lib/platform', () => ({
 jest.mock('lucide-react-native/icons/chevron-down', () => () => null);
 jest.mock('lucide-react-native/icons/chevron-up', () => () => null);
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('@/theme/motion', () => ({ manipulationTiming: { duration: 200 } }));
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: jest.requireActual('react-native').View },
-  Easing: { out: (easing: unknown) => easing, quad: jest.fn() },
+  Easing: { in: (easing: unknown) => easing, out: (easing: unknown) => easing, quad: jest.fn() },
   runOnJS: (callback: unknown) => callback,
   useAnimatedStyle: (callback: () => unknown) => callback(),
   useReducedMotion: () => mockReducedMotion,
-  useSharedValue: (value: unknown) => ({ value }),
+  useSharedValue: (value: unknown) => {
+    const { useRef } = jest.requireActual('react');
+    return useRef({ value, set(next: unknown) { this.value = next; } }).current;
+  },
   withTiming: (value: unknown) => value,
 }));
 jest.mock('react-i18next', () => ({
@@ -54,6 +59,17 @@ jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
 jest.mock('../MessageBubble', () => ({ MessageBubble: () => null }));
 jest.mock('../PendingAttachmentBubble', () => ({ PendingAttachmentBubble: () => null }));
 jest.mock('../GroupSystemMessage', () => ({ GroupSystemMessage: () => null }));
+
+function visibleScrollButtons(list: ReactTestRenderer) {
+  return list.root.findAllByType(IconButton).filter(button => {
+    let parent = button.parent;
+    while (parent) {
+      if (parent.props.accessibilityElementsHidden) return false;
+      parent = parent.parent;
+    }
+    return true;
+  });
+}
 
 type Props = ComponentProps<typeof MessageList>;
 const createdAt = Math.floor(new Date(2026, 8, 2, 8).getTime() / 1000);
@@ -552,6 +568,169 @@ describe('MessageList boundaries and reply navigation', () => {
       act(() => { list?.unmount(); });
       jest.useRealTimers();
     }
+  });
+
+  it('clears the bottom button when returning to a fresh tail list without a scroll event', () => {
+    jest.useFakeTimers();
+    try {
+      const history = loadedHistory(80);
+      const onJumpToTail = jest.fn();
+      const initial = props({ messages: history, anchored: true, hasMoreNewer: true,
+        focusMessageId: history[20].id, onJumpToTail });
+      jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {});
+      const offset = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+      const event = (y: number) => ({ nativeEvent: { contentOffset: { y },
+        layoutMeasurement: { height: 800 }, contentSize: { height: 6000 } } });
+      act(() => { list = create(<MessageList {...initial} />); });
+      act(() => { jest.advanceTimersByTime(300); });
+      const previousList = list.root.findByType(FlatList).instance;
+      act(() => { list.root.findByType(FlatList).props.onScroll(event(1200)); });
+      act(() => { list.root.findByType(FlatList).props.onScroll(event(1100)); });
+      act(() => { list.root.findByType(IconButton).props.onPress(); });
+      expect(onJumpToTail).toHaveBeenCalledTimes(1);
+      act(() => { list.update(<MessageList {...initial} anchored={false} hasMoreNewer={false}
+        focusMessageId={undefined} tailJumpVersion={1} />); });
+      act(() => { jest.advanceTimersByTime(20); });
+      expect(list.root.findByType(FlatList).instance).not.toBe(previousList);
+      expect(offset).toHaveBeenCalledWith({ offset: 0, animated: false });
+      expect(visibleScrollButtons(list)).toHaveLength(0);
+      act(() => { list.root.findByType(FlatList).props.onScroll(event(1200)); });
+      expect(visibleScrollButtons(list)).toHaveLength(0);
+      act(() => { list.root.findByType(FlatList).props.onScroll(event(1100)); });
+      expect(visibleScrollButtons(list)).toHaveLength(1);
+    } finally {
+      act(() => { list?.unmount(); });
+      jest.useRealTimers();
+    }
+  });
+
+  it('updates the bottom button from the final settled position without another scroll tick', () => {
+    const offset = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+    const event = (y: number) => ({ nativeEvent: { contentOffset: { y },
+      layoutMeasurement: { height: 800 }, contentSize: { height: 6000 } } });
+    act(() => { list = create(<MessageList {...props({ messages: loadedHistory(80) })} />); });
+    act(() => { list.root.findByType(FlatList).props.onScroll(event(1200)); });
+    act(() => { list.root.findByType(FlatList).props.onScroll(event(1100)); });
+    act(() => { list.root.findByType(IconButton).props.onPress(); });
+    expect(offset).toHaveBeenCalledWith({ offset: 0, animated: true });
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    act(() => { list.root.findByType(FlatList).props.onMomentumScrollEnd(event(0)); });
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+  });
+
+  it('shows the bottom control only while returning toward newer messages', () => {
+    const event = (y: number) => ({ nativeEvent: { contentOffset: { y },
+      layoutMeasurement: { height: 800 }, contentSize: { height: 6000 } } });
+    act(() => { list = create(<MessageList {...props({ messages: loadedHistory(80) })} />); });
+    const scroll = (y: number) => act(() => {
+      list.root.findByType(FlatList).props.onScroll(event(y));
+    });
+    scroll(1200);
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+    scroll(1176);
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    scroll(1152);
+    scroll(1176);
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+    scroll(1200);
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+    scroll(1100);
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    scroll(300);
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+  });
+
+  it('does not reveal the bottom control while a send scrolls automatically', () => {
+    jest.useFakeTimers();
+    try {
+      jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+      const initial = props({ messages: loadedHistory(80) });
+      const event = (y: number) => ({ nativeEvent: { contentOffset: { y },
+        layoutMeasurement: { height: 800 }, contentSize: { height: 6000 } } });
+      act(() => { list = create(<MessageList {...initial} />); });
+      act(() => { list.root.findByType(FlatList).props.onScroll(event(1200)); });
+      act(() => { list.update(<MessageList {...initial} pendingTailVersion={1} />); });
+      act(() => { jest.advanceTimersByTime(20); });
+      act(() => { list.root.findByType(FlatList).props.onMomentumScrollBegin(); });
+      act(() => { list.root.findByType(FlatList).props.onScroll(event(1100)); });
+      expect(visibleScrollButtons(list)).toHaveLength(0);
+      act(() => { list.root.findByType(FlatList).props.onScrollBeginDrag(); });
+      act(() => { list.root.findByType(FlatList).props.onScroll(event(1000)); });
+      expect(visibleScrollButtons(list)).toHaveLength(1);
+    } finally {
+      act(() => { list?.unmount(); });
+      jest.useRealTimers();
+    }
+  });
+
+  it.each(['light', 'dark'])('shows only the unread action at the live tail in %s mode', preference => {
+    mockPreference = preference;
+    const initial = props({ firstUnreadId: 'older-unread',
+      firstUnreadOrderAt: message.orderAt - 1000, unreadCount: 60 });
+    act(() => { list = create(<MessageList {...initial} />); });
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    expect(visibleScrollButtons(list)[0].props.accessibilityLabel).toBe('chat.scroll_to_unread');
+    expect(list.root.findAllByProps({ accessibilityLabel: 'chat.scroll_to_latest' })).toHaveLength(0);
+    act(() => { visibleScrollButtons(list)[0].props.onPress(); });
+    expect(initial.onFocusAnchor).toHaveBeenCalledWith({ id: 'older-unread', orderAt: message.orderAt - 1000 });
+  });
+
+  it('pins the loaded unread action until its divider becomes visible', () => {
+    const history = loadedHistory(80);
+    const initial = props({ messages: history, firstUnreadId: history[0].id,
+      firstUnreadOrderAt: history[0].orderAt, unreadCount: 80 });
+    act(() => { list = create(<MessageList {...initial} />); });
+    const flatList = () => list.root.findByType(FlatList);
+    const visible = (index: number) => act(() => {
+      flatList().props.onViewableItemsChanged({ viewableItems: [{ index,
+        item: flatList().props.data[index], isViewable: true }] });
+    });
+    visible(0);
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    expect(visibleScrollButtons(list)[0].props.accessibilityLabel).toBe('chat.scroll_to_unread');
+    act(() => { flatList().props.onScroll({ nativeEvent: {
+      contentOffset: { y: 1200 }, layoutMeasurement: { height: 800 },
+      contentSize: { height: 6000 },
+    } }); });
+    visible(history.length - 1);
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+  });
+
+  it('keeps unread navigation ahead of staged arrivals and restores the latest action afterward', () => {
+    const history = loadedHistory(80).map(row => ({ ...row, senderPubkey: 'peer' }));
+    const initial = props({ messages: history, firstUnreadId: 'older-unread',
+      firstUnreadOrderAt: history[0].orderAt - 1000, unreadCount: 60 });
+    const event = (y: number) => ({ nativeEvent: { contentOffset: { y },
+      layoutMeasurement: { height: 800 }, contentSize: { height: 6000 } } });
+    act(() => { list = create(<MessageList {...initial} />); });
+    act(() => { list.root.findByType(FlatList).props.onScroll(event(1200)); });
+    const newest = history[history.length - 1];
+    const messages = [...history, { ...newest, id: 'incoming', orderAt: newest.orderAt + 1000 }];
+    act(() => { list.update(<MessageList {...initial} messages={messages} />); });
+    act(() => { list.root.findByType(FlatList).props.onScroll(event(1600)); });
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    expect(visibleScrollButtons(list)[0].props.accessibilityLabel).toBe('chat.scroll_to_unread');
+    act(() => { visibleScrollButtons(list)[0].props.onPress(); });
+    expect(initial.onFocusAnchor).toHaveBeenCalledWith({ id: 'older-unread', orderAt: history[0].orderAt - 1000 });
+    expect(initial.onJumpToTail).not.toHaveBeenCalled();
+    act(() => { list.update(<MessageList {...initial} messages={messages} firstUnreadId={null} />); });
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    expect(visibleScrollButtons(list)[0].props.accessibilityLabel).toBe('chat.scroll_to_latest');
+  });
+
+  it('keeps the bottom control visible for arrivals while scrolling toward older messages', () => {
+    const history = loadedHistory(80).map(row => ({ ...row, senderPubkey: 'peer' }));
+    const initial = props({ messages: history });
+    const event = (y: number) => ({ nativeEvent: { contentOffset: { y },
+      layoutMeasurement: { height: 800 }, contentSize: { height: 6000 } } });
+    act(() => { list = create(<MessageList {...initial} />); });
+    act(() => { list.root.findByType(FlatList).props.onScroll(event(1200)); });
+    const newest = history[history.length - 1];
+    act(() => { list.update(<MessageList {...initial} messages={[...history,
+      { ...newest, id: 'incoming', orderAt: newest.orderAt + 1000 }]} />); });
+    expect(visibleScrollButtons(list)).toHaveLength(1);
+    act(() => { list.root.findByType(FlatList).props.onScroll(event(1600)); });
+    expect(visibleScrollButtons(list)).toHaveLength(1);
   });
 
   it('keeps a same-day pagination boundary capsule-free', () => {
