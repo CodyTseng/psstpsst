@@ -57,7 +57,7 @@ it('reports launch failures without opening an external browser', async () => {
   jest.mocked(tryOpenApplicationWindow).mockRejectedValueOnce(new Error('launch-failed'));
   try {
     await openMessageUrl('https://example.com/');
-    expect(showToast).toHaveBeenCalledWith('napplets.request_failed', { variant: 'error' });
+    expect(showToast).toHaveBeenCalledWith('applications.request_failed', { variant: 'error' });
     expect(platform.urlOpener.openExternalUrl).not.toHaveBeenCalled();
   } finally {
     warn.mockRestore();

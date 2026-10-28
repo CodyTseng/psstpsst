@@ -8,7 +8,7 @@ import { useApplicationRunning } from '@/stores/application-presence.store';
 import { useTranslation } from 'react-i18next';
 
 /** All app grids share their columns, typography and font-scaled row geometry. */
-export function useNappletGridMetrics(width: number) {
+export function useApplicationGridMetrics(width: number) {
   const { fontScale } = useWindowDimensions();
   // Use the measured pane width, so split panes follow the same density as phones.
   const densityUnit = spacing['3xl'] + spacing.xl;
@@ -39,9 +39,9 @@ type Props = Pick<ComponentProps<typeof AppButton>,
   hideLabel?: boolean;
 };
 
-export function NappletTile({ app, iconSize, iconRef, hideLabel = false, ...actions }: Props) {
+export function ApplicationTile({ app, iconSize, iconRef, hideLabel = false, ...actions }: Props) {
   const running = useApplicationRunning(app.key), { t } = useTranslation();
   return <AppButton variant="ghost" corner="none" compact compactAxis="none" label={app.title} labelHidden={hideLabel} labelVariant="caption" labelNumberOfLines={1}
-    orientation="vertical" interactionFeedback="iconOpacity" accessibilityLabel={running ? `${app.title}, ${t('napplets.running')}` : app.title} {...actions}
+    orientation="vertical" interactionFeedback="iconOpacity" accessibilityLabel={running ? `${app.title}, ${t('applications.running')}` : app.title} {...actions}
     iconLeft={<RunningApplicationIcon sourceId={app.key} release={app} size={iconSize} iconRef={iconRef} />} />;
 }

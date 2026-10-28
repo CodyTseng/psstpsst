@@ -15,7 +15,7 @@ let mockScheme: 'light' | 'dark' = 'light';
 jest.mock('@/stores/theme.store', () => ({ useThemeStore: (select: (state: object) => unknown) => select({ accent: 'blue', preference: mockScheme }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { answer: jest.fn() } }));
-jest.mock('../NappletIcon', () => ({ NappletIcon: () => null }));
+jest.mock('../ApplicationIcon', () => ({ ApplicationIcon: () => null }));
 jest.mock('lucide-react-native/icons/chevron-down', () => () => null);
 jest.mock('lucide-react-native/icons/check', () => () => null);
 jest.mock('@solar-icons/react-native/category/money/Linear/Wallet', () => ({ Wallet: () => null }), { virtual: true });

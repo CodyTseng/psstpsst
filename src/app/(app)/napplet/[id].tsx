@@ -30,6 +30,6 @@ export default function NappletDetailScreen() {
         if (await tryOpenApplicationWindow(fromNapplet(release), accountPubkey ?? '', access.approved ? undefined : [...new Set(['shell', ...release.required])])) return;
         const runId=nappletService.prepareOpen(release,accountPubkey??'',access.approved?undefined:[...new Set(['shell',...release.required])]);
         router.push({pathname:'/napplet-run',params:{runId}});
-      } catch {setError('napplets.request_failed');}
+      } catch {setError('applications.request_failed');}
     }}/>;
 }

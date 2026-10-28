@@ -71,7 +71,7 @@ export class BrowserActions {
       if (requested.some(resource => saved.get(resource)?.decision === 'deny')) return { allowed: false };
       if (!needed.length) return { allowed: true, expiresAt: Number.isFinite(until) ? until : null };
     }
-    const answer = await this.options.confirm({ title: i18n.t(`napplets.browser_${action === 'permission' ? 'permission' : action === 'download' ? 'download' : action === 'external' ? 'external' : 'window'}`),
+    const answer = await this.options.confirm({ title: i18n.t(`applications.browser_${action === 'permission' ? 'permission' : action === 'download' ? 'download' : action === 'external' ? 'external' : 'window'}`),
       detail: [needed.map(resource => browserPermissionLabel(resource, i18n.t)).join('\n'), request.url, request.filename].filter(Boolean).join('\n'),
       accountPubkey: this.options.account, application: this.options.application,
       browser: { action, resources: action === 'permission' ? needed : request.resources, url: request.url, filename: request.filename } }, this.options.signal);

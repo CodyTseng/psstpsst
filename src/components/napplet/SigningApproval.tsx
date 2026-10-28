@@ -41,7 +41,7 @@ export function SigningActions({ prompt, duration, menuOpen, onMenuChange }: {
   const { t } = useTranslation();
   return <PermissionActions prompt={prompt} duration={duration} menuOpen={menuOpen} onMenuChange={onMenuChange}
     remember={canRememberSigning(prompt.signing!)}
-    label={t(prompt.signing!.operation === 'relay-auth' && !prompt.signing!.scopeKey ? 'napplets.signing_auth_remember' : 'napplets.signing_remember')} />;
+    label={t(prompt.signing!.operation === 'relay-auth' && !prompt.signing!.scopeKey ? 'applications.signing_auth_remember' : 'applications.signing_remember')} />;
 }
 
 /** Signing and browser permissions share the same duration and decision controls. */
@@ -73,7 +73,7 @@ export function PermissionActions({ prompt, duration, menuOpen, onMenuChange, re
             }));
           }} /></View>
       </View>
-    </> : <AppText variant="caption" tone="muted">{t('napplets.signing_unknown_notice')}</AppText>}
+    </> : <AppText variant="caption" tone="muted">{t('applications.signing_unknown_notice')}</AppText>}
     <SigningDecisions key={`${prompt.requestId}:${prompt.expiresAt}`} expiresAt={prompt.expiresAt}
       onApprove={() => nappletService.answer(prompt.requestId, decision)}
       onReject={() => nappletService.answer(prompt.requestId, reject)} />
@@ -82,11 +82,11 @@ export function PermissionActions({ prompt, duration, menuOpen, onMenuChange, re
 
 function durationOptions(t: TFunction) {
   return [
-    { value: 'allow', label: t('napplets.signing_duration_once') },
+    { value: 'allow', label: t('applications.signing_duration_once') },
     ...Object.keys(SIGNING_PERIODS).map((period) => ({
-      value: `allow-${period}`, label: t(`napplets.signing_period_${period}`),
+      value: `allow-${period}`, label: t(`applications.signing_period_${period}`),
     })),
-    { value: 'allow-always', label: t('napplets.signing_duration_always') },
+    { value: 'allow-always', label: t('applications.signing_duration_always') },
   ];
 }
 

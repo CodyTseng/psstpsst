@@ -26,9 +26,9 @@ it('keeps a signed reference unresolved until verified metadata arrives', async 
   expect(state.entry).toMatchObject({ title: 'Notes', desktopPosition: 1 });
 });
 it('does not launch or drop a saved reference when metadata lookup fails', async () => {
-  jest.mocked(resolveFavoriteMetadata).mockRejectedValueOnce(new Error('napplets.not_found'));
+  jest.mocked(resolveFavoriteMetadata).mockRejectedValueOnce(new Error('applications.not_found'));
   await act(async () => { renderer = create(<Probe />); });
-  expect(state).toMatchObject({ unresolved: true, entry: app, error: 'napplets.not_found' });
+  expect(state).toMatchObject({ unresolved: true, entry: app, error: 'applications.not_found' });
 });
 it('aborts an old account lookup and ignores its late result', async () => {
   let finish!: (entry: ExploreEntry) => void;

@@ -5,7 +5,7 @@ import {
 } from '../primary-pane-navigation';
 
 describe('primary pane navigation', () => {
-  it.each(['/', '/contacts', '/napplets', '/me'])('recognizes %s as a primary route', (pathname) => {
+  it.each(['/', '/contacts', '/explore', '/me'])('recognizes %s as a primary route', (pathname) => {
     expect(isPrimaryPanePathname(pathname)).toBe(true);
   });
 

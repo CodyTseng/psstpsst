@@ -95,7 +95,7 @@ export const fileSystemAdapter: FileSystemPort = {
     }, async text => {
       if (Platform.OS === 'android') {
         const native = requireOptionalNativeModule<{ writeTextAtomicAsync?(uri: string, text: string): Promise<void> }>('ExpoNapplet');
-        if (!native?.writeTextAtomicAsync) throw new Error('napplets.rebuild_required');
+        if (!native?.writeTextAtomicAsync) throw new Error('applications.rebuild_required');
         await native.writeTextAtomicAsync(uri, text);
       } else {
         // The SDK's iOS legacy writer uses Foundation's atomic replacement.

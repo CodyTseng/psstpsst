@@ -81,7 +81,7 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
   const note = event ? event.kind === 1 : reference.kind === 1 || reference.kind == null;
   const status = t(loading ? 'chat.event_reference.loading' : 'chat.event_reference.unavailable');
 
-  return <MessageCard type={note ? 'note' : reference.kind === 0 ? 'profile' : 'event'} disabled={!loadRemote} accessibilityLabel={t('napplets.open')}
+  return <MessageCard type={note ? 'note' : reference.kind === 0 ? 'profile' : 'event'} disabled={!loadRemote} accessibilityLabel={t('applications.open')}
     onPress={() => { void openMessageUrl(href); }} metaSlot={metaSlot}
     header={event ? <ResolvedHeader event={event} loadRemote={loadRemote} /> :
       <MessageCardHeader title={note ? t('chat.card_types.note') : fallbackLabel} reserveVisual={note || reference.kind === 0}

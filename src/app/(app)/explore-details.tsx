@@ -54,7 +54,7 @@ export default function ExploreDetailsScreen() {
   const application=app?applicationPresentation(app):undefined;
   const required = application?.required ?? [];
   const publisherPending=!!loadPublisher&&!publisherApps.loaded&&!publisherApps.error;
-  const message=!cachedApp&&!publisherPending?(address?'napplets.invalid_manifest':'napplets.not_found'):!ready&&activationError?.account===account?'napplets.request_failed':error??metadata.error??access.error;
+  const message=!cachedApp&&!publisherPending?(address?'applications.invalid_manifest':'applications.not_found'):!ready&&activationError?.account===account?'applications.request_failed':error??metadata.error??access.error;
   if(permissions==='1')return <ApplicationPermissionsPage application={metadata.unresolved?undefined:application} error={message}>
     {app&&!metadata.unresolved&&ready&&account?<ApplicationSettings accountPubkey={account} access={required.length?<ApplicationAccessControls required={required} selected={required}/>:undefined} sourceId={exploreService.signingSource(app)} onReset={()=>exploreService.reset(app,account!)}
       onUninstall={app.local?async()=>{await exploreService.uninstallLocal(app,account!);router.back();}:undefined}/>:null}
@@ -77,6 +77,6 @@ export default function ExploreDetailsScreen() {
         }
         const runId=exploreService.prepare(app,account,access.approved?undefined:required);
         router.push({pathname:'/explore-run',params:{runId}});
-      } catch {setError('napplets.request_failed');}
+      } catch {setError('applications.request_failed');}
     }}/>;
 }

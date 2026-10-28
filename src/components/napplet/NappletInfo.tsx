@@ -9,7 +9,7 @@ import { ListRow } from '@/components/common/ListRow';
 import { useDisplayName } from '@/hooks/use-display-name';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { spacing, useThemeColors } from '@/theme';
-import { NappletIdentity, type IdentityAction } from './NappletIdentity';
+import { ApplicationIdentity, type IdentityAction } from './ApplicationIdentity';
 import { NappletRequiredAccess } from './NappletRequiredAccess';
 
 /** One information layout for details, runtime information and launch consent. */
@@ -20,10 +20,10 @@ export function NappletInfo({ release, onPublisher, notice }: { release: Napplet
 export function ApplicationInfo({release,onPublisher,notice,action,actionPlacement='identity',unsupported,onPlacementReady}:{release:ApplicationPresentation;onPublisher():void;notice?:ReactNode;action?:IdentityAction;actionPlacement?:'identity'|'below'|'responsive';unsupported?:readonly string[];onPlacementReady?:()=>void}) {
   const { t } = useTranslation();
   return <View testID="napplet-info" style={{ gap: spacing.lg }}>
-    <NappletIdentity release={release} action={actionPlacement!=='below'?action:undefined} wrapActions={actionPlacement==='responsive'} subtitle={release.kind ? t(`napplets.formats.${release.kind}`) : undefined} onPlacementReady={onPlacementReady} />
+    <ApplicationIdentity release={release} action={actionPlacement!=='below'?action:undefined} wrapActions={actionPlacement==='responsive'} subtitle={release.kind ? t(`applications.formats.${release.kind}`) : undefined} onPlacementReady={onPlacementReady} />
     {actionPlacement==='below'?(typeof action==='function'?action(false):action):null}
     {release.publisher?<PublisherRow pubkey={release.publisher} onPress={onPublisher}/>:null}
-    {release.local ? <AppText variant="caption" tone="muted">{t('napplets.local_unsigned_notice')}</AppText> : null}
+    {release.local ? <AppText variant="caption" tone="muted">{t('applications.local_unsigned_notice')}</AppText> : null}
     {release.description.trim() ? <AppText>{release.description}</AppText> : null}
     {release.origin?<AppText variant="caption" tone="muted" selectable>{release.origin}</AppText>:null}
     {notice}
@@ -32,7 +32,7 @@ export function ApplicationInfo({release,onPublisher,notice,action,actionPlaceme
 }
 function PublisherRow({pubkey,onPress}:{pubkey:string;onPress:()=>void}) {
   const {t}=useTranslation();const c=useThemeColors();const {name,profile}=useDisplayName(pubkey);
-  return <ListRow variant="inline" compact title={t('napplets.publisher')} titleTone="muted"
+  return <ListRow variant="inline" compact title={t('applications.publisher')} titleTone="muted"
     value={name} valueTone="default" valueLeading={<Avatar pubkey={pubkey} picture={profile?.picture} size={spacing.xl}/>}
     trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted}/>} onPress={onPress}/>;
 }

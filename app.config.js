@@ -13,7 +13,7 @@ module.exports = ({ config }) => {
       bundleIdentifier: identity.id,
       infoPlist: {
         ...config.ios?.infoPlist,
-        NSLocationWhenInUseUsageDescription: require('./src/i18n/en.json').napplets.browser_location_usage,
+        NSLocationWhenInUseUsageDescription: require('./src/i18n/en.json').applications.browser_location_usage,
       },
       // Xcode replaces this with the selected provisioning profile's signed value.
       entitlements: { ...config.ios?.entitlements, 'aps-environment': 'development' },

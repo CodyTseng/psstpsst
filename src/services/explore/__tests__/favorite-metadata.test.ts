@@ -48,7 +48,7 @@ it('resolves immutable kind-5129 favorites by exact event id', async () => {
 it('leaves unavailable or aborted favorites intact without persisting an unverified manifest', async () => {
   query.mockResolvedValue({ events: [], error: true });
   const app = parseFavoriteReference(['a', `35130:${author}:missing`]).entry;
-  await expect(resolveFavoriteMetadata('account', app, new AbortController().signal)).rejects.toThrow('napplets.request_failed');
+  await expect(resolveFavoriteMetadata('account', app, new AbortController().signal)).rejects.toThrow('applications.request_failed');
   const life = new AbortController(); life.abort();
   await expect(resolveFavoriteMetadata('account', app, life.signal)).rejects.toThrow();
   expect(cacheFavoriteMetadata).not.toHaveBeenCalled();

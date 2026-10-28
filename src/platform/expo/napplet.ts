@@ -82,9 +82,9 @@ export const nappletAdapter: NappletPort = {
   tasks: applicationTasksAdapter,
   async fetchResource(url, max, signal, options) {
     const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
-    if (!native) throw new Error('napplets.rebuild_required');
+    if (!native) throw new Error('applications.rebuild_required');
     const headers = native.supportsResourceHeaders?.() === true;
-    if (options && !headers) throw new Error('napplets.rebuild_required');
+    if (options && !headers) throw new Error('applications.rebuild_required');
     const id = `resource:${++serial}`;
     assertNotAborted(signal);
     const abort = () => {
@@ -102,7 +102,7 @@ export const nappletAdapter: NappletPort = {
   },
   async clearPageData(storageId) { await requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.clearPageDataAsync?.(storageId); },
   async openPage(page: ExplorePage) {
-    if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isExploreAvailable?.()) throw new Error('napplets.rebuild_required');
+    if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isExploreAvailable?.()) throw new Error('applications.rebuild_required');
     const id=`surface:${Date.now()}:${++serial}`;
     const bootstrap = page.bootstrap;
     const script = bootstrap ? exploreBridge(bootstrap.napp, bootstrap.theme, bootstrap.domains, bootstrap.instance) : page.script;
@@ -110,7 +110,7 @@ export const nappletAdapter: NappletPort = {
   },
   async open(html) {
     if (!requireOptionalNativeModule<NativeModule>('ExpoNapplet')?.isAvailable())
-      throw new Error('napplets.rebuild_required');
+      throw new Error('applications.rebuild_required');
     const id = `surface:${Date.now()}:${++serial}`;
     surfaces.set(id, { html, ready: false });
     updates.forEach((fn) => fn());
@@ -131,7 +131,7 @@ export const nappletAdapter: NappletPort = {
   async goBack(id) {
     if (!surfaces.has(id)) return false;
     const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
-    if (!native?.goBackAsync) throw new Error('napplets.rebuild_required');
+    if (!native?.goBackAsync) throw new Error('applications.rebuild_required');
     return native.goBackAsync(id);
   },
   async setBounds() {},

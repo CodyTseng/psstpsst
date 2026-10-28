@@ -31,12 +31,12 @@ export default function NappletInstallScreen() {
           if (await tryOpenApplicationWindow(release, account)) { router.back(); return; }
           const runId=exploreService.prepare(release,account);router.replace({pathname:'/explore-run',params:{runId}}); }
       })
-      .catch((error: Error) => setError(error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed'))
+      .catch((error: Error) => setError(error.message.startsWith('applications.') ? error.message : 'applications.request_failed'))
       .finally(() => setBusy(false));
   }
   return (
     <AppScreen edges={[]}>
-      <ScreenHeader title={t('napplets.install_link')} />
+      <ScreenHeader title={t('applications.install_link')} />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
@@ -46,7 +46,7 @@ export default function NappletInstallScreen() {
         }}
       >
         <AppInput
-          label={t('napplets.address')}
+          label={t('applications.address')}
           maxLength={8192}
           value={value}
           onChangeText={(text) => { setValue(text); setError(null); }}
@@ -60,10 +60,10 @@ export default function NappletInstallScreen() {
             lookup(data);
           }} />}
         />
-        <AppText tone="muted">{t('napplets.address_hint')}</AppText>
+        <AppText tone="muted">{t('applications.address_hint')}</AppText>
         {error ? <AppText style={{ color: c.danger }}>{t(error)}</AppText> : null}
         <AppButton
-          label={t('napplets.open')}
+          label={t('applications.open')}
           disabled={!value.trim()}
           loading={busy}
           onPress={() => lookup(value)}

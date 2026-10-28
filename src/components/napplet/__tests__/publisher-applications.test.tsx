@@ -45,11 +45,11 @@ it.each(['light', 'dark'] as const)('shows themed loading before an empty publis
   expect(mockLoad).toHaveBeenCalledWith('account');
   expect(renderer.root.findByType(ActivityIndicator).props.color).toBe((scheme === 'light' ? lightPalette : darkPalette).accent);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'Building small apps.\nOpen source.' && node.props.selectable)).toBe(true);
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.discovery_empty')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.discovery_empty')).toBe(false);
   mockState.loaded = true;
   mockAbout = '   ';
   await act(async () => { renderer.update(<PublisherApplicationsScreen />); });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.discovery_empty')).toBe(true);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.discovery_empty')).toBe(true);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.selectable)).toBe(false);
 });
 

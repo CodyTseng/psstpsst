@@ -215,7 +215,7 @@ export class NappData {
       const data = await this.json(http.href, 'application/nostr+json');
       if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
       return { ...data, url, urlSimple: url.replace(/^wss?:\/\//, '').replace(/\/$/, ''), icon: data.icon ?? new URL('/favicon.ico', http).href };
-    } catch (error) { this.check(); if (error instanceof Error && error.message === 'napplets.rebuild_required') throw error; return null; }
+    } catch (error) { this.check(); if (error instanceof Error && error.message === 'applications.rebuild_required') throw error; return null; }
   }
   private index(event: Event) {
     const old = this.profiles.get(event.pubkey);

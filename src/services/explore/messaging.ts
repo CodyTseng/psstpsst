@@ -12,6 +12,6 @@ const local: ApplicationMessagingPort = {
 };
 export function applicationMessaging(): ApplicationMessagingPort {
   const windows = platform.napplet.windows;
-  if (windows && !windows.messaging) throw new Error('napplets.rebuild_required');
+  if (windows && !windows.messaging) throw new Error('applications.rebuild_required');
   return windows?.messaging ?? local;
 }

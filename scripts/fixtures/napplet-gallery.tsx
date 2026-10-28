@@ -18,9 +18,9 @@ initPlatformAdapters({
 } as unknown as PlatformAdapters);
 const profile = require('../../src/hooks/use-display-name') as typeof import('../../src/hooks/use-display-name');
 profile.useDisplayName = () => ({ name: 'Alice', profile: null });
-const { NappletGrid } =
-  require('../../src/components/napplet/NappletGrid') as typeof import('../../src/components/napplet/NappletGrid');
-const { NappletRecentPage } = require('../../src/components/napplet/NappletRecentPage') as typeof import('../../src/components/napplet/NappletRecentPage');
+const { ApplicationGrid } =
+  require('../../src/components/napplet/ApplicationGrid') as typeof import('../../src/components/napplet/ApplicationGrid');
+const { ApplicationRecentPage } = require('../../src/components/napplet/ApplicationRecentPage') as typeof import('../../src/components/napplet/ApplicationRecentPage');
 const { AppText } =
   require('../../src/components/common/AppText') as typeof import('../../src/components/common/AppText');
 const { useThemeColors } = require('../../src/theme') as typeof import('../../src/theme');
@@ -112,12 +112,12 @@ function Gallery() {
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
           <View style={{ flex: 1, backgroundColor: c.background, direction: rtl ? 'rtl' : 'ltr' }}>
-            {recentPage && !opened ? <NappletRecentPage recent={currentRecent} onBack={() => setRecentPage(false)}
+            {recentPage && !opened ? <ApplicationRecentPage recent={currentRecent} onBack={() => setRecentPage(false)}
               onUnfavorite={app => { void move(app, null); }} onAdd={addRecent} onRemove={removeRecent} onDetails={details} onPermissions={(app) => { document.title = `Permissions ${app.title}`; }} onShare={(app) => { document.title = `Share ${app.title}`; }} /> : <View style={{ flex: 1, paddingTop: 48, backgroundColor: c.background }}>
             <AppText variant="title" align="center">
               Explore
             </AppText>
-            {opened ? <AppButton label="Close app" onPress={() => setOpened(null)} /> : <NappletGrid
+            {opened ? <AppButton label="Close app" onPress={() => setOpened(null)} /> : <ApplicationGrid
               items={items}
               visibleCount={paged ? pageCount : undefined}
               loadingMore={loadingPage}

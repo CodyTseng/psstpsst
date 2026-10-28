@@ -13,7 +13,7 @@ export function useFavoriteMetadata(entry: ExploreEntry | undefined, account: st
     void resolveFavoriteMetadata(account, entry, controller.signal).then(resolved => {
       if (!controller.signal.aborted) setResult({ key, entry: resolved });
     }, error => {
-      if (!controller.signal.aborted) setResult({ key, error: error instanceof Error && error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed' });
+      if (!controller.signal.aborted) setResult({ key, error: error instanceof Error && error.message.startsWith('applications.') ? error.message : 'applications.request_failed' });
     });
     return () => controller.abort();
   }, [entry, account, pending, key]);

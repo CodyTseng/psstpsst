@@ -61,7 +61,7 @@ it('reads a locally saved application before querying relays', async () => {
 
 it('queries only naddr relay hints and never falls back when they return no application', async () => {
   query.mockResolvedValue({ events: [], incomplete: false });
-  await expect(resolveApplicationAddress('account', target(35130, ['wss://hint.example']), [], signal())).rejects.toThrow('napplets.not_found');
+  await expect(resolveApplicationAddress('account', target(35130, ['wss://hint.example']), [], signal())).rejects.toThrow('applications.not_found');
   expect(query).toHaveBeenCalledWith(['wss://hint.example/'], [{ kinds: [35130], authors: [author], '#d': ['app'], limit: 1 }], expect.anything());
   expect(routes).not.toHaveBeenCalled();
   expect(query).toHaveBeenCalledTimes(1);
@@ -92,7 +92,7 @@ it('uses only dedicated relays when no author write relays are available', async
 it('rejects signed events for a different application and forged manifests', async () => {
   const valid = manifest();
   query.mockResolvedValue({ events: [manifest(35130, 2, 'other-app'), { ...valid, content: 'forged' }], incomplete: false });
-  await expect(resolveApplicationAddress('account', target(), [], signal())).rejects.toThrow('napplets.invalid_manifest');
+  await expect(resolveApplicationAddress('account', target(), [], signal())).rejects.toThrow('applications.invalid_manifest');
 });
 
 it('constructs a website result without inventing a publisher or relay lookup', async () => {
@@ -145,7 +145,7 @@ it('accepts a known event by ID despite a wrong kind hint but keeps coordinate-k
   expect(query).not.toHaveBeenCalled();
   query.mockResolvedValue({ events: [event], incomplete: false });
   const coordinate = naddrEncode({ pubkey: author, kind: 35129, identifier: 'app', relays: ['wss://hint.example/'] });
-  await expect(resolveApplicationMetadata('account', coordinate, signal())).rejects.toThrow('napplets.invalid_manifest');
+  await expect(resolveApplicationMetadata('account', coordinate, signal())).rejects.toThrow('applications.invalid_manifest');
   expect(query.mock.calls[0][1]).toEqual([{ authors: [author], kinds: [35129], '#d': ['app'], limit: 1 }]);
 });
 

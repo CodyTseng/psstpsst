@@ -175,7 +175,7 @@ it('does not reuse a previous account app lookup cache', async () => {
   await nappletService.activate('accountB');
   const network = lookupNetwork();
   network.query.mockResolvedValue({ events: [], incomplete: false });
-  await expect(nappletService.resolve(address)).rejects.toThrow('napplets.not_found');
+  await expect(nappletService.resolve(address)).rejects.toThrow('applications.not_found');
   expect(network.query).toHaveBeenCalled();
 });
 
@@ -220,9 +220,9 @@ it('avoids an author relay-list lookup when the normal query already found the a
 });
 
 it.each([
-  [{ events: [], incomplete: false }, 'napplets.not_found'],
-  [{ events: [], incomplete: true, error: 'network-error' }, 'napplets.request_failed'],
-  [{ events: [{}], incomplete: false }, 'napplets.invalid_manifest'],
+  [{ events: [], incomplete: false }, 'applications.not_found'],
+  [{ events: [], incomplete: true, error: 'network-error' }, 'applications.request_failed'],
+  [{ events: [{}], incomplete: false }, 'applications.invalid_manifest'],
 ])('distinguishes empty reads, failed reads and rejected manifests', async (result, reason) => {
   const { address } = addressFixture(['wss://publisher.example/']);
   const network = lookupNetwork();
@@ -287,11 +287,11 @@ it('prepares navigation without starting installation, permissions or the runtim
 
 it('keeps download failures available for retry inside the same container run', async () => {
   stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
-  jest.mocked(loadArtifact).mockRejectedValueOnce(new Error('napplets.download_failed'));
+  jest.mocked(loadArtifact).mockRejectedValueOnce(new Error('applications.download_failed'));
   const runId = nappletService.prepareOpen(app, 'accountA');
   nappletService.startPreparedOpen(runId);
   await settleLaunch();
-  expect(nappletStore.getState()).toMatchObject({ runId, launching: false, running: null, launch: { error: 'napplets.download_failed' } });
+  expect(nappletStore.getState()).toMatchObject({ runId, launching: false, running: null, launch: { error: 'applications.download_failed' } });
   nappletService.retryOpen(runId);
   expect(nappletStore.getState().launch?.pending).toBe(true);
   nappletService.startPreparedOpen(runId);

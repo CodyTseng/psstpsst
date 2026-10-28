@@ -19,9 +19,9 @@ export function useApplicationFavorite(account: string | null, target?: ToastTar
       const count = favorite ? state.entries.filter(app => app.desktopPosition !== null).length : 0;
       await exploreService.move(saved ?? entry, favorite ? saved?.desktopPosition ?? count : null, account);
       if (getExploreState().account === account)
-        showToast(t(favorite ? 'napplets.app_added' : 'napplets.app_removed'), { target });
+        showToast(t(favorite ? 'applications.app_added' : 'applications.app_removed'), { target });
     } catch {
-      showToast(t('napplets.request_failed'), { variant: 'error', target });
+      showToast(t('applications.request_failed'), { variant: 'error', target });
     }
   }, [account, target, t]);
 }

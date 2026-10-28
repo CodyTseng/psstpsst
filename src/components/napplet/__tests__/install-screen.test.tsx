@@ -47,7 +47,7 @@ it('fills and resolves scanned input through the same verified lookup', async ()
 });
 
 it('keeps an invalid scan editable without navigating', async () => {
-  jest.mocked(exploreService.resolve).mockRejectedValueOnce(new Error('napplets.not_found'));
+  jest.mocked(exploreService.resolve).mockRejectedValueOnce(new Error('applications.not_found'));
   await act(async () => renderer.root.findByType(AppInput).props.trailingAccessory.props.onScanned('invalid'));
   expect(renderer.root.findByType(AppInput).props.value).toBe('invalid');
   expect(renderer.root.findByType(AppInput).props.editable).toBe(true);

@@ -46,7 +46,7 @@ const theme = (): RuntimeTheme => {
 export const applicationTasks = {
   async open(entry: ExploreEntry, account: string, reviewed?: readonly string[], delivery?: Record<string, unknown>) {
     const tasks = platform.napplet.tasks;
-    if (!tasks) throw new Error('napplets.rebuild_required');
+    if (!tasks) throw new Error('applications.rebuild_required');
     if (!await canReceiveForAccount(account)) throw new Error('account-unavailable');
     if (nappletStore.getState().accountPubkey !== account) throw new Error('session-closed');
     entry = await resolveFavoriteMetadata(account, entry, new AbortController().signal);
@@ -103,7 +103,7 @@ export const applicationTasks = {
         current(); patch(id, { entry });
       }
       const required = entry.release ? [...new Set(['shell', ...entry.required])] : applicationRequirements(entry.kind, entry.required);
-      if (entry.kind === 'napp' && required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('napplets.unsupported');
+      if (entry.kind === 'napp' && required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('applications.unsupported');
       const optional = entry.release?.optional.filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)) ?? [];
       const sourceId = entry.release?.key ?? applicationSigningSource(entry);
       const scope = { accountPubkey: account, appKey: sourceId };
@@ -147,7 +147,7 @@ export const applicationTasks = {
         const runtime = new ExploreRuntime(account, { ...entry, required }, {
           theme: () => theme().colors, confirm, presented,
           focus: () => { current(); return platform.napplet.tasks!.focus(id); },
-          failed: () => { if (isCurrent()) patch(id, { loading: false, error: 'napplets.request_failed' }); },
+          failed: () => { if (isCurrent()) patch(id, { loading: false, error: 'applications.request_failed' }); },
           close: () => { if (!isCurrent()) return; void this.close(id).catch(error => console.warn('[explore] Task cleanup failed', error)); },
           link: url => { current(); void platform.urlOpener.openExternalUrl(url).catch(() => {}); },
           configure: (schema, values, save, configSignal) => { current(); nappletService.configureExternal(schema, values, save, configSignal); },
@@ -179,7 +179,7 @@ export const applicationTasks = {
       if (session.runtime instanceof ExploreRuntime) await session.runtime.stop();
       else await session.runtime?.close().catch(cleanup => console.warn('[explore] Task cleanup failed', cleanup));
       session.runtime = undefined;
-      patch(id, { containerId: undefined, loading: false, error: error instanceof Error && error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed' });
+      patch(id, { containerId: undefined, loading: false, error: error instanceof Error && error.message.startsWith('applications.') ? error.message : 'applications.request_failed' });
     }).finally(() => { session.starting = undefined; });
     await session.starting;
   },

@@ -44,12 +44,12 @@ it('discards an old account lookup after switching accounts', async () => {
 });
 
 it('does not carry a resolved release or failure into a different app route', async () => {
-  jest.mocked(nappletService.resolve).mockResolvedValueOnce(app).mockRejectedValueOnce(new Error('napplets.not_found'));
+  jest.mocked(nappletService.resolve).mockResolvedValueOnce(app).mockRejectedValueOnce(new Error('applications.not_found'));
   await act(async () => { renderer = create(<Probe id="listing" />); });
   expect(result.release).toBe(app);
   await act(async () => { renderer.update(<Probe id="missing" />); });
   expect(result.release).toBeUndefined();
-  expect(result.error).toBe('napplets.not_found');
+  expect(result.error).toBe('applications.not_found');
   mockState = { ...mockState, market: [app] };
   act(() => { renderer.update(<Probe id="listing" />); });
   expect(result.release).toBe(app);

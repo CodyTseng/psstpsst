@@ -31,7 +31,7 @@ import { IconButton } from '@/components/common/IconButton';
 import { QrScanButton } from '@/components/common/QrScanButton';
 import { parseApplicationAddressQuery } from '@/services/explore/address-query';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
-import { NappletGrid } from '@/components/napplet/NappletGrid';
+import { ApplicationGrid } from '@/components/napplet/ApplicationGrid';
 import { nappletService } from '@/services/napplet/service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { usePrimaryPaneNavigation } from '@/components/navigation/primary-pane-navigation';
@@ -40,7 +40,7 @@ import { bottomBarHeight, spacing, uiDensity, useThemeColors } from '@/theme';
 const SEARCH_HEIGHT = uiDensity.searchBarHeight + spacing.sm;
 type ExploreMode = 'my-apps' | 'discover';
 
-export default function NappletsScreen() {
+export default function ExploreScreen() {
   const account = useActiveAccount((s) => s.activePubkey);
   const [mode, setMode] = useState<{ account: string | null; value: ExploreMode; handoff?: number }>({ account, value: 'my-apps' });
   const { searchHandoff } = useLocalSearchParams<{ searchHandoff?: string }>();
@@ -54,10 +54,10 @@ export default function NappletsScreen() {
       useExploreSearchHandoffStore.getState().consume(id, account);
     }
   }, [input, account, id, handoff]);
-  return <AccountNapplets key={`${account ?? 'signed-out'}:${searchHandoff ?? ''}`} account={account} initialAddress={input} initialAction={handoff?.action}
+  return <AccountExplore key={`${account ?? 'signed-out'}:${searchHandoff ?? ''}`} account={account} initialAddress={input} initialAction={handoff?.action}
     tab={mode.account === account ? mode.value : 'my-apps'} onTabChange={value => setMode(current => ({ ...current, account, value }))} />;
 }
-function AccountNapplets({ account, initialAddress, initialAction, tab, onTabChange }: { account: string | null; initialAddress?: string; initialAction?: { name: string; auxiliary: boolean }; tab: ExploreMode; onTabChange(value: ExploreMode): void }) {
+function AccountExplore({ account, initialAddress, initialAction, tab, onTabChange }: { account: string | null; initialAddress?: string; initialAction?: { name: string; auxiliary: boolean }; tab: ExploreMode; onTabChange(value: ExploreMode): void }) {
   const [actionFilter, setActionFilter] = useState(initialAction);
   const c = useThemeColors();
   const { t } = useTranslation();
@@ -83,11 +83,11 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
   const [scrolled, setScrolled] = useState(false);
   const [searchScrolled, setSearchScrolled] = useState(false);
   const showError = useCallback((key: string) => {
-    showToast(t(key.startsWith('napplets.') ? key : 'napplets.request_failed'), { variant: 'error', target: 'primary' });
+    showToast(t(key.startsWith('applications.') ? key : 'applications.request_failed'), { variant: 'error', target: 'primary' });
   }, [t]);
   const reportBackgroundError = useEffectEvent((error: unknown) => {
     console.warn('[explore] My apps load failed', error);
-    showError('napplets.request_failed');
+    showError('applications.request_failed');
   });
   const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setSearchScrolled(false); }, []);
   const clearance = useScreenHeaderClearance();
@@ -102,7 +102,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
       void exploreService.loadFavoriteSearchMetadata(account).catch(error => reportBackgroundError(error));
   }, [account, focused, searching, tab, state.loaded, state.account]);
   const loadMoreFavorites = useCallback(() => {
-    if (account) void exploreService.loadMoreFavorites(account).catch(() => showError('napplets.request_failed'));
+    if (account) void exploreService.loadMoreFavorites(account).catch(() => showError('applications.request_failed'));
   }, [account, showError]);
   const open = useCallback(
     async (app: ExploreEntry) => {
@@ -121,7 +121,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
         }
       } catch (error) {
         console.warn('[explore] Application launch failed', { stage, kind: app.kind }, error);
-        showError('napplets.request_failed');
+        showError('applications.request_failed');
       }
     },
     [account, navigation, showError],
@@ -135,7 +135,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
   const resolveScan = useEffectEvent(async (request: { value: string }, signal: AbortSignal) => {
     const address = parseApplicationAddressQuery(request.value);
     if (!account || !address || address.type === 'invalid') {
-      showError('napplets.invalid_manifest');
+      showError('applications.invalid_manifest');
       setSettledScan(request);
       return;
     }
@@ -152,8 +152,8 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
         showSearchDetails(app);
       }
     } catch (error) {
-      if (!signal.aborted) showError(error instanceof Error && ['napplets.not_found', 'napplets.invalid_manifest'].includes(error.message)
-        ? error.message : 'napplets.request_failed');
+      if (!signal.aborted) showError(error instanceof Error && ['applications.not_found', 'applications.invalid_manifest'].includes(error.message)
+        ? error.message : 'applications.request_failed');
     } finally {
       if (!signal.aborted) setSettledScan(request);
     }
@@ -172,14 +172,14 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
   }, [focused, searchActive, closeSearch]);
   useEffect(() => tabsNavigation.addListener('tabPress' as never, () => {
     const state = tabsNavigation.getState();
-    if (state?.routes[state.index]?.name === 'napplets' && searchActive) closeSearch();
+    if (state?.routes[state.index]?.name === 'explore' && searchActive) closeSearch();
   }), [tabsNavigation, searchActive, closeSearch]);
   const action = useCallback(
     (app: ExploreEntry, index: number | null) => {
       if (index === null) return setFavorite(app, false);
       return exploreService
         .move(app, index, account ?? '')
-        .catch(() => showError('napplets.request_failed'));
+        .catch(() => showError('applications.request_failed'));
     },
     [account, setFavorite, showError],
   );
@@ -190,7 +190,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
     navigation.open(app.release ? `/napplet-permissions/${app.release.event.id}` : `/explore-details?key=${encodeURIComponent(app.key)}&permissions=1${actionFilter ? '&discovery=napps' : ''}`);
   }, [navigation, actionFilter]);
   const restingSearch = <View style={{ paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
-    <SearchBar value="" onChangeText={() => {}} placeholder={t('napplets.search_placeholder')}
+    <SearchBar value="" onChangeText={() => {}} placeholder={t('applications.search_placeholder')}
       shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} onPress={openSearch} />
   </View>;
   const stopEmptySearch = () => { if (searchActive && !searching) closeSearch(); };
@@ -200,10 +200,10 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
         back={false}
         left={<IconButton variant="plain" size={uiDensity.headerActionSize}
           icon={<RotateCcwClock size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.text} />}
-          accessibilityLabel={t('napplets.recent')} onPress={() => navigation.open('/explore-recent')} />}
+          accessibilityLabel={t('applications.recent')} onPress={() => navigation.open('/explore-recent')} />}
         bordered={searching ? searchScrolled : scrolled}
         titleControl={<SegmentedControl compact value={tab}
-          options={[{ value: 'my-apps', label: t('napplets.my_apps') }, { value: 'discover', label: t('napplets.discover') }]}
+          options={[{ value: 'my-apps', label: t('applications.my_apps') }, { value: 'discover', label: t('applications.discover') }]}
           onChange={value => { onTabChange(value); setScrolled(false); }} />}
         right={
           <QrScanButton variant="plain" size={uiDensity.headerActionSize} iconSize={uiDensity.headerActionIconSize}
@@ -211,7 +211,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
               closeSearch();
               const value = data.trim();
               const address = parseApplicationAddressQuery(value);
-              if (!address || address.type === 'invalid') { setScan(null); showError('napplets.invalid_manifest'); return; }
+              if (!address || address.type === 'invalid') { setScan(null); showError('applications.invalid_manifest'); return; }
               setScan({ value });
             }}
           />
@@ -220,7 +220,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
       <SearchTransition active={searchActive} contentActive={searching} focused={focused}
         onActivate={openSearch} onCancel={closeSearch}
         activeChrome={<View style={{ paddingTop: clearance, paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
-          <SearchBar value={query} onChangeText={changeQuery} placeholder={t('napplets.search_placeholder')}
+          <SearchBar value={query} onChangeText={changeQuery} placeholder={t('applications.search_placeholder')}
             shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} autoFocus />
         </View>}
         activeContent={<View style={{ flex: 1, paddingTop: clearance + SEARCH_HEIGHT }}>
@@ -236,7 +236,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
             header={restingSearch} headerHeight={SEARCH_HEIGHT} onScrollBeginDrag={stopEmptySearch}
             bottomInset={bottomInset} onScrollChange={setScrolled} onDetails={showSearchDetails}
             onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (
-            <NappletGrid header={restingSearch} onScrollBeginDrag={stopEmptySearch}
+            <ApplicationGrid header={restingSearch} onScrollBeginDrag={stopEmptySearch}
               visibleCount={state.favoriteVisibleCount} loadingMore={state.favoritesLoadingMore} onLoadMore={loadMoreFavorites}
               onPermissions={showPermissions} onShare={share}
               onDetails={showFavoriteDetails}
@@ -267,12 +267,12 @@ function Empty({ onDiscover }: { onDiscover: () => void }) {
     >
       <Widget size={spacing['3xl']} color={c.textMuted} />
       <AppText variant="title" align="center">
-        {t('napplets.empty_title')}
+        {t('applications.empty_title')}
       </AppText>
       <AppText tone="muted" align="center">
-        {t('napplets.empty_description')}
+        {t('applications.empty_description')}
       </AppText>
-      <View><AppButton fullWidth={false} label={t('napplets.discover')} onPress={onDiscover} /></View>
+      <View><AppButton fullWidth={false} label={t('applications.discover')} onPress={onDiscover} /></View>
     </View>
   );
 }

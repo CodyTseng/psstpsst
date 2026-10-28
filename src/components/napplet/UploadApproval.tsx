@@ -14,14 +14,14 @@ export function UploadApproval({ prompt, hideActions = false }: { prompt: Queued
   const { t } = useTranslation();
   const upload = prompt.upload!;
   return <View style={{ gap: spacing.lg }}>
-    <UploadText>{t('napplets.signing_effect_upload')}</UploadText>
+    <UploadText>{t('applications.signing_effect_upload')}</UploadText>
     <AppCard variant="muted" style={{ gap: spacing.sm }}>
       <UploadText variant="subtitle">{upload.filename || t('message_detail.attachment')}</UploadText>
       <UploadText variant="caption" tone="muted">{upload.mimeType} · {formatFileSize(upload.size)}</UploadText>
-      <UploadText variant="caption" tone="muted">{t('napplets.upload_destinations')}</UploadText>
+      <UploadText variant="caption" tone="muted">{t('applications.upload_destinations')}</UploadText>
       {upload.servers.map((server) => <UploadText key={server}>{new URL(server).host}</UploadText>)}
     </AppCard>
-    {!hideActions ? <ActionRow layout="horizontal" confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
+    {!hideActions ? <ActionRow layout="horizontal" confirm={{ label: t('applications.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
       dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} /> : null}
   </View>;
 }

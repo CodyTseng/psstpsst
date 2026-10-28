@@ -29,7 +29,7 @@ function InvalidPublisher() {
   const { t } = useTranslation();
   const clearance = useScreenHeaderClearance();
   return <AppScreen edges={['bottom']}>
-    <ScreenHeader title={t('napplets.publisher')} />
+    <ScreenHeader title={t('applications.publisher')} />
     <View style={{ padding: spacing.lg, paddingTop: clearance + spacing.lg }}>
     </View>
   </AppScreen>;
@@ -38,7 +38,7 @@ function InvalidPublisher() {
 function PublisherApplications({ pubkey }: { pubkey: string }) {
   const account = useActiveAccount(state => state.activePubkey);
   const state = usePublisherApplications(pubkey);
-  useErrorToast(state.error && 'napplets.request_failed');
+  useErrorToast(state.error && 'applications.request_failed');
   const { name, profile } = useDisplayName(pubkey);
   const { t } = useTranslation();
   const colors = useThemeColors();
@@ -48,7 +48,7 @@ function PublisherApplications({ pubkey }: { pubkey: string }) {
   useEffect(() => { if (account) void load?.(account); }, [account, load]);
   const refresh = () => { if (account) void load?.(account, true); };
   return <AppScreen edges={['bottom']}>
-    <ScreenHeader title={t('napplets.publisher_apps')} bordered={scrolled} />
+    <ScreenHeader title={t('applications.publisher_apps')} bordered={scrolled} />
     <FlatList data={state.entries} keyExtractor={entry => entry.key}
       initialNumToRender={12} refreshing={state.loading} onRefresh={refresh}
       onScroll={event => setScrolled(event.nativeEvent.contentOffset.y > 0)} scrollEventThrottle={16}
@@ -63,7 +63,7 @@ function PublisherApplications({ pubkey }: { pubkey: string }) {
         </View>
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
           paddingHorizontal: spacing.lg, paddingVertical: spacing.lg, gap: spacing.lg }}>
-          <SectionLabel>{t('napplets.publisher_apps')}</SectionLabel>
+          <SectionLabel>{t('applications.publisher_apps')}</SectionLabel>
           {state.error ? <View style={{ gap: spacing.sm }}>
             <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} />
           </View> : null}
@@ -73,7 +73,7 @@ function PublisherApplications({ pubkey }: { pubkey: string }) {
         ? <ActivityIndicator color={colors.accent} style={{ padding: spacing.lg }} />
         : !state.error ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
           <Widget size={spacing['3xl']} color={colors.textMuted} />
-          <AppText variant="title" align="center">{t('napplets.discovery_empty')}</AppText>
+          <AppText variant="title" align="center">{t('applications.discovery_empty')}</AppText>
           <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} />
         </View> : null}
       renderItem={({ item }) => <PublisherApplicationRow entry={item} pubkey={pubkey} />} />

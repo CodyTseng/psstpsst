@@ -1,13 +1,13 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ActivityIndicator } from 'react-native';
 import { naddrEncode } from 'nostr-tools/nip19';
-import NappletsScreen from '../../../app/(app)/(tabs)/napplets';
+import ExploreScreen from '../../../app/(app)/(tabs)/explore';
 import type { ExploreEntry } from '@/services/explore/model';
 import { SearchTransition } from '@/components/search/SearchTransition';
 import { SearchBar } from '@/components/search/SearchBar';
 import { QrScanButton } from '@/components/common/QrScanButton';
 import { IconButton } from '@/components/common/IconButton';
-import { NappletGrid } from '../NappletGrid';
+import { ApplicationGrid } from '../ApplicationGrid';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
@@ -21,11 +21,11 @@ import { exploreService } from '@/services/explore/service';
 import { discoveryStore } from '@/services/explore/discovery';
 
 const mockNavigate = jest.fn();
-const mockTabsNavigation = { addListener: jest.fn(() => () => {}), getState: () => ({ index: 0, routes: [{ name: 'napplets' }] }) };
+const mockTabsNavigation = { addListener: jest.fn(() => () => {}), getState: () => ({ index: 0, routes: [{ name: 'explore' }] }) };
 let mockHandoff: string | undefined;
 let mockFocused = true;
 let mockExplore: { account: string | null; loaded: boolean; entries: ExploreEntry[] } = { account: 'account', loaded: true, entries: [] };
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ searchHandoff: mockHandoff }), useIsFocused: () => mockFocused, useNavigation: () => mockTabsNavigation, useRoute: () => ({ key: 'napplets' }) }));
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ searchHandoff: mockHandoff }), useIsFocused: () => mockFocused, useNavigation: () => mockTabsNavigation, useRoute: () => ({ key: 'explore' }) }));
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/services/explore/windows', () => ({ tryOpenApplicationWindow: jest.fn(async () => false) }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
@@ -51,28 +51,28 @@ jest.mock('@/components/common/AppText', () => ({ AppText: 'Text' }));
 jest.mock('@/components/common/QrScanButton', () => ({ QrScanButton: 'ScanButton' }));
 jest.mock('@/components/common/SegmentedControl', () => ({ SegmentedControl: 'Tabs' }));
 jest.mock('@/components/napplet/ExploreDiscovery', () => ({ ExploreDiscovery: ({ header }: { header?: React.ReactNode }) => <>{header}</> }));
-jest.mock('@/components/napplet/NappletGrid', () => ({ NappletGrid: ({ header }: { header?: React.ReactNode }) => <>{header}</> }));
+jest.mock('@/components/napplet/ApplicationGrid', () => ({ ApplicationGrid: ({ header }: { header?: React.ReactNode }) => <>{header}</> }));
 jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ Widget: () => null }), { virtual: true });
 
 let renderer: ReactTestRenderer;
-beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockFocused = true; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<NappletsScreen />); }); });
+beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockFocused = true; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<ExploreScreen />); }); });
 afterEach(() => { act(() => renderer?.unmount()); jest.useRealTimers(); });
 
 it('does not flash a spinner or empty state for a quick local Favorites read', async () => {
   mockExplore = { account: 'account', loaded: false, entries: [] };
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   await act(async () => { await jest.advanceTimersByTimeAsync(30); });
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.empty_title')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.empty_title')).toBe(false);
   mockExplore = { account: 'account', loaded: true, entries: [{ key: 'saved', desktopPosition: 0 } as ExploreEntry] };
-  await act(async () => { renderer.update(<NappletsScreen />); await jest.advanceTimersByTimeAsync(150); });
+  await act(async () => { renderer.update(<ExploreScreen />); await jest.advanceTimersByTimeAsync(150); });
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
-  expect(renderer.root.findAllByType(NappletGrid)).toHaveLength(1);
+  expect(renderer.root.findAllByType(ApplicationGrid)).toHaveLength(1);
 });
 
 it('shows loading feedback when the local Favorites read remains pending', async () => {
   mockExplore = { account: 'account', loaded: false, entries: [] };
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   await act(async () => { await jest.advanceTimersByTimeAsync(150); });
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
 });
@@ -80,8 +80,8 @@ it('shows loading feedback when the local Favorites read remains pending', async
 it('shows the grid when the local Favorites snapshot is ready', async () => {
   mockExplore = { account: 'account', loaded: true,
     entries: [{ key: 'favorite', title: 'Saved app', desktopPosition: 0, lastUsedAt: null } as ExploreEntry] };
-  await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(renderer.root.findByType(NappletGrid).props.items).toEqual(mockExplore.entries);
+  await act(async () => { renderer.update(<ExploreScreen />); });
+  expect(renderer.root.findByType(ApplicationGrid).props.items).toEqual(mockExplore.entries);
 });
 
 it('uses the shared header-sized scanner and points empty Favorites to Discover', async () => {
@@ -94,7 +94,7 @@ it('uses the shared header-sized scanner and points empty Favorites to Discover'
   expect(renderer.root.findByType(ScreenHeader).props.titleControl.type).toBe(SegmentedControl);
   expect(scanner.props).toMatchObject({ size: uiDensity.headerActionSize, iconSize: uiDensity.headerActionIconSize, variant: 'plain' });
   const discover = renderer.root.findByType(AppButton);
-  expect(discover.props.label).toBe('napplets.discover');
+  expect(discover.props.label).toBe('applications.discover');
   await act(async () => { discover.props.onPress(); });
   expect(renderer.root.findByType(ExploreDiscovery).props.query ?? '').toBe('');
   expect(mockNavigate).not.toHaveBeenCalled();
@@ -103,12 +103,12 @@ it('uses the shared header-sized scanner and points empty Favorites to Discover'
 it('uses scrolling search headers in both modes and exits empty search on drag', async () => {
   const favorite = { key: 'favorite', desktopPosition: 0, lastUsedAt: null } as ExploreEntry;
   mockExplore.entries = [favorite];
-  await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(renderer.root.findByType(NappletGrid).props.header.type).toBeDefined();
+  await act(async () => { renderer.update(<ExploreScreen />); });
+  expect(renderer.root.findByType(ApplicationGrid).props.header.type).toBeDefined();
   await act(async () => { renderer.root.findByType(SearchBar).props.onPress(); });
   expect(renderer.root.findByType(SearchTransition).props.active).toBe(true);
   expect(renderer.root.findByType(SearchTransition).props.contentActive).toBe(false);
-  await act(async () => { renderer.root.findByType(NappletGrid).props.onScrollBeginDrag(); });
+  await act(async () => { renderer.root.findByType(ApplicationGrid).props.onScrollBeginDrag(); });
   expect(renderer.root.findByType(SearchTransition).props.active).toBe(false);
   await act(async () => { renderer.root.findByType(SegmentedControl).props.onChange('discover'); });
   expect(renderer.root.findByType(ExploreDiscovery).props.header.type).toBeDefined();
@@ -157,21 +157,21 @@ it('ignores a late naddr result after a replacement scan', async () => {
 
 it('reports a failed naddr lookup without launching or recording an application', async () => {
   const value = naddrEncode({ kind: 35130, pubkey: 'a'.repeat(64), identifier: 'missing' });
-  jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error('napplets.not_found'));
+  jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error('applications.not_found'));
   await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned(value); });
   await act(async () => { await jest.advanceTimersByTimeAsync(0); });
   expect(mockNavigate).not.toHaveBeenCalled();
   expect(discoveryStore.getState().addressCache.entries).toEqual([]);
-  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.not_found', variant: 'error', target: 'primary' });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.not_found')).toBe(false);
+  expect(useToastStore.getState()).toMatchObject({ message: 'applications.not_found', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.not_found')).toBe(false);
 });
 
 it('keeps invalid scans out of discovery search', async () => {
   await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned('not-an-app-address'); });
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('my-apps');
   expect(renderer.root.findAllByType(ExploreDiscovery)).toHaveLength(0);
-  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.invalid_manifest', variant: 'error', target: 'primary' });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.invalid_manifest')).toBe(false);
+  expect(useToastStore.getState()).toMatchObject({ message: 'applications.invalid_manifest', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.invalid_manifest')).toBe(false);
 });
 
 it('opens a home-scanned website directly without changing scope', async () => {
@@ -179,7 +179,7 @@ it('opens a home-scanned website directly without changing scope', async () => {
   let id!: number;
   act(() => { id = useExploreSearchHandoffStore.getState().start({ account: 'account', value }); });
   mockHandoff = String(id);
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('my-apps');
   await act(async () => { await jest.advanceTimersByTimeAsync(0); });
   expect(mockNavigate).toHaveBeenCalledWith('/explore-run?runId=7');
@@ -191,7 +191,7 @@ it("does not consume another account's scan", async () => {
   let id!: number;
   act(() => { id = useExploreSearchHandoffStore.getState().start({ account: 'other', value: 'https://example.com/private' }); });
   mockHandoff = String(id);
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('my-apps');
   expect(renderer.root.findAllByType(ExploreDiscovery)).toHaveLength(0);
 });
@@ -200,7 +200,7 @@ it('shares query text across modes and restricts Favorites keyword scope to shor
   const favorite = { key: 'favorite', title: 'Saved app', desktopPosition: 0, lastUsedAt: null } as ExploreEntry;
   const recent = { key: 'recent', title: 'Recent app', desktopPosition: null, lastUsedAt: 10 } as ExploreEntry;
   mockExplore.entries = [favorite, recent];
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   await act(async () => { renderer.root.findByType(SearchBar).props.onPress(); });
   await act(async () => { renderer.root.findAllByType(SearchBar).find(node => node.props.autoFocus)!.props.onChangeText('app'); });
   expect(renderer.root.findByType(ExploreDiscovery).props.scope).toBe('my-apps');
@@ -215,33 +215,33 @@ it('keeps history accessible in both modes and recent apps out of the Favorites 
   const favorite = { key: 'favorite', desktopPosition: 0, lastUsedAt: null } as ExploreEntry;
   const recent = { key: 'recent', desktopPosition: null, lastUsedAt: 10 } as ExploreEntry;
   mockExplore.entries = [favorite, recent];
-  await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(renderer.root.findByType(NappletGrid).props.items).toEqual([favorite]);
-  expect(renderer.root.findByType(NappletGrid).props.recent).toBeUndefined();
+  await act(async () => { renderer.update(<ExploreScreen />); });
+  expect(renderer.root.findByType(ApplicationGrid).props.items).toEqual([favorite]);
+  expect(renderer.root.findByType(ApplicationGrid).props.recent).toBeUndefined();
   const history = renderer.root.findByType(IconButton);
-  expect(history.props.accessibilityLabel).toBe('napplets.recent');
+  expect(history.props.accessibilityLabel).toBe('applications.recent');
   await act(async () => { history.props.onPress(); });
   expect(mockNavigate).toHaveBeenCalledWith('/explore-recent');
   await act(async () => { renderer.root.findByType(SegmentedControl).props.onChange('discover'); });
   const discoverHistory = renderer.root.findByType(IconButton);
-  expect(discoverHistory.props.accessibilityLabel).toBe('napplets.recent');
+  expect(discoverHistory.props.accessibilityLabel).toBe('applications.recent');
   await act(async () => { discoverHistory.props.onPress(); });
   expect(mockNavigate).toHaveBeenLastCalledWith('/explore-recent');
 });
 
 it('shows empty Favorites for accounts with only recent apps while keeping history accessible', async () => {
   mockExplore.entries = [{ key: 'recent', desktopPosition: null, lastUsedAt: 10 } as ExploreEntry];
-  await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(renderer.root.findAllByType(NappletGrid)).toHaveLength(0);
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.empty_title')).toBe(true);
-  expect(renderer.root.findByType(IconButton).props.accessibilityLabel).toBe('napplets.recent');
+  await act(async () => { renderer.update(<ExploreScreen />); });
+  expect(renderer.root.findAllByType(ApplicationGrid)).toHaveLength(0);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.empty_title')).toBe(true);
+  expect(renderer.root.findByType(IconButton).props.accessibilityLabel).toBe('applications.recent');
 });
 
 
 it('queries Favorites once on entry without repeating the query for store updates', async () => {
   expect(exploreService.activate).toHaveBeenCalledWith('account', { refresh: true });
   mockExplore = { account: 'account', loaded: true, entries: [] };
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   expect(exploreService.activate).toHaveBeenCalledTimes(1);
 });
 
@@ -249,28 +249,28 @@ it('queries Favorites again each time focus returns and does no query while blur
   jest.mocked(exploreService.activate).mockClear();
   mockFocused = false;
   mockExplore = { account: null, loaded: false, entries: [] };
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   expect(exploreService.activate).not.toHaveBeenCalled();
   mockFocused = true;
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   expect(exploreService.activate).toHaveBeenCalledTimes(1);
   mockExplore = { account: 'account', loaded: true, entries: [] };
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   mockFocused = false;
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   mockFocused = true;
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   expect(exploreService.activate).toHaveBeenCalledTimes(2);
 });
 
 it('shows launch failures in an error toast while preserving the Favorites grid', async () => {
   mockExplore.entries = [{ key: 'saved', desktopPosition: 0, lastUsedAt: null } as ExploreEntry];
-  await act(async () => { renderer.update(<NappletsScreen />); });
+  await act(async () => { renderer.update(<ExploreScreen />); });
   jest.mocked(exploreService.prepare).mockImplementationOnce(() => { throw new Error('failed'); });
-  await act(async () => { await renderer.root.findByType(NappletGrid).props.onOpen(mockExplore.entries[0]); });
-  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.request_failed', variant: 'error', target: 'primary' });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
-  expect(renderer.root.findByType(NappletGrid).props.items).toEqual(mockExplore.entries);
+  await act(async () => { await renderer.root.findByType(ApplicationGrid).props.onOpen(mockExplore.entries[0]); });
+  expect(useToastStore.getState()).toMatchObject({ message: 'applications.request_failed', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.request_failed')).toBe(false);
+  expect(renderer.root.findByType(ApplicationGrid).props.items).toEqual(mockExplore.entries);
 });
 
 it('opens action discovery and keeps its filter after consuming the handoff', async () => {
@@ -278,7 +278,7 @@ it('opens action discovery and keeps its filter after consuming the handoff', as
   await act(async () => {
     const id = useExploreSearchHandoffStore.getState().start({ account: 'account', value: '', action });
     mockHandoff = String(id);
-    renderer.update(<NappletsScreen />);
+    renderer.update(<ExploreScreen />);
   });
   expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
   expect(renderer.root.findByType(SegmentedControl).props.value).toBe('discover');

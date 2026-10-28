@@ -79,10 +79,10 @@ export class ExploreRuntime {
   }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network); }
   async start() {
     if (!platform.napplet.openPage)
-      throw new Error('napplets.rebuild_required');
+      throw new Error('applications.rebuild_required');
     const page: ExplorePage = { storageId: this.entry.local ? `${this.account}:${this.entry.key}` : this.account, sourceId: `${this.account}:${this.entry.key}`, network: this.entry.kind !== 'napp' || this.entry.required.includes('network'),
       script: '', bootstrap: { napp: this.entry.kind === 'napp', theme: this.options.theme?.(), domains: this.entry.required, instance: this.instance } };
-    page.labels = { ok: i18n.t('common.ok'), cancel: i18n.t('common.cancel'), allow: i18n.t('napplets.allow') };
+    page.labels = { ok: i18n.t('common.ok'), cancel: i18n.t('common.cancel'), allow: i18n.t('applications.allow') };
     if (this.entry.kind === 'website')
       page.url = this.entry.address;
     else {
@@ -99,7 +99,7 @@ export class ExploreRuntime {
         try { return await loadSiteBlob(this.entry, hash, this.lifetime.signal); }
         catch (error) {
           assertNotAborted(this.lifetime.signal);
-          if (!(error instanceof Error) || error.message !== 'napplets.download_failed' || !this.entry.manifest) throw error;
+          if (!(error instanceof Error) || error.message !== 'applications.download_failed' || !this.entry.manifest) throw error;
           // All workers share one lazy metadata lookup, after signed hints fail.
           mediaServers ??= this.network.mediaServers(this.entry.manifest.pubkey, this.lifetime.signal);
           const servers = (await mediaServers).filter(server => !this.entry.servers.includes(server));

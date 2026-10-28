@@ -15,7 +15,7 @@ it('preserves the exact resource names and target in the host approval', async (
   expect(await actions.approve({ action: 'permission', resources: ['mediaKeySystem', 'unknown-feature'] })).toBe(true);
   expect(confirm.mock.calls[0][0]).toMatchObject({
     browser: { action: 'permission', resources: ['mediaKeySystem', 'unknown-feature'] },
-    detail: 'napplets.browser_protected_media\nnapplets.browser_permission: unknown-feature',
+    detail: 'applications.browser_protected_media\napplications.browser_permission: unknown-feature',
   });
   await actions.approve({ action: 'download', url: 'https://files.example/report.pdf', filename: 'report.pdf' });
   expect(confirm.mock.calls[1][0].browser).toEqual({ action: 'download', url: 'https://files.example/report.pdf', filename: 'report.pdf', resources: undefined });

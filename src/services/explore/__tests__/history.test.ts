@@ -45,7 +45,7 @@ it('retains previous pages after a failure and retries the same cursor', async (
     .mockRejectedValueOnce(new Error('busy')).mockResolvedValueOnce({ entries: [], hasMore: false });
   await history.open();
   await history.loadMore();
-  expect(history.store.getState()).toMatchObject({ entries: [entry], error: 'napplets.request_failed' });
+  expect(history.store.getState()).toMatchObject({ entries: [entry], error: 'applications.request_failed' });
   await history.loadMore();
   expect(readHistoryPage).toHaveBeenLastCalledWith('account', cursor);
   expect(history.store.getState().error).toBeNull();

@@ -12,7 +12,7 @@ import { ScreenHeader,useScreenHeaderClearance } from '@/components/common/Scree
 import { IconButton } from '@/components/common/IconButton';
 import { AppText } from '@/components/common/AppText';
 import { AppButton } from '@/components/common/AppButton';
-import { NappletIcon } from './NappletIcon';
+import { ApplicationIcon } from './ApplicationIcon';
 import type { ApplicationInfo } from '@/services/explore/model';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing,uiDensity,useThemeColors } from '@/theme';
@@ -31,7 +31,7 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
   useApplicationUpdates(update, active && !loading && !error && !hidden);
-  useErrorToast(active && !hidden && error ? (error.startsWith('napplets.') ? error : 'napplets.request_failed') : null);
+  useErrorToast(active && !hidden && error ? (error.startsWith('applications.') ? error : 'applications.request_failed') : null);
   const taskId = useContext(ApplicationTaskContext);
   const immersive = IS_ANDROID && taskId !== null;
   const appearance = useNappletAppearance(containerId);
@@ -39,11 +39,11 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
   const contentTop = nativeWindow || immersive ? 0 : clearance;
   const more = <IconButton size={uiDensity.headerActionSize}
     icon={<Ellipsis strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>}
-    accessibilityLabel={t('napplets.runtime_more')} onPress={onMore} disabled={!menuEnabled || openingWindow}/>;
+    accessibilityLabel={t('applications.runtime_more')} onPress={onMore} disabled={!menuEnabled || openingWindow}/>;
   const actions = onOpenWindow ? <View style={{flexDirection:'row',alignItems:'center',gap:spacing.xs}}>
     <IconButton size={uiDensity.headerActionSize}
       icon={<SquareTopDown size={uiDensity.headerActionIconSize} color={c.text}/>}
-      accessibilityLabel={t('napplets.open_in_new_window')} onPress={onOpenWindow} disabled={!menuEnabled || openingWindow}/>
+      accessibilityLabel={t('applications.open_in_new_window')} onPress={onOpenWindow} disabled={!menuEnabled || openingWindow}/>
     {more}
   </View> : more;
   useDesktopWindowTitlebar(nativeWindow && active ? { title, actions: more } : null);
@@ -59,9 +59,9 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
       <View style={{flex:1,marginTop:contentTop,overflow:'hidden'}}>
         {children}
         {loading&&!error?<View style={[StyleSheet.absoluteFill,{alignItems:'center',justifyContent:'center',padding:spacing.xl,gap:spacing.lg,backgroundColor:c.background}]}>
-          {application?<NappletIcon release={application}/>:null}
+          {application?<ApplicationIcon release={application}/>:null}
           <ActivityIndicator color={c.accent}/>
-          <AppText align="center" tone="muted">{t('napplets.runtime_loading')}</AppText>
+          <AppText align="center" tone="muted">{t('applications.runtime_loading')}</AppText>
         </View>:null}
         {error?<View style={{flex:1,alignItems:'center',justifyContent:'center',padding:spacing.xl,gap:spacing.lg}}>
           <View><AppButton fullWidth={false} label={t('common.retry')} onPress={onRetry}/></View>

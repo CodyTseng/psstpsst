@@ -17,7 +17,7 @@ const active = new Set<ApplicationCommentsSession>();
 const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 export type CommentsState = { rows: CommentRow[]; loading: boolean; loaded: boolean; error: boolean; hasMore: boolean };
 
-/** Public discussions own isolated, account-bound networking and never borrow mini-app permissions. */
+/** Public discussions own isolated, account-bound networking and never borrow application permissions. */
 export class ApplicationCommentsSession {
   readonly store = createStore<CommentsState>(() => ({ rows: [], loading: false, loaded: false, error: false, hasMore: true }));
   private index = new CommentIndex();

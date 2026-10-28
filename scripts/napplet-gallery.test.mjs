@@ -81,7 +81,7 @@ test(
       page.on('pageerror', (error) => errors.push(error.message));
       const address = `http://127.0.0.1:${server.address().port}`;
       await page.goto(`${address}/?slow-drop=1`);
-      const desktop = page.getByTestId('napplet-desktop');
+      const desktop = page.getByTestId('application-grid');
       const tile = (source, name) => page.getByTestId(`${source}-app-${name}`).getByRole('button', { name, exact: true });
       const order = () => desktop.locator('[data-testid^="desktop-app-"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid').slice('desktop-app-'.length)));
       await tile('desktop', 'Weather').waitFor({ timeout: 10000 }).catch(async (error) => {
@@ -91,10 +91,10 @@ test(
         for (const theme of ['light', 'dark']) {
           await page.goto(`${address}/?theme=${theme}`);
           await tile('desktop', 'Weather').click({ button: 'right' });
-          await page.getByRole('button', { name: 'Remove app', exact: true }).click();
+          await page.getByRole('button', { name: 'Remove from My apps', exact: true }).click();
           await tile('desktop', 'Weather').waitFor({ state: 'hidden' });
           await tile('recent', 'Weather').click({ button: 'right' });
-          await page.getByRole('button', { name: 'Add app', exact: true }).click();
+          await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
           await tile('desktop', 'Weather').waitFor();
           await tile('recent', 'Weather').click({ button: 'right' });
           await page.getByRole('button', { name: 'Remove from history', exact: true }).click();
@@ -150,7 +150,7 @@ test(
       assert.equal(await preview.locator('[data-testid^="recent-app-"]').count(), 4, 'the recent preview is one row');
       assert.equal(await page.getByText('More', { exact: true }).count(), 0, 'recent history uses a trailing chevron instead of More text');
       assert(await preview.evaluate((node) => node.scrollWidth <= node.clientWidth + 1), 'recent apps do not overflow horizontally');
-      const edgeIcons = await preview.getByTestId('napplet-icon').all();
+      const edgeIcons = await preview.getByTestId('application-icon').all();
       const firstIcon = await edgeIcons[0].boundingBox();
       const lastIcon = await edgeIcons.at(-1).boundingBox();
       assert.equal(firstIcon.width, 68);
@@ -162,15 +162,15 @@ test(
           const tiles = [...document.querySelectorAll('[data-testid^="desktop-app-"]')];
           const first = tiles[0]?.getBoundingClientRect();
           const firstRow = tiles.filter((node) => Math.abs(node.getBoundingClientRect().y - first.y) < 1);
-          return firstRow.length === columns && tiles[0].querySelector('[data-testid="napplet-icon"]').getBoundingClientRect().width === iconSize;
+          return firstRow.length === columns && tiles[0].querySelector('[data-testid="application-icon"]').getBoundingClientRect().width === iconSize;
         }, { columns, iconSize });
         await aligned();
         await page.waitForFunction(({ width, columns }) => {
-          const icons = document.querySelectorAll('[data-testid^="desktop-app-"] [data-testid="napplet-icon"]');
+          const icons = document.querySelectorAll('[data-testid^="desktop-app-"] [data-testid="application-icon"]');
           const last = icons[columns - 1]?.getBoundingClientRect();
           return last && Math.abs(width - last.right - 16) < 1;
         }, { width, columns });
-        const icons = await desktop.locator('[data-testid^="desktop-app-"] [data-testid="napplet-icon"]').all();
+        const icons = await desktop.locator('[data-testid^="desktop-app-"] [data-testid="application-icon"]').all();
         const first = await icons[0].boundingBox();
         const last = await icons[columns - 1].boundingBox();
         assert(Math.abs(first.x - 16) < 1 && Math.abs(width - last.x - last.width - 16) < 1,
@@ -187,7 +187,7 @@ test(
       await tile('desktop', 'Weather').waitFor();
       assert.deepEqual(await order(), initial, 'opening an app never changes its desktop position');
       const checkMenuAnchor = async (source, name, above, centered) => {
-        const icon = await page.getByTestId(`${source}-app-${name}`).getByTestId('napplet-icon').boundingBox();
+        const icon = await page.getByTestId(`${source}-app-${name}`).getByTestId('application-icon').boundingBox();
         const details = page.getByRole('button', { name: 'View details', exact: true });
         await details.waitFor();
         const menu = await details.locator('..').boundingBox();
@@ -224,12 +224,12 @@ test(
       await checkMenuAnchor('desktop', 'Notes', true, true);
       if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/desktop-menu-above.png` });
       assert.equal(await page.getByText('Pin', { exact: true }).count(), 0);
-      await page.getByRole('button', { name: 'Remove app', exact: true }).click();
+      await page.getByRole('button', { name: 'Remove from My apps', exact: true }).click();
       await page.waitForFunction(() => document.title === 'move:Notes:null');
       assert.equal(await tile('desktop', 'Notes').count(), 0);
       await tile('recent', 'Notes').waitFor();
       await tile('recent', 'Notes').click({ button: 'right' });
-      await page.getByRole('button', { name: 'Add app', exact: true }).click();
+      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
       await tile('desktop', 'Notes').waitFor();
       assert.equal((await order()).at(-1), 'Notes');
       const drag = async (source, name, destination, expected) => {
@@ -315,7 +315,7 @@ test(
       await page.getByRole('button', { name: 'View details', exact: true }).click();
       await page.waitForFunction(() => document.title === 'Details Reader');
       await openRecentMenu('Reader');
-      await page.getByRole('button', { name: 'Add app', exact: true }).click();
+      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
       await tile('desktop', 'Reader').waitFor();
       assert.equal((await order()).at(-1), 'Reader', 'the recent menu adds a shortcut at the end');
       await drag('desktop', 'Reader', tile('desktop', 'Weather'), 'move:Reader:1');
@@ -340,7 +340,7 @@ test(
         const restingChildren = await artworkButton.locator(':scope > *').count();
         await artworkButton.hover();
         await page.waitForFunction(() => {
-          const icon = document.querySelector('[data-testid="desktop-app-Reader"] [data-testid="napplet-icon"]');
+          const icon = document.querySelector('[data-testid="desktop-app-Reader"] [data-testid="application-icon"]');
           return icon && Number(getComputedStyle(icon.parentElement).opacity) === 0.7;
         });
         assert.equal(await artworkButton.locator(':scope > *').count(), restingChildren,
@@ -350,14 +350,14 @@ test(
         await page.mouse.move(0, 0);
         if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/${theme}-desktop.png` });
         await page.getByTestId('napplet-recent-header').click({ position: { x: 200, y: 16 } });
-        const recentPage = page.getByTestId('napplet-recent-page');
+        const recentPage = page.getByTestId('application-recent-page');
         assert.equal(await page.getByRole('dialog').count(), 0, 'More opens a page rather than a modal');
         await recentPage.getByTestId('all-recent-app-Reader').waitFor();
         if (theme === 'light') {
           await page.setViewportSize({ width: 900, height: 840 });
           await page.waitForFunction(() => {
-            const page = document.querySelector('[data-testid="napplet-recent-page"]');
-            const first = page?.querySelector('[data-testid="napplet-icon"]')?.getBoundingClientRect();
+            const page = document.querySelector('[data-testid="application-recent-page"]');
+            const first = page?.querySelector('[data-testid="application-icon"]')?.getBoundingClientRect();
             return page?.getBoundingClientRect().width === 900 && first?.width === 40 && Math.abs(first.x - 16) < 1;
           });
           assert.equal(await page.getByText('Recently visited', { exact: true }).count(), 1);
@@ -375,12 +375,12 @@ test(
         await page.mouse.click(readerPoint.x + 250, readerPoint.y + 20, { button: 'right' });
         await page.getByRole('button', { name: 'View details', exact: true }).waitFor();
         await page.mouse.click(20, weatherPoint.y + 20, { button: 'right' });
-        await page.getByRole('button', { name: 'Remove app', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Remove from My apps', exact: true }).waitFor();
         await page.getByRole('button', { name: 'Remove from history', exact: true }).click();
         await usedFavorite.waitFor({ state: 'hidden' });
         await readerRow.waitFor();
         await page.getByRole('button', { name: 'Back', exact: true }).click();
-        await page.waitForFunction(() => !document.querySelector('[data-testid="napplet-recent-page"]'));
+        await page.waitForFunction(() => !document.querySelector('[data-testid="application-recent-page"]'));
 
       }
       await page.goto(`${address}/?theme=dark&chrome-edge=1&history=1`);
@@ -394,12 +394,12 @@ test(
       await page.goto(`${address}/?theme=dark&rtl=1&touch=1`);
       await tile('desktop', 'Reader').waitFor();
       await page.getByTestId('napplet-recent-header').click({ position: { x: 200, y: 16 } });
-      const rtlPage = page.getByTestId('napplet-recent-page');
+      const rtlPage = page.getByTestId('application-recent-page');
       const latestRecent = rtlPage.getByTestId('all-recent-app-Reader');
       await latestRecent.waitFor();
-      assert((await latestRecent.getByTestId('napplet-icon').boundingBox()).x > 210, 'history artwork starts at the logical right edge in RTL');
+      assert((await latestRecent.getByTestId('application-icon').boundingBox()).x > 210, 'history artwork starts at the logical right edge in RTL');
       await page.getByRole('button', { name: 'Back', exact: true }).click();
-      await page.waitForFunction(() => !document.querySelector('[data-testid="napplet-recent-page"]'));
+      await page.waitForFunction(() => !document.querySelector('[data-testid="application-recent-page"]'));
       await drag('desktop', 'Weather', tile('desktop', 'Reader'), 'move:Weather:0');
       assert.equal((await order())[0], 'Weather', 'RTL and touch long-press mode use the same logical slot order');
       const beforeCancel = await order();
@@ -471,7 +471,7 @@ test(
       assert.equal(await tile('recent', 'App 80').count(), 0, 'the preview stays bounded');
       const showAll = page.getByTestId('napplet-recent-header');
       await showAll.click();
-      const history = page.getByTestId('napplet-recent-page');
+      const history = page.getByTestId('application-recent-page');
       await history.getByTestId('all-recent-app-Weather').waitFor();
       const scrollHistory = () => history.locator('div').evaluateAll((nodes) => {
         const scroll = nodes.find((node) => ['auto', 'scroll'].includes(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight);
@@ -485,10 +485,10 @@ test(
       await olderApp.click({ trial: true });
       if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/all-recent.png` });
       await olderApp.click({ button: 'right' });
-      await page.getByRole('button', { name: 'Add app', exact: true }).click();
+      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
       await page.waitForFunction(() => document.title === 'move:App 80:9');
       await page.getByRole('button', { name: 'Back', exact: true }).click();
-      await page.waitForFunction(() => !document.querySelector('[data-testid="napplet-recent-page"]'));
+      await page.waitForFunction(() => !document.querySelector('[data-testid="application-recent-page"]'));
       await tile('desktop', 'App 80').waitFor();
       await showAll.click();
       await history.getByTestId('all-recent-app-Weather').waitFor();

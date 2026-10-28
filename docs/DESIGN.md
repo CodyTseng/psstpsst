@@ -368,14 +368,14 @@ Title-bar icon actions use the header control and icon density tokens, including
 floating camera-close controls and task-dialog headers; generic icon-button defaults
 are reserved for body actions.
 
-Human avatars are circular. Mini-app icons are rounded squares at every size,
+Human avatars are circular. Application icons are rounded squares at every size,
 including compact identity rows and loading or fallback artwork.
 Signed-site icons use declared artwork or one conventional icon from the signed
 file list; missing or unavailable artwork uses the shared fallback without
 fetching page metadata.
 Website identities retain cached artwork while refreshing in the background;
 temporary network failures must not replace usable artwork with a fallback.
-Mini-app publisher attribution uses a separate labelled information row between
+Application publisher attribution uses a separate labelled information row between
 the app heading and description. Supporting metadata rows fit their visible content with expanded touch targets
 and remain borderless, with text aligned to the surrounding content gutter. Hover and press
 feedback reduce only the identity avatar and name's opacity, without adding a
@@ -669,19 +669,19 @@ delays guessed at call sites.
 
 Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
-Mini-app chrome places Close at the start and More at the end. System Back
+Application chrome places Close at the start and More at the end. System Back
 traverses the embedded application's history before closing it at its root.
 Message web links and public-note cards open in the same built-in application
 container as websites, following the account's website opening preference.
 Custom app protocols in note-link preferences retain their external handoff.
-Mini-app container and initial document canvases follow the host background in
+Application container and initial document canvases follow the host background in
 both themes, including loading and teardown. Apps may supply their own page fill.
-Opening a mini-app enters its container immediately; loading, cancellation and
+Opening an application enters its container immediately; loading, cancellation and
 recoverable launch errors belong there rather than replacing the app grid.
 Cached apps retain a quiet themed canvas until their first frame. When local
 app code is missing or invalid, show its icon and loading state during download
 and retain that state until the first frame replaces it.
-Native sheets retain the underlying mini-app page behind their normal dimming
+Native sheets retain the underlying application page behind their normal dimming
 backdrop and block its input through the full sheet exit transition.
 All host sheets and dialogs cover embedded application containers, including
 account switching. Runtime More opens app information and permission management
@@ -934,7 +934,8 @@ Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
 
-My apps lists the applications added by the current account. Adding
+My apps lists napps, napplets, nsites and websites added by the current account.
+Shared UI calls them apps; napplet refers only to that specific format. Adding
 an app makes it eligible for compatible handoffs without granting access.
 Removing it excludes subsequent handoffs while preserving history, data and
 permissions. Add actions use a plus icon; remove actions use a trash icon. Reversible removal from
@@ -942,8 +943,8 @@ My apps uses danger text and icons across menus, buttons and action rails.
 Runtime action rails place application membership actions after utility actions.
 Discover rows open application details; membership controls stay out of the
 list’s resting layout.
-Application details pair the primary Open action with Add app for unsaved
-applications or a danger-tone Remove app for saved ones. Membership changes
+Application details pair the primary Open action with Add to My apps for unsaved
+applications or a danger-tone Remove from My apps for saved ones. Membership changes
 never launch or close the application. Detail actions align beside app identity
 when space permits and wrap beneath it on narrower content panes. The primary
 Open action follows membership controls at the logical end when beside identity;
@@ -1086,7 +1087,7 @@ Omit the selection question and repeated empty-state heading. Active capability
 filters show their requested action in a compact, dismissible label; only show
 no results after matching discovery pages settle.
 
-Mini-app More opens app information with Copy address, Share, Permissions and
+Application More opens app information with Copy address, Share, Permissions and
 Reload actions. Copy omits the `nostr:` prefix; sharing includes it. Both retain
 relay hints and use a coordinate for replaceable applications or an event pointer
 for immutable applications. Copy keeps the sheet open with brief in-place

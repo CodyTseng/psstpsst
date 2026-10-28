@@ -27,7 +27,7 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
   const saved = ready ? state.entries.find(app => app.key === entry.key) : undefined;
   const favorite = saved?.desktopPosition != null;
   const MembershipIcon = favorite ? Trash : Plus;
-  const failed = () => showToast(t('napplets.request_failed'), { variant: 'error', target: 'detail' });
+  const failed = () => showToast(t('applications.request_failed'), { variant: 'error', target: 'detail' });
   const setFavorite = useApplicationFavorite(owner, 'detail');
   const trigger = useRef<View>(null);
   const [anchor, setAnchor] = useState<HeaderActionMenuAnchor | null>(null);
@@ -40,7 +40,7 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
     }));
   }
   return <View ref={trigger} collapsable={false}>
-    <IconButton size={uiDensity.headerActionSize} accessibilityLabel={t('napplets.more')}
+    <IconButton size={uiDensity.headerActionSize} accessibilityLabel={t('applications.more')}
       icon={<Ellipsis size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={colors.text} />}
       onPress={() => { void openMenu().catch(failed); }} />
     <HeaderActionMenu visible={anchor !== null} anchor={anchor} onClose={() => setAnchor(null)} items={[
@@ -48,12 +48,12 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
         onPress: () => { void copyText(applicationCopyAddress(entry)).then(copied => {
           if (copied) showToast(t('common.copied'), { target: 'detail' });
         }); } },
-      { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={colors.text} />,
+      { key: 'permissions', title: t('applications.permissions_manage'), icon: <ShieldCheck size={size} color={colors.text} />,
         onPress: () => router.push(entry.release
           ? { pathname: '/napplet-permissions/[id]', params: { id: applicationCopyAddress(entry) } }
           : { pathname: '/explore-details', params: { address: entry.address, permissions: '1' } }) },
       ...(onShare && !entry.local ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={colors.text} />, onPress: onShare }] : []),
-      ...(ready ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_app' : 'napplets.add_app'), tone: favorite ? 'danger' as const : 'default' as const,
+      ...(ready ? [{ key: 'favorite', title: t(favorite ? 'applications.remove_app' : 'applications.add_app'), tone: favorite ? 'danger' as const : 'default' as const,
         icon: <MembershipIcon size={size} strokeWidth={iconStrokeWidth.default} color={favorite ? colors.danger : colors.text} />,
         onPress: () => { void setFavorite(saved ?? entry, !favorite); } }] : []),
     ]} />

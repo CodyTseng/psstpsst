@@ -17,13 +17,13 @@ export function CapabilityActions({ prompt, duration = 'allow', menuOpen = false
 }) {
   const { t } = useTranslation();
   if (prompt.capabilities?.requested) return <ActionRow layout="horizontal"
-    confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
-    dismiss={{ label: t('napplets.signing_reject'), onPress: () => nappletService.answer(prompt.requestId, 'deny') }} />;
+    confirm={{ label: t('applications.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
+    dismiss={{ label: t('applications.signing_reject'), onPress: () => nappletService.answer(prompt.requestId, 'deny') }} />;
   if (prompt.browser?.action === 'permission' && rememberBrowserPermission(prompt.browser.resources ?? []))
     return <PermissionActions prompt={prompt} duration={duration} menuOpen={menuOpen} onMenuChange={onMenuChange}
-      remember label={t('napplets.signing_remember')} />;
+      remember label={t('applications.signing_remember')} />;
   return <ActionRow layout="horizontal"
-    confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, prompt.capabilities ? 'domains:[]' : 'allow') }}
+    confirm={{ label: t('applications.allow'), onPress: () => nappletService.answer(prompt.requestId, prompt.capabilities ? 'domains:[]' : 'allow') }}
     dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} />;
 }
 
@@ -36,36 +36,36 @@ export function CapabilityApproval({ prompt, hideActions = false }: { prompt: Qu
   const required = prompt.capabilities?.required ?? prompt.application?.required ?? prompt.app?.required ?? [];
   return <View style={{ gap: spacing.lg }}>
     {prompt.installation ? <>
-      <AppText>{t(prompt.installation.replacing ? 'napplets.local_replace_notice' : 'napplets.local_install_notice')}</AppText>
+      <AppText>{t(prompt.installation.replacing ? 'applications.local_replace_notice' : 'applications.local_install_notice')}</AppText>
       <AppCard variant="muted" style={{ gap: spacing.md }}>
         <AppText variant="subtitle">{prompt.installation.target.title}</AppText>
         <AppText variant="code">{prompt.installation.id}</AppText>
-        <AppText variant="caption" tone="muted">{t('napplets.local_unsigned_notice')}</AppText>
-        {prompt.installation.otherInstaller ? <AppText tone="danger">{t('napplets.local_other_installer_notice')}</AppText> : null}
+        <AppText variant="caption" tone="muted">{t('applications.local_unsigned_notice')}</AppText>
+        {prompt.installation.otherInstaller ? <AppText tone="danger">{t('applications.local_other_installer_notice')}</AppText> : null}
       </AppCard>
       <NappletRequiredAccess release={{ required: prompt.installation.target.required }} />
     </> : browser ? <AppCard variant="muted" style={{ gap: spacing.md }}>
       {browser.action === 'permission' ? <>
         {browser.resources?.length ? [...new Set(browser.resources)].map(resource =>
           <AppText key={resource} variant="body">{browserPermissionLabel(resource, t)}</AppText>)
-          : <AppText variant="body">{prompt.detail || t('napplets.browser_permission')}</AppText>}
-      </> : <AppText variant="body">{t(`napplets.browser_${browser.action}`)}</AppText>}
+          : <AppText variant="body">{prompt.detail || t('applications.browser_permission')}</AppText>}
+      </> : <AppText variant="body">{t(`applications.browser_${browser.action}`)}</AppText>}
       {browser.filename ? <AppText>{browser.filename}</AppText> : null}
       {browser.url ? <>
-        <AppText variant="caption" tone="muted">{t('napplets.signing_destinations')}</AppText>
+        <AppText variant="caption" tone="muted">{t('applications.signing_destinations')}</AppText>
         <AppText variant="caption">{browser.url}</AppText>
       </> : null}
     </AppCard> : prompt.device ? <>
-      <AppText>{t(prompt.device.operation === 'save-file' ? 'napplets.save_file_notice' : 'napplets.copy_text_notice')}</AppText>
+      <AppText>{t(prompt.device.operation === 'save-file' ? 'applications.save_file_notice' : 'applications.copy_text_notice')}</AppText>
       <AppCard variant="muted"><AppText variant="code">{prompt.detail}</AppText></AppCard>
     </> : prompt.crypto ? <>
-      <AppText>{t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt_notice' : 'napplets.crypto_decrypt_notice')}</AppText>
+      <AppText>{t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt_notice' : 'applications.crypto_decrypt_notice')}</AppText>
       <AppCard variant="muted" style={{ gap: spacing.md }}>
         <AppText variant="body">{prompt.crypto.algorithm === 'nip04' ? 'NIP-04' : 'NIP-44'}</AppText>
       </AppCard>
     </> : <>
       <NappletRequiredAccess release={{ required }} showHeading={false} />
-      <AppText variant="caption" tone="muted">{t('napplets.capabilities_signing_notice')}</AppText>
+      <AppText variant="caption" tone="muted">{t('applications.capabilities_signing_notice')}</AppText>
     </>}
     {!hideActions && anchor ? <SigningDurationMenu standalone anchor={anchor} duration={duration} onChange={setDuration} onClose={() => setAnchor(null)} /> : null}
     {!hideActions ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={anchor !== null} onMenuChange={setAnchor} /> : null}

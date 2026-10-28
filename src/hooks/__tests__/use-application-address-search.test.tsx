@@ -61,7 +61,7 @@ it('cancels the debounce when the user switches back to a keyword', async () => 
   expect(resolveApplicationAddress).not.toHaveBeenCalled();
 });
 
-it.each(['napplets.not_found', 'napplets.invalid_manifest', 'napplets.request_failed'])(
+it.each(['applications.not_found', 'applications.invalid_manifest', 'applications.request_failed'])(
   'treats %s as no results and still accepts a later local match', async error => {
     jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error(error));
     await act(async () => { renderer = create(<Harness value={address('app')} />); });
@@ -109,7 +109,7 @@ it('starts a debounced website lookup after completing the URL', async () => {
 });
 
 it('returns to local search after an unsuccessful lookup when editing an incomplete URL', async () => {
-  jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error('napplets.request_failed'));
+  jest.mocked(resolveApplicationAddress).mockRejectedValueOnce(new Error('applications.request_failed'));
   await act(async () => { renderer = create(<Harness value="https://example.com" />); });
   await act(async () => { await jest.advanceTimersByTimeAsync(300); });
   expect(state!).toMatchObject({ active: true, loading: false });

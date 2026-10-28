@@ -76,7 +76,7 @@ it.each(['light', 'dark'] as const)('loads on scroll and shows themed footer pro
   await act(async () => { renderer.root.findByType(FlatList).props.onEndReached(); });
   expect(loadMoreApplications).toHaveBeenCalledTimes(1);
   expect(renderer.root.findByType(ActivityIndicator).props.color).toBe((scheme === 'light' ? lightPalette : darkPalette).textMuted);
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.discovery_empty')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.discovery_empty')).toBe(false);
   await act(async () => { renderer.root.findByType(FlatList).props.onRefresh(); });
   expect(discoverApplications).toHaveBeenLastCalledWith('account', true, 'all');
 });
@@ -141,15 +141,15 @@ it('shows a catalogue request error only when no content can be displayed', asyn
   const app = { key: 'cached', title: 'Cached app', description: '' } as ExploreEntry;
   mockState.error = true;
   await act(async () => { renderer = create(screen()); });
-  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.request_failed', variant: 'error', target: 'primary' });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
+  expect(useToastStore.getState()).toMatchObject({ message: 'applications.request_failed', variant: 'error', target: 'primary' });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.request_failed')).toBe(false);
   mockState.entries = [app]; mockState.visibleEntries = [app];
   await act(async () => { renderer.update(screen()); });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.request_failed')).toBe(false);
   expect(renderer.root.findByType(FlatList).props.data).toEqual([app]);
   mockQuery = 'no local match';
   await act(async () => { renderer.update(screen()); });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.request_failed')).toBe(false);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'search.empty')).toBe(true);
 });
 
@@ -338,35 +338,35 @@ it.each(['light', 'dark'] as const)('finds compatible apps beyond the visible pa
   await act(async () => { renderer = create(screen()); });
   expect(loadMoreApplications).toHaveBeenCalledWith('account', 'napps');
   expect(useDiscovery).toHaveBeenLastCalledWith('napps');
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.discovery_empty')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.discovery_empty')).toBe(false);
   mockState.entries = [wrong, match, app('auxiliary', 'view:1', true)];
   mockState.hasMore = false;
   await act(async () => { renderer.update(screen()); });
   expect(renderer.root.findByType(FlatList).props.data).toEqual([match]);
-  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'napplets.action_filter: view:1')!;
+  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'applications.action_filter: view:1')!;
   expect(filter).toBeDefined();
   await act(async () => { filter.props.onPress(); });
   expect(renderer.root.findByType(FlatList).props.data).toEqual([wrong]);
-  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'napplets.action_filter: view:1')).toBe(false);
+  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'applications.action_filter: view:1')).toBe(false);
 });
 
 it('shows no results only after filtered discovery is exhausted and retains retry on failure', async () => {
   mockAction = { name: 'edit', auxiliary: false };
   mockState.hasMore = false;
   await act(async () => { renderer = create(screen()); });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.no_compatible_apps')).toBe(true);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.no_compatible_apps')).toBe(true);
   mockState.error = true;
   await act(async () => { renderer.update(screen()); });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.no_compatible_apps')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.no_compatible_apps')).toBe(false);
 });
 
 it.each(['light', 'dark'] as const)('identifies an auxiliary action filter in %s mode', async scheme => {
   mockScheme = scheme;
   mockAction = { name: 'reply', auxiliary: true };
   await act(async () => { renderer = create(screen()); });
-  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'napplets.auxiliary_action_filter: reply')!;
+  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'applications.auxiliary_action_filter: reply')!;
   expect(filter).toBeDefined();
-  expect(filter.props.accessibilityLabel).toContain('napplets.show_all_apps');
+  expect(filter.props.accessibilityLabel).toContain('applications.show_all_apps');
 });
 
 it('uses a separate napps catalogue for action discovery and restores the full catalogue on clear', async () => {
@@ -379,7 +379,7 @@ it('uses a separate napps catalogue for action discovery and restores the full c
   await act(async () => { renderer = create(screen()); });
   expect(discoverApplications).toHaveBeenCalledWith('account', false, 'napps');
   expect(renderer.root.findByType(FlatList).props.data).toEqual([napp]);
-  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'napplets.action_filter: edit')!;
+  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'applications.action_filter: edit')!;
   await act(async () => { filter.props.onPress(); });
   expect(useDiscovery).toHaveBeenLastCalledWith('all');
   expect(discoverApplications).toHaveBeenLastCalledWith('account', false, 'all');

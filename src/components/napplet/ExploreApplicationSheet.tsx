@@ -30,14 +30,14 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
   const sourceId=exploreService.signingSource(entry);
   return <BottomSheet visible={page!==null} onClose={close}
     onClosed={()=>{const action=pending.current;pending.current=null;action?.();}}
-    title={t(page==='settings'?'napplets.permissions_manage':'napplets.details')}
+    title={t(page==='settings'?'applications.permissions_manage':'applications.details')}
     headerAction={page==='settings'?<SigningAccountAvatar pubkey={account}/>:undefined}
     scrollResetKey={page??'closed'} maxWidth={contentWidth.focused}
     fixedFooter={page==='about'?<NappletPanelActions entry={entry} account={account}
       onOpenExternal={entry.kind === 'website' ? () => schedule(() => {
         void platform.urlOpener.openExternalUrl(entry.address)
-          .then(opened => { if (!opened) showToast(t('napplets.request_failed'), { variant: 'error' }); })
-          .catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
+          .then(opened => { if (!opened) showToast(t('applications.request_failed'), { variant: 'error' }); })
+          .catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
       }) : undefined}
       onAction={action=>{
       if(action==='settings')onPageChange('settings');
@@ -47,8 +47,8 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
     <ApplicationPanel application={applicationPresentation(entry)} page={page??'about'}
       settings={<ApplicationSettings accountPubkey={account} access={entry.required.length ? <View style={{ gap: spacing.lg }}>
         <ApplicationAccessControls required={entry.required} selected={entry.required}/>
-        {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('napplets.settings')}
-          onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' })); })}/> : null}
+        {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('applications.settings')}
+          onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('applications.request_failed'), { variant: 'error' })); })}/> : null}
       </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}
         onUninstall={entry.local ? async()=>{await exploreService.uninstallLocal(entry,account);close();} : undefined}/>}
       onPublisher={()=>{if(entry.manifest)schedule(()=>openPublisher(entry.manifest!.pubkey));}}/>

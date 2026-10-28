@@ -10,7 +10,7 @@ const labels: Record<string, string> = {
 
 /** Preserve unrecognized resource names so an approval never hides the requested scope. */
 export function browserPermissionLabel(resource: string, t: TFunction): string {
-  return Object.hasOwn(labels, resource) ? t(`napplets.${labels[resource]}`) : `${t('napplets.browser_permission')}: ${resource}`;
+  return Object.hasOwn(labels, resource) ? t(`applications.${labels[resource]}`) : `${t('applications.browser_permission')}: ${resource}`;
 }
 
 /** Automatic capabilities do not expose private data or grant device access. */

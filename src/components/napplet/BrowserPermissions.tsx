@@ -16,18 +16,18 @@ export function BrowserPermissions({ accountPubkey, sourceId }: { accountPubkey:
   const { t, i18n } = useTranslation();
   const c = useThemeColors();
   const data = useBrowserPermissions(accountPubkey, sourceId);
-  useErrorToast(data?.error && 'napplets.request_failed');
+  useErrorToast(data?.error && 'applications.request_failed');
   const [editor, setEditor] = useState<{ rule: BrowserPermissionRule; visible: boolean }>();
   if (data && !data.error && !data.rules?.length && !editor) return null;
   return <View style={{ gap: spacing.md }}>
-    <AppText variant="subtitle">{t('napplets.browser_permission')}{data?.rules ? ` · ${data.rules.length}` : ''}</AppText>
+    <AppText variant="subtitle">{t('applications.browser_permission')}{data?.rules ? ` · ${data.rules.length}` : ''}</AppText>
     {!data ? <ActivityIndicator color={c.accent} /> : data.error ? null
       : !data.rules?.length ? null : <ListGroup>{data.rules.map(rule =>
         <ListRow key={rule.resource} title={browserPermissionLabel(rule.resource, t)}
-          subtitle={rule.expiresAt === null ? t('napplets.signing_duration_always') : t('napplets.signing_until', {
+          subtitle={rule.expiresAt === null ? t('applications.signing_duration_always') : t('applications.signing_until', {
             time: new Date(rule.expiresAt).toLocaleString(i18n.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           })}
-          titleTrailing={<AppText variant="caption" tone={rule.decision === 'allow' ? 'success' : 'danger'}>{t(rule.decision === 'allow' ? 'napplets.allow' : 'napplets.signing_reject')}</AppText>}
+          titleTrailing={<AppText variant="caption" tone={rule.decision === 'allow' ? 'success' : 'danger'}>{t(rule.decision === 'allow' ? 'applications.allow' : 'applications.signing_reject')}</AppText>}
           trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />}
           onPress={() => setEditor({ rule, visible: true })} />)}</ListGroup>}
     {editor ? <PermissionRuleEditor key={editor.rule.resource} title={browserPermissionLabel(editor.rule.resource, t)} visible={editor.visible}

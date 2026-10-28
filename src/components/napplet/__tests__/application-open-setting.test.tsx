@@ -22,7 +22,7 @@ afterEach(() => { act(() => renderer?.unmount()); });
 
 it('persists the selected opening mode for this account and page', async () => {
   await act(async () => { renderer = create(<ApplicationOpenSetting entry={website} account="account" />); });
-  expect(renderer.root.findByType(Toggle).props.accessibilityLabel).toBe('napplets.default_open_in_new_window');
+  expect(renderer.root.findByType(Toggle).props.accessibilityLabel).toBe('applications.default_open_in_new_window');
   expect(renderer.root.findByType(Toggle).props.value).toBe(false);
   await act(async () => { renderer.root.findByType(Toggle).props.onValueChange(true); });
   expect(setData).toHaveBeenCalledWith({ accountPubkey: 'account', appKey: website.address }, 'host', 'open-in-window', 'true');
@@ -38,8 +38,8 @@ it('rolls back an optimistic switch when saving fails', async () => {
   expect(renderer.root.findByType(Toggle).props.disabled).toBe(true);
   await act(async () => { fail(new Error('storage-failed')); });
   expect(renderer.root.findByType(Toggle).props.value).toBe(false);
-  expect(useToastStore.getState()).toMatchObject({ message: 'napplets.request_failed', variant: 'error' });
-  expect(JSON.stringify(renderer.toJSON())).not.toContain('napplets.request_failed');
+  expect(useToastStore.getState()).toMatchObject({ message: 'applications.request_failed', variant: 'error' });
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('applications.request_failed');
 });
 
 it.each(['napp', 'napplet'] as const)('omits the opening preference for %s applications', async kind => {

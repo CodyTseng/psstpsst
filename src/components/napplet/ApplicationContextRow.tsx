@@ -5,7 +5,7 @@ import type { ContextMenuAnchor } from '@/components/common/ContextMenu';
 import { IS_ELECTRON, desktopContextMenuPoint, type DesktopContextMenuEvent } from '@/lib/platform';
 import { impact } from '@/lib/haptics';
 import type { ExploreEntry, GridApp } from '@/services/explore/model';
-import { NappletAppMenu } from './NappletAppMenu';
+import { ApplicationMenu } from './ApplicationMenu';
 
 import { ApplicationListRow } from './ApplicationListRow';
 
@@ -38,11 +38,11 @@ function ContextRow<T extends MenuApplication>({ app, favorite, testID, onFavori
     <ApplicationListRow application={application} onPress={() => onDetails(app)}
       onLongPress={showMenu}
       accessibilityActions={[
-        { name: 'details', label: t('napplets.details') },
-        { name: 'permissions', label: t('napplets.permissions_manage') },
+        { name: 'details', label: t('applications.details') },
+        { name: 'permissions', label: t('applications.permissions_manage') },
         ...(!app.local ? [{ name: 'share', label: t('share.title') }] : []),
-        { name: 'favorite', label: t(favorite ? 'napplets.remove_app' : 'napplets.add_app') },
-        ...(onRemove ? [{ name: 'remove', label: t('napplets.remove_from_history') }] : []),
+        { name: 'favorite', label: t(favorite ? 'applications.remove_app' : 'applications.add_app') },
+        ...(onRemove ? [{ name: 'remove', label: t('applications.remove_from_history') }] : []),
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'details') onDetails(app);
@@ -51,7 +51,7 @@ function ContextRow<T extends MenuApplication>({ app, favorite, testID, onFavori
         else if (event.nativeEvent.actionName === 'favorite') void onFavorite(app);
         else if (event.nativeEvent.actionName === 'remove') onRemove?.(app);
       }} />
-    {anchor ? <NappletAppMenu app={app} anchor={anchor} point favorite={favorite} onFavorite={onFavorite} onClose={() => setAnchor(null)}
+    {anchor ? <ApplicationMenu app={app} anchor={anchor} point favorite={favorite} onFavorite={onFavorite} onClose={() => setAnchor(null)}
       onDetails={onDetails} onPermissions={onPermissions} onShare={onShare}
       onRemove={onRemove} /> : null}
   </View>;

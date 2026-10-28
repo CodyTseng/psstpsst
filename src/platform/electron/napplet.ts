@@ -49,8 +49,8 @@ export const electronNappletAdapter: NappletPort = {
   async clearPageData(storageId) {await getElectronBridge().napplet.clearPageData?.(storageId);},
   async openPage(page) {
     const bridge=getElectronBridge().napplet;
-    if(typeof bridge.openPage!=='function') throw new Error('napplets.rebuild_required');
-    if (page.bootstrap && !bridge.supportsExploreBootstrap) throw new Error('napplets.rebuild_required');
+    if(typeof bridge.openPage!=='function') throw new Error('applications.rebuild_required');
+    if (page.bootstrap && !bridge.supportsExploreBootstrap) throw new Error('applications.rebuild_required');
     return bridge.openPage(page);
   },
   open: (html) => getElectronBridge().napplet.open(html),

@@ -22,7 +22,7 @@ export const ApplicationListRow = memo(function ApplicationListRow({ application
   return <ListRow {...interactions} variant="list" title={application.title} subtitleMultiline
     iconWidth={APPLICATION_ICON_SIZE} iconAlign="start" verticalPadding="md"
     subtitleContent={website || description || application.publisher ? <View style={{ gap: spacing.xs }}>
-      {website ? <AppText variant="caption" tone="muted" selectable={false} style={{ userSelect: 'none' }}>{t('napplets.formats.website')}</AppText> : null}
+      {website ? <AppText variant="caption" tone="muted" selectable={false} style={{ userSelect: 'none' }}>{t('applications.formats.website')}</AppText> : null}
       {description ? <AppText variant="caption" tone="muted" numberOfLines={1} selectable={false} style={{ userSelect: 'none' }}>{description}</AppText> : null}
       {application.publisher ? <View testID="discovery-publisher" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
         <Avatar pubkey={application.publisher} picture={profile?.picture} size={spacing.lg}/>

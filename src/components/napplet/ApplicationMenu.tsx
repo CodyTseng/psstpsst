@@ -26,7 +26,7 @@ type Props<T extends GridApp> = {
 };
 
 /** Desktop shortcuts and recent apps use the same platform menu vocabulary. */
-export function NappletAppMenu<T extends GridApp>({ app, anchor, inline, point, favorite = false, onClose, onPlacementChange, onDetails, onPermissions, onShare, onFavorite, onRemove }: Props<T>) {
+export function ApplicationMenu<T extends GridApp>({ app, anchor, inline, point, favorite = false, onClose, onPlacementChange, onDetails, onPermissions, onShare, onFavorite, onRemove }: Props<T>) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const density = IS_ELECTRON ? 'pointer' : 'touch';
@@ -34,11 +34,11 @@ export function NappletAppMenu<T extends GridApp>({ app, anchor, inline, point, 
   const MembershipIcon = favorite ? Trash : Plus;
   return <ContextMenu inline={inline} anchor={anchor} align={point ? 'start' : 'center'} placement="auto" density={density}
     onClose={onClose} onPlacementChange={onPlacementChange} items={[
-      { key: 'details', title: t('napplets.details'), icon: <Info size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onDetails(app) },
-      { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={c.text} />, onPress: () => onPermissions(app) },
+      { key: 'details', title: t('applications.details'), icon: <Info size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onDetails(app) },
+      { key: 'permissions', title: t('applications.permissions_manage'), icon: <ShieldCheck size={size} color={c.text} />, onPress: () => onPermissions(app) },
       ...(!app.local ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={c.text} />, onPress: () => onShare(app) }] : []),
-      ...(onFavorite ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_app' : 'napplets.add_app'), tone: favorite ? 'danger' as const : 'default' as const, icon: <MembershipIcon size={size} strokeWidth={iconStrokeWidth.default} color={favorite ? c.danger : c.text} />, onPress: () => onFavorite(app) }] : []),
-      ...(onRemove ? [{ key: 'remove', title: t('napplets.remove_from_history'), tone: 'danger' as const, separatorBefore: true,
+      ...(onFavorite ? [{ key: 'favorite', title: t(favorite ? 'applications.remove_app' : 'applications.add_app'), tone: favorite ? 'danger' as const : 'default' as const, icon: <MembershipIcon size={size} strokeWidth={iconStrokeWidth.default} color={favorite ? c.danger : c.text} />, onPress: () => onFavorite(app) }] : []),
+      ...(onRemove ? [{ key: 'remove', title: t('applications.remove_from_history'), tone: 'danger' as const, separatorBefore: true,
         icon: <Trash size={size} strokeWidth={iconStrokeWidth.default} color={c.danger} />, onPress: () => onRemove(app) }] : []),
     ]} />;
 }

@@ -23,6 +23,6 @@ export async function openMessageUrl(href: string): Promise<void> {
     await openInlineApplication({ entry, account });
   } catch (error) {
     console.warn('[chat] Could not open message link', error);
-    showToast(i18n.t('napplets.request_failed'), { variant: 'error' });
+    showToast(i18n.t('applications.request_failed'), { variant: 'error' });
   }
 }

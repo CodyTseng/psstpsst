@@ -39,13 +39,13 @@ export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, on
   const [error, setError] = useState(false);
   const [anchor, setAnchor] = useState<ContextMenuAnchor>();
   const durationRef = useRef<View>(null);
-  const expires = rule.duration === 'timed' && rule.expiresAt ? t('napplets.signing_until', {
+  const expires = rule.duration === 'timed' && rule.expiresAt ? t('applications.signing_until', {
     time: new Date(rule.expiresAt).toLocaleString(i18n?.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-  }) : t(rule.duration === 'session' ? 'napplets.signing_session' : 'napplets.signing_duration_always');
+  }) : t(rule.duration === 'session' ? 'applications.signing_session' : 'applications.signing_duration_always');
   const options = [
     ...(rule.duration !== 'always' && rule.decision !== 'ask' ? [{ key: 'keep' as const, title: expires }] : []),
-    ...(['10m', '1h', '24h'] as const).map((key) => ({ key, title: t(`napplets.signing_period_${key}`) })),
-    { key: 'always' as const, title: t('napplets.signing_duration_always') },
+    ...(['10m', '1h', '24h'] as const).map((key) => ({ key, title: t(`applications.signing_period_${key}`) })),
+    { key: 'always' as const, title: t('applications.signing_duration_always') },
   ];
   const selected = period === 'keep' && (rule.duration === 'always' || rule.decision === 'ask') ? 'always' : period;
   const changed = decision !== rule.decision || period !== 'keep';
@@ -72,16 +72,16 @@ export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, on
       }))} /> : undefined}>
     {children}
     <ListGroup>{(['ask', 'allow', 'deny'] as const).map((value) => <ListRow key={value}
-      title={t(value === 'ask' ? 'napplets.permissions_ask' : value === 'allow' ? 'napplets.permissions_allow' : 'napplets.permissions_deny')}
+      title={t(value === 'ask' ? 'applications.permissions_ask' : value === 'allow' ? 'applications.permissions_allow' : 'applications.permissions_deny')}
       selectionMode="single" active={decision === value} disabled={busy}
       trailing={<RadioIndicator selected={decision === value} />} onPress={() => setDecision(value)} />)}</ListGroup>
     <View ref={durationRef} collapsable={false}>
-      <ListRow title={t('napplets.permissions_duration')} disabled={busy || decision === 'ask'}
-        value={decision === 'ask' ? t('napplets.none') : options.find((option) => option.key === selected)?.title ?? expires}
+      <ListRow title={t('applications.permissions_duration')} disabled={busy || decision === 'ask'}
+        value={decision === 'ask' ? t('applications.none') : options.find((option) => option.key === selected)?.title ?? expires}
         trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />}
         onPress={() => durationRef.current?.measureInWindow((x, y, width, height) => setAnchor({ x: x + width, y: y + height }))} />
     </View>
 
-    {error ? <AppText tone="danger">{t('napplets.request_failed')}</AppText> : null}
+    {error ? <AppText tone="danger">{t('applications.request_failed')}</AppText> : null}
   </BottomSheet>;
 }

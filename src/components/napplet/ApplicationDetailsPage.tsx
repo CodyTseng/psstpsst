@@ -42,7 +42,7 @@ function ApplicationDetailsContent({application,error,access,unsupported=[],onPu
   const placementReady=useCallback(()=>setPlaced(identity),[identity]);
   const visible=!ready||placed===identity;
   if(application&&access.loaded&&membershipReady&&presented!==identity)setPresented(identity);
-  const openAction=<AppButton key="open" variant="primary" fullWidth={false} size="sm" label={t('napplets.open')}
+  const openAction=<AppButton key="open" variant="primary" fullWidth={false} size="sm" label={t('applications.open')}
     disabled={unsupported.length>0||!access.loaded} onPress={onOpen}/>;
   const header=<View style={{padding:spacing.lg,paddingTop:clearance+spacing.lg,gap:spacing.xl}}>
     {ready?<ApplicationInfo key={identity} release={application} onPublisher={onPublisher} unsupported={unsupported} actionPlacement="responsive" onPlacementReady={placementReady}
@@ -53,7 +53,7 @@ function ApplicationDetailsContent({application,error,access,unsupported=[],onPu
     {ready && actions?.account ? <ApplicationOpenSetting entry={actions.entry} account={actions.account} /> : null}
   </View>;
   return <AppScreen edges={['bottom']}>
-    <ScreenHeader title={ready?application.title:t('napplets.details')} bordered={scrolled}
+    <ScreenHeader title={ready?application.title:t('applications.details')} bordered={scrolled}
       right={ready&&actions?<ApplicationDetailsActions key={actions.entry.key} {...actions}/>:undefined}/>
     <View testID="application-details-body" accessibilityElementsHidden={!visible} importantForAccessibility={visible?'auto':'no-hide-descendants'}
       style={{flex:1,opacity:visible?1:0,pointerEvents:visible?'auto':'none'}}>

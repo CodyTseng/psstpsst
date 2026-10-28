@@ -194,8 +194,8 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
   }
   fun loadPage(value: String) {
     if(value == pageValue) return
-    require(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) { "napplets.rebuild_required" }
-    require(WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) { "napplets.rebuild_required" }
+    require(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) { "applications.rebuild_required" }
+    require(WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) { "applications.rebuild_required" }
     pageValue=value
     val config=JSONObject(value);page=config
     val profileHash=java.security.MessageDigest.getInstance("SHA-256").digest(config.optString("storageId",config.getString("sourceId")).toByteArray()).joinToString("") { "%02x".format(it) }

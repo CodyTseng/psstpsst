@@ -11,13 +11,13 @@ export function NappletRequiredAccess({ release, showHeading = true, unsupported
   const required = [...new Set(release.required)].filter((domain) => domain !== 'shell');
   if (!required.length) return null;
   return <View style={{ gap: spacing.md }}>
-    {showHeading ? <AppText variant="subtitle">{t('napplets.capabilities_required')}</AppText> : null}
-    {unsupported.length ? <AppText variant="caption" tone="danger">{t('napplets.unsupported')}</AppText> : null}
+    {showHeading ? <AppText variant="subtitle">{t('applications.capabilities_required')}</AppText> : null}
+    {unsupported.length ? <AppText variant="caption" tone="danger">{t('applications.unsupported')}</AppText> : null}
     <ListGroup>{required.map((domain) => {
-      const name=t(`napplets.capability_${({network:'resource',common:'relay'} as Record<string,string>)[domain] ?? domain}`, { defaultValue: domain });
+      const name=t(`applications.capability_${({network:'resource',common:'relay'} as Record<string,string>)[domain] ?? domain}`, { defaultValue: domain });
       const unavailable=unsupported.includes(domain);
       return <ListRow key={domain} titleTone={unavailable ? 'danger' : 'default'}
-        title={unavailable ? t('napplets.capability_unsupported', { name }) : name} />;
+        title={unavailable ? t('applications.capability_unsupported', { name }) : name} />;
     })}</ListGroup>
   </View>;
 }

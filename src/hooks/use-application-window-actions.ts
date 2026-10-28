@@ -24,7 +24,7 @@ export function useApplicationWindowActions() {
     } else if (useActiveAccount.getState().activePubkey === action.accountPubkey) {
       if (action.type === 'discover') {
         const id = useExploreSearchHandoffStore.getState().start({ account: action.accountPubkey, value: '', action: { name: action.name, auxiliary: action.auxiliary } });
-        router.navigate({ pathname: '/napplets', params: { searchHandoff: String(id) } });
+        router.navigate({ pathname: '/explore', params: { searchHandoff: String(id) } });
         return;
       }
       useForwardDraftStore.getState().start({ accountPubkey: action.accountPubkey, sourceConversationKey: null,

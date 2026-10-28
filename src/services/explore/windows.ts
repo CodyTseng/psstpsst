@@ -17,7 +17,7 @@ export async function tryOpenApplicationWindow(entry: ExploreEntry, accountPubke
 
 export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: string, reviewedRequired?: readonly string[]) {
   try {
-    if (!platform.napplet.windows && !platform.napplet.tasks) throw new Error('napplets.rebuild_required');
+    if (!platform.napplet.windows && !platform.napplet.tasks) throw new Error('applications.rebuild_required');
     if (!await canReceiveForAccount(accountPubkey)) throw new Error('account-unavailable');
     if (platform.napplet.tasks) { await applicationTasks.open(entry, accountPubkey, reviewedRequired); return; }
     entry = await resolveFavoriteMetadata(accountPubkey, entry, new AbortController().signal);
@@ -36,7 +36,7 @@ export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEnt
   if (launch.address.startsWith('local~')) {
     const { readLocalApplication } = await import('./local-applications');
     const local = await readLocalApplication(launch.accountPubkey, launch.address);
-    if (!local) throw new Error('napplets.not_found');
+    if (!local) throw new Error('applications.not_found');
     entry = local;
   } else if (launch.manifest) entry = [5129, 15129, 35129].includes(launch.manifest.kind) ? fromNapplet(parseManifest(launch.manifest)) : parseSite(launch.manifest);
   else {

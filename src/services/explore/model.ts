@@ -89,7 +89,7 @@ export type GridApp = Pick<ExploreEntry, 'key' | 'title' | 'servers' | 'icon' | 
 export function websiteAddress(value: string): string {
   const url = new URL(value.includes('://') ? value : `https://${value}`);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !url.hostname || value.length > 8192)
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   return url.href;
 }
 export function websiteEntry(value: string): ExploreEntry {
@@ -98,10 +98,10 @@ export function websiteEntry(value: string): ExploreEntry {
 }
 export function sitePath(value: string): string {
   if (!value.startsWith('/') || value.startsWith('//') || /[?#\\\u0000-\u001f]/.test(value) || value.split('/').some((s) => ['.', '..'].includes(s)))
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   const url = new URL(value, 'https://site.invalid');
   if (decodeURIComponent(url.pathname) !== value || url.pathname !== value)
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   return value;
 }
 export function fileMime(path: string): string {
@@ -112,24 +112,24 @@ export function parseSite(input: Event): ExploreEntry {
   // Verification caches on foreign objects are never an authority boundary.
   const event: Event = { id: input.id, pubkey: input.pubkey, sig: input.sig, kind: input.kind, created_at: input.created_at, content: input.content, tags: input.tags };
   if (!Number.isSafeInteger(event.created_at) || event.created_at < 0 || ![15128, 35128, 35130].includes(event.kind) || !Array.isArray(event.tags) || event.tags.length > 1024 || JSON.stringify(event).length > 256 * 1024 || !verifyEvent(event))
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   const tags = (key: string) => event.tags.filter((t) => t[0] === key);
   const named = event.kind !== 15128;
   if (named ? tags('d').length !== 1 || !tags('d')[0][1] : tags('d').length !== 0)
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   const files = tags('path').map((t) => {
     if (!/^[a-f0-9]{64}$/.test(t[2] ?? ''))
-      throw new Error('napplets.invalid_manifest');
+      throw new Error('applications.invalid_manifest');
     const path = sitePath(t[1]);
     return { path, hash: t[2], mime: fileMime(path) };
   });
   if (!files.length || files.length > 512 || !files.some((f) => f.path === '/index.html') || new Set(files.map((f) => f.path)).size !== files.length)
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   const aggregate = tags('x').find((t) => t[2] === 'aggregate');
   if (aggregate) {
     const lines = [...files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0).map((f) => `${f.hash} ${f.path}\n`).join('');
     if (bytesToHex(sha256(new TextEncoder().encode(lines))) !== aggregate[1])
-      throw new Error('napplets.invalid_manifest');
+      throw new Error('applications.invalid_manifest');
   }
   const key = naddrEncode({ kind: event.kind, pubkey: event.pubkey, identifier: tags('d')[0]?.[1] ?? '' });
   const servers = [...new Set(tags('server').map((t) => publicUrl(t[1])))].slice(0, 8);

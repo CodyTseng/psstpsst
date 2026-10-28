@@ -30,7 +30,7 @@ it('shows Favorite and permissions without Remove for an unused app', async () =
   mockState.entries = [];
   await act(async () => { renderer = create(render()); });
   expect(items().map(item => item.key)).toEqual(['copy', 'permissions', 'share', 'favorite']);
-  expect(items().find(item => item.key === 'favorite')?.title).toBe('napplets.add_app');
+  expect(items().find(item => item.key === 'favorite')?.title).toBe('applications.add_app');
   act(() => { items().find(item => item.key === 'favorite')!.onPress(); });
   expect(mockFavorite).toHaveBeenCalledWith(app, true);
   act(() => { items().find(item => item.key === 'permissions')!.onPress(); });
@@ -40,7 +40,7 @@ it('reads saved state without exposing history removal in details', async () => 
   const saved = { ...app, desktopPosition: 0, lastUsedAt: 100 };
   mockState.entries = [saved];
   await act(async () => { renderer = create(render()); });
-  expect(items().find(item => item.key === 'favorite')).toMatchObject({ title: 'napplets.remove_app', tone: 'danger' });
+  expect(items().find(item => item.key === 'favorite')).toMatchObject({ title: 'applications.remove_app', tone: 'danger' });
   expect(items().some(item => item.key === 'remove')).toBe(false);
   act(() => { items().find(item => item.key === 'favorite')!.onPress(); });
   expect(mockFavorite).toHaveBeenCalledWith(saved, false);

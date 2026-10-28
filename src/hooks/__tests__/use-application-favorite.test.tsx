@@ -29,14 +29,14 @@ it('adds a new favorite after existing favorites and confirms success', async ()
   mockState.entries = [{ ...app, key: 'other', desktopPosition: 0 }];
   await act(async () => { await toggle(app, true); });
   expect(exploreService.move).toHaveBeenCalledWith(app, 1, 'account');
-  expect(showToast).toHaveBeenCalledWith('napplets.app_added', { target: 'detail' });
+  expect(showToast).toHaveBeenCalledWith('applications.app_added', { target: 'detail' });
 });
 it('uses the current saved entry and confirms unfavoriting', async () => {
   const saved = { ...app, desktopPosition: 2, lastUsedAt: 100 };
   mockState.entries = [saved];
   await act(async () => { await toggle(app, false); });
   expect(exploreService.move).toHaveBeenCalledWith(saved, null, 'account');
-  expect(showToast).toHaveBeenCalledWith('napplets.app_removed', { target: 'detail' });
+  expect(showToast).toHaveBeenCalledWith('applications.app_removed', { target: 'detail' });
 });
 it('loads favorite state before changing an app opened outside Explore', async () => {
   mockState = { account: null, loaded: false, entries: [] };
@@ -49,5 +49,5 @@ it('shows an error instead of a success toast when persistence fails', async () 
   jest.mocked(exploreService.move).mockRejectedValue(new Error('failed'));
   await act(async () => { await toggle(app, true); });
   expect(showToast).toHaveBeenCalledTimes(1);
-  expect(showToast).toHaveBeenCalledWith('napplets.request_failed', { variant: 'error', target: 'detail' });
+  expect(showToast).toHaveBeenCalledWith('applications.request_failed', { variant: 'error', target: 'detail' });
 });

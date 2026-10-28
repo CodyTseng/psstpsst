@@ -330,7 +330,7 @@ function RealConversations() {
     if (result.kind === 'application') {
       if (!accountPubkey) return;
       const handoff = useExploreSearchHandoffStore.getState().start({ account: accountPubkey, value: result.address });
-      router.navigate({ pathname: '/napplets', params: { searchHandoff: String(handoff) } });
+      router.navigate({ pathname: '/explore', params: { searchHandoff: String(handoff) } });
       return;
     }
     if (result.kind === 'napplet') {

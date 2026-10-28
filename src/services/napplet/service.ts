@@ -210,7 +210,7 @@ export const nappletService = {
         refresh: options.refresh, known: known.map(fromNapplet),
       });
       check(account, epoch);
-      if (!app.release) throw new Error('napplets.invalid_manifest');
+      if (!app.release) throw new Error('applications.invalid_manifest');
       const release = known.find(previous => previous.event.id === app.release!.event.id) ?? app.release;
       nappletStore.setState(state => {
         const previous = state.market.find(app => app.key === release.key);
@@ -229,7 +229,7 @@ export const nappletService = {
     if (expectedAccount !== undefined && account !== expectedAccount)
       throw new Error('session-closed');
     if (release.required.some((domain) => !(NAP_DOMAINS as readonly string[]).includes(domain)))
-      throw new Error('napplets.unsupported');
+      throw new Error('applications.unsupported');
     await loadArtifact(release, undefined, onDownload);
     check(account, epoch);
     desktopRevision++;
@@ -260,7 +260,7 @@ export const nappletService = {
       nappletStore.setState({ launch: { release, pending: true, showLoading: true, error: null } });
     } catch (error) {
       if (opening === token && nappletStore.getState().runId === runId) nappletStore.setState({ launching: false,
-        launch: { release, pending: false, showLoading: false, error: 'napplets.request_failed' } });
+        launch: { release, pending: false, showLoading: false, error: 'applications.request_failed' } });
       throw error;
     }
   },
@@ -283,7 +283,7 @@ export const nappletService = {
       await work;
     } catch (error) {
       if (token === opening) {
-        const reason = error instanceof Error ? error.message : 'napplets.request_failed';
+        const reason = error instanceof Error ? error.message : 'applications.request_failed';
         if (reason === 'permission-denied' || reason === 'session-closed') this.stop();
         else {
           approvals.cancelAll();

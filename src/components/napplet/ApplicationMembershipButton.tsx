@@ -15,7 +15,7 @@ export function ApplicationMembershipButton({ added, onChange }: Props) {
   const [busy, setBusy] = useState(false);
   const Icon = added ? Trash : Plus;
   return <AppButton variant={added ? 'danger' : 'secondary'} size="sm" fullWidth={false} labelVariant="body"
-    label={t(added === undefined ? 'napplets.my_apps' : added ? 'napplets.remove_app' : 'napplets.add_app')}
+    label={t(added === undefined ? 'applications.my_apps' : added ? 'applications.remove_app' : 'applications.add_app')}
     disabled={busy || added === undefined} loading={busy || added === undefined}
     iconLeft={added === undefined ? undefined : <Icon size={spacing.lg} color={added ? colors.danger : colors.text} strokeWidth={iconStrokeWidth.default} />}
     onLongPress={event => event.stopPropagation()}

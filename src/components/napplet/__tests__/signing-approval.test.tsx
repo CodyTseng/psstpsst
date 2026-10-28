@@ -55,7 +55,7 @@ jest.mock('@/components/common/Avatar', () => ({ Avatar: () => null }));
 jest.mock('../ApplicationChoiceRow', () => ({ ApplicationChoiceRow: () => null }));
 jest.mock('../ApplicationTaskContext', () => ({ useOwnsApplicationTaskOverlays: () => true }));
 jest.mock('../NappletPanel', () => ({ NappletPanel: () => null, NappletPanelActions: () => null }));
-jest.mock('../NappletIcon', () => ({ NappletIcon: () => null }));
+jest.mock('../ApplicationIcon', () => ({ ApplicationIcon: () => null }));
 jest.mock('@/components/common/BottomSheet', () => ({
   BottomSheet: ({ children, headerAction, fixedSubheader, fixedFooter, modalOverlay, listProps }: { listProps?: { data: unknown[]; ListEmptyComponent?: React.ReactNode }; children: React.ReactNode; headerAction: React.ReactNode; fixedSubheader: React.ReactNode; fixedFooter: React.ReactNode; modalOverlay: React.ReactNode }) => {
     const View = jest.requireActual('react-native').View;
@@ -88,12 +88,12 @@ it.each(['light', 'dark'] as const)('reviews files as app consent without signin
     upload: { filename: 'card.png', mimeType: 'image/png', size: 1024, sha256: 'c'.repeat(64), servers: ['https://storage.example/'] } };
   act(() => { renderer = create(<UploadApproval prompt={file} />); });
   const text = renderer.root.findAllByType(AppText).map((node) => node.props.children);
-  expect(text).toContain('napplets.signing_effect_upload');
+  expect(text).toContain('applications.signing_effect_upload');
   expect(text).toContain('card.png'); expect(text).toContain('storage.example');
   expect(renderer.root.findAllByType(SigningActions)).toHaveLength(0);
-  for (const content of ['card.png', 'storage.example', 'napplets.signing_effect_upload'])
+  for (const content of ['card.png', 'storage.example', 'applications.signing_effect_upload'])
     expect(renderer.root.findAllByType(AppText).find((node) => node.props.children === content)!.props.selectable).toBe(false);
-  act(() => { void button('napplets.allow').props.onPress(); });
+  act(() => { void button('applications.allow').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'allow');
 });
 
@@ -103,10 +103,10 @@ it.each(['light', 'dark'] as const)('binds scope selection and approval to the d
   const content = renderer.root.findAllByType(AppText).find((node) => node.props.children === prompt.signing!.content)!;
   expect(StyleSheet.flatten(content.findByType(Text).props.style).color).toBe((scheme === 'dark' ? darkPalette : lightPalette).text);
   selectDuration('allow-always');
-  act(() => { void button('napplets.signing_approve').props.onPress(); });
+  act(() => { void button('applications.signing_approve').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'allow-always');
   act(() => { renderer.update(<SigningApproval key="request-B" prompt={{ ...prompt, requestId: 'request-B' }} />); });
-  act(() => { void button('napplets.signing_approve').props.onPress(); });
+  act(() => { void button('applications.signing_approve').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-B', 'allow');
 });
 
@@ -114,16 +114,16 @@ it('uses exactly two side-by-side decisions and applies the selected time to ref
   act(() => { renderer = create(<SigningApproval prompt={prompt} />); });
   selectDuration('allow-1h');
   expect(renderer.root.findByType(ActionRow).props.layout).toBe('horizontal');
-  expect(renderer.root.findAllByType(AppButton).filter((node) => node.props.label === 'napplets.signing_block')).toHaveLength(0);
-  act(() => { void button('napplets.signing_reject_countdown').props.onPress(); });
+  expect(renderer.root.findAllByType(AppButton).filter((node) => node.props.label === 'applications.signing_block')).toHaveLength(0);
+  act(() => { void button('applications.signing_reject_countdown').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'deny-1h');
 });
 
 it('omits optional capabilities from launch consent and grants only required access', () => {
   const capability = { ...prompt, signing: undefined, capabilities: { required: ['shell'], optional: ['identity'] } };
   act(() => { renderer = create(<CapabilityApproval prompt={capability} />); });
-  expect(renderer.root.findAllByType(AppButton).some((node) => node.props.label === 'napplets.capability_identity')).toBe(false);
-  act(() => { void button('napplets.allow').props.onPress(); });
+  expect(renderer.root.findAllByType(AppButton).some((node) => node.props.label === 'applications.capability_identity')).toBe(false);
+  act(() => { void button('applications.allow').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'domains:[]');
 });
 
@@ -132,10 +132,10 @@ it.each(['light', 'dark'] as const)('reviews the requested optional capability w
   const capability = { ...prompt, signing: undefined,
     capabilities: { required: ['config'], optional: [], requested: 'config' } };
   act(() => { renderer = create(<CapabilityApproval prompt={capability} />); });
-  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toContain('napplets.capability_config');
-  act(() => { void button('napplets.signing_reject').props.onPress(); });
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toContain('applications.capability_config');
+  act(() => { void button('applications.signing_reject').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'deny');
-  act(() => { void button('napplets.allow').props.onPress(); });
+  act(() => { void button('applications.allow').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'allow');
 });
 
@@ -143,10 +143,10 @@ it('keeps the fixed footer bound to its request and resets duration before a new
   mockPrompt = prompt;
   act(() => { renderer = create(<NappletOverlays />); });
   selectDuration('allow-always');
-  const previousApprove = button('napplets.signing_approve').props.onPress;
+  const previousApprove = button('applications.signing_approve').props.onPress;
   mockPrompt = { ...prompt, requestId: 'new-request' };
   act(() => { renderer.update(<NappletOverlays />); });
-  act(() => { void button('napplets.signing_approve').props.onPress(); });
+  act(() => { void button('applications.signing_approve').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('new-request', 'allow');
   act(() => { void previousApprove(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'allow-always');
@@ -161,7 +161,7 @@ it('prioritizes the requesting app and account and expands directly into JSON an
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findByType(SigningAccountAvatar).props.pubkey).toBe('a'.repeat(64));
   expect(renderer.root.findAllByType(SigningIdentity)).toHaveLength(0);
-  act(() => { void button('napplets.signing_details').props.onPress(); });
+  act(() => { void button('applications.signing_details').props.onPress(); });
   expect(renderer.root.findAllByType(SigningIdentity)).toHaveLength(0);
   const text = renderer.root.findAllByType(AppText).map((node) => node.props.children);
   expect(text).toContain(JSON.stringify({ pubkey: prompt.signing!.accountPubkey, kind: 1, created_at: 100,
@@ -177,7 +177,7 @@ it('shows a readable application-data preview while keeping the complete payload
   expect(text()).toContain('score'); expect(text()).toContain('120');
   expect(text()).not.toContain(request.content);
   expect(text()).not.toContain('wss://relay.example/');
-  act(() => { void button('napplets.signing_details').props.onPress(); });
+  act(() => { void button('applications.signing_details').props.onPress(); });
   expect(text().some((value) => typeof value === 'string' && value.includes('"kind": 30078'))).toBe(true);
 });
 
@@ -215,7 +215,7 @@ it.each(['light', 'dark'] as const)('blocks backdrop dismissal and closes the du
 
 it('disables JSON text selection and copies the complete displayed event', async () => {
   act(() => { renderer = create(<SigningRequestDetails request={prompt.signing!} />); });
-  act(() => { button('napplets.signing_details').props.onPress(); });
+  act(() => { button('applications.signing_details').props.onPress(); });
   const json = renderer.root.findAllByType(AppText).find((node) => node.props.variant === 'code')!;
   expect(json.props.selectable).toBe(false);
   expect(StyleSheet.flatten(json.props.style).userSelect).toBe('none');
@@ -230,11 +230,11 @@ it('disables JSON text selection and copies the complete displayed event', async
 it('disables selection across raw JSON previews, relay addresses and signing identities', () => {
   const request = { ...prompt.signing!, kind: 30079, recipient: 'b'.repeat(64), content: '{"score":120}' };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
-  act(() => { button('napplets.signing_details').props.onPress(); });
+  act(() => { button('applications.signing_details').props.onPress(); });
   const texts = renderer.root.findAllByType(AppText);
   expect(texts.some((node) => node.props.children === request.content)).toBe(true);
   expect(texts.some((node) => node.props.children === 'wss://relay.example/')).toBe(true);
-  for (const text of texts.filter((node) => node.props.children !== 'napplets.signing_hide_details' && node.props.children !== 'common.copy')) {
+  for (const text of texts.filter((node) => node.props.children !== 'applications.signing_hide_details' && node.props.children !== 'common.copy')) {
     expect(text.props.selectable).toBe(false);
     expect(StyleSheet.flatten(text.props.style).userSelect).toBe('none');
   }
@@ -245,13 +245,13 @@ it.each([
   [3, [['d', 'actual-record']], null],
   [10001, [['d', 'actual-record']], null],
   [30078, [['d', 'actual-record']], 'actual-record'],
-  [30078, [['d', '']], 'napplets.signing_unnamed'],
-  [30078, [], 'napplets.none'],
+  [30078, [['d', '']], 'applications.signing_unnamed'],
+  [30078, [], 'applications.none'],
 ] as const)('shows kind %s and its applicable d tag before expanding details', (kind, tags, expected) => {
   const request = { ...prompt.signing!, kind, tags: tags.map((tag) => [...tag]), scopeKey: 'untrusted-derived-record' };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map((node) => node.props.children);
-  expect(texts).toContain('napplets.signing_kind');
+  expect(texts).toContain('applications.signing_kind');
   expect(texts.some(value => typeof value === 'string' && (value === String(kind) || value.endsWith(` · ${kind}`)))).toBe(true);
   if (expected === null) expect(texts).not.toContain('d');
   else {
@@ -266,8 +266,8 @@ it.each([{ tags: [] }, { tags: [['e', 'referenced-event']] }, { tags: [['p', 'a'
   const request = { ...prompt.signing!, kind: 3, content: '', tags };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts).not.toContain('napplets.signing_content');
-  expect(texts).not.toContain('napplets.none');
+  expect(texts).not.toContain('applications.signing_content');
+  expect(texts).not.toContain('applications.none');
   expect(texts).not.toContain('d');
 });
 
@@ -277,16 +277,16 @@ it('keeps launch permissions focused on required capabilities with a fixed decis
   act(() => { renderer = create(<NappletOverlays />); });
   const sheet = renderer.root.findByType(jest.requireMock('@/components/common/BottomSheet').BottomSheet);
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts).not.toContain('napplets.signing_queued');
-  expect(button('napplets.signing_reject_all')).toBeUndefined();
+  expect(texts).not.toContain('applications.signing_queued');
+  expect(button('applications.signing_reject_all')).toBeUndefined();
   expect(texts).not.toContain(mockPrompt.application!.description);
-  expect(texts).toContain('napplets.capability_resource');
-  expect(texts).toContain('napplets.capability_storage');
+  expect(texts).toContain('applications.capability_resource');
+  expect(texts).toContain('applications.capability_storage');
   expect(renderer.root.findByType(CapabilityApproval).props.hideActions).toBe(true);
   expect(sheet.props.dismissOnBackdropPress).toBe(false);
   expect(sheet.props.fixedFooter).toBeDefined();
   expect(renderer.root.findByType(SigningAccountAvatar).props.pubkey).toBe('a'.repeat(64));
-  act(() => { button('napplets.allow').props.onPress(); });
+  act(() => { button('applications.allow').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith(prompt.requestId, 'allow');
   mockPrompt = null;
 });
@@ -296,9 +296,9 @@ it('shows the concrete browser permission without unrelated application requirem
     application: { title: 'Armada', description: '', required: ['network'], servers: [] } };
   act(() => { renderer = create(<CapabilityApproval prompt={browser} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts).toContain('napplets.browser_protected_media');
-  expect(texts).toContain('napplets.browser_permission: unrecognized-feature');
-  expect(texts).not.toContain('napplets.capability_resource');
+  expect(texts).toContain('applications.browser_protected_media');
+  expect(texts).toContain('applications.browser_permission: unrecognized-feature');
+  expect(texts).not.toContain('applications.capability_resource');
 });
 
 it.each(['u', 'url'])('shows the event type and HTTP authentication target from %s before opening event JSON', tag => {
@@ -306,11 +306,11 @@ it.each(['u', 'url'])('shows the event type and HTTP authentication target from 
     tags: [[tag, 'https://service.example/upload'], ['method', 'POST']] };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts.some(value => typeof value === 'string' && value.includes('napplets.event_http_auth'))).toBe(true);
+  expect(texts.some(value => typeof value === 'string' && value.includes('applications.event_http_auth'))).toBe(true);
   expect(texts).toContain('https://service.example/upload');
-  expect(texts).toContain('napplets.signing_url');
+  expect(texts).toContain('applications.signing_url');
   expect(texts).toContain('POST');
-  expect(texts).not.toContain('napplets.none');
+  expect(texts).not.toContain('applications.none');
 });
 
 it.each(['light', 'dark'] as const)('keeps the full HTTP authentication URL visible beyond reference limits in %s mode', scheme => {
@@ -329,7 +329,7 @@ it.each(['light', 'dark'] as const)('keeps the full HTTP authentication URL visi
 it('identifies a profile event and previews the actual profile values', () => {
   act(() => { renderer = create(<SigningRequestDetails request={{ ...prompt.signing!, operation: 'sign', kind: 0, content: '{"name":"Cody","about":"Hello"}' }} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts.some(value => typeof value === 'string' && value.includes('napplets.event_profile'))).toBe(true);
+  expect(texts.some(value => typeof value === 'string' && value.includes('applications.event_profile'))).toBe(true);
   expect(texts).toContain('Cody'); expect(texts).toContain('Hello');
 });
 
@@ -338,7 +338,7 @@ it.each(['get-public-key', 'nip44-encrypt', 'nip04-decrypt'] as const)('reviews 
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).not.toContain('chat.event_reference.kind');
-  expect(button('napplets.signing_details')).toBeUndefined();
+  expect(button('applications.signing_details')).toBeUndefined();
   if (operation === 'get-public-key') {
     expect(texts).toContain('profile.public_key'); expect(texts).toContain('a'.repeat(64));
   } else {
@@ -350,10 +350,10 @@ it.each(['get-public-key', 'nip44-encrypt', 'nip04-decrypt'] as const)('reviews 
 it('browser sensitive permissions reuse duration controls for both allow and reject', () => {
   const browser = { ...prompt, signing: undefined, browser: { action: 'permission' as const, resources: ['clipboard-read'] } };
   act(() => { renderer = create(<CapabilityActions prompt={browser} duration="allow-1h" />); });
-  expect(button('napplets.signing_period_1h')).toBeDefined();
-  act(() => { button('napplets.signing_approve').props.onPress(); });
+  expect(button('applications.signing_period_1h')).toBeDefined();
+  act(() => { button('applications.signing_approve').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith(prompt.requestId, 'allow-1h');
-  act(() => { button('napplets.signing_reject_countdown').props.onPress(); });
+  act(() => { button('applications.signing_reject_countdown').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith(prompt.requestId, 'deny-1h');
 });
 
@@ -361,7 +361,7 @@ it.each(['nip04-encrypt', 'nip44-encrypt'] as const)('shows the original plainte
   const text = '  Exact original\n{"literal":"<message>"}  ';
   act(() => { renderer = create(<SigningRequestDetails request={{ ...prompt.signing!, operation, kind: undefined, recipient: undefined, content: text }} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts).toContain('napplets.crypto_plaintext'); expect(texts).toContain(text);
+  expect(texts).toContain('applications.crypto_plaintext'); expect(texts).toContain(text);
 });
 it('bounds long plaintext until expanded and copies the complete original', async () => {
   const text = 'Private original\n'.repeat(100);
@@ -371,7 +371,7 @@ it('bounds long plaintext until expanded and copies the complete original', asyn
   expect(texts).toContain(text.slice(0, 600)); expect(texts).not.toContain(text);
   await act(async () => { button('common.copy').props.onPress(); });
   expect(platform.clipboard.writeText).toHaveBeenCalledWith(text);
-  act(() => { button('napplets.signing_details').props.onPress(); });
+  act(() => { button('applications.signing_details').props.onPress(); });
   texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).toContain(text);
   act(() => { renderer.update(<SigningRequestDetails request={{ ...request, content: 'another input'.repeat(100) }} />); });
@@ -404,32 +404,32 @@ it.each(['light', 'dark'] as const)('opens Discover without an initialized nappl
   const sheet = renderer.root.findByType(BottomSheet);
   expect(sheet.props.fixedSubheader).toBeUndefined();
   const text = renderer.root.findAllByType(AppText);
-  expect(text.map(node => node.props.children)).toEqual(['napplets.open_with_empty', 'napplets.discover']);
-  expect(text[0].props).toMatchObject({ children: 'napplets.open_with_empty', variant: 'body', tone: 'muted' });
-  expect(button('napplets.discover')).toBeDefined();
+  expect(text.map(node => node.props.children)).toEqual(['applications.open_with_empty', 'applications.discover']);
+  expect(text[0].props).toMatchObject({ children: 'applications.open_with_empty', variant: 'body', tone: 'muted' });
+  expect(button('applications.discover')).toBeDefined();
   expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'common.cancel')).toBe(false);
   expect(getNappletAccountPubkey()).toBeNull();
-  act(() => { button('napplets.discover').props.onPress(); });
+  act(() => { button('applications.discover').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('empty', false);
   expect(router.navigate).not.toHaveBeenCalled();
   act(() => { renderer.root.findByType(BottomSheet).props.onClosed(); });
   expect(useExploreSearchHandoffStore.getState().pending).toMatchObject({ account: 'a'.repeat(64), action: { name: 'edit', auxiliary: false } });
-  expect(router.navigate).toHaveBeenCalledWith({ pathname: '/napplets', params: { searchHandoff: expect.any(String) } });
+  expect(router.navigate).toHaveBeenCalledWith({ pathname: '/explore', params: { searchHandoff: expect.any(String) } });
 });
 
 it('does not offer Discover for an unavailable explicit instance', () => {
   mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
     choices: [], applicationSelection: { requester: 'Timeline', content: 'content', unavailable: 'instance' } };
   act(() => { renderer = create(<NappletOverlays />); });
-  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.handler_closed')).toBe(true);
-  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'napplets.discover')).toBe(false);
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.handler_closed')).toBe(true);
+  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'applications.discover')).toBe(false);
 });
 
 it('discards a Discover handoff when the active account changes during dismissal', () => {
   mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
   act(() => { renderer = create(<NappletOverlays />); });
-  act(() => { button('napplets.discover').props.onPress(); });
+  act(() => { button('applications.discover').props.onPress(); });
   mockActiveAccount = 'b'.repeat(64);
   act(() => { renderer.root.findByType(BottomSheet).props.onClosed(); });
   expect(router.navigate).not.toHaveBeenCalled();
@@ -441,5 +441,5 @@ it('keeps the requester question when compatible applications can be selected', 
     choices: [{ key: 'target', title: 'Target' }], applicationSelection: { requester: 'Timeline', content: 'content' } };
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findByType(BottomSheet).props.fixedSubheader).toBeDefined();
-  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toEqual(['napplets.open_with_content']);
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toEqual(['applications.open_with_content']);
 });

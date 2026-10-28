@@ -84,7 +84,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   }, [address.active, address.entry, searching, scope, matches, searchCount, state.visibleEntries, actionFilter]);
   const c = useThemeColors();
   const { t } = useTranslation();
-  const filterLabel = actionFilter ? t(actionFilter.auxiliary ? 'napplets.auxiliary_action_filter' : 'napplets.action_filter', { action: actionFilter.name }) : '';
+  const filterLabel = actionFilter ? t(actionFilter.auxiliary ? 'applications.auxiliary_action_filter' : 'applications.action_filter', { action: actionFilter.name }) : '';
   useEffect(() => { if (scope === 'discover' && !address.active) void discoverApplications(account, false, discoveryScope); }, [account, address.active, scope, discoveryScope]);
   useEffect(() => {
     if (actionFilter && scope === 'discover' && !address.active && state.loaded && state.hasMore &&
@@ -101,7 +101,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   const refreshing = canRefresh && pullRefreshing;
   const cataloguePending = !address.active && scope === 'discover' && !state.loaded && !state.error;
   const error = scope === 'discover' && !address.active && state.error && (actionFilter || (!data.length && !searching))
-    ? 'napplets.request_failed' : undefined;
+    ? 'applications.request_failed' : undefined;
   const filteredPending = !!actionFilter && !address.active && scope === 'discover' && !state.error &&
     (state.loading || state.loadingMore || state.hasMore);
   useErrorToast(error, 'primary');
@@ -129,7 +129,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
     ListHeaderComponent={actionFilter || error ? <>{actionFilter ? <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs, alignItems: 'flex-start' }}>
       <AppButton variant="secondary" size="sm" fullWidth={false} corner="full" labelVariant="caption"
         label={filterLabel}
-        accessibilityLabel={`${filterLabel}. ${t('napplets.show_all_apps')}`}
+        accessibilityLabel={`${filterLabel}. ${t('applications.show_all_apps')}`}
         iconRight={<X size={spacing.lg} strokeWidth={iconStrokeWidth.compact} color={c.textMuted} />}
         onPress={onClearAction} />
     </View> : null}{error ? <View style={{ padding: spacing.lg, gap: spacing.sm }}>
@@ -139,7 +139,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
       ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
       : !error && (searching || scope === 'my-apps' || !state.error && !state.loading && !state.hasMore) ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
         <Compass size={spacing['3xl']} color={c.textMuted} />
-        <AppText variant="title" align="center">{t(searching || scope === 'my-apps' ? 'search.empty' : actionFilter ? 'napplets.no_compatible_apps' : 'napplets.discovery_empty')}</AppText>
+        <AppText variant="title" align="center">{t(searching || scope === 'my-apps' ? 'search.empty' : actionFilter ? 'applications.no_compatible_apps' : 'applications.discovery_empty')}</AppText>
         {!searching && scope === 'discover' ? <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} /> : null}
       </View> : null}
     renderItem={({ item }) => <ApplicationContextRow app={item} favorite={favoriteKeys.has(item.key)}

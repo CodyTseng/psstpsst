@@ -8,7 +8,7 @@ import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { nappletService } from '@/services/napplet/service';
 import { AppButton } from '@/components/common/AppButton';
 import { ActivityIndicator } from 'react-native';
-import { NappletIcon } from '@/components/napplet/NappletIcon';
+import { ApplicationIcon } from '@/components/napplet/ApplicationIcon';
 import NappletRunScreen from '../../../app/(app)/napplet-run';
 import { AppScreen } from '@/components/common/AppScreen';
 
@@ -37,7 +37,7 @@ jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null,
 jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
 jest.mock('@/components/common/AppText', () => ({ AppText: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
-jest.mock('@/components/napplet/NappletIcon', () => ({ NappletIcon: () => null }));
+jest.mock('@/components/napplet/ApplicationIcon', () => ({ ApplicationIcon: () => null }));
 jest.mock('@/platform/napplet-surface', () => ({ NappletSurface: () => null }));
 jest.mock('@/platform/napplet-appearance', () => ({ useNappletAppearance: (id?: string) => id === 'test'
   ? { background: '#121212', dark: true } : undefined }));
@@ -93,7 +93,7 @@ it('shows a cold download until the mounted app presents its first frame', () =>
   let renderer!: ReactTestRenderer;
   act(() => { renderer = create(<NappletRunScreen />); });
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
-  expect(renderer.root.findAllByType(NappletIcon)).toHaveLength(1);
+  expect(renderer.root.findAllByType(ApplicationIcon)).toHaveLength(1);
   mockRunning = { release: { title: 'New app' }, containerId: 'new' }; mockLaunching = false;
   act(() => { renderer.update(<NappletRunScreen />); });
   expect(renderer.root.findAllByType(NappletSurface)).toHaveLength(1);
@@ -101,7 +101,7 @@ it('shows a cold download until the mounted app presents its first frame', () =>
   mockLaunch = { ...mockLaunch, showLoading: false };
   act(() => { renderer.update(<NappletRunScreen />); });
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
-  expect(renderer.root.findAllByType(NappletIcon)).toHaveLength(0);
+  expect(renderer.root.findAllByType(ApplicationIcon)).toHaveLength(0);
   act(() => renderer.unmount());
 });
 
@@ -114,7 +114,7 @@ it('shows the container before starting a prepared app and cancels its startup t
     act(() => { renderer = create(<NappletRunScreen />); });
     expect(renderer.root.findByType(ScreenHeader).props.title).toBe('Loading app');
     expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
-    expect(JSON.stringify(renderer.toJSON())).not.toContain('napplets.runtime_loading');
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('applications.runtime_loading');
     expect(router.back).not.toHaveBeenCalled();
     expect(nappletService.startPreparedOpen).not.toHaveBeenCalled();
     act(() => { jest.runOnlyPendingTimers(); });
@@ -130,7 +130,7 @@ it('shows the container before starting a prepared app and cancels its startup t
 
 it('keeps failed launches in the container and retries the same run', () => {
   mockRunning = null;
-  mockLaunch = { release: { title: 'App' }, pending: false, error: 'napplets.download_failed' };
+  mockLaunch = { release: { title: 'App' }, pending: false, error: 'applications.download_failed' };
   let renderer!: ReactTestRenderer;
   act(() => { renderer = create(<NappletRunScreen />); });
   expect(router.back).not.toHaveBeenCalled();
@@ -146,7 +146,7 @@ it('places explicit close at the start and sends system back to the app', async 
   act(() => { renderer = create(<NappletRunScreen />); });
   const header = renderer.root.findByType(ScreenHeader);
   expect(header.props.left.props.accessibilityLabel).toBe('common.close');
-  expect(header.props.right.props.accessibilityLabel).toBe('napplets.runtime_more');
+  expect(header.props.right.props.accessibilityLabel).toBe('applications.runtime_more');
   const [active, back] = jest.mocked(useFocusedOverlayDismiss).mock.calls.at(-1)!;
   expect(active).toBe(true);
   await act(async () => { back(); });

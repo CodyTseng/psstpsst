@@ -47,7 +47,7 @@ test('wallet requests reuse payment sheets, choose wallets at confirmation witho
       await page.getByRole('button', { name: 'Pay', exact: true }).waitFor();
       const headerGap = await page.getByRole('button', { name: 'Close', exact: true }).evaluate((close, source) =>
         source.getBoundingClientRect().top - close.getBoundingClientRect().bottom,
-      await page.getByTestId('napplet-identity').elementHandle());
+      await page.getByTestId('application-identity').elementHandle());
       assert.ok(Math.abs(headerGap - 16) < 1, 'the shared header owns the source gap');
       assert.equal(await page.getByText('https://jumble.social', { exact: true }).count(), 1);
       assert.equal(await page.getByRole('button', { name: 'Cancel', exact: true }).count(), 0);

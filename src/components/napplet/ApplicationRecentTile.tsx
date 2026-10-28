@@ -6,8 +6,8 @@ import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
 import { impact } from '@/lib/haptics';
 import type { GridApp } from '@/services/explore/model';
 import { spacing } from '@/theme';
-import { NappletAppMenu } from './NappletAppMenu';
-import { NappletTile } from './NappletTile';
+import { ApplicationMenu } from './ApplicationMenu';
+import { ApplicationTile } from './ApplicationTile';
 
 export type RecentAppActions<T extends GridApp = GridApp> = {
   onOpen: (app: T) => void;
@@ -28,7 +28,7 @@ type Props<T extends GridApp = GridApp> = RecentAppActions<T> & {
 };
 
 /** Recent history owns its menu and never participates in desktop drag state. */
-export function NappletRecentTile<T extends GridApp>({ app, width, height, iconSize, testID, onOpen, onAdd, onUnfavorite, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
+export function ApplicationRecentTile<T extends GridApp>({ app, width, height, iconSize, testID, onOpen, onAdd, onUnfavorite, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
   const icon = useRef<View>(null);
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);
@@ -46,17 +46,17 @@ export function NappletRecentTile<T extends GridApp>({ app, width, height, iconS
       event.preventDefault?.(); event.stopPropagation?.();
       showMenu(false);
     } } : {})}>
-    <NappletTile app={app} iconSize={iconSize} iconRef={icon} hideLabel={anchor !== null && menuPlacement === 'below'} onPress={() => onOpen(app)}
+    <ApplicationTile app={app} iconSize={iconSize} iconRef={icon} hideLabel={anchor !== null && menuPlacement === 'below'} onPress={() => onOpen(app)}
       onLongPress={() => showMenu(true)}
       accessibilityActions={[
-        { name: 'details', label: t('napplets.details') },
-        { name: 'permissions', label: t('napplets.permissions_manage') },
+        { name: 'details', label: t('applications.details') },
+        { name: 'permissions', label: t('applications.permissions_manage') },
         ...(!app.local ? [{ name: 'share', label: t('share.title') }] : []),
         ...(app.desktopPosition === null ? [
-          { name: 'add', label: t('napplets.add_app') },
+          { name: 'add', label: t('applications.add_app') },
         ] : []),
-        ...(app.desktopPosition !== null ? [{ name: 'unfavorite', label: t('napplets.remove_app') }] : []),
-        { name: 'remove', label: t('napplets.remove_from_history') },
+        ...(app.desktopPosition !== null ? [{ name: 'unfavorite', label: t('applications.remove_app') }] : []),
+        { name: 'remove', label: t('applications.remove_from_history') },
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'details') onDetails(app);
@@ -66,7 +66,7 @@ export function NappletRecentTile<T extends GridApp>({ app, width, height, iconS
         else if (event.nativeEvent.actionName === 'unfavorite') onUnfavorite(app);
         else if (event.nativeEvent.actionName === 'remove') onRemove(app);
       }} />
-    {anchor ? <NappletAppMenu app={app} anchor={anchor} onClose={() => setAnchor(null)}
+    {anchor ? <ApplicationMenu app={app} anchor={anchor} onClose={() => setAnchor(null)}
       onPlacementChange={setMenuPlacement} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare}
       favorite={app.desktopPosition !== null} onFavorite={app.desktopPosition === null ? onAdd : onUnfavorite} onRemove={onRemove} /> : null}
   </View>;

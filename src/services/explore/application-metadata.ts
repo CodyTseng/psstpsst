@@ -53,7 +53,7 @@ export async function refreshApplicationMetadata(account: string, entries: Explo
         if (response.incomplete || response.error) throw new Error('application-refresh-incomplete');
         const apps = await parseApplicationEvents(response.events);
         const valid = apps.flatMap(app => app?.manifest ? [app.manifest] : []);
-        if (response.events.length && !valid.length) throw new Error('napplets.invalid_manifest');
+        if (response.events.length && !valid.length) throw new Error('applications.invalid_manifest');
         return { events: valid, eventRelays: response.eventRelays };
       },
     });
@@ -72,7 +72,7 @@ export async function resolveApplicationMetadata(account: string, input: Explore
   options: { refresh?: boolean; known?: readonly ExploreEntry[] } = {}): Promise<ExploreEntry> {
   assertNotAborted(signal);
   const entry = typeof input === 'string' ? applicationEntryFromAddress(input) : input;
-  if (!entry) throw new Error('napplets.invalid_manifest');
+  if (!entry) throw new Error('applications.invalid_manifest');
   const reference = parseNostrEventReference(entry.address);
   let known: ExploreEntry | undefined;
   for (const candidate of options.known ?? []) {
@@ -88,7 +88,7 @@ export async function resolveApplicationMetadata(account: string, input: Explore
   if (entry.key.startsWith('local~')) {
     const { readLocalApplication } = await import('./local-applications');
     const local = await readLocalApplication(account, entry.key); assertNotAborted(signal);
-    if (!local) throw new Error('napplets.not_found');
+    if (!local) throw new Error('applications.not_found');
     return withApplicationMetadata(entry, local);
   }
   if (entry.kind === 'website') return known ?? entry;
@@ -146,7 +146,7 @@ async function readApplicationId(id: string): Promise<ExploreEntry | undefined> 
 
 async function fetchApplicationMetadata(account: string, entry: ExploreEntry, signal: AbortSignal): Promise<ExploreEntry> {
   const reference = parseNostrEventReference(entry.address);
-  if (!reference) throw new Error('napplets.invalid_manifest');
+  if (!reference) throw new Error('applications.invalid_manifest');
   const coordinate = applicationCoordinate(entry);
   const network = new NappletNetwork(account);
   const abort = () => network.destroy(); signal.addEventListener('abort', abort, { once: true });
@@ -173,7 +173,7 @@ async function fetchApplicationMetadata(account: string, entry: ExploreEntry, si
       if (reference.id) await storeCachedEvent(event, app.eventRelays);
       return withApplicationMetadata(entry, app);
     }
-    throw new Error(events.length ? 'napplets.invalid_manifest' : response.incomplete || response.error ? 'napplets.request_failed' : 'napplets.not_found');
+    throw new Error(events.length ? 'applications.invalid_manifest' : response.incomplete || response.error ? 'applications.request_failed' : 'applications.not_found');
   } finally { signal.removeEventListener('abort', abort); network.destroy(); }
 }
 

@@ -50,7 +50,7 @@ it('keeps a mounted surface hidden until its own first frame and ignores late re
 });
 
 it('requires the new native Explore capability before opening a remote page',async()=>{
-  await expect(nappletAdapter.openPage!({url:'https://example.com',sourceId:'source',script:'',network:true})).rejects.toThrow('napplets.rebuild_required');
+  await expect(nappletAdapter.openPage!({url:'https://example.com',sourceId:'source',script:'',network:true})).rejects.toThrow('applications.rebuild_required');
 });
 
 it('keeps Explore hidden until its document reports its first frame',async()=>{

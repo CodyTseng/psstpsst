@@ -23,14 +23,14 @@ it('shows required access immediately and distinguishes enabled and disabled opt
     optional={['network', 'appearance']} selected={['shell', 'common', 'network']} onToggle={onToggle} />); });
   const rows = renderer.root.findAllByType(ListRow);
   expect(rows.map(row => row.props.title)).toEqual([
-    'napplets.capability_relay', 'napplets.capability_resource', 'napplets.capability_appearance',
+    'applications.capability_relay', 'applications.capability_resource', 'applications.capability_appearance',
   ]);
-  expect(rows[0].props.value).toBe('napplets.capabilities_required');
-  expect(rows[1].props.subtitle).toBe('napplets.permissions_enabled');
-  expect(rows[2].props.subtitle).toBe('napplets.permissions_disabled');
+  expect(rows[0].props.value).toBe('applications.capabilities_required');
+  expect(rows[1].props.subtitle).toBe('applications.permissions_enabled');
+  expect(rows[2].props.subtitle).toBe('applications.permissions_disabled');
   const toggle = rows[2].props.trailing;
   expect(toggle.type).toBe(Toggle);
-  expect(toggle.props.accessibilityLabel).toBe('napplets.capability_appearance');
+  expect(toggle.props.accessibilityLabel).toBe('applications.capability_appearance');
   act(() => { toggle.props.onValueChange(true); });
   expect(onToggle).toHaveBeenCalledWith('appearance', true);
 });
@@ -39,7 +39,7 @@ it('does not present unresolved optional access as disabled', () => {
   act(() => { renderer = create(<ApplicationAccessControls required={['network']} optional={['appearance']} />); });
   expect(renderer.root.findAllByType(ListRow)).toHaveLength(1);
   const text = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(text).not.toContain('napplets.permissions_disabled');
+  expect(text).not.toContain('applications.permissions_disabled');
 });
 
 it('keeps draft state visible and requires saving before reloading', () => {
@@ -48,7 +48,7 @@ it('keeps draft state visible and requires saving before reloading', () => {
     selected={['appearance']} changed onSave={onSave} />); });
   expect(onSave).not.toHaveBeenCalled();
   const save = renderer.root.findByType(AppButton);
-  expect(save.props.label).toBe('napplets.permissions_save');
+  expect(save.props.label).toBe('applications.permissions_save');
   act(() => { save.props.onPress(); });
   expect(onSave).toHaveBeenCalledTimes(1);
 });

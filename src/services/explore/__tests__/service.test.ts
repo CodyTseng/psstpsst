@@ -500,7 +500,7 @@ it('releases the old inline runtime and keeps a retryable error when an update c
   });
   await expect(exploreService.restart(runId, { ...app, title: 'Updated' })).rejects.toThrow();
   expect(old.stop).toHaveBeenCalledTimes(1);
-  expect(exploreStore.getState()).toMatchObject({ entry: { key: app.key, title: 'Updated', required: ['network'] }, containerId: null, error: 'napplets.request_failed' });
+  expect(exploreStore.getState()).toMatchObject({ entry: { key: app.key, title: 'Updated', required: ['network'] }, containerId: null, error: 'applications.request_failed' });
 });
 
 it('closes an old inline runtime before starting the replacement', async () => {

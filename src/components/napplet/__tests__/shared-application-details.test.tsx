@@ -75,7 +75,7 @@ it('activates the current account before resolving a chat share when Explore has
 it('rejects a non-application address instead of treating it as a signed application', async () => {
   mockParams = { address: pointer(30023) };
   await act(async () => { renderer = create(<ExploreDetailsScreen />); });
-  expect(renderer.root.findByType(ApplicationDetailsPage).props.error).toBe('napplets.invalid_manifest');
+  expect(renderer.root.findByType(ApplicationDetailsPage).props.error).toBe('applications.invalid_manifest');
   expect(useFavoriteMetadata).toHaveBeenLastCalledWith(undefined, 'account');
 });
 

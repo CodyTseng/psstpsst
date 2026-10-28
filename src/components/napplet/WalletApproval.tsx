@@ -6,7 +6,7 @@ import { nappletService } from '@/services/napplet/service';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import { spacing } from '@/theme';
 import { satsFromMsat } from '@/lib/wallet/amount';
-import { NappletIdentity } from './NappletIdentity';
+import { ApplicationIdentity } from './ApplicationIdentity';
 
 type Props = { prompt: QueuedPrompt; visible: boolean; onClosed: () => void };
 
@@ -38,6 +38,6 @@ function WalletRequester({ prompt }: { prompt: QueuedPrompt }) {
   const requester = prompt.requester;
   if (!requester) return null;
   const application = prompt.application ?? prompt.app ?? { ...requester, servers: [] };
-  return <NappletIdentity release={{ ...application, title: requester.title }} compact
+  return <ApplicationIdentity release={{ ...application, title: requester.title }} compact
     iconSize={spacing['2xl'] + spacing.sm} titleVariant="body" subtitle={requester.origin} />;
 }

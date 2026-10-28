@@ -9,7 +9,7 @@ export function useExploreAccess(entry:ExploreEntry|undefined,account:string|nul
     let active=true;
     if(entry&&account)void exploreService.access(entry,account)
       .then(approved=>{if(active)setResult({key,approved});})
-      .catch(()=>{if(active)setResult({key,error:'napplets.request_failed'});});
+      .catch(()=>{if(active)setResult({key,error:'applications.request_failed'});});
     return ()=>{active=false;};
   },[entry,account,key]);
   const current=result?.key===key?result:undefined;

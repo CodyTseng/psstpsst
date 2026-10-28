@@ -14,7 +14,7 @@ export function useNappletAccess(release: NappletRelease | undefined, accountPub
       .then(() => active ? nappletService.domainPermissions(release, accountPubkey) : undefined)
       .then((domains) => {
         if (active && domains) setResult({ key, approved: ['shell', ...release.required].every((domain) => domains.includes(domain)) });
-      }).catch(() => { if (active) setResult({ key, error: 'napplets.request_failed' }); });
+      }).catch(() => { if (active) setResult({ key, error: 'applications.request_failed' }); });
     return () => { active = false; };
   }, [release, accountPubkey, key]);
   const current = result?.key === key ? result : undefined;

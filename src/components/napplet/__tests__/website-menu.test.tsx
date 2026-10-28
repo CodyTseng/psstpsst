@@ -86,6 +86,6 @@ it.each(['unavailable', 'failure'] as const)('shows feedback when the default br
   const sheet = renderer.root.findByType(BottomSheet);
   act(() => { sheet.props.fixedFooter.props.onOpenExternal(); });
   await act(async () => { sheet.props.onClosed(); });
-  expect(showToast).toHaveBeenCalledWith('napplets.request_failed', { variant: 'error' });
+  expect(showToast).toHaveBeenCalledWith('applications.request_failed', { variant: 'error' });
   act(() => renderer.unmount());
 });

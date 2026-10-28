@@ -19,6 +19,6 @@ export function SigningDecisions({ expiresAt, onApprove, onReject }: {
   }, [expiresAt]);
   const seconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
   return <ActionRow layout="horizontal"
-    confirm={{ label: t('napplets.signing_approve'), onPress: onApprove }}
-    dismiss={{ label: t('napplets.signing_reject_countdown', { seconds }), onPress: onReject }} />;
+    confirm={{ label: t('applications.signing_approve'), onPress: onApprove }}
+    dismiss={{ label: t('applications.signing_reject_countdown', { seconds }), onPress: onReject }} />;
 }

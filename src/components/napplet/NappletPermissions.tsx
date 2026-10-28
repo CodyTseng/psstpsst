@@ -51,7 +51,7 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
   if (data && !busy && view.snapshot !== data) {
     setView((previous) => ({ snapshot: data, rows: mergeRules(previous.rows, data.rules), activity: data.activity }));
   }
-  useErrorToast(expanded && error && 'napplets.request_failed');
+  useErrorToast(expanded && error && 'applications.request_failed');
   const rows = data && !busy ? mergeRules(view.rows, data.rules) : view.rows;
   const activity = data?.activity ?? view.activity;
   async function save(row: EditableSigningRule, change: SigningRuleChange) {
@@ -68,19 +68,19 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
   }
   if (data && rows.length === 0 && activity.length === 0 && !editor) return null;
   return <View style={{ gap: spacing.md }}>
-    {initiallyExpanded ? (!data || rows.length ? <AppText variant="subtitle">{t('napplets.permissions_signing')}{data ? ` · ${rows.length}` : ''}</AppText> : null) :
-      <AppButton variant="secondary" label={t('napplets.signing_manage')} onPress={() => setExpanded(!expanded)} />}
+    {initiallyExpanded ? (!data || rows.length ? <AppText variant="subtitle">{t('applications.permissions_signing')}{data ? ` · ${rows.length}` : ''}</AppText> : null) :
+      <AppButton variant="secondary" label={t('applications.signing_manage')} onPress={() => setExpanded(!expanded)} />}
     {expanded ? <>
-      {rows.length ? <AppText variant="caption" tone="muted">{t('napplets.permissions_hint')}</AppText> : null}
+      {rows.length ? <AppText variant="caption" tone="muted">{t('applications.permissions_hint')}</AppText> : null}
       {!data && !error && !rows.length ? <ActivityIndicator color={c.accent} /> : null}
       {rows.length ? <ListGroup>{rows.map((rule) => {
         const status = rule.duration === 'timed' && rule.expiresAt
-          ? t('napplets.signing_until', { time: new Date(rule.expiresAt).toLocaleString(i18n?.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
-          : t(rule.duration === 'session' ? 'napplets.signing_session' : 'napplets.signing_duration_always');
+          ? t('applications.signing_until', { time: new Date(rule.expiresAt).toLocaleString(i18n?.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+          : t(rule.duration === 'session' ? 'applications.signing_session' : 'applications.signing_duration_always');
         const scope = [...(rule.scope.kind !== undefined ? [t('chat.event_reference.kind', { kind: rule.scope.kind })] : []), ...(rule.decision === 'ask' ? [] : [status])];
-        if (rule.scope.scopeKey !== undefined) scope.push(`${rule.scope.kind !== undefined && rule.scope.kind >= 30000 && rule.scope.kind < 40000 ? 'd' : t('napplets.signing_scope_key')}: ${JSON.stringify(rule.scope.scopeKey)}`);
-        if (rule.scope.recipient) scope.push(`${t('napplets.signing_recipient')}: ${rule.scope.recipient}`);
-        if (rule.scope.operation === 'relay-auth' && !rule.scope.scopeKey) scope.push(t('napplets.signing_auth_scope'));
+        if (rule.scope.scopeKey !== undefined) scope.push(`${rule.scope.kind !== undefined && rule.scope.kind >= 30000 && rule.scope.kind < 40000 ? 'd' : t('applications.signing_scope_key')}: ${JSON.stringify(rule.scope.scopeKey)}`);
+        if (rule.scope.recipient) scope.push(`${t('applications.signing_recipient')}: ${rule.scope.recipient}`);
+        if (rule.scope.operation === 'relay-auth' && !rule.scope.scopeKey) scope.push(t('applications.signing_auth_scope'));
         if (rule.scope.relays.length) scope.push(rule.scope.relays.map(url => new URL(url).host).join(', '));
         return <ListRow key={rule.key} title={signingAction(rule.scope, t)} subtitleMultiline
           disabled={busy} onPress={() => setEditor({ row: rule, visible: true })}
@@ -91,13 +91,13 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
           trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />} />;
       })}</ListGroup> : null}
       {activity.length ? <>
-        <AppButton variant="text" compact compactAxis="none" labelVariant="caption" label={t('napplets.signing_activity')}
+        <AppButton variant="text" compact compactAxis="none" labelVariant="caption" label={t('applications.signing_activity')}
           accessibilityState={{ expanded: history }}
           iconRight={history ? <ChevronUp size={spacing.lg} color={c.text} /> : <ChevronDown size={spacing.lg} color={c.text} />}
           onPress={() => setHistory(!history)} />
         {history ? <ListGroup>{activity.map((entry, index) => <ListRow key={`${entry.at}:${index}`}
           title={signingAction(entry.scope, t)}
-          subtitle={`${t(`napplets.signing_${entry.decision}`)} · ${new Date(entry.at).toLocaleString(i18n?.resolvedLanguage)}`} />)}</ListGroup> : null}
+          subtitle={`${t(`applications.signing_${entry.decision}`)} · ${new Date(entry.at).toLocaleString(i18n?.resolvedLanguage)}`} />)}</ListGroup> : null}
       </> : null}
     </> : null}
     {editor ? <SigningRuleEditor rule={editor.row} visible={editor.visible}
@@ -110,6 +110,6 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
 function DecisionStatus({ decision }: { decision: SigningRuleChange['decision'] }) {
   const { t } = useTranslation();
   return <AppText variant="caption" weight="medium" tone={decision === 'ask' ? 'muted' : decision === 'allow' ? 'success' : 'danger'}>
-    {t(decision === 'ask' ? 'napplets.permissions_ask' : decision === 'allow' ? 'napplets.allow' : 'napplets.signing_reject')}
+    {t(decision === 'ask' ? 'applications.permissions_ask' : decision === 'allow' ? 'applications.allow' : 'applications.signing_reject')}
   </AppText>;
 }

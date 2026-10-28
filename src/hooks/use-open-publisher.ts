@@ -17,6 +17,6 @@ export function useOpenPublisher() {
       }
       if (platform.napplet.tasks?.active()) await platform.napplet.tasks.showHost();
       pushOnce({ pathname: '/explore-publisher', params: { pubkey } });
-    })().catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
+    })().catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
   }, [t]);
 }

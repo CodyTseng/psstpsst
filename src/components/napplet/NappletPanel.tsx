@@ -52,21 +52,21 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
     if (!account) return;
     const current = getExploreState();
     if (current.account !== account || !current.loaded)
-      void exploreService.activate(account).catch(() => showToast(t('napplets.request_failed'), { variant: 'error', target: 'detail' }));
+      void exploreService.activate(account).catch(() => showToast(t('applications.request_failed'), { variant: 'error', target: 'detail' }));
   }, [account, t]);
   const actionSize = uiDensity.profileActionSize + spacing.lg;
   const MembershipIcon = favorite ? Trash : Plus;
   const actionWidth = actionSize + spacing.sm;
   const actions = [
-    { key: 'copy', label: t(copied ? 'common.copied' : 'common.copy'), accessibilityLabel: t(copied ? 'common.copied' : 'napplets.copy_address'), icon: copied
+    { key: 'copy', label: t(copied ? 'common.copied' : 'common.copy'), accessibilityLabel: t(copied ? 'common.copied' : 'applications.copy_address'), icon: copied
       ? <Check size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/>
       : <Copy size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default}/> },
-    ...(onOpenExternal ? [{ key: 'browser' as const, label: t('napplets.browser_short'), accessibilityLabel: t('napplets.browser_open_default'),
+    ...(onOpenExternal ? [{ key: 'browser' as const, label: t('applications.browser_short'), accessibilityLabel: t('applications.browser_open_default'),
       icon: <Global size={spacing.xl} color={c.text} /> }] : []),
     ...(!entry.local ? [{ key: 'share' as const, label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> }] : []),
-    { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
-    { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
-    ...(account ? [{ key: 'favorite' as const, label: t(favorite ? 'napplets.remove_app' : 'napplets.add_app'), icon: <MembershipIcon size={spacing.xl} color={favorite ? c.danger : c.text} strokeWidth={iconStrokeWidth.default} /> }] : []),
+    { key: 'settings', label: t('applications.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
+    { key: 'reload', label: t('applications.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
+    ...(account ? [{ key: 'favorite' as const, label: t(favorite ? 'applications.remove_app' : 'applications.add_app'), icon: <MembershipIcon size={spacing.xl} color={favorite ? c.danger : c.text} strokeWidth={iconStrokeWidth.default} /> }] : []),
   ] as const;
   return <HorizontalScrollView
     containerStyle={{ marginHorizontal: -spacing.lg }}

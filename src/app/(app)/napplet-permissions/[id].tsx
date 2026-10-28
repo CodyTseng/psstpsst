@@ -18,10 +18,10 @@ export default function NappletPermissionsScreen() {
   return <ApplicationPermissionsPage application={app?applicationPresentation(app):undefined} error={error}>
     {app?installed&&accountPubkey?<NappletSettings key={`${accountPubkey}:${installed.key}:${installed.hash}`} release={installed} accountPubkey={accountPubkey}/>
       :<View style={{gap:spacing.md}}>
-        <AppText variant="subtitle">{t('napplets.permissions')}</AppText>
+        <AppText variant="subtitle">{t('applications.permissions')}</AppText>
         <ListGroup>{[...new Set([...app.required,...app.optional])].filter(domain=>domain!=='shell').map(domain=>
-          <ListRow key={domain} title={t(`napplets.capability_${domain}`,{defaultValue:domain})} value={t(app.required.includes(domain)?'napplets.capabilities_required':'napplets.capabilities_optional')}/>)}</ListGroup>
-        {!app.required.length&&!app.optional.length?<AppText tone="muted">{t('napplets.none')}</AppText>:null}
+          <ListRow key={domain} title={t(`applications.capability_${domain}`,{defaultValue:domain})} value={t(app.required.includes(domain)?'applications.capabilities_required':'applications.capabilities_optional')}/>)}</ListGroup>
+        {!app.required.length&&!app.optional.length?<AppText tone="muted">{t('applications.none')}</AppText>:null}
       </View>:null}
   </ApplicationPermissionsPage>;
 }

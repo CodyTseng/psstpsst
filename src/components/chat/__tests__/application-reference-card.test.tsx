@@ -5,7 +5,7 @@ import { AppText } from '@/components/common/AppText';
 import { AppCard } from '@/components/common/AppCard';
 import { AppButton } from '@/components/common/AppButton';
 import { InteractivePressable } from '@/components/common/InteractivePressable';
-import { NappletIcon } from '@/components/napplet/NappletIcon';
+import { ApplicationIcon } from '@/components/napplet/ApplicationIcon';
 import { useApplicationReference } from '@/hooks/use-application-reference';
 import { useReferencedEvent } from '@/hooks/use-referenced-event';
 import { EmojiPackReferenceCard } from '@/components/emoji/EmojiPackReferenceCard';
@@ -28,7 +28,7 @@ jest.mock('@/stores/theme.store', () => ({ useThemeStore: (select: (state: objec
 jest.mock('@/hooks/use-application-reference', () => ({ useApplicationReference: jest.fn() }));
 jest.mock('@/hooks/use-display-name', () => ({ useDisplayName: () => ({ name: 'Alice', profile: null }) }));
 jest.mock('@/components/common/Avatar', () => ({ Avatar: () => null }));
-jest.mock('@/components/napplet/NappletIcon', () => ({ NappletIcon: () => null }));
+jest.mock('@/components/napplet/ApplicationIcon', () => ({ ApplicationIcon: () => null }));
 jest.mock('@/hooks/use-referenced-event', () => ({ useReferencedEvent: jest.fn() }));
 jest.mock('@/services/explore/application-reference', () => ({ isApplicationReference: (reference: { kind: number }) => [5129, 15129, 35129, 15128, 35128, 35130].includes(reference.kind) }));
 jest.mock('@/services/nostr/event-reference.service', () => ({ canResolveReferencedEvent: () => false }));
@@ -54,7 +54,7 @@ it.each([5129, 15129, 35129, 15128, 35128, 35130])('routes shared application ki
   expect(renderer.root.findByType(MessageCardSource).findAllByType(AppText).map(node => node.props.children)).toContain('Alice');
   expect(renderer.root.findByType(MessageCardHeader).findByType(MessageCardSource)).toBeDefined();
   expect(renderer.root.findByType(MessageCardHeader).findAllByType(AppText).map(node => node.props.children)).not.toContain(entry.description);
-  expect(texts).not.toContain('napplets.details');
+  expect(texts).not.toContain('applications.details');
   const footer = renderer.root.findByType(MessageCardFooter);
   expect(footer.findAllByType(AppText).map(node => node.props.children)).toContain('chat.card_types.application');
   expect(renderer.root.findByType(MessageCardFooter).props.metaSlot).toBeDefined();
@@ -79,7 +79,7 @@ it('preserves an application fallback and footer during loading and permits retr
   expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
   jest.mocked(useApplicationReference).mockReturnValue({ entry: null, loading: false, retry });
   act(() => { renderer.update(<ApplicationReferenceCard reference={reference} metaSlot={<Text>12:00</Text>} />); });
-  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toContain('napplets.app_title');
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toContain('applications.app_title');
   const stopPropagation = jest.fn();
   act(() => { renderer.root.findByType(AppButton).props.onPress({ stopPropagation }); });
   expect(stopPropagation).toHaveBeenCalled(); expect(retry).toHaveBeenCalled();
@@ -89,7 +89,7 @@ it('preserves an application fallback and footer during loading and permits retr
 it('holds remote icon loading and navigation during a conversation transition', () => {
   act(() => { renderer = create(<ApplicationReferenceCard reference={reference} loadRemote={false} />); });
   expect(useApplicationReference).toHaveBeenLastCalledWith(reference, false);
-  expect(renderer.root.findByType(NappletIcon).props.loadRemote).toBe(false);
+  expect(renderer.root.findByType(ApplicationIcon).props.loadRemote).toBe(false);
   expect(renderer.root.findByType(InteractivePressable).props.disabled).toBe(true);
 });
 
@@ -122,7 +122,7 @@ it.each(['light', 'dark'])('shares frame geometry and title hierarchy across all
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).toContain('Short note');
   expect(texts).not.toContain('chat.view_profile');
-  expect(texts).not.toContain('napplets.open');
+  expect(texts).not.toContain('applications.open');
 });
 
 it.each([1, 2])('preserves application and note text geometry across loading, success and failure at font scale %s', fontScale => {

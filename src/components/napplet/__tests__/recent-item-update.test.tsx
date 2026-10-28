@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { NappletRecentRow } from '../NappletRecentRow';
+import { ApplicationRecentRow } from '../ApplicationRecentRow';
 import { websiteEntry, type ExploreEntry, type GridApp } from '@/services/explore/model';
 import { updateApplicationMetadata } from '@/services/explore/application-event';
 
@@ -7,7 +7,7 @@ const mockRender = jest.fn((_props: { app: GridApp }) => null);
 jest.mock('../ApplicationContextRow', () => ({ ApplicationContextRow: (props: { app: GridApp }) => mockRender(props) }));
 const actions = { onAdd: jest.fn(), onUnfavorite: jest.fn(), onRemove: jest.fn(), onDetails: jest.fn(), onPermissions: jest.fn(), onShare: jest.fn() };
 function Rows({ entries }: { entries: ExploreEntry[] }) {
-  return <>{entries.map((app, index) => <NappletRecentRow key={app.key} app={app} desktopPosition={index % 2 ? null : index}
+  return <>{entries.map((app, index) => <ApplicationRecentRow key={app.key} app={app} desktopPosition={index % 2 ? null : index}
     testID={app.key} {...actions} />)}</>;
 }
 

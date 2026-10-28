@@ -458,7 +458,7 @@ async function launchRuntime(runId: number, cleanup?: Promise<void>) {
     }
     if (entry.kind === 'napp') {
       if (entry.required.some(d => !SUPPORTED_NAPP_DOMAINS.includes(d)))
-        throw new Error('napplets.unsupported');
+        throw new Error('applications.unsupported');
     }
     const scope = { accountPubkey: account, appKey: exploreService.signingSource(entry) };
     const stored = await getData(scope, 'permissions', 'domains');
@@ -491,7 +491,7 @@ async function launchRuntime(runId: number, cleanup?: Promise<void>) {
     if (epoch === generation && runId === exploreStore.getState().runId && signal === launchLife.signal && !signal.aborted) {
       void runtime?.stop();
       runtime = undefined;
-      exploreStore.setState({ loading: false, error: error instanceof Error && error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed' });
+      exploreStore.setState({ loading: false, error: error instanceof Error && error.message.startsWith('applications.') ? error.message : 'applications.request_failed' });
     }
   }
 }
@@ -503,7 +503,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
   };
   const callbacks: ConstructorParameters<typeof ExploreRuntime>[2] = {
     presented: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false }); },
-    failed: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false, error: 'napplets.request_failed' }); },
+    failed: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false, error: 'applications.request_failed' }); },
     theme: () => nappletService.currentTheme()?.colors,
     confirm: (prompt, signal) => { current(); return nappletService.requestApproval(prompt, signal); },
     configure: (schema, values, save, signal) => {
@@ -522,7 +522,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
       app = { ...app, required: applicationRequirements(app.kind, app.required) };
       if (await tryOpenApplicationWindow(app, account)) return;
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
-      if (app.required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('napplets.unsupported');
+      if (app.required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('applications.unsupported');
       if (!await exploreService.access(app, account)) {
         const answer = await nappletService.requestApproval({ title: app.title, detail: '', accountPubkey: account, application: applicationPresentation(app) }, launchLife.signal);
         check(account, generation);

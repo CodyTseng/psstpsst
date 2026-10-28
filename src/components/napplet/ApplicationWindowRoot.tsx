@@ -52,7 +52,7 @@ export function ApplicationWindowRoot() {
   }, []);
   useEffect(() => { nappletService.updateTheme({ colors: { background: c.background, text: c.text, primary: c.accent } }); }, [c.background, c.text, c.accent]);
   if (!ready) return <AppScreen><View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, padding: spacing.xl }}>
-    {failed ? <><AppText>{t('napplets.request_failed')}</AppText><AppButton label={t('common.close')} onPress={() => { void platform.napplet.windows?.close(); }} /></> : <ActivityIndicator color={c.accent} />}
+    {failed ? <><AppText>{t('applications.request_failed')}</AppText><AppButton label={t('common.close')} onPress={() => { void platform.napplet.windows?.close(); }} /></> : <ActivityIndicator color={c.accent} />}
   </View></AppScreen>;
   return <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
     <Stack screenOptions={{ headerShown: false, animation: 'none' }} />

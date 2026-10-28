@@ -10,7 +10,7 @@ export function ApplicationDetailsMembership({ entry, account, children }: { ent
   children?: (action: ReactNode, ready: boolean) => ReactNode;
 }) {
   const { added, error } = useApplicationMembership(account, entry);
-  useErrorToast(error ? 'napplets.request_failed' : undefined, 'detail');
+  useErrorToast(error ? 'applications.request_failed' : undefined, 'detail');
   const setMembership = useApplicationFavorite(account, 'detail');
   const action=<ApplicationMembershipButton key="membership" added={added} onChange={added => setMembership(entry, added)} />;
   return children?children(action,added!==undefined||!!error):action;

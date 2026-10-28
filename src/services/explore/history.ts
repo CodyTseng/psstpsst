@@ -44,7 +44,7 @@ export class ExploreHistory {
             loaded: true, hasMore: page.hasMore };
         });
       } catch {
-        if (generation === this.generation) this.store.setState({ error: 'napplets.request_failed' });
+        if (generation === this.generation) this.store.setState({ error: 'applications.request_failed' });
       } finally {
         if (generation === this.generation) { this.pending = undefined; this.store.setState({ loading: false }); }
       }

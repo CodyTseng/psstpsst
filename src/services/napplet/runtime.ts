@@ -1068,7 +1068,7 @@ export class NappletRuntime {
         detail: convention,
         choices: candidates.slice(0, 16).flatMap((h) => [
           { key: h.id, title: h.release.title },
-          { key: `default:${h.id}`, title: `${h.release.title} (${i18n.t('napplets.always')})` },
+          { key: `default:${h.id}`, title: `${h.release.title} (${i18n.t('applications.always')})` },
         ]),
       }, this.signal));
     this.check();

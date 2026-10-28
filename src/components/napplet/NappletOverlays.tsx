@@ -77,7 +77,7 @@ function NappletOverlayContent() {
           messages: [{ kind: KIND_CHAT, content: appShareAddress(release), tags: [] }] });
         try { nappletService.startShare(account, release); }
         catch { useForwardDraftStore.getState().discard(draftId); }
-      } else void nappletService.reload(release, account).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
+      } else void nappletService.reload(release, account).catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
     };
     nappletService.closePanel();
   }
@@ -87,11 +87,11 @@ function NappletOverlayContent() {
     <BottomSheet<RuntimePromptChoice>
       visible={!approvalClosing && (!!prompt || !!configuration || !!panel)}
       dismissOnBackdropPress={!prompt || !!selectingApplication}
-      title={selectingApplication ? t('napplets.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'napplets.permissions' : `napplets.browser_${prompt.browser.action}`) : accessPrompt ? t('napplets.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
+      title={selectingApplication ? t('applications.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt' : 'applications.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('applications.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'applications.permissions' : `applications.browser_${prompt.browser.action}`) : accessPrompt ? t('applications.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('applications.details') : showingPanel?.page === 'settings' ? t('applications.permissions_manage') : t('applications.settings'))}
       headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
       fixedSubheader={selectingApplication && !!prompt?.choices?.length ? <AppText>
-        {t(selectingApplication.content === 'profile' ? 'napplets.open_with_profile' : 'napplets.open_with_content', { app: selectingApplication.requester })}
+        {t(selectingApplication.content === 'profile' ? 'applications.open_with_profile' : 'applications.open_with_content', { app: selectingApplication.requester })}
       </AppText> : undefined}
       listProps={selectingApplication && prompt ? {
         data: prompt.choices ?? [], keyExtractor: choice => choice.key,
@@ -101,8 +101,8 @@ function NappletOverlayContent() {
           <Compass size={spacing['2xl']} color={colors.textMuted} />
           <AppText variant="body" tone="muted" align="center">
             {selectingApplication.discovery
-              ? t('napplets.open_with_empty', { app: selectingApplication.requester })
-              : t('napplets.handler_closed')}
+              ? t('applications.open_with_empty', { app: selectingApplication.requester })
+              : t('applications.handler_closed')}
           </AppText>
         </View>,
         renderItem: ({ item }) => <ApplicationChoiceRow choice={item} requestId={prompt.requestId}/>,
@@ -117,19 +117,19 @@ function NappletOverlayContent() {
       }}
       modalOverlay={prompt && menuOpen && menu ? <SigningDurationMenu anchor={menu.anchor} duration={duration}
         onChange={(value) => setChoice({ id: prompt.requestId, value })} onClose={() => setMenu(undefined)} /> : undefined}
-      fixedFooter={selectingApplication?.discovery && prompt && !prompt.choices?.length ? <AppButton label={t('napplets.discover')} onPress={() => {
+      fixedFooter={selectingApplication?.discovery && prompt && !prompt.choices?.length ? <AppButton label={t('applications.discover')} onPress={() => {
         const filter = selectingApplication.discovery!;
         const account = prompt.accountPubkey;
         if (!account) return;
         pending.current = () => {
           if (useActiveAccount.getState().activePubkey !== account) return;
           if (platform.napplet.windows?.isHost) {
-            void platform.napplet.windows.action({ type: 'discover', accountPubkey: account, ...filter }).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
+            void platform.napplet.windows.action({ type: 'discover', accountPubkey: account, ...filter }).catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
             return;
           }
           const id = useExploreSearchHandoffStore.getState().start({ account, value: '', action: filter });
-          router.navigate({ pathname: '/napplets', params: { searchHandoff: String(id) } });
-          void platform.napplet.tasks?.showHost().catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
+          router.navigate({ pathname: '/explore', params: { searchHandoff: String(id) } });
+          void platform.napplet.tasks?.showHost().catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
         };
         nappletService.answer(prompt.requestId, false);
       }} /> : prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
@@ -154,7 +154,7 @@ function NappletOverlayContent() {
                 onPress={() => nappletService.answer(prompt.requestId, option.key)} />)}
               <AppButton variant="ghost" label={t('common.cancel')} onPress={() => nappletService.answer(prompt.requestId, false)} />
             </> : <ActionRow layout="horizontal"
-              confirm={{ label: t('napplets.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
+              confirm={{ label: t('applications.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
               dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} />}
           </>}
       </> : configuration ? <ConfigEditor key={configuration.requestId ?? 'napplet'} configuration={configuration} /> : panel && accountPubkey ?
@@ -180,7 +180,7 @@ function ConfigEditor({
         onChange={(next) => setValues(next as Record<string, unknown>)}
       />
       {error ? (
-        <AppText style={{ color: c.danger }}>{t('napplets.invalid_settings')}</AppText>
+        <AppText style={{ color: c.danger }}>{t('applications.invalid_settings')}</AppText>
       ) : null}
       <ActionRow layout="vertical"
         confirm={{ label: t('common.save'), onPress: () => {
@@ -222,7 +222,7 @@ function ConfigFields({
     return (
       <AppButton
         variant="secondary"
-        label={`${label}: ${t(value ? 'napplets.yes' : 'napplets.no')}`}
+        label={`${label}: ${t(value ? 'applications.yes' : 'applications.no')}`}
         onPress={() => onChange(!value)}
       />
     );

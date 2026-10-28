@@ -144,11 +144,11 @@ export async function fetchBlob(
       return bytes;
     } catch (error) {
       assertNotAborted(signal);
-      if (error instanceof Error && error.message === 'napplets.rebuild_required') throw error;
+      if (error instanceof Error && error.message === 'applications.rebuild_required') throw error;
       lastError = error;
     }
   }
-  throw new Error('napplets.download_failed', { cause: lastError });
+  throw new Error('applications.download_failed', { cause: lastError });
 }
 export async function loadArtifact(release: NappletRelease, signal?: AbortSignal, onDownload?: () => void): Promise<string> {
   assertNotAborted(signal);

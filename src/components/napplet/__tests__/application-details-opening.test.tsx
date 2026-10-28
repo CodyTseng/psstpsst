@@ -6,7 +6,7 @@ import { NappletRequiredAccess } from '../NappletRequiredAccess';
 import { applicationPresentation, type ExploreEntry } from '@/services/explore/model';
 let mockMembershipReady = true;
 
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: { defaultValue?: string; name?: string }) => key === 'napplets.capability_unsupported' ? `${options?.name} (not supported)` : options?.defaultValue ?? key }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: { defaultValue?: string; name?: string }) => key === 'applications.capability_unsupported' ? `${options?.name} (not supported)` : options?.defaultValue ?? key }) }));
 jest.mock('@/components/common/AppScreen', () => ({ AppScreen: 'Screen' }));
 jest.mock('@/components/common/AppText', () => ({ AppText: 'Text' }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: 'Button' }));
@@ -52,7 +52,7 @@ it.each([false, true])('waits for initial access before showing details and acti
 it('stops loading when the initial access read fails', () => {
   let renderer!: ReactTestRenderer;
   act(() => { renderer = create(<ApplicationDetailsPage application={applicationPresentation(entry)}
-    access={{ loaded: false, approved: false }} error="napplets.request_failed"
+    access={{ loaded: false, approved: false }} error="applications.request_failed"
     onOpen={() => {}} onPublisher={() => {}} />); });
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
   expect(renderer.root.findAllByType('Info' as never)).toHaveLength(1);
@@ -77,7 +77,7 @@ it('marks unsupported requirements in one list with a single explanation', () =>
   expect(renderer.root.findAllByType('ListRow' as never).map(node=>[node.props.title,node.props.titleTone]))
     .toEqual([['network','default'],['ui (not supported)','danger'],['dev (not supported)','danger']]);
   expect(renderer.root.findAllByType('Text' as never).map(node=>node.props.children))
-    .toEqual(['napplets.capabilities_required','napplets.unsupported']);
+    .toEqual(['applications.capabilities_required','applications.unsupported']);
   act(() => renderer.unmount());
 });
 

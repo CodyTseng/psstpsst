@@ -7,8 +7,8 @@ import { applicationIconKey, loadApplicationIcon, websiteIconOrigin, type Applic
 import { peekWebsiteIcon, retryWebsiteIcon, subscribeWebsiteIcon } from '@/services/explore/website-icons';
 import { radius, spacing, useThemeColors } from '@/theme';
 
-export const NAPPLET_ICON_SIZE = spacing['3xl'] + spacing.lg;
-export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef, loadRemote = true }: { release: ApplicationIconSource; size?: number; iconRef?: Ref<View>; loadRemote?: boolean }) {
+export const APPLICATION_ICON_SIZE = spacing['3xl'] + spacing.lg;
+export const ApplicationIcon = memo(function ApplicationIcon({ release, size = APPLICATION_ICON_SIZE, iconRef, loadRemote = true }: { release: ApplicationIconSource; size?: number; iconRef?: Ref<View>; loadRemote?: boolean }) {
   const c = useThemeColors();
   const origin = websiteIconOrigin(release);
   const iconKey = applicationIconKey(release);
@@ -30,7 +30,7 @@ export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_I
     };
   }, [release, iconKey, origin, loadRemote]);
   return (
-    <View ref={iconRef} testID="napplet-icon"
+    <View ref={iconRef} testID="application-icon"
       style={{
         width: size,
         height: size,

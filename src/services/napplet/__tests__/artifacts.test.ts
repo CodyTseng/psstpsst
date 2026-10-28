@@ -57,8 +57,8 @@ test('keeps cached launches quiet after verifying their local bytes', async () =
 });
 
 test('reports a missing native runtime instead of hiding it as a network failure', async () => {
-  fetchResource.mockRejectedValue(new Error('napplets.rebuild_required'));
-  await expect(fetchBlob(release, hash, 100)).rejects.toThrow('napplets.rebuild_required');
+  fetchResource.mockRejectedValue(new Error('applications.rebuild_required'));
+  await expect(fetchBlob(release, hash, 100)).rejects.toThrow('applications.rebuild_required');
   expect(fetchResource).toHaveBeenCalledTimes(1);
 });
 
@@ -75,7 +75,7 @@ test('retains the underlying failure for diagnosis when all servers fail', async
   const error = new Error('TLS connection failed');
   fetchResource.mockRejectedValue(error);
   await expect(fetchBlob(release, hash, 100)).rejects.toMatchObject({
-    message: 'napplets.download_failed', cause: error,
+    message: 'applications.download_failed', cause: error,
   });
 });
 
@@ -102,7 +102,7 @@ test('verifies cached multi-file assets before reusing them',async()=>{
 test('bounds icon cache reads and downloads without reading oversized cached assets', async () => {
   jest.mocked(platform.fileSystem.stat).mockResolvedValue({ exists: true, size: 1024 } as never);
   fetchResource.mockResolvedValue(new Uint8Array(1024));
-  await expect(loadSiteBlob(release, hash, undefined, 100)).rejects.toThrow('napplets.download_failed');
+  await expect(loadSiteBlob(release, hash, undefined, 100)).rejects.toThrow('applications.download_failed');
   expect(platform.fileSystem.readBytes).not.toHaveBeenCalled();
   expect(fetchResource).toHaveBeenCalledWith(`https://first.example/${hash}`, 100, undefined);
 });

@@ -17,10 +17,10 @@ import { impact } from '@/lib/haptics';
 import { FAVORITES_PAGE_SIZE, type GridApp } from '@/services/explore/model';
 import { spacing, useThemeColors } from '@/theme';
 import { manipulationTiming } from '@/theme/motion';
-import { NappletAppMenu } from './NappletAppMenu';
-import { NappletRecentTile } from './NappletRecentTile';
-import { NappletIcon } from './NappletIcon';
-import { NappletTile, useNappletGridMetrics } from './NappletTile';
+import { ApplicationMenu } from './ApplicationMenu';
+import { ApplicationRecentTile } from './ApplicationRecentTile';
+import { ApplicationIcon } from './ApplicationIcon';
+import { ApplicationTile, useApplicationGridMetrics } from './ApplicationTile';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type Source = 'recent' | 'desktop';
@@ -78,7 +78,7 @@ function previewTransform(index: number, slot: number, drag: Drag) {
 const EMPTY_RECENT: GridApp[] = [];
 
 /** One virtualized drag surface for shortcuts, with an optional recent preview. */
-export function NappletGrid<T extends GridApp>(props: Props<T>) {
+export function ApplicationGrid<T extends GridApp>(props: Props<T>) {
   return <AppGrid {...props as unknown as Props} />;
 }
 function AppGrid({ header, onScrollBeginDrag, items, visibleCount: pageCount, loadingMore, onLoadMore, recent = EMPTY_RECENT, onOpen, onMove, bottomInset, onShowRecent, onRemoveRecent, onDetails, onPermissions, onShare, onScrollChange }: Props) {
@@ -112,7 +112,7 @@ function AppGrid({ header, onScrollBeginDrag, items, visibleCount: pageCount, lo
     setVisibleCount(count => Math.max(count, Math.min(items.length, count + FAVORITES_PAGE_SIZE)));
   }, [items.length, onLoadMore]);
   const offset = useSharedValue(0), contentHeight = useSharedValue(0);
-  const { columns, iconSize, cellWidth, cellHeight, columnGap, columnStep, gridInset } = useNappletGridMetrics(width);
+  const { columns, iconSize, cellWidth, cellHeight, columnGap, columnStep, gridInset } = useApplicationGridMetrics(width);
   const preview = useMemo(() => recent.slice(0, columns), [recent, columns]);
   const itemCount = items.length;
   const target = useDerivedValue(() => {
@@ -276,7 +276,7 @@ function AppGrid({ header, onScrollBeginDrag, items, visibleCount: pageCount, lo
   return <GestureDetector gesture={pan}><View ref={root} style={{ flex: 1 }} onLayout={(event) => {
     setWidth(Math.max(0, event.nativeEvent.layout.width - spacing.lg * 2)); measure();
   }}>
-    <View ref={viewport} testID="napplet-desktop" style={{ flex: 1 }} onLayout={measure}>
+    <View ref={viewport} testID="application-grid" style={{ flex: 1 }} onLayout={measure}>
       {width > 0 ? <Animated.FlatList
         ref={list} key={columns} data={visibleItems} numColumns={columns}
         onEndReached={loadMore} onEndReachedThreshold={0.25}
@@ -295,11 +295,11 @@ function AppGrid({ header, onScrollBeginDrag, items, visibleCount: pageCount, lo
           {header ? <View style={{ marginHorizontal: -gridInset }}>{header}</View> : null}
           {recent.length && onShowRecent && onRemoveRecent ? <View testID="napplet-recent" style={{ paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
             <View testID="napplet-recent-header" style={{ paddingHorizontal: spacing.lg - gridInset, overflow: 'hidden' }}>
-              <ListRow variant="inline" title={t('napplets.recent')} titleTone="muted" onPress={onShowRecent}
+              <ListRow variant="inline" title={t('applications.recent')} titleTone="muted" onPress={onShowRecent}
                 trailing={<ChevronRight size={spacing.lg} color={c.textMuted} style={rtl ? { transform: [{ scaleX: -1 }] } : undefined} />} />
             </View>
             <View style={{ flexDirection: 'row', gap: columnGap }}>
-              {preview.map((app) => <NappletRecentTile key={app.key} app={app} testID={`recent-app-${app.key}`}
+              {preview.map((app) => <ApplicationRecentTile key={app.key} app={app} testID={`recent-app-${app.key}`}
                 width={cellWidth} height={cellHeight} iconSize={iconSize} onOpen={open}
                 onAdd={(item) => { if (item.desktopPosition === null) void onMove(item, items.length); }}
                 onUnfavorite={(app) => onMove(app, null)} onRemove={onRemoveRecent} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare} />)}
@@ -313,10 +313,10 @@ function AppGrid({ header, onScrollBeginDrag, items, visibleCount: pageCount, lo
     {dragging ? <Animated.View accessible={false}
       style={[{ position: 'absolute', top: 0, left: 0, width: cellWidth, height: cellHeight,
         alignItems: 'center', justifyContent: 'center', gap: spacing.sm, zIndex: 100 }, ghostStyle, { pointerEvents: 'none' }]}>
-      <NappletIcon release={dragging} size={iconSize} />
+      <ApplicationIcon release={dragging} size={iconSize} />
       <AppText variant="caption" numberOfLines={1}>{dragging.title}</AppText>
     </Animated.View> : null}
-    {menu ? <NappletAppMenu inline app={menu.app} anchor={menu.anchor} onClose={() => setMenu(null)}
+    {menu ? <ApplicationMenu inline app={menu.app} anchor={menu.anchor} onClose={() => setMenu(null)}
       onPlacementChange={setMenuPlacement} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare}
       favorite onFavorite={(app) => action(app, 'remove', -1)} /> : null}
 
@@ -341,14 +341,14 @@ const GridItem = memo(function GridItem({ app, source, index, width, height, ico
       <View style={{ flex: 1 }} onPointerDown={() => onSelect(app, icon.current, index)} onTouchStart={() => onSelect(app, icon.current, index)} {...(IS_ELECTRON ? {
         onContextMenu: (event: DesktopContextMenuEvent) => onMenu(app, source, event, icon.current),
       } : {})}>
-        <NappletTile app={app} iconSize={iconSize} iconRef={icon} hideLabel={hideLabel}
-          accessibilityActions={source === 'recent' ? [{ name: 'add', label: t('napplets.add_app') }] : [
-            { name: 'details', label: t('napplets.details') },
-            { name: 'permissions', label: t('napplets.permissions_manage') },
+        <ApplicationTile app={app} iconSize={iconSize} iconRef={icon} hideLabel={hideLabel}
+          accessibilityActions={source === 'recent' ? [{ name: 'add', label: t('applications.add_app') }] : [
+            { name: 'details', label: t('applications.details') },
+            { name: 'permissions', label: t('applications.permissions_manage') },
             { name: 'share', label: t('share.title') },
-            { name: 'earlier', label: t('napplets.move_earlier') },
-            { name: 'later', label: t('napplets.move_later') },
-            { name: 'remove', label: t('napplets.remove_app') },
+            { name: 'earlier', label: t('applications.move_earlier') },
+            { name: 'later', label: t('applications.move_later') },
+            { name: 'remove', label: t('applications.remove_app') },
           ]}
           onAccessibilityAction={(event) => onAction(app, event.nativeEvent.actionName, index)}
           onPress={() => onOpen(app)} />

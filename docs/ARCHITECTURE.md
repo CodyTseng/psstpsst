@@ -897,7 +897,7 @@ the URL for unsigned websites), without a title or surrounding prose. Clipboard,
 in-app forwarding and separate-window handoffs preserve the same link.
 Application reviews are public NIP-22 discussions scoped to the verified
 application coordinate or website URL. Their bounded, virtualized read models
-stay separate from private messages and mini-app signing grants. Explicit user
+stay separate from private messages and application signing grants. Explicit user
 posts use the account identity signer; account lifecycle changes cancel reads,
 signing and publishing before results can enter a replacement session.
 
@@ -959,7 +959,7 @@ manifests; runtime files remain hash-verified.
 Website artwork is indexed by canonical origin in a separate website directory.
 Local display files survive restarts; refreshes retain usable artwork and use the
 same bounded public-resource transport as application downloads.
-Mini-app desktop membership and position are explicit account-scoped state,
+Application desktop membership and position are explicit account-scoped state,
 independent of launch recency. Desktop edits commit atomically and never change
 app data or grants. The recent preview shows one row; full recent history derives from the bounded
 installation library.

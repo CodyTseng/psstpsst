@@ -15,7 +15,7 @@ export function useNappletRelease(id: string) {
     void nappletService.activate(account).then(() => {
       if (active) setActivationError(undefined);
     }).catch(() => {
-      if (active) setActivationError({ account, message: 'napplets.request_failed' });
+      if (active) setActivationError({ account, message: 'applications.request_failed' });
     });
     return () => { active = false; };
   }, [account, state.accountPubkey, state.loaded]);
@@ -31,7 +31,7 @@ export function useNappletRelease(id: string) {
     if (!release && id && ready && state.loaded) void nappletService.resolve(id)
       .then((release) => { if (active) setResult({ key, release }); })
       .catch((error: Error) => {
-        if (active) setResult({ key, error: error.message.startsWith('napplets.') ? error.message : 'napplets.request_failed' });
+        if (active) setResult({ key, error: error.message.startsWith('applications.') ? error.message : 'applications.request_failed' });
       });
     return () => { active = false; };
   }, [id, key, release, ready, state.loaded]);

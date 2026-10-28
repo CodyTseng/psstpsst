@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Image } from 'expo-image';
-import { NappletIcon } from '../NappletIcon';
+import { ApplicationIcon } from '../ApplicationIcon';
 import { loadApplicationIcon } from '@/services/explore/icons';
 import { peekWebsiteIcon, subscribeWebsiteIcon } from '@/services/explore/website-icons';
 
@@ -25,7 +25,7 @@ it('shows the memory-cached local file before asynchronous loading finishes and 
   jest.mocked(subscribeWebsiteIcon).mockImplementation((_origin, listener) => { update = listener; return unsubscribe; });
   jest.mocked(loadApplicationIcon).mockImplementation(() => new Promise(() => {}));
   let renderer!: ReactTestRenderer;
-  await act(async () => { renderer = create(<NappletIcon release={{ origin: 'https://site.example', servers: [] }} />); });
+  await act(async () => { renderer = create(<ApplicationIcon release={{ origin: 'https://site.example', servers: [] }} />); });
   expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///old.png' });
   await act(async () => { update('file:///new.png'); });
   expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///new.png' });
@@ -38,11 +38,11 @@ it('defers remote icon work while held and retains loaded artwork when held agai
   jest.mocked(peekWebsiteIcon).mockReturnValue(undefined);
   const release = { servers: [], icon: { hash: 'a'.repeat(64), mime: 'image/png' } };
   let renderer!: ReactTestRenderer;
-  await act(async () => { renderer = create(<NappletIcon release={release} loadRemote={false} />); });
+  await act(async () => { renderer = create(<ApplicationIcon release={release} loadRemote={false} />); });
   expect(loadApplicationIcon).not.toHaveBeenCalled();
-  await act(async () => { renderer.update(<NappletIcon release={release} />); });
+  await act(async () => { renderer.update(<ApplicationIcon release={release} />); });
   expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///application.png' });
-  await act(async () => { renderer.update(<NappletIcon release={release} loadRemote={false} />); });
+  await act(async () => { renderer.update(<ApplicationIcon release={release} loadRemote={false} />); });
   expect(loadApplicationIcon).toHaveBeenCalledTimes(1);
   expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///application.png' });
   act(() => renderer.unmount());

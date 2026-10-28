@@ -72,12 +72,12 @@ export function parseManifest(input: unknown): NappletRelease {
     event.content.length > 16000 ||
     !verifyEvent(event)
   )
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   const tags = (name: string) => event.tags.filter((tag) => tag[0] === name);
   const hashes = tags('x');
   const ds = tags('d');
   if (event.kind === 35129 ? ds.length !== 1 || !ds[0][1] : ds.length !== 0)
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   // Select the signed format once; a malformed standalone listing cannot downgrade.
   const legacy = !hashes.some((tag) => tag.length === 2) &&
     (tags('path').length > 0 || hashes.some((tag) => tag[2] === 'aggregate'));
@@ -88,22 +88,22 @@ export function parseManifest(input: unknown): NappletRelease {
     if (paths.length !== 1 || paths[0].length !== 3 || paths[0][1] !== '/index.html' ||
         !/^[a-f0-9]{64}$/.test(paths[0][2]) || tags('R').length || tags('O').length ||
         tags('description').length > 1 || hashes.length > 1 || (event.kind === 5129 && hashes.length !== 1))
-      throw new Error('napplets.invalid_manifest');
+      throw new Error('applications.invalid_manifest');
     artifactHash = paths[0][2];
     const aggregate = bytesToHex(sha256(new TextEncoder().encode(`${artifactHash} /index.html\n`)));
     if (hashes.length && (hashes[0].length !== 3 || hashes[0][2] !== 'aggregate' || hashes[0][1] !== aggregate))
-      throw new Error('napplets.invalid_manifest');
+      throw new Error('applications.invalid_manifest');
     description = tags('description')[0]?.[1] ?? '';
-    if (description.length > 16000) throw new Error('napplets.invalid_manifest');
+    if (description.length > 16000) throw new Error('applications.invalid_manifest');
   } else {
     if (hashes.length !== 1 || hashes[0].length !== 2 || !/^[a-f0-9]{64}$/.test(hashes[0][1]) ||
         !event.content.trim() || tags('path').length || tags('requires').length || tags('description').length)
-      throw new Error('napplets.invalid_manifest');
+      throw new Error('applications.invalid_manifest');
     artifactHash = hashes[0][1];
     description = event.content;
   }
   const domains = (name: string) => [...new Set(tags(name).map((tag) => {
-    if (tag.length !== 2) throw new Error('napplets.invalid_manifest');
+    if (tag.length !== 2) throw new Error('applications.invalid_manifest');
     return tag[1];
   }))];
   const required = domains(legacy ? 'requires' : 'R');
@@ -113,7 +113,7 @@ export function parseManifest(input: unknown): NappletRelease {
       (d) => typeof d !== 'string' || !/^[a-z][a-z0-9-]*$/.test(d),
     )
   )
-    throw new Error('napplets.invalid_manifest');
+    throw new Error('applications.invalid_manifest');
   const icon = tags('icon')[0];
   return {
     key:
@@ -186,7 +186,7 @@ export function publicUrl(value: string, websocket = false): string {
 }
 
 export function parseAppAddress(value: string): { filters: Filter[]; relays: string[]; author?: string } {
-  if (value.length > 8192) throw new Error('napplets.invalid_manifest');
+  if (value.length > 8192) throw new Error('applications.invalid_manifest');
   const match = value.trim().match(/(?:naddr|nevent|note)1[023456789acdefghjklmnpqrstuvwxyz]+/i);
   const code = match?.[0] ?? value.trim().replace(/^nostr:/, '');
   if (/^[a-f0-9]{64}$/.test(code)) return { filters: [{ ids: [code] }], relays: [] };
@@ -210,7 +210,7 @@ export function parseAppAddress(value: string): { filters: Filter[]; relays: str
       relays: (decoded.data.relays ?? []).map((v) => publicUrl(v, true)).slice(0, 4),
     };
   if (decoded.type === 'note') return { filters: [{ ids: [decoded.data] }], relays: [] };
-  throw new Error('napplets.invalid_manifest');
+  throw new Error('applications.invalid_manifest');
 }
 
 export function resourceMime(bytes: Uint8Array): string {

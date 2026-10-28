@@ -18,10 +18,10 @@ export function ApplicationOpenSetting({ entry, account }: { entry: ExploreEntry
 function ApplicationOpenPreference({ entry, account }: { entry: ExploreEntry; account: string }) {
   const { t } = useTranslation();
   const { value, saving, error, change } = useApplicationWindowPreference(entry, account);
-  useErrorToast(error && 'napplets.request_failed');
+  useErrorToast(error && 'applications.request_failed');
   return <View style={{ gap: spacing.sm }}>
-    <ListGroup><ListRow title={t('napplets.default_open_in_new_window')} loading={value === undefined && !error}
-      trailing={value !== undefined ? <Toggle accessibilityLabel={t('napplets.default_open_in_new_window')} value={value} disabled={saving} onValueChange={next => { void change(next); }} /> : undefined} />
+    <ListGroup><ListRow title={t('applications.default_open_in_new_window')} loading={value === undefined && !error}
+      trailing={value !== undefined ? <Toggle accessibilityLabel={t('applications.default_open_in_new_window')} value={value} disabled={saving} onValueChange={next => { void change(next); }} /> : undefined} />
     </ListGroup>
   </View>;
 }

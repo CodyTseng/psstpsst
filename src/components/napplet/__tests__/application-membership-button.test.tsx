@@ -27,7 +27,7 @@ it.each(['light', 'dark'] as const)('adds once and stops list navigation while s
   expect(onChange).toHaveBeenCalledWith(true);
   await act(async () => { finish(); await first; });
   act(() => { renderer.update(<ApplicationMembershipButton added onChange={onChange} />); });
-  expect(renderer.root.findByType(AppButton).props).toMatchObject({ label: 'napplets.remove_app', variant: 'danger', disabled: false, loading: false });
+  expect(renderer.root.findByType(AppButton).props).toMatchObject({ label: 'applications.remove_app', variant: 'danger', disabled: false, loading: false });
   let removal!: Promise<void>;
   act(() => { removal = renderer.root.findByType(AppButton).props.onPress(event); });
   expect(onChange).toHaveBeenLastCalledWith(false);
@@ -39,7 +39,7 @@ it('disables membership actions until the account snapshot resolves', async () =
   const onChange = jest.fn();
   act(() => { renderer = create(<ApplicationMembershipButton added={undefined} onChange={onChange} />); });
   const button = renderer.root.findByType(AppButton);
-  expect(button.props).toMatchObject({ label: 'napplets.my_apps', disabled: true, loading: true });
+  expect(button.props).toMatchObject({ label: 'applications.my_apps', disabled: true, loading: true });
   await act(async () => { await button.props.onPress({ stopPropagation: jest.fn() }); });
   expect(onChange).not.toHaveBeenCalled();
 });

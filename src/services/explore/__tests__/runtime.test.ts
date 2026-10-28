@@ -335,7 +335,7 @@ it.each([{servers:[]},{servers:['https://old.example/']}])('shares one author-se
   const network=(NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
   network.mediaServers=jest.fn(async()=>['https://old.example/','https://new.example/']);
   jest.mocked(loadSiteBlob).mockImplementation(async(source)=>{
-    if(!source.servers.includes('https://new.example/'))throw new Error('napplets.download_failed');
+    if(!source.servers.includes('https://new.example/'))throw new Error('applications.download_failed');
     return new TextEncoder().encode('file');
   });
   await runtime.start();
@@ -356,7 +356,7 @@ it('does not open a nsite after cancellation while author servers are loading',a
   let started!:()=>void;
   const loading=new Promise<void>(resolve=>{started=resolve;});
   network.mediaServers=jest.fn(()=>new Promise(resolve=>{finish=resolve;started();}));
-  jest.mocked(loadSiteBlob).mockRejectedValue(new Error('napplets.download_failed'));
+  jest.mocked(loadSiteBlob).mockRejectedValue(new Error('applications.download_failed'));
   const start=runtime.start();
   const cancelled=expect(start).rejects.toThrow();
   await loading;

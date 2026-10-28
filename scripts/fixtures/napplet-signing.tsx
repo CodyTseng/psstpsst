@@ -200,7 +200,7 @@ if(params.get('scenario')==='explore-discovery') {
   active.useActiveAccount.setState({activePubkey:'a'.repeat(64)});
   const navigation=require('../../src/components/navigation/primary-pane-navigation') as typeof import('../../src/components/navigation/primary-pane-navigation');
   navigation.usePrimaryPaneNavigation=()=>({open:href=>{document.title=href;},wide:false,pendingPathname:null,selection:{conversationKey:null,profilePubkey:null,settingsItem:null,contactsItem:null}}) as ReturnType<typeof navigation.usePrimaryPaneNavigation>;
-  RuntimeScreen=require('../../src/app/(app)/(tabs)/napplets').default;
+  RuntimeScreen=require('../../src/app/(app)/(tabs)/explore').default;
 }
 if(['explore-detail','explore-permissions','explore-menu'].includes(params.get('scenario')??'')) {
   const {exploreService,exploreStore}=require('../../src/services/explore/service') as typeof import('../../src/services/explore/service');

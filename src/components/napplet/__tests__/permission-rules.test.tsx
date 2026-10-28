@@ -77,13 +77,13 @@ it('keeps signing history accessible without showing an empty rules section', ()
   expect(renderer.root.findAllByType(AppText)).toHaveLength(0);
   expect(rows()).toHaveLength(0);
   const disclosure = renderer.root.findByType(AppButton);
-  expect(disclosure.props.label).toBe('napplets.signing_activity');
+  expect(disclosure.props.label).toBe('applications.signing_activity');
   expect(disclosure.props.accessibilityState.expanded).toBe(false);
   act(() => { disclosure.props.onPress(); });
   expect(disclosure.props.accessibilityState.expanded).toBe(true);
   expect(rows()).toHaveLength(1);
   expect(rows()[0].props.title).toBe('Publish a post');
-  expect(rows()[0].props.subtitle).toContain('napplets.signing_allowed');
+  expect(rows()[0].props.subtitle).toContain('applications.signing_allowed');
   act(() => { disclosure.props.onPress(); });
   expect(rows()).toHaveLength(0);
 });

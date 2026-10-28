@@ -16,12 +16,12 @@ export function ApplicationSettings({accountPubkey,release,sourceId,access,onRes
 }) {
   const {t}=useTranslation();
   const [busy,setBusy]=useState(false),[error,setError]=useState(false),[revision,setRevision]=useState(0);
-  useErrorToast(error && 'napplets.request_failed');
+  useErrorToast(error && 'applications.request_failed');
   async function reset() {
     if(busy)return;
     setBusy(true);setError(false);
     try {
-      if(!await platform.confirmationDialog.confirm({title:t('napplets.revoke'),message:t('napplets.revoke_notice'),confirmLabel:t('common.reset'),cancelLabel:t('common.cancel'),destructive:true}))return;
+      if(!await platform.confirmationDialog.confirm({title:t('applications.revoke'),message:t('applications.revoke_notice'),confirmLabel:t('common.reset'),cancelLabel:t('common.cancel'),destructive:true}))return;
       await onReset();setRevision(value=>value+1);
     } catch {setError(true);} finally {setBusy(false);}
   }
@@ -29,9 +29,9 @@ export function ApplicationSettings({accountPubkey,release,sourceId,access,onRes
     {access?<Fragment key={`access:${revision}`}>{access}</Fragment>:null}
     <NappletPermissions accountPubkey={accountPubkey} key={`signing:${revision}`} release={release} sourceId={sourceId} initiallyExpanded/>
     {sourceId || release ? <BrowserPermissions accountPubkey={accountPubkey} key={`browser:${revision}`} sourceId={sourceId ?? signingSourceFromLegacyKey(release!.key)} /> : null}
-    <AppButton variant="danger" label={t('napplets.revoke')} loading={busy} onPress={()=>{void reset();}}/>
-    {onUninstall ? <AppButton variant="danger" label={t('napplets.local_uninstall')} disabled={busy} onPress={()=>{void (async()=>{
-      if (!await platform.confirmationDialog.confirm({title:t('napplets.local_uninstall'),message:t('napplets.local_uninstall_notice'),confirmLabel:t('common.remove'),cancelLabel:t('common.cancel'),destructive:true})) return;
+    <AppButton variant="danger" label={t('applications.revoke')} loading={busy} onPress={()=>{void reset();}}/>
+    {onUninstall ? <AppButton variant="danger" label={t('applications.local_uninstall')} disabled={busy} onPress={()=>{void (async()=>{
+      if (!await platform.confirmationDialog.confirm({title:t('applications.local_uninstall'),message:t('applications.local_uninstall_notice'),confirmLabel:t('common.remove'),cancelLabel:t('common.cancel'),destructive:true})) return;
       setBusy(true); try { await onUninstall(); } catch {setError(true);} finally {setBusy(false);}
     })();}}/> : null}
   </View>;

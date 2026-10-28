@@ -86,7 +86,7 @@ it('keeps primary Open in the scrolling application header and Post in the compo
     application={{ title: 'App', description: '', required: [], servers: [] }} discussion={{ entry, account: 'account' }}
     access={{ loaded: true, approved: true }} onPublisher={() => {}} onOpen={() => {}} />); });
   const buttons = renderer.root.findAllByType(AppButton);
-  const open = buttons.find(button => button.props.label === 'napplets.open')!;
+  const open = buttons.find(button => button.props.label === 'applications.open')!;
   expect(renderer.root.findByType(FlatList).findAllByType(AppButton)).toContain(open);
   expect(buttons.find(button => button.props.label === 'comments.post')?.props.variant).toBe('primary');
   expect(open.props.variant).toBe('primary');

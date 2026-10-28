@@ -138,8 +138,8 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="napplets"
-          options={{ title: t('napplets.title'), tabBarIcon: ({ color, focused, size }) => { const Icon = focused ? CompassBold : CompassLinear; return <Icon color={color as string} size={IS_ELECTRON ? uiDensity.tabIconSize : size} style={focused ? styles.selectedTabIcon : undefined} />; } }}
+          name="explore"
+          options={{ title: t('applications.title'), tabBarIcon: ({ color, focused, size }) => { const Icon = focused ? CompassBold : CompassLinear; return <Icon color={color as string} size={IS_ELECTRON ? uiDensity.tabIconSize : size} style={focused ? styles.selectedTabIcon : undefined} />; } }}
         />
         <Tabs.Screen
           name="me"
