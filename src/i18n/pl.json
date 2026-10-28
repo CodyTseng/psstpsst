@@ -1211,6 +1211,8 @@
     "encrypted_recipient": "Zaszyfruj za pomocą NIP-44 dla: {{recipient}}",
     "signing_account": "Konto podpisujące",
     "signing_auth": "Uwierzytelnij na przekaźniku",
+    "signing_auth_relay": "Przekaźnik",
+    "signing_url": "URL",
     "signing_encrypt": "Zaszyfruj i opublikuj",
     "signing_post": "Opublikuj wpis",
     "signing_repost": "Udostępnij wydarzenie ponownie",

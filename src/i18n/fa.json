@@ -1201,6 +1201,8 @@
     "encrypted_recipient": "رمزگذاری با NIP-44 برای: {{recipient}}",
     "signing_account": "حساب امضاکننده",
     "signing_auth": "احراز هویت در رله",
+    "signing_auth_relay": "رله",
+    "signing_url": "URL",
     "signing_encrypt": "رمزگذاری و انتشار",
     "signing_post": "انتشار پست",
     "signing_repost": "بازنشر رویداد",

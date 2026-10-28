@@ -1201,6 +1201,8 @@
     "encrypted_recipient": "NIP-44 ile şu alıcı için şifrele: {{recipient}}",
     "signing_account": "İmzalayan hesap",
     "signing_auth": "Relay üzerinde kimlik doğrula",
+    "signing_auth_relay": "Röle",
+    "signing_url": "URL",
     "signing_encrypt": "Şifrele ve yayımla",
     "signing_post": "Gönderi yayımla",
     "signing_repost": "Etkinliği yeniden paylaş",

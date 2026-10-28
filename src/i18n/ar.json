@@ -1221,6 +1221,8 @@
     "encrypted_recipient": "التشفير باستخدام NIP-44 إلى: {{recipient}}",
     "signing_account": "حساب التوقيع",
     "signing_auth": "المصادقة لدى المرحّل",
+    "signing_auth_relay": "المرحّل",
+    "signing_url": "URL",
     "signing_encrypt": "تشفير ونشر",
     "signing_post": "نشر منشور",
     "signing_repost": "إعادة نشر حدث",

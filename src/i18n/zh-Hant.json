@@ -1201,6 +1201,8 @@
     "encrypted_recipient": "使用 NIP-44 加密，接收者：{{recipient}}",
     "signing_account": "簽名帳號",
     "signing_auth": "向訊息中繼驗證身分",
+    "signing_auth_relay": "中繼伺服器",
+    "signing_url": "URL",
     "signing_encrypt": "加密並發布",
     "signing_post": "發布動態",
     "signing_repost": "轉發事件",

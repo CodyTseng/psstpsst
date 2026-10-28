@@ -133,7 +133,8 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   const c = useThemeColors();
   const [details, setDetails] = useState(false);
   const preview = useMemo(() => previewContent(request), [request]);
-  const references = useMemo(() => request.tags.filter(tag => ['e', 'a', 'url', 'method', 'relay'].includes(tag[0]) && tag[1]), [request]);
+  const references = useMemo(() => request.tags.filter(tag => ['e', 'a', 'url', 'method', 'relay'].includes(tag[0]) && tag[1]
+    && !(request.kind === 27235 && ['url', 'method'].includes(tag[0]))), [request]);
   const [verified, setVerified] = useState<{ request: SigningRequest; text: string }>();
   useEffect(() => {
     let active = true;
@@ -160,6 +161,10 @@ export function SigningRequestDetails({ request, showTitle = true }: {
     {request.operation.endsWith('-encrypt') ? <EncryptionPlaintext text={request.content} /> : null}
   </View>;
   const auth = request.operation === 'relay-auth';
+  const httpAuth = request.kind === 27235;
+  const httpUrl = httpAuth ? request.tags.find(tag => tag[0] === 'u' && tag[1])?.[1]
+    ?? request.tags.find(tag => tag[0] === 'url' && tag[1])?.[1] : undefined;
+  const httpMethod = httpAuth ? request.tags.find(tag => tag[0] === 'method' && tag[1])?.[1] : undefined;
   const effect = request.operation === 'sign' ? 'signing_effect_sign' : auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
   const showIdentifier = isAddressableKind(request.kind);
   const eventType = signingEventType(request.kind, t);
@@ -183,11 +188,22 @@ export function SigningRequestDetails({ request, showTitle = true }: {
     {request.operation === 'encrypt-publish' ? <SigningText tone="muted">{t(`napplets.${effect}`)}</SigningText> : null}
     {auth ? <AppCard variant="muted" style={{ gap: spacing.lg }}>
       {metadata}
-      <SigningText>{new URL(request.relays[0]).host}</SigningText>
+      <View style={{ gap: spacing.sm }}>
+        <SigningText variant="caption" tone="muted">{t('napplets.signing_auth_relay')}</SigningText>
+        <SigningText>{new URL(request.relays[0]).host}</SigningText>
+      </View>
     </AppCard> : <>
       {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('napplets.signing_recipient')} /> : null}
       <AppCard variant="muted" style={{ gap: spacing.lg }}>
         {metadata}
+        {httpUrl ? <View style={{ gap: spacing.sm }}>
+          <SigningText variant="caption" tone="muted">{t('napplets.signing_url')}</SigningText>
+          <SigningText>{httpUrl}</SigningText>
+        </View> : null}
+        {httpMethod ? <View style={{ gap: spacing.sm }}>
+          <SigningText variant="caption" tone="muted">HTTP</SigningText>
+          <SigningText>{httpMethod}</SigningText>
+        </View> : null}
         {request.content.length > 0 ? <View style={{ gap: spacing.sm }}>
           <SigningText variant="caption" tone="muted">{t('napplets.signing_content')}</SigningText>
           {title ? <SigningText>{title}</SigningText> : null}

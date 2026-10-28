@@ -1211,6 +1211,8 @@
     "encrypted_recipient": "Зашифровать с NIP-44 для: {{recipient}}",
     "signing_account": "Аккаунт подписи",
     "signing_auth": "Авторизация на ретрансляторе",
+    "signing_auth_relay": "Ретранслятор",
+    "signing_url": "URL",
     "signing_encrypt": "Зашифровать и опубликовать",
     "signing_post": "Опубликовать запись",
     "signing_repost": "Сделать репост события",

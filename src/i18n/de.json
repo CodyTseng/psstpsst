@@ -1201,6 +1201,8 @@
     "encrypted_recipient": "Mit NIP-44 verschlüsseln für: {{recipient}}",
     "signing_account": "Signierendes Konto",
     "signing_auth": "Beim Relay authentifizieren",
+    "signing_auth_relay": "Relay",
+    "signing_url": "URL",
     "signing_encrypt": "Verschlüsseln und veröffentlichen",
     "signing_post": "Beitrag veröffentlichen",
     "signing_repost": "Ereignis erneut teilen",

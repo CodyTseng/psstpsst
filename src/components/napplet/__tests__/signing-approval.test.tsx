@@ -301,15 +301,29 @@ it('shows the concrete browser permission without unrelated application requirem
   expect(texts).not.toContain('napplets.capability_resource');
 });
 
-it('shows the event type and authentication target before opening event JSON', () => {
+it.each(['u', 'url'])('shows the event type and HTTP authentication target from %s before opening event JSON', tag => {
   const request = { ...prompt.signing!, operation: 'sign' as const, kind: 27235, content: '',
-    tags: [['url', 'https://service.example/upload'], ['method', 'POST']] };
+    tags: [[tag, 'https://service.example/upload'], ['method', 'POST']] };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts.some(value => typeof value === 'string' && value.includes('napplets.event_http_auth'))).toBe(true);
   expect(texts).toContain('https://service.example/upload');
+  expect(texts).toContain('napplets.signing_url');
   expect(texts).toContain('POST');
   expect(texts).not.toContain('napplets.none');
+});
+
+it.each(['light', 'dark'] as const)('keeps the full HTTP authentication URL visible beyond reference limits in %s mode', scheme => {
+  mockScheme = scheme;
+  const url = `https://service.example/upload?token=${'a'.repeat(300)}`;
+  const request = { ...prompt.signing!, operation: 'sign' as const, kind: 27235, content: '',
+    tags: [...Array.from({ length: 5 }, (_, index) => ['e', String(index)]), ['u', url], ['method', 'PUT']] };
+  act(() => { renderer = create(<SigningRequestDetails request={request} />); });
+  const target = renderer.root.findAllByType(AppText).find(node => node.props.children === url)!;
+  expect(target).toBeDefined();
+  expect(target.props.numberOfLines).toBeUndefined();
+  expect(target.props.selectable).toBe(false);
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toContain('PUT');
 });
 
 it('identifies a profile event and previews the actual profile values', () => {
