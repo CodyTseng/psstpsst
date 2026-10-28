@@ -1251,7 +1251,6 @@
     "signing_denied": "已拒绝",
     "capabilities_required": "必需能力",
     "capabilities_optional": "可选能力",
-    "capabilities_signing_notice": "签名请求将单独审核。",
     "signing_expires": "请求将于 {{time}} 过期",
     "signing_no_rules_title": "暂无已保存的授权",
     "signing_duration_once": "仅此次",
@@ -1294,7 +1293,7 @@
     "capability_dev": "安装和替换本地应用",
     "local_install_notice": "此应用想要安装一个本地应用，并授予下列访问权限。",
     "local_replace_notice": "此应用想要替换一个本地应用，并重新加载其已打开的窗口。",
-    "local_unsigned_notice": "此本地应用没有经过验证的发布者。签名和付款需要另行批准。",
+    "local_unsigned_notice": "此本地应用没有经过验证的发布者。",
     "local_other_installer_notice": "此应用由其他来源安装。替换后的代码将能访问此应用已保存的数据。",
     "local_uninstall": "卸载本地应用",
     "local_uninstall_notice": "移除此本地应用及其数据和权限？"

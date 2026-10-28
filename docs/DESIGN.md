@@ -1064,7 +1064,9 @@ scrolls. It always reads Open, regardless of installation or access approval sta
 viewing app details alone never grants access. Details and runtime information share the app identity, publisher, description
 and required access. Approval sheets show a compact requester identity and the
 exact requested access, omitting publisher rows and marketing descriptions. Applications with no effective required access open without
-launch consent. First-use consent uses the same sheet across Explore formats,
+launch consent. Internal shell access is implicit and never triggers consent.
+Access reviews omit routine explanations about separate signing reviews.
+First-use consent uses the same sheet across Explore formats,
 identifies the current account with the shared header avatar when account-bound.
 Access confirmation fixes one horizontal action row below the scrolling content,
 with Cancel at the start and Allow at the end. Optional

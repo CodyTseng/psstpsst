@@ -3,7 +3,7 @@ import { getData, type AppScope } from './repository';
 
 const DEFAULT_OPTIONAL_DOMAINS = ['theme', 'storage', 'config'] as const;
 
-/** Defaults apply only to declared optional capabilities, below explicit denials. */
+/** Shell is implicit; optional defaults apply only when declared and not denied. */
 export function resolveDomainPermissions(
   release: Pick<NappletRelease, 'required' | 'optional'>,
   granted: readonly string[],
@@ -14,6 +14,7 @@ export function resolveDomainPermissions(
     (NAP_DOMAINS as readonly string[]).includes(domain) && !required.has(domain)));
   const blocked = new Set(denied);
   return [...new Set([
+    'shell',
     ...granted.filter(domain => required.has(domain) || optional.has(domain) && !blocked.has(domain)),
     ...DEFAULT_OPTIONAL_DOMAINS.filter(domain => optional.has(domain) && !blocked.has(domain)),
   ])];

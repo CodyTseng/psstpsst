@@ -1251,7 +1251,6 @@
     "signing_denied": "已拒絕",
     "capabilities_required": "必要能力",
     "capabilities_optional": "選用能力",
-    "capabilities_signing_notice": "簽名請求將單獨審核。",
     "signing_expires": "請求將於 {{time}} 到期",
     "signing_no_rules_title": "尚無已儲存的授權",
     "signing_duration_once": "僅此次",
@@ -1294,7 +1293,7 @@
     "capability_dev": "安裝和替換本機應用",
     "local_install_notice": "此應用想要安裝一個本機應用，並授予下列存取權限。",
     "local_replace_notice": "此應用想要替換一個本機應用，並重新載入其已開啟的視窗。",
-    "local_unsigned_notice": "此本機應用沒有經過驗證的發佈者。簽名和付款需要另行批准。",
+    "local_unsigned_notice": "此本機應用沒有經過驗證的發佈者。",
     "local_other_installer_notice": "此應用由其他來源安裝。替換後的程式碼將能存取此應用已儲存的資料。",
     "local_uninstall": "解除安裝本機應用",
     "local_uninstall_notice": "移除此本機應用及其資料和權限？"

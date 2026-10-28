@@ -278,6 +278,7 @@ it('keeps launch permissions focused on required capabilities with a fixed decis
   const sheet = renderer.root.findByType(jest.requireMock('@/components/common/BottomSheet').BottomSheet);
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
   expect(texts).not.toContain('applications.signing_queued');
+  expect(texts).not.toContain('applications.capabilities_signing_notice');
   expect(button('applications.signing_reject_all')).toBeUndefined();
   expect(texts).not.toContain(mockPrompt.application!.description);
   expect(texts).toContain('applications.capability_resource');

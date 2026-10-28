@@ -65,7 +65,6 @@ export function CapabilityApproval({ prompt, hideActions = false }: { prompt: Qu
       </AppCard>
     </> : <>
       <NappletRequiredAccess release={{ required }} showHeading={false} />
-      <AppText variant="caption" tone="muted">{t('applications.capabilities_signing_notice')}</AppText>
     </>}
     {!hideActions && anchor ? <SigningDurationMenu standalone anchor={anchor} duration={duration} onChange={setDuration} onClose={() => setAnchor(null)} /> : null}
     {!hideActions ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={anchor !== null} onMenuChange={setAnchor} /> : null}

@@ -184,12 +184,16 @@ it('still reviews required access for an independent task',async()=>{
   expect(applicationTaskStore.getState().sessions.get(id)?.containerId).toBe('container');
 });
 
-it.each([false, true])('applies default optional access in independent napplet tasks with storage denied: %s', async denied => {
+it.each([
+  { denied: false, saved: null }, { denied: true, saved: null },
+  { denied: false, saved: '[]' }, { denied: true, saved: '[]' },
+  { denied: false, saved: '["shell"]' }, { denied: true, saved: '["shell"]' },
+])('applies default optional access without consent in independent napplet tasks: %j', async ({ denied, saved }) => {
   const app = { ...entry('napp'), kind: 'napplet' as const };
   app.release = { key: app.key, required: [], optional: ['theme', 'storage', 'config', 'identity'] } as unknown as NappletRelease;
   jest.mocked(getData).mockImplementation(async (_scope, bucket, name) => {
     if (bucket !== 'permissions') return null;
-    if (name === 'domains') return '["shell"]';
+    if (name === 'domains') return saved;
     return name === 'denied-domains' && denied ? '["storage"]' : null;
   });
   jest.mocked(NappletRuntime).mockImplementationOnce(function(this: object) {

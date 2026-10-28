@@ -1251,7 +1251,6 @@
     "signing_denied": "거부됨",
     "capabilities_required": "필수 기능",
     "capabilities_optional": "선택 기능",
-    "capabilities_signing_notice": "서명 요청은 별도로 검토합니다.",
     "signing_expires": "요청 만료 시간: {{time}}",
     "signing_no_rules_title": "저장된 권한 없음",
     "signing_duration_once": "이번만",
@@ -1294,7 +1293,7 @@
     "capability_dev": "Install and replace local apps",
     "local_install_notice": "This application wants to install a local app with the access listed below.",
     "local_replace_notice": "This application wants to replace a local app and reload its open windows.",
-    "local_unsigned_notice": "This is a local app without a verified publisher. Signing and payments require separate approval.",
+    "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
     "local_uninstall_notice": "Remove this local app, its data and permissions?"

@@ -1261,7 +1261,6 @@
     "signing_denied": "Отклонено",
     "capabilities_required": "Необходимый доступ",
     "capabilities_optional": "Дополнительный доступ",
-    "capabilities_signing_notice": "Запросы подписи рассматриваются отдельно.",
     "signing_expires": "Запрос истекает в {{time}}",
     "signing_no_rules_title": "Нет сохранённых разрешений",
     "signing_duration_once": "Один раз",
@@ -1304,7 +1303,7 @@
     "capability_dev": "Install and replace local apps",
     "local_install_notice": "This application wants to install a local app with the access listed below.",
     "local_replace_notice": "This application wants to replace a local app and reload its open windows.",
-    "local_unsigned_notice": "This is a local app without a verified publisher. Signing and payments require separate approval.",
+    "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
     "local_uninstall_notice": "Remove this local app, its data and permissions?"

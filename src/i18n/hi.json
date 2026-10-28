@@ -1251,7 +1251,6 @@
     "signing_denied": "अस्वीकृत",
     "capabilities_required": "आवश्यक पहुँच",
     "capabilities_optional": "वैकल्पिक पहुँच",
-    "capabilities_signing_notice": "हस्ताक्षर अनुरोधों की अलग से समीक्षा होती है।",
     "signing_expires": "अनुरोध {{time}} पर समाप्त होगा",
     "signing_no_rules_title": "कोई अनुमति सहेजी नहीं गई",
     "signing_duration_once": "केवल इस बार",
@@ -1294,7 +1293,7 @@
     "capability_dev": "Install and replace local apps",
     "local_install_notice": "This application wants to install a local app with the access listed below.",
     "local_replace_notice": "This application wants to replace a local app and reload its open windows.",
-    "local_unsigned_notice": "This is a local app without a verified publisher. Signing and payments require separate approval.",
+    "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
     "local_uninstall_notice": "Remove this local app, its data and permissions?"

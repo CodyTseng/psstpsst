@@ -1256,7 +1256,6 @@
     "signing_denied": "Rechazado",
     "capabilities_required": "Acceso requerido",
     "capabilities_optional": "Acceso opcional",
-    "capabilities_signing_notice": "Las solicitudes de firma se revisan por separado.",
     "signing_expires": "La solicitud caduca a las {{time}}",
     "signing_no_rules_title": "Sin permisos guardados",
     "signing_duration_once": "Solo esta vez",
@@ -1299,7 +1298,7 @@
     "capability_dev": "Install and replace local apps",
     "local_install_notice": "This application wants to install a local app with the access listed below.",
     "local_replace_notice": "This application wants to replace a local app and reload its open windows.",
-    "local_unsigned_notice": "This is a local app without a verified publisher. Signing and payments require separate approval.",
+    "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
     "local_uninstall_notice": "Remove this local app, its data and permissions?"

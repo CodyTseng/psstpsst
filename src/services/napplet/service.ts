@@ -98,10 +98,10 @@ async function authorizeRelease(release: NappletRelease, account: string, curren
   const required = [...new Set(['shell', ...release.required])];
   const optional = [...new Set(release.optional.filter((domain) =>
     (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
-  const { saved, denied, domains } = await readDomainPermissions(scope, release);
+  const { denied, domains } = await readDomainPermissions(scope, release);
   current();
   let declared = domains;
-  if (!saved || required.some((domain) => !declared.includes(domain))) {
+  if (required.some((domain) => !declared.includes(domain))) {
     // Details-page consent applies only to the exact required set the user reviewed.
     const reviewed = reviewedRequired && reviewedRequired.length === required.length
       && required.every((domain) => reviewedRequired.includes(domain));

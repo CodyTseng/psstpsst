@@ -388,10 +388,21 @@ it('grants only required domains when the user leaves optional capabilities disa
 
 const defaultAccessApp = { ...app, required: [], optional: ['theme', 'storage', 'config', 'identity', 'resource', 'link'] };
 
+it.each([{ required: [] }, { required: ['shell'] }])('opens a napplet with only implicit access without consent: %j', async ({ required }) => {
+  const release = { ...app, required, optional: ['identity'] };
+  await nappletService.open(release);
+  expect(nappletStore.getState().prompt).toBeNull();
+  expect(jest.mocked(NappletRuntime).mock.calls.at(-1)![0].domains).toEqual(['shell']);
+  await nappletService.revoke(release, 'accountA');
+  await nappletService.open(release);
+  expect(nappletStore.getState().prompt).toBeNull();
+  expect(jest.mocked(NappletRuntime).mock.calls.at(-1)![0].domains).toEqual(['shell']);
+});
+
 it('enables only declared default optional access on first launch and in management', async () => {
-  expect(await nappletService.domainPermissions(defaultAccessApp, 'accountA')).toEqual(['theme', 'storage', 'config']);
-  await nappletService.open(defaultAccessApp, undefined, ['shell']);
-  expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['shell', 'theme', 'storage', 'config']);
+  expect(await nappletService.domainPermissions(defaultAccessApp, 'accountA')).toEqual(['shell', 'theme', 'storage', 'config']);
+  await nappletService.open(defaultAccessApp);
+  expect(stored.has(key(scope, 'permissions', 'domains'))).toBe(false);
   expect(jest.mocked(NappletRuntime).mock.calls.at(-1)![0].domains).toEqual(['shell', 'theme', 'storage', 'config']);
   expect(nappletStore.getState().prompt).toBeNull();
 });
@@ -408,7 +419,7 @@ it('keeps default optional switches disabled across launches until enabled or re
   await nappletService.setDomainPermissions(defaultAccessApp, ['shell'], 'accountA');
   expect(await nappletService.domainPermissions(defaultAccessApp, 'accountA')).toEqual(['shell']);
   await nappletService.revoke(defaultAccessApp, 'accountA');
-  expect(await nappletService.domainPermissions(defaultAccessApp, 'accountA')).toEqual(['theme', 'storage', 'config']);
+  expect(await nappletService.domainPermissions(defaultAccessApp, 'accountA')).toEqual(['shell', 'theme', 'storage', 'config']);
 });
 
 it('revokes only the selected source rule and resets access independently from application data', async () => {
