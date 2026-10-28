@@ -6,6 +6,12 @@ import { resolveApplicationMetadata } from '../application-metadata';
 jest.mock('../application-metadata', () => ({ resolveApplicationMetadata: jest.fn() }));
 
 const author = 'a'.repeat(64);
+it('accepts internal coordinates and immutable IDs without using encoded addresses as identity', () => {
+  const key = `35130:${author}:notes`;
+  expect(applicationEntryFromAddress(key)?.key).toBe(key);
+  const id = 'b'.repeat(64);
+  expect(applicationEntryFromAddress(id)?.key).toBe(id);
+});
 const pointer = (kind: number) => parseNostrEventReference(kind === 5129
   ? neventEncode({ id: 'b'.repeat(64), kind, author, relays: ['wss://relay.example/'] })
   : naddrEncode({ pubkey: author, kind, identifier: kind >= 30000 ? 'app' : '', relays: ['wss://relay.example/'] }))!;

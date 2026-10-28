@@ -329,7 +329,7 @@ it('reviews public-key access separately from launch consent and isolates origin
 
 it.each([{servers:[]},{servers:['https://old.example/']}])('shares one author-server fallback across missing nsite files: %j',async({servers})=>{
   await runtime.stop();
-  const app={...entry,kind:'nsite' as const,servers,manifest:{pubkey:'b'.repeat(64)} as import('nostr-tools').Event,
+  const app={...entry,kind:'nsite' as const,servers,manifest:{pubkey:'b'.repeat(64),kind:35128,id:'c'.repeat(64),tags:[['d','site']]} as import('nostr-tools').Event,
     files:[{path:'/index.html',hash:'a'.repeat(64),mime:'text/html'},{path:'/app.js',hash:'c'.repeat(64),mime:'text/javascript'}]};
   runtime=new ExploreRuntime('account',app,{confirm,close:()=>{},link:()=>{}});
   const network=(NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
@@ -348,7 +348,7 @@ it.each([{servers:[]},{servers:['https://old.example/']}])('shares one author-se
 
 it('does not open a nsite after cancellation while author servers are loading',async()=>{
   await runtime.stop();jest.mocked(platform.napplet.openPage!).mockClear();
-  const app={...entry,kind:'nsite' as const,manifest:{pubkey:'b'.repeat(64)} as import('nostr-tools').Event,
+  const app={...entry,kind:'nsite' as const,manifest:{pubkey:'b'.repeat(64),kind:35128,id:'c'.repeat(64),tags:[['d','site']]} as import('nostr-tools').Event,
     files:[{path:'/index.html',hash:'a'.repeat(64),mime:'text/html'}]};
   runtime=new ExploreRuntime('account',app,{confirm,close:()=>{},link:()=>{}});
   const network=(NappletNetwork as jest.Mock).mock.results.at(-1)!.value;

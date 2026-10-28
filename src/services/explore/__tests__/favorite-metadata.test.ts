@@ -43,7 +43,7 @@ it('resolves immutable kind-5129 favorites by exact event id', async () => {
   const app = parseFavoriteReference(['e', event.id, '', author]).entry;
   const resolved = await resolveFavoriteMetadata('account', app, new AbortController().signal);
   expect(resolved.release?.event.id).toBe(event.id);
-  expect(query.mock.calls[0][1]).toEqual([{ ids: [event.id], kinds: [5129], limit: 1 }]);
+  expect(query.mock.calls[0][1]).toEqual([{ ids: [event.id], limit: 1 }]);
 });
 it('leaves unavailable or aborted favorites intact without persisting an unverified manifest', async () => {
   query.mockResolvedValue({ events: [], error: true });

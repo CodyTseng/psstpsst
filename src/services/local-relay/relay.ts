@@ -1,8 +1,10 @@
 import { matchFilters, verifyEvent, type Event, type Filter } from 'nostr-tools';
 import { isSignedEvent } from '@/lib/nostr/event-validation';
+import { eventCoordinate } from '@/lib/nostr/event-key';
 import type { SqliteExecutor, SqlBindValue } from '@/platform/ports/database';
 import type { LocalRelayEventsPort } from '@/platform/ports/local-relay-events';
 import { localFilters, filterSql } from './filters';
+export { eventCoordinate } from '@/lib/nostr/event-key';
 const MAX_BYTES = 1024 * 1024 * 1024;
 const privateKinds = new Set([4, 13, 14, 15, 1059]);
 const yieldTask = () => new Promise<void>(resolve => setTimeout(resolve, 0));
@@ -16,13 +18,6 @@ function stateFor(database: SqliteExecutor): RelayState {
         states.set(database, state);
     }
     return state;
-}
-export function eventCoordinate(event: Pick<Event, 'kind' | 'pubkey' | 'tags'>): string | null {
-    if (event.kind >= 30000 && event.kind < 40000)
-        return `${event.kind}:${event.pubkey}:${event.tags.find(tag => tag[0] === 'd')?.[1] ?? ''}`;
-    if (event.kind === 0 || event.kind === 3 || event.kind >= 10000 && event.kind < 20000)
-        return `${event.kind}:${event.pubkey}:`;
-    return null;
 }
 async function rows<T>(executor: SqliteExecutor, sql: string, params: SqlBindValue[] = [], columns: string[] = []): Promise<T[]> {
     const values = (await executor.execute(sql, params, 'all')).rows as unknown[][];

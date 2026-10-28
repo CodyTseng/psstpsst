@@ -3,10 +3,11 @@ import { platform } from '@/platform';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { registerNappletLifecycle } from '@/services/napplet/lifecycle';
 import { parseManifest, publicUrl } from '@/services/napplet/protocol';
-import { fromNapplet, parseSite, websiteAddress, type ExploreEntry } from './model';
+import { fromNapplet, parseSite, websiteEntry, type ExploreEntry } from './model';
 import type { ApplicationWindowLaunch } from '@/platform/ports/application-window';
 import { applicationTasks } from './application-tasks';
 import { shouldOpenApplicationWindow } from './open-preferences';
+import { applicationEntryFromAddress } from './application-address';
 
 /** False leaves navigation with the caller's existing inline container flow. */
 export async function tryOpenApplicationWindow(entry: ExploreEntry, accountPubkey: string, reviewedRequired?: readonly string[]): Promise<boolean> {
@@ -20,7 +21,6 @@ export async function openApplicationWindow(entry: ExploreEntry, accountPubkey: 
     if (!platform.napplet.windows && !platform.napplet.tasks) throw new Error('applications.rebuild_required');
     if (!await canReceiveForAccount(accountPubkey)) throw new Error('account-unavailable');
     if (platform.napplet.tasks) { await applicationTasks.open(entry, accountPubkey, reviewedRequired); return; }
-    entry = await resolveFavoriteMetadata(accountPubkey, entry, new AbortController().signal);
     await platform.napplet.windows!.open({ accountPubkey, address: entry.address, manifest: entry.manifest, servers: entry.servers, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined });
   } catch (error) {
     console.warn('[explore] Application host could not open', error);
@@ -38,10 +38,12 @@ export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEnt
     const local = await readLocalApplication(launch.accountPubkey, launch.address);
     if (!local) throw new Error('applications.not_found');
     entry = local;
-  } else if (launch.manifest) entry = [5129, 15129, 35129].includes(launch.manifest.kind) ? fromNapplet(parseManifest(launch.manifest)) : parseSite(launch.manifest);
+  } else if (/^https?:\/\//i.test(launch.address)) entry = websiteEntry(launch.address);
+  else if (launch.manifest) entry = [5129, 15129, 35129].includes(launch.manifest.kind) ? fromNapplet(parseManifest(launch.manifest)) : parseSite(launch.manifest);
   else {
-    const address = websiteAddress(launch.address);
-    entry = { key: address, address, title: new URL(address).host, kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
+    const reference = applicationEntryFromAddress(launch.address);
+    if (!reference) throw new Error('applications.invalid_manifest');
+    entry = reference;
   }
   if (!entry.servers.length && launch.servers) {
     entry = { ...entry, servers: [...new Set(launch.servers.slice(0, 8).map(server => publicUrl(server)))] };
@@ -50,6 +52,7 @@ export async function readApplicationWindowLaunch(): Promise<{ entry: ExploreEnt
   const reviewedRequired = Array.isArray(launch.reviewedRequired) && launch.reviewedRequired.every(domain => typeof domain === 'string')
     ? launch.reviewedRequired : undefined;
   entry = await resolveFavoriteMetadata(launch.accountPubkey, entry, new AbortController().signal);
+  if (entry.manifest && !await platform.napplet.windows!.resolveIdentity(entry.manifest)) throw new Error('session-closed');
   return { entry, accountPubkey: launch.accountPubkey, reviewedRequired };
 }
 

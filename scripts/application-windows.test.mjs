@@ -20,6 +20,8 @@ test('Electron application hosts keep independent containers, owned IPC and shar
       import { ApplicationWindows } from ${JSON.stringify(path.resolve('desktop/application-windows.ts'))};
       import { registerNappletHandlers } from ${JSON.stringify(path.resolve('desktop/napplet-service.ts'))};
       import { IPC } from ${JSON.stringify(path.resolve('desktop/ipc-channels.ts'))};
+      import { finalizeEvent, generateSecretKey } from 'nostr-tools';
+      import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
       app.setPath('userData', ${JSON.stringify(path.join(dir, 'profile'))});
       const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
       app.whenReady().then(async()=>{
@@ -49,6 +51,29 @@ test('Electron application hosts keep independent containers, owned IPC and shar
         await invoke(parent,IPC.applicationWindowOpen,launch);
         assert.equal(manager.windows().length,2,'reopening reuses the existing application');
         assert.deepEqual(first.getBounds(),firstBounds,'reusing an application preserves its position');
+        const secret=generateSecretKey();
+        const manifest=finalizeEvent({kind:35130,created_at:1,tags:[['d','identity-test']],content:''},secret);
+        const coordinate='35130:'+manifest.pubkey+':identity-test';
+        const canonical={accountPubkey:launch.accountPubkey,address:naddrEncode({kind:35130,pubkey:manifest.pubkey,identifier:'identity-test'})};
+        const reference={accountPubkey:launch.accountPubkey,address:neventEncode({id:manifest.id})};
+        await invoke(parent,IPC.applicationWindowOpen,reference);
+        const provisional=manager.windows().at(-1);
+        assert.equal(await invoke(provisional,IPC.applicationWindowResolveIdentity,manifest),true);
+        assert((await invoke(parent,IPC.applicationWindowsRunning)).some(item=>item.sourceId===coordinate),'resolved windows register the eventKey');
+        await invoke(parent,IPC.applicationWindowOpen,canonical);
+        assert.equal(manager.windows().length,3,'the canonical address reuses the event-reference host');
+        const newer=finalizeEvent({kind:35130,created_at:2,tags:[['d','identity-test']],content:''},secret);
+        const another={accountPubkey:launch.accountPubkey,address:neventEncode({id:newer.id})};
+        await invoke(parent,IPC.applicationWindowOpen,another);
+        const redundant=manager.windows().at(-1);
+        const merged=new Promise(resolve=>redundant.once('closed',resolve));
+        void invoke(redundant,IPC.applicationWindowResolveIdentity,newer).catch(()=>false);
+        await merged;
+        assert.equal(manager.windows().length,3,'reference collisions close the provisional host');
+        await invoke(parent,IPC.applicationWindowOpen,another);
+        assert.equal(manager.windows().length,3,'known reference aliases reuse the canonical host');
+        await assert.rejects(invoke(provisional,IPC.applicationWindowResolveIdentity,{...manifest,id:'f'.repeat(64)}),/invalid-application-identity/);
+        provisional.close();await pause(40);
         const publicAddition={origin:'first-host',event:{id:'c'.repeat(64),pubkey:'a'.repeat(64),sig:'d'.repeat(128),kind:1,created_at:100,content:'x'.repeat(2*1024*1024+1024),tags:[]}};
         await first.webContents.executeJavaScript('psstpsstDesktop.localRelayEvents.publish('+JSON.stringify(publicAddition)+')');await pause(40);
         for(const owner of [parent,second])assert((await events(owner)).some(e=>e.channel===IPC.localRelayEvent&&e.args[0].event.content.length===publicAddition.event.content.length));

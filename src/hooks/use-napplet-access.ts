@@ -6,7 +6,7 @@ import { useNappletPermissionRevision } from '@/stores/napplet.store';
 /** Read consent for the exact account and artifact shown on the details page. */
 export function useNappletAccess(release: NappletRelease | undefined, accountPubkey: string | null) {
   const revision = useNappletPermissionRevision();
-  const key = JSON.stringify([accountPubkey, release?.key, release?.hash, release?.required, revision]);
+  const key = JSON.stringify([accountPubkey, release?.eventKey, release?.hash, release?.required, revision]);
   const [result, setResult] = useState<{ key: string; approved?: boolean; error?: string }>();
   useEffect(() => {
     let active = true;

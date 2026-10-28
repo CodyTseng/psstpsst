@@ -1,4 +1,5 @@
 import m0076 from './0076_local-applications.sql';
+import m0077 from './0077_event-keys.sql';
 import m0075 from './0075_webln-payments.sql';
 import m0073 from './0073_crypto-operation-permissions.sql';
 import m0074 from './0074_application-cache-retention.sql';
@@ -159,6 +160,7 @@ m0072,
 m0073,
 m0074,
 m0075,
-m0076
+m0076,
+m0077
     }
   }

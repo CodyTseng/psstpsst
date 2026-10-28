@@ -7,12 +7,15 @@ import type { ApplicationEndpoint, ApplicationEnvelope } from '../src/platform/p
 import { applicationSourceId, applicationInstanceKey } from '../src/lib/application-identity';
 import { isSignedEvent } from '../src/lib/nostr/event-validation';
 import type { LocalRelayEvent } from '../src/platform/ports/local-relay-events';
+import { verifyEvent, type Event } from 'nostr-tools';
+import { eventKey } from '../src/lib/nostr/event-key';
 
 /** Only host renderers enter this registry; application WebContentsViews never do. */
 export class ApplicationWindows {
   private hosts = new Map<BrowserWindow, ApplicationWindowLaunch>();
   private identities = new Map<BrowserWindow, RunningApplication>();
   private byIdentity = new Map<string, BrowserWindow>();
+  private aliases = new Map<string, string>();
   private messaging = new ApplicationMessagingBroker();
   private endpoints = new Map<string, WebContents>();
   constructor(private options: { create: () => BrowserWindow; parent: () => BrowserWindow | null; url: () => string;
@@ -59,7 +62,7 @@ export class ApplicationWindows {
         JSON.stringify(launch).length > 512 * 1024) throw new Error('invalid-application-window');
       const sourceId = applicationSourceId(launch.address);
       const key = applicationInstanceKey(launch.accountPubkey, sourceId);
-      const existing = this.byIdentity.get(key);
+      const existing = this.byIdentity.get(this.aliases.get(key) ?? key);
       if (existing && !existing.isDestroyed()) {
         if (existing.isMinimized()) existing.restore();
         existing.show(); existing.focus(); return;
@@ -85,7 +88,7 @@ export class ApplicationWindows {
       owner.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) disconnect(); });
       window.once('closed', () => {
         disconnect(); this.hosts.delete(window); this.identities.delete(window);
-        if (this.byIdentity.get(key) === window) this.byIdentity.delete(key);
+        for (const [registered, owner] of this.byIdentity) if (owner === window) this.byIdentity.delete(registered);
         this.changed(); this.options.cleanup(ownerId);
       });
       try { await window.loadURL(this.options.url()); }
@@ -94,6 +97,32 @@ export class ApplicationWindows {
     handle(IPC.applicationWindowLaunch, event => {
       const window = this.host(event.sender);
       return window ? this.hosts.get(window) : null;
+    });
+    handle(IPC.applicationWindowResolveIdentity, (event, input: Event) => {
+      const window = this.host(event.sender), identity = window && this.identities.get(window);
+      if (!window || !identity || !isSignedEvent(input) || JSON.stringify(input).length > 256 * 1024 ||
+        ![5129, 15128, 15129, 35128, 35129, 35130].includes(input.kind)) throw new Error('invalid-application-identity');
+      const manifest: Event = { id: input.id, pubkey: input.pubkey, kind: input.kind, created_at: input.created_at,
+        tags: input.tags, content: input.content, sig: input.sig };
+      if (!verifyEvent(manifest)) throw new Error('invalid-application-identity');
+      const sourceId = eventKey(manifest);
+      if (identity.sourceId !== sourceId && identity.sourceId !== manifest.id) throw new Error('invalid-application-identity');
+      const oldKey = applicationInstanceKey(identity.accountPubkey, identity.sourceId);
+      const key = applicationInstanceKey(identity.accountPubkey, sourceId);
+      if (oldKey === key) return true;
+      this.aliases.set(oldKey, key);
+      while (this.aliases.size > 512) this.aliases.delete(this.aliases.keys().next().value!);
+      const existing = this.byIdentity.get(key);
+      if (existing && existing !== window && !existing.isDestroyed()) {
+        if (existing.isMinimized()) existing.restore();
+        existing.show(); existing.focus(); window.close();
+        return false;
+      }
+      this.byIdentity.delete(oldKey);
+      this.byIdentity.set(key, window);
+      this.identities.set(window, { accountPubkey: identity.accountPubkey, sourceId });
+      this.changed();
+      return true;
     });
     handle(IPC.applicationWindowsRunning, () => [...this.identities.values()]);
     handle(IPC.applicationWindowClose, event => { this.host(event.sender)?.close(); });

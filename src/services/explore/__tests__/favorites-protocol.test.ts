@@ -2,6 +2,13 @@ import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
 import { favoriteReference, parseFavoriteReference, parseFavoriteSnapshot } from '../favorites-protocol';
 import { websiteEntry } from '../model';
 const author = 'b'.repeat(64);
+it('serializes internal eventKeys at the favorites protocol boundary', () => {
+  const key = `35130:${author}:notes`;
+  const address = naddrEncode({ kind: 35130, pubkey: author, identifier: 'notes' });
+  expect(favoriteReference({ kind: 'napp', address: key })).toEqual(favoriteReference({ kind: 'napp', address }));
+  const id = 'c'.repeat(64);
+  expect(favoriteReference({ kind: 'napplet', address: id })).toEqual(favoriteReference({ kind: 'napplet', address: neventEncode({ id }) }));
+});
 it('round-trips ordered app/root/event/URL references with private relay hints', () => {
   const tags = [
     ['a', `35130:${author}:notes`, 'wss://relay.example/'],
@@ -13,8 +20,8 @@ it('round-trips ordered app/root/event/URL references with private relay hints',
   ];
   const parsed = parseFavoriteSnapshot(JSON.stringify(tags));
   expect(parsed.map(item => favoriteReference(item.entry))).toEqual(tags);
-  expect(parsed[0].entry.key).toBe(naddrEncode({ kind: 35130, pubkey: author, identifier: 'notes' }));
-  expect(parsed[4].entry.key).toBe(neventEncode({ id: 'c'.repeat(64) }));
+  expect(parsed[0].entry.key).toBe(`35130:${author}:notes`);
+  expect(parsed[4].entry.key).toBe('c'.repeat(64));
   expect(parsed[3].entry.kind).toBe('nsite');
 });
 it('deduplicates identities independent of relay hints while retaining first position', () => {

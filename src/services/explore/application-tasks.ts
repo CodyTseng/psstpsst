@@ -1,4 +1,4 @@
-import { needsFavoriteMetadata, resolveFavoriteMetadata } from './favorite-metadata';
+import { resolveFavoriteMetadata } from './favorite-metadata';
 import { createStore } from 'zustand/vanilla';
 import { platform } from '@/platform';
 import { assertNotAborted } from '@/platform/abort';
@@ -24,12 +24,19 @@ export type ApplicationTaskState = {
 };
 type Session = {
   account: string; sourceId: string;
+  aliases: Set<string>;
+  opened?: Promise<void>;
   life: AbortController; reviewed?: readonly string[]; starting?: Promise<void>; cleanup?: Promise<void>;
   runtime?: ExploreRuntime | NappletRuntime; delivery?: Record<string, unknown>;
 };
 export const applicationTaskStore = createStore(() => ({ sessions: new Map<string, ApplicationTaskState>() }));
 const sessions = new Map<string, Session>();
 let subscribed = false;
+function rememberAlias(session: Session, alias: string) {
+  session.aliases.delete(alias);
+  session.aliases.add(alias);
+  while (session.aliases.size > 512) session.aliases.delete(session.aliases.values().next().value!);
+}
 const patch = (id: string, update: Partial<ApplicationTaskState>) => applicationTaskStore.setState(state => {
   const current = state.sessions.get(id);
   if (!current) return state;
@@ -44,16 +51,16 @@ const theme = (): RuntimeTheme => {
 
 /** All task runtimes share the trusted process; each owns its WebView and cancellation scope. */
 export const applicationTasks = {
-  async open(entry: ExploreEntry, account: string, reviewed?: readonly string[], delivery?: Record<string, unknown>) {
+  async open(entry: ExploreEntry, account: string, reviewed?: readonly string[], delivery?: Record<string, unknown>): Promise<void> {
     const tasks = platform.napplet.tasks;
     if (!tasks) throw new Error('applications.rebuild_required');
     if (!await canReceiveForAccount(account)) throw new Error('account-unavailable');
     if (nappletStore.getState().accountPubkey !== account) throw new Error('session-closed');
-    entry = await resolveFavoriteMetadata(account, entry, new AbortController().signal);
-    if (nappletStore.getState().accountPubkey !== account) throw new Error('session-closed');
     const sourceId = applicationSourceId(entry.address);
-    for (const [id, session] of sessions) if (session.account === account && session.sourceId === sourceId) {
+    for (const [id, session] of sessions) if (session.account === account && (session.sourceId === sourceId || session.aliases.has(sourceId))) {
       try {
+        await session.opened;
+        if (sessions.get(id) !== session) return this.open(entry, account, reviewed, delivery);
         await tasks.focus(id);
         if (delivery) { session.delivery = delivery; if (session.runtime instanceof NappletRuntime) session.runtime.setDelivery(delivery); }
         return;
@@ -65,11 +72,12 @@ export const applicationTasks = {
       subscribed = true;
     }
     const id = randomId();
-    const session: Session = { account, sourceId, life: new AbortController(), reviewed: reviewed ? [...reviewed] : undefined, delivery };
+    const session: Session = { account, sourceId, aliases: new Set(), life: new AbortController(), reviewed: reviewed ? [...reviewed] : undefined, delivery };
     sessions.set(id, session);
     applicationPresence.set(account, sourceId, true);
     applicationTaskStore.setState(state => ({ sessions: new Map(state.sessions).set(id, { entry, account, loading: true }) }));
-    try { await tasks.open(id, entry.title.slice(0, 200)); }
+    session.opened = tasks.open(id, entry.title.slice(0, 200));
+    try { await session.opened; }
     catch (error) { await this.close(id); throw error; }
   },
   async start(id: string) {
@@ -98,14 +106,38 @@ export const applicationTasks = {
         if (windowed) await this.open(app, account, undefined, delivery);
         else await openInlineApplication({ entry: app, account });
       };
-      if (needsFavoriteMetadata(entry)) {
-        entry = await resolveFavoriteMetadata(account, entry, signal);
-        current(); patch(id, { entry });
+      entry = await resolveFavoriteMetadata(account, entry, signal);
+      current();
+      const canonicalSource = applicationSourceId(entry.address);
+      if (canonicalSource !== session.sourceId) {
+        const existing = [...sessions].find(([otherId, other]) => otherId !== id && other.account === account && other.sourceId === canonicalSource);
+        if (existing) {
+          const [otherId, other] = existing;
+          let focused = false;
+          try { await other.opened; await platform.napplet.tasks!.focus(otherId); focused = true; }
+          catch { current(); await this.close(otherId); }
+          current();
+          if (focused && sessions.get(otherId) === other) {
+            rememberAlias(other, session.sourceId);
+            for (const alias of session.aliases) rememberAlias(other, alias);
+            if (session.delivery) {
+              other.delivery = session.delivery;
+              if (other.runtime instanceof NappletRuntime) other.runtime.setDelivery(session.delivery);
+            }
+            await this.close(id);
+            return;
+          }
+        }
+        rememberAlias(session, session.sourceId);
+        applicationPresence.set(account, session.sourceId, false);
+        session.sourceId = canonicalSource;
+        applicationPresence.set(account, canonicalSource, true);
       }
+      patch(id, { entry });
       const required = entry.release ? [...new Set(['shell', ...entry.required])] : applicationRequirements(entry.kind, entry.required);
       if (entry.kind === 'napp' && required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('applications.unsupported');
       const optional = entry.release?.optional.filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)) ?? [];
-      const sourceId = entry.release?.key ?? applicationSigningSource(entry);
+      const sourceId = entry.release?.eventKey ?? applicationSigningSource(entry);
       const scope = { accountPubkey: account, appKey: sourceId };
       const access = entry.release ? await readDomainPermissions(scope, entry.release) : undefined;
       const stored = access ? null : await getData(scope, 'permissions', 'domains'); current();
@@ -193,7 +225,7 @@ export const applicationTasks = {
     if (!old || !previous || applicationSourceId(entry.address) !== old.sourceId) throw new Error('session-closed');
     old.life.abort();
     const cleanup = Promise.resolve(old.runtime instanceof ExploreRuntime ? old.runtime.stop() : old.runtime?.close());
-    const candidate: Session = { account: old.account, sourceId: old.sourceId, life: new AbortController(), cleanup, delivery: old.delivery };
+    const candidate: Session = { account: old.account, sourceId: old.sourceId, aliases: old.aliases, opened: old.opened, life: new AbortController(), cleanup, delivery: old.delivery };
     sessions.set(id, candidate);
     patch(id, { entry, containerId: undefined, loading: true, error: undefined });
     await this.start(id);
@@ -229,7 +261,7 @@ registerNappletLifecycle(account => {
 });
 registerNappletSourceInvalidation((account, sourceId) => {
   for (const [id, state] of applicationTaskStore.getState().sessions)
-    if (state.account === account && (state.entry.release?.key === sourceId || state.entry.key === sourceId || applicationSigningSource(state.entry) === sourceId))
+    if (state.account === account && (state.entry.release?.eventKey === sourceId || state.entry.key === sourceId || applicationSigningSource(state.entry) === sourceId))
       void applicationTasks.close(id).catch(error => console.warn('[explore] Task cleanup failed', error));
 });
 registerNappletTheme(() => {

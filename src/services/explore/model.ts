@@ -1,4 +1,5 @@
 import { normalizeSigningSource } from '@/services/signing/source';
+import { eventKey, normalizeEventKey } from '@/lib/nostr/event-key';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { verifyEvent, type Event } from 'nostr-tools';
@@ -47,6 +48,7 @@ export type SiteFile = {
 export type ExploreEntry = {
   local?: { version: string; installer: string; actions: string[] };
   localIcon?: { account: string; appId: string; version: string; hash: string };
+  /** Nostr eventKey, explicit website URL, or local application ID. */
   key: string;
   address: string;
   title: string;
@@ -131,12 +133,12 @@ export function parseSite(input: Event): ExploreEntry {
     if (bytesToHex(sha256(new TextEncoder().encode(lines))) !== aggregate[1])
       throw new Error('applications.invalid_manifest');
   }
-  const key = naddrEncode({ kind: event.kind, pubkey: event.pubkey, identifier: tags('d')[0]?.[1] ?? '' });
+  const key = eventKey(event);
   const servers = [...new Set(tags('server').map((t) => publicUrl(t[1])))].slice(0, 8);
   const iconFile = files.find((f) => f.path === tags('icon')[0]?.[1]);
   // Napps are web applications; their normal network access must be visible in host consent.
   const required = applicationRequirements(event.kind === 35130 ? 'napp' : 'nsite', tags('requires').map(tag => tag[1]).filter(Boolean));
-  return { key, address: key, title: (tags('title')[0]?.[1] ?? tags('d')[0]?.[1] ?? '').slice(0, 200) || key,
+  return { key, address: naddrEncode({ kind: event.kind, pubkey: event.pubkey, identifier: tags('d')[0]?.[1] ?? '' }), title: (tags('title')[0]?.[1] ?? tags('d')[0]?.[1] ?? '').slice(0, 200) || key,
     kind: event.kind === 35130 ? 'napp' : 'nsite', description: (tags('description')[0]?.[1] ?? event.content).slice(0, 16000),
     servers, manifest: event, files, required,
     ...(iconFile && ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml', 'image/x-icon'].includes(iconFile.mime) ? { icon: { hash: iconFile.hash, mime: iconFile.mime } } : {}),
@@ -147,7 +149,7 @@ export function signedAddress(value: string) {
   const parsed = decode(input);
   if (parsed.type !== 'naddr' || ![15128, 35128, 35130].includes(parsed.data.kind))
     return null;
-  return { source: naddrEncode({ kind: parsed.data.kind, pubkey: parsed.data.pubkey, identifier: parsed.data.identifier }),
+  return { source: normalizeEventKey(input),
     filter: { kinds: [parsed.data.kind], authors: [parsed.data.pubkey], ...(parsed.data.kind === 15128 ? {} : { '#d': [parsed.data.identifier] }) },
     relays: (parsed.data.relays ?? []).slice(0, 4), author: parsed.data.pubkey };
 }
@@ -163,8 +165,8 @@ export function withVisit(entries: readonly ExploreEntry[], app: ExploreEntry, a
 }
 
 export function fromNapplet(release: ReturnType<typeof parseManifest>): ExploreEntry {
-  const key = normalizeSigningSource(appShareAddress(release));
-  return { key, address: key, title: release.title, kind: 'napplet', description: release.description, servers: release.servers, eventRelays: release.eventRelays,
+  const key = eventKey(release.event);
+  return { key, address: appShareAddress(release).replace(/^nostr:/, ''), title: release.title, kind: 'napplet', description: release.description, servers: release.servers, eventRelays: release.eventRelays,
     icon: release.icon, manifest: release.event, release, required: release.required, desktopPosition: null, lastUsedAt: null };
 }
 

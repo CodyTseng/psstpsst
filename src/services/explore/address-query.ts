@@ -1,5 +1,5 @@
 import type { Filter } from 'nostr-tools';
-import { naddrEncode } from 'nostr-tools/nip19';
+import { normalizeEventKey } from '@/lib/nostr/event-key';
 import { parseNostrEventReference } from '@/lib/nostr/event-reference';
 import { publicUrl } from '@/services/napplet/protocol';
 import { websiteAddress, type ExploreEntry } from './model';
@@ -28,7 +28,7 @@ export function parseApplicationAddressQuery(value: string): ApplicationAddressQ
     if (!ref || ref.identifier === undefined || !ref.author || !ref.kind ||
       ![15128, 35128, 15129, 35129, 35130].includes(ref.kind) ||
       (ref.kind < 30000 && ref.identifier !== '') || (ref.kind >= 30000 && !ref.identifier)) throw new Error('invalid-address');
-    return { type: 'naddr', key: naddrEncode({ kind: ref.kind, pubkey: ref.author, identifier: ref.identifier }),
+    return { type: 'naddr', key: normalizeEventKey(`${ref.kind}:${ref.author}:${ref.identifier}`),
       kind: ref.kind, author: ref.author, relays: ref.relays.map(relay => publicUrl(relay, true)).slice(0, 4),
       filter: { kinds: [ref.kind], authors: [ref.author], ...(ref.kind >= 30000 ? { '#d': [ref.identifier] } : {}) } };
   } catch { return { type: 'invalid', key: input }; }

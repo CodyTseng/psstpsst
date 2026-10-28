@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AppButton } from '@/components/common/AppButton';
 import { BrowserPermissions } from './BrowserPermissions';
-import { signingSourceFromLegacyKey } from '@/services/signing/source';
+import { normalizeSigningSource } from '@/services/signing/source';
 import { NappletPermissions } from './NappletPermissions';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { platform } from '@/platform';
@@ -28,7 +28,7 @@ export function ApplicationSettings({accountPubkey,release,sourceId,access,onRes
   return <View style={{gap:spacing.xl}}>
     {access?<Fragment key={`access:${revision}`}>{access}</Fragment>:null}
     <NappletPermissions accountPubkey={accountPubkey} key={`signing:${revision}`} release={release} sourceId={sourceId} initiallyExpanded/>
-    {sourceId || release ? <BrowserPermissions accountPubkey={accountPubkey} key={`browser:${revision}`} sourceId={sourceId ?? signingSourceFromLegacyKey(release!.key)} /> : null}
+    {sourceId || release ? <BrowserPermissions accountPubkey={accountPubkey} key={`browser:${revision}`} sourceId={sourceId ?? normalizeSigningSource(release!.eventKey)} /> : null}
     <AppButton variant="danger" label={t('applications.revoke')} loading={busy} onPress={()=>{void reset();}}/>
     {onUninstall ? <AppButton variant="danger" label={t('applications.local_uninstall')} disabled={busy} onPress={()=>{void (async()=>{
       if (!await platform.confirmationDialog.confirm({title:t('applications.local_uninstall'),message:t('applications.local_uninstall_notice'),confirmLabel:t('common.remove'),cancelLabel:t('common.cancel'),destructive:true})) return;

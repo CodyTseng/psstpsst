@@ -16,7 +16,7 @@ export default function NappletPermissionsScreen() {
   const {t}=useTranslation();
   const app=installed??release;
   return <ApplicationPermissionsPage application={app?applicationPresentation(app):undefined} error={error}>
-    {app?installed&&accountPubkey?<NappletSettings key={`${accountPubkey}:${installed.key}:${installed.hash}`} release={installed} accountPubkey={accountPubkey}/>
+    {app?installed&&accountPubkey?<NappletSettings key={`${accountPubkey}:${installed.eventKey}:${installed.hash}`} release={installed} accountPubkey={accountPubkey}/>
       :<View style={{gap:spacing.md}}>
         <AppText variant="subtitle">{t('applications.permissions')}</AppText>
         <ListGroup>{[...new Set([...app.required,...app.optional])].filter(domain=>domain!=='shell').map(domain=>

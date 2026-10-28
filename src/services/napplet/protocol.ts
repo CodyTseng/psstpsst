@@ -2,6 +2,7 @@ import { randomBytes, bytesToHex } from '@noble/hashes/utils.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { verifyEvent, type Event, type Filter } from 'nostr-tools';
 import { decode, naddrEncode, neventEncode } from 'nostr-tools/nip19';
+import { eventKey } from '@/lib/nostr/event-key';
 
 export const NAP_DOMAINS = [
   'shell',
@@ -25,7 +26,7 @@ export const MARKET_RELAYS = [
 export const MAX_ARTIFACT_BYTES = 25 * 1024 * 1024;
 export const MAX_RESOURCE_BYTES = 10 * 1024 * 1024;
 export type NappletRelease = {
-  key: string;
+  eventKey: string;
   event: Event;
   eventRelays?: string[];
   hash: string;
@@ -116,10 +117,7 @@ export function parseManifest(input: unknown): NappletRelease {
     throw new Error('applications.invalid_manifest');
   const icon = tags('icon')[0];
   return {
-    key:
-      event.kind === 5129
-        ? `5129:${event.id}`
-        : `${event.kind}:${event.pubkey}:${ds[0]?.[1] ?? ''}`,
+    eventKey: eventKey(event),
     event,
     hash: artifactHash,
     title:

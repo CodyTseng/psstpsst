@@ -54,6 +54,7 @@ if (long) names.push(...Array.from({ length: 80 }, (_, index) => `App ${index + 
 const history = new URLSearchParams(location.search).has('history');
 const storageKey = history ? 'gallery-desktop-history' : long ? 'gallery-desktop-long' : 'gallery-desktop';
 const apps = names.map((title, index) => ({
+  eventKey: title,
   key: title,
   title,
   hash: 'a'.repeat(64),
@@ -66,7 +67,7 @@ const apps = names.map((title, index) => ({
   lastUsedAt: 100 - index,
   desktopPosition: index < 9 ? index : null,
   previousManifest: null,
-})) as unknown as NappletInstallation[];
+})) as unknown as (NappletInstallation & { key: string })[];
 const { AppButton } = require('../../src/components/common/AppButton') as typeof import('../../src/components/common/AppButton');
 function Gallery() {
   const [recentPage, setRecentPage] = useState(false);
@@ -76,23 +77,23 @@ function Gallery() {
   const [opened, setOpened] = useState<string | null>(null);
   const [keys, setKeys] = useState<string[]>(() => {
     const saved = localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : (long && !history ? apps : apps.slice(0, 9)).map((app) => app.key);
+    return saved ? JSON.parse(saved) : (long && !history ? apps : apps.slice(0, 9)).map((app) => app.eventKey);
   });
   const [recent, setRecent] = useState(long ? apps : [apps[9], apps[0], apps[1], apps[5], apps[10], apps[11]]);
-  const items = keys.map((key, desktopPosition) => ({ ...apps.find((app) => app.key === key)!, desktopPosition }));
+  const items = keys.map((key, desktopPosition) => ({ ...apps.find((app) => app.eventKey === key)!, desktopPosition }));
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(keys)); }, [keys]);
-  const currentRecent = recent.map((app) => ({ ...app, desktopPosition: keys.includes(app.key) ? keys.indexOf(app.key) : null }));
+  const currentRecent = recent.map((app) => ({ ...app, desktopPosition: keys.includes(app.eventKey) ? keys.indexOf(app.eventKey) : null }));
   function open(app: NappletInstallation) {
     document.title = `Opened ${app.title}`;
-    setRecent((old) => [app, ...old.filter((item) => item.key !== app.key)]);
+    setRecent((old) => [{ ...app, key: app.eventKey }, ...old.filter((item) => item.eventKey !== app.eventKey)]);
     setOpened(app.title);
   }
   function move(app: NappletInstallation, index: number | null) {
     const apply = () => {
       document.title = `move:${app.title}:${index}`;
       setKeys((old) => {
-        const next = old.filter((key) => key !== app.key);
-        if (index !== null) next.splice(Math.min(index, next.length), 0, app.key);
+        const next = old.filter((key) => key !== app.eventKey);
+        if (index !== null) next.splice(Math.min(index, next.length), 0, app.eventKey);
         return next;
       });
     };
@@ -101,7 +102,7 @@ function Gallery() {
     }
     apply();
   }
-  const removeRecent = (app: NappletInstallation) => setRecent((old) => old.filter((item) => item.key !== app.key));
+  const removeRecent = (app: NappletInstallation) => setRecent((old) => old.filter((item) => item.eventKey !== app.eventKey));
   const details = (app: NappletInstallation) => { document.title = `Details ${app.title}`; };
   const addRecent = (app: NappletInstallation) => { if (app.desktopPosition === null) return move(app, items.length); };
   const c = useThemeColors();

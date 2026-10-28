@@ -6,7 +6,7 @@ import type { NappletRelease } from '@/services/napplet/protocol';
 
 jest.mock('@/stores/napplet.store', () => ({ useNappletPermissionRevision: () => 0 }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { activateAccount: jest.fn(), domainPermissions: jest.fn() } }));
-const release = { key: 'app', hash: 'version', required: ['network'] } as NappletRelease;
+const release = { eventKey: 'app', hash: 'version', required: ['network'] } as NappletRelease;
 let renderer: ReactTestRenderer;
 let result: ReturnType<typeof useNappletAccess>;
 function Probe({ app }: { app?: NappletRelease }) {

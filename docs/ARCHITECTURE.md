@@ -70,6 +70,8 @@ web input when predictive back starts, using the same native callback.
 Native application hosts deduplicate opens by account and canonical application
 source. Their process-owned instance registry drives focused-window restoration
 and UI running indicators; icons never infer running state from visit history.
+Independent hosts open or focus before metadata resolution; the destination owns
+loading, cancellation, permission review and recoverable launch failures.
 Task intents carry opaque in-memory
 session identifiers, so process death removes stale tasks rather than restoring
 account authority from intent extras.
@@ -802,6 +804,16 @@ native delivery path and never modify messaging badges.
 Public application manifests use the shared replaceable-event cache by canonical
 coordinate, with one latest event per application. Immutable kind-5129 applications
 and message references share the event-ID cache.
+Internal event identity is named `eventKey`: replaceable events use
+`kind:pubkey:d` (empty `d` for non-parameterized kinds), and other events use
+their raw `event.id`. NIP-19 references are transport addresses, never storage
+identities. Account/application namespaces, permissions, history and running-host
+registries use the same eventKey. Website URL/origin scopes and local application
+IDs retain their domain meanings. An unresolved event-ID reference has provisional
+host identity; verified metadata reconciles it with the coordinate and reuses any
+existing host. Exact-version caches and signature verification retain event IDs.
+Filesystem names and WebView origin seeds preserve their prior portable encoding
+at the platform boundary so identity upgrades retain downloaded and browser data.
 Details and permissions resolve self-contained application addresses even when
 no favorite, history, discovery or in-memory address entry exists: check the
 shared local metadata cache, then query relays on a miss. Membership controls
@@ -975,7 +987,7 @@ Approvals are committed before invoking the signer; signer latency does not
 expire them. Remembered rules have no per-source count or aggregate-size quota.
 Signing, publication and local event ingestion share NIP-01 structure validation;
 transport and cache budgets do not define event validity.
-Sources are canonical naddr IDs or host-verified HTTP(S) website origins (scheme,
+Sources are canonical eventKeys or host-verified HTTP(S) website origins (scheme,
 host and effective port), without a source type or code version; immutable legacy listings use canonical event IDs. Durable rules and a
 bounded metadata-only activity journal have separate tables. Session grants stay
 in memory. Relay AUTH and public-file uploads use explicit signer permissions

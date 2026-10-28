@@ -9,7 +9,10 @@ import { getData,setData } from '@/services/napplet/repository';
 import { readEntries, readFavoriteEntries, readFavoriteReferences, readFavoriteMetadata, queueFavoritesPublication, reorder, visit } from '../repository';
 import { ExploreRuntime } from '../runtime';
 import type { ExploreEntry } from '../model';
-import { naddrEncode } from 'nostr-tools/nip19';
+import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
+import { normalizeEventKey } from '@/lib/nostr/event-key';
+import { applicationPresenceStore } from '../application-presence';
+import { applicationInstanceKey } from '@/lib/application-identity';
 import { tryOpenApplicationWindow } from '../windows';
 import { platform } from '@/platform';
 import { refreshApplicationMetadata } from '../application-metadata';
@@ -184,6 +187,123 @@ it('still reviews required access for an independent task',async()=>{
   expect(applicationTaskStore.getState().sessions.get(id)?.containerId).toBe('container');
 });
 
+it('opens and refocuses a task before resolving metadata, then reviews the resolved access', async () => {
+  const app = entry('napp');
+  let finish!: (app: ExploreEntry) => void, resolving!: () => void;
+  const started = new Promise<void>(resolve => { resolving = resolve; });
+  jest.mocked(resolveFavoriteMetadata).mockImplementationOnce(() => {
+    resolving();
+    return new Promise(resolve => { finish = resolve; });
+  });
+  await applicationTasks.open(app, 'account');
+  const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledWith(id, app.title);
+  expect(resolveFavoriteMetadata).not.toHaveBeenCalled();
+  const loading = applicationTasks.start(id);
+  await started;
+  expect(applicationTaskStore.getState().sessions.get(id)).toMatchObject({ loading: true });
+  expect(ExploreRuntime).not.toHaveBeenCalled();
+  await applicationTasks.open(app, 'account');
+  expect(platform.napplet.tasks!.focus).toHaveBeenCalledWith(id);
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(1);
+  expect(resolveFavoriteMetadata).toHaveBeenCalledTimes(1);
+  finish({ ...app, title: 'Resolved', required: ['network', 'relay'] });
+  await loading;
+  expect(nappletService.requestApproval).toHaveBeenCalledWith(expect.objectContaining({
+    application: expect.objectContaining({ title: 'Resolved', required: ['network', 'relay'] }),
+  }), expect.anything());
+  expect(applicationTaskStore.getState().sessions.get(id)).toMatchObject({ entry: { title: 'Resolved' }, containerId: 'container' });
+});
+
+it('hands a local app off to its window before querying its metadata in the caller', async () => {
+  const caller = entry('napp');
+  await exploreService.start(exploreService.prepare(caller, 'account'));
+  const callbacks = jest.mocked(ExploreRuntime).mock.calls.at(-1)![2];
+  const target: ExploreEntry = { ...caller, key: 'local~target', address: 'local~target',
+    local: { version: 'b'.repeat(64), installer: caller.key, actions: [] } };
+  jest.mocked(resolveFavoriteMetadata).mockClear();
+  await callbacks.launch!(target);
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(1);
+  expect(resolveFavoriteMetadata).not.toHaveBeenCalled();
+  const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  await applicationTasks.start(id);
+  expect(resolveFavoriteMetadata).toHaveBeenCalledWith('account', target, expect.any(AbortSignal));
+});
+
+it('cancels task metadata loading when its window closes', async () => {
+  const app = entry('napp');
+  let finish!: (app: ExploreEntry) => void, resolving!: () => void;
+  const started = new Promise<void>(resolve => { resolving = resolve; });
+  jest.mocked(resolveFavoriteMetadata).mockImplementationOnce(() => {
+    resolving();
+    return new Promise(resolve => { finish = resolve; });
+  });
+  await applicationTasks.open(app, 'account');
+  const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  const loading = applicationTasks.start(id);
+  await started;
+  const signal = jest.mocked(resolveFavoriteMetadata).mock.calls.at(-1)![2];
+  await applicationTasks.close(id);
+  expect(signal.aborted).toBe(true);
+  finish(app);
+  await loading;
+  expect(ExploreRuntime).not.toHaveBeenCalled();
+  expect(nappletService.requestApproval).not.toHaveBeenCalled();
+  expect(applicationTaskStore.getState().sessions.has(id)).toBe(false);
+});
+
+it('reconciles an event reference with its verified coordinate for focus, presence and restart', async () => {
+  const app = entry('napp'), canonical = { ...app, key: normalizeEventKey(app.address) };
+  const id = 'b'.repeat(64), reference = { ...app, key: id, address: neventEncode({ id }) };
+  await applicationTasks.open(reference, 'account');
+  const task = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  jest.mocked(resolveFavoriteMetadata).mockResolvedValueOnce(canonical);
+  await applicationTasks.start(task);
+  expect(applicationPresenceStore.getState().running.has(applicationInstanceKey('account', id))).toBe(false);
+  expect(applicationPresenceStore.getState().running.has(applicationInstanceKey('account', canonical.key))).toBe(true);
+  await applicationTasks.open(canonical, 'account');
+  await applicationTasks.open(reference, 'account');
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(1);
+  expect(platform.napplet.tasks!.focus).toHaveBeenLastCalledWith(task);
+  await expect(applicationTasks.restart(task, canonical)).resolves.toBeUndefined();
+});
+
+it('reuses an existing canonical task when another event reference resolves to it', async () => {
+  const app = entry('napp'), canonical = { ...app, key: normalizeEventKey(app.address) };
+  await applicationTasks.open(canonical, 'account');
+  const existing = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  await applicationTasks.start(existing);
+  const id = 'b'.repeat(64), reference = { ...app, key: id, address: neventEncode({ id }) };
+  await applicationTasks.open(reference, 'account');
+  const pending = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  jest.mocked(resolveFavoriteMetadata).mockResolvedValueOnce(canonical);
+  await applicationTasks.start(pending);
+  expect(platform.napplet.tasks!.focus).toHaveBeenLastCalledWith(existing);
+  expect(platform.napplet.tasks!.close).toHaveBeenCalledWith(pending);
+  expect(ExploreRuntime).toHaveBeenCalledTimes(1);
+  expect(applicationTaskStore.getState().sessions.has(existing)).toBe(true);
+  expect(applicationTaskStore.getState().sessions.has(pending)).toBe(false);
+  expect(applicationPresenceStore.getState().running.has(applicationInstanceKey('account', canonical.key))).toBe(true);
+  await applicationTasks.open(reference, 'account');
+  expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(2);
+});
+
+it('keeps metadata failures in the opened task and retries there', async () => {
+  const app = entry('napp');
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    jest.mocked(resolveFavoriteMetadata).mockRejectedValueOnce(new Error('applications.not_found'));
+    await applicationTasks.open(app, 'account');
+    const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+    await applicationTasks.start(id);
+    expect(applicationTaskStore.getState().sessions.get(id)).toMatchObject({ loading: false, error: 'applications.not_found' });
+    expect(ExploreRuntime).not.toHaveBeenCalled();
+    await applicationTasks.retry(id);
+    expect(applicationTaskStore.getState().sessions.get(id)).toMatchObject({ containerId: 'container', error: undefined });
+    expect(platform.napplet.tasks!.open).toHaveBeenCalledTimes(1);
+  } finally { warn.mockRestore(); }
+});
+
 it.each([
   { denied: false, saved: null }, { denied: true, saved: null },
   { denied: false, saved: '[]' }, { denied: true, saved: '[]' },
@@ -229,7 +349,7 @@ it('closes the inline page only after its independent window opens', async () =>
   let opened!: () => void;
   jest.mocked(platform.napplet.tasks!.open).mockImplementationOnce(() => new Promise<void>(resolve => { opened = resolve; }));
   const launch = exploreService.openInWindow(runId);
-  // The native launch awaits account and metadata checks first.
+  // The native launch checks account availability before opening the task.
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(exploreStore.getState().entry).toEqual(website);
   expect(instance.stop).not.toHaveBeenCalled();

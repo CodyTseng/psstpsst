@@ -17,7 +17,7 @@ import { fromNapplet } from '@/services/explore/model';
 jest.mock('@/services/explore/application-handlers', () => ({ readApplicationHandlers: jest.fn(async () => []) }));
 jest.mock('@/services/explore/browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(async () => {}), clearAccountBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
-jest.mock('@/services/signing/source', () => ({ ...jest.requireActual('@/services/signing/source'), signingSourceFromLegacyKey: (key: string) => `${key}.example` }));
+jest.mock('@/services/signing/source', () => ({ ...jest.requireActual('@/services/signing/source'), normalizeSigningSource: (key: string) => `${key}.example` }));
 jest.mock('@/services/nostr/event-cache-retention', () => ({ pruneEventCache: jest.fn(async () => {}), favoriteCoordinates: '' }));
 jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActual('../../explore/testing/memory-cache').replaceableCache);
 jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('../../explore/testing/memory-cache').immutableCache);
@@ -27,7 +27,7 @@ jest.mock('../artifacts', () => ({ loadArtifact: jest.fn(async () => '') }));
 jest.mock('../network', () => ({ NappletNetwork: jest.fn(() => ({ destroy: jest.fn(), query: jest.fn(), publisherRelays: jest.fn(async () => []) })) }));
 jest.mock('../repository', () => ({ clearRecent: jest.fn(async () => {}), saveDesktopOrder: jest.fn(async () => {}), getData: jest.fn(), setData: jest.fn(), installations: jest.fn(), saveInstallation: jest.fn(async () => {}), markRecent: jest.fn(async () => {}) }));
 jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
-  scope: { accountPubkey: options.accountPubkey, appKey: options.release.key },
+  scope: { accountPubkey: options.accountPubkey, appKey: options.release.eventKey },
   open: jest.fn(async () => 'container'), close: jest.fn(async () => {}),
   goBack: jest.fn(async () => true),
   signingPermissions: { revoke: jest.fn(async () => {}), edit: jest.fn(async () => {}), settled: jest.fn(async () => {}), snapshot: jest.fn(async () => ({ rules: [], activity: [] })) },
@@ -35,8 +35,8 @@ jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
 
 const stored = new Map<string, string>();
 const key = (scope: AppScope, bucket: string, name: string) => JSON.stringify([scope, bucket, name]);
-const app = { key: 'app', hash: 'v1', title: 'App', required: ['storage'], optional: ['identity'], event: { pubkey: 'publisher' } } as NappletInstallation;
-const scope = { accountPubkey: 'accountA', appKey: app.key };
+const app = { eventKey: 'app', hash: 'v1', title: 'App', required: ['storage'], optional: ['identity'], event: { pubkey: 'publisher' } } as NappletInstallation;
+const scope = { accountPubkey: 'accountA', appKey: app.eventKey };
 
 beforeEach(async () => {
   nappletService.deactivate(); clearApplicationTestCache(); stored.clear(); signingRules.clear(); signingActivity.clear(); jest.clearAllMocks();
@@ -55,7 +55,7 @@ it('uses favorite napplets as intent handlers independently of installations', a
   await nappletService.open(app);
   const config = jest.mocked(NappletRuntime).mock.calls.at(-1)![0];
   expect(await config.handlers()).toEqual([]);
-  const favorite = { ...app, key: 'favorite', title: 'Favorite', event: { ...app.event, kind: 15129, pubkey: 'a'.repeat(64) } };
+  const favorite = { ...app, eventKey: 'favorite', title: 'Favorite', event: { ...app.event, kind: 15129, pubkey: 'a'.repeat(64) } };
   jest.mocked(readApplicationHandlers).mockResolvedValue([fromNapplet(favorite)]);
   expect(await config.handlers()).toEqual([favorite]);
   expect(readApplicationHandlers).toHaveBeenLastCalledWith('accountA', 'napplet');
@@ -302,7 +302,7 @@ it('keeps download failures available for retry inside the same container run', 
 it('rejects stale accounts and prevents an old route from starting or stopping a newer run', async () => {
   expect(() => nappletService.prepareOpen(app, 'accountB')).toThrow('session-closed');
   const first = nappletService.prepareOpen(app, 'accountA');
-  const second = nappletService.prepareOpen({ ...app, key: 'another-app' }, 'accountA');
+  const second = nappletService.prepareOpen({ ...app, eventKey: 'another-app' }, 'accountA');
   nappletService.stop(first);
   nappletService.startPreparedOpen(first);
   expect(nappletStore.getState()).toMatchObject({ runId: second, launching: true });
@@ -498,12 +498,12 @@ it('shares without replacing the execution container and resumes only its own se
 
 
 it('optimistically serializes desktop edits and persists the latest complete order', async () => {
-  const items = [{ ...app, desktopPosition: 0 }, { ...app, key: 'second', desktopPosition: null }];
+  const items = [{ ...app, desktopPosition: 0 }, { ...app, eventKey: 'second', desktopPosition: null }];
   nappletStore.setState({ installed: items, recent: items });
   let finish!: () => void;
   jest.mocked(saveDesktopOrder).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
   const first = nappletService.moveDesktop('second', 0, 'accountA');
-  expect(nappletStore.getState().installed.find((entry) => entry.key === 'second')?.desktopPosition).toBe(0);
+  expect(nappletStore.getState().installed.find((entry) => entry.eventKey === 'second')?.desktopPosition).toBe(0);
   const second = nappletService.moveDesktop('app', null, 'accountA');
   await Promise.resolve();
   expect(saveDesktopOrder).toHaveBeenCalledTimes(1);
@@ -511,7 +511,7 @@ it('optimistically serializes desktop edits and persists the latest complete ord
   await Promise.all([first, second]);
   expect(saveDesktopOrder).toHaveBeenNthCalledWith(1, 'accountA', ['second', 'app']);
   expect(saveDesktopOrder).toHaveBeenNthCalledWith(2, 'accountA', ['second']);
-  expect(nappletStore.getState().installed.find((entry) => entry.key === 'app')?.desktopPosition).toBeNull();
+  expect(nappletStore.getState().installed.find((entry) => entry.eventKey === 'app')?.desktopPosition).toBeNull();
 });
 
 it('restores persisted desktop state after a failed write and rejects a stale account', async () => {

@@ -1,6 +1,6 @@
 import { SigningPermissions as SharedSigningPermissions } from '@/services/signing/permissions';
 import { readSigningSnapshot as readSharedSnapshot } from '@/services/signing/repository';
-import { signingSourceFromLegacyKey } from '@/services/signing/source';
+import { normalizeSigningSource } from '@/services/signing/source';
 import type { AppScope } from './repository';
 import type { NappletRelease } from './protocol';
 import type { RuntimePrompt } from './runtime';
@@ -8,7 +8,7 @@ import type { RuntimePrompt } from './runtime';
 export { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, SIGNING_PERIODS } from '@/services/signing/model';
 export type { SigningScope, SigningRequest, SigningRule, SigningActivity, SigningSnapshot, SigningRuleChange, SigningRuleTarget } from '@/services/signing/model';
 export function appSigningScope(scope: AppScope) {
-  return { accountPubkey: scope.accountPubkey, sourceId: signingSourceFromLegacyKey(scope.appKey) };
+  return { accountPubkey: scope.accountPubkey, sourceId: normalizeSigningSource(scope.appKey) };
 }
 export function readSigningSnapshot(scope: AppScope) { return readSharedSnapshot(appSigningScope(scope)); }
 

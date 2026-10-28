@@ -518,9 +518,9 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
     },
     launch: async app => {
       current();
+      if (await tryOpenApplicationWindow(app, account)) return;
       if (app.local) { app = await resolveFavoriteMetadata(account, app, launchLife.signal); current(); }
       app = { ...app, required: applicationRequirements(app.kind, app.required) };
-      if (await tryOpenApplicationWindow(app, account)) return;
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
       if (app.required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('applications.unsupported');
       if (!await exploreService.access(app, account)) {

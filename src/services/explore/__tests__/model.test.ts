@@ -92,7 +92,7 @@ it('classifies by signed kind and accepts several static files', () => {
   expect(app.manifest!.tags).not.toContainEqual(['requires', 'network']);
   expect(app.files).toHaveLength(2);
   expect(app.files![1].mime).toBe('text/javascript');
-  expect(signedAddress(app.key)?.source).toBe(app.key);
+  expect(signedAddress(app.address)?.source).toBe(app.key);
   expect(parseSite(manifest(35128, [['requires', 'identity']])).kind).toBe('nsite');
   expect(parseSite(manifest(35128, [['requires', 'identity']])).required).toEqual(['identity']);
 });

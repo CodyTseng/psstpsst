@@ -57,6 +57,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
       export { migrateExplore } from ${JSON.stringify(path.resolve('src/db/data-migrations/explore.ts'))};
       export { migrateSigningSources } from ${JSON.stringify(path.resolve('src/db/data-migrations/signing-sources.ts'))};
       export { migrateApplicationFavorites } from ${JSON.stringify(path.resolve('src/db/data-migrations/application-favorites.ts'))};
+      export { migrateEventKeys } from ${JSON.stringify(path.resolve('src/db/data-migrations/event-keys.ts'))};
       export { normalizeSigningSource,signingSourceFromLegacyKey } from ${JSON.stringify(path.resolve('src/services/signing/source.ts'))};
       export function repository() { return require(${JSON.stringify(path.resolve('src/services/signing/repository.ts'))}); }
       export function browserPermissions() { return require(${JSON.stringify(path.resolve('src/services/explore/browser-permission-store.ts'))}); }
@@ -122,16 +123,19 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     for (const kind of [0, 65535]) insertKind.run('publish', kind);
     assert.throws(() => insertKind.run('publish', 0), /UNIQUE constraint/);
     sqlite.prepare("DELETE FROM signing_authorizations WHERE source_id='constraint-test'").run();
-    const sourceId = fixture.signingSourceFromLegacyKey(app);
+    const legacySourceId = fixture.signingSourceFromLegacyKey(app);
+    const sourceId = fixture.normalizeSigningSource(app);
     const scope = { accountPubkey: 'A', sourceId };
-    assert.equal(sqlite.prepare('SELECT position FROM explore_shortcuts WHERE account_pubkey=? AND source_id=?').get('A',sourceId).position,2);
-    assert.equal(sqlite.prepare('SELECT last_used_at FROM explore_history WHERE account_pubkey=? AND source_id=?').get('A',sourceId).last_used_at,123);
+    assert.equal(sqlite.prepare('SELECT position FROM explore_shortcuts WHERE account_pubkey=? AND source_id=?').get('A',legacySourceId).position,2);
+    assert.equal(sqlite.prepare('SELECT last_used_at FROM explore_history WHERE account_pubkey=? AND source_id=?').get('A',legacySourceId).last_used_at,123);
     sqlite.exec('BEGIN');
     sqlite.exec(readFileSync('src/db/migrations/0071_event-backed-applications.sql', 'utf8'));
     await fixture.migrateApplicationFavorites(globalThis.__signingDatabaseTest);
     sqlite.exec(readFileSync('src/db/migrations/0072_event-relay-sources.sql', 'utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0073_crypto-operation-permissions.sql', 'utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0076_local-applications.sql', 'utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0077_event-keys.sql', 'utf8'));
+    await fixture.migrateEventKeys(globalThis.__signingDatabaseTest);
     sqlite.exec('COMMIT');
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name IN ('explore_shortcuts','legacy_explore_shortcuts')").get().n, 0);
     const explore=fixture.exploreRepository();
@@ -163,9 +167,9 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     assert(!sqlite.prepare('PRAGMA table_info(napplet_usage)').all().some((column) => column.name === 'artifact_hash'));
     const repository = fixture.repository();
     const saved = await repository.readSigningSnapshot(scope);
-    assert.equal((await repository.readSigningSnapshot({ ...scope, sourceId: fixture.signingSourceFromLegacyKey(secondApp) })).rules[0].scope.kind, 7,
+    assert.equal((await repository.readSigningSnapshot({ ...scope, sourceId: fixture.normalizeSigningSource(secondApp) })).rules[0].scope.kind, 7,
       'known legacy path manifests retain previous-version grants when the current version has none');
-    assert.equal((await repository.readSigningSnapshot({ ...scope, sourceId: fixture.signingSourceFromLegacyKey(emptyApp) })).rules.length, 0,
+    assert.equal((await repository.readSigningSnapshot({ ...scope, sourceId: fixture.normalizeSigningSource(emptyApp) })).rules.length, 0,
       'a current-version reset never restores a previous grant');
     assert.equal(saved.rules.length, 1, 'narrow, malformed and expired legacy grants do not expand');
     assert.equal(saved.rules[0].scope.scopeKey, 'progress');

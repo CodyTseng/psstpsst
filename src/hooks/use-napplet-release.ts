@@ -25,7 +25,7 @@ export function useNappletRelease(id: string) {
   const current = result?.key === key ? result : undefined;
   const release = current?.release ?? (ready ? state.market.find((app) => app.event.id === id) ??
     state.installed.find((app) => app.event.id === id) : undefined);
-  const installed = release ? state.installed.find((app) => app.key === release.key) : undefined;
+  const installed = release ? state.installed.find((app) => app.eventKey === release.eventKey) : undefined;
   useEffect(() => {
     let active = true;
     if (!release && id && ready && state.loaded) void nappletService.resolve(id)

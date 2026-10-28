@@ -1,4 +1,5 @@
 import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
+import { eventKeyAddress } from '@/lib/nostr/event-key';
 import { parseNostrEventReference, type NostrEventReference } from '@/lib/nostr/event-reference';
 import { parseFavoriteReference } from './favorites-protocol';
 import { websiteEntry, type ExploreEntry } from './model';
@@ -29,6 +30,9 @@ export function applicationEntryFromAddress(value: string): ExploreEntry | undef
   if (value.startsWith('local~')) return { key: value, address: value, kind: 'napp', title: value,
     description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
   if (/^[a-f0-9]{64}$/.test(value)) return { ...parseFavoriteReference(['e', value]).entry, address: neventEncode({ id: value }) };
+  if (/^[0-9]+:[a-f0-9]{64}:/.test(value)) {
+    try { return applicationEntryFromAddress(eventKeyAddress(value)); } catch { return; }
+  }
   const reference = parseNostrEventReference(value);
   if (reference) return applicationReferenceEntry(reference);
   const query = parseApplicationAddressQuery(value);

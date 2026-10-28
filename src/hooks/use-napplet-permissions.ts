@@ -12,7 +12,7 @@ export function useNappletPermissions(accountPubkey: string, release: NappletRel
   const focused = useIsFocused();
   const [expiryTick, setExpiryTick] = useState(0);
   const [value, setValue] = useState<{ key: string; data?: SigningSnapshot; error?: boolean }>();
-  const key = JSON.stringify([accountPubkey, release?.key, release?.hash, sourceId, permissionsRevision, focused, enabled, expiryTick]);
+  const key = JSON.stringify([accountPubkey, release?.eventKey, release?.hash, sourceId, permissionsRevision, focused, enabled, expiryTick]);
   useEffect(() => {
     if(!sourceId||!accountPubkey) return;
     return subscribeSigning({accountPubkey,sourceId},()=>setExpiryTick(tick=>tick+1));

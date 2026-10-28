@@ -3,7 +3,7 @@ import type { NappletInstallation } from './protocol';
 /** Desktop order is explicit and independent of launch timestamps. */
 export function desktopApps(installed: readonly NappletInstallation[]): NappletInstallation[] {
   return installed.filter((app) => app.desktopPosition !== null)
-    .sort((a, b) => a.desktopPosition! - b.desktopPosition! || a.key.localeCompare(b.key));
+    .sort((a, b) => a.desktopPosition! - b.desktopPosition! || a.eventKey.localeCompare(b.eventKey));
 }
 
 export function moveDesktopApp(keys: readonly string[], key: string, index: number | null): string[] {
@@ -18,5 +18,5 @@ export function moveDesktopApp(keys: readonly string[], key: string, index: numb
 /** The full history uses already-loaded account installations, not only the preview window. */
 export function recentApps(installed: readonly NappletInstallation[]): NappletInstallation[] {
   return installed.filter((app) => app.lastUsedAt !== null)
-    .sort((a, b) => b.lastUsedAt! - a.lastUsedAt! || a.key.localeCompare(b.key));
+    .sort((a, b) => b.lastUsedAt! - a.lastUsedAt! || a.eventKey.localeCompare(b.eventKey));
 }

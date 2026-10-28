@@ -22,7 +22,7 @@ import { SigningRuleEditor, type EditableSigningRule } from './SigningRuleEditor
 /** Cleared rows belong to this focused visit, never to persisted permissions. */
 export function NappletPermissions(props: { accountPubkey: string; release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
   const focused = useIsFocused();
-  return focused ? <PermissionRules key={`${props.accountPubkey}:${props.release?.key ?? props.sourceId}:${props.release?.hash}`} {...props} /> : null;
+  return focused ? <PermissionRules key={`${props.accountPubkey}:${props.release?.eventKey ?? props.sourceId}:${props.release?.hash}`} {...props} /> : null;
 }
 
 function mergeRules(previous: EditableSigningRule[], saved: SigningRule[]): EditableSigningRule[] {

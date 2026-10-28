@@ -3,12 +3,12 @@ import type { NappletInstallation } from '../protocol';
 
 it('keeps explicit positions independent of last use and excludes unsaved apps', () => {
   const apps = [
-    { key: 'a', desktopPosition: 1, lastUsedAt: 999 },
-    { key: 'b', desktopPosition: 0, lastUsedAt: 1 },
-    { key: 'c', desktopPosition: null, lastUsedAt: 1000 },
+    { eventKey: 'a', desktopPosition: 1, lastUsedAt: 999 },
+    { eventKey: 'b', desktopPosition: 0, lastUsedAt: 1 },
+    { eventKey: 'c', desktopPosition: null, lastUsedAt: 1000 },
   ] as NappletInstallation[];
-  expect(desktopApps(apps).map((app) => app.key)).toEqual(['b', 'a']);
-  expect(apps[0].key).toBe('a');
+  expect(desktopApps(apps).map((app) => app.eventKey)).toEqual(['b', 'a']);
+  expect(apps[0].eventKey).toBe('a');
 });
 
 it('inserts, moves and removes exactly one shortcut without changing its input', () => {
@@ -25,12 +25,12 @@ it('inserts, moves and removes exactly one shortcut without changing its input',
 
 it('offers all used installations beyond the 24-app preview in recency order', () => {
   const installed = Array.from({ length: 40 }, (_, index) => ({
-    key: `app-${index}`, lastUsedAt: index, desktopPosition: null,
+    eventKey: `app-${index}`, lastUsedAt: index, desktopPosition: null,
   })) as NappletInstallation[];
-  const unused = { key: 'unused', lastUsedAt: null } as NappletInstallation;
+  const unused = { eventKey: 'unused', lastUsedAt: null } as NappletInstallation;
   const recent = recentApps([...installed, unused]);
   expect(recent).toHaveLength(40);
-  expect(recent[0].key).toBe('app-39');
-  expect(recent.at(-1)?.key).toBe('app-0');
-  expect(installed[0].key).toBe('app-0');
+  expect(recent[0].eventKey).toBe('app-39');
+  expect(recent.at(-1)?.eventKey).toBe('app-0');
+  expect(installed[0].eventKey).toBe('app-0');
 });

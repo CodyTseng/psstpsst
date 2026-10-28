@@ -17,7 +17,7 @@ jest.mock('@/platform', () => ({
 
 const hash = 'a'.repeat(64);
 const release = {
-  key: `35129:${'b'.repeat(64)}:demo`,
+  eventKey: `35129:${'b'.repeat(64)}:demo`,
   event: { kind: 35129, pubkey: 'b'.repeat(64), tags: [['d', 'demo']], id: 'c'.repeat(64) },
   servers: ['https://first.example/', 'https://second.example/'],
 } as NappletRelease;
@@ -113,7 +113,7 @@ test('stores the same asset in separate application directories', async () => {
   fetchResource.mockResolvedValue(bytes);
   sha256Hex.mockResolvedValue(hash);
   await loadSiteBlob(release, hash);
-  const other = { ...release, key: `35129:${'b'.repeat(64)}:other` };
+  const other = { ...release, eventKey: `35129:${'b'.repeat(64)}:other` };
   await loadSiteBlob(other, hash);
   const otherId = naddrEncode({ kind: 35129, pubkey: 'b'.repeat(64), identifier: 'other' });
   expect(platform.fileSystem.writeBytes).toHaveBeenNthCalledWith(1, `${directory}/${hash}.blob`, bytes);
@@ -173,7 +173,7 @@ test('encodes separators and case-sensitive identifiers into a portable naddr di
   jest.mocked(platform.fileSystem.stat).mockResolvedValue({ exists: true } as never);
   jest.mocked(platform.fileSystem.readBytes).mockResolvedValue(new Uint8Array([1]));
   sha256Hex.mockResolvedValue(hash);
-  await loadSiteBlob({ ...release, key: `35129:${'b'.repeat(64)}:${identifier}` }, hash);
+  await loadSiteBlob({ ...release, eventKey: `35129:${'b'.repeat(64)}:${identifier}` }, hash);
   expect(platform.fileSystem.makeDirectory).toHaveBeenCalledWith(`file:///documents/app-artifacts/${id}/files`, expect.anything());
   expect(id).toMatch(/^naddr1[0-9a-z]+$/);
 });
@@ -185,8 +185,8 @@ test('bounds long directory names and retains the full application ID', async ()
   jest.mocked(platform.fileSystem.stat).mockResolvedValue({ exists: true } as never);
   jest.mocked(platform.fileSystem.readBytes).mockResolvedValue(new Uint8Array([1]));
   sha256Hex.mockResolvedValue(hash);
-  await loadSiteBlob({ ...release, key: `35129:${'b'.repeat(64)}:${identifier}` }, hash);
-  expect(platform.fileSystem.writeText).toHaveBeenCalledWith(`file:///documents/app-artifacts/app-${hash}/app-id.txt`, id);
+  await loadSiteBlob({ ...release, eventKey: `35129:${'b'.repeat(64)}:${identifier}` }, hash);
+  expect(platform.fileSystem.writeText).toHaveBeenCalledWith(`file:///documents/app-artifacts/app-${hash}/app-id.txt`, `35129:${'b'.repeat(64)}:${identifier}`);
 });
 
 test('persists declared icons inside their application directory', async () => {

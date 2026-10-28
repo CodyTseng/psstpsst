@@ -158,7 +158,7 @@ function NappletOverlayContent() {
               dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} />}
           </>}
       </> : configuration ? <ConfigEditor key={configuration.requestId ?? 'napplet'} configuration={configuration} /> : panel && accountPubkey ?
-        <NappletPanel key={`${accountPubkey}:${panel.release.key}:${panel.release.hash}:${panel.page}`}
+        <NappletPanel key={`${accountPubkey}:${panel.release.eventKey}:${panel.release.hash}:${panel.page}`}
           release={panel.release} page={panel.page} accountPubkey={accountPubkey} onAction={panelAction} /> : null}
     </BottomSheet>
   );

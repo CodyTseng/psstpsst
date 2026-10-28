@@ -17,6 +17,8 @@ export interface ApplicationWindowsPort {
   readonly isHost: boolean;
   open(launch: ApplicationWindowLaunch): Promise<void>;
   launch(): Promise<ApplicationWindowLaunch | null>;
+  /** Replace a provisional event reference with its verified eventKey; false reuses another host. */
+  resolveIdentity(manifest: Event): Promise<boolean>;
   running(): Promise<RunningApplication[]>;
   onRunningChange(listener: (applications: RunningApplication[]) => void): () => void;
   close(): Promise<void>;

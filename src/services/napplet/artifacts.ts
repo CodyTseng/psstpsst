@@ -3,13 +3,12 @@ import { assertNotAborted } from '@/platform/abort';
 import { base64 } from '@scure/base';
 import { platform } from '@/platform';
 import type { Event } from 'nostr-tools';
-import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
-import { normalizeSigningSource, signingSourceFromLegacyKey } from '@/services/signing/source';
+import { eventKey, eventKeyAddress, normalizeEventKey } from '@/lib/nostr/event-key';
 import { MAX_ARTIFACT_BYTES, publicUrl, resourceMime, type NappletRelease } from './protocol';
 
 type ArtifactManifest = Pick<Event, 'id' | 'kind' | 'pubkey' | 'tags'>;
 export type ArtifactSource = Pick<NappletRelease, 'servers'> & {
-  key?: string;
+  eventKey?: string;
   event?: ArtifactManifest;
   manifest?: ArtifactManifest;
 };
@@ -22,12 +21,9 @@ export type ArtifactMetadata = {
 };
 
 function applicationId(source: ArtifactSource): string {
-  if (source.key) return /^(?:nostr:)?(?:naddr|nevent)1/i.test(source.key)
-    ? normalizeSigningSource(source.key) : signingSourceFromLegacyKey(source.key);
+  if (source.eventKey) return normalizeEventKey(source.eventKey);
   const event = source.manifest ?? source.event;
-  if (event) return event.kind === 5129 ? neventEncode({ id: event.id }) : naddrEncode({
-    kind: event.kind, pubkey: event.pubkey, identifier: event.tags.find(tag => tag[0] === 'd')?.[1] ?? '',
-  });
+  if (event) return eventKey(event);
   throw new Error('missing-application-id');
 }
 
@@ -36,10 +32,12 @@ async function applicationDirectory(source: ArtifactSource) {
   const root = await platform.fileSystem.documentDirectoryUri();
   if (!root) throw new Error('storage-unavailable');
   // Long identifiers can exceed a filesystem's per-component limit.
-  const name = id.length <= 240 ? id : `app-${await platform.deviceCrypto.sha256Hex(new TextEncoder().encode(id))}`;
+  // Preserve existing cache directories and encode coordinate punctuation for Windows.
+  const encoded = eventKeyAddress(id);
+  const name = encoded.length <= 240 ? encoded : `app-${await platform.deviceCrypto.sha256Hex(new TextEncoder().encode(encoded))}`;
   const directory = `${root.replace(/\/$/, '')}/app-artifacts/${name}`;
   await platform.fileSystem.makeDirectory(`${directory}/files`, { intermediates: true, idempotent: true });
-  if (name !== id) await platform.fileSystem.writeText(`${directory}/app-id.txt`, id);
+  if (name !== encoded) await platform.fileSystem.writeText(`${directory}/app-id.txt`, id);
   return { id, root, directory };
 }
 
@@ -77,7 +75,7 @@ export async function readArtifactMetadata(source: ArtifactSource): Promise<Arti
   if (!stat.exists || stat.size != null && stat.size > 2 * 1024 * 1024) return undefined;
   try {
     const value = JSON.parse(await platform.fileSystem.readText(path)) as ArtifactMetadata;
-    if (value.schemaVersion !== 1 || value.appId !== id || !value.versions || typeof value.versions !== 'object' || Array.isArray(value.versions)) return undefined;
+    if (value.schemaVersion !== 1 || normalizeEventKey(value.appId) !== id || !value.versions || typeof value.versions !== 'object' || Array.isArray(value.versions)) return undefined;
     for (const [version, entry] of Object.entries(value.versions)) {
       if (!/^[a-f0-9]{64}$/.test(version) || !entry || !Array.isArray(entry.files) || entry.files.length > 513 ||
         entry.files.some(file => typeof file !== 'string' || !/^files\/[a-f0-9]{64}\.(html|blob)$/.test(file)) ||
@@ -85,7 +83,7 @@ export async function readArtifactMetadata(source: ArtifactSource): Promise<Arti
     }
     if (value.icon && (!/^[a-f0-9]{64}$/.test(value.icon.sourceHash) ||
       value.icon.path !== `files/${value.icon.sourceHash}.blob` || !/^[a-f0-9]{64}$/.test(value.icon.manifestId))) return undefined;
-    return value;
+    return { ...value, appId: id };
   } catch { return undefined; }
 }
 

@@ -1,4 +1,5 @@
 import { platform } from '@/platform';
+import { eventKey, eventKeyAddress } from '@/lib/nostr/event-key';
 import type { ExplorePage, ExploreMessage } from '@/platform/ports/explore';
 import { assertNotAborted } from '@/platform/abort';
 import { NappletNetwork } from '@/services/napplet/network';
@@ -80,7 +81,9 @@ export class ExploreRuntime {
   async start() {
     if (!platform.napplet.openPage)
       throw new Error('applications.rebuild_required');
-    const page: ExplorePage = { storageId: this.entry.local ? `${this.account}:${this.entry.key}` : this.account, sourceId: `${this.account}:${this.entry.key}`, network: this.entry.kind !== 'napp' || this.entry.required.includes('network'),
+    // The platform hashes this seed into the WebView origin; retain existing browser storage.
+    const originSeed = this.entry.manifest ? eventKeyAddress(eventKey(this.entry.manifest)) : this.entry.key;
+    const page: ExplorePage = { storageId: this.entry.local ? `${this.account}:${this.entry.key}` : this.account, sourceId: `${this.account}:${originSeed}`, network: this.entry.kind !== 'napp' || this.entry.required.includes('network'),
       script: '', bootstrap: { napp: this.entry.kind === 'napp', theme: this.options.theme?.(), domains: this.entry.required, instance: this.instance } };
     page.labels = { ok: i18n.t('common.ok'), cancel: i18n.t('common.cancel'), allow: i18n.t('applications.allow') };
     if (this.entry.kind === 'website')

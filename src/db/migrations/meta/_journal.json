@@ -540,6 +540,13 @@
       "when": 1793577600000,
       "tag": "0076_local-applications",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1793664000000,
+      "tag": "0077_event-keys",
+      "breakpoints": true
     }
   ]
 }

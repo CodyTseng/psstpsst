@@ -1,6 +1,6 @@
 import type { WalletApprovalRequest } from '@/lib/wallet/approval';
 import { isEventTemplate } from '@/lib/nostr/event-validation';
-import { signingSourceFromLegacyKey } from '@/services/signing/source';
+import { normalizeSigningSource } from '@/services/signing/source';
 import { applicationPresentation, type ApplicationInfo, type ApplicationListEntry } from '@/services/explore/model';
 import { NappDevice } from '@/services/explore/device';
 import { BrowserActions } from '@/services/explore/browser-actions';
@@ -151,7 +151,7 @@ export class NappletRuntime {
     );
     this.scope = {
       accountPubkey: options.accountPubkey,
-      appKey: options.release.key,
+      appKey: options.release.eventKey,
     };
     this.signingPermissions = new SigningPermissions(
       this.scope, options.release, options.confirm, this.signal,
@@ -420,7 +420,7 @@ export class NappletRuntime {
   private async dispatch(m: Message, domain: string, op: string): Promise<void> {
     if (domain === 'browser') {
       if (typeof m.event?.method !== 'string' || !m.event.method.startsWith('browser.') || !Array.isArray(m.event.args)) throw new Error('invalid-request');
-      this.browser ??= new BrowserActions({ account: this.options.accountPubkey, sourceId: signingSourceFromLegacyKey(this.options.release.key), application: applicationPresentation(this.options.release), signal: this.signal,
+      this.browser ??= new BrowserActions({ account: this.options.accountPubkey, sourceId: normalizeSigningSource(this.options.release.eventKey), application: applicationPresentation(this.options.release), signal: this.signal,
         confirm: (prompt, signal) => this.options.confirm(prompt, signal),
         open: this.options.openBrowser ?? (async url => { if (!await platform.urlOpener.openExternalUrl(url)) throw new Error('external-open-failed'); }) });
       const result = await this.browser.handle(m.event.method.slice(8), m.event.args);
@@ -1009,12 +1009,12 @@ export class NappletRuntime {
         if (!contracts.length) continue;
         const preferred = contracts.map((contract) => preferences.get(contract.convention));
         candidates.push({
-          id: release.key,
+          id: release.eventKey,
           title: release.title,
           contracts,
           actions: [...new Set(contracts.map((contract) => contract.convention.split('/')[1]))],
           conventions: contracts.map((contract) => contract.convention),
-          isDefault: preferred.includes(release.key),
+          isDefault: preferred.includes(release.eventKey),
         });
       }
       return {
@@ -1052,7 +1052,7 @@ export class NappletRuntime {
     if (!/^napplet:[a-z0-9-]+\/[a-z0-9-]+$/.test(convention)) throw new Error('invalid-convention');
     const candidates = releases
       .filter((release) => release.intents.some((contract) => contract.convention === convention))
-      .map((release) => ({ id: release.key, release }));
+      .map((release) => ({ id: release.eventKey, release }));
     if (!candidates.length) throw new Error('handler-unavailable');
     const saved = await getData(defaults, 'defaults', convention);
     const preferred =
@@ -1076,7 +1076,7 @@ export class NappletRuntime {
       (c) => c.id === (typeof chosen === 'string' ? chosen.replace(/^default:/, '') : chosen),
     );
     if (!target) throw new Error('permission-denied');
-    const currentTarget = (await this.options.handlers()).find(release => release.key === target.id &&
+    const currentTarget = (await this.options.handlers()).find(release => release.eventKey === target.id &&
       release.intents.some(contract => contract.convention === convention));
     this.check();
     if (!currentTarget) throw new Error('handler-unavailable');
@@ -1086,7 +1086,7 @@ export class NappletRuntime {
     const [archetype, action] = convention.slice('napplet:'.length).split('/');
     const delivery = {
       id: randomId(),
-      sender: this.options.release.key,
+      sender: this.options.release.eventKey,
       convention,
       archetype,
       action,

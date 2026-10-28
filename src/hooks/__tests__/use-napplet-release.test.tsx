@@ -6,7 +6,7 @@ import type { NappletRelease } from '@/services/napplet/protocol';
 
 let mockAccount = 'accountA';
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: (select: (state: { activePubkey: string }) => unknown) => select({ activePubkey: mockAccount }) }));
-const app = { key: 'app', hash: 'version', event: { id: 'listing' } } as NappletRelease;
+const app = { eventKey: 'app', hash: 'version', event: { id: 'listing' } } as NappletRelease;
 let mockState: { accountPubkey: string; loaded: boolean; installed: NappletRelease[]; market: NappletRelease[] };
 jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => mockState }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { resolve: jest.fn(), activate: jest.fn(async () => {}) } }));

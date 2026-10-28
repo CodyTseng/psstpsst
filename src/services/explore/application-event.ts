@@ -25,7 +25,7 @@ export function updateApplicationMetadata(entries: ExploreEntry[], metadata: Exp
 
 const parsed = new Map<string, ExploreEntry>();
 let bytes = 0;
-const eventKey = (event: Event) => JSON.stringify([event?.id, event?.pubkey, event?.sig, event?.kind, event?.created_at, event?.content, event?.tags]);
+const eventFingerprint = (event: Event) => JSON.stringify([event?.id, event?.pubkey, event?.sig, event?.kind, event?.created_at, event?.content, event?.tags]);
 
 /** Domain verification is reused across database reads, discovery and launch resolution. */
 function parseEvent(event: Event, raw: string): ExploreEntry {
@@ -42,14 +42,14 @@ function parseEvent(event: Event, raw: string): ExploreEntry {
 }
 
 
-export function parseApplicationEvent(event: Event): ExploreEntry { return parseEvent(event, eventKey(event)); }
+export function parseApplicationEvent(event: Event): ExploreEntry { return parseEvent(event, eventFingerprint(event)); }
 
 /** Only new signature work yields; warm list reads reuse settled verification results. */
 export async function parseApplicationEvents(events: readonly Event[]): Promise<(ExploreEntry | undefined)[]> {
   const result: (ExploreEntry | undefined)[] = [];
   let cold = 0;
   for (const event of events) {
-    const raw = eventKey(event);
+    const raw = eventFingerprint(event);
     if (!parsed.has(raw) && ++cold % 4 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0));
     try { result.push(parseEvent(event, raw)); } catch { result.push(undefined); }
   }

@@ -3,6 +3,7 @@ export const IPC = {
   applicationMessagingConnect: 'application-messaging:connect', applicationMessagingDisconnect: 'application-messaging:disconnect',
   applicationMessagingRequest: 'application-messaging:request', applicationMessagingMessage: 'application-messaging:message',
   applicationWindowOpen: 'application-window:open', applicationWindowLaunch: 'application-window:launch',
+  applicationWindowResolveIdentity: 'application-window:resolve-identity',
   applicationWindowsRunning: 'application-window:running', applicationWindowsChanged: 'application-window:changed',
   browserOpenExternal: 'browser:open-external',
   applicationWindowClose: 'application-window:close', applicationWindowCloseAll: 'application-window:close-all',

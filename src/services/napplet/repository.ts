@@ -44,7 +44,7 @@ export async function installations(
         verifiedReleases.set(row.manifest, release);
         cachedReleaseBytes += row.manifest.length;
       }
-      if (release.key !== row.appKey || release.hash !== row.artifactHash) continue;
+      if (release.eventKey !== row.appKey || release.hash !== row.artifactHash) continue;
       result.push({
         ...release,
         lastUsedAt: row.lastUsedAt,
@@ -69,7 +69,7 @@ export async function saveInstallation(
       .where(
         and(
           eq(nappletInstallations.accountPubkey, accountPubkey),
-          eq(nappletInstallations.appKey, release.key),
+          eq(nappletInstallations.appKey, release.eventKey),
         ),
       )
       .get();
@@ -85,7 +85,7 @@ export async function saveInstallation(
       .insert(nappletInstallations)
       .values({
         accountPubkey,
-        appKey: release.key,
+        appKey: release.eventKey,
         manifest: JSON.stringify(release.event),
         artifactHash: release.hash,
       })

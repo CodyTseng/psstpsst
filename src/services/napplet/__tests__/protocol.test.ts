@@ -54,15 +54,15 @@ function manifest(kind = 35129, tags: string[][] = [['d', 'test']]) {
 test('manifest identity retains publisher, kind and opaque d value', () => {
   const event = manifest();
   const release = parseManifest(event);
-  expect(release.key).toBe(`35129:${event.pubkey}:test`);
+  expect(release.eventKey).toBe(`35129:${event.pubkey}:test`);
   const other = finalizeEvent(
     { kind: 35129, tags: event.tags, content: event.content, created_at: event.created_at },
     generateSecretKey(),
   );
-  expect(parseManifest(other).key).not.toBe(release.key);
-  expect(parseManifest(manifest(15129, [])).key).toBe(`15129:${event.pubkey}:`);
+  expect(parseManifest(other).eventKey).not.toBe(release.eventKey);
+  expect(parseManifest(manifest(15129, [])).eventKey).toBe(`15129:${event.pubkey}:`);
   const snapshot = manifest(5129, []);
-  expect(parseManifest(snapshot).key).toBe(`5129:${snapshot.id}`);
+  expect(parseManifest(snapshot).eventKey).toBe(snapshot.id);
 });
 test('tampering and duplicate hashes are rejected before installation', () => {
   expect(() => parseManifest({ ...manifest(), content: 'tampered' })).toThrow();

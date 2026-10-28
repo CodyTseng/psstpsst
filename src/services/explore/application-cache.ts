@@ -71,9 +71,9 @@ export async function readApplicationCache(entries: Pick<ExploreEntry, 'key' | '
       .filter((item): item is { key: string; event: Event; relays: string[] | undefined } => !!item.event);
     const apps = await profileAsync(span, 'verify-and-parse', () => parseApplicationEvents(events.map(item => item.event)));
     const result = new Map<string, ExploreEntry>();
-    apps.forEach((app, index) => { if (app?.key === events[index].key) {
+    apps.forEach((app, index) => { if (app && (app.key === events[index].key || app.manifest?.id === events[index].key)) {
       const eventRelays = events[index].relays ?? [];
-      result.set(app.key, { ...app, eventRelays, release: app.release ? { ...app.release, eventRelays } : undefined });
+      result.set(events[index].key, { ...app, eventRelays, release: app.release ? { ...app.release, eventRelays } : undefined });
     } });
     return result;
   } finally { span?.end(); }

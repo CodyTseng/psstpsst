@@ -28,7 +28,7 @@ it('ignores relay hints when saving a signed site preference', async () => {
   const pointer = { kind: 35128, pubkey: 'a'.repeat(64), identifier: 'notes' };
   const address = naddrEncode({ ...pointer, relays: ['wss://relay.example'] });
   await setApplicationWindowPreference({ kind: 'nsite', address }, 'account', false);
-  expect(setData).toHaveBeenCalledWith({ accountPubkey: 'account', appKey: naddrEncode(pointer) }, 'host', 'open-in-window', 'false');
+  expect(setData).toHaveBeenCalledWith({ accountPubkey: 'account', appKey: `35128:${pointer.pubkey}:${pointer.identifier}` }, 'host', 'open-in-window', 'false');
 });
 
 it('rereads saved choices on each launch and falls back for invalid values', async () => {

@@ -129,7 +129,7 @@ if (params.get('scenario') === 'upload') {
   } });
 }
 if (params.get('scenario') === 'capabilities') {
-  const release = { ...nappletStore.getState().prompt!.app!, key: '35129:publisher:arcade',
+  const release = { ...nappletStore.getState().prompt!.app!, eventKey: '35129:publisher:arcade',
     description: 'A small game for your account.', required: ['relay', 'upload'], optional: ['storage'], servers: [], intents: [],
   } as NappletRelease;
   nappletStore.setState({ accountPubkey: 'a'.repeat(64), prompt: {
@@ -237,7 +237,7 @@ if(['explore-detail','explore-permissions','explore-menu'].includes(params.get('
   RuntimeScreen=params.get('scenario')==='explore-menu'?require('../../src/app/(app)/explore-run').default:require('../../src/app/(app)/explore-details').default;
 }
 if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
-  const release: NappletRelease = { title: 'Composer', key: `35129:${'b'.repeat(64)}:composer`, hash: 'c'.repeat(64),
+  const release: NappletRelease = { title: 'Composer', eventKey: `35129:${'b'.repeat(64)}:composer`, hash: 'c'.repeat(64),
     description: params.get('empty') ? '' : 'Compose and publish posts with your Nostr account.'.repeat(params.get('long') ? 30 : 1),
     required: ['identity', 'outbox', 'relay', 'resource', 'theme', 'inc', 'intent', 'link', 'storage'],
     optional: ['upload'], servers: [], intents: [],
@@ -300,7 +300,7 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
     : require('../../src/app/(app)/napplet-permissions/[id]').default;
 }
 if (menu) {
-  const release: NappletRelease = { ...nappletStore.getState().prompt!.app!, key: '35129:publisher:arcade',
+  const release: NappletRelease = { ...nappletStore.getState().prompt!.app!, eventKey: '35129:publisher:arcade',
     description: 'A small game for your account.', required: ['storage'], optional: ['identity'], servers: [], intents: [],
     event: { id: 'd'.repeat(64), pubkey: 'b'.repeat(64), kind: 35129, tags: [['d', 'arcade']] } as NappletRelease['event'],
   };

@@ -102,6 +102,7 @@ const bridge: ElectronBridge = {
       isHost: process.argv.includes('--psstpsst-application-window=1'),
       open: launch => invoke(IPC.applicationWindowOpen, launch),
       launch: () => invoke(IPC.applicationWindowLaunch),
+      resolveIdentity: manifest => invoke(IPC.applicationWindowResolveIdentity, manifest),
       running: () => invoke(IPC.applicationWindowsRunning),
       onRunningChange: listener => {
         const handler = (_event: unknown, applications: Parameters<typeof listener>[0]) => listener(applications);

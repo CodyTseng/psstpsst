@@ -56,7 +56,7 @@ jest.mock('../network', () => ({
 }));
 
 const release = {
-  key: `35129:${'b'.repeat(64)}:app`,
+  eventKey: `35129:${'b'.repeat(64)}:app`,
   title: 'Fixture',
   hash: 'a'.repeat(64),
   event: {},
@@ -267,13 +267,13 @@ test('storage operations always use the endpoint account and application identit
     );
     await second.receive(JSON.stringify({ type: 'storage.get', id: '2', key: 'state' }));
     expect(setData).toHaveBeenCalledWith(
-      { accountPubkey: 'accountA', appKey: release.key },
+      { accountPubkey: 'accountA', appKey: release.eventKey },
       'storage',
       'state',
       'A',
     );
     expect(getData).toHaveBeenCalledWith(
-      { accountPubkey: 'accountB', appKey: release.key },
+      { accountPubkey: 'accountB', appKey: release.eventKey },
       'storage',
       'state',
     );
@@ -302,7 +302,7 @@ test('closing during a permission prompt prevents external actions and late repl
 });
 test('an intent target removed from favorites during selection is not invoked or saved as default', async () => {
   const config = options();
-  const target = { ...release, key: 'target', intents: [{ convention: 'napplet:profile/open', params: [] }] };
+  const target = { ...release, eventKey: 'target', intents: [{ convention: 'napplet:profile/open', params: [] }] };
   let favorites = [target];
   config.handlers = async () => favorites;
   config.confirm = async () => { favorites = []; return 'default:target'; };
@@ -333,7 +333,7 @@ test('the pinned shim intent request and delivery envelopes are preserved', asyn
   const config = options();
   const target = {
     ...release,
-    key: 'target',
+    eventKey: 'target',
     intents: [{ convention: 'napplet:profile/open', params: ['pubkey'] }],
   };
   config.handlers = async () => [target];
@@ -447,7 +447,7 @@ test('intent availability exposes the pinned candidate schema', async () => {
         hasDefault: false,
         candidates: [
           {
-            id: release.key,
+            id: release.eventKey,
             title: release.title,
             actions: ['open'],
             conventions: ['napplet:profile/open'],

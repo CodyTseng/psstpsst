@@ -1,4 +1,5 @@
 import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
+import { eventKeyAddress, normalizeEventKey } from '@/lib/nostr/event-key';
 import { parseNostrEventReference } from '@/lib/nostr/event-reference';
 import { publicUrl } from '@/services/napplet/protocol';
 import { websiteEntry, type ExploreEntry } from './model';
@@ -13,7 +14,7 @@ export type FavoriteReference = { entry: ExploreEntry; tag: string[] };
 /** Stable identities and optional relay hints; no cached artwork or permission grants. */
 export function favoriteReference(entry: Pick<ExploreEntry, 'address' | 'kind' | 'manifest'>): string[] {
   if (entry.kind === 'website') return ['r', entry.address];
-  const ref = parseNostrEventReference(entry.address);
+  const ref = parseNostrEventReference(entry.address) ?? parseNostrEventReference(eventKeyAddress(entry.address));
   const relay = ref?.relays[0];
   if (entry.manifest?.kind === 5129 || ref?.id) {
     const id = entry.manifest?.id ?? ref?.id;
@@ -32,7 +33,7 @@ export function parseFavoriteReference(tag: string[]): FavoriteReference {
   }
   const relay = tag[2] ? publicUrl(tag[2], true) : undefined;
   if (tag[0] === 'e' && tag.length <= 4 && hexKey(tag[1] ?? '') && (!tag[3] || hexKey(tag[3]))) {
-    const key = neventEncode({ id: tag[1] });
+    const key = tag[1];
     return { tag, entry: { key, address: neventEncode({ id: tag[1], kind: 5129, author: tag[3] || undefined, relays: relay ? [relay] : [] }),
       title: tag[1].slice(0, 12), kind: 'napplet', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null } };
   }
@@ -42,7 +43,7 @@ export function parseFavoriteReference(tag: string[]): FavoriteReference {
   if (!KINDS.has(kind) || String(kind) !== rawKind || !hexKey(author) || !identifier.length ||
       (kind < 30000 ? d !== '' : !d) || d.length > 2000) throw new Error('invalid-favorite');
   const pointer = { kind, pubkey: author, identifier: d };
-  return { tag, entry: { key: naddrEncode(pointer), address: naddrEncode({ ...pointer, relays: relay ? [relay] : [] }),
+  return { tag, entry: { key: normalizeEventKey(`${kind}:${author}:${d}`), address: naddrEncode({ ...pointer, relays: relay ? [relay] : [] }),
     title: d || author.slice(0, 12), kind: kind === 35130 ? 'napp' : [15129, 35129].includes(kind) ? 'napplet' : 'nsite',
     description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null } };
 }
