@@ -1,3 +1,3 @@
 import { useStore } from 'zustand';
-import { discoveryStore } from '@/services/explore/discovery';
-export function useDiscovery() { return useStore(discoveryStore); }
+import { getDiscoveryStore, type ApplicationDiscoveryScope } from '@/services/explore/discovery';
+export function useDiscovery(scope: ApplicationDiscoveryScope = 'all') { return useStore(getDiscoveryStore(scope)); }

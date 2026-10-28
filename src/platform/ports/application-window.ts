@@ -3,6 +3,7 @@ import type { ApplicationMessagingPort } from './application-messaging';
 
 export type ApplicationWindowLaunch = { accountPubkey: string; address: string; manifest?: Event; servers?: string[]; reviewedRequired?: string[] };
 export type ApplicationWindowAction =
+  | { type: 'discover'; accountPubkey: string; name: string; auxiliary: boolean }
   | { type: 'visited'; accountPubkey: string; key: string }
   | { type: 'profile'; pubkey: string }
   | { type: 'publisher'; pubkey: string }

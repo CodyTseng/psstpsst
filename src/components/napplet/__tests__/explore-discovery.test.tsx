@@ -1,8 +1,10 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
+import { useDiscovery } from '@/stores/explore-discovery.store';
 import { ExploreDiscovery } from '../ExploreDiscovery';
 import type { ExploreEntry } from '@/services/explore/model';
 import { useProfilesMap } from '@/hooks/use-profile';
+import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
 import { discoverApplications, loadMoreApplications } from '@/services/explore/discovery';
 import { useToastStore } from '@/stores/toast.store';
@@ -22,6 +24,7 @@ jest.mock('react-native-reanimated', () => {
     useAnimatedReaction: jest.fn(),
   };
 });
+jest.mock('lucide-react-native/icons/x', () => () => null);
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
 
 let mockScheme: 'light' | 'dark' = 'light';
@@ -33,9 +36,9 @@ jest.mock('@/hooks/use-profile', () => ({ useProfilesMap: jest.fn(() => mockProf
 jest.mock('@/hooks/use-contacts', () => ({ useContactsMap: () => mockContacts }));
 const mockState = { entries: [] as ExploreEntry[], visibleEntries: [] as ExploreEntry[], loaded: true, loading: false, loadingMore: false, error: false, hasMore: true };
 jest.mock('@/stores/theme.store', () => ({ useThemeStore: (select: (state: object) => unknown) => select({ accent: 'blue', preference: mockScheme }) }));
-jest.mock('@/stores/explore-discovery.store', () => ({ useDiscovery: () => mockState }));
+jest.mock('@/stores/explore-discovery.store', () => ({ useDiscovery: jest.fn(() => mockState) }));
 jest.mock('@/services/explore/discovery', () => ({ discoverApplications: jest.fn(), loadMoreApplications: jest.fn() }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: { action?: string }) => options?.action ? `${key}: ${options.action}` : key }) }));
 jest.mock('@/theme', () => ({ ...jest.requireActual('@/theme'),
   useThemeColors: () => jest.requireActual('@/theme')[mockScheme === 'light' ? 'lightPalette' : 'darkPalette'],
 }));
@@ -46,13 +49,15 @@ jest.mock('@solar-icons/react-native/category/map/Linear/Compass', () => ({ Comp
 jest.mock('@/services/explore/model', () => ({ applicationListEntry: (entry: unknown) => entry }));
 
 let renderer: ReactTestRenderer;
+let mockAction: { name: string; auxiliary: boolean } | undefined;
 let mockQuery = '';
 let mockScope: 'favorites' | 'discover' = 'discover';
 let mockFavorites: ExploreEntry[] = [];
-const screen = () => <ExploreDiscovery query={mockQuery} scope={mockScope} favorites={mockFavorites} account="account" onFavorite={() => {}} onPermissions={() => {}} onShare={() => {}} bottomInset={0} onDetails={() => {}} onScrollChange={() => {}} />;
+const screen = () => <ExploreDiscovery actionFilter={mockAction} onClearAction={() => { mockAction = undefined; renderer.update(screen()); }} query={mockQuery} scope={mockScope} favorites={mockFavorites} account="account" onFavorite={() => {}} onPermissions={() => {}} onShare={() => {}} bottomInset={0} onDetails={() => {}} onScrollChange={() => {}} />;
 beforeEach(() => {
   jest.clearAllMocks();
-  mockQuery = ''; mockScope = 'discover'; mockFavorites = [];
+  jest.mocked(useDiscovery).mockImplementation(() => mockState as ReturnType<typeof useDiscovery>);
+  mockAction = undefined; mockQuery = ''; mockScope = 'discover'; mockFavorites = [];
   Object.assign(mockAddressSearch, { active: false, entry: undefined, loading: false });
   mockProfiles = {};
   mockContacts = {};
@@ -63,9 +68,9 @@ afterEach(() => { act(() => renderer?.unmount()); });
 it.each(['light', 'dark'] as const)('loads on scroll and shows themed footer progress in %s mode', async scheme => {
   mockScheme = scheme;
   await act(async () => { renderer = create(screen()); });
-  expect(discoverApplications).toHaveBeenCalledWith('account');
+  expect(discoverApplications).toHaveBeenCalledWith('account', false, 'all');
   await act(async () => { renderer.root.findByType(FlatList).props.onEndReached(); });
-  expect(loadMoreApplications).toHaveBeenCalledWith('account');
+  expect(loadMoreApplications).toHaveBeenCalledWith('account', 'all');
   mockState.loadingMore = true;
   await act(async () => { renderer.update(screen()); });
   await act(async () => { renderer.root.findByType(FlatList).props.onEndReached(); });
@@ -73,7 +78,7 @@ it.each(['light', 'dark'] as const)('loads on scroll and shows themed footer pro
   expect(renderer.root.findByType(ActivityIndicator).props.color).toBe((scheme === 'light' ? lightPalette : darkPalette).textMuted);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.discovery_empty')).toBe(false);
   await act(async () => { renderer.root.findByType(FlatList).props.onRefresh(); });
-  expect(discoverApplications).toHaveBeenLastCalledWith('account', true);
+  expect(discoverApplications).toHaveBeenLastCalledWith('account', true, 'all');
 });
 
 it.each(['light', 'dark'] as const)('keeps pull-to-refresh below the scrolling search field in %s mode', async scheme => {
@@ -99,7 +104,7 @@ it.each(['light', 'dark'] as const)('keeps pull-to-refresh below the scrolling s
   expect(headerStyle().transform).toEqual([{ translateY: -48 }]);
   expect(headerHeight()).toBe(0);
   await act(async () => { list().props.onRefresh(); });
-  expect(discoverApplications).toHaveBeenLastCalledWith('account', true);
+  expect(discoverApplications).toHaveBeenLastCalledWith('account', true, 'all');
 });
 
 it('does not pull the iOS list open for a background reload', async () => {
@@ -240,7 +245,7 @@ it('searches only saved Favorites and keeps relay discovery dormant in that scop
   mockScope = 'discover';
   await act(async () => { renderer.update(screen()); });
   expect(renderer.root.findByType(FlatList).props.data).toEqual([discovered]);
-  expect(discoverApplications).toHaveBeenCalledWith('account');
+  expect(discoverApplications).toHaveBeenCalledWith('account', false, 'all');
 });
 
 it('uses the saved favorite set instead of stale catalogue positions for row menus', async () => {
@@ -287,7 +292,7 @@ it.each(['light', 'dark'] as const)('waits for the first catalogue page before k
   expect(renderer.root.findByType(FlatList).props.data).toEqual([]);
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'search.empty')).toBe(false);
-  expect(discoverApplications).toHaveBeenCalledWith('account');
+  expect(discoverApplications).toHaveBeenCalledWith('account', false, 'all');
 
   mockQuery = 'gallery';
   await act(async () => { renderer.update(screen()); });
@@ -320,4 +325,63 @@ it.each(['favorites', 'address'] as const)('keeps %s searches independent of the
   expect(renderer.root.findByType(FlatList).props.data).toEqual([match]);
   expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
   expect(discoverApplications).not.toHaveBeenCalled();
+});
+
+it.each(['light', 'dark'] as const)('finds compatible apps beyond the visible page in %s mode', async scheme => {
+  mockScheme = scheme;
+  mockAction = { name: 'view:1', auxiliary: false };
+  const app = (key: string, action: string, auxiliary = false) => ({ key, title: key, kind: 'napp',
+    manifest: { tags: [['action', action], ...(auxiliary ? [['mode', 'auxiliary']] : [])] } }) as ExploreEntry;
+  const wrong = app('wrong', 'edit');
+  const match = app('match', 'view');
+  mockState.entries = [wrong]; mockState.visibleEntries = [wrong];
+  await act(async () => { renderer = create(screen()); });
+  expect(loadMoreApplications).toHaveBeenCalledWith('account', 'napps');
+  expect(useDiscovery).toHaveBeenLastCalledWith('napps');
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.discovery_empty')).toBe(false);
+  mockState.entries = [wrong, match, app('auxiliary', 'view:1', true)];
+  mockState.hasMore = false;
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([match]);
+  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'napplets.action_filter: view:1')!;
+  expect(filter).toBeDefined();
+  await act(async () => { filter.props.onPress(); });
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([wrong]);
+  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'napplets.action_filter: view:1')).toBe(false);
+});
+
+it('shows no results only after filtered discovery is exhausted and retains retry on failure', async () => {
+  mockAction = { name: 'edit', auxiliary: false };
+  mockState.hasMore = false;
+  await act(async () => { renderer = create(screen()); });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.no_compatible_apps')).toBe(true);
+  mockState.error = true;
+  await act(async () => { renderer.update(screen()); });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.no_compatible_apps')).toBe(false);
+});
+
+it.each(['light', 'dark'] as const)('identifies an auxiliary action filter in %s mode', async scheme => {
+  mockScheme = scheme;
+  mockAction = { name: 'reply', auxiliary: true };
+  await act(async () => { renderer = create(screen()); });
+  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'napplets.auxiliary_action_filter: reply')!;
+  expect(filter).toBeDefined();
+  expect(filter.props.accessibilityLabel).toContain('napplets.show_all_apps');
+});
+
+it('uses a separate napps catalogue for action discovery and restores the full catalogue on clear', async () => {
+  const normal = { key: 'normal', kind: 'napplet', title: 'Normal' } as ExploreEntry;
+  const napp = { key: 'napp', kind: 'napp', title: 'Napp', manifest: { tags: [['action', 'edit']] } } as ExploreEntry;
+  mockState.entries = [normal]; mockState.visibleEntries = [normal];
+  const nappsState = { ...mockState, entries: [napp], visibleEntries: [napp], hasMore: false };
+  jest.mocked(useDiscovery).mockImplementation(scope => (scope === 'napps' ? nappsState : mockState) as ReturnType<typeof useDiscovery>);
+  mockAction = { name: 'edit', auxiliary: false };
+  await act(async () => { renderer = create(screen()); });
+  expect(discoverApplications).toHaveBeenCalledWith('account', false, 'napps');
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([napp]);
+  const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'napplets.action_filter: edit')!;
+  await act(async () => { filter.props.onPress(); });
+  expect(useDiscovery).toHaveBeenLastCalledWith('all');
+  expect(discoverApplications).toHaveBeenLastCalledWith('account', false, 'all');
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([normal]);
 });

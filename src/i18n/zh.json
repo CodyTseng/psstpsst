@@ -1076,6 +1076,12 @@
     "open_with_title": "用哪个应用打开？",
     "open_with_profile": "“{{app}}”想打开用户资料。要用哪个应用打开？",
     "open_with_content": "“{{app}}”想在应用中打开内容。要用哪个应用打开？",
+    "no_compatible_apps": "暂无可用的应用",
+    "open_with_empty": "暂无可供“{{app}}”使用的兼容应用。前往发现寻找支持此内容的应用，收藏后返回重试。",
+    "handler_closed": "此应用已不可用",
+    "action_filter": "支持：{{action}}",
+    "auxiliary_action_filter": "辅助应用：{{action}}",
+    "show_all_apps": "显示全部应用",
     "copy_address": "复制地址",
     "formats": {
       "napplet": "napplet",

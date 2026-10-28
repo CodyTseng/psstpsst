@@ -2,7 +2,8 @@ import type { ApplicationEndpoint, ApplicationEnvelope } from '@/platform/ports/
 import { IncBroker } from '@/services/napplet/inc';
 import { randomId } from '@/services/napplet/protocol';
 
-export const matchesAction = (pattern: string, name: string) => pattern === name || pattern === 'view' && name.startsWith('view:');
+import { matchesAction } from './action-matching';
+export { matchesAction } from './action-matching';
 type Endpoint = ApplicationEndpoint & { send(message: ApplicationEnvelope): void; detach(): void };
 
 /** One broker per process on mobile, one in Electron's main process across hosts. */

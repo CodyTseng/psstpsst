@@ -9,7 +9,7 @@ import { getData, setData } from '@/services/napplet/repository';
 import { reconcileConfig, validateSchema, validateValues, type ConfigSchema } from '@/services/napplet/config';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
 import { applicationMessaging } from './messaging';
-import { matchesAction } from './messaging-broker';
+import { matchesAction, supportsApplicationAction } from './action-matching';
 import { applicationListEntry, type ExploreEntry } from './model';
 
 type Options = {
@@ -96,9 +96,8 @@ export class NappCapabilities {
     const available = endpoints.filter(e => known.has(e.sourceId) && (!options.instance || e.instance === options.instance) &&
       !!e.auxiliary === !!options.auxiliary && e.actions.some(p => matchesAction(p, name as string)));
     const runningSources = new Set(available.map(endpoint => endpoint.sourceId));
-    const applications = options.instance ? [] : [...known.values()].filter(app => app.kind === 'napp' &&
-      !runningSources.has(app.key) && !!app.manifest?.tags.some(t => t[0] === 'mode' && t[1] === 'auxiliary') === !!options.auxiliary &&
-      (app.local?.actions.some(pattern => matchesAction(pattern, name as string)) || app.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string))));
+    const applications = options.instance ? [] : [...known.values()].filter(app => !runningSources.has(app.key) &&
+      supportsApplicationAction(app, { name: name as string, auxiliary: !!options.auxiliary }));
     this.check();
     const choices = [...available.map(endpoint => {
       const app = known.get(endpoint.sourceId);
@@ -107,7 +106,13 @@ export class NappCapabilities {
       return { key: `instance:${endpoint.instance}`, title: endpoint.title,
         application: app ? { ...applicationListEntry(app), title: endpoint.title } : { key: endpoint.sourceId, title: endpoint.title, kind: 'napp' as const, servers: [], publisher } };
     }), ...applications.map(app => ({ key: `source:${app.key}`, title: app.title, application: applicationListEntry(app) }))].slice(0, 64);
-    if (!choices.length) throw new Error('handler-unavailable');
+    if (!choices.length) {
+      await this.options.confirm({ title: this.entry.title, detail: '', choices: [], accountPubkey: this.account,
+        applicationSelection: { requester: this.entry.title, content: name === 'profile' || name === 'view:0' ? 'profile' : 'content',
+          ...(options.instance ? { unavailable: 'instance' as const } : { discovery: { name: name as string, auxiliary: !!options.auxiliary } }) } }, this.options.signal);
+      this.check();
+      throw new Error('permission-denied');
+    }
     const selected = await this.options.confirm({ title: this.entry.title, detail: '', choices,
       applicationSelection: { requester: this.entry.title, content: name === 'profile' || name === 'view:0' ? 'profile' : 'content' } }, this.options.signal);
     this.check();

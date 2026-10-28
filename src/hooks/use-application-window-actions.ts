@@ -1,3 +1,4 @@
+import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { platform } from '@/platform';
@@ -21,6 +22,11 @@ export function useApplicationWindowActions() {
     } else if (action.type === 'publisher') {
       router.push({ pathname: '/explore-publisher', params: { pubkey: action.pubkey } });
     } else if (useActiveAccount.getState().activePubkey === action.accountPubkey) {
+      if (action.type === 'discover') {
+        const id = useExploreSearchHandoffStore.getState().start({ account: action.accountPubkey, value: '', action: { name: action.name, auxiliary: action.auxiliary } });
+        router.navigate({ pathname: '/napplets', params: { searchHandoff: String(id) } });
+        return;
+      }
       useForwardDraftStore.getState().start({ accountPubkey: action.accountPubkey, sourceConversationKey: null,
         messages: [{ kind: KIND_CHAT, content: action.address, tags: [] }] });
       router.push('/forward');

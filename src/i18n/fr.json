@@ -1081,6 +1081,12 @@
     "open_with_title": "Ouvrir avec",
     "open_with_profile": "« {{app}} » souhaite ouvrir un profil. Quelle application souhaitez-vous utiliser ?",
     "open_with_content": "« {{app}} » souhaite ouvrir du contenu dans une application. Laquelle souhaitez-vous utiliser ?",
+    "no_compatible_apps": "Aucune application compatible disponible",
+    "open_with_empty": "Aucune application compatible n’est disponible pour « {{app}} ». Trouvez une application dans Découvrir, ajoutez-la aux favoris, puis réessayez.",
+    "handler_closed": "Cette application n’est plus disponible",
+    "action_filter": "Prend en charge : {{action}}",
+    "auxiliary_action_filter": "Applications auxiliaires : {{action}}",
+    "show_all_apps": "Afficher toutes les applications",
     "copy_address": "Copier l’adresse",
     "formats": {
       "napplet": "napplet",

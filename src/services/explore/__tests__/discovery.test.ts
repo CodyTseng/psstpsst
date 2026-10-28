@@ -1,5 +1,5 @@
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
-import { discoveryEntries, ApplicationDiscovery } from '../discovery';
+import { discoveryEntries, ApplicationDiscovery, cacheApplicationAddress, getDiscoveryStore } from '../discovery';
 import { queryApplicationCatalogue } from '../catalogue-relays';
 import { NappletNetwork } from '@/services/napplet/network';
 
@@ -193,4 +193,58 @@ it('restarts cursors and the 20-entry window when explicitly refreshed', async (
   expect(discovery.store.getState().visibleEntries).toHaveLength(20);
   expect(discovery.store.getState().visibleEntries[0].manifest!.created_at).toBe(2000);
   expect(query.mock.calls.slice(-2).every(([, filters]) => filters[0].until === undefined)).toBe(true);
+});
+
+it('queries only the napps relay and kind, including after a refresh', async () => {
+  const { query } = setup({ [nappRelay]: Array.from({ length: 20 }, (_, i) => uniqueManifest(35130, 100 - i)) });
+  const napps = new ApplicationDiscovery('napps');
+  await napps.load('account');
+  expect(query.mock.calls.map(call => call.slice(0, 2))).toEqual([
+    [[nappRelay], [{ kinds: [35130], limit: 200 }]],
+  ]);
+  await napps.load('account', true);
+  expect(query).toHaveBeenCalledTimes(2);
+  expect(query.mock.calls[1].slice(0, 2)).toEqual([[nappRelay], [{ kinds: [35130], limit: 200 }]]);
+});
+
+it('keeps napps pagination, refreshes and failures independent of the full catalogue', async () => {
+  const events = Array.from({ length: 225 }, (_, i) => uniqueManifest(35130, 1000 - i));
+  const { query, discovery: all } = setup({ [nappRelay]: events, [nappletRelay]: [uniqueManifest(35129, 1100)] });
+  await all.load('account');
+  const full = all.store.getState();
+  expect(full.visibleEntries[0].kind).toBe('napplet');
+  const napps = new ApplicationDiscovery('napps');
+  const start = query.mock.calls.length;
+  await napps.load('account');
+  for (let i = 0; i < 10; i++) await napps.loadMore('account');
+  expect(napps.store.getState().visibleEntries).toHaveLength(220);
+  expect(query.mock.calls.slice(start).map(call => call.slice(0, 2))).toEqual([
+    [[nappRelay], [{ kinds: [35130], limit: 200 }]],
+    [[nappRelay], [{ kinds: [35130], limit: 200, until: 801 }]],
+  ]);
+  expect(all.store.getState()).toBe(full);
+  const requests = query.mock.calls.length;
+  await all.load('account');
+  expect(query).toHaveBeenCalledTimes(requests);
+  await all.loadMore('account');
+  expect(all.store.getState().visibleEntries).toHaveLength(40);
+  expect(napps.store.getState().visibleEntries).toHaveLength(220);
+  const continued = all.store.getState();
+  query.mockRejectedValue(new Error('offline'));
+  await napps.load('account', true);
+  expect(napps.store.getState().error).toBe(true);
+  expect(all.store.getState()).toBe(continued);
+});
+
+it('shares exact-address metadata without merging discovery catalogues', async () => {
+  const all = getDiscoveryStore();
+  const napps = getDiscoveryStore('napps');
+  const fullEntries = all.getState().entries;
+  const nappEntries = napps.getState().entries;
+  const [entry] = await discoveryEntries([uniqueManifest(35130, 100)]);
+  cacheApplicationAddress('account', entry);
+  expect(all.getState().addressCache).toBe(napps.getState().addressCache);
+  expect(napps.getState().addressCache).toMatchObject({ account: 'account', entries: [entry] });
+  expect(all.getState().entries).toBe(fullEntries);
+  expect(napps.getState().entries).toBe(nappEntries);
 });

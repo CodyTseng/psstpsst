@@ -42,7 +42,7 @@ export type RuntimePrompt = {
   application?: ApplicationInfo;
   requester?: { title: string; origin: string };
   choices?: RuntimePromptChoice[];
-  applicationSelection?: { requester: string; content: 'profile' | 'content' };
+  applicationSelection?: { requester: string; content: 'profile' | 'content'; discovery?: { name: string; auxiliary: boolean }; unavailable?: 'instance' };
   app?: NappletRelease;
   accountPubkey?: string;
   signing?: SigningRequest;

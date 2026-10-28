@@ -272,3 +272,22 @@ it('shows launch failures in an error toast while preserving the Favorites grid'
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.request_failed')).toBe(false);
   expect(renderer.root.findByType(NappletGrid).props.items).toEqual(mockExplore.entries);
 });
+
+it('opens action discovery and keeps its filter after consuming the handoff', async () => {
+  const action = { name: 'view:1', auxiliary: true };
+  await act(async () => {
+    const id = useExploreSearchHandoffStore.getState().start({ account: 'account', value: '', action });
+    mockHandoff = String(id);
+    renderer.update(<NappletsScreen />);
+  });
+  expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
+  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('discover');
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toEqual(action);
+  const app = { key: 'result', kind: 'napp' } as ExploreEntry;
+  await act(async () => { renderer.root.findByType(ExploreDiscovery).props.onDetails(app); });
+  expect(mockNavigate).toHaveBeenLastCalledWith('/explore-details?key=result&catalog=1&discovery=napps');
+  await act(async () => { renderer.root.findByType(ExploreDiscovery).props.onPermissions(app); });
+  expect(mockNavigate).toHaveBeenLastCalledWith('/explore-details?key=result&permissions=1&discovery=napps');
+  await act(async () => { renderer.root.findByType(ExploreDiscovery).props.onClearAction(); });
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toBeUndefined();
+});

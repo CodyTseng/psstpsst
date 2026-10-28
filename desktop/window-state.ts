@@ -30,6 +30,32 @@ export function fitWindowBounds(bounds: Rectangle, area: Rectangle): Rectangle {
   };
 }
 
+const APPLICATION_WINDOW_GAP = 16;
+const APPLICATION_WINDOW_OFFSET = 32;
+
+/** Keep the launching window visible without moving or resizing it. */
+export function placeApplicationWindow(source: Rectangle, preferred: Rectangle, area: Rectangle): Rectangle {
+  const fitted = fitWindowBounds(preferred, area);
+  const clampX = (x: number) => Math.max(area.x, Math.min(x, area.x + area.width - fitted.width));
+  const clampY = (y: number) => Math.max(area.y, Math.min(y, area.y + area.height - fitted.height));
+  const beside = [
+    { x: source.x + source.width + APPLICATION_WINDOW_GAP, y: clampY(source.y) },
+    { x: source.x - fitted.width - APPLICATION_WINDOW_GAP, y: clampY(source.y) },
+    { x: clampX(source.x), y: source.y + source.height + APPLICATION_WINDOW_GAP },
+    { x: clampX(source.x), y: source.y - fitted.height - APPLICATION_WINDOW_GAP },
+  ];
+  const free = beside.find(({ x, y }) => x >= area.x && y >= area.y &&
+    x + fitted.width <= area.x + area.width && y + fitted.height <= area.y + area.height);
+  if (free) return { ...fitted, ...free };
+
+  // Reverse the cascade at display edges instead of clamping onto the source.
+  const offset = (value: number, clamp: (value: number) => number) => {
+    const forward = clamp(value + APPLICATION_WINDOW_OFFSET);
+    return forward > value ? forward : clamp(value - APPLICATION_WINDOW_OFFSET);
+  };
+  return { ...fitted, x: offset(source.x, clampX), y: offset(source.y, clampY) };
+}
+
 type PreviewWindow = Pick<
   BrowserWindow,
   | 'getBounds'

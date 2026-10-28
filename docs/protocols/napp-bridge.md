@@ -162,7 +162,9 @@ an explicit `instance` cannot bypass favorite membership. Removing a favorite
 excludes even its running handlers from subsequent selection and delivery.
 The chooser names the caller and content purpose and asks which app to
 open it with. Candidate rows reuse discovery's icons, names, publishers and format
-labels. The sheet's Close action dismisses only this handoff. Android launches
+labels. An empty chooser offers capability-filtered Discover; an unavailable
+explicit instance offers no discovery handoff. Closing the empty chooser settles
+as `permission-denied`, like cancelling a populated chooser. The sheet's Close action dismisses only this handoff. Android launches
 selected applications in independent document tasks and focuses an existing task
 when delivering an action to its live handler. Options may identify one live
 `instance` or request an `auxiliary` application. Exact patterns match; `view`

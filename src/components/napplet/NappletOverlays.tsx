@@ -1,3 +1,7 @@
+import { useActiveAccount } from '@/stores/active-account.store';
+import { router } from 'expo-router';
+import { Compass } from '@solar-icons/react-native/category/map/Linear/Compass';
+import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
 import { useEffect, useRef, useState } from 'react';
@@ -42,6 +46,7 @@ export function NappletOverlays() {
 
 function NappletOverlayContent() {
   const openPublisher = useOpenPublisher();
+  const colors = useThemeColors();
   const { prompt, approvalClosing, configuration, panel, accountPubkey } = useNapplets();
   const pending = useRef<(() => void) | null>(null);
   const [lastWalletPrompt, setLastWalletPrompt] = useState<QueuedPrompt | null>(null);
@@ -85,13 +90,21 @@ function NappletOverlayContent() {
       title={selectingApplication ? t('napplets.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'napplets.crypto_encrypt' : 'napplets.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('napplets.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'napplets.permissions' : `napplets.browser_${prompt.browser.action}`) : accessPrompt ? t('napplets.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('napplets.details') : showingPanel?.page === 'settings' ? t('napplets.permissions_manage') : t('napplets.settings'))}
       headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
-      fixedSubheader={selectingApplication ? <AppText>
+      fixedSubheader={selectingApplication && !!prompt?.choices?.length ? <AppText>
         {t(selectingApplication.content === 'profile' ? 'napplets.open_with_profile' : 'napplets.open_with_content', { app: selectingApplication.requester })}
       </AppText> : undefined}
       listProps={selectingApplication && prompt ? {
         data: prompt.choices ?? [], keyExtractor: choice => choice.key,
         initialNumToRender: 8,
-        contentContainerStyle: { paddingBottom: spacing.lg },
+        contentContainerStyle: { paddingBottom: prompt.choices?.length ? spacing.lg : 0 },
+        ListEmptyComponent: <View style={{ alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.md }}>
+          <Compass size={spacing['2xl']} color={colors.textMuted} />
+          <AppText variant="body" tone="muted" align="center">
+            {selectingApplication.discovery
+              ? t('napplets.open_with_empty', { app: selectingApplication.requester })
+              : t('napplets.handler_closed')}
+          </AppText>
+        </View>,
         renderItem: ({ item }) => <ApplicationChoiceRow choice={item} requestId={prompt.requestId}/>,
       } : undefined}
       scrollResetKey={prompt?.requestId ?? (configuration ? 'configuration' : panel?.page ?? 'closed')}
@@ -104,7 +117,22 @@ function NappletOverlayContent() {
       }}
       modalOverlay={prompt && menuOpen && menu ? <SigningDurationMenu anchor={menu.anchor} duration={duration}
         onChange={(value) => setChoice({ id: prompt.requestId, value })} onClose={() => setMenu(undefined)} /> : undefined}
-      fixedFooter={prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
+      fixedFooter={selectingApplication?.discovery && prompt && !prompt.choices?.length ? <AppButton label={t('napplets.discover')} onPress={() => {
+        const filter = selectingApplication.discovery!;
+        const account = prompt.accountPubkey;
+        if (!account) return;
+        pending.current = () => {
+          if (useActiveAccount.getState().activePubkey !== account) return;
+          if (platform.napplet.windows?.isHost) {
+            void platform.napplet.windows.action({ type: 'discover', accountPubkey: account, ...filter }).catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
+            return;
+          }
+          const id = useExploreSearchHandoffStore.getState().start({ account, value: '', action: filter });
+          router.navigate({ pathname: '/napplets', params: { searchHandoff: String(id) } });
+          void platform.napplet.tasks?.showHost().catch(() => showToast(t('napplets.request_failed'), { variant: 'error' }));
+        };
+        nappletService.answer(prompt.requestId, false);
+      }} /> : prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
         {prompt?.signing ? <SigningActions prompt={prompt} duration={duration} menuOpen={menuOpen}
           onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} />
           : prompt ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={menuOpen}

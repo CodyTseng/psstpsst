@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type Handoff = { id: number; account: string; value: string };
+type Handoff = { id: number; account: string; value: string; action?: { name: string; auxiliary: boolean } };
 type State = {
   pending: Handoff | null;
   start(input: Omit<Handoff, 'id'>): number;
@@ -8,7 +8,7 @@ type State = {
 };
 let nextId = 0;
 
-/** Hand scan input to the Explore tab without putting URLs or addresses in route params. */
+/** Hand scan input or an action filter to the Explore tab without putting URLs or addresses in route params. */
 export const useExploreSearchHandoffStore = create<State>((set, get) => ({
   pending: null,
   start(input) {

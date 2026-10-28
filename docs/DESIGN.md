@@ -1034,7 +1034,12 @@ and name the requesting app. Candidate rows reuse the discovery list's app icon,
 name, description and publisher attribution. Choosing a row opens that app;
 The sheet's Close action dismisses only this handoff, without a duplicate Cancel
 footer. These choosers omit access-review language,
-signing-account labels and raw protocol action names.
+signing-account labels and raw protocol action names. When no compatible app is
+available, keep the sheet title and show one body-style explanation naming the
+requester, with a single Discover action filtered to the required capability.
+Omit the selection question and repeated empty-state heading. Active capability
+filters show their requested action in a compact, dismissible label; only show
+no results after matching discovery pages settle.
 
 Mini-app More opens app information with Copy address, Share, Permissions and
 Reload actions. Copy omits the `nostr:` prefix; sharing includes it. Both retain
@@ -1052,7 +1057,10 @@ omit opening preferences. Website runtime sheets include a default-browser
 action with the Solar Linear Global icon. Preference labels explicitly describe
 the default for future opens, distinct from immediate opening actions.
 Preferences apply to subsequent opens and never move a running page. Independent hosts reuse
-the account/application instance with its state intact. Open applications show a
+the account/application instance with its state intact. New Electron application
+windows open beside the launching window when space permits; otherwise they
+stagger within its display’s work area so the source remains recognizable.
+Reused windows retain their user-arranged position. Open applications show a
 small success-green dot beside their icons in app grids and lists; closing the
 last independent instance clears it.
 Inline websites expose a Solar Linear SquareTopDown window-opening action

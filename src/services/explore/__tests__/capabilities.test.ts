@@ -53,10 +53,10 @@ it('offers a live handler only while its application is a favorite, including ex
   try {
     await expect(capabilities.handle('action', ['edit', 'content'])).resolves.toBe('done');
     favorites = [];
-    await expect(capabilities.handle('action', ['edit', 'content'])).rejects.toThrow('handler-unavailable');
-    await expect(capabilities.handle('action', ['edit', 'content', { instance: 'target-instance' }])).rejects.toThrow('handler-unavailable');
+    await expect(capabilities.handle('action', ['edit', 'content'])).rejects.toThrow('permission-denied');
+    await expect(capabilities.handle('action', ['edit', 'content', { instance: 'target-instance' }])).rejects.toThrow('permission-denied');
     expect(received).toHaveBeenCalledTimes(1);
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledTimes(3);
   } finally { detach(); }
 });
 
@@ -84,6 +84,15 @@ it.each(['selection', 'startup'])('rejects a favorite removed during %s', async 
 
 it('does not expose another account live instance even when the same application is a favorite', async () => {
   await connectTarget('b'.repeat(64));
-  await expect(capabilities.handle('action', ['edit', {}, { instance: 'target-instance' }])).rejects.toThrow('handler-unavailable');
-  expect(confirm).not.toHaveBeenCalled();
+  await expect(capabilities.handle('action', ['edit', {}, { instance: 'target-instance' }])).rejects.toThrow('permission-denied');
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ choices: [], applicationSelection: expect.objectContaining({ unavailable: 'instance' }) }), life.signal);
+});
+
+it('offers discovery with the exact requested action and mode when no favorite can handle it', async () => {
+  favorites = [];
+  confirm.mockResolvedValue(false);
+  await expect(capabilities.handle('action', ['edit', {}, { auxiliary: true }])).rejects.toThrow('permission-denied');
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ accountPubkey: account, choices: [],
+    applicationSelection: { requester: 'Caller', content: 'content', discovery: { name: 'edit', auxiliary: true } } }), life.signal);
+  expect(launch).not.toHaveBeenCalled();
 });

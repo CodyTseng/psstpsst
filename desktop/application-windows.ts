@@ -1,5 +1,6 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import type { ApplicationWindowLaunch, ApplicationWindowAction, ApplicationSigningChange, RunningApplication } from '../src/platform/ports/application-window';
+import { placeApplicationWindow } from './window-state';
 import { IPC } from './ipc-channels';
 import { ApplicationMessagingBroker } from '../src/services/explore/messaging-broker';
 import type { ApplicationEndpoint, ApplicationEnvelope } from '../src/platform/ports/application-messaging';
@@ -53,7 +54,7 @@ export class ApplicationWindows {
       if (this.endpoints.get(instance) !== event.sender) throw new Error('untrusted-endpoint');
       return this.messaging.request(instance, message);
     });
-    handle(IPC.applicationWindowOpen, async (_event, launch: ApplicationWindowLaunch) => {
+    handle(IPC.applicationWindowOpen, async (event, launch: ApplicationWindowLaunch) => {
       if (!launch || !/^[a-f0-9]{64}$/.test(launch.accountPubkey) || typeof launch.address !== 'string' || launch.address.length > 8192 ||
         JSON.stringify(launch).length > 512 * 1024) throw new Error('invalid-application-window');
       const sourceId = applicationSourceId(launch.address);
@@ -64,7 +65,12 @@ export class ApplicationWindows {
         existing.show(); existing.focus(); return;
       }
       if (this.hosts.size >= 8) throw new Error('invalid-application-window');
+      const source = this.host(event.sender) ?? this.options.parent();
       const window = this.options.create();
+      if (source && !source.isDestroyed()) {
+        const sourceBounds = source.getBounds();
+        window.setBounds(placeApplicationWindow(sourceBounds, window.getBounds(), screen.getDisplayMatching(sourceBounds).workArea));
+      }
       this.hosts.set(window, structuredClone(launch));
       this.identities.set(window, { accountPubkey: launch.accountPubkey, sourceId });
       this.byIdentity.set(key, window); this.changed();
@@ -104,6 +110,7 @@ export class ApplicationWindows {
         return;
       }
       if (action.type === 'profile' || action.type === 'publisher' ? typeof action.pubkey !== 'string' || !/^[a-f0-9]{64}$/.test(action.pubkey) :
+        action.type === 'discover' ? action.accountPubkey !== launch.accountPubkey || typeof action.name !== 'string' || !action.name || action.name.length > 128 || typeof action.auxiliary !== 'boolean' :
         action.type !== 'share' || action.accountPubkey !== launch.accountPubkey || typeof action.title !== 'string' || typeof action.address !== 'string') throw new Error('invalid-window-action');
       const parent = this.options.parent();
       if (!parent || parent.isDestroyed()) throw new Error('window-unavailable');

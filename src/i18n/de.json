@@ -1076,6 +1076,12 @@
     "open_with_title": "Öffnen mit",
     "open_with_profile": "„{{app}}“ möchte ein Profil öffnen. Welche App möchtest du verwenden?",
     "open_with_content": "„{{app}}“ möchte Inhalte in einer App öffnen. Welche App möchtest du verwenden?",
+    "no_compatible_apps": "Keine passenden Apps verfügbar",
+    "open_with_empty": "Für „{{app}}“ ist keine passende App verfügbar. Finde eine App unter Entdecken, füge sie zu den Favoriten hinzu und versuche es erneut.",
+    "handler_closed": "Diese App ist nicht mehr verfügbar",
+    "action_filter": "Unterstützt: {{action}}",
+    "auxiliary_action_filter": "Hilfs-Apps: {{action}}",
+    "show_all_apps": "Alle Apps anzeigen",
     "copy_address": "Adresse kopieren",
     "formats": {
       "napplet": "napplet",

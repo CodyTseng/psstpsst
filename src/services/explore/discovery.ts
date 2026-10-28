@@ -21,15 +21,19 @@ export async function discoveryEntries(events: Event[], eventRelays?: Map<string
   return [...entries.values()].sort(compare);
 }
 
+export type ApplicationDiscoveryScope = 'all' | 'napps';
 export type ApplicationAddressCache = { account: string | null; entries: ExploreEntry[] };
 const DISPLAY_PAGE_SIZE = 20;
 const RELAY_PAGE_SIZE = APPLICATION_QUERY_LIMIT;
 const CACHE_MS = 5 * 60 * 1000;
 const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 const compare = (a: ExploreEntry, b: ExploreEntry) => compareTimelineEvents(a.manifest!, b.manifest!);
-const createTimeline = () => new RelayTimeline(APPLICATION_DISCOVERY_SOURCES.map(source => ({
-  urls: source.relays, filter: { kinds: source.kinds },
-})), RELAY_PAGE_SIZE);
+const createTimeline = (scope: ApplicationDiscoveryScope) => new RelayTimeline(APPLICATION_DISCOVERY_SOURCES.flatMap(source => {
+  const kinds = scope === 'napps' ? source.kinds.filter(kind => kind === 35130) : source.kinds;
+  return kinds.length ? [{
+    urls: source.relays, filter: { kinds },
+  }] : [];
+}), RELAY_PAGE_SIZE);
 
 /** Discovery owns application parsing and the visible window; RelayTimeline owns event pagination. */
 export class ApplicationDiscovery {
@@ -37,7 +41,7 @@ export class ApplicationDiscovery {
     addressCache: { account: null, entries: [] } as ApplicationAddressCache,
     entries: [] as ExploreEntry[], visibleEntries: [] as ExploreEntry[], loading: false, loadingMore: false, loaded: false, error: false, hasMore: false,
   }));
-  private timeline = createTimeline();
+  private timeline: RelayTimeline;
   private shown = new Set<string>();
   private catalogue = new Map<string, ExploreEntry>();
   private cached: ExploreEntry[] = [];
@@ -45,6 +49,10 @@ export class ApplicationDiscovery {
   private updatedAt = 0;
   private pending?: Promise<void>;
   private pendingRefresh?: Promise<void>;
+
+  constructor(private readonly scope: ApplicationDiscoveryScope = 'all') {
+    this.timeline = createTimeline(scope);
+  }
 
   load(account: string, refresh = false): Promise<void> {
     if (refresh && this.pendingRefresh) return this.pendingRefresh;
@@ -61,7 +69,7 @@ export class ApplicationDiscovery {
 
   private reload(account: string): Promise<void> {
     this.timeline.dispose();
-    this.timeline = createTimeline();
+    this.timeline = createTimeline(this.scope);
     this.shown.clear();
     this.catalogue.clear();
     this.cached = [];
@@ -149,15 +157,21 @@ export class ApplicationDiscovery {
   }
 }
 
-const discovery = new ApplicationDiscovery();
-export const discoveryStore = discovery.store;
-export function discoverApplications(account: string, refresh = false) { return discovery.load(account, refresh); }
-export function loadMoreApplications(account: string) { return discovery.loadMore(account); }
+const discoveries = { all: new ApplicationDiscovery(), napps: new ApplicationDiscovery('napps') };
+export const discoveryStore = discoveries.all.store;
+export function getDiscoveryStore(scope: ApplicationDiscoveryScope = 'all') { return discoveries[scope].store; }
+export function discoverApplications(account: string, refresh = false, scope: ApplicationDiscoveryScope = 'all') {
+  return discoveries[scope].load(account, refresh);
+}
+export function loadMoreApplications(account: string, scope: ApplicationDiscoveryScope = 'all') {
+  return discoveries[scope].loadMore(account);
+}
 
 /** Exact-address results remain separate from the curated discovery catalogue. */
 export function cacheApplicationAddress(account: string, entry: ExploreEntry) {
   setTimeout(() => { void import('./application-cache').then(cache => cache.cacheApplicationEvent(entry)).catch(() => {}); }, 0);
-  discoveryStore.setState(state => ({ addressCache: { account,
-    entries: [entry, ...(state.addressCache.account === account ? state.addressCache.entries : []).filter(app => app.key !== entry.key)].slice(0, 64),
-  } }));
+  const previous = discoveryStore.getState().addressCache;
+  const addressCache = { account, entries: [entry, ...(previous.account === account ? previous.entries : [])
+    .filter(app => app.key !== entry.key)].slice(0, 64) };
+  for (const discovery of Object.values(discoveries)) discovery.store.setState({ addressCache });
 }

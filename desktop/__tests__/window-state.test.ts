@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   fitWindowBounds,
+  placeApplicationWindow,
   parseWindowState,
   SCREENSHOT_PREVIEW_HEIGHT,
   SCREENSHOT_PREVIEW_WIDTH,
@@ -108,4 +109,36 @@ it('sizes screenshot preview without disabling resize controls and restores the 
   expect(resizable).toBe(true);
   expect(maximizable).toBe(true);
   expect(fullScreenable).toBe(true);
+});
+
+it('places a new application beside its source without overlap when space permits', () => {
+  const source = { x: 100, y: 100, width: 600, height: 600 };
+  const preferred = { x: 100, y: 100, width: 600, height: 600 };
+  expect(placeApplicationWindow(source, preferred, { x: 0, y: 0, width: 1920, height: 1080 }))
+    .toEqual({ x: 716, y: 100, width: 600, height: 600 });
+  expect(source).toEqual({ x: 100, y: 100, width: 600, height: 600 });
+});
+
+it('uses space to the left or below before overlapping the source', () => {
+  const area = { x: 0, y: 0, width: 1400, height: 1400 };
+  const preferred = { x: 0, y: 0, width: 600, height: 600 };
+  expect(placeApplicationWindow({ x: 800, y: 0, width: 600, height: 600 }, preferred, area).x).toBe(184);
+  expect(placeApplicationWindow({ x: 400, y: 0, width: 600, height: 600 }, preferred, area))
+    .toEqual({ ...preferred, x: 400, y: 616 });
+});
+
+it('staggers on a small screen and reverses direction at the bottom-right edge', () => {
+  const area = { x: 0, y: 0, width: 1200, height: 900 };
+  const preferred = { x: 0, y: 0, width: 960, height: 720 };
+  expect(placeApplicationWindow({ ...preferred, x: 100, y: 100 }, preferred, area))
+    .toEqual({ ...preferred, x: 132, y: 132 });
+  expect(placeApplicationWindow({ ...preferred, x: 240, y: 180 }, preferred, area))
+    .toEqual({ ...preferred, x: 208, y: 148 });
+});
+
+it('uses the source display work area, including negative monitor coordinates', () => {
+  const area = { x: -1440, y: -200, width: 1440, height: 900 };
+  const source = { x: -1400, y: -160, width: 600, height: 600 };
+  expect(placeApplicationWindow(source, { x: 0, y: 0, width: 600, height: 600 }, area))
+    .toEqual({ x: -784, y: -160, width: 600, height: 600 });
 });

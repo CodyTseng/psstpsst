@@ -268,7 +268,9 @@ either layer.
 `RelayTimeline` owns reusable in-memory event pagination. Each relay/query pair
 has an independent cursor and buffer; ordered merging and event-ID deduplication
 happen before results reach consumers. Callers supply the verified transport and
-own domain parsing, display windows and cache policy. Durable message-history
+own domain parsing, display windows and cache policy. Full application discovery
+and napps-only capability discovery keep independent cursors, caches and loading
+state; exact-address metadata may be shared across them. Durable message-history
 coverage remains in the separate account/relay sync cursor store.
 
 Relay addresses share `src/lib/nostr/relay-url.ts` normalization at input,

@@ -1076,6 +1076,12 @@
     "open_with_title": "Megnyitás ezzel",
     "open_with_profile": "A(z) „{{app}}” egy profilt szeretne megnyitni. Melyik alkalmazást szeretné használni?",
     "open_with_content": "A(z) „{{app}}” tartalmat szeretne megnyitni egy alkalmazásban. Melyik alkalmazást szeretné használni?",
+    "no_compatible_apps": "Nincs elérhető kompatibilis alkalmazás",
+    "open_with_empty": "Nincs elérhető kompatibilis alkalmazás a(z) „{{app}}” számára. Keress egy alkalmazást a Felfedezés alatt, add a kedvencekhez, majd térj vissza és próbáld újra.",
+    "handler_closed": "Ez az alkalmazás már nem érhető el",
+    "action_filter": "Támogatja: {{action}}",
+    "auxiliary_action_filter": "Kiegészítő alkalmazások: {{action}}",
+    "show_all_apps": "Összes alkalmazás megjelenítése",
     "copy_address": "Cím másolása",
     "formats": {
       "napplet": "napplet",

@@ -1076,6 +1076,12 @@
     "open_with_title": "इससे खोलें",
     "open_with_profile": "“{{app}}” एक प्रोफ़ाइल खोलना चाहता है। आप कौन सा ऐप इस्तेमाल करना चाहेंगे?",
     "open_with_content": "“{{app}}” सामग्री को एक ऐप में खोलना चाहता है। आप कौन सा ऐप इस्तेमाल करना चाहेंगे?",
+    "no_compatible_apps": "कोई संगत ऐप उपलब्ध नहीं है",
+    "open_with_empty": "“{{app}}” के लिए कोई संगत ऐप उपलब्ध नहीं है। खोजें में ऐप ढूँढें, उसे पसंदीदा में जोड़ें, फिर लौटकर दोबारा कोशिश करें।",
+    "handler_closed": "यह ऐप अब उपलब्ध नहीं है",
+    "action_filter": "समर्थित: {{action}}",
+    "auxiliary_action_filter": "सहायक ऐप: {{action}}",
+    "show_all_apps": "सभी ऐप दिखाएँ",
     "copy_address": "पता कॉपी करें",
     "formats": {
       "napplet": "napplet",

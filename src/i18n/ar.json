@@ -1096,6 +1096,12 @@
     "open_with_title": "فتح باستخدام",
     "open_with_profile": "يريد «{{app}}» فتح ملف شخصي. أي تطبيق تريد استخدامه؟",
     "open_with_content": "يريد «{{app}}» فتح محتوى في تطبيق. أي تطبيق تريد استخدامه؟",
+    "no_compatible_apps": "لا توجد تطبيقات متوافقة متاحة",
+    "open_with_empty": "لا يوجد تطبيق متوافق متاح لـ «{{app}}». ابحث عن تطبيق في قسم الاستكشاف وأضفه إلى المفضلة، ثم عُد وحاول مجددًا.",
+    "handler_closed": "لم يعد هذا التطبيق متاحًا",
+    "action_filter": "يدعم: {{action}}",
+    "auxiliary_action_filter": "تطبيقات مساعدة: {{action}}",
+    "show_all_apps": "عرض جميع التطبيقات",
     "copy_address": "نسخ العنوان",
     "formats": {
       "napplet": "napplet",

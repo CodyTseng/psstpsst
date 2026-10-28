@@ -1,3 +1,7 @@
+import { getNappletAccountPubkey } from '@/stores/napplet.store';
+import { router } from 'expo-router';
+import { BottomSheet } from '@/components/common/BottomSheet';
+import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { WalletApproval } from '../WalletApproval';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet, Text } from 'react-native';
@@ -17,8 +21,9 @@ import { platform } from '@/platform';
 import { getEventHash, serializeEvent } from 'nostr-tools';
 import { darkPalette, lightPalette } from '@/theme';
 
+jest.mock('@solar-icons/react-native/category/map/Linear/Compass', () => ({ Compass: () => null }), { virtual: true });
 jest.mock('lucide-react-native/icons/external-link', () => () => null);
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
 jest.mock('@/components/common/DirectionalChevron', () => ({ DirectionalChevron: () => null }));
 jest.mock('lucide-react-native/icons/chevron-down', () => () => null);
 jest.mock('lucide-react-native/icons/chevron-up', () => () => null);
@@ -33,6 +38,8 @@ jest.mock('@/components/common/ContextMenu', () => {
   return { ContextMenuOverlay: Menu, ContextMenu: Menu };
 });
 
+let mockActiveAccount: string | null = 'a'.repeat(64);
+jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: { getState: () => ({ activePubkey: mockActiveAccount }) } }));
 let mockScheme: 'light' | 'dark' = 'light';
 jest.mock('@/stores/theme.store', () => ({
   useThemeStore: (select: (state: object) => unknown) => select({ accent: 'blue', preference: mockScheme }),
@@ -41,7 +48,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 jest.mock('@/components/common/ActionMenuPanel', () => ({ ActionMenuPanel: () => null }));
 jest.mock('@/hooks/use-display-name', () => ({ useDisplayName: () => ({ name: 'Alice', profile: null }) }));
 jest.mock('@/services/napplet/service', () => ({ nappletStore: { getState: () => ({ prompt: mockPrompt }) }, nappletService: { answer: jest.fn(), rejectAllRequests: jest.fn(), closeConfiguration: jest.fn(), overlayClosed: jest.fn() } }));
-jest.mock('@/platform', () => ({ platform: { deviceCrypto: { sha256Hex: jest.fn() }, clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } } }));
+jest.mock('@/platform', () => ({ platform: { napplet: {}, deviceCrypto: { sha256Hex: jest.fn() }, clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } } }));
 jest.mock('@/services/napplet/repository', () => ({ getData: jest.fn(), setData: jest.fn() }));
 
 jest.mock('@/components/common/Avatar', () => ({ Avatar: () => null }));
@@ -50,22 +57,22 @@ jest.mock('../ApplicationTaskContext', () => ({ useOwnsApplicationTaskOverlays: 
 jest.mock('../NappletPanel', () => ({ NappletPanel: () => null, NappletPanelActions: () => null }));
 jest.mock('../NappletIcon', () => ({ NappletIcon: () => null }));
 jest.mock('@/components/common/BottomSheet', () => ({
-  BottomSheet: ({ children, headerAction, fixedSubheader, fixedFooter, modalOverlay }: { children: React.ReactNode; headerAction: React.ReactNode; fixedSubheader: React.ReactNode; fixedFooter: React.ReactNode; modalOverlay: React.ReactNode }) => {
+  BottomSheet: ({ children, headerAction, fixedSubheader, fixedFooter, modalOverlay, listProps }: { listProps?: { data: unknown[]; ListEmptyComponent?: React.ReactNode }; children: React.ReactNode; headerAction: React.ReactNode; fixedSubheader: React.ReactNode; fixedFooter: React.ReactNode; modalOverlay: React.ReactNode }) => {
     const View = jest.requireActual('react-native').View;
-    return <View>{headerAction}{fixedSubheader}{children}{fixedFooter}{modalOverlay}</View>;
+    return <View>{headerAction}{fixedSubheader}{listProps?.data.length === 0 ? listProps.ListEmptyComponent : null}{children}{fixedFooter}{modalOverlay}</View>;
   },
 }));
 let mockPrompt: QueuedPrompt | null = null;
 let mockApprovalClosing = false;
 jest.mock('../WalletApproval', () => ({ WalletApproval: () => null }));
-jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ prompt: mockPrompt, approvalClosing: mockApprovalClosing, configuration: null }) }));
+jest.mock('@/stores/napplet.store', () => ({ getNappletAccountPubkey: () => null, useNapplets: () => ({ prompt: mockPrompt, approvalClosing: mockApprovalClosing, configuration: null }) }));
 
 let renderer: ReactTestRenderer;
 const prompt = {
   requestId: 'request-A', expiresAt: Date.now() + 60000, queued: 0, title: 'Game', detail: '',
   signing: { operation: 'publish', kind: 1, accountPubkey: 'a'.repeat(64), content: 'Hello from the app', tags: [], createdAt: 100, relays: ['wss://relay.example/'] },
 } satisfies QueuedPrompt;
-afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); mockApprovalClosing = false; });
+afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); mockApprovalClosing = false; mockActiveAccount = 'a'.repeat(64); useExploreSearchHandoffStore.setState({ pending: null }); });
 function selectDuration(value: string) {
   act(() => { renderer.root.findByType(SigningActions).props.onMenuChange({ x: 180, y: 700 }); });
   const menu = renderer.root.findByType(ActionMenuPanel);
@@ -373,4 +380,52 @@ it('retains a dedicated wallet sheet until its dismissal completes', () => {
   mockApprovalClosing = false;
   act(() => { renderer.update(<NappletOverlays />); });
   expect(renderer.root.findAllByType(WalletApproval)).toHaveLength(0);
+});
+
+it.each(['light', 'dark'] as const)('opens Discover without an initialized napplet account in %s mode', scheme => {
+  mockScheme = scheme;
+  mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  const sheet = renderer.root.findByType(BottomSheet);
+  expect(sheet.props.fixedSubheader).toBeUndefined();
+  const text = renderer.root.findAllByType(AppText);
+  expect(text.map(node => node.props.children)).toEqual(['napplets.open_with_empty', 'napplets.discover']);
+  expect(text[0].props).toMatchObject({ children: 'napplets.open_with_empty', variant: 'body', tone: 'muted' });
+  expect(button('napplets.discover')).toBeDefined();
+  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'common.cancel')).toBe(false);
+  expect(getNappletAccountPubkey()).toBeNull();
+  act(() => { button('napplets.discover').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith('empty', false);
+  expect(router.navigate).not.toHaveBeenCalled();
+  act(() => { renderer.root.findByType(BottomSheet).props.onClosed(); });
+  expect(useExploreSearchHandoffStore.getState().pending).toMatchObject({ account: 'a'.repeat(64), action: { name: 'edit', auxiliary: false } });
+  expect(router.navigate).toHaveBeenCalledWith({ pathname: '/napplets', params: { searchHandoff: expect.any(String) } });
+});
+
+it('does not offer Discover for an unavailable explicit instance', () => {
+  mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    choices: [], applicationSelection: { requester: 'Timeline', content: 'content', unavailable: 'instance' } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.handler_closed')).toBe(true);
+  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'napplets.discover')).toBe(false);
+});
+
+it('discards a Discover handoff when the active account changes during dismissal', () => {
+  mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  act(() => { button('napplets.discover').props.onPress(); });
+  mockActiveAccount = 'b'.repeat(64);
+  act(() => { renderer.root.findByType(BottomSheet).props.onClosed(); });
+  expect(router.navigate).not.toHaveBeenCalled();
+  expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
+});
+
+it('keeps the requester question when compatible applications can be selected', () => {
+  mockPrompt = { requestId: 'choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    choices: [{ key: 'target', title: 'Target' }], applicationSelection: { requester: 'Timeline', content: 'content' } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  expect(renderer.root.findByType(BottomSheet).props.fixedSubheader).toBeDefined();
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toEqual(['napplets.open_with_content']);
 });

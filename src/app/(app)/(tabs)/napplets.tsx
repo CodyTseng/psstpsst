@@ -42,18 +42,23 @@ type ExploreMode = 'favorites' | 'discover';
 
 export default function NappletsScreen() {
   const account = useActiveAccount((s) => s.activePubkey);
-  const [mode, setMode] = useState<{ account: string | null; value: ExploreMode }>({ account, value: 'favorites' });
+  const [mode, setMode] = useState<{ account: string | null; value: ExploreMode; handoff?: number }>({ account, value: 'favorites' });
   const { searchHandoff } = useLocalSearchParams<{ searchHandoff?: string }>();
   const pending = useExploreSearchHandoffStore(state => state.pending);
   const id = typeof searchHandoff === 'string' ? Number(searchHandoff) : NaN;
-  const input = pending?.id === id && pending.account === account ? pending.value : undefined;
+  const handoff = pending?.id === id && pending.account === account ? pending : undefined;
+  const input = handoff?.value;
+  if (handoff?.action && mode.handoff !== id) setMode({ account, value: 'discover', handoff: id });
   useEffect(() => {
-    if (input !== undefined && account) useExploreSearchHandoffStore.getState().consume(id, account);
-  }, [input, account, id]);
-  return <AccountNapplets key={`${account ?? 'signed-out'}:${searchHandoff ?? ''}`} account={account} initialAddress={input}
-    tab={mode.account === account ? mode.value : 'favorites'} onTabChange={value => setMode({ account, value })} />;
+    if (input !== undefined && account) {
+      useExploreSearchHandoffStore.getState().consume(id, account);
+    }
+  }, [input, account, id, handoff]);
+  return <AccountNapplets key={`${account ?? 'signed-out'}:${searchHandoff ?? ''}`} account={account} initialAddress={input} initialAction={handoff?.action}
+    tab={mode.account === account ? mode.value : 'favorites'} onTabChange={value => setMode(current => ({ ...current, account, value }))} />;
 }
-function AccountNapplets({ account, initialAddress, tab, onTabChange }: { account: string | null; initialAddress?: string; tab: ExploreMode; onTabChange(value: ExploreMode): void }) {
+function AccountNapplets({ account, initialAddress, initialAction, tab, onTabChange }: { account: string | null; initialAddress?: string; initialAction?: { name: string; auxiliary: boolean }; tab: ExploreMode; onTabChange(value: ExploreMode): void }) {
+  const [actionFilter, setActionFilter] = useState(initialAction);
   const c = useThemeColors();
   const { t } = useTranslation();
   const state = useExplore();
@@ -122,8 +127,8 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
     [account, navigation, showError],
   );
   const showSearchDetails = useCallback((app: ExploreEntry) => {
-    navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1`);
-  }, [navigation]);
+    navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}&catalog=1${actionFilter ? '&discovery=napps' : ''}`);
+  }, [navigation, actionFilter]);
   const showFavoriteDetails = useCallback((app: ExploreEntry) => {
     navigation.open(`/explore-details?key=${encodeURIComponent(app.key)}`);
   }, [navigation]);
@@ -182,8 +187,8 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
     void setFavorite(app, !desktop.some(item => item.key === app.key));
   }, [setFavorite, desktop]);
   const showPermissions = useCallback((app: ExploreEntry) => {
-    navigation.open(app.release ? `/napplet-permissions/${app.release.event.id}` : `/explore-details?key=${encodeURIComponent(app.key)}&permissions=1`);
-  }, [navigation]);
+    navigation.open(app.release ? `/napplet-permissions/${app.release.event.id}` : `/explore-details?key=${encodeURIComponent(app.key)}&permissions=1${actionFilter ? '&discovery=napps' : ''}`);
+  }, [navigation, actionFilter]);
   const restingSearch = <View style={{ paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
     <SearchBar value="" onChangeText={() => {}} placeholder={t('napplets.search_placeholder')}
       shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} onPress={openSearch} />
@@ -219,7 +224,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
             shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} autoFocus />
         </View>}
         activeContent={<View style={{ flex: 1, paddingTop: clearance + SEARCH_HEIGHT }}>
-          {account ? <ExploreDiscovery query={query} scope={tab} favorites={desktop} account={account}
+          {account ? <ExploreDiscovery actionFilter={actionFilter} onClearAction={() => setActionFilter(undefined)} query={query} scope={tab} favorites={desktop} account={account}
             bottomInset={bottomInset} onScrollChange={setSearchScrolled} onDetails={showSearchDetails}
             onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : null}
         </View>}>
@@ -227,7 +232,7 @@ function AccountNapplets({ account, initialAddress, tab, onTabChange }: { accoun
           {scanLoading || tab === 'favorites' && (!state.loaded || state.account !== account) ? <View>
             {restingSearch}
             <DelayedActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
-          </View> : account && tab === 'discover' ? <ExploreDiscovery scope={tab} favorites={desktop} account={account}
+          </View> : account && tab === 'discover' ? <ExploreDiscovery actionFilter={actionFilter} onClearAction={() => setActionFilter(undefined)} scope={tab} favorites={desktop} account={account}
             header={restingSearch} headerHeight={SEARCH_HEIGHT} onScrollBeginDrag={stopEmptySearch}
             bottomInset={bottomInset} onScrollChange={setScrolled} onDetails={showSearchDetails}
             onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (

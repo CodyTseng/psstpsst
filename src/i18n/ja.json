@@ -1076,6 +1076,12 @@
     "open_with_title": "アプリを選択",
     "open_with_profile": "「{{app}}」がプロフィールを開こうとしています。どのアプリで開きますか？",
     "open_with_content": "「{{app}}」がコンテンツを開こうとしています。どのアプリで開きますか？",
+    "no_compatible_apps": "対応するアプリがありません",
+    "open_with_empty": "「{{app}}」に対応するアプリがありません。「見つける」で対応アプリを探してお気に入りに追加し、戻ってもう一度お試しください。",
+    "handler_closed": "このアプリは利用できなくなりました",
+    "action_filter": "対応機能: {{action}}",
+    "auxiliary_action_filter": "補助アプリ: {{action}}",
+    "show_all_apps": "すべてのアプリを表示",
     "copy_address": "アドレスをコピー",
     "formats": {
       "napplet": "napplet",

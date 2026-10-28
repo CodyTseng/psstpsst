@@ -19,14 +19,14 @@ import { applicationPresentation } from '@/services/explore/model';
 import { exploreService,SUPPORTED_NAPP_DOMAINS } from '@/services/explore/service';
 
 export default function ExploreDetailsScreen() {
-  const {key,permissions,catalog,publisher}=useLocalSearchParams<{key:string;permissions?:string;catalog?:string;publisher?:string}>();
+  const {key,permissions,catalog,publisher,discovery:discoveryScope}=useLocalSearchParams<{key:string;permissions?:string;catalog?:string;publisher?:string;discovery?:string}>();
   const openPublisher=useOpenPublisher();
   const publisherApps=usePublisherApplications(publisher);
   const state=useExplore();
   const share=useExploreShare(state.account);
   const loadPublisher=publisherApps.load;
   useEffect(()=>{if(state.account&&loadPublisher)void loadPublisher(state.account);},[state.account,loadPublisher]);
-  const discovery=useDiscovery();
+  const discovery=useDiscovery(discoveryScope==='napps'?'napps':'all');
   const discovered=publisherApps.entries.find(entry=>entry.key===key)??(discovery.addressCache.account===state.account?discovery.addressCache.entries.find(entry=>entry.key===key):undefined)??discovery.entries.find(entry=>entry.key===key);
   const cachedApp=(catalog==='1'?discovered:undefined)??state.entries.find(entry=>entry.key===key)??(state.entry?.key===key?state.entry:undefined)??discovered;
   const metadata=useFavoriteMetadata(cachedApp,state.account);

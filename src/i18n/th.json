@@ -1076,6 +1076,12 @@
     "open_with_title": "เปิดด้วยแอปใด",
     "open_with_profile": "“{{app}}” ต้องการเปิดโปรไฟล์ คุณต้องการใช้แอปใด?",
     "open_with_content": "“{{app}}” ต้องการเปิดเนื้อหาในแอป คุณต้องการใช้แอปใด?",
+    "no_compatible_apps": "ไม่มีแอปที่รองรับ",
+    "open_with_empty": "ไม่มีแอปที่รองรับสำหรับ “{{app}}” ค้นหาแอปในหน้าสำรวจ เพิ่มในรายการโปรด แล้วกลับมาลองอีกครั้ง",
+    "handler_closed": "แอปนี้ไม่พร้อมใช้งานแล้ว",
+    "action_filter": "รองรับ: {{action}}",
+    "auxiliary_action_filter": "แอปเสริม: {{action}}",
+    "show_all_apps": "แสดงแอปทั้งหมด",
     "copy_address": "คัดลอกที่อยู่",
     "formats": {
       "napplet": "napplet",

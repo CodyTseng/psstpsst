@@ -1076,6 +1076,12 @@
     "open_with_title": "Open with",
     "open_with_profile": "“{{app}}” wants to open a profile. Which app would you like to use?",
     "open_with_content": "“{{app}}” wants to open content in an app. Which app would you like to use?",
+    "no_compatible_apps": "No compatible apps available",
+    "open_with_empty": "No compatible app is available for “{{app}}”. Find an app in Discover, add it to Favorites, then return and try again.",
+    "handler_closed": "This app is no longer available",
+    "action_filter": "Supports: {{action}}",
+    "auxiliary_action_filter": "Auxiliary apps: {{action}}",
+    "show_all_apps": "Show all apps",
     "copy_address": "Copy address",
     "formats": {
       "napplet": "napplet",

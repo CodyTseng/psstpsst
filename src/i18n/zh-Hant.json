@@ -1076,6 +1076,12 @@
     "open_with_title": "要用哪個應用開啟？",
     "open_with_profile": "「{{app}}」想開啟使用者資料。要用哪個應用開啟？",
     "open_with_content": "「{{app}}」想在應用中開啟內容。要用哪個應用開啟？",
+    "no_compatible_apps": "暫無可用的應用程式",
+    "open_with_empty": "暫無可供「{{app}}」使用的相容應用程式。前往探索尋找支援此內容的應用程式，加入收藏後返回重試。",
+    "handler_closed": "此應用程式已無法使用",
+    "action_filter": "支援：{{action}}",
+    "auxiliary_action_filter": "輔助應用程式：{{action}}",
+    "show_all_apps": "顯示所有應用程式",
     "copy_address": "複製地址",
     "formats": {
       "napplet": "napplet",
