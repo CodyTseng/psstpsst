@@ -91,6 +91,40 @@ test(
         }
       };
       const address = `http://127.0.0.1:${server.address().port}`;
+      if (process.env.NAPPLET_MEMBERSHIP_ONLY === '1') {
+        for (const theme of ['light', 'dark']) {
+          await page.goto(`${address}/?scenario=explore-detail&detail-actions=1&theme=${theme}`);
+          await page.getByRole('button', { name: 'Add app', exact: true }).click();
+          await page.getByText('App added', { exact: true }).waitFor();
+          await page.getByRole('button', { name: 'Remove app', exact: true }).waitFor();
+          const more = page.getByRole('button', { name: 'More', exact: true });
+          await more.click();
+          const menu = page.getByRole('dialog');
+          await menu.getByRole('button', { name: 'Remove app', exact: true }).click();
+          await page.getByText('App removed', { exact: true }).waitFor();
+          await more.click();
+          await menu.getByRole('button', { name: 'Add app', exact: true }).click();
+          await page.getByRole('button', { name: 'Remove app', exact: true }).click();
+          await page.getByText('App removed', { exact: true }).waitFor();
+          await page.goto(`${address}/?scenario=explore-discovery&theme=${theme}`);
+          await page.getByText('No apps added yet', { exact: true }).waitFor();
+          await page.getByRole('button', { name: 'Discover', exact: true }).click();
+          await page.getByText('Photo Gallery', { exact: true }).waitFor();
+          await page.getByRole('tab', { name: 'My apps', exact: true }).click();
+          await page.getByText('No apps added yet', { exact: true }).waitFor();
+          await page.goto(`${address}/?scenario=explore-discovery&list-actions=1&saved-apps=1&theme=${theme}`);
+          await page.getByRole('tab', { name: 'My apps', exact: true }).click();
+          await page.getByRole('tab', { name: 'Discover', exact: true }).click();
+          await page.getByText('Photo Gallery', { exact: true }).click({ button: 'right' });
+          await page.getByRole('button', { name: 'Add app', exact: true }).click();
+          await page.waitForFunction(() => document.title === 'move:Photo Gallery:1');
+          await page.getByRole('tab', { name: 'My apps', exact: true }).click();
+          await page.getByText('Photo Gallery', { exact: true }).waitFor();
+        }
+        assert.deepEqual(errors, []);
+        return;
+      }
+
       for (const theme of ['light', 'dark']) {
         for (const duration of ['Always', '1 hour']) {
           await page.goto(`${address}/?scenario=queued-approvals&theme=${theme}`);
@@ -585,7 +619,7 @@ test(
         await page.mouse.up();
         await page.waitForFunction(() => document.title === 'move:Notes:1');
         assert.equal(await shortcuts.nth(0).getByText('Photo Gallery', { exact: true }).count(), 1,
-          'Favorites without recent previews still supports drag sorting');
+          'My apps without recent previews still supports drag sorting');
       }
       for (const theme of ['light', 'dark']) {
         await page.goto(`${address}/?scenario=explore-discovery&list-actions=1&saved-apps=1&theme=${theme}`);
@@ -594,9 +628,9 @@ test(
         const first = await page.getByText('Notes', { exact: true }).boundingBox();
         const second = await page.getByText('Photo Gallery', { exact: true }).boundingBox();
         await page.mouse.click(first.x + 130, first.y + 5, { button: 'right' });
-        await page.getByRole('button', { name: 'Unfavorite', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Remove app', exact: true }).waitFor();
         await page.mouse.click(20, second.y + 5, { button: 'right' });
-        await page.getByRole('button', { name: 'Favorite', exact: true }).click();
+        await page.getByRole('button', { name: 'Add app', exact: true }).click();
         await page.waitForFunction(() => document.title === 'move:Photo Gallery:1');
       }
       for (const theme of ['light', 'dark']) {
@@ -606,27 +640,27 @@ test(
         const notes = page.getByText('Notes', { exact: true });
         await notes.waitFor();
         await notes.click({ button: 'right' });
-        await page.getByRole('button', { name: 'Unfavorite', exact: true }).click();
+        await page.getByRole('button', { name: 'Remove app', exact: true }).click();
         await page.waitForFunction(() => document.title === 'move:Notes:null');
         const bounds = await notes.boundingBox();
         await page.mouse.move(bounds.x + 10, bounds.y + 5);
         await page.mouse.down();
         await page.waitForTimeout(650);
         await page.mouse.up();
-        await page.getByRole('button', { name: 'Favorite', exact: true }).waitFor();
-        assert.equal(await page.getByRole('button', { name: 'Remove', exact: true }).count(), 0,
+        await page.getByRole('button', { name: 'Add app', exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: 'Remove from history', exact: true }).count(), 0,
           'discovery menus do not remove history');
-        await page.getByRole('button', { name: 'Favorite', exact: true }).click();
+        await page.getByRole('button', { name: 'Add app', exact: true }).click();
         await page.waitForFunction(() => document.title === 'move:Notes:0');
-        await page.getByRole('tab', { name: 'Favorites', exact: true }).click();
+        await page.getByRole('tab', { name: 'My apps', exact: true }).click();
         await page.getByText('Notes', { exact: true }).waitFor();
       }
       for(const theme of ['light','dark']) {
         await page.goto(`${address}/?scenario=explore-discovery&theme=${theme}`);
-        await page.getByText('Your space to explore',{exact:true}).waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error.message}\n${JSON.stringify(errors)}\n${await page.locator('body').innerText()}`);});
+        await page.getByText('No apps added yet',{exact:true}).waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error.message}\n${JSON.stringify(errors)}\n${await page.locator('body').innerText()}`);});
         await page.getByRole('tab',{name:'Discover',exact:true}).click();
         await page.getByText('Photo Gallery',{exact:true}).waitFor();
-        assert.equal(await page.getByRole('button',{name:'Favorite',exact:true}).count(),0);
+        assert.equal(await page.getByRole('button',{name:'Add app',exact:true}).count(),0);
         assert.equal(await page.getByText('Alice',{exact:true}).count(),2,'each app shows its publisher');
         for(const format of ['napplet','napp','nsite'])assert.equal(await page.getByText(format,{exact:true}).count(),0,'format badges stay out of app rows');
         assert.equal(await page.getByTestId('application-format-border').count(),0,'application artwork has no format border');
@@ -655,8 +689,8 @@ test(
         await page.getByText('example.com',{exact:true}).waitFor();
         await search.fill('');
         await page.getByText('Notes',{exact:true}).waitFor();
-        await page.getByRole('tab',{name:'Favorites',exact:true}).click();
-        await page.getByText('Your space to explore',{exact:true}).waitFor();
+        await page.getByRole('tab',{name:'My apps',exact:true}).click();
+        await page.getByText('No apps added yet',{exact:true}).waitFor();
         assert.equal(await page.getByText('Recently visited',{exact:true}).count(),0,'browsing discovery never creates a visit');
         if(process.env.NAPPLET_SIGNING_SCREENSHOTS)await page.screenshot({path:`${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-favorites.png`});
         await page.getByRole('tab',{name:'Discover',exact:true}).click();
@@ -698,13 +732,13 @@ test(
         const more = page.getByRole('button', { name: 'More', exact: true });
         await more.click();
         await page.getByRole('button', { name: 'Permissions', exact: true }).waitFor();
-        assert.equal(await page.getByRole('button', { name: 'Remove', exact: true }).count(), 0);
-        await page.getByRole('button', { name: 'Favorite', exact: true }).click();
-        await page.getByText('Added to favorites', { exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: 'Remove from history', exact: true }).count(), 0);
+        await page.getByRole('dialog').getByRole('button', { name: 'Add app', exact: true }).click();
+        await page.getByText('App added', { exact: true }).waitFor();
         await more.click();
-        assert.equal(await page.getByRole('button', { name: 'Remove', exact: true }).count(), 0);
-        await page.getByRole('button', { name: 'Unfavorite', exact: true }).click();
-        await page.getByText('Removed from favorites', { exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: 'Remove from history', exact: true }).count(), 0);
+        await page.getByRole('dialog').getByRole('button', { name: 'Remove app', exact: true }).click();
+        await page.getByText('App removed', { exact: true }).waitFor();
       }
       for(const theme of ['light','dark'])for(const kind of ['napp','nsite','website']) {
         await page.goto(`${address}/?scenario=explore-detail&kind=${kind}&theme=${theme}&needs-consent=1`);
@@ -727,11 +761,11 @@ test(
         await assertRuntimeHeader();
         await page.getByRole('button',{name:'App menu',exact:true}).click();
         const sheet=page.getByRole('dialog');
-        await sheet.getByRole('button',{name:'Favorite',exact:true}).click();
-        await sheet.getByText('Added to favorites',{exact:true}).waitFor();
-        await sheet.getByRole('button',{name:'Unfavorite',exact:true}).click();
-        await sheet.getByText('Removed from favorites',{exact:true}).waitFor();
-        await sheet.getByRole('button',{name:'Favorite',exact:true}).waitFor();
+        await sheet.getByRole('button',{name:'Add app',exact:true}).click();
+        await sheet.getByText('App added',{exact:true}).waitFor();
+        await sheet.getByRole('button',{name:'Remove app',exact:true}).click();
+        await sheet.getByText('App removed',{exact:true}).waitFor();
+        await sheet.getByRole('button',{name:'Add app',exact:true}).waitFor();
         await sheet.getByRole('button',{name:'Permissions',exact:true}).click();
         await sheet.getByText('Signing rules',{exact:true}).waitFor();
         assert.equal(await page.evaluate(()=>window.lastRoute),undefined);

@@ -38,11 +38,11 @@ import { usePrimaryPaneNavigation } from '@/components/navigation/primary-pane-n
 import { bottomBarHeight, spacing, uiDensity, useThemeColors } from '@/theme';
 
 const SEARCH_HEIGHT = uiDensity.searchBarHeight + spacing.sm;
-type ExploreMode = 'favorites' | 'discover';
+type ExploreMode = 'my-apps' | 'discover';
 
 export default function NappletsScreen() {
   const account = useActiveAccount((s) => s.activePubkey);
-  const [mode, setMode] = useState<{ account: string | null; value: ExploreMode; handoff?: number }>({ account, value: 'favorites' });
+  const [mode, setMode] = useState<{ account: string | null; value: ExploreMode; handoff?: number }>({ account, value: 'my-apps' });
   const { searchHandoff } = useLocalSearchParams<{ searchHandoff?: string }>();
   const pending = useExploreSearchHandoffStore(state => state.pending);
   const id = typeof searchHandoff === 'string' ? Number(searchHandoff) : NaN;
@@ -55,7 +55,7 @@ export default function NappletsScreen() {
     }
   }, [input, account, id, handoff]);
   return <AccountNapplets key={`${account ?? 'signed-out'}:${searchHandoff ?? ''}`} account={account} initialAddress={input} initialAction={handoff?.action}
-    tab={mode.account === account ? mode.value : 'favorites'} onTabChange={value => setMode(current => ({ ...current, account, value }))} />;
+    tab={mode.account === account ? mode.value : 'my-apps'} onTabChange={value => setMode(current => ({ ...current, account, value }))} />;
 }
 function AccountNapplets({ account, initialAddress, initialAction, tab, onTabChange }: { account: string | null; initialAddress?: string; initialAction?: { name: string; auxiliary: boolean }; tab: ExploreMode; onTabChange(value: ExploreMode): void }) {
   const [actionFilter, setActionFilter] = useState(initialAction);
@@ -86,19 +86,19 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
     showToast(t(key.startsWith('napplets.') ? key : 'napplets.request_failed'), { variant: 'error', target: 'primary' });
   }, [t]);
   const reportBackgroundError = useEffectEvent((error: unknown) => {
-    console.warn('[explore] Favorites load failed', error);
+    console.warn('[explore] My apps load failed', error);
     showError('napplets.request_failed');
   });
   const changeQuery = useCallback((value: string) => { setScan(null); setQuery(value); setSearchScrolled(false); }, []);
   const clearance = useScreenHeaderClearance();
   const bottomInset = bottomBarHeight + getBottomChromeInset(useSafeAreaInsets().bottom);
-  const needsFavorites = tab === 'favorites' || scan !== null;
+  const needsFavorites = tab === 'my-apps' || scan !== null;
   useEffect(() => {
     if (account && focused && needsFavorites)
       void exploreService.activate(account, { refresh: true }).catch(error => reportBackgroundError(error));
   }, [account, focused, needsFavorites]);
   useEffect(() => {
-    if (account && focused && searching && tab === 'favorites' && state.loaded && state.account === account)
+    if (account && focused && searching && tab === 'my-apps' && state.loaded && state.account === account)
       void exploreService.loadFavoriteSearchMetadata(account).catch(error => reportBackgroundError(error));
   }, [account, focused, searching, tab, state.loaded, state.account]);
   const loadMoreFavorites = useCallback(() => {
@@ -184,7 +184,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
     [account, setFavorite, showError],
   );
   const toggleFavorite = useCallback((app: ExploreEntry) => {
-    void setFavorite(app, !desktop.some(item => item.key === app.key));
+    return setFavorite(app, !desktop.some(item => item.key === app.key));
   }, [setFavorite, desktop]);
   const showPermissions = useCallback((app: ExploreEntry) => {
     navigation.open(app.release ? `/napplet-permissions/${app.release.event.id}` : `/explore-details?key=${encodeURIComponent(app.key)}&permissions=1${actionFilter ? '&discovery=napps' : ''}`);
@@ -203,7 +203,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
           accessibilityLabel={t('napplets.recent')} onPress={() => navigation.open('/explore-recent')} />}
         bordered={searching ? searchScrolled : scrolled}
         titleControl={<SegmentedControl compact value={tab}
-          options={[{ value: 'favorites', label: t('napplets.favorites') }, { value: 'discover', label: t('napplets.discover') }]}
+          options={[{ value: 'my-apps', label: t('napplets.my_apps') }, { value: 'discover', label: t('napplets.discover') }]}
           onChange={value => { onTabChange(value); setScrolled(false); }} />}
         right={
           <QrScanButton variant="plain" size={uiDensity.headerActionSize} iconSize={uiDensity.headerActionIconSize}
@@ -229,7 +229,7 @@ function AccountNapplets({ account, initialAddress, initialAction, tab, onTabCha
             onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : null}
         </View>}>
         <View style={{ flex: 1, paddingTop: clearance }}>
-          {scanLoading || tab === 'favorites' && (!state.loaded || state.account !== account) ? <View>
+          {scanLoading || tab === 'my-apps' && (!state.loaded || state.account !== account) ? <View>
             {restingSearch}
             <DelayedActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
           </View> : account && tab === 'discover' ? <ExploreDiscovery actionFilter={actionFilter} onClearAction={() => setActionFilter(undefined)} scope={tab} favorites={desktop} account={account}

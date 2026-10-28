@@ -12,7 +12,7 @@ import { ApplicationListRow } from './ApplicationListRow';
 type MenuApplication = GridApp & Partial<Pick<ExploreEntry, 'kind' | 'description' | 'release'>>;
 type Props<T extends MenuApplication> = {
   app: T; favorite: boolean; testID?: string;
-  onFavorite(app: T): void;
+  onFavorite(app: T): void | Promise<void>;
   onRemove?: (app: T) => void;
   onDetails(app: T): void;
   onPermissions(app: T): void;
@@ -41,14 +41,14 @@ function ContextRow<T extends MenuApplication>({ app, favorite, testID, onFavori
         { name: 'details', label: t('napplets.details') },
         { name: 'permissions', label: t('napplets.permissions_manage') },
         ...(!app.local ? [{ name: 'share', label: t('share.title') }] : []),
-        { name: 'favorite', label: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop') },
-        ...(onRemove ? [{ name: 'remove', label: t('common.remove') }] : []),
+        { name: 'favorite', label: t(favorite ? 'napplets.remove_app' : 'napplets.add_app') },
+        ...(onRemove ? [{ name: 'remove', label: t('napplets.remove_from_history') }] : []),
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'details') onDetails(app);
         else if (event.nativeEvent.actionName === 'permissions') onPermissions(app);
         else if (event.nativeEvent.actionName === 'share' && !app.local) onShare(app);
-        else if (event.nativeEvent.actionName === 'favorite') onFavorite(app);
+        else if (event.nativeEvent.actionName === 'favorite') void onFavorite(app);
         else if (event.nativeEvent.actionName === 'remove') onRemove?.(app);
       }} />
     {anchor ? <NappletAppMenu app={app} anchor={anchor} point favorite={favorite} onFavorite={onFavorite} onClose={() => setAnchor(null)}

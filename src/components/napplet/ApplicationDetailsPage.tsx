@@ -9,6 +9,7 @@ import { useScrolled } from '@/hooks/use-scrolled';
 import { ApplicationInfo } from './NappletInfo';
 import { ApplicationComments } from './ApplicationComments';
 import { ApplicationOpenSetting } from './ApplicationOpenSetting';
+import { ApplicationDetailsMembership } from './ApplicationDetailsMembership';
 import { ApplicationDetailsActions } from './ApplicationDetailsActions';
 import type { ExploreEntry, ApplicationInfo as ApplicationPresentation } from '@/services/explore/model';
 import { spacing,useThemeColors } from '@/theme';
@@ -28,11 +29,14 @@ export function ApplicationDetailsPage({application,error,access,unsupported=[],
   const [presented,setPresented]=useState<string>();
   const ready=!!application&&(access.loaded||!!error||presented===identity);
   if(application&&access.loaded&&presented!==identity)setPresented(identity);
+  const openAction=<AppButton key="open" variant="primary" fullWidth={false} size="sm" label={t('napplets.open')}
+    disabled={unsupported.length>0||!access.loaded} onPress={onOpen}/>;
+  const membershipAction=actions?.account ? <ApplicationDetailsMembership key="membership" entry={actions.entry} account={actions.account} /> : null;
   const header=<View style={{padding:spacing.lg,paddingTop:clearance+spacing.lg,gap:spacing.xl}}>
-    {ready?<ApplicationInfo release={application} onPublisher={onPublisher} unsupported={unsupported}
-      action={<AppButton variant="primary" fullWidth={false} size="sm"
-        label={t('napplets.open')}
-        disabled={unsupported.length>0||!access.loaded} onPress={onOpen}/>}/>
+    {ready?<ApplicationInfo release={application} onPublisher={onPublisher} unsupported={unsupported} actionPlacement="responsive"
+      action={inline=><View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }}>
+        {inline ? [membershipAction,openAction] : [openAction,membershipAction]}
+      </View>}/>
       :!error?<ActivityIndicator color={c.accent}/>:null}
     {ready && actions?.account ? <ApplicationOpenSetting entry={actions.entry} account={actions.account} /> : null}
   </View>;

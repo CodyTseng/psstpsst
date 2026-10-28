@@ -15,6 +15,7 @@ jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: 'Header', u
 jest.mock('@/hooks/use-scrolled', () => ({ useScrolled: () => ({ scrolled: false, scrollProps: {} }) }));
 jest.mock('../NappletInfo', () => ({ ApplicationInfo: 'Info' }));
 jest.mock('../ApplicationComments', () => ({ ApplicationComments: 'Comments' }));
+jest.mock('../ApplicationDetailsMembership', () => ({ ApplicationDetailsMembership: 'Membership' }));
 jest.mock('../ApplicationDetailsActions', () => ({ ApplicationDetailsActions: 'Actions' }));
 jest.mock('../ApplicationOpenSetting', () => ({ ApplicationOpenSetting: 'OpeningPreference' }));
 jest.mock('@/theme', () => ({ spacing: { lg: 16, xl: 24, sm: 8 }, useThemeColors: () => ({ accent: 'accent' }) }));
@@ -60,7 +61,7 @@ it('passes unsupported capabilities into application information and keeps Open 
     access={{ loaded: true, approved: true }} unsupported={['ui', 'dev', 'ui']}
     onOpen={() => {}} onPublisher={() => {}} />); });
   const info=renderer.root.findByType('Info' as never);
-  expect(info.props.action.props.disabled).toBe(true);
+  expect(info.props.action(false).props.children.find((child: { key?: string } | null) => child?.key === 'open').props.disabled).toBe(true);
   expect(info.props.unsupported).toEqual(['ui', 'dev', 'ui']);
   expect(info.props.notice).toBeUndefined();
   act(() => renderer.unmount());
@@ -90,5 +91,17 @@ it.each([false, true])('places the webpage preference in the details body with d
   } else {
     expect(renderer.root.findByType(ApplicationOpenSetting).props).toEqual({ entry, account: 'account' });
   }
+  act(() => renderer.unmount());
+});
+
+it('puts Open at the edge beside identity and first when actions are below', () => {
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<ApplicationDetailsPage application={applicationPresentation(entry)}
+    access={{ loaded: true, approved: true }} actions={{ entry, account: 'account' }}
+    onOpen={() => {}} onPublisher={() => {}} />); });
+  const keys = (inline: boolean) => renderer.root.findByType('Info' as never).props.action(inline).props.children.map((child: { key: string }) => child.key);
+  expect(keys(false)).toEqual(['open', 'membership']);
+  expect(keys(true)).toEqual(['membership', 'open']);
+  expect(keys(false)).toEqual(['open', 'membership']);
   act(() => renderer.unmount());
 });

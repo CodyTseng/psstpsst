@@ -3,7 +3,8 @@ import { Global } from '@solar-icons/react-native/category/map/Linear/Global';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import Copy from 'lucide-react-native/icons/copy';
 import Check from 'lucide-react-native/icons/check';
-import Star from 'lucide-react-native/icons/star';
+import Plus from 'lucide-react-native/icons/plus';
+import Trash from 'lucide-react-native/icons/trash-2';
 import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { getExploreState, useExplore } from '@/stores/explore.store';
 import { exploreService } from '@/services/explore/service';
@@ -54,6 +55,7 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
       void exploreService.activate(account).catch(() => showToast(t('napplets.request_failed'), { variant: 'error', target: 'detail' }));
   }, [account, t]);
   const actionSize = uiDensity.profileActionSize + spacing.lg;
+  const MembershipIcon = favorite ? Trash : Plus;
   const actionWidth = actionSize + spacing.sm;
   const actions = [
     { key: 'copy', label: t(copied ? 'common.copied' : 'common.copy'), accessibilityLabel: t(copied ? 'common.copied' : 'napplets.copy_address'), icon: copied
@@ -62,15 +64,16 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
     ...(onOpenExternal ? [{ key: 'browser' as const, label: t('napplets.browser_short'), accessibilityLabel: t('napplets.browser_open_default'),
       icon: <Global size={spacing.xl} color={c.text} /> }] : []),
     ...(!entry.local ? [{ key: 'share' as const, label: t('share.title'), icon: <Share size={spacing.xl} color={c.text} /> }] : []),
-    ...(account ? [{ key: 'favorite' as const, label: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'), icon: <Star size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> }] : []),
     { key: 'settings', label: t('napplets.permissions_manage'), icon: <ShieldCheck size={spacing.xl} color={c.text} /> },
     { key: 'reload', label: t('napplets.runtime_reload'), icon: <RotateCw size={spacing.xl} color={c.text} strokeWidth={iconStrokeWidth.default} /> },
+    ...(account ? [{ key: 'favorite' as const, label: t(favorite ? 'napplets.remove_app' : 'napplets.add_app'), icon: <MembershipIcon size={spacing.xl} color={favorite ? c.danger : c.text} strokeWidth={iconStrokeWidth.default} /> }] : []),
   ] as const;
   return <HorizontalScrollView
     containerStyle={{ marginHorizontal: -spacing.lg }}
     contentContainerStyle={{ paddingHorizontal: spacing.lg - (actionWidth - actionSize) / 2, gap: spacing.xs, alignItems: 'flex-start' }}>
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
       width={actionWidth} size={actionSize}
+      tone={action.key === 'favorite' && favorite ? 'danger' : 'default'}
       singleLineLabel labelVariant="micro" icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
       onPress={() => { if (action.key === 'copy') void copyText(applicationCopyAddress(entry)); else if (action.key === 'favorite') void setFavorite(entry, !favorite); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
   </HorizontalScrollView>;

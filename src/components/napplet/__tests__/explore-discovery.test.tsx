@@ -51,7 +51,7 @@ jest.mock('@/services/explore/model', () => ({ applicationListEntry: (entry: unk
 let renderer: ReactTestRenderer;
 let mockAction: { name: string; auxiliary: boolean } | undefined;
 let mockQuery = '';
-let mockScope: 'favorites' | 'discover' = 'discover';
+let mockScope: 'my-apps' | 'discover' = 'discover';
 let mockFavorites: ExploreEntry[] = [];
 const screen = () => <ExploreDiscovery actionFilter={mockAction} onClearAction={() => { mockAction = undefined; renderer.update(screen()); }} query={mockQuery} scope={mockScope} favorites={mockFavorites} account="account" onFavorite={() => {}} onPermissions={() => {}} onShare={() => {}} bottomInset={0} onDetails={() => {}} onScrollChange={() => {}} />;
 beforeEach(() => {
@@ -236,7 +236,7 @@ it('searches only saved Favorites and keeps relay discovery dormant in that scop
   const favorite = { key: 'favorite', title: 'Photo tool', description: 'Saved app' } as ExploreEntry;
   const discovered = { key: 'discovered', title: 'Photo editor', description: 'Public app' } as ExploreEntry;
   mockFavorites = [favorite]; mockState.entries = [discovered];
-  mockScope = 'favorites'; mockQuery = 'photo';
+  mockScope = 'my-apps'; mockQuery = 'photo';
   await act(async () => { renderer = create(screen()); });
   expect(renderer.root.findByType(FlatList).props.data).toEqual([favorite]);
   expect(discoverApplications).not.toHaveBeenCalled();
@@ -262,7 +262,7 @@ it('uses the saved favorite set instead of stale catalogue positions for row men
 
 
 it.each([
-  ['light', 'favorites'], ['dark', 'favorites'], ['light', 'discover'], ['dark', 'discover'],
+  ['light', 'my-apps'], ['dark', 'my-apps'], ['light', 'discover'], ['dark', 'discover'],
 ] as const)('shows only no results for an unsuccessful address search in %s %s', async (scheme, scope) => {
   mockScheme = scheme;
   mockScope = scope;
@@ -311,12 +311,12 @@ it.each(['light', 'dark'] as const)('waits for the first catalogue page before k
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'search.empty')).toBe(true);
 });
 
-it.each(['favorites', 'address'] as const)('keeps %s searches independent of the first Discover page', async mode => {
+it.each(['my-apps', 'address'] as const)('keeps %s searches independent of the first Discover page', async mode => {
   mockState.loaded = false;
   mockState.loading = true;
   const match = { key: 'photo', title: 'Photo Gallery', description: '' } as ExploreEntry;
-  if (mode === 'favorites') {
-    mockScope = 'favorites'; mockQuery = 'photo'; mockFavorites = [match];
+  if (mode === 'my-apps') {
+    mockScope = 'my-apps'; mockQuery = 'photo'; mockFavorites = [match];
   } else {
     mockQuery = 'https://example.com/';
     Object.assign(mockAddressSearch, { active: true, loading: false, entry: match });

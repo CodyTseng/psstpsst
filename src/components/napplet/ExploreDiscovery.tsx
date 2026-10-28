@@ -26,8 +26,8 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   actionFilter?: ApplicationActionFilter; onClearAction?: () => void;
   header?: ReactNode; headerHeight?: number; onScrollBeginDrag?: () => void;
   account: string; onDetails: (app: ExploreEntry) => void;
-  onFavorite: (app: ExploreEntry) => void; onPermissions: (app: ExploreEntry) => void; onShare: (app: ExploreEntry) => void;
-  bottomInset: number; onScrollChange: (scrolled: boolean) => void; query?: string; scope?: 'favorites' | 'discover'; favorites?: ExploreEntry[];
+  onFavorite: (app: ExploreEntry) => void | Promise<void>; onPermissions: (app: ExploreEntry) => void; onShare: (app: ExploreEntry) => void;
+  bottomInset: number; onScrollChange: (scrolled: boolean) => void; query?: string; scope?: 'my-apps' | 'discover'; favorites?: ExploreEntry[];
 }) {
   const discoveryScope = actionFilter ? 'napps' : 'all';
   const state = useDiscovery(discoveryScope);
@@ -37,9 +37,9 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const [searchWindow, setSearchWindow] = useState({ key: searchKey, count: 20 });
   const searchCount = searchWindow.key === searchKey ? searchWindow.count : 20;
-  const catalogueReady = scope === 'favorites' || state.loaded;
+  const catalogueReady = scope === 'my-apps' || state.loaded;
   const entries = useMemo(() => {
-    const source = scope === 'favorites' ? favorites : catalogueReady ? state.entries : EMPTY_ENTRIES;
+    const source = scope === 'my-apps' ? favorites : catalogueReady ? state.entries : EMPTY_ENTRIES;
     return actionFilter ? source.filter(app => supportsApplicationAction(app, actionFilter)) : source;
   }, [scope, favorites, catalogueReady, state.entries, actionFilter]);
   const list = useRef<FlatList<ExploreEntry>>(null);
@@ -80,7 +80,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
   }).map(item => item.app) : entries, [address.active, catalogueReady, index, terms, authorNames, entries]);
   const data = useMemo(() => {
     if (address.active) return address.entry && (!actionFilter || supportsApplicationAction(address.entry, actionFilter)) ? [address.entry] : [];
-    return searching || actionFilter || scope === 'favorites' ? matches.slice(0, searchCount) : state.visibleEntries;
+    return searching || actionFilter || scope === 'my-apps' ? matches.slice(0, searchCount) : state.visibleEntries;
   }, [address.active, address.entry, searching, scope, matches, searchCount, state.visibleEntries, actionFilter]);
   const c = useThemeColors();
   const { t } = useTranslation();
@@ -115,7 +115,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
       tintColor={c.textMuted} colors={[c.textMuted]} /> : undefined}
     onEndReached={() => {
       if (address.active) return;
-      if (searching || actionFilter || scope === 'favorites') {
+      if (searching || actionFilter || scope === 'my-apps') {
         if (searchCount < matches.length || actionFilter && scope === 'discover' && matches.length >= searchCount && state.hasMore && !state.error) setSearchWindow({ key: searchKey, count: searchCount + 20 });
         return;
       }
@@ -137,9 +137,9 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
     </View> : null}</> : null}
     ListEmptyComponent={filteredPending || address.active && address.loading || cataloguePending && (searching || !pullRefreshing)
       ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
-      : !error && (searching || scope === 'favorites' || !state.error && !state.loading && !state.hasMore) ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
+      : !error && (searching || scope === 'my-apps' || !state.error && !state.loading && !state.hasMore) ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
         <Compass size={spacing['3xl']} color={c.textMuted} />
-        <AppText variant="title" align="center">{t(searching || scope === 'favorites' ? 'search.empty' : actionFilter ? 'napplets.no_compatible_apps' : 'napplets.discovery_empty')}</AppText>
+        <AppText variant="title" align="center">{t(searching || scope === 'my-apps' ? 'search.empty' : actionFilter ? 'napplets.no_compatible_apps' : 'napplets.discovery_empty')}</AppText>
         {!searching && scope === 'discover' ? <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} /> : null}
       </View> : null}
     renderItem={({ item }) => <ApplicationContextRow app={item} favorite={favoriteKeys.has(item.key)}

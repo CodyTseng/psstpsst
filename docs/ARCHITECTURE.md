@@ -808,31 +808,34 @@ Failed lookups retain usable releases and retry with a bounded delay. Parsed
 manifests are memoized within a bounded process cache; browsing caches public
 metadata without recording visits or publishing it to the local relay.
 
-Favorites are ordered references from the account's encrypted kind-30267 event,
+My apps are ordered references from the account's encrypted kind-30267 event,
 not a separate membership table. The private-list revision state retains a derived
 decrypted snapshot for offline reads and a durable draft for unsigned local edits.
 Signing and the existing configuration outbox atomically retire the exact draft
 revision. Remote reconciliation cannot overwrite dirty or pending local work.
-History remains device-local. Metadata changes preserve favorite order and recency;
+History remains device-local. Metadata changes preserve application order and recency;
 database change notifications keep sibling hosts' read models current.
+Application membership controls query the committed plaintext list or local
+application row through async live queries, independently of Explore navigation
+and metadata hydration. An unresolved membership is distinct from non-membership.
 Cross-application action and intent handlers derive membership only from the
-current account's favorites. Installations, history and live endpoints do not
-grant membership. Dispatch rechecks favorites after target selection;
-removing a favorite excludes it from subsequent handoffs without closing its app.
-Favorites reads its saved membership snapshot and only the requested metadata
+current account's My apps library. Installations, history and live endpoints do not
+grant membership. Dispatch rechecks membership after target selection;
+removing an app excludes it from subsequent handoffs without closing its app.
+My apps reads its saved membership snapshot and only the requested metadata
 pages. Saved local titles render before first-page manifest verification and
 metadata hydration, which run in a later task. Visible signed references missing
 local manifests resolve remotely in bounded background workers, allowing each
 device to fetch its own artwork without delaying local pagination. Failed
-resolutions retain the saved reference and retry on a later Favorites visit.
+resolutions retain the saved reference and retry on a later My apps visit.
 List navigation never decrypts
 events or waits for a signer; configuration synchronization prepares the durable
 plaintext snapshot. It does not initialize application runtimes or poll metadata; shared
 metadata events update existing entries directly. Runtime initialization belongs
 to launch and application-management flows. History changes never invalidate
-Favorites membership. History listing has a separate
+My apps membership. History listing has a separate
 page-owned reader and is queried only while its page is open, using bounded
-keyset pages independently of the Favorites read model. Each entry into Favorites
+keyset pages independently of the My apps read model. Each entry into My apps
 or History queries its own first page again; account startup does not prepare
 either list. Page metadata reads use the current database rows rather than a
 potentially stale process mirror.
@@ -853,7 +856,7 @@ only after its last consumer leaves.
 
 Application libraries retain their loaded account snapshot across route changes
 and share unfinished initialization. Account lifecycle changes discard that
-snapshot; visible library consumers restore unloaded snapshots. Local Favorites
+snapshot; visible library consumers restore unloaded snapshots. Local My apps
 reads do not wait behind legacy-library reads.
 
 Discovery queries napp and napplet manifests in bounded pages only from dedicated
@@ -867,7 +870,7 @@ resolving a manifest from explicit hints or, when absent, author write relays pl
 dedicated format relays. Its bounded account-scoped result cache does not admit
 applications to discovery or record visits. Query replacement cancels stale reads.
 Browsing never records a visit or writes to the local relay; adding
-a favorite persists its event reference independently of history.
+an app to My apps persists its event reference independently of history.
 Publisher catalogues additionally include nsites from dedicated relays, with an
 exact author filter and local authorship verification. Their bounded, temporary results share the
 application detail flow without changing saved applications or discovery results.
@@ -880,14 +883,14 @@ stay separate from private messages and mini-app signing grants. Explicit user
 posts use the account identity signer; account lifecycle changes cancel reads,
 signing and publishing before results can enter a replacement session.
 
-Favorite membership/order is read from the event snapshot; account-scoped
-metadata projections and distinct-address history remain separate. Favorites synchronize as a private NIP-51
+Application membership/order is read from the event snapshot; account-scoped
+metadata projections and distinct-address history remain separate. My apps synchronize as a private NIP-51
 kind-30267 snapshot through the shared private-list queue, configuration outbox
 and self-event intake. A full local draft and dirty revision commit before
 background encryption/signing; dirty or signed-pending work blocks remote echoes.
 Recency and grants remain device-local. Unresolved references retain membership;
 verified metadata hydrates in bounded workers and refreshes one entry at a time.
-See [the favorites wire format](protocols/application-favorites.md).
+See [the application-list wire format](protocols/application-favorites.md).
 Opening changes recency only. The cache is bounded
 by 512 recent addresses plus 512 shortcuts. Existing napplet membership and recency
 migrate atomically. Platform website data uses account-specific profiles; removing
@@ -915,7 +918,7 @@ target-specific access review and an atomic version comparison. Replacements
 clear signer/browser authorization in that transaction and invalidate old
 documents after commit. Document-owned authorization writes check the installed
 version, including across sibling hosts. Failed transitions retain old grants. Local desktop
-membership never enters synchronized signed favorites. Local code never gains
+membership never enters synchronized application lists. Local code never gains
 the installer's permissions or a fabricated publisher identity.
 
 Napplets run under the current persisted account in a separate platform container.

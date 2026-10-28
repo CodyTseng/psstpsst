@@ -342,13 +342,13 @@ const GridItem = memo(function GridItem({ app, source, index, width, height, ico
         onContextMenu: (event: DesktopContextMenuEvent) => onMenu(app, source, event, icon.current),
       } : {})}>
         <NappletTile app={app} iconSize={iconSize} iconRef={icon} hideLabel={hideLabel}
-          accessibilityActions={source === 'recent' ? [{ name: 'add', label: t('napplets.add_to_desktop') }] : [
+          accessibilityActions={source === 'recent' ? [{ name: 'add', label: t('napplets.add_app') }] : [
             { name: 'details', label: t('napplets.details') },
             { name: 'permissions', label: t('napplets.permissions_manage') },
             { name: 'share', label: t('share.title') },
             { name: 'earlier', label: t('napplets.move_earlier') },
             { name: 'later', label: t('napplets.move_later') },
-            { name: 'remove', label: t('napplets.remove_from_desktop') },
+            { name: 'remove', label: t('napplets.remove_app') },
           ]}
           onAccessibilityAction={(event) => onAction(app, event.nativeEvent.actionName, index)}
           onPress={() => onOpen(app)} />

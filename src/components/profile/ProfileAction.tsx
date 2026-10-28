@@ -11,7 +11,7 @@ type Props = {
   accessibilityLabel?: string;
   onPress?: () => void;
   disabled?: boolean;
-  /** `danger` tints the label red for destructive actions (e.g. Remove). */
+  /** Match the label and icon tone for destructive actions. */
   tone?: 'default' | 'danger';
   shape?: 'circle' | 'square';
   /** Fixed slots preserve action order in a horizontally scrolling rail. */
@@ -53,7 +53,7 @@ export function ProfileAction({ icon, label, accessibilityLabel, onPress, disabl
       />
       <AppText
         variant={labelVariant}
-        tone={tone === 'danger' ? 'danger' : 'muted'}
+        tone={tone === 'default' ? 'muted' : tone}
         align="center"
         numberOfLines={singleLineLabel ? 1 : undefined}
         style={{ alignSelf: 'stretch' }}

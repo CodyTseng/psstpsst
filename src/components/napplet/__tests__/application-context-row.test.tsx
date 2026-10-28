@@ -27,7 +27,7 @@ it('anchors a browser context menu to the pointer rather than the full row', asy
 it('anchors a long-press menu to the touch and keeps Remove available on favorited history', async () => {
   await act(async () => { renderer = create(<ApplicationContextRow {...props} />); });
   const row = renderer.root.findByType(ApplicationListRow);
-  expect(row.props.accessibilityActions).toContainEqual({ name: 'remove', label: 'common.remove' });
+  expect(row.props.accessibilityActions).toContainEqual({ name: 'remove', label: 'napplets.remove_from_history' });
   await act(async () => { row.props.onLongPress({ nativeEvent: { pageX: 80, pageY: 320 } }); });
   expect(renderer.root.findByType(NappletAppMenu).props.anchor).toEqual({ x: 80, y: 320 });
   act(() => { row.props.onAccessibilityAction({ nativeEvent: { actionName: 'remove' } }); });
@@ -41,7 +41,16 @@ it('omits history removal in discovery while exposing the favorite toggle', asyn
   await act(async () => { renderer = create(<ApplicationContextRow {...props} onRemove={undefined} favorite={false} />); });
   const row = renderer.root.findByType(ApplicationListRow);
   expect(row.props.accessibilityActions.some((item: { name: string }) => item.name === 'remove')).toBe(false);
-  expect(row.props.accessibilityActions).toContainEqual({ name: 'favorite', label: 'napplets.add_to_desktop' });
+  expect(row.props.accessibilityActions).toContainEqual({ name: 'favorite', label: 'napplets.add_app' });
   act(() => { row.props.onAccessibilityAction({ nativeEvent: { actionName: 'favorite' } }); });
   expect(onFavorite).toHaveBeenCalledWith(app);
+});
+
+it('keeps discovery rows free of membership buttons and opens details on press', async () => {
+  await act(async () => { renderer = create(<ApplicationContextRow {...props} favorite={false} />); });
+  const row = renderer.root.findByType(ApplicationListRow);
+  expect(row.props.trailing).toBeUndefined();
+  act(() => { row.props.onPress(); });
+  expect(onDetails).toHaveBeenCalledWith(app);
+  expect(onFavorite).not.toHaveBeenCalled();
 });

@@ -44,6 +44,12 @@ const { nappletStore, nappletService } = require('../../src/services/napplet/ser
 const { useThemeStore } = require('../../src/stores/theme.store') as typeof import('../../src/stores/theme.store');
 require('../../src/i18n');
 const params = new URLSearchParams(location.search);
+const membershipHooks = require('../../src/hooks/use-application-membership') as typeof import('../../src/hooks/use-application-membership');
+membershipHooks.useApplicationMembership = (account, entry) => {
+  const state = (require('../../src/stores/explore.store') as typeof import('../../src/stores/explore.store')).useExplore();
+  return { added: state.account === account && state.loaded ? state.entries.some(app => app.key === entry.key && app.desktopPosition !== null) : undefined, error: undefined };
+};
+
 const browserPermissionRepository = require('../../src/services/explore/browser-permission-store') as typeof import('../../src/services/explore/browser-permission-store');
 browserPermissionRepository.readBrowserPermissions = async () => [];
 

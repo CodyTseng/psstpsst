@@ -908,7 +908,23 @@ Generated Nearby names follow the current app language's word order and grammar.
 Saved names remain stable across language changes; explicit regeneration uses
 the newly selected language.
 
-Explore keeps compact Favorites/Discover mode selection beside Scan in its fixed
+My apps lists the applications added by the current account. Adding
+an app makes it eligible for compatible handoffs without granting access.
+Removing it excludes subsequent handoffs while preserving history, data and
+permissions. Add actions use a plus icon; remove actions use a trash icon. Reversible removal from
+My apps uses danger text and icons across menus, buttons and action rails.
+Runtime action rails place application membership actions after utility actions.
+Discover rows open application details; membership controls stay out of the
+list’s resting layout.
+Application details pair the primary Open action with Add app for unsaved
+applications or a danger-tone Remove app for saved ones. Membership changes
+never launch or close the application. Detail actions align beside app identity
+when space permits and wrap beneath it on narrower content panes. The primary
+Open action follows membership controls at the logical end when beside identity;
+when the group moves below, Open comes first. One responsive layout decision
+controls both placement and button order.
+
+Explore keeps compact My apps/Discover mode selection beside Scan in its fixed
 header, without a redundant Explore title. Like Chats and Contacts, its resting
 search field belongs to the scrolling content; tapping it opens the shared search
 transition, with editable chrome fixed only while search is active. Discover
@@ -922,7 +938,7 @@ when there are no usable results; partial and cached results stay visible withou
 an error banner.
 The first three tabs keep the shared title-row height and begin their search
 fields immediately below that row, without extra top padding.
-Keywords persist across mode changes: Favorites searches saved shortcuts, while
+Keywords persist across mode changes: My apps searches saved shortcuts, while
 Discover searches the already-fetched catalogue. Both scopes match application
 names, descriptions and resolved publisher names. Discover keyword matching waits
 for its first catalogue page to resolve; pending searches show loading rather
@@ -931,7 +947,7 @@ Both Explore and home scanning
 open exact application naddr references in their details page and website URLs
 in their application container, without changing the selected search scope.
 Explicit Lightning/LNURL links retain their wallet flow in the home scanner.
-Empty Favorites opens Discover rather than a separate address-entry task.
+Empty My apps opens Discover rather than a separate address-entry task.
 Discover lists verified napps and napplets, excluding nsites, without recording visits or adding
 shortcuts until the user chooses an action. Exact naddr and URL input selects address lookup:
 local matches appear first, naddr hints choose manifest relays, and hintless
@@ -951,11 +967,11 @@ has no format border. Website rows show a muted web label below the title;
 signed-application rows omit format badges. Application information shows
 the format as muted caption text
 beneath the title. Both modes open the shared application
-details. Favorites displays only saved shortcuts in its vertically scrolling
-grid without a redundant section heading. Favorites reads and reveals local
+details. My apps displays only saved shortcuts in its vertically scrolling
+grid without a redundant section heading. My apps reads and reveals local
 application metadata in pages of 50 as the user scrolls. Both Explore modes keep the leading
 header history action, which opens the dedicated recent-use page;
-recent apps do not appear inline in Favorites. History loads on entry and appends
+recent apps do not appear inline in My apps. History loads on entry and appends
 50 older entries at a time as the user scrolls. History reuses Discover application
 rows with artwork, a single-line description and publisher identity. Pressing a
 history row opens application details. Running-state dots remain
@@ -988,12 +1004,12 @@ share right-click and long-press menus near the pointer or touch position, clamp
 to safe viewport bounds. Right-clicking another visible app replaces the open menu
 and its action target. Menu-enabled row text does not enter text selection
 during a hold. Their menus offer details, permissions, sharing and
-Favorite/Unfavorite. Every history row also offers danger-tone Remove, including
-favorited apps. The application-detail header menu exposes the same permissions,
-sharing and Favorite/Unfavorite actions, plus Copy. History removal belongs to
-the recent-use list, not application details. Runtime menu sheets include Favorite/Unfavorite in their bottom
-action rail. Every menu favorite change confirms success with a bottom toast;
-failures show error feedback. Favorite removal is labelled Unfavorite throughout Explore. Removing recent usage preserves the
+Add app/Remove app. Every history row also offers danger-tone Remove from history, including
+added apps. The application-detail header menu exposes the same permissions,
+sharing and Add app/Remove app actions, plus Copy. History removal belongs to
+the recent-use list, not application details. Runtime menu sheets include Add app/Remove app in their bottom
+action rail. Every app membership change confirms success with a bottom toast;
+failures show error feedback. Removing an app is labelled Remove app throughout Explore. Removing recent usage preserves the
 desktop shortcut and application state. Cancelling a drag leaves the desktop intact.
 There is no pin state or browser-style forward/back toolbar. The address entry accepts both Nostr addresses and website URLs. Pointer menus and accessibility actions
 provide equivalent add, move and remove operations. Removing a shortcut preserves

@@ -53,10 +53,10 @@ export function NappletRecentTile<T extends GridApp>({ app, width, height, iconS
         { name: 'permissions', label: t('napplets.permissions_manage') },
         ...(!app.local ? [{ name: 'share', label: t('share.title') }] : []),
         ...(app.desktopPosition === null ? [
-          { name: 'add', label: t('napplets.add_to_desktop') },
+          { name: 'add', label: t('napplets.add_app') },
         ] : []),
-        ...(app.desktopPosition !== null ? [{ name: 'unfavorite', label: t('napplets.remove_from_desktop') }] : []),
-        { name: 'remove', label: t('common.remove') },
+        ...(app.desktopPosition !== null ? [{ name: 'unfavorite', label: t('napplets.remove_app') }] : []),
+        { name: 'remove', label: t('napplets.remove_from_history') },
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'details') onDetails(app);

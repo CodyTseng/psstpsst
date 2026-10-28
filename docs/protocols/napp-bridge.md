@@ -156,9 +156,9 @@ or publish anything. See [implementation and limits](../implementation/napp-ui-d
 
 `napp.registerAction(pattern, handler?)` registers a document-scoped handler;
 omitting the callback permits a popstate-only handler. `napp.action(name, payload,
-options?)` selects a live handler belonging to a favorite application or a verified
-favorite application declaring the action. Both paths use the caller's account;
-an explicit `instance` cannot bypass favorite membership. Removing a favorite
+options?)` selects a live handler belonging to an application in My apps or a verified
+My apps entry declaring the action. Both paths use the caller's account;
+an explicit `instance` cannot bypass My apps membership. Removing an app
 excludes even its running handlers from subsequent selection and delivery.
 The chooser names the caller and content purpose and asks which app to
 open it with. Candidate rows reuse discovery's icons, names, publishers and format

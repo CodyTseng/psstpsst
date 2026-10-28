@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import Copy from 'lucide-react-native/icons/copy';
-import Star from 'lucide-react-native/icons/star';
+import Plus from 'lucide-react-native/icons/plus';
+import Trash from 'lucide-react-native/icons/trash-2';
 import { ShieldCheck } from '@solar-icons/react-native/category/security/Linear/ShieldCheck';
 import { router } from 'expo-router';
 import { useExplore } from '@/stores/explore.store';
@@ -25,6 +26,7 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
   const ready = !!owner && state.account === owner && state.loaded;
   const saved = ready ? state.entries.find(app => app.key === entry.key) : undefined;
   const favorite = saved?.desktopPosition != null;
+  const MembershipIcon = favorite ? Trash : Plus;
   const failed = () => showToast(t('napplets.request_failed'), { variant: 'error', target: 'detail' });
   const setFavorite = useApplicationFavorite(owner, 'detail');
   const trigger = useRef<View>(null);
@@ -49,8 +51,8 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={colors.text} />,
         onPress: () => router.push(entry.release ? `/napplet-permissions/${entry.release.event.id}` : `/explore-details?key=${encodeURIComponent(entry.key)}&permissions=1`) },
       ...(onShare && !entry.local ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={colors.text} />, onPress: onShare }] : []),
-      ...(ready ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'),
-        icon: <Star size={size} strokeWidth={iconStrokeWidth.default} color={colors.text} />,
+      ...(ready ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_app' : 'napplets.add_app'), tone: favorite ? 'danger' as const : 'default' as const,
+        icon: <MembershipIcon size={size} strokeWidth={iconStrokeWidth.default} color={favorite ? colors.danger : colors.text} />,
         onPress: () => { void setFavorite(saved ?? entry, !favorite); } }] : []),
     ]} />
   </View>;

@@ -2,16 +2,16 @@
 
 PsstPsst hosts HTML napplets, including embedded single-threaded WebAssembly,
 under the currently selected account. There is no guest account or DM capability.
-The third primary tab is a home screen: a single recent-app row above an
-explicitly ordered desktop, both inside one virtualized vertical list. Each account
-owns its desktop positions, recent usage, installations, settings, permissions and default intent handlers.
+The Explore tab separates My apps from Discover. Each account owns its ordered
+application library, recent usage, installations, settings, permissions and default
+intent handlers.
 
 ## Protocol baseline
 
-Intent candidates come from the current account's favorite napplet manifests,
-including cached metadata outside visible Favorites pages. Installation and
-execution do not register candidates. Removing a favorite excludes its intents;
-saved defaults apply only while the target remains an eligible favorite.
+Intent candidates come from napplet manifests in the current account's My apps library,
+including cached metadata outside visible My apps pages. Installation and
+execution do not register candidates. Removing an app excludes its intents;
+saved defaults apply only while the target remains an eligible library member.
 
 - NIP-5D PR 2303, `020cb8b33a9e4c6b8ca4b2f9d0ed0a67843b68f7`.
 - `@napplet/shim` 0.32.0, with core/nap 0.34.0 locked by package-lock.json.
@@ -407,24 +407,24 @@ naddr and website URLs with the same pure parser, then sends an account-scoped,
 one-use in-memory handoff to the Explore tab; only the handoff ID enters route
 params. Explicit Lightning/LNURL endpoints retain their payment routing, and legacy
 note/nevent app pointers retain their existing detail route. A valid naddr/URL scan seeds
-the shared search field without changing the selected Favorites/Discover scope
+the shared search field without changing the selected My apps/Discover scope
 or starting a background catalogue read,
 reusing the same local-first lookup rather
 than launching or authorizing the application. Invalid scan content reports an
 error without replacing the current search. Repeated scans reset the search
-instance; mode changes preserve the query. Empty Favorites links to Discover.
+instance; mode changes preserve the query. Empty My apps links to Discover.
 The header's compact mode selector and Scan action share one row; its fixed
 search field occupies the second row. Keyword search uses only desktop shortcuts
-in Favorites and the fetched catalogue in Discover. The results component keeps
-per-query display windows, and Favorites keyword search never starts discovery
-reads. Clearing a Favorites search restores its shortcut grid. Favorites omits the recent
+in My apps and the fetched catalogue in Discover. The results component keeps
+per-query display windows, and My apps keyword search never starts discovery
+reads. Clearing a My apps search restores its shortcut grid. My apps omits the recent
 preview; the leading header action in both modes opens `/explore-recent`. Recent-only accounts
-show the empty Favorites state while retaining that history entry point. History
+show the empty My apps state while retaining that history entry point. History
 uses the shared discovery row in a virtualized list, opening details on press. Discovery and history share pointer-anchored menus for
-details, permissions, sharing and Favorite/Unfavorite; history always exposes
-Remove, which clears recency without changing favorites. Detail header menus
-expose favorite actions while keeping history removal in the history list. Runtime menu footers include a favorite toggle;
-all menu favorite changes use the shared hook for persistence and bottom-toast feedback.
+details, permissions, sharing and Add app/Remove app; history always exposes
+Remove, which clears recency without changing My apps membership. Detail header menus
+expose add/remove actions while keeping history removal in the history list. Runtime menu footers include add/remove actions;
+all menu membership changes use the shared hook for persistence and bottom-toast feedback.
 Discovery search recognizes bare naddr, `nostr:naddr`, naddr share-link URLs, and
 HTTP(S) website addresses. It checks the fetched catalogue, its account-scoped
 64-entry address cache, saved in-memory entries, and an exact asynchronous local
@@ -440,7 +440,7 @@ Explicit application links retain their relay hints and author routing.
 `explore_entries` caches verified manifests and visited URLs;
 `explore_shortcuts` owns explicit order and retained sync references; `explore_history` keeps one latest visit
 per address, bounded to 512 per account. This is not a chronological click log.
-Favorites synchronize through the shared private-list/configuration infrastructure
+My apps synchronize through the shared private-list/configuration infrastructure
 using [encrypted app-curation snapshots](../protocols/application-favorites.md).
 Both history and shortcuts refer to the cached identity, independently of signing
 authority. Website addresses keep their path, query and fragment, whereas signing

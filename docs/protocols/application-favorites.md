@@ -1,7 +1,7 @@
-# Private application favorites
+# Private application library
 
-Favorites use a NIP-51 app-curation set: kind `30267`, authored by the account,
-with the public tag `['d', 'psstpsst-favorites']`. There are no public favorite
+My apps uses a NIP-51 app-curation set: kind `30267`, authored by the account,
+with the legacy public tag `['d', 'psstpsst-favorites']`. There are no public application
 references. `content` is a NIP-44 encrypt-to-self JSON array of tags:
 
 - `['a', '<kind>:<pubkey>:<identifier>', '<optional relay>']` references napps,
@@ -11,13 +11,13 @@ references. `content` is a NIP-44 encrypt-to-self JSON array of tags:
 - `['r', '<http(s) URL>']` references a website, retaining path, query and fragment.
   This is PsstPsst's extension to the app-curation set.
 
-Array order is favorite order. Duplicate identities keep their first position;
+Array order is the application order. Duplicate identities keep their first position;
 relay hints do not change identity. An encrypted `[]` explicitly clears the
 collection. Every publication is a full snapshot, including drag-order changes.
 The normal replaceable-event freshness and local pending-write guards apply;
 there is no per-item conflict-free merge of concurrent device edits.
 
-Only favorite membership and order synchronize. Recency, manifests, application
+Only application membership and order synchronize. Recency, manifests, application
 data and permission grants remain independent. Known references are retained
 when metadata cannot be fetched; only verified manifests may launch. Hintless
 references use the publisher's write relays plus application-specific sources;
@@ -34,7 +34,7 @@ use these observations plus existing address hints, without inventing locations.
 
 Snapshots are bounded to 512 references, 1,048,576 plaintext characters and
 2,097,152 ciphertext characters. Unsupported or malformed snapshots leave local
-favorites intact; partial decoding never clears or silently truncates a list.
+application membership intact; partial decoding never clears or silently truncates a list.
 
 The cached encrypted event owns membership and order. A derived decrypted
 snapshot supports immediate offline reads; it is keyed by event ID and never
@@ -55,3 +55,8 @@ Migration retires the former shortcut projection after preserving ordered
 references as a pending draft or an event-keyed decrypted snapshot. Existing
 unsigned drafts, including an empty collection, retain their revision and intent. Private-list revisions are keyed by account, kind and d-tag; existing
 kind-30000 mute/block revisions retain their original identity and pending state.
+
+The product calls this library My apps. Legacy storage/service names and the
+`psstpsst-favorites` identifier remain compatible with existing account data.
+Adding an application records membership, not endorsement or permission grants.
+Removing it excludes future handoffs without closing it or deleting its data.

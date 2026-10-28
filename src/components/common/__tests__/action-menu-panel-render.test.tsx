@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { darkPalette, lightPalette } from '@/theme';
 
+import { AppText } from '../AppText';
 import { ActionMenuPanel } from '../ActionMenuPanel';
 import { InteractivePressable } from '../InteractivePressable';
 
@@ -49,4 +50,10 @@ describe('ActionMenuPanel interaction feedback', () => {
     row = renderer!.root.findByType(InteractivePressable);
     expect(row.props.style({ pressed: false }).backgroundColor).toBe(palette.interactionOverlay);
   });
+  it.each([['light', lightPalette], ['dark', darkPalette]] as const)('uses the danger palette for application removal in %s mode', (scheme, palette) => {
+    mockThemeState.preference = scheme;
+    act(() => { renderer = create(<ActionMenuPanel items={[{ key: 'remove-app', title: 'Remove app', tone: 'danger', icon: null, onPress: jest.fn() }]} />); });
+    expect(renderer!.root.findByType(AppText).props.style.color).toBe(palette.danger);
+  });
+
 });

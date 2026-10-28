@@ -29,14 +29,14 @@ it('adds a new favorite after existing favorites and confirms success', async ()
   mockState.entries = [{ ...app, key: 'other', desktopPosition: 0 }];
   await act(async () => { await toggle(app, true); });
   expect(exploreService.move).toHaveBeenCalledWith(app, 1, 'account');
-  expect(showToast).toHaveBeenCalledWith('napplets.favorited', { target: 'detail' });
+  expect(showToast).toHaveBeenCalledWith('napplets.app_added', { target: 'detail' });
 });
 it('uses the current saved entry and confirms unfavoriting', async () => {
   const saved = { ...app, desktopPosition: 2, lastUsedAt: 100 };
   mockState.entries = [saved];
   await act(async () => { await toggle(app, false); });
   expect(exploreService.move).toHaveBeenCalledWith(saved, null, 'account');
-  expect(showToast).toHaveBeenCalledWith('napplets.unfavorited', { target: 'detail' });
+  expect(showToast).toHaveBeenCalledWith('napplets.app_removed', { target: 'detail' });
 });
 it('loads favorite state before changing an app opened outside Explore', async () => {
   mockState = { account: null, loaded: false, entries: [] };

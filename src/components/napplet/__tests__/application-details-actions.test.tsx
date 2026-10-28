@@ -17,7 +17,8 @@ jest.mock('@/components/common/HeaderActionMenu', () => ({ HeaderActionMenu: 'Me
 jest.mock('@/stores/theme.store', () => ({ useThemeStore: (select: (state: object) => unknown) => select({ accent: 'blue' }) }));
 jest.mock('lucide-react-native/icons/ellipsis', () => () => null);
 jest.mock('lucide-react-native/icons/copy', () => () => null);
-jest.mock('lucide-react-native/icons/star', () => () => null);
+jest.mock('lucide-react-native/icons/plus', () => () => null);
+jest.mock('lucide-react-native/icons/trash-2', () => () => null);
 jest.mock('@solar-icons/react-native/category/security/Linear/ShieldCheck', () => ({ ShieldCheck: () => null }), { virtual: true });
 jest.mock('@solar-icons/react-native/category/ui/Linear/Share', () => ({ Share: () => null }), { virtual: true });
 const app: ExploreEntry = { key: 'notes', address: 'https://example.com', title: 'Notes', kind: 'website', description: '', required: [], servers: [], desktopPosition: null, lastUsedAt: null };
@@ -29,7 +30,7 @@ it('shows Favorite and permissions without Remove for an unused app', async () =
   mockState.entries = [];
   await act(async () => { renderer = create(render()); });
   expect(items().map(item => item.key)).toEqual(['copy', 'permissions', 'share', 'favorite']);
-  expect(items().find(item => item.key === 'favorite')?.title).toBe('napplets.add_to_desktop');
+  expect(items().find(item => item.key === 'favorite')?.title).toBe('napplets.add_app');
   act(() => { items().find(item => item.key === 'favorite')!.onPress(); });
   expect(mockFavorite).toHaveBeenCalledWith(app, true);
   act(() => { items().find(item => item.key === 'permissions')!.onPress(); });
@@ -39,7 +40,7 @@ it('reads saved state without exposing history removal in details', async () => 
   const saved = { ...app, desktopPosition: 0, lastUsedAt: 100 };
   mockState.entries = [saved];
   await act(async () => { renderer = create(render()); });
-  expect(items().find(item => item.key === 'favorite')?.title).toBe('napplets.remove_from_desktop');
+  expect(items().find(item => item.key === 'favorite')).toMatchObject({ title: 'napplets.remove_app', tone: 'danger' });
   expect(items().some(item => item.key === 'remove')).toBe(false);
   act(() => { items().find(item => item.key === 'favorite')!.onPress(); });
   expect(mockFavorite).toHaveBeenCalledWith(saved, false);

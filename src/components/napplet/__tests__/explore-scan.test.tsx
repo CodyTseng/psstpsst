@@ -120,7 +120,7 @@ it('uses scrolling search headers in both modes and exits empty search on drag',
 it.each(['https://example.com/app', 'http://example.com/app'])('opens scanned %s directly in the website runtime', async value => {
   await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned(`  ${value}  `); });
   await act(async () => { await jest.advanceTimersByTimeAsync(0); });
-  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');
+  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('my-apps');
   expect(renderer.root.findByType(SearchBar).props.value).toBe('');
   expect(exploreService.prepare).toHaveBeenCalledWith(expect.objectContaining({ kind: 'website', address: value }), 'account');
   expect(mockNavigate).toHaveBeenCalledWith('/explore-run?runId=7');
@@ -168,7 +168,7 @@ it('reports a failed naddr lookup without launching or recording an application'
 
 it('keeps invalid scans out of discovery search', async () => {
   await act(async () => { renderer.root.findByType(QrScanButton).props.onScanned('not-an-app-address'); });
-  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');
+  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('my-apps');
   expect(renderer.root.findAllByType(ExploreDiscovery)).toHaveLength(0);
   expect(useToastStore.getState()).toMatchObject({ message: 'napplets.invalid_manifest', variant: 'error', target: 'primary' });
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'napplets.invalid_manifest')).toBe(false);
@@ -180,7 +180,7 @@ it('opens a home-scanned website directly without changing scope', async () => {
   act(() => { id = useExploreSearchHandoffStore.getState().start({ account: 'account', value }); });
   mockHandoff = String(id);
   await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');
+  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('my-apps');
   await act(async () => { await jest.advanceTimersByTimeAsync(0); });
   expect(mockNavigate).toHaveBeenCalledWith('/explore-run?runId=7');
   expect(renderer.root.findByType(SearchBar).props.value).toBe('');
@@ -192,7 +192,7 @@ it("does not consume another account's scan", async () => {
   act(() => { id = useExploreSearchHandoffStore.getState().start({ account: 'other', value: 'https://example.com/private' }); });
   mockHandoff = String(id);
   await act(async () => { renderer.update(<NappletsScreen />); });
-  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('favorites');
+  expect(renderer.root.findByType(SegmentedControl).props.value).toBe('my-apps');
   expect(renderer.root.findAllByType(ExploreDiscovery)).toHaveLength(0);
 });
 
@@ -203,7 +203,7 @@ it('shares query text across modes and restricts Favorites keyword scope to shor
   await act(async () => { renderer.update(<NappletsScreen />); });
   await act(async () => { renderer.root.findByType(SearchBar).props.onPress(); });
   await act(async () => { renderer.root.findAllByType(SearchBar).find(node => node.props.autoFocus)!.props.onChangeText('app'); });
-  expect(renderer.root.findByType(ExploreDiscovery).props.scope).toBe('favorites');
+  expect(renderer.root.findByType(ExploreDiscovery).props.scope).toBe('my-apps');
   expect(renderer.root.findByType(ExploreDiscovery).props.favorites).toEqual([favorite]);
   await act(async () => { renderer.root.findByType(SegmentedControl).props.onChange('discover'); });
   expect(renderer.root.findByType(SearchBar).props.value).toBe('app');

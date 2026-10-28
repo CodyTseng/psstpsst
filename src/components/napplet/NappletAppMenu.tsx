@@ -1,4 +1,4 @@
-import Star from 'lucide-react-native/icons/star';
+import Plus from 'lucide-react-native/icons/plus';
 import Trash from 'lucide-react-native/icons/trash-2';
 import Info from 'lucide-react-native/icons/info';
 import { Share } from '@solar-icons/react-native/category/ui/Linear/Share';
@@ -31,13 +31,14 @@ export function NappletAppMenu<T extends GridApp>({ app, anchor, inline, point, 
   const c = useThemeColors();
   const density = IS_ELECTRON ? 'pointer' : 'touch';
   const size = CONTEXT_MENU_ICON_SIZE[density];
+  const MembershipIcon = favorite ? Trash : Plus;
   return <ContextMenu inline={inline} anchor={anchor} align={point ? 'start' : 'center'} placement="auto" density={density}
     onClose={onClose} onPlacementChange={onPlacementChange} items={[
       { key: 'details', title: t('napplets.details'), icon: <Info size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onDetails(app) },
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={c.text} />, onPress: () => onPermissions(app) },
       ...(!app.local ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={c.text} />, onPress: () => onShare(app) }] : []),
-      ...(onFavorite ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_from_desktop' : 'napplets.add_to_desktop'), icon: <Star size={size} strokeWidth={iconStrokeWidth.default} color={c.text} />, onPress: () => onFavorite(app) }] : []),
-      ...(onRemove ? [{ key: 'remove', title: t('common.remove'), tone: 'danger' as const, separatorBefore: true,
+      ...(onFavorite ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_app' : 'napplets.add_app'), tone: favorite ? 'danger' as const : 'default' as const, icon: <MembershipIcon size={size} strokeWidth={iconStrokeWidth.default} color={favorite ? c.danger : c.text} />, onPress: () => onFavorite(app) }] : []),
+      ...(onRemove ? [{ key: 'remove', title: t('napplets.remove_from_history'), tone: 'danger' as const, separatorBefore: true,
         icon: <Trash size={size} strokeWidth={iconStrokeWidth.default} color={c.danger} />, onPress: () => onRemove(app) }] : []),
     ]} />;
 }

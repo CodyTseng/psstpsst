@@ -17,7 +17,7 @@ type Options = {
   send(message: ApplicationEnvelope): Promise<void>;
   confirm(prompt: RuntimePrompt, signal: AbortSignal): Promise<string | false>;
   configure(schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal): void;
-  /** Current account's favorite applications, including metadata beyond visible list pages. */
+  /** Current account's added applications, including metadata beyond visible list pages. */
   applications(): Promise<ExploreEntry[]>;
   launch(entry: ExploreEntry): Promise<void>;
   beforeConnect?(): Promise<void>;
