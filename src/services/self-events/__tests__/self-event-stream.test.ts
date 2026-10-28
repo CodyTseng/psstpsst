@@ -334,7 +334,7 @@ describe('selfEventStream', () => {
       { kinds: [4454], authors: [SELF], since: expect.any(Number) },
       { kinds: [4455], authors: [SELF], '#p': [SELF], since: expect.any(Number) },
       { kinds: [0], authors: [SELF] },
-      { kinds: [30267], authors: [SELF], '#d': ['psstpsst-favorites'] },
+      { kinds: [30267], authors: [SELF], '#d': ['psstpsst-my-apps'] },
       { kinds: [30000], authors: [SELF], '#d': PRIVATE_SET_D_TAGS },
       { kinds: [10030], authors: [SELF] },
       { kinds: [10063], authors: [SELF] },
@@ -346,7 +346,7 @@ describe('selfEventStream', () => {
     expect(discovery.filters).toEqual([
       { kinds: [10044], authors: [SELF] },
       { kinds: [0], authors: [SELF] },
-      { kinds: [30267], authors: [SELF], '#d': ['psstpsst-favorites'] },
+      { kinds: [30267], authors: [SELF], '#d': ['psstpsst-my-apps'] },
       { kinds: [30000], authors: [SELF], '#d': PRIVATE_SET_D_TAGS },
       { kinds: [10030], authors: [SELF] },
       { kinds: [10063], authors: [SELF] },
@@ -361,8 +361,8 @@ describe('selfEventStream', () => {
     await startStream();
 
     expect(mockSubscribeCalls.map((c) => c.label)).toEqual(['self.dm']);
-    expect(findSub('self.dm')!.filters).toContainEqual({ kinds: [30267], authors: [SELF], '#d': ['psstpsst-favorites'] });
-    const favorites = makeEvent(30267, 100, [['d', 'psstpsst-favorites']]);
+    expect(findSub('self.dm')!.filters).toContainEqual({ kinds: [30267], authors: [SELF], '#d': ['psstpsst-my-apps'] });
+    const favorites = makeEvent(30267, 100, [['d', 'psstpsst-my-apps']]);
     deliver('self.dm', favorites); await flush();
     expect(jest.requireMock('@/services/explore/favorites').applyFavoritesEvent).toHaveBeenCalledWith(SELF, favorites, fakeSigner);
   });
@@ -419,7 +419,7 @@ describe('selfEventStream', () => {
     const muted = makeEvent(30000, 100, [['d', 'psstpsst-muted']]);
     const contacts = makeEvent(30000, 100, [['d', 'psstpsst-contacts']]);
     const blocked = makeEvent(30000, 100, [['d', 'psstpsst-blocked']]);
-    const favorites = makeEvent(30267, 100, [['d', 'psstpsst-favorites']]);
+    const favorites = makeEvent(30267, 100, [['d', 'psstpsst-my-apps']]);
     const savedGroups = makeEvent(30078, 100, [['d', 'psstpsst-saved-groups']]);
     const emoji = makeEvent(10030, 100);
     const media = makeEvent(10063, 100);

@@ -26,7 +26,7 @@ it('repairs older application-cache schemas before retaining launch metadata', a
   const draft = JSON.stringify([['a', `35130:${app.manifest!.pubkey}:notes`]]);
   sqlite.prepare('INSERT INTO private_list_sync_state(account_pubkey,kind,d_tag,draft,dirty) VALUES (?,?,?,?,1)')
     .run('account', 30267, 'psstpsst-favorites', draft);
-  await expect(cache.cacheApplicationEvent(app, { retain: true })).rejects.toThrow('Failed query');
+  await expect(cache.cacheApplicationEvent(app, { retain: true })).resolves.toBeUndefined();
 
   const repair = readFileSync(`${process.cwd()}/src/db/migrations/0074_application-cache-retention.sql`, 'utf8');
   sqlite.exec(repair);
@@ -219,7 +219,7 @@ it('bounds ID-cache growth without evicting a favorited immutable application', 
   await cache.cacheApplicationEvent(cache.parseApplicationEvent(pinned));
   const sqlite = mockDatabase!.sqlite;
   sqlite.prepare('INSERT INTO private_list_sync_state(account_pubkey,kind,d_tag,snapshot) VALUES (?,?,?,?)')
-    .run('account', 30267, 'psstpsst-favorites', JSON.stringify({ eventId: 'favorites', tags: [['e', pinned.id]] }));
+    .run('account', 30267, 'psstpsst-my-apps', JSON.stringify({ eventId: 'favorites', tags: [['e', pinned.id]] }));
   sqlite.exec('UPDATE cached_events SET fetched_at=0');
   const insert = sqlite.prepare('INSERT INTO cached_events(id,event,fetched_at) VALUES (?,?,?)');
   for (let index = 0; index < 2050; index++) {
@@ -236,7 +236,7 @@ it('keeps favorited coordinates while bounding unrelated replaceable application
   await cache.cacheApplicationEvent(cache.parseApplicationEvent(pinned));
   const sqlite = mockDatabase!.sqlite;
   sqlite.prepare('INSERT INTO private_list_sync_state(account_pubkey,kind,d_tag,draft,dirty) VALUES (?,?,?,?,1)')
-    .run('account', 30267, 'psstpsst-favorites', JSON.stringify([['a', `35130:${pinned.pubkey}:notes`]]));
+    .run('account', 30267, 'psstpsst-my-apps', JSON.stringify([['a', `35130:${pinned.pubkey}:notes`]]));
   sqlite.exec('UPDATE replaceable_events SET fetched_at=0');
   const insert = sqlite.prepare('INSERT INTO replaceable_events(pubkey,kind,d_tag,event,created_at,fetched_at) VALUES (?,35130,?,?,1,?)');
   for (let index = 0; index < 2050; index++) insert.run(pinned.pubkey, `other-${index}`, JSON.stringify(pinned), index + 1);

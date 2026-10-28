@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from '../client';
-import { favoriteReference, parseFavoriteSnapshot, KIND_APP_FAVORITES, FAVORITES_D } from '@/services/explore/favorites-protocol';
+import { favoriteReference, parseFavoriteSnapshot, KIND_APP_FAVORITES } from '@/services/explore/favorites-protocol';
 import type { ExploreEntry } from '@/services/explore/model';
+
+const FAVORITES_D = 'psstpsst-favorites';
 
 /** Preserve local edits and the last decrypted snapshot before dropping the legacy projection. */
 export async function migrateApplicationFavorites(tx: Database) {

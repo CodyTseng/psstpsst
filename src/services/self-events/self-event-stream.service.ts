@@ -1,7 +1,7 @@
 import { isNewerEvent as isReplaceableNewer } from '@/lib/nostr/event-version';
 import { cacheProfileEvent } from '../profile/profile.service';
 import { applyFavoritesEvent } from '../explore/favorites';
-import { FAVORITES_D, KIND_APP_FAVORITES } from '../explore/favorites-protocol';
+import { MY_APPS_D, KIND_APP_FAVORITES } from '../explore/favorites-protocol';
 import type { Event, Filter } from 'nostr-tools';
 
 import { KIND_USER_EMOJI_LIST } from '@/lib/nostr/custom-emoji';
@@ -193,7 +193,7 @@ class SelfEventStream {
         since: fiveMinAgo,
       },
     ];
-    const favoritesFilter: Filter = { kinds: [KIND_APP_FAVORITES], authors: [self], '#d': [FAVORITES_D] };
+    const favoritesFilter: Filter = { kinds: [KIND_APP_FAVORITES], authors: [self], '#d': [MY_APPS_D] };
     const ownListFilters: Filter[] = [
       { kinds: [0], authors: [self] },
       favoritesFilter,
@@ -291,7 +291,7 @@ class SelfEventStream {
         config.handlers.onKeyAnnouncement(event);
         return;
       case KIND_APP_FAVORITES:
-        if (dTagOf(event) !== FAVORITES_D || !this.isNewerReplaceable(event)) return;
+        if (dTagOf(event) !== MY_APPS_D || !this.isNewerReplaceable(event)) return;
         this.storeReplaceable(event);
         this.enqueue('favorites', async () => {
           const signer = await this.loadSigner(config);

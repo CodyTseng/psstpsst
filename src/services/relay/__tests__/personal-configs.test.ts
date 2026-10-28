@@ -206,7 +206,7 @@ describe('syncPersonalConfigs', () => {
     expect(call.relays).toEqual(['wss://relay.example']);
     expect(call.filters).toEqual([
       { kinds: [10030, 10063], authors: ['self'] },
-      { kinds: [30267], authors: ['self'], '#d': ['psstpsst-favorites'] },
+      { kinds: [30267], authors: ['self'], '#d': ['psstpsst-my-apps'] },
       { kinds: [30000], authors: ['self'], '#d': ALL_D_TAGS },
     ]);
 
@@ -238,7 +238,7 @@ describe('syncPersonalConfigs', () => {
     seedFresh(muted, 'psstpsst-muted');
     seedFresh(contacts, 'psstpsst-contacts');
     seedFresh(blocked, 'psstpsst-blocked');
-    seedFresh(makeEvent('self', 30267, 100, 'psstpsst-favorites'), 'psstpsst-favorites');
+    seedFresh(makeEvent('self', 30267, 100, 'psstpsst-my-apps'), 'psstpsst-my-apps');
 
     await service.syncPersonalConfigs('self');
     await jest.runAllTimersAsync();

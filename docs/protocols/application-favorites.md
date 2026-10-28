@@ -1,7 +1,7 @@
 # Private application library
 
 My apps uses a NIP-51 app-curation set: kind `30267`, authored by the account,
-with the legacy public tag `['d', 'psstpsst-favorites']`. There are no public application
+with the public tag `['d', 'psstpsst-my-apps']`. There are no public application
 references. `content` is a NIP-44 encrypt-to-self JSON array of tags:
 
 - `['a', '<kind>:<pubkey>:<identifier>', '<optional relay>']` references napps,
@@ -51,12 +51,12 @@ inside the reconciliation transaction after decryption. Events use the account's
 own configuration publication routing, not application catalogue relays. Live
 filters also cover write/discovery relays already shared with the DM subscription.
 
-Migration retires the former shortcut projection after preserving ordered
+Historical migration retires the former shortcut projection after preserving ordered
 references as a pending draft or an event-keyed decrypted snapshot. Existing
 unsigned drafts, including an empty collection, retain their revision and intent. Private-list revisions are keyed by account, kind and d-tag; existing
 kind-30000 mute/block revisions retain their original identity and pending state.
 
-The product calls this library My apps. Legacy storage/service names and the
-`psstpsst-favorites` identifier remain compatible with existing account data.
+The product calls this library My apps. The former `psstpsst-favorites` list is
+independent; it is neither read nor migrated into the My apps coordinate.
 Adding an application records membership, not endorsement or permission grants.
 Removing it excludes future handoffs without closing it or deleting its data.

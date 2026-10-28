@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { localApplications, privateListSyncState } from '@/db/schema';
 import { useLiveQuery } from '@/db/use-live-query';
-import { FAVORITES_D, KIND_APP_FAVORITES, favoriteReference } from '@/services/explore/favorites-protocol';
+import { MY_APPS_D, KIND_APP_FAVORITES, favoriteReference } from '@/services/explore/favorites-protocol';
 import type { ExploreEntry } from '@/services/explore/model';
 
 /** Read membership independently of Explore and application metadata loading. */
@@ -13,7 +13,7 @@ export function useApplicationMembership(account: string, entry: Pick<ExploreEnt
   const saved = useLiveQuery(db.select({ dirty: privateListSyncState.dirty, draft: privateListSyncState.draft,
     snapshot: privateListSyncState.snapshot }).from(privateListSyncState).where(and(
     eq(privateListSyncState.accountPubkey, account), eq(privateListSyncState.kind, KIND_APP_FAVORITES),
-    eq(privateListSyncState.dTag, FAVORITES_D))).limit(1), [account, local], { enabled: !!account && !local });
+    eq(privateListSyncState.dTag, MY_APPS_D))).limit(1), [account, local], { enabled: !!account && !local });
   const installed = useLiveQuery(db.select({ desktopPosition: localApplications.desktopPosition }).from(localApplications).where(and(
     eq(localApplications.accountPubkey, account), eq(localApplications.appId, entry.key))).limit(1),
     [account, entry.key, local], { enabled: !!account && local });

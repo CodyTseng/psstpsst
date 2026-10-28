@@ -4,7 +4,7 @@ import { exploreEntries as entries, exploreHistory as history, localApplications
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { markPrivateListDirty, readPrivateListState } from '@/services/relay/private-list-sync.service';
 import { notifyExploreVisit } from './visits';
-import { favoriteReference, parseFavoriteReference, KIND_APP_FAVORITES, FAVORITES_D } from './favorites-protocol';
+import { favoriteReference, parseFavoriteReference, KIND_APP_FAVORITES, MY_APPS_D } from './favorites-protocol';
 import { knownFavoriteSnapshot, readLocalFavoriteSnapshot } from './favorites-snapshot';
 import { queueFavoritesPublication } from './favorites';
 import { cacheApplicationEvent, parseApplicationEvent, readApplicationCache, withApplicationMetadata } from './application-cache';
@@ -144,7 +144,7 @@ async function pruneEntries(tx: Database, account: string, favoriteKeys: string[
 
 export async function visit(account: string, app: ExploreEntry) {
   await cacheApplicationEvent(app);
-  const favorites = knownFavoriteSnapshot(await readPrivateListState(account, FAVORITES_D, db, KIND_APP_FAVORITES));
+  const favorites = knownFavoriteSnapshot(await readPrivateListState(account, MY_APPS_D, db, KIND_APP_FAVORITES));
   await db.transaction(async tx => {
     if (!await canReceiveForAccount(account, tx)) throw new Error('account-unavailable');
     await storeEntry(tx, account, app);
@@ -163,7 +163,7 @@ export async function forget(account: string, key: string) {
 
 export async function reorder(account: string, keys: string[], app?: ExploreEntry) {
   if (keys.length > 512 || new Set(keys).size !== keys.length) throw new Error('quota-exceeded');
-  const state = await readPrivateListState(account, FAVORITES_D, db, KIND_APP_FAVORITES);
+  const state = await readPrivateListState(account, MY_APPS_D, db, KIND_APP_FAVORITES);
   const current = knownFavoriteSnapshot(state);
   const references = new Map(current.map(item => [item.entry.key, item.tag]));
   const locals = await readLocalApplications(account, undefined, false, true);
@@ -173,9 +173,9 @@ export async function reorder(account: string, keys: string[], app?: ExploreEntr
   const signedChanged = JSON.stringify(tags) !== JSON.stringify(current.map(item => item.tag));
   await db.transaction(async tx => {
     if (!await canReceiveForAccount(account, tx)) throw new Error('account-unavailable');
-    const latest = await readPrivateListState(account, FAVORITES_D, tx, KIND_APP_FAVORITES);
+    const latest = await readPrivateListState(account, MY_APPS_D, tx, KIND_APP_FAVORITES);
     if ((latest?.revision ?? 0) !== (state?.revision ?? 0) || latest?.eventId !== state?.eventId) throw new Error('favorites-changed');
-    if (signedChanged) await markPrivateListDirty(account, FAVORITES_D, tx, KIND_APP_FAVORITES, tags);
+    if (signedChanged) await markPrivateListDirty(account, MY_APPS_D, tx, KIND_APP_FAVORITES, tags);
     for (const local of locals) {
       const index = keys.indexOf(local.key), position = index < 0 ? null : index;
       if (local.desktopPosition !== position) await tx.update(localApplications).set({ desktopPosition: position })

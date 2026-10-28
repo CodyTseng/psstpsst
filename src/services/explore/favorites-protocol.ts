@@ -5,7 +5,7 @@ import { publicUrl } from '@/services/napplet/protocol';
 import { websiteEntry, type ExploreEntry } from './model';
 
 export const KIND_APP_FAVORITES = 30267;
-export const FAVORITES_D = 'psstpsst-favorites';
+export const MY_APPS_D = 'psstpsst-my-apps';
 export const MAX_FAVORITES = 512;
 const KINDS = new Set([15128, 35128, 15129, 35129, 35130]);
 const hexKey = (value: string) => /^[a-f0-9]{64}$/.test(value);
