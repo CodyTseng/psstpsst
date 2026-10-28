@@ -178,7 +178,8 @@
     "sticker_preview": "[Çıkartma] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[Kişi kartı] {{name}}",
-    "event_reference_preview": "[Paylaşılan etkinlik]",
+    "event_reference_preview": "[Etkinlik]",
+    "application_reference_preview": "[Uygulama]",
     "invoice_preview": "[Ödeme isteği] {{amount}}",
     "invoice_preview_sent": "[Ödeme isteği gönderildi] {{amount}}"
   },

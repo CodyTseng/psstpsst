@@ -178,7 +178,8 @@
     "sticker_preview": "[ملصق] {{shortcodes}}",
     "sticker_preview_separator": "، ",
     "contact_card_preview": "[بطاقة جهة اتصال] {{name}}",
-    "event_reference_preview": "[حدث مشترك]",
+    "event_reference_preview": "[حدث]",
+    "application_reference_preview": "[تطبيق]",
     "invoice_preview": "[طلب دفع] {{amount}}",
     "invoice_preview_sent": "[تم إرسال طلب دفع] {{amount}}"
   },

@@ -178,7 +178,8 @@
     "sticker_preview": "[Стикер] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[Карточка контакта] {{name}}",
-    "event_reference_preview": "[Общее событие]",
+    "event_reference_preview": "[Событие]",
+    "application_reference_preview": "[Приложение]",
     "invoice_preview": "[Запрос платежа] {{amount}}",
     "invoice_preview_sent": "[Запрос платежа отправлен] {{amount}}"
   },

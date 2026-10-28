@@ -178,7 +178,8 @@
     "sticker_preview": "[ステッカー] {{shortcodes}}",
     "sticker_preview_separator": "、",
     "contact_card_preview": "[連絡先カード] {{name}}",
-    "event_reference_preview": "[共有イベント]",
+    "event_reference_preview": "[イベント]",
+    "application_reference_preview": "[アプリ]",
     "invoice_preview": "[支払いリクエスト] {{amount}}",
     "invoice_preview_sent": "[支払いリクエスト送信済み] {{amount}}"
   },

@@ -178,7 +178,8 @@
     "sticker_preview": "[贴纸] {{shortcodes}}",
     "sticker_preview_separator": "、",
     "contact_card_preview": "[个人名片] {{name}}",
-    "event_reference_preview": "[分享的事件]",
+    "event_reference_preview": "[事件]",
+    "application_reference_preview": "[应用]",
     "invoice_preview": "[付款请求] {{amount}}",
     "invoice_preview_sent": "[收款请求已发送] {{amount}}"
   },

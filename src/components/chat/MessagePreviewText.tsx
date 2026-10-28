@@ -5,6 +5,7 @@ import { Text } from 'react-native';
 import { AppText } from '@/components/common/AppText';
 import { useDisplayName } from '@/hooks/use-display-name';
 import { splitCustomEmojiText } from '@/lib/emoji/custom-message';
+import type { NostrEventReference } from '@/lib/nostr/event-reference';
 import { customEmojisFromMessageTags } from '@/lib/nostr/custom-emoji';
 import {
   parseMessageSegments,
@@ -12,7 +13,14 @@ import {
   soleMentionPubkey,
 } from '@/lib/text/message-segments';
 import { parseInvoiceMessage } from '@/lib/wallet/invoice-message';
+import { isApplicationReference } from '@/services/explore/application-address';
 import { formatSats } from '@/services/wallet/bolt11';
+
+function eventPreviewKey(reference: NostrEventReference) {
+  return isApplicationReference(reference)
+    ? 'conversations.application_reference_preview'
+    : 'conversations.event_reference_preview';
+}
 
 function MentionName({ pubkey }: { pubkey: string }) {
   const { name } = useDisplayName(pubkey);
@@ -32,7 +40,8 @@ function ContactCardPreview({ pubkey }: { pubkey: string }) {
  * authenticated custom-emoji shortcodes use a localized bracketed Sticker
  * label and their bare shortcode; otherwise
  * a whole-message `nostr:` mention shows as "[Contact card] name"; inline
- * mentions become the user's `@name`; event references become "[Shared event]";
+ * mentions become the user's `@name`; application references become "[App]";
+ * other event references become "[Event]";
  * URLs and other text show as-is. Most previews have no special token, so the
  * ordinary path remains a single truncated `AppText`.
  */
@@ -63,7 +72,7 @@ export function MessagePreviewText({
     const parts: (
       | { type: 'text'; value: string }
       | { type: 'mention'; pubkey: string }
-      | { type: 'event' }
+      | { type: 'event'; reference: NostrEventReference }
       | { type: 'sticker'; shortcode: string }
     )[] = [];
     let foundEmoji = false;
@@ -71,7 +80,7 @@ export function MessagePreviewText({
       if (segment.type === 'mention') {
         parts.push({ type: 'mention', pubkey: segment.pubkey });
       } else if (segment.type === 'event') {
-        parts.push({ type: 'event' });
+        parts.push({ type: 'event', reference: segment.reference });
       } else if (segment.type === 'url') {
         parts.push({ type: 'text', value: segment.value });
       } else {
@@ -104,7 +113,7 @@ export function MessagePreviewText({
         part.type === 'mention' ? (
           <MentionName key={index} pubkey={part.pubkey} />
         ) : part.type === 'event' ? (
-          <Fragment key={index}>{t('conversations.event_reference_preview')}</Fragment>
+          <Fragment key={index}>{t(eventPreviewKey(part.reference))}</Fragment>
         ) : part.type === 'sticker' ? (
           <Fragment key={index}>
             {t('conversations.sticker_preview', { shortcodes: part.shortcode })}
@@ -117,7 +126,7 @@ export function MessagePreviewText({
   } else if (cardPubkey) {
     preview = <ContactCardPreview pubkey={cardPubkey} />;
   } else if (eventReference) {
-    preview = t('conversations.event_reference_preview');
+    preview = t(eventPreviewKey(eventReference));
   } else if (invoice) {
     preview = t('conversations.invoice_preview', {
       context: invoiceRole,
@@ -130,7 +139,7 @@ export function MessagePreviewText({
       seg.type === 'mention' ? (
         <MentionName key={i} pubkey={seg.pubkey} />
       ) : seg.type === 'event' ? (
-        <Fragment key={i}>{t('conversations.event_reference_preview')}</Fragment>
+        <Fragment key={i}>{t(eventPreviewKey(seg.reference))}</Fragment>
       ) : (
         <Fragment key={i}>{seg.value}</Fragment>
       ),

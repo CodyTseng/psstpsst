@@ -178,7 +178,8 @@
     "sticker_preview": "[استیکر] {{shortcodes}}",
     "sticker_preview_separator": "، ",
     "contact_card_preview": "[کارت مخاطب] {{name}}",
-    "event_reference_preview": "[رویداد هم‌رسانی‌شده]",
+    "event_reference_preview": "[رویداد]",
+    "application_reference_preview": "[برنامه]",
     "invoice_preview": "[درخواست پرداخت] {{amount}}",
     "invoice_preview_sent": "[درخواست پرداخت ارسال شد] {{amount}}"
   },

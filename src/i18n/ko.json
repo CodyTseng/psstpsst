@@ -178,7 +178,8 @@
     "sticker_preview": "[스티커] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[연락처 카드] {{name}}",
-    "event_reference_preview": "[공유된 이벤트]",
+    "event_reference_preview": "[이벤트]",
+    "application_reference_preview": "[앱]",
     "invoice_preview": "[결제 요청] {{amount}}",
     "invoice_preview_sent": "[결제 요청 전송됨] {{amount}}"
   },

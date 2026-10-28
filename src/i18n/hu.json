@@ -178,7 +178,8 @@
     "sticker_preview": "[Matrica] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[Névjegykártya] {{name}}",
-    "event_reference_preview": "[Megosztott esemény]",
+    "event_reference_preview": "[Esemény]",
+    "application_reference_preview": "[Alkalmazás]",
     "invoice_preview": "[Fizetési kérelem] {{amount}}",
     "invoice_preview_sent": "[Fizetési kérelem elküldve] {{amount}}"
   },

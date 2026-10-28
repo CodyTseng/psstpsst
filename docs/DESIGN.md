@@ -167,6 +167,8 @@ between a message bubble and its reaction row.
   in its active primary row. Composer keystrokes stay local; leaving the
   conversation reveals the latest draft once, while clearing or sending removes
   the frozen preview immediately.
+- Conversation previews label non-text content with a bracketed type name,
+  without a sharing verb; available names or amounts may follow the label.
 - Ordinary group-conversation previews prefix the resolved sender name on the
   same truncated line. Drafts and group system actions keep their own labels.
 

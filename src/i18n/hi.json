@@ -178,7 +178,8 @@
     "sticker_preview": "[स्टिकर] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[संपर्क कार्ड] {{name}}",
-    "event_reference_preview": "[शेयर किया गया इवेंट]",
+    "event_reference_preview": "[इवेंट]",
+    "application_reference_preview": "[ऐप]",
     "invoice_preview": "[भुगतान अनुरोध] {{amount}}",
     "invoice_preview_sent": "[भुगतान अनुरोध भेजा गया] {{amount}}"
   },

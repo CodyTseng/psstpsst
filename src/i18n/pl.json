@@ -178,7 +178,8 @@
     "sticker_preview": "[Naklejka] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[Wizytówka] {{name}}",
-    "event_reference_preview": "[Udostępnione zdarzenie]",
+    "event_reference_preview": "[Zdarzenie]",
+    "application_reference_preview": "[Aplikacja]",
     "invoice_preview": "[Prośba o płatność] {{amount}}",
     "invoice_preview_sent": "[Wysłano prośbę o płatność] {{amount}}"
   },

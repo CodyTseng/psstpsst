@@ -178,7 +178,8 @@
     "sticker_preview": "[สติกเกอร์] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[บัตรผู้ติดต่อ] {{name}}",
-    "event_reference_preview": "[เหตุการณ์ที่แชร์]",
+    "event_reference_preview": "[เหตุการณ์]",
+    "application_reference_preview": "[แอป]",
     "invoice_preview": "[คำขอชำระเงิน] {{amount}}",
     "invoice_preview_sent": "[ส่งคำขอชำระเงินแล้ว] {{amount}}"
   },

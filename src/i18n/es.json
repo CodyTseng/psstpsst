@@ -178,7 +178,8 @@
     "sticker_preview": "[Sticker] {{shortcodes}}",
     "sticker_preview_separator": ", ",
     "contact_card_preview": "[Tarjeta de contacto] {{name}}",
-    "event_reference_preview": "[Evento compartido]",
+    "event_reference_preview": "[Evento]",
+    "application_reference_preview": "[Aplicación]",
     "invoice_preview": "[Solicitud de pago] {{amount}}",
     "invoice_preview_sent": "[Solicitud de pago enviada] {{amount}}"
   },
