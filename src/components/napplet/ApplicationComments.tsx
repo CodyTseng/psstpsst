@@ -88,7 +88,7 @@ const CommentItem = memo(function CommentItem({ row, account, session, replying,
   const { t } = useTranslation();
   const guideStart = (depth: number) => spacing.lg + depth * replyIndent + avatarSize / 2;
   return <View style={{ marginTop: row.depth === 0 ? spacing.xs : 0 }}>
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
       {(row.guideDepths ?? []).map(depth => <View key={depth} style={{ position: 'absolute', start: guideStart(depth),
         top: 0, bottom: 0, width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />)}
       {row.parentDepth !== undefined ? <>

@@ -114,8 +114,7 @@ function MediaTouchPage({ active, coordinate, position, width, direction, childr
   return (
     <Animated.View
       testID={active ? 'media-current-surface' : undefined}
-      pointerEvents={active ? 'auto' : 'none'}
-      style={[StyleSheet.absoluteFill, style]}
+      style={[StyleSheet.absoluteFill, style, { pointerEvents: active ? 'auto' : 'none' }]}
     >
       {children}
     </Animated.View>

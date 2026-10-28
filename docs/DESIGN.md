@@ -294,6 +294,7 @@ action, independently of scroll direction, while that action is available.
 Composer quote feedback fills the input's upper region and follows its outer
 top corners, without a separate rounded card.
 
+- Host views declare pointer hit testing through `style.pointerEvents`.
 - Press feedback is immediate.
 - Ordinary transitions use the shared duration and easing tokens.
 - Avoid decorative bounce, looping motion, and layout jumps.

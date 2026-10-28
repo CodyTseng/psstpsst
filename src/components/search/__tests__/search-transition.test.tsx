@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { Animated, View } from 'react-native';
+import { StyleSheet, Animated, View } from 'react-native';
 
 import {
   getSearchActivationShortcutLabel,
@@ -36,7 +36,7 @@ describe('SearchTransition', () => {
     });
 
     const restingContent = renderer!.root.findByProps({ testID: 'resting-content' });
-    expect(restingContent.parent?.props.pointerEvents).toBe('auto');
+    expect(StyleSheet.flatten(restingContent.parent?.props?.style)?.pointerEvents).toBe('auto');
     expect(renderer!.root.findAllByProps({ testID: 'active-content' })).toHaveLength(0);
 
     act(() => {
@@ -55,8 +55,7 @@ describe('SearchTransition', () => {
 
     expect(renderer!.root.findByProps({ testID: 'resting-content' })).toBeTruthy();
     expect(
-      renderer!.root.findByProps({ testID: 'resting-content' }).parent?.props
-        .pointerEvents,
+      StyleSheet.flatten(renderer!.root.findByProps({ testID: 'resting-content' }).parent?.props?.style)?.pointerEvents,
     ).toBe('none');
     expect(
       renderer!.root.findAllByProps({ testID: 'active-content' }).length,
@@ -80,8 +79,7 @@ describe('SearchTransition', () => {
     });
 
     expect(
-      renderer!.root.findByProps({ testID: 'resting-content' }).parent?.props
-        .pointerEvents,
+      StyleSheet.flatten(renderer!.root.findByProps({ testID: 'resting-content' }).parent?.props?.style)?.pointerEvents,
     ).toBe('auto');
     expect(renderer!.root.findAllByProps({ testID: 'active-content' })).toHaveLength(0);
     expect(renderer!.root.findByProps({ testID: 'active-chrome' })).toBeTruthy();
@@ -102,8 +100,7 @@ describe('SearchTransition', () => {
     });
 
     expect(
-      renderer!.root.findByProps({ testID: 'resting-content' }).parent?.props
-        .pointerEvents,
+      StyleSheet.flatten(renderer!.root.findByProps({ testID: 'resting-content' }).parent?.props?.style)?.pointerEvents,
     ).toBe('none');
     expect(renderer!.root.findByProps({ testID: 'active-content' })).toBeTruthy();
   });
@@ -150,8 +147,8 @@ describe('SearchTransition', () => {
 
     const exitingContent = renderer!.root.findByProps({ testID: 'active-content' });
     const exitingChrome = renderer!.root.findByProps({ testID: 'active-chrome' });
-    expect(exitingContent.parent?.props.pointerEvents).toBe('none');
-    expect(exitingChrome.parent?.props.pointerEvents).toBe('none');
+    expect(StyleSheet.flatten(exitingContent.parent?.props?.style)?.pointerEvents).toBe('none');
+    expect(StyleSheet.flatten(exitingChrome.parent?.props?.style)?.pointerEvents).toBe('none');
 
     act(() => completions.at(-1)?.({ finished: true }));
 
@@ -186,7 +183,7 @@ describe('SearchTransition', () => {
     expect(results.props.query).toBe('photo');
     expect(renderedQueries).not.toContain('');
     expect(renderer!.root.findAllByProps({ testID: 'all-apps-list' })).toHaveLength(0);
-    expect(renderer!.root.findByProps({ testID: 'favorites-grid' }).parent?.props.pointerEvents).toBe('auto');
+    expect(StyleSheet.flatten(renderer!.root.findByProps({ testID: 'favorites-grid' }).parent?.props?.style)?.pointerEvents).toBe('auto');
     expect(renderer!.root.findByProps({ testID: 'editable-search' })).toBeTruthy();
     act(() => completions.at(-1)?.({ finished: true }));
     expect(renderer!.root.findAllByType(Results)).toHaveLength(0);

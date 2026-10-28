@@ -55,11 +55,10 @@ export function MediaTopChrome({ children }: { children: ReactNode }) {
   return (
     <View
       testID="media-top-chrome"
-      pointerEvents={shown ? 'box-none' : 'none'}
       onTouchStart={touchControls}
       accessibilityElementsHidden={!shown}
       importantForAccessibility={shown ? 'auto' : 'no-hide-descendants'}
-      style={{ flex: 1, opacity: shown ? 1 : 0 }}
+      style={{ flex: 1, opacity: shown ? 1 : 0 , pointerEvents: shown ? 'box-none' : 'none' }}
     >
       {children}
     </View>

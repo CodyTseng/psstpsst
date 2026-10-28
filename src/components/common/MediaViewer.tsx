@@ -103,7 +103,7 @@ export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: ()
       ]}
     >
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.lightboxBackdrop }, animatedStyle]} />
-      <Animated.View style={[StyleSheet.absoluteFill, contentStyle]} pointerEvents={isClosing ? 'none' : 'auto'}>
+      <Animated.View style={[StyleSheet.absoluteFill, contentStyle, { pointerEvents: isClosing ? 'none' : 'auto' }]}>
         <ZoomableImage
           ref={imageRef}
           onScaleChange={setImageScale}
@@ -115,7 +115,7 @@ export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: ()
           }}
         />
       </Animated.View>
-      <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]} pointerEvents={isClosing ? 'none' : 'box-none'}>
+      <Animated.View style={[StyleSheet.absoluteFill, animatedStyle, { pointerEvents: isClosing ? 'none' : 'box-none' }]}>
         <MediaViewerTopBar
           onClose={() => requestClose()}
           onSave={save}

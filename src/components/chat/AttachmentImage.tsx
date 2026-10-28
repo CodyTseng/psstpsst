@@ -169,13 +169,9 @@ export function AttachmentImage({
           }
         >
           {placeholder && (!localUri || displayedUri !== localUri) ? (
-            <Image
-              placeholder={placeholder}
-              placeholderContentFit="fill"
-              contentFit="fill"
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
+            <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
+              <Image placeholder={placeholder} placeholderContentFit="fill" contentFit="fill" style={StyleSheet.absoluteFill} />
+            </View>
           ) : null}
           <Image
             source={localUri ? { uri: localUri } : undefined}

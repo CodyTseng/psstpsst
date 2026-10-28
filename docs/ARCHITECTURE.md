@@ -815,6 +815,8 @@ Signing and the existing configuration outbox atomically retire the exact draft
 revision. Remote reconciliation cannot overwrite dirty or pending local work.
 History remains device-local. Metadata changes preserve application order and recency;
 database change notifications keep sibling hosts' read models current.
+Application data storage is a low-level repository shared by napps and napplets;
+it never imports application discovery, installation or visit orchestration.
 Application membership controls query the committed plaintext list or local
 application row through async live queries, independently of Explore navigation
 and metadata hydration. An unresolved membership is distinct from non-membership.
@@ -822,6 +824,9 @@ Cross-application action and intent handlers derive membership only from the
 current account's My apps library. Installations, history and live endpoints do not
 grant membership. Dispatch rechecks membership after target selection;
 removing an app excludes it from subsequent handoffs without closing its app.
+An explicit action to the caller’s exact live document instance is internal
+dispatch: it checks account, source, registered action and mode without requiring
+My apps membership or prompting for another application.
 My apps reads its saved membership snapshot and only the requested metadata
 pages. Saved local titles render before first-page manifest verification and
 metadata hydration, which run in a later task. Visible signed references missing

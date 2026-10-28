@@ -1,3 +1,4 @@
+import { forwardElectronStderr } from './electron-output.mjs';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { createRequire } from 'node:module';
@@ -130,14 +131,15 @@ const metro = track(
 try {
   await waitForMetro(metro, rendererPort, rendererUrl);
   console.log(`Starting Electron with Fast Refresh from ${rendererUrl}`);
-  track(
+  const electron = track(
     'Electron',
     spawn(electronBinary, [electronMain], {
       cwd: projectRoot,
       env: { ...process.env, PSSTPSST_RENDERER_URL: rendererUrl },
-      stdio: 'inherit',
+      stdio: ['inherit', 'inherit', 'pipe'],
     }),
   );
+  forwardElectronStderr(electron);
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   exitCode = 1;

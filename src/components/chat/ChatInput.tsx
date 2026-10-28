@@ -894,7 +894,6 @@ export function ChatInput({
 
   return (
     <View
-      pointerEvents="box-none"
       onLayout={(event) => {
         const nextWidth = event.nativeEvent.layout.width;
         setPanelWidth((current) => (current === nextWidth ? current : nextWidth));
@@ -906,8 +905,7 @@ export function ChatInput({
           aboveInputHeight +
           (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0)
         ),
-        zIndex: 1,
-      }}
+        zIndex: 1, pointerEvents: 'box-none' }}
     >
       <View
         style={{
@@ -916,7 +914,7 @@ export function ChatInput({
           start: 0,
           end: 0,
           bottom: 0,
-          pointerEvents: "none",
+          pointerEvents: 'none',
         }}
       >
         <ChromeBackdrop scrollbarOcclusion="bottom" />

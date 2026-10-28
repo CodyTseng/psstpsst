@@ -1078,7 +1078,7 @@
     "open_with_content": "“{{app}}” içeriği bir uygulamada açmak istiyor. Hangi uygulamayı kullanmak istersiniz?",
     "no_compatible_apps": "Uyumlu uygulama yok",
     "open_with_empty": "“{{app}}” için uyumlu bir uygulama yok. Keşfet bölümünde bir uygulama bulun, Uygulamalarım bölümüne ekleyin ve geri dönüp yeniden deneyin.",
-    "handler_closed": "Bu uygulama artık kullanılamıyor",
+    "handler_closed": "Bu uygulama şu anda isteği işleyemiyor",
     "action_filter": "Destekler: {{action}}",
     "auxiliary_action_filter": "Yardımcı uygulamalar: {{action}}",
     "show_all_apps": "Tüm uygulamaları göster",

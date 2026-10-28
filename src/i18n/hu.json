@@ -1078,7 +1078,7 @@
     "open_with_content": "A(z) „{{app}}” tartalmat szeretne megnyitni egy alkalmazásban. Melyik alkalmazást szeretné használni?",
     "no_compatible_apps": "Nincs elérhető kompatibilis alkalmazás",
     "open_with_empty": "Nincs elérhető kompatibilis alkalmazás a(z) „{{app}}” számára. Keress egyet a Felfedezés alatt, add a Saját alkalmazásokhoz, majd térj vissza és próbáld újra.",
-    "handler_closed": "Ez az alkalmazás már nem érhető el",
+    "handler_closed": "Ez az alkalmazás most nem tudja kezelni a kérést",
     "action_filter": "Támogatja: {{action}}",
     "auxiliary_action_filter": "Kiegészítő alkalmazások: {{action}}",
     "show_all_apps": "Összes alkalmazás megjelenítése",

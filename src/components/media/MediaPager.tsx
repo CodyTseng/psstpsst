@@ -342,7 +342,7 @@ function MediaPagerContent({
       <Animated.View
         style={[StyleSheet.absoluteFill, { backgroundColor: c.lightboxBackdrop }, animatedStyle]}
       />
-      <Animated.View style={[{ flex: 1 }, contentStyle]} pointerEvents={isClosing || (!IS_ELECTRON && !ready) ? 'none' : 'auto'}>
+      <Animated.View style={[{ flex: 1 }, contentStyle, { pointerEvents: isClosing || (!IS_ELECTRON && !ready) ? 'none' : 'auto' }]}>
         {!ready && !preview ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.onOverlay} /></View>
         ) : !IS_ELECTRON && touchPage ? (
@@ -428,7 +428,7 @@ function MediaPagerContent({
           />
         )}
       </Animated.View>
-      <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]} pointerEvents={isClosing ? 'none' : 'box-none'}>
+      <Animated.View style={[StyleSheet.absoluteFill, animatedStyle, { pointerEvents: isClosing ? 'none' : 'box-none' }]}>
         <MediaPagerNavigation
           hasPrevious={ready && currentIndex > 0}
           hasNext={ready && currentIndex < pages.length - 1}

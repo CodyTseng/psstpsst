@@ -235,7 +235,6 @@ function IncomingMessageBannerContent({
   return (
     <Animated.View
       entering={reducedMotion ? NOTICE_FADE : NOTICE_ENTER}
-      pointerEvents="box-none"
       style={{
         position: 'absolute',
         top,
@@ -243,8 +242,7 @@ function IncomingMessageBannerContent({
         end: 0,
         zIndex: 100,
         alignItems: 'center',
-        paddingHorizontal: spacing.lg,
-      }}
+        paddingHorizontal: spacing.lg, pointerEvents: 'box-none' }}
     >
       <GestureDetector gesture={pan} touchAction="none">
         <Animated.View

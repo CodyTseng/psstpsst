@@ -78,7 +78,6 @@ export const SearchBar = forwardRef<TextInput, Props>(function SearchBar(
       >
         {focused ? (
           <Animated.View
-            pointerEvents="none"
             entering={FadeIn.duration(SEARCH_ACTIVATION_TRANSITION_MS)}
             style={[
               StyleSheet.absoluteFill,
@@ -86,8 +85,7 @@ export const SearchBar = forwardRef<TextInput, Props>(function SearchBar(
                 borderWidth: 1,
                 borderColor: c.accent,
                 borderRadius: radius.md,
-              },
-            ]}
+              }, { pointerEvents: 'none' }]}
           />
         ) : null}
         <Search size={18} color={c.textMuted} />
@@ -98,7 +96,6 @@ export const SearchBar = forwardRef<TextInput, Props>(function SearchBar(
           placeholder={resolvedPlaceholder}
           placeholderTextColor={c.textMuted}
           editable={!onPress}
-          pointerEvents={onPress ? 'none' : 'auto'}
           accessible={!onPress}
           autoFocus={autoFocus}
           onFocus={() => {
@@ -118,8 +115,7 @@ export const SearchBar = forwardRef<TextInput, Props>(function SearchBar(
             fontSize: typography.body.fontSize,
             lineHeight: typography.body.fontFamily ? typography.body.lineHeight : undefined,
             fontFamily: typography.body.fontFamily,
-            paddingVertical: 0,
-          }}
+            paddingVertical: 0, pointerEvents: onPress ? 'none' : 'auto' }}
         />
         {value.length > 0 ? (
           <InputClearButton onPress={() => onChangeText('')} />

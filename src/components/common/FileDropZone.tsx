@@ -28,7 +28,6 @@ export function FileDropZone({ children, enabled, onDropFiles, title, hint, icon
         <View
           accessibilityLiveRegion="polite"
           accessibilityRole="alert"
-          pointerEvents="none"
           style={[
             StyleSheet.absoluteFill,
             {
@@ -37,8 +36,7 @@ export function FileDropZone({ children, enabled, onDropFiles, title, hint, icon
               alignItems: 'center',
               justifyContent: 'center',
               paddingHorizontal: spacing.xl,
-            },
-          ]}
+            }, { pointerEvents: 'none' }]}
         >
           <AppCard
             variant="plain"

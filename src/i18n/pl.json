@@ -1088,7 +1088,7 @@
     "open_with_content": "„{{app}}” chce otworzyć treść w aplikacji. Której aplikacji chcesz użyć?",
     "no_compatible_apps": "Brak zgodnych aplikacji",
     "open_with_empty": "Brak dostępnych aplikacji zgodnych z „{{app}}”. Znajdź aplikację w sekcji Odkrywaj, dodaj ją do Moich aplikacji, a następnie spróbuj ponownie.",
-    "handler_closed": "Ta aplikacja nie jest już dostępna",
+    "handler_closed": "Ta aplikacja nie może teraz obsłużyć żądania",
     "action_filter": "Obsługuje: {{action}}",
     "auxiliary_action_filter": "Aplikacje pomocnicze: {{action}}",
     "show_all_apps": "Pokaż wszystkie aplikacje",

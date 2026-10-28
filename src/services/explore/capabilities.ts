@@ -21,6 +21,7 @@ type Options = {
   applications(): Promise<ExploreEntry[]>;
   launch(entry: ExploreEntry): Promise<void>;
   beforeConnect?(): Promise<void>;
+  warn?(message: string, details: object): void;
 };
 
 /** Document-scoped capabilities share persistence, never authority, across windows. */
@@ -35,6 +36,10 @@ export class NappCapabilities {
   constructor(private account: string, private entry: ExploreEntry, private network: NappletNetwork, private options: Options, readonly instance = randomId()) {
     this.scope = { accountPubkey: account, appKey: entry.key };
     options.signal.addEventListener('abort', () => { void this.stop(); }, { once: true });
+  }
+  private warn(message: string, details: object) {
+    if (this.options.warn) this.options.warn(message, details);
+    else console.warn(`[explore] ${message}`, details);
   }
   private check() { assertNotAborted(this.options.signal); }
   private ensure() {
@@ -62,7 +67,16 @@ export class NappCapabilities {
     if (method === 'ready') { await this.ensure(); return this.instance; }
     if (method === 'registerAction') return this.request({ type: 'register', pattern: args[0] });
     if (method === 'actionResult') return this.request({ type: 'actionResult', requestId: args[0], result: args[1], error: args[2] });
-    if (method === 'action') return this.action(args[0], args[1], args[2]);
+    if (method === 'action') {
+      try { return await this.action(args[0], args[1], args[2]); }
+      catch (error) {
+        if (!this.options.signal.aborted && error instanceof Error && error.message !== 'permission-denied')
+          this.warn('Action failed', { requester: this.entry.title,
+            action: typeof args[0] === 'string' ? args[0].slice(0, 128) : null,
+            targetInstance: typeof args[2]?.instance === 'string' ? args[2].instance.slice(0, 128) : null, error: error.message });
+        throw error;
+      }
+    }
     if (method === 'nap') return this.nap(args[0]);
     throw new Error('unsupported-method');
   }
@@ -92,6 +106,11 @@ export class NappCapabilities {
       this.check();
     }
     const endpoints: ApplicationEndpoint[] = await this.request({ type: 'list' });
+    const self = options.instance === this.instance ? endpoints.find(endpoint => endpoint.instance === this.instance &&
+      endpoint.accountPubkey === this.account && endpoint.sourceId === this.entry.key) : undefined;
+    // An explicit self-target stays inside the already-open document's authority.
+    if (self && !!self.auxiliary === !!options.auxiliary && self.actions.some(pattern => matchesAction(pattern, name as string)))
+      return this.request({ type: 'invoke', target: self.instance, name, payload });
     const known = new Map((await this.options.applications()).map(app => [app.key, app]));
     const available = endpoints.filter(e => known.has(e.sourceId) && (!options.instance || e.instance === options.instance) &&
       !!e.auxiliary === !!options.auxiliary && e.actions.some(p => matchesAction(p, name as string)));
@@ -107,6 +126,13 @@ export class NappCapabilities {
         application: app ? { ...applicationListEntry(app), title: endpoint.title } : { key: endpoint.sourceId, title: endpoint.title, kind: 'napp' as const, servers: [], publisher } };
     }), ...applications.map(app => ({ key: `source:${app.key}`, title: app.title, application: applicationListEntry(app) }))].slice(0, 64);
     if (!choices.length) {
+      const requested = options.instance ? endpoints.find(endpoint => endpoint.instance === options.instance) : undefined;
+      const reason = !options.instance ? 'no-matching-app' : !requested ? 'instance-not-running'
+        : requested !== self && !known.has(requested.sourceId) ? 'app-not-added'
+          : !!requested.auxiliary !== !!options.auxiliary ? 'mode-mismatch' : 'action-not-registered';
+      this.warn('Action handler unavailable', { requester: this.entry.title, action: name,
+        requesterInstance: this.instance, targetInstance: options.instance ?? null, auxiliary: !!options.auxiliary,
+        reason, runningInstances: endpoints.length, addedApps: known.size, registeredActions: requested?.actions });
       await this.options.confirm({ title: this.entry.title, detail: '', choices: [], accountPubkey: this.account,
         applicationSelection: { requester: this.entry.title, content: name === 'profile' || name === 'view:0' ? 'profile' : 'content',
           ...(options.instance ? { unavailable: 'instance' as const } : { discovery: { name: name as string, auxiliary: !!options.auxiliary } }) } }, this.options.signal);

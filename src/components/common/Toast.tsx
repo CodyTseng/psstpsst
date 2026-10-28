@@ -42,7 +42,7 @@ function hideToastIfCurrent(id: number) {
 /**
  * The shared toast host. Centers in the window or a requested logical pane,
  * fades + lifts in, holds briefly, then fades out.
- * Driven by `toast.store`; `pointerEvents="none"` so it never blocks taps.
+ * Driven by `toast.store`; `style.pointerEvents = 'none'` so it never blocks taps.
  */
 export function Toast({ managesLifetime = true }: Props = {}) {
   const c = useThemeColors();
@@ -112,7 +112,6 @@ export function Toast({ managesLifetime = true }: Props = {}) {
 
   return (
     <Reanimated.View
-      pointerEvents="none"
       style={[
         {
           position: 'absolute',
@@ -122,8 +121,7 @@ export function Toast({ managesLifetime = true }: Props = {}) {
           alignItems: 'center',
           paddingHorizontal: spacing.xl,
         },
-        animatedStyle,
-      ]}
+        animatedStyle, { pointerEvents: 'none' }]}
     >
       <View
         accessibilityRole={isError ? 'alert' : undefined}

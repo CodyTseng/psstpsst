@@ -12,7 +12,7 @@ type Props = { children: ReactNode } & (
 
 export function TabIconWithBadge({ children, count, dot }: Props) {
   return (
-    <View pointerEvents="none" style={{ alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ alignItems: 'center', justifyContent: 'center' , pointerEvents: 'none' }}>
       {children}
       {dot || (count ?? 0) > 0 ? (
         <View style={{

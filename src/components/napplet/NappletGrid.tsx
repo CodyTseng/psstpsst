@@ -310,9 +310,9 @@ function AppGrid({ header, onScrollBeginDrag, items, visibleCount: pageCount, lo
       /> : null}
     </View>
     {/* Pointer coordinates use the physical window origin, including in RTL. */}
-    {dragging ? <Animated.View pointerEvents="none" accessible={false}
+    {dragging ? <Animated.View accessible={false}
       style={[{ position: 'absolute', top: 0, left: 0, width: cellWidth, height: cellHeight,
-        alignItems: 'center', justifyContent: 'center', gap: spacing.sm, zIndex: 100 }, ghostStyle]}>
+        alignItems: 'center', justifyContent: 'center', gap: spacing.sm, zIndex: 100 }, ghostStyle, { pointerEvents: 'none' }]}>
       <NappletIcon release={dragging} size={iconSize} />
       <AppText variant="caption" numberOfLines={1}>{dragging.title}</AppText>
     </Animated.View> : null}

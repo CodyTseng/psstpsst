@@ -133,7 +133,7 @@ it.each([false, true])('retains surfaces across forward and backward selection (
   expect(mounted.mock.calls.map(([name]) => name)).toEqual(['a', 'b', 'c']);
   expect(unmounted).not.toHaveBeenCalled();
   expect(translation()).toEqual([{ translateX: 0 }]);
-  expect(renderer.root.findByProps({ testID: 'media-current-surface' }).props.pointerEvents).toBe('auto');
+  expect(StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-current-surface' }).props?.style)?.pointerEvents).toBe('auto');
   act(() => { renderer.update(<MediaTouchPager width={400} height={800} pageKey="a" nextKey="b"
     enabled next={<ImageSurface name="b" />} onPage={onPage}><ImageSurface name="a" /></MediaTouchPager>); });
   expect(renderer.root.findByProps({ testID: 'image-b' })).toBe(neighbour);

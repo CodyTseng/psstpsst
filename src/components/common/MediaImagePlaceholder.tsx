@@ -15,8 +15,7 @@ export function MediaImagePlaceholder({ thumbhash, blurhash, aspectRatio }: {
   const height = aspect ? width / aspect : viewport.height;
   return (
     <View
-      pointerEvents="none"
-      style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+      style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }, { pointerEvents: 'none' }]}
       onLayout={({ nativeEvent: { layout } }) => setViewport((previous) =>
         previous.width === layout.width && previous.height === layout.height
           ? previous : { width: layout.width, height: layout.height })}

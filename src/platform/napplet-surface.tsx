@@ -23,8 +23,7 @@ export function NappletSurface({ id, visible, obscured: localObscured = false }:
   return (
     <NativeView
       key={id}
-      style={{ flex: 1, backgroundColor: c.background, opacity: presented ? 1 : 0 }}
-      pointerEvents={presented && !obscured ? 'auto' : 'none'}
+      style={{ flex: 1, backgroundColor: c.background, opacity: presented ? 1 : 0 , pointerEvents: presented && !obscured ? 'auto' : 'none' }}
       surfaceId={id}
       html={surface.html}
       page={surface.page ?? ''}

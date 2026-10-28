@@ -19,21 +19,25 @@ let capabilities: NappCapabilities;
 let confirm: jest.Mock;
 let launch: jest.Mock;
 let received: jest.Mock;
+let applications: jest.Mock;
+let warning: jest.SpyInstance;
 
-async function connectTarget(owner = account) {
+async function connectTarget(owner = account, actions = ['edit'], auxiliary = false) {
   await messaging.connect({ instance: 'target-instance', accountPubkey: owner, sourceId: target.key,
-    title: target.title, actions: ['edit'], domains: [], auxiliary: false });
+    title: target.title, actions, domains: [], auxiliary });
 }
 
 beforeEach(() => {
+  warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
   favorites = [target];
   life = new AbortController();
   confirm = jest.fn(async () => 'instance:target-instance');
   launch = jest.fn(async () => connectTarget());
   received = jest.fn();
+  applications = jest.fn(async () => favorites);
   capabilities = new NappCapabilities(account, caller, {} as NappletNetwork, {
     signal: life.signal, send: jest.fn(async () => {}), confirm, configure: jest.fn(),
-    applications: async () => favorites, launch,
+    applications, launch,
   }, 'caller-instance');
 });
 
@@ -41,6 +45,7 @@ afterEach(async () => {
   life.abort();
   await capabilities.stop();
   await messaging.disconnect('target-instance');
+  warning.mockRestore();
 });
 
 it('offers a live handler only while its application is a favorite, including explicit instance calls', async () => {
@@ -95,4 +100,49 @@ it('offers discovery with the exact requested action and mode when no favorite c
   expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ accountPubkey: account, choices: [],
     applicationSelection: { requester: 'Caller', content: 'content', discovery: { name: 'edit', auxiliary: true } } }), life.signal);
   expect(launch).not.toHaveBeenCalled();
+});
+
+it.each(['instance-not-running', 'app-not-added', 'mode-mismatch', 'action-not-registered'])('logs the action and exact handler rejection: %s', async reason => {
+  if (reason !== 'instance-not-running') await connectTarget(account,
+    reason === 'action-not-registered' ? ['profile'] : ['edit'], reason === 'mode-mismatch');
+  if (reason === 'app-not-added') favorites = [];
+  const payload = { content: 'private content' };
+  await expect(capabilities.handle('action', ['edit', payload, { instance: 'target-instance' }])).rejects.toThrow('permission-denied');
+  expect(warning).toHaveBeenCalledWith('[explore] Action handler unavailable', expect.objectContaining({
+    requester: 'Caller', action: 'edit', requesterInstance: 'caller-instance', targetInstance: 'target-instance', reason,
+  }));
+  expect(JSON.stringify(warning.mock.calls)).not.toContain('private content');
+});
+
+it('delivers an explicit self-target without My apps membership or a chooser', async () => {
+  favorites = [];
+  await capabilities.handle('registerAction', ['relay']);
+  const detach = messaging.onMessage((instance, message) => {
+    if (instance !== 'caller-instance' || message.type !== 'action') return;
+    received(message);
+    void messaging.request(instance, { type: 'actionResult', requestId: message.requestId, result: 'self-opened' });
+  });
+  try {
+    await expect(capabilities.handle('action', ['relay', 'wss://relay.example/', { instance: 'caller-instance' }])).resolves.toBe('self-opened');
+    expect(received).toHaveBeenCalledWith(expect.objectContaining({ name: 'relay', payload: 'wss://relay.example/' }));
+    expect(applications).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(launch).not.toHaveBeenCalled();
+  } finally { detach(); }
+});
+
+it('does not extend the self-target exception to another instance of the same app', async () => {
+  favorites = [];
+  await messaging.connect({ instance: 'target-instance', accountPubkey: account, sourceId: caller.key,
+    title: caller.title, actions: ['relay'], domains: [] });
+  await expect(capabilities.handle('action', ['relay', {}, { instance: 'target-instance' }])).rejects.toThrow('permission-denied');
+  expect(warning).toHaveBeenCalledWith('[explore] Action handler unavailable', expect.objectContaining({ reason: 'app-not-added' }));
+});
+
+it.each(['mode-mismatch', 'action-not-registered'])('still validates explicit self-target handlers: %s', async reason => {
+  favorites = [];
+  await capabilities.handle('registerAction', ['relay']);
+  const name = reason === 'action-not-registered' ? 'edit' : 'relay';
+  await expect(capabilities.handle('action', [name, {}, { instance: 'caller-instance', auxiliary: reason === 'mode-mismatch' }])).rejects.toThrow('permission-denied');
+  expect(warning).toHaveBeenCalledWith('[explore] Action handler unavailable', expect.objectContaining({ reason }));
 });

@@ -1,3 +1,4 @@
+import { forwardElectronStderr } from './electron-output.mjs';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -8,8 +9,9 @@ const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const binary = await prepareElectronDevRuntime(projectRoot, require('electron'));
 const child = spawn(binary, [fileURLToPath(new URL('../desktop/dist/main.js', import.meta.url))], {
   cwd: projectRoot,
-  stdio: 'inherit',
+  stdio: ['inherit', 'inherit', 'pipe'],
 });
+forwardElectronStderr(child);
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => child.kill(signal));
 }

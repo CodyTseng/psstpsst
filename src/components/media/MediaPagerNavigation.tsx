@@ -53,9 +53,7 @@ export function MediaPagerNavigation({ hasPrevious, hasNext, disabled, onPage }:
         end: spacing.lg,
         marginTop: -uiDensity.headerActionSize / 2,
         flexDirection: 'row',
-        justifyContent: 'space-between',
-      }}
-      pointerEvents="box-none"
+        justifyContent: 'space-between', pointerEvents: 'box-none' }}
     >
       <View>{hasPrevious ? (
         <IconButton

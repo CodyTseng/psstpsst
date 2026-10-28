@@ -6,7 +6,7 @@ import { assertNotAborted } from '@/platform/abort';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import type { ExploreEntry } from './model';
 import { localInstallPath } from './local-path';
-import { setData } from '@/services/napplet/repository';
+import { setData } from '@/services/napplet/data-repository';
 import { invalidateSigning } from '@/services/signing/changes';
 
 export const localAppId = (value: string) => /^local~[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);

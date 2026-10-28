@@ -22,7 +22,7 @@ it('retains the transparent measured envelope after dismissal, including stale z
   act(() => { renderer.update(<Feedback visible={false} />); });
   expect(renderer.root.findAllByProps({ testID: 'notice' })).toHaveLength(0);
   expect(StyleSheet.flatten(slot().props.style).minHeight).toBe(56);
-  expect(slot().props.pointerEvents).toBe('box-none');
+  expect(StyleSheet.flatten(slot().props?.style)?.pointerEvents).toBe('box-none');
   act(() => { slot().props.onLayout({ nativeEvent: { layout: { height: 0 } } }); });
   expect(StyleSheet.flatten(slot().props.style).minHeight).toBe(56);
   act(() => { renderer.unmount(); });

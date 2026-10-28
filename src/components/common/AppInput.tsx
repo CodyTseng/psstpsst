@@ -77,14 +77,12 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
       <View style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
         {showTruncatedPlaceholder ? (
           <View
-            pointerEvents="none"
             importantForAccessibility="no-hide-descendants"
             style={{
               position: 'absolute',
               insetBlock: 0,
               insetInline: 0,
-              justifyContent: 'center',
-            }}
+              justifyContent: 'center', pointerEvents: 'none' }}
           >
             <AppText
               variant="body"

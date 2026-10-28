@@ -1078,7 +1078,7 @@
     "open_with_content": "“{{app}}” wants to open content in an app. Which app would you like to use?",
     "no_compatible_apps": "No compatible apps available",
     "open_with_empty": "No compatible app is available for “{{app}}”. Find an app in Discover, add it to My apps, then return and try again.",
-    "handler_closed": "This app is no longer available",
+    "handler_closed": "This app cannot handle the request right now",
     "action_filter": "Supports: {{action}}",
     "auxiliary_action_filter": "Auxiliary apps: {{action}}",
     "show_all_apps": "Show all apps",

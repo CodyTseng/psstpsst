@@ -437,6 +437,7 @@ export class ExploreRuntime {
           if (!this.options.configure) throw new Error('settings-unavailable');
           this.options.configure(schema, values, save, life);
         },
+        warn: (message, details) => this.log('warn', message, details),
         applications: this.options.applications ?? (async () => []),
         launch: this.options.launch ?? (async () => { throw new Error('handler-unavailable'); }),
       }, this.instance);

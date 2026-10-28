@@ -50,7 +50,7 @@ export function NappletSurface({ id, visible, obscured: localObscured = false }:
     void platform.napplet.setBounds(id, { x: 0, y: 0, width: 0, height: 0 }, false).catch(() => {});
   }, [id]);
   return <View ref={ref} onLayout={place} style={{ flex: 1 }}>
-    {preview?.id === id ? <View style={StyleSheet.absoluteFill} pointerEvents="none"><Image key={preview.session.token} source={{ uri: preview.uri }} style={StyleSheet.absoluteFill}
+    {preview?.id === id ? <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}><Image key={preview.session.token} source={{ uri: preview.uri }} style={StyleSheet.absoluteFill}
       resizeMode="stretch" accessible={false}
       onError={() => { if (preview.session.active) setPresentation((value) => ({ ...value, preview: null })); }} /></View> : null}
   </View>;

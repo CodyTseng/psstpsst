@@ -157,13 +157,17 @@ or publish anything. See [implementation and limits](../implementation/napp-ui-d
 `napp.registerAction(pattern, handler?)` registers a document-scoped handler;
 omitting the callback permits a popstate-only handler. `napp.action(name, payload,
 options?)` selects a live handler belonging to an application in My apps or a verified
-My apps entry declaring the action. Both paths use the caller's account;
-an explicit `instance` cannot bypass My apps membership. Removing an app
-excludes even its running handlers from subsequent selection and delivery.
+My apps entry declaring the action. Both paths use the caller's account.
+An explicit call to the caller's exact live document instance dispatches directly
+without My apps membership or a chooser, after checking its registered action and
+mode. Other instances, including another window of the same app, require My apps
+membership. Removing an app excludes its running handlers from subsequent
+cross-application selection and delivery.
 The chooser names the caller and content purpose and asks which app to
 open it with. Candidate rows reuse discovery's icons, names, publishers and format
 labels. An empty chooser offers capability-filtered Discover; an unavailable
-explicit instance offers no discovery handoff. Closing the empty chooser settles
+explicit instance offers no discovery handoff. Failure diagnostics include the
+action name, instance identifiers and routing rejection reason, never payloads. Closing the empty chooser settles
 as `permission-denied`, like cancelling a populated chooser. The sheet's Close action dismisses only this handoff. Android launches
 selected applications in independent document tasks and focuses an existing task
 when delivering an action to its live handler. Options may identify one live

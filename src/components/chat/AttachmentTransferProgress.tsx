@@ -85,9 +85,7 @@ export function AttachmentTransferProgress({
         borderRadius: diameter / 2,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor,
-      }}
-      pointerEvents="none"
+        backgroundColor, pointerEvents: 'none' }}
     >
       <Svg
         width={diameter}

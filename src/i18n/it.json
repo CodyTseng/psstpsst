@@ -1083,7 +1083,7 @@
     "open_with_content": "«{{app}}» vuole aprire un contenuto in un’app. Quale vuoi usare?",
     "no_compatible_apps": "Nessuna app compatibile disponibile",
     "open_with_empty": "Nessuna app compatibile è disponibile per “{{app}}”. Trovane una in Scopri, aggiungila a Le mie app, poi torna e riprova.",
-    "handler_closed": "Questa app non è più disponibile",
+    "handler_closed": "Questa app non può gestire la richiesta al momento",
     "action_filter": "Supporta: {{action}}",
     "auxiliary_action_filter": "App ausiliarie: {{action}}",
     "show_all_apps": "Mostra tutte le app",

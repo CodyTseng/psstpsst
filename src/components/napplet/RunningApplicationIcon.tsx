@@ -10,8 +10,8 @@ export function RunningApplicationIcon({ sourceId, ...props }: ComponentProps<ty
   const dotSize = compact ? spacing.sm : spacing.md;
   return <View style={{ alignSelf: 'center', paddingHorizontal: spacing.xs }}>
     <NappletIcon {...props}/>
-    {running ? <View pointerEvents="none" testID="application-running-dot" style={{ position: 'absolute', bottom: -spacing.xs, end: 0,
+    {running ? <View testID="application-running-dot" style={{ position: 'absolute', bottom: -spacing.xs, end: 0,
       width: dotSize + spacing.xs, height: dotSize + spacing.xs, borderRadius: radius.full, backgroundColor: colors.success,
-      borderWidth: 2, borderColor: colors.background }}/>:null}
+      borderWidth: 2, borderColor: colors.background , pointerEvents: 'none' }}/>:null}
   </View>;
 }

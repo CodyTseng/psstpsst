@@ -305,7 +305,6 @@ export default function Welcome() {
           <View style={{ flex: 1 }}>
             <OnboardingArtwork wide={false} fadeColor={c.background} />
             <View
-              pointerEvents="none"
               style={[
                 StyleSheet.absoluteFill,
                 {
@@ -314,8 +313,7 @@ export default function Welcome() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   paddingHorizontal: spacing.lg,
-                },
-              ]}
+                }, { pointerEvents: 'none' }]}
             >
               {/* Account for the SVG's built-in whitespace below the visible mark. */}
               <View style={{ marginBottom: -spacing.xs }}>

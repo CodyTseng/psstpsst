@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { NappletSurface } from '../napplet-surface';
 
@@ -14,15 +15,15 @@ it('retains the painted mobile page beneath native modals while blocking input',
   act(() => { renderer = create(<NappletSurface id="app" visible />); });
   const surface = renderer.root.findByProps({ surfaceId: 'app' });
   expect(surface.props.style.opacity).toBe(1);
-  expect(surface.props.pointerEvents).toBe('auto');
+  expect(StyleSheet.flatten(surface.props?.style)?.pointerEvents).toBe('auto');
   act(() => { renderer.update(<NappletSurface id="app" visible obscured />); });
   expect(surface.props.style.opacity).toBe(1);
-  expect(surface.props.pointerEvents).toBe('none');
+  expect(StyleSheet.flatten(surface.props?.style)?.pointerEvents).toBe('none');
   act(() => { renderer.update(<NappletSurface id="app" visible />); });
   expect(surface.props.style.opacity).toBe(1);
-  expect(surface.props.pointerEvents).toBe('auto');
+  expect(StyleSheet.flatten(surface.props?.style)?.pointerEvents).toBe('auto');
   act(() => { renderer.update(<NappletSurface id="app" visible={false} />); });
   expect(surface.props.style.opacity).toBe(0);
-  expect(surface.props.pointerEvents).toBe('none');
+  expect(StyleSheet.flatten(surface.props?.style)?.pointerEvents).toBe('none');
   act(() => renderer.unmount());
 });

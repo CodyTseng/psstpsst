@@ -88,7 +88,6 @@ export function SearchTransition({
     <View style={styles.root}>
       <Animated.View
         ref={restingSurface}
-        pointerEvents={contentActive ? 'none' : 'auto'}
         style={[
           StyleSheet.absoluteFill,
           {
@@ -96,16 +95,14 @@ export function SearchTransition({
               inputRange: [0, 1],
               outputRange: [1, 0],
             }),
-          },
-        ]}
+          }, { pointerEvents: contentActive ? 'none' : 'auto' }]}
       >
         {children}
       </Animated.View>
 
       {contentActive || retainedContent ? (
         <Animated.View
-          pointerEvents={contentActive ? 'auto' : 'none'}
-          style={[StyleSheet.absoluteFill, styles.active, { opacity: progress }]}
+          style={[StyleSheet.absoluteFill, styles.active, { opacity: progress }, { pointerEvents: contentActive ? 'auto' : 'none' }]}
         >
           {contentActive ? activeContent : retainedContent?.node}
         </Animated.View>
@@ -113,8 +110,7 @@ export function SearchTransition({
 
       {activeChrome && (active || retainedContent) ? (
         <View
-          pointerEvents={active ? 'box-none' : 'none'}
-          style={[StyleSheet.absoluteFill, styles.activeChrome]}
+          style={[StyleSheet.absoluteFill, styles.activeChrome, { pointerEvents: active ? 'box-none' : 'none' }]}
         >
           {activeChrome}
         </View>

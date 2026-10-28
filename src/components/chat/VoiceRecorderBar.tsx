@@ -285,8 +285,8 @@ export function VoiceRecorderBar({ onSendVoice, onCancel, aboveInput }: Props) {
 
   if (phase === "recording") {
     return (
-      <View pointerEvents="box-none" style={{ marginTop: -(bottomBarHeight + safe + feedbackHeight), zIndex: 1 }}>
-        <View pointerEvents="none" style={{ position: 'absolute', top: feedbackHeight, bottom: 0, start: 0, end: 0 }}>
+      <View style={{ marginTop: -(bottomBarHeight + safe + feedbackHeight), zIndex: 1 , pointerEvents: 'box-none' }}>
+        <View style={{ position: 'absolute', top: feedbackHeight, bottom: 0, start: 0, end: 0 , pointerEvents: 'none' }}>
           <ChromeBackdrop scrollbarOcclusion="bottom" />
         </View>
         <ChatComposerFeedbackSlot
@@ -358,8 +358,8 @@ export function VoiceRecorderBar({ onSendVoice, onCancel, aboveInput }: Props) {
   }
 
   return (
-    <View pointerEvents="box-none" style={{ marginTop: -(bottomBarHeight + safe + feedbackHeight), zIndex: 1 }}>
-      <View pointerEvents="none" style={{ position: 'absolute', top: feedbackHeight, bottom: 0, start: 0, end: 0 }}>
+    <View style={{ marginTop: -(bottomBarHeight + safe + feedbackHeight), zIndex: 1 , pointerEvents: 'box-none' }}>
+      <View style={{ position: 'absolute', top: feedbackHeight, bottom: 0, start: 0, end: 0 , pointerEvents: 'none' }}>
         <ChromeBackdrop scrollbarOcclusion="bottom" />
       </View>
       <ChatComposerFeedbackSlot

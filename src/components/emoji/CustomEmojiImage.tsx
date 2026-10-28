@@ -112,11 +112,9 @@ function EmojiImageFrame({ uri, shortcode, size, cornerRadius, clickable, loadin
       />
       {status !== 'displayed' ? (
         <View
-          pointerEvents="none"
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
-          ]}
+            { backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center' }, { pointerEvents: 'none' }]}
         >
           {loading && status === 'loading' ? (
             <ActivityIndicator

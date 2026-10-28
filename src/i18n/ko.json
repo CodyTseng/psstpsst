@@ -1078,7 +1078,7 @@
     "open_with_content": "“{{app}}”에서 콘텐츠를 열려고 합니다. 어떤 앱으로 열까요?",
     "no_compatible_apps": "사용 가능한 호환 앱이 없습니다",
     "open_with_empty": "“{{app}}”에 사용할 수 있는 호환 앱이 없습니다. 발견에서 앱을 찾아 내 앱에 추가한 후 돌아와 다시 시도하세요.",
-    "handler_closed": "이 앱은 더 이상 사용할 수 없습니다",
+    "handler_closed": "이 앱은 지금 요청을 처리할 수 없습니다",
     "action_filter": "지원 기능: {{action}}",
     "auxiliary_action_filter": "보조 앱: {{action}}",
     "show_all_apps": "모든 앱 표시",
