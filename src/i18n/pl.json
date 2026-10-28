@@ -479,6 +479,13 @@
     "scroll_to_unread": "Przewiń do nieprzeczytanych wiadomości",
     "scroll_to_latest": "Przewiń do najnowszych wiadomości",
     "view_profile": "Wyświetl profil",
+    "card_types": {
+      "profile": "Profil",
+      "note": "Krótki wpis",
+      "application": "Aplikacja",
+      "emoji_pack": "Pakiet naklejek",
+      "event": "Udostępnione zdarzenie"
+    },
     "event_reference": {
       "event": "Zdarzenie",
       "kind": "Rodzaj {{kind}}",

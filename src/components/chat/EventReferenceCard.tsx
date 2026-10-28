@@ -1,28 +1,23 @@
-import { SquareArrowRightUp as ExternalLink } from '@solar-icons/react-native/category/arrows/Linear/SquareArrowRightUp';
-import { router } from 'expo-router';
 import type { Event } from 'nostr-tools';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
-
-import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { AppText } from '@/components/common/AppText';
 import { Avatar } from '@/components/common/Avatar';
-import { InteractionOverlay } from '@/components/common/InteractionOverlay';
 import { EmojiPackReferenceCard } from '@/components/emoji/EmojiPackReferenceCard';
 import { useDisplayName } from '@/hooks/use-display-name';
 import { useReferencedEvent } from '@/hooks/use-referenced-event';
-import { useDirectionalIconStyle } from '@/i18n/direction';
 import { KIND_EMOJI_SET } from '@/lib/nostr/custom-emoji';
 import type { NostrEventReference } from '@/lib/nostr/event-reference';
 import { nostrEventUrl } from '@/lib/nostr/event-url';
 import { formatListTime } from '@/lib/time';
 import { canResolveReferencedEvent } from '@/services/nostr/event-reference.service';
+import { isApplicationReference } from '@/services/explore/application-reference';
 import { useChatPrefsStore } from '@/stores/chat-prefs.store';
-import { radius, spacing, useThemeColors } from '@/theme';
 
-import { MessageCardFooter } from './MessageCardFooter';
+import { MessageCard } from './MessageCard';
+import { MessageCardHeader, MessageCardText, MESSAGE_CARD_VISUAL_SIZE } from './MessageCardHeader';
+import { ApplicationReferenceCard } from './ApplicationReferenceCard';
 import { MentionCard } from './MentionCard';
 import { openMessageUrl } from './open-message-url';
 import type { RemoteContentMode } from './remote-content-policy';
@@ -56,36 +51,14 @@ function EventContent({ event }: { event: Event }) {
     );
   }
 
-  return event.content ? (
-    <AppText variant="body" numberOfLines={4}>
-      {boundedText(event.content)}
-    </AppText>
-  ) : (
-    <AppText variant="caption" tone="muted">
-      {t('chat.event_reference.empty')}
-    </AppText>
-  );
+  return <MessageCardText variant="body" lines={4}>{event.content ? boundedText(event.content) : t('chat.event_reference.empty')}</MessageCardText>;
 }
 
 function ResolvedHeader({ event, loadRemote }: { event: Event; loadRemote: boolean }) {
   const { name, profile } = useDisplayName(event.pubkey, loadRemote);
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-      <Avatar
-        pubkey={event.pubkey}
-        picture={loadRemote ? profile?.picture : undefined}
-        size={36}
-      />
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <AppText variant="caption" weight="semibold" numberOfLines={1}>
-          {name}
-        </AppText>
-        <AppText variant="caption" tone="muted" numberOfLines={1}>
-          {formatListTime(event.created_at)}
-        </AppText>
-      </View>
-    </View>
-  );
+  return <MessageCardHeader title={name}
+    visual={<Avatar pubkey={event.pubkey} picture={loadRemote ? profile?.picture : undefined} size={MESSAGE_CARD_VISUAL_SIZE} />}
+    subtitle={formatListTime(event.created_at)} />;
 }
 
 /** A compact neutral card for a public-event reference block. Kind 1 gets a
@@ -93,13 +66,10 @@ function ResolvedHeader({ event, loadRemote }: { event: Event; loadRemote: boole
  * useful links with their kind number visible. */
 function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: Props) {
   const { t } = useTranslation();
-  const directionalIconStyle = useDirectionalIconStyle();
-  const c = useThemeColors();
   const { event, loading } = useReferencedEvent(reference, loadRemote);
   const resolvable = canResolveReferencedEvent(reference);
   const urlTemplate = useChatPrefsStore((s) => s.nostrEventUrl);
   const href = nostrEventUrl(reference, urlTemplate);
-  const app = reference.kind === 5129 || reference.kind === 15129 || reference.kind === 35129;
   const fallbackLabel =
     reference.kind == null
       ? t('chat.event_reference.event')
@@ -108,70 +78,22 @@ function DefaultEventReferenceCard({ reference, metaSlot, loadRemote = true }: P
   if (event?.kind === 0) {
     return <MentionCard loadRemote={loadRemote} pubkey={event.pubkey} metaSlot={metaSlot} />;
   }
+  const note = event ? event.kind === 1 : reference.kind === 1 || reference.kind == null;
+  const status = t(loading ? 'chat.event_reference.loading' : 'chat.event_reference.unavailable');
 
-  return (
-    <Pressable
-      disabled={!loadRemote}
-      accessibilityRole="link"
-      accessibilityLabel={t(app ? 'napplets.details' : 'napplets.open')}
-      fallbackHoverOpacity={false}
-      onPress={() => {
-        if (app) router.push({ pathname: '/napplet/[id]', params: { id: reference.bech32 } });
-        else void openMessageUrl(href);
-      }}
-      style={{
-        width: 280,
-        maxWidth: '100%',
-        paddingTop: 10,
-        paddingHorizontal: 10,
-        paddingBottom: 6,
-        borderRadius: radius.lg,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: c.border,
-        backgroundColor: c.surface,
-      }}
-    >
-      {({ pressed }) => (
-        <>
-          {pressed ? <InteractionOverlay borderRadius={radius.lg} /> : null}
-          <View style={{ gap: spacing.md }}>
-            {event ? (
-              <ResolvedHeader event={event} loadRemote={loadRemote} />
-            ) : (
-              <View style={{ gap: spacing.xs }}>
-                <AppText variant="caption" weight="semibold">
-                  {fallbackLabel}
-                </AppText>
-                {resolvable ? (
-                  <AppText variant="caption" tone="muted">
-                    {loading
-                      ? t('chat.event_reference.loading')
-                      : t('chat.event_reference.unavailable')}
-                  </AppText>
-                ) : null}
-              </View>
-            )}
-
-            {event ? <EventContent event={event} /> : null}
-          </View>
-          <MessageCardFooter
-            leading={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                <ExternalLink size={14} color={c.accent} style={directionalIconStyle} />
-                <AppText variant="caption" tone="accent" numberOfLines={1}>
-                  {t(app ? 'napplets.details' : 'napplets.open')}
-                </AppText>
-              </View>
-            }
-            metaSlot={metaSlot}
-          />
-        </>
-      )}
-    </Pressable>
-  );
+  return <MessageCard type={note ? 'note' : reference.kind === 0 ? 'profile' : 'event'} disabled={!loadRemote} accessibilityLabel={t('napplets.open')}
+    onPress={() => { void openMessageUrl(href); }} metaSlot={metaSlot}
+    header={event ? <ResolvedHeader event={event} loadRemote={loadRemote} /> :
+      <MessageCardHeader title={note ? t('chat.card_types.note') : fallbackLabel} reserveVisual={note || reference.kind === 0}
+        subtitle={!note && resolvable ? status : ''} />}>
+    {event ? <EventContent event={event} /> : note ? <MessageCardText variant="body" lines={4}>{status}</MessageCardText> : null}
+  </MessageCard>;
 }
 
 export function EventReferenceCard({ reference, metaSlot, loadRemote = true, downloadMode = 'auto' }: Props) {
+  if (isApplicationReference(reference)) {
+    return <ApplicationReferenceCard reference={reference} metaSlot={metaSlot} loadRemote={loadRemote} />;
+  }
   if (
     reference.kind === KIND_EMOJI_SET &&
     reference.author &&

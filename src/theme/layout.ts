@@ -24,6 +24,7 @@ export const wideLayout = {
 
 /** Maximum widths for surfaces that should not stretch with the window. */
 export const contentWidth = {
+  messageCard: 320,
   focused: 480,
   compactSheet: 480,
   sheet: 480,

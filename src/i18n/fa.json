@@ -473,6 +473,13 @@
     "scroll_to_unread": "رفتن به پیام‌های خوانده‌نشده",
     "scroll_to_latest": "رفتن به جدیدترین پیام‌ها",
     "view_profile": "نمایش نمایه",
+    "card_types": {
+      "profile": "نمایه",
+      "note": "یادداشت کوتاه",
+      "application": "برنامه",
+      "emoji_pack": "بستهٔ برچسب",
+      "event": "رویداد اشتراک‌گذاری‌شده"
+    },
     "event_reference": {
       "event": "رویداد",
       "kind": "نوع {{kind}}",

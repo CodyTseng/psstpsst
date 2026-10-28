@@ -1,6 +1,4 @@
-import { cacheApplicationEvent, readApplicationCache } from '@/services/explore/application-cache';
-import { refreshApplicationMetadata } from '@/services/explore/application-metadata';
-import { parseFavoriteReference } from '@/services/explore/favorites-protocol';
+import { resolveApplicationMetadata } from '@/services/explore/application-metadata';
 import { fromNapplet } from '@/services/explore/model';
 import { readApplicationHandlers } from '@/services/explore/application-handlers';
 import { clearBrowserPermissions, clearAccountBrowserPermissions } from '@/services/explore/browser-permission-store';
@@ -12,14 +10,9 @@ import { getAccount } from '@/services/account/account-access';
 import { nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingActivity } from '@/db/schema';
 import { db } from '@/db/client';
 import { eq } from 'drizzle-orm';
-import { matchFilters } from 'nostr-tools/filter';
 import { loadArtifact } from './artifacts';
-import { NappletNetwork } from './network';
 import {
-  MARKET_RELAYS,
   NAP_DOMAINS,
-  parseAppAddress,
-  parseManifest,
   type NappletInstallation,
   type NappletRelease,
 } from './protocol';
@@ -80,8 +73,7 @@ let generation = 0;
 let activation: { account: string; ready: Promise<void>; promise: Promise<void> } | undefined;
 let desktopRevision = 0;
 let desktopEdits: Promise<void> = Promise.resolve();
-let catalog: NappletNetwork | null = null;
-const addressReaders = new Set<NappletNetwork>();
+const addressRequests = new Set<AbortController>();
 const signingEdits = new Map<string, Promise<void>>();
 let runtime: NappletRuntime | null = null;
 let runtimeClosing: Promise<void> = Promise.resolve();
@@ -166,7 +158,6 @@ export const nappletService = {
     const promise = (async () => {
       if (!(await getAccount(accountPubkey))) throw new Error('account-unavailable');
       if (generation !== epoch) { ready(); return; }
-      catalog = new NappletNetwork(accountPubkey);
       nappletStore.setState({ accountPubkey });
       ready();
       await refresh(accountPubkey, epoch);
@@ -186,10 +177,8 @@ export const nappletService = {
     opening++;
     approvals.cancelAll();
     this.stop();
-    for (const reader of addressReaders) reader.destroy();
-    addressReaders.clear();
-    catalog?.destroy();
-    catalog = null;
+    for (const request of addressRequests) request.abort();
+    addressRequests.clear();
     nappletStore.setState({
       accountPubkey: null,
       loaded: false,
@@ -212,81 +201,26 @@ export const nappletService = {
   async resolve(value: string, options: { refresh?: boolean } = {}): Promise<NappletRelease> {
     const { accountPubkey: account, installed, market } = nappletStore.getState();
     const epoch = generation;
-    if (!catalog || !account) throw new Error('account-unavailable');
-    const address = parseAppAddress(value);
-    const filter = address.filters[0];
-    const reference = filter.ids?.[0] ? parseFavoriteReference(['e', filter.ids[0], address.relays[0] ?? '', address.author ?? '']).entry
-      : parseFavoriteReference(['a', `${filter.kinds![0]}:${filter.authors![0]}:${filter['#d']?.[0] ?? ''}`, ...(address.relays[0] ? [address.relays[0]] : [])]).entry;
-    if (!options.refresh) {
-      const stored = await readApplicationCache([reference]).catch(() => new Map());
-      const release = stored.get(reference.key)?.release;
-      if (release) {
-        void refreshApplicationMetadata(account, [fromNapplet(release)], new AbortController().signal).catch(() => {});
-        return release;
-      }
-      let cached: NappletRelease | undefined;
-      for (const releases of [installed, market]) {
-        for (const release of releases) {
-          if (matchFilters(address.filters, release.event) && (!cached ||
-            release.event.created_at > cached.event.created_at ||
-            (release.event.created_at === cached.event.created_at && release.event.id < cached.event.id))) cached = release;
-        }
-      }
-      if (cached) {
-        await cacheApplicationEvent(fromNapplet(cached)).catch(() => {});
-        if (filter.ids?.length) return cached;
-        const latest = (await readApplicationCache([fromNapplet(cached)]).catch(() => new Map())).get(fromNapplet(cached).key)?.release;
-        return latest ?? cached;
-      }
-    }
-    const network = new NappletNetwork(account);
-    addressReaders.add(network);
+    if (!account) throw new Error('account-unavailable');
+    const request = new AbortController();
+    addressRequests.add(request);
     try {
-      const filters = address.filters.map((filter) => ({ ...filter, limit: 1 }));
-      const initial = [...new Set([...address.relays, ...MARKET_RELAYS])].slice(0, 8);
-      let invalid = false;
-      let failed = false;
-      const lookup = async (relays: string[]) => {
-        let result: Awaited<ReturnType<NappletNetwork['query']>>;
-        try { result = await network.query(relays, filters); }
-        catch { check(account, epoch); failed = true; return null; }
-        check(account, epoch);
-        failed ||= !!result.error || result.incomplete;
-        for (const event of result.events.sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id))) {
-          try {
-            const release = { ...parseManifest(event), eventRelays: result.eventRelays?.get(event.id) ?? [] };
-            await cacheApplicationEvent(fromNapplet(release)).catch(() => {});
-            nappletStore.setState((state) => {
-              const previous = state.market.find((app) => app.key === release.key);
-              if (previous && (previous.event.created_at > event.created_at ||
-                (previous.event.created_at === event.created_at && previous.event.id <= event.id))) return state;
-              return { market: [release, ...state.market.filter((app) => app.key !== release.key)].slice(0, 500) };
-            });
-            return release;
-          }
-          catch { invalid = true; }
-        }
-        return null;
-      };
-      const release = await lookup(initial);
-      if (release) return release;
-      if (!address.relays.length && address.author) {
-        let relays: string[] = [];
-        try { relays = await network.publisherRelays(address.author); }
-        catch { failed = true; }
-        check(account, epoch);
-        const extra = relays.filter((relay) => !initial.includes(relay));
-        if (extra.length) {
-          const fallback = await lookup(extra);
-          if (fallback) return fallback;
-        }
-      }
-      if (invalid) throw new Error('napplets.invalid_manifest');
-      if (failed) throw new Error('napplets.request_failed');
-      throw new Error('napplets.not_found');
-    } finally {
-      if (addressReaders.delete(network)) network.destroy();
-    }
+      const known = [...installed, ...market].filter(release => /^[a-f0-9]{64}$/.test(release.event.id ?? ''));
+      const app = await resolveApplicationMetadata(account, value, request.signal, {
+        refresh: options.refresh, known: known.map(fromNapplet),
+      });
+      check(account, epoch);
+      if (!app.release) throw new Error('napplets.invalid_manifest');
+      const release = known.find(previous => previous.event.id === app.release!.event.id) ?? app.release;
+      nappletStore.setState(state => {
+        const previous = state.market.find(app => app.key === release.key);
+        if (previous && (previous.event.created_at > release.event.created_at ||
+          previous.event.created_at === release.event.created_at && previous.event.id <= release.event.id)) return state;
+        return { market: [release, ...state.market.filter(app => app.key !== release.key)].slice(0, 500) };
+      });
+      return release;
+    } catch (error) { check(account, epoch); throw error; }
+    finally { addressRequests.delete(request); }
   },
   async install(release: NappletRelease, expectedAccount?: string, onDownload?: () => void) {
     const account = nappletStore.getState().accountPubkey;

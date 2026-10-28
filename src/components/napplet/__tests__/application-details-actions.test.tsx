@@ -34,7 +34,7 @@ it('shows Favorite and permissions without Remove for an unused app', async () =
   act(() => { items().find(item => item.key === 'favorite')!.onPress(); });
   expect(mockFavorite).toHaveBeenCalledWith(app, true);
   act(() => { items().find(item => item.key === 'permissions')!.onPress(); });
-  expect(router.push).toHaveBeenCalledWith('/explore-details?key=notes&permissions=1');
+  expect(router.push).toHaveBeenCalledWith({ pathname: '/explore-details', params: { address: app.address, permissions: '1' } });
 });
 it('reads saved state without exposing history removal in details', async () => {
   const saved = { ...app, desktopPosition: 0, lastUsedAt: 100 };

@@ -473,6 +473,13 @@
     "scroll_to_unread": "滚动到未读消息",
     "scroll_to_latest": "滚动到最新消息",
     "view_profile": "查看个人资料",
+    "card_types": {
+      "profile": "个人资料",
+      "note": "短帖",
+      "application": "应用",
+      "emoji_pack": "表情包",
+      "event": "分享的事件"
+    },
     "event_reference": {
       "event": "事件",
       "kind": "Kind {{kind}}",

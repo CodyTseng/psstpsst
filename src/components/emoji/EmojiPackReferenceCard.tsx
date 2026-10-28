@@ -3,20 +3,19 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
-import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
+import { MessageCard } from '@/components/chat/MessageCard';
+import { MessageCardHeader } from '@/components/chat/MessageCardHeader';
+import { MessageCardSource } from '@/components/chat/MessageCardSource';
 
 import { useCachedImages } from '@/hooks/use-cached-images';
 import { AppButton } from '@/components/common/AppButton';
-import type { RemoteContentMode } from '@/components/chat/remote-content-policy';
 import { AppText } from '@/components/common/AppText';
-import { InteractionOverlay } from '@/components/common/InteractionOverlay';
-import { MessageCardFooter } from '@/components/chat/MessageCardFooter';
+import type { RemoteContentMode } from '@/components/chat/remote-content-policy';
 import { emojiSetCoordinate, type EmojiPack } from '@/lib/nostr/custom-emoji';
 import { getEmojiPack } from '@/services/emoji/custom-emoji.service';
-import { emojiSize, radius, spacing, useThemeColors } from '@/theme';
+import { spacing } from '@/theme';
 
 import { CustomEmojiImage } from './CustomEmojiImage';
-import { EmojiPackAuthorRow } from './EmojiPackAuthorRow';
 
 type Props = {
   authorPubkey: string;
@@ -29,15 +28,9 @@ type Props = {
 const PREVIEW_COLUMN_COUNT = 5;
 const PREVIEW_ROWS = [0, 1] as const;
 const PREVIEW_COLUMNS = [0, 1, 2, 3, 4] as const;
-const CARD_WIDTH =
-  PREVIEW_COLUMN_COUNT * emojiSize.packImage +
-  (PREVIEW_COLUMN_COUNT - 1) * spacing.sm +
-  spacing.md * 2 +
-  StyleSheet.hairlineWidth * 2;
 
 export function EmojiPackReferenceCard({ authorPubkey, identifier, metaSlot, loadRemote = true, downloadMode = 'auto' }: Props) {
   const { t } = useTranslation();
-  const c = useThemeColors();
   const coordinate = emojiSetCoordinate(authorPubkey, identifier);
   const [pack, setPack] = useState<EmojiPack | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -72,99 +65,66 @@ export function EmojiPackReferenceCard({ authorPubkey, identifier, metaSlot, loa
   }, [coordinate, loadRemote]);
 
   return (
-    <Pressable
+    <MessageCard
+      type="emoji_pack"
       disabled={!loadRemote}
-      accessibilityRole="link"
       accessibilityLabel={t('emoji.view_pack')}
-      fallbackHoverOpacity={false}
       onPress={() =>
         router.push({
           pathname: '/emoji-pack/[coordinate]',
           params: { coordinate },
         })
       }
-      style={{
-        alignSelf: 'flex-start',
-        width: CARD_WIDTH,
-        maxWidth: '100%',
-        minWidth: 0,
-        paddingTop: spacing.md,
-        paddingHorizontal: spacing.md,
-        paddingBottom: spacing.sm,
-        borderRadius: radius.lg,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: c.border,
-        backgroundColor: c.surface,
-      }}
+      metaSlot={metaSlot}
+      header={<MessageCardHeader title={pack?.title || t('emoji.untitled_pack')}
+        subtitle={<MessageCardSource pubkey={pack?.authorPubkey ?? authorPubkey} loadRemote={loadRemote && !!pack} />} />}
     >
-      {({ pressed }) => (
-        <>
-          {pressed ? <InteractionOverlay borderRadius={radius.lg} /> : null}
-          <View style={{ gap: spacing.md }}>
-            <View style={{ gap: spacing.xs }}>
-              <EmojiPackAuthorRow
-                authorPubkey={pack?.authorPubkey ?? authorPubkey}
-                packTitle={pack?.title || undefined}
-                titleVariant="caption"
-                prominentTitle
-                withVerticalPadding={false}
-                loadRemote={loadRemote && !!pack}
-              />
-              <AppText variant="caption" tone="muted" numberOfLines={1}>
-                {pack
-                  ? t('emoji.emoji_count', { count: pack.emojis.length })
-                  : loaded
-                    ? t('emoji.pack_unavailable')
-                    : t('emoji.loading_pack')}
-              </AppText>
-            </View>
-            <View style={{ gap: spacing.sm }}>
-              {PREVIEW_ROWS.map((rowIndex) => (
-                <View
-                  key={rowIndex}
-                  style={{ flexDirection: 'row', gap: spacing.sm }}
-                >
-                  {PREVIEW_COLUMNS.map((columnIndex) => {
-                    const emoji = pack?.emojis[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex];
-                    return (
-                      <View key={columnIndex} style={styles.previewCell}>
-                        {emoji ? (
-                          <CustomEmojiImage
-                            sourceUri={previewImages[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex]?.uri ?? null}
-                            loadRemote={downloadAllowed && !previewImages[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex]?.failed}
-                            emoji={emoji}
-                            size="100%"
-                            clickable={false}
-                          />
-                        ) : null}
-                      </View>
-                    );
-                  })}
-                </View>
-              ))}
-              {showLoadPrompt ? (
-                <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <View style={{ maxWidth: '100%' }}>
-                    <AppButton
-                      variant="ghost"
-                      size="sm"
-                      fullWidth={false}
-                      label={t('attach.tap_to_load')}
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        setOpenedCoordinate(coordinate);
-                        setDownloadAttempt((value) => value + 1);
-                      }}
+      <View style={{ gap: spacing.sm }}>
+        {PREVIEW_ROWS.map((rowIndex) => (
+          <View
+            key={rowIndex}
+            style={{ flexDirection: 'row', gap: spacing.sm }}
+          >
+            {PREVIEW_COLUMNS.map((columnIndex) => {
+              const emoji = pack?.emojis[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex];
+              return (
+                <View key={columnIndex} style={styles.previewCell}>
+                  {emoji ? (
+                    <CustomEmojiImage
+                      sourceUri={previewImages[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex]?.uri ?? null}
+                      loadRemote={downloadAllowed && !previewImages[rowIndex * PREVIEW_COLUMN_COUNT + columnIndex]?.failed}
+                      emoji={emoji}
+                      size="100%"
+                      clickable={false}
                     />
-                  </View>
+                  ) : null}
                 </View>
-              ) : null}
+              );
+            })}
+          </View>
+        ))}
+        {!pack ? <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: spacing.sm }]}>
+          <AppText variant="caption" tone="muted">{t(loaded ? 'emoji.pack_unavailable' : 'emoji.loading_pack')}</AppText>
+        </View> : null}
+        {showLoadPrompt ? (
+          <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+            <View style={{ maxWidth: '100%' }}>
+              <AppButton
+                variant="ghost"
+                size="sm"
+                fullWidth={false}
+                label={t('attach.tap_to_load')}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setOpenedCoordinate(coordinate);
+                  setDownloadAttempt((value) => value + 1);
+                }}
+              />
             </View>
           </View>
-          <MessageCardFooter metaSlot={metaSlot} />
-        </>
-      )}
-    </Pressable>
+        ) : null}
+      </View>
+    </MessageCard>
   );
 }
 

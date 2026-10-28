@@ -1,5 +1,4 @@
-import { parseApplicationAddressQuery, resolveApplicationAddress } from './address-search';
-import { subscribeApplicationMetadata } from './application-metadata';
+import { resolveApplicationMetadata, subscribeApplicationMetadata } from './application-metadata';
 import { invalidateReplaceableEvents } from '@/services/relay/replaceable-events.service';
 import { platform } from '@/platform';
 import { needsFavoriteMetadata, resolveFavoriteMetadata } from './favorite-metadata';
@@ -13,7 +12,7 @@ import { clearBrowserPermissions } from './browser-permission-store';
 import { clearSigningPermissions } from '@/services/signing/repository';
 import { getData, setData } from '@/services/napplet/repository';
 import { readFavoriteEntries, readFavoriteReferences, readFavoriteMetadata, reorder, visit, forget } from './repository';
-import { FAVORITES_PAGE_SIZE, fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, websiteEntry, type ExploreEntry } from './model';
+import { FAVORITES_PAGE_SIZE, fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, type ExploreEntry } from './model';
 import { updateApplicationMetadata, withApplicationMetadata } from './application-event';
 import { isNewerEvent } from '@/lib/nostr/event-version';
 import { ExploreRuntime } from './runtime';
@@ -266,18 +265,8 @@ export const exploreService = {
   async resolve(value: string): Promise<ExploreEntry> {
     const { account, entries } = exploreStore.getState();
     if (!account) throw new Error('account-unavailable');
-    if (value.startsWith('local~')) {
-      const { readLocalApplication } = await import('./local-applications');
-      const local = await readLocalApplication(account, value);
-      if (!local) throw new Error('napplets.not_found');
-      return local;
-    }
-    const generation = epoch, query = parseApplicationAddressQuery(value);
-    if (query?.type === 'invalid') throw new Error('napplets.invalid_manifest');
-    if (!query) { await nappletService.activateAccount(account); check(account, generation); }
-    const resolved = query?.type === 'website' ? websiteEntry(query.key) : query?.type === 'naddr'
-      ? await resolveApplicationAddress(account, query, entries, favoritesLife.signal)
-      : fromNapplet(await nappletService.resolve(value));
+    const generation = epoch;
+    const resolved = await resolveApplicationMetadata(account, value, favoritesLife.signal, { known: entries });
     check(account, generation);
     return resolved;
   },

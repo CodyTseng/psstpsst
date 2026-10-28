@@ -10,7 +10,7 @@ jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ 
 jest.mock('@/theme', () => ({ spacing: { '3xl': 32, lg: 16, xl: 24 }, radius: { xl: 12 },
   useThemeColors: () => ({ surfaceMuted: 'surface', textMuted: 'muted' }) }));
 jest.mock('@/services/explore/icons', () => ({
-  applicationIconKey: (source: { origin: string }) => source.origin,
+  applicationIconKey: (source: { origin?: string; icon?: { hash: string } }) => source.origin ?? source.icon?.hash ?? '',
   websiteIconOrigin: (source: { origin: string }) => source.origin,
   loadApplicationIcon: jest.fn(),
 }));
@@ -31,4 +31,19 @@ it('shows the memory-cached local file before asynchronous loading finishes and 
   expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///new.png' });
   await act(async () => { renderer.unmount(); });
   expect(unsubscribe).toHaveBeenCalledTimes(1);
+});
+
+it('defers remote icon work while held and retains loaded artwork when held again', async () => {
+  jest.mocked(loadApplicationIcon).mockClear().mockResolvedValue('file:///application.png');
+  jest.mocked(peekWebsiteIcon).mockReturnValue(undefined);
+  const release = { servers: [], icon: { hash: 'a'.repeat(64), mime: 'image/png' } };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<NappletIcon release={release} loadRemote={false} />); });
+  expect(loadApplicationIcon).not.toHaveBeenCalled();
+  await act(async () => { renderer.update(<NappletIcon release={release} />); });
+  expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///application.png' });
+  await act(async () => { renderer.update(<NappletIcon release={release} loadRemote={false} />); });
+  expect(loadApplicationIcon).toHaveBeenCalledTimes(1);
+  expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///application.png' });
+  act(() => renderer.unmount());
 });

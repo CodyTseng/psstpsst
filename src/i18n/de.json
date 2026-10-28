@@ -473,6 +473,13 @@
     "scroll_to_unread": "Zu ungelesenen Nachrichten scrollen",
     "scroll_to_latest": "Zu den neuesten Nachrichten scrollen",
     "view_profile": "Profil anzeigen",
+    "card_types": {
+      "profile": "Profil",
+      "note": "Kurzbeitrag",
+      "application": "Anwendung",
+      "emoji_pack": "Stickerpaket",
+      "event": "Geteiltes Ereignis"
+    },
     "event_reference": {
       "event": "Ereignis",
       "kind": "Art {{kind}}",

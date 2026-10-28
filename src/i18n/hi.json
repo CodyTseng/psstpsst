@@ -473,6 +473,13 @@
     "scroll_to_unread": "नहीं पढ़े गए संदेशों तक स्क्रॉल करें",
     "scroll_to_latest": "नवीनतम संदेशों तक स्क्रॉल करें",
     "view_profile": "प्रोफ़ाइल देखें",
+    "card_types": {
+      "profile": "प्रोफ़ाइल",
+      "note": "छोटी पोस्ट",
+      "application": "ऐप",
+      "emoji_pack": "स्टिकर पैक",
+      "event": "साझा इवेंट"
+    },
     "event_reference": {
       "event": "इवेंट",
       "kind": "काइंड {{kind}}",

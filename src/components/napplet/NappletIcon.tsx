@@ -8,13 +8,14 @@ import { peekWebsiteIcon, retryWebsiteIcon, subscribeWebsiteIcon } from '@/servi
 import { radius, spacing, useThemeColors } from '@/theme';
 
 export const NAPPLET_ICON_SIZE = spacing['3xl'] + spacing.lg;
-export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef }: { release: ApplicationIconSource; size?: number; iconRef?: Ref<View> }) {
+export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_ICON_SIZE, iconRef, loadRemote = true }: { release: ApplicationIconSource; size?: number; iconRef?: Ref<View>; loadRemote?: boolean }) {
   const c = useThemeColors();
   const origin = websiteIconOrigin(release);
   const iconKey = applicationIconKey(release);
   const [loaded, setLoaded] = useState<{ key: string; uri?: string }>();
   const uri = loaded?.key === iconKey ? loaded.uri : origin ? peekWebsiteIcon(origin) : undefined;
   useEffect(() => {
+    if (!loadRemote) return;
     let active = true;
     const unsubscribe = origin ? subscribeWebsiteIcon(origin, value => {
       if (active) setLoaded({ key: iconKey, uri: value });
@@ -27,7 +28,7 @@ export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_I
       active = false;
       unsubscribe?.();
     };
-  }, [release, iconKey, origin]);
+  }, [release, iconKey, origin, loadRemote]);
   return (
     <View ref={iconRef} testID="napplet-icon"
       style={{
@@ -47,7 +48,7 @@ export const NappletIcon = memo(function NappletIcon({ release, size = NAPPLET_I
           contentFit={origin || release.files ? 'contain' : 'cover'}
           onError={() => {
             setLoaded({ key: iconKey });
-            if (origin && uri) void retryWebsiteIcon(origin, uri);
+            if (loadRemote && origin && uri) void retryWebsiteIcon(origin, uri);
           }}
           style={{ width: '100%', height: '100%' }}
         />

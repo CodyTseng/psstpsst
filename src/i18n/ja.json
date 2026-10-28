@@ -473,6 +473,13 @@
     "scroll_to_unread": "未読メッセージまでスクロール",
     "scroll_to_latest": "最新のメッセージまでスクロール",
     "view_profile": "プロフィールを表示",
+    "card_types": {
+      "profile": "プロフィール",
+      "note": "短文投稿",
+      "application": "アプリ",
+      "emoji_pack": "ステッカーパック",
+      "event": "共有イベント"
+    },
     "event_reference": {
       "event": "イベント",
       "kind": "種類 {{kind}}",

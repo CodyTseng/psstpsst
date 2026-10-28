@@ -17,10 +17,10 @@ export function NappletInfo({ release, onPublisher, notice }: { release: Napplet
   return <ApplicationInfo release={applicationPresentation(release)} onPublisher={onPublisher} notice={notice} />;
 }
 
-export function ApplicationInfo({release,onPublisher,notice,action,actionPlacement='identity',unsupported}:{release:ApplicationPresentation;onPublisher():void;notice?:ReactNode;action?:IdentityAction;actionPlacement?:'identity'|'below'|'responsive';unsupported?:readonly string[]}) {
+export function ApplicationInfo({release,onPublisher,notice,action,actionPlacement='identity',unsupported,onPlacementReady}:{release:ApplicationPresentation;onPublisher():void;notice?:ReactNode;action?:IdentityAction;actionPlacement?:'identity'|'below'|'responsive';unsupported?:readonly string[];onPlacementReady?:()=>void}) {
   const { t } = useTranslation();
   return <View testID="napplet-info" style={{ gap: spacing.lg }}>
-    <NappletIdentity release={release} action={actionPlacement!=='below'?action:undefined} wrapActions={actionPlacement==='responsive'} subtitle={release.kind ? t(`napplets.formats.${release.kind}`) : undefined} />
+    <NappletIdentity release={release} action={actionPlacement!=='below'?action:undefined} wrapActions={actionPlacement==='responsive'} subtitle={release.kind ? t(`napplets.formats.${release.kind}`) : undefined} onPlacementReady={onPlacementReady} />
     {actionPlacement==='below'?(typeof action==='function'?action(false):action):null}
     {release.publisher?<PublisherRow pubkey={release.publisher} onPress={onPublisher}/>:null}
     {release.local ? <AppText variant="caption" tone="muted">{t('napplets.local_unsigned_notice')}</AppText> : null}

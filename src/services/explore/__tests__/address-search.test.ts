@@ -1,10 +1,12 @@
 import { clearApplicationTestCache } from '../testing/memory-cache';
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
-import { naddrEncode } from 'nostr-tools/nip19';
+import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
 import { parseApplicationAddressQuery, resolveApplicationAddress } from '../address-search';
 import { parseSite, websiteEntry } from '../model';
 import { readEntries } from '../repository';
 import { NappletNetwork } from '@/services/napplet/network';
+import { cacheApplicationEvent } from '../application-cache';
+import { resolveApplicationMetadata } from '../application-metadata';
 
 jest.mock('@/services/nostr/event-cache-retention', () => ({ pruneEventCache: jest.fn(async () => {}), favoriteCoordinates: '' }));
 jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActual('../testing/memory-cache').replaceableCache);
@@ -16,7 +18,7 @@ const pointer = (kind = 35130, relays: string[] = [], identifier = kind < 30000 
   naddrEncode({ kind, pubkey: author, identifier, relays });
 const manifest = (kind = 35130, created_at = 1, identifier = 'app') => finalizeEvent({ kind, created_at, content: 'Application',
   tags: [...(kind >= 30000 ? [['d', identifier]] : []),
-    ...([15129, 35129].includes(kind) ? [['x', 'a'.repeat(64)]] : [['path', '/index.html', 'a'.repeat(64)]]),
+    ...([5129, 15129, 35129].includes(kind) ? [['x', 'a'.repeat(64)]] : [['path', '/index.html', 'a'.repeat(64)]]),
     ['title', 'App'], ['server', 'https://media.example/']] }, secret);
 const query = jest.fn(), routes = jest.fn(), destroy = jest.fn(), mediaServers = jest.fn();
 const target = (kind = 35130, relays: string[] = []) => parseApplicationAddressQuery(pointer(kind, relays))!;
@@ -51,9 +53,9 @@ it('returns a canonical in-memory match despite different relay hints without re
 
 it('reads a locally saved application before querying relays', async () => {
   const app = parseSite(manifest());
-  jest.mocked(readEntries).mockResolvedValue([app]);
+  await cacheApplicationEvent(app);
   expect(await resolveApplicationAddress('account', target(), [], signal())).toMatchObject(app);
-  expect(readEntries).toHaveBeenCalledWith('account', app.key);
+  expect(readEntries).not.toHaveBeenCalled();
   expect(NappletNetwork).not.toHaveBeenCalled();
 });
 
@@ -97,6 +99,54 @@ it('constructs a website result without inventing a publisher or relay lookup', 
   const address = parseApplicationAddressQuery('https://example.com/path')!;
   expect(await resolveApplicationAddress('account', address, [], signal())).toEqual(websiteEntry('https://example.com/path'));
   expect(NappletNetwork).not.toHaveBeenCalled();
+});
+
+it.each([5129, 15129, 35129, 15128, 35128, 35130])('uses the same verified ID/database/relay pipeline for kind %s', async kind => {
+  const event = manifest(kind);
+  query.mockResolvedValue({ events: [event], incomplete: false });
+  const address = neventEncode({ id: event.id, kind, author, relays: ['wss://hint.example/'] });
+  const first = await resolveApplicationMetadata('account', address, signal());
+  expect(first.manifest?.id).toBe(event.id);
+  expect(query).toHaveBeenCalledTimes(1);
+  expect(query.mock.calls[0][1]).toEqual([{ ids: [event.id], limit: 1 }]);
+  const fromDatabase = await resolveApplicationMetadata('another-account', event.id, signal());
+  expect(fromDatabase.manifest?.id).toBe(event.id);
+  expect(query).toHaveBeenCalledTimes(1);
+});
+
+it.each([[35130, 5129], [5129, 35130], [1, 35130]])('shares an ID lookup for kind hints %s then %s and uses the actual event', async (firstHint, secondHint) => {
+  const event = manifest(35130);
+  query.mockResolvedValue({ events: [event], incomplete: false });
+  const pointer = (kind: number) => neventEncode({ id: event.id, kind, author: 'f'.repeat(64), relays: ['wss://hint.example/'] });
+  const results = await Promise.all([
+    resolveApplicationMetadata('account', pointer(firstHint), signal()),
+    resolveApplicationMetadata('account', pointer(secondHint), signal()),
+  ]);
+  for (const result of results) expect(result).toMatchObject({ kind: 'napp', manifest: { id: event.id, kind: 35130 } });
+  expect(query).toHaveBeenCalledTimes(1);
+  expect(query.mock.calls[0][1]).toEqual([{ ids: [event.id], limit: 1 }]);
+  expect((await resolveApplicationMetadata('account', pointer(1), signal())).manifest?.id).toBe(event.id);
+  expect(query).toHaveBeenCalledTimes(1);
+});
+
+it('does not let incorrect ID kind hints restrict the relay sources', async () => {
+  const event = manifest(35130);
+  query.mockResolvedValue({ events: [event], incomplete: false });
+  await resolveApplicationMetadata('account', neventEncode({ id: event.id, kind: 5129 }), signal());
+  expect(query.mock.calls[0][0]).toEqual(expect.arrayContaining([
+    'wss://relay.nostrapps.com/', 'wss://relay.napplet.soy/', 'wss://relay.nsite.lol/',
+  ]));
+});
+
+it('accepts a known event by ID despite a wrong kind hint but keeps coordinate-kind matching', async () => {
+  const event = manifest(35130), app = parseSite(event);
+  const pointer = neventEncode({ id: event.id, kind: 5129 });
+  expect((await resolveApplicationMetadata('account', pointer, signal(), { known: [app] })).kind).toBe('napp');
+  expect(query).not.toHaveBeenCalled();
+  query.mockResolvedValue({ events: [event], incomplete: false });
+  const coordinate = naddrEncode({ pubkey: author, kind: 35129, identifier: 'app', relays: ['wss://hint.example/'] });
+  await expect(resolveApplicationMetadata('account', coordinate, signal())).rejects.toThrow('napplets.invalid_manifest');
+  expect(query.mock.calls[0][1]).toEqual([{ authors: [author], kinds: [35129], '#d': ['app'], limit: 1 }]);
 });
 
 it('discards a late relay result after cancellation and destroys its transport', async () => {

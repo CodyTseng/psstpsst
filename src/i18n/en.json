@@ -473,6 +473,13 @@
     "scroll_to_unread": "Scroll to unread messages",
     "scroll_to_latest": "Scroll to latest messages",
     "view_profile": "View profile",
+    "card_types": {
+      "profile": "Profile",
+      "note": "Short note",
+      "application": "Application",
+      "emoji_pack": "Sticker pack",
+      "event": "Shared event"
+    },
     "event_reference": {
       "event": "Event",
       "kind": "Kind {{kind}}",

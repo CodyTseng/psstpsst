@@ -476,6 +476,13 @@
     "scroll_to_unread": "Rolar até as mensagens não lidas",
     "scroll_to_latest": "Rolar até as mensagens mais recentes",
     "view_profile": "Ver perfil",
+    "card_types": {
+      "profile": "Perfil",
+      "note": "Nota curta",
+      "application": "Aplicativo",
+      "emoji_pack": "Pacote de figurinhas",
+      "event": "Evento compartilhado"
+    },
     "event_reference": {
       "event": "Evento",
       "kind": "Tipo {{kind}}",

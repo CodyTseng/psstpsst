@@ -20,6 +20,7 @@ export function applicationCopyAddress(entry: ApplicationAddressEntry): string {
   const kind = event?.kind ?? reference?.kind;
   const author = event?.pubkey ?? reference?.author;
   const relays = normalizeRelayUrls([...(entry.eventRelays ?? []), ...(reference?.relays ?? [])]).slice(0, 8);
+  if (!event && reference?.id) return neventEncode({ id: reference.id, author, kind, relays });
   if (kind !== undefined && author && (kind >= 10000 && kind < 20000 || kind >= 30000 && kind < 40000)) {
     const identifier = kind < 30000 ? '' : event?.tags.find(tag => tag[0] === 'd')?.[1] ?? reference?.identifier;
     if (identifier !== undefined) return naddrEncode({ kind, pubkey: author, identifier, relays });

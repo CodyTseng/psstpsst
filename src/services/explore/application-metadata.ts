@@ -10,6 +10,8 @@ import { parseApplicationEvents } from './application-event';
 import { APPLICATION_CATALOGUE_SOURCES } from './catalogue-relays';
 import { applicationCoordinate, cacheApplicationEvent, parseApplicationEvent, readApplicationCache, withApplicationMetadata } from './application-cache';
 import type { ExploreEntry } from './model';
+import { applicationEntryFromAddress } from './application-address';
+import { readCachedEventRecords, storeCachedEvent } from '@/services/nostr/cached-events.service';
 
 export const APPLICATION_METADATA_TTL_SECONDS = 3600;
 const retryAfter = new Map<string, number>();
@@ -17,12 +19,12 @@ type MetadataRequest = { life: AbortController; consumers: number; settled: bool
 const resolving = new Map<string, MetadataRequest>();
 export { subscribeApplicationChanges as subscribeApplicationMetadata } from './application-changes';
 
-async function relaysFor(network: NappletNetwork, entry: ExploreEntry, kind: number, signal: AbortSignal) {
+async function relaysFor(network: NappletNetwork, entry: ExploreEntry, kind: number | undefined, signal: AbortSignal) {
   const reference = parseNostrEventReference(entry.address);
   if (reference?.relays.length) return reference.relays;
   const writes = reference?.author ? await network.routes([reference.author], 'write', true, signal).catch(() => []) : [];
   assertNotAborted(signal);
-  const dedicated = APPLICATION_CATALOGUE_SOURCES.filter(source => source.kinds.includes(kind)).flatMap(source => source.relays);
+  const dedicated = APPLICATION_CATALOGUE_SOURCES.filter(source => kind === undefined || source.kinds.includes(kind)).flatMap(source => source.relays);
   return normalizeRelayUrls([...writes, ...dedicated]);
 }
 
@@ -66,23 +68,41 @@ export async function refreshApplicationMetadata(account: string, entries: Explo
 }
 
 /** Cache hits return immediately; a stale coordinate refreshes without delaying navigation. */
-export async function resolveApplicationMetadata(account: string, entry: ExploreEntry, signal: AbortSignal): Promise<ExploreEntry> {
+export async function resolveApplicationMetadata(account: string, input: ExploreEntry | string, signal: AbortSignal,
+  options: { refresh?: boolean; known?: readonly ExploreEntry[] } = {}): Promise<ExploreEntry> {
+  assertNotAborted(signal);
+  const entry = typeof input === 'string' ? applicationEntryFromAddress(input) : input;
+  if (!entry) throw new Error('napplets.invalid_manifest');
+  const reference = parseNostrEventReference(entry.address);
+  let known: ExploreEntry | undefined;
+  for (const candidate of options.known ?? []) {
+    if (reference?.id ? candidate.manifest?.id !== reference.id : candidate.key !== entry.key) continue;
+    if (!reference?.id && reference?.kind !== undefined && candidate.manifest && candidate.manifest.kind !== reference.kind) continue;
+    if (!known || (candidate.manifest?.created_at ?? 0) > (known.manifest?.created_at ?? 0) ||
+      candidate.manifest?.created_at === known.manifest?.created_at && (candidate.manifest?.id ?? '') < (known.manifest?.id ?? '')) known = candidate;
+  }
+  if (known?.manifest) {
+    await cacheApplicationEvent(known);
+    if (reference?.id) await storeCachedEvent(known.manifest, known.eventRelays);
+  }
   if (entry.key.startsWith('local~')) {
     const { readLocalApplication } = await import('./local-applications');
     const local = await readLocalApplication(account, entry.key); assertNotAborted(signal);
     if (!local) throw new Error('napplets.not_found');
     return withApplicationMetadata(entry, local);
   }
-  if (entry.kind === 'website') return entry;
+  if (entry.kind === 'website') return known ?? entry;
   assertNotAborted(signal);
   if (entry.manifest) await cacheApplicationEvent(entry);
-  const cached = (await readApplicationCache([entry])).get(entry.key);
+  const cached = options.refresh ? undefined : reference?.id
+    ? await readApplicationId(reference.id)
+    : (await readApplicationCache([entry])).get(entry.key);
   assertNotAborted(signal);
   if (cached) {
-    void refreshApplicationMetadata(account, [entry], signal).catch(() => {});
+    if (!reference?.id) void refreshApplicationMetadata(account, [entry], signal).catch(() => {});
     return withApplicationMetadata(entry, cached);
   }
-  const key = JSON.stringify([account, entry.key]);
+  const key = JSON.stringify([account, reference?.id ?? entry.key]);
   let request = resolving.get(key);
   if (!request || request.life.signal.aborted) {
     const shared: MetadataRequest = { life: new AbortController(), consumers: 0, settled: false, promise: undefined! };
@@ -117,6 +137,13 @@ export async function resolveApplicationMetadata(account: string, entry: Explore
   });
 }
 
+async function readApplicationId(id: string): Promise<ExploreEntry | undefined> {
+  const cached = (await readCachedEventRecords([id])).get(id);
+  if (!cached) return;
+  const [app] = await parseApplicationEvents([cached.event]);
+  return app ? { ...app, eventRelays: cached.relays, release: app.release ? { ...app.release, eventRelays: cached.relays } : undefined } : undefined;
+}
+
 async function fetchApplicationMetadata(account: string, entry: ExploreEntry, signal: AbortSignal): Promise<ExploreEntry> {
   const reference = parseNostrEventReference(entry.address);
   if (!reference) throw new Error('napplets.invalid_manifest');
@@ -124,10 +151,10 @@ async function fetchApplicationMetadata(account: string, entry: ExploreEntry, si
   const network = new NappletNetwork(account);
   const abort = () => network.destroy(); signal.addEventListener('abort', abort, { once: true });
   try {
-    const kind = coordinate?.kind ?? 5129;
+    const kind = coordinate?.kind;
     const relays = await relaysFor(network, entry, kind, signal);
-    const response = await network.query(relays, [coordinate ? { authors: [coordinate.pubkey], kinds: [kind],
-      ...(kind >= 30000 ? { '#d': [coordinate.dTag ?? ''] } : {}), limit: 1 } : { ids: [reference.id!], kinds: [5129], limit: 1 }], signal);
+    const response = await network.query(relays, [coordinate ? { authors: [coordinate.pubkey], kinds: [coordinate.kind],
+      ...(coordinate.kind >= 30000 ? { '#d': [coordinate.dTag ?? ''] } : {}), limit: 1 } : { ids: [reference.id!], limit: 1 }], signal);
     assertNotAborted(signal);
     const events = response.events.sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id));
     for (const [index, event] of events.entries()) {
@@ -135,7 +162,7 @@ async function fetchApplicationMetadata(account: string, entry: ExploreEntry, si
       assertNotAborted(signal);
       let app: ExploreEntry;
       try { app = parseApplicationEvent(event); } catch { continue; }
-      if (app.key !== entry.key) continue;
+      if (reference.id ? event.id !== reference.id : app.key !== entry.key) continue;
       app = { ...app, eventRelays: response.eventRelays?.get(event.id) ?? [] };
       if (!app.servers.length) {
         app.servers = await network.mediaServers(event.pubkey, signal).catch(() => []);
@@ -143,6 +170,7 @@ async function fetchApplicationMetadata(account: string, entry: ExploreEntry, si
       }
       assertNotAborted(signal);
       await cacheApplicationEvent(app);
+      if (reference.id) await storeCachedEvent(event, app.eventRelays);
       return withApplicationMetadata(entry, app);
     }
     throw new Error(events.length ? 'napplets.invalid_manifest' : response.incomplete || response.error ? 'napplets.request_failed' : 'napplets.not_found');

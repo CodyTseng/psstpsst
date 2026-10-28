@@ -479,6 +479,13 @@
     "scroll_to_unread": "К непрочитанным сообщениям",
     "scroll_to_latest": "К последним сообщениям",
     "view_profile": "Открыть профиль",
+    "card_types": {
+      "profile": "Профиль",
+      "note": "Короткая заметка",
+      "application": "Приложение",
+      "emoji_pack": "Набор стикеров",
+      "event": "Событие, которым поделились"
+    },
     "event_reference": {
       "event": "Событие",
       "kind": "Тип {{kind}}",

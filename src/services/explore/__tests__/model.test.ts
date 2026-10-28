@@ -65,6 +65,14 @@ it('retains routing hints before metadata is loaded and avoids duplicate URI pre
   }
 });
 
+it.each([15128, 15129, 35128, 35129, 35130])('does not promote an ID reference to a coordinate based on kind-%s hints', kind => {
+  const event = manifest();
+  const address = neventEncode({ id: event.id, author: event.pubkey, kind, relays: ['wss://private.example/'] });
+  const copied = applicationCopyAddress({ kind: 'napp', address });
+  expect(decode(copied)).toEqual(decode(address));
+  expect(decode(copied).type).toBe('nevent');
+});
+
 it('omits relay hints when their location is unknown and leaves website URLs unchanged', () => {
   const entry = parseSite(manifest());
   const decoded = decode(applicationCopyAddress(entry));

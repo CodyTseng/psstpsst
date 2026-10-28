@@ -8,7 +8,7 @@ import { NappletIcon } from './NappletIcon';
 export type IdentityAction = ReactNode | ((inline: boolean) => ReactNode);
 
 /** App identity shared by information surfaces and compact permission contexts. */
-export function NappletIdentity({ release, compact = false, iconSize, titleVariant, action, subtitle, wrapActions = false }: { release: ApplicationIconSource & { title: string }; compact?: boolean; iconSize?: number; titleVariant?: 'body' | 'subtitle' | 'title'; action?: IdentityAction; subtitle?: string; wrapActions?: boolean }) {
+export function NappletIdentity({ release, compact = false, iconSize, titleVariant, action, subtitle, wrapActions = false, onPlacementReady }: { release: ApplicationIconSource & { title: string }; compact?: boolean; iconSize?: number; titleVariant?: 'body' | 'subtitle' | 'title'; action?: IdentityAction; subtitle?: string; wrapActions?: boolean; onPlacementReady?: () => void }) {
   const [actionsInline, setActionsInline] = useState(false);
   const layout = useRef({ width: 0, actionsWidth: 0, inline: false });
   const gap = compact ? spacing.md : spacing.lg;
@@ -21,6 +21,7 @@ export function NappletIdentity({ release, compact = false, iconSize, titleVaria
       measured.inline = inline;
       setActionsInline(inline);
     }
+    onPlacementReady?.();
   };
   const stacked = wrapActions && !actionsInline;
   const renderedAction = typeof action === 'function' ? action(!stacked) : action;

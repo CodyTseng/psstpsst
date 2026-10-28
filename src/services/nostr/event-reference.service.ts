@@ -28,14 +28,10 @@ const pendingPersistedReads: PersistedReadWaiter[] = [];
 let relayFlushScheduled = false;
 let persistedReadScheduled = false;
 
-/** naddr is intentionally unsupported, as are nevent pointers that explicitly
- * identify a kind other than the two locally rendered kinds. A bare note or an
- * untyped nevent still needs one lookup to discover its kind. */
+/** Full IDs identify an event independently of optional kind or author hints.
+ * Coordinate references remain outside this ID-only resolver. */
 export function canResolveReferencedEvent(reference: NostrEventReference): boolean {
-  return (
-    reference.id != null &&
-    (reference.kind == null || reference.kind === 0 || reference.kind === 1)
-  );
+  return reference.id != null;
 }
 
 function readFreshMemoryCache(key: string): Event | null | undefined {

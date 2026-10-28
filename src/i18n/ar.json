@@ -279,6 +279,13 @@
     "scroll_to_unread": "الانتقال إلى الرسائل غير المقروءة",
     "scroll_to_latest": "الانتقال إلى أحدث الرسائل",
     "view_profile": "عرض الملف الشخصي",
+    "card_types": {
+      "profile": "ملف شخصي",
+      "note": "منشور قصير",
+      "application": "تطبيق",
+      "emoji_pack": "حزمة ملصقات",
+      "event": "حدث مشارَك"
+    },
     "event_reference": {
       "event": "حدث",
       "kind": "النوع {{kind}}",

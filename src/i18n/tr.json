@@ -473,6 +473,13 @@
     "scroll_to_unread": "Okunmamış mesajlara kaydır",
     "scroll_to_latest": "En son mesajlara kaydır",
     "view_profile": "Profili görüntüle",
+    "card_types": {
+      "profile": "Profil",
+      "note": "Kısa not",
+      "application": "Uygulama",
+      "emoji_pack": "Çıkartma paketi",
+      "event": "Paylaşılan etkinlik"
+    },
     "event_reference": {
       "event": "Etkinlik",
       "kind": "Tür {{kind}}",

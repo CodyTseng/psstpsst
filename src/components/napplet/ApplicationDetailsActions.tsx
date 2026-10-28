@@ -49,7 +49,9 @@ export function ApplicationDetailsActions({ entry, account, onShare }: { entry: 
           if (copied) showToast(t('common.copied'), { target: 'detail' });
         }); } },
       { key: 'permissions', title: t('napplets.permissions_manage'), icon: <ShieldCheck size={size} color={colors.text} />,
-        onPress: () => router.push(entry.release ? `/napplet-permissions/${entry.release.event.id}` : `/explore-details?key=${encodeURIComponent(entry.key)}&permissions=1`) },
+        onPress: () => router.push(entry.release
+          ? { pathname: '/napplet-permissions/[id]', params: { id: applicationCopyAddress(entry) } }
+          : { pathname: '/explore-details', params: { address: entry.address, permissions: '1' } }) },
       ...(onShare && !entry.local ? [{ key: 'share', title: t('share.title'), icon: <Share size={size} color={colors.text} />, onPress: onShare }] : []),
       ...(ready ? [{ key: 'favorite', title: t(favorite ? 'napplets.remove_app' : 'napplets.add_app'), tone: favorite ? 'danger' as const : 'default' as const,
         icon: <MembershipIcon size={size} strokeWidth={iconStrokeWidth.default} color={favorite ? colors.danger : colors.text} />,

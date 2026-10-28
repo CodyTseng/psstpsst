@@ -801,7 +801,20 @@ native delivery path and never modify messaging badges.
 
 Public application manifests use the shared replaceable-event cache by canonical
 coordinate, with one latest event per application. Immutable kind-5129 applications
-and message references share the event-ID cache. Valid cached releases render
+and message references share the event-ID cache.
+Details and permissions resolve self-contained application addresses even when
+no favorite, history, discovery or in-memory address entry exists: check the
+shared local metadata cache, then query relays on a miss. Membership controls
+list inclusion and handler registration, never address resolution. Search,
+previews, details, permissions and legacy napplet routes delegate to the same
+application resolver for address parsing, database lookup, relay routing,
+signature validation and cancellation. UI and compatibility adapters do not
+implement separate lookup algorithms. Exact event-ID lookups retain their
+requested version in the ID cache even when a newer coordinate is cached.
+Full-ID queries and caches ignore optional kind and author hints as constraints;
+the verified event determines its type and author. Kind remains part of every
+coordinate query. ID hints must never turn an ID reference into a coordinate.
+Valid cached releases render
 immediately; stale coordinates refresh asynchronously with the application's
 relay routing and transport budgets. Only completed lookups renew freshness.
 Failed lookups retain usable releases and retry with a bounded delay. Parsed

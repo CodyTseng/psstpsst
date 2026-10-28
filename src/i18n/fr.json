@@ -476,6 +476,13 @@
     "scroll_to_unread": "Faire défiler jusqu'aux messages non lus",
     "scroll_to_latest": "Faire défiler jusqu'aux derniers messages",
     "view_profile": "Afficher le profil",
+    "card_types": {
+      "profile": "Profil",
+      "note": "Note courte",
+      "application": "Application",
+      "emoji_pack": "Pack de stickers",
+      "event": "Événement partagé"
+    },
     "event_reference": {
       "event": "Événement",
       "kind": "Type {{kind}}",

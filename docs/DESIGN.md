@@ -837,7 +837,8 @@ of flashing a transient completion state.
 Media resources sent by non-contacts require an explicit tap before downloading,
 even in accepted conversations. This restriction applies to attachments, custom
 emoji, and sticker artwork; remote media URLs remain ordinary actionable links.
-Profile cards (including avatars), public-event text, and sticker-pack metadata
+Profile cards (including avatars), public-event text, application listing
+metadata and icons, and sticker-pack metadata
 load regardless of the sender's contact status and never become load buttons.
 Downloaded resources render from local files regardless of sender status and
 never revert to download prompts. Resolve the local cache before showing a
@@ -848,6 +849,28 @@ thumbnails follow the same download rule.
 
 Sticker-pack message cards reserve their heading and two preview rows from the
 first render, including while loading, when unavailable, and for smaller packs.
+
+Profile, public-note, application and sticker-pack message cards share one
+bounded width, neutral surface, border, radius, insets and content spacing.
+Their headers use the same semibold body title and muted supporting text.
+Each card separates its optional leading visual, title and subtitle header from its
+optional content area and its type/time/status footer. Application descriptions
+belong in the content area. Omit a leading visual when none represents the
+shared content; do not add a generic icon to fill that slot. Sticker-pack cards
+show their preview grid without a sticker count.
+Two-line identity headers keep supporting metadata directly beneath the title.
+Leading avatars and application icons share one size while retaining their
+respective shapes. Reserve each type's bounded header, text-preview and footer
+geometry before loading, including missing or failed content. Text reservations
+scale with the user's font size; shorter loaded previews retain their space.
+Cards use shared hover and pressed feedback without navigation arrows or
+redundant view/open captions. Message time and delivery status stay at the
+footer's logical end, with a muted card-type label at its logical start.
+Application and sticker-pack subtitles show the author/publisher with a small
+avatar and name directly below the title. Notes keep their author in
+the header without repeating it below. Static sharing previews retain
+the same layout without navigation. Application cards open details before
+launch; unavailable metadata retains an application label and retry action.
 
 Contact and own image and audio attachments auto-download only when their declared
 plaintext and ciphertext sizes are at most 20 MiB. A larger declared size
@@ -924,6 +947,9 @@ when space permits and wrap beneath it on narrower content panes. The primary
 Open action follows membership controls at the logical end when beside identity;
 when the group moves below, Open comes first. One responsive layout decision
 controls both placement and button order.
+Details resolve initial membership and measure responsive action placement
+before revealing the body, so provisional button layouts never shift visible
+content. Later permission or membership refreshes retain the presented body.
 
 Explore keeps compact My apps/Discover mode selection beside Scan in its fixed
 header, without a redundant Explore title. Like Chats and Contacts, its resting

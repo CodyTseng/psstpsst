@@ -4,6 +4,7 @@ import { ApplicationDetailsPage } from '../ApplicationDetailsPage';
 import { ApplicationOpenSetting } from '../ApplicationOpenSetting';
 import { NappletRequiredAccess } from '../NappletRequiredAccess';
 import { applicationPresentation, type ExploreEntry } from '@/services/explore/model';
+let mockMembershipReady = true;
 
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: { defaultValue?: string; name?: string }) => key === 'napplets.capability_unsupported' ? `${options?.name} (not supported)` : options?.defaultValue ?? key }) }));
 jest.mock('@/components/common/AppScreen', () => ({ AppScreen: 'Screen' }));
@@ -15,13 +16,16 @@ jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: 'Header', u
 jest.mock('@/hooks/use-scrolled', () => ({ useScrolled: () => ({ scrolled: false, scrollProps: {} }) }));
 jest.mock('../NappletInfo', () => ({ ApplicationInfo: 'Info' }));
 jest.mock('../ApplicationComments', () => ({ ApplicationComments: 'Comments' }));
-jest.mock('../ApplicationDetailsMembership', () => ({ ApplicationDetailsMembership: 'Membership' }));
+jest.mock('../ApplicationDetailsMembership', () => ({ ApplicationDetailsMembership: ({ children }: {
+  children(action: React.ReactNode, ready: boolean): React.ReactNode;
+}) => children(jest.requireActual('react').createElement('Membership', { key: 'membership' }), mockMembershipReady) }));
 jest.mock('../ApplicationDetailsActions', () => ({ ApplicationDetailsActions: 'Actions' }));
 jest.mock('../ApplicationOpenSetting', () => ({ ApplicationOpenSetting: 'OpeningPreference' }));
 jest.mock('@/theme', () => ({ spacing: { lg: 16, xl: 24, sm: 8 }, useThemeColors: () => ({ accent: 'accent' }) }));
 
 const entry: ExploreEntry = { key: 'https://example.com', address: 'https://example.com', title: 'Website',
   kind: 'website', description: '', required: [], servers: [], desktopPosition: null, lastUsedAt: null };
+beforeEach(() => { mockMembershipReady = true; });
 
 it.each([false, true])('waits for initial access before showing details and actions with discussion=%s', discussion => {
   const page = (loaded: boolean) => <ApplicationDetailsPage application={applicationPresentation(entry)}
@@ -103,5 +107,29 @@ it('puts Open at the edge beside identity and first when actions are below', () 
   expect(keys(false)).toEqual(['open', 'membership']);
   expect(keys(true)).toEqual(['membership', 'open']);
   expect(keys(false)).toEqual(['open', 'membership']);
+  act(() => renderer.unmount());
+});
+
+it('reveals the entire body only after membership and header placement are settled', () => {
+  mockMembershipReady = false;
+  const page = () => <ApplicationDetailsPage application={applicationPresentation(entry)}
+    access={{ loaded: true, approved: true }} actions={{ entry, account: 'account' }}
+    onOpen={() => {}} onPublisher={() => {}} />;
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(page()); });
+  expect(renderer.root.findAllByType('Info' as never)).toHaveLength(0);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  mockMembershipReady = true;
+  act(() => { renderer.update(page()); });
+  const body = () => renderer.root.findByProps({ testID: 'application-details-body' });
+  expect(body().props.style.opacity).toBe(0);
+  expect(body().props.style.pointerEvents).toBe('none');
+  act(() => { renderer.root.findByType('Info' as never).props.onPlacementReady(); });
+  expect(body().props.style.opacity).toBe(1);
+  expect(body().props.style.pointerEvents).toBe('auto');
+  mockMembershipReady = false;
+  act(() => { renderer.update(page()); });
+  expect(body().props.style.opacity).toBe(1);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(0);
   act(() => renderer.unmount());
 });

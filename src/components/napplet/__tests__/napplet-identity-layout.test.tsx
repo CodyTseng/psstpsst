@@ -7,8 +7,9 @@ jest.mock('../NappletIcon', () => ({ NappletIcon: 'Icon' }));
 jest.mock('@/theme', () => ({ spacing: { xs: 4, md: 12, lg: 16, '2xl': 32, '3xl': 48 } }));
 
 it('keeps placement and action order in sync across resizes and changing button widths', () => {
+  const onPlacementReady = jest.fn();
   let renderer!: ReactTestRenderer;
-  act(() => { renderer = create(<NappletIdentity release={{ title: 'Notes', servers: [] }} wrapActions
+  act(() => { renderer = create(<NappletIdentity release={{ title: 'Notes', servers: [] }} wrapActions onPlacementReady={onPlacementReady}
     action={inline => <View testID="buttons">{inline ? 'secondary,primary' : 'primary,secondary'}</View>} />); });
   const root = () => renderer.root.findByProps({ testID: 'napplet-identity' });
   const actionBounds = () => renderer.root.findAllByType(View).find(node => node.props.onLayout && node.props.testID !== 'napplet-identity')!;
@@ -17,8 +18,10 @@ it('keeps placement and action order in sync across resizes and changing button 
     expect(renderer.root.findByProps({ testID: 'buttons' }).props.children).toBe(inline ? 'secondary,primary' : 'primary,secondary');
   };
   act(() => { root().props.onLayout({ nativeEvent: { layout: { width: 360 } } }); });
+  expect(onPlacementReady).not.toHaveBeenCalled();
   act(() => { actionBounds().props.onLayout({ nativeEvent: { layout: { width: 180 } } }); });
   expectPlacement(false);
+  expect(onPlacementReady).toHaveBeenCalledTimes(1);
   act(() => { root().props.onLayout({ nativeEvent: { layout: { width: 700 } } }); });
   expectPlacement(true);
   act(() => { root().props.onLayout({ nativeEvent: { layout: { width: 360 } } }); });

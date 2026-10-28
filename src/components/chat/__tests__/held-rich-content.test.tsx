@@ -9,7 +9,8 @@ import { EmojiPackReferenceCard } from '@/components/emoji/EmojiPackReferenceCar
 import { getEmojiPack } from '@/services/emoji/custom-emoji.service';
 import { CustomEmojiImage } from '@/components/emoji/CustomEmojiImage';
 import { useDisplayName } from '@/hooks/use-display-name';
-import { darkPalette, lightPalette } from '@/theme';
+import { contentWidth, darkPalette, lightPalette } from '@/theme';
+import { MessageCardHeader } from '../MessageCardHeader';
 
 import { DeferredRemoteContent } from '../DeferredRemoteContent';
 import { MentionCard } from '../MentionCard';
@@ -62,7 +63,7 @@ it.each([lightPalette, darkPalette])('keeps emoji and identity geometry while re
   const image = renderer.root.findByType(Image);
   const avatar = renderer.root.findByType(Avatar);
   const cardFrame = renderer.root.findAllByType(View).find(
-    (node) => StyleSheet.flatten(node.props.style)?.width === 260,
+    (node) => StyleSheet.flatten(node.props.style)?.width === contentWidth.messageCard,
   )!;
   expect(cardFrame).toBeDefined();
   const frameStyle = cardFrame.props.style;
@@ -156,7 +157,7 @@ it('loads stranger pack metadata while holding artwork until a tap', async () =>
     renderer = create(<EmojiPackReferenceCard authorPubkey={'a'.repeat(64)} identifier="stranger-pack" downloadMode="request" />);
   });
   expect(getEmojiPack).toHaveBeenCalledTimes(1);
-  expect(renderer.root.findByType(EmojiPackAuthorRow).props.packTitle).toBe('Sticker pack');
+  expect(renderer.root.findByType(MessageCardHeader).props.title).toBe('Sticker pack');
   const cells = renderer.root.findAllByType(View).filter(
     (node) => StyleSheet.flatten(node.props.style)?.aspectRatio === 1,
   );

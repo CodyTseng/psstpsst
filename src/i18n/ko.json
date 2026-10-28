@@ -473,6 +473,13 @@
     "scroll_to_unread": "읽지 않은 메시지로 스크롤",
     "scroll_to_latest": "최신 메시지로 스크롤",
     "view_profile": "프로필 보기",
+    "card_types": {
+      "profile": "프로필",
+      "note": "짧은 게시물",
+      "application": "앱",
+      "emoji_pack": "스티커 팩",
+      "event": "공유된 이벤트"
+    },
     "event_reference": {
       "event": "이벤트",
       "kind": "종류 {{kind}}",

@@ -1,3 +1,4 @@
+import { clearApplicationTestCache } from '@/services/explore/testing/memory-cache';
 import { clearBrowserPermissions } from '@/services/explore/browser-permission-store';
 import { rules as signingRules, activity as signingActivity } from '@/services/signing/testing/memory-repository';
 import { signingRuleKey } from '../signing-permissions';
@@ -17,6 +18,9 @@ jest.mock('@/services/explore/application-handlers', () => ({ readApplicationHan
 jest.mock('@/services/explore/browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(async () => {}), clearAccountBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
 jest.mock('@/services/signing/source', () => ({ ...jest.requireActual('@/services/signing/source'), signingSourceFromLegacyKey: (key: string) => `${key}.example` }));
+jest.mock('@/services/nostr/event-cache-retention', () => ({ pruneEventCache: jest.fn(async () => {}), favoriteCoordinates: '' }));
+jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActual('../../explore/testing/memory-cache').replaceableCache);
+jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('../../explore/testing/memory-cache').immutableCache);
 jest.mock('@/db/client', () => ({ db: {} }));
 jest.mock('@/services/account/account-access', () => ({ getAccount: jest.fn(async () => ({ pubkey: 'accountA' })) }));
 jest.mock('../artifacts', () => ({ loadArtifact: jest.fn(async () => '') }));
@@ -35,7 +39,7 @@ const app = { key: 'app', hash: 'v1', title: 'App', required: ['storage'], optio
 const scope = { accountPubkey: 'accountA', appKey: app.key };
 
 beforeEach(async () => {
-  nappletService.deactivate(); stored.clear(); signingRules.clear(); signingActivity.clear(); jest.clearAllMocks();
+  nappletService.deactivate(); clearApplicationTestCache(); stored.clear(); signingRules.clear(); signingActivity.clear(); jest.clearAllMocks();
   jest.mocked(getData).mockImplementation(async (s, bucket, name) => stored.get(key(s, bucket, name)) ?? null);
   jest.mocked(setData).mockImplementation(async (s, bucket, name, value) => {
     if (value == null) stored.delete(key(s, bucket, name)); else stored.set(key(s, bucket, name), value);
@@ -120,7 +124,7 @@ function addressFixture(relays: string[] = []) {
 }
 
 function lookupNetwork() {
-  const network = { destroy: jest.fn(), query: jest.fn(), publisherRelays: jest.fn(async () => [] as string[]) };
+  const network = { destroy: jest.fn(), query: jest.fn(), routes: jest.fn(async () => [] as string[]), mediaServers: jest.fn(async () => [] as string[]), publisherRelays: jest.fn(async () => [] as string[]) };
   jest.mocked(NappletNetwork).mockImplementationOnce(() => network as unknown as NappletNetwork);
   return network;
 }
@@ -196,14 +200,15 @@ it('queries embedded relay hints with the complete address coordinate', async ()
   expect(network.destroy).toHaveBeenCalledTimes(1);
 });
 
-it('falls back to the publisher write relays when an address has no relay hints', async () => {
+it('uses the shared publisher-write and format-relay routing when hints are absent', async () => {
   const { event, address } = addressFixture();
   const network = lookupNetwork();
-  network.query.mockResolvedValueOnce({ events: [], incomplete: false }).mockResolvedValueOnce({ events: [event], incomplete: false });
-  network.publisherRelays.mockResolvedValue(['wss://nos.lol/', 'wss://author-write.example/']);
+  network.query.mockResolvedValue({ events: [event], incomplete: false });
+  network.routes.mockResolvedValue(['wss://author-write.example/']);
   expect((await nappletService.resolve(address)).event.id).toBe(event.id);
-  expect(network.publisherRelays).toHaveBeenCalledWith(event.pubkey);
-  expect(network.query.mock.calls[1]).toEqual([['wss://author-write.example/'], network.query.mock.calls[0][1]]);
+  expect(network.routes).toHaveBeenCalledWith([event.pubkey], 'write', true, expect.anything());
+  expect(network.query.mock.calls[0][0]).toEqual(['wss://author-write.example/', 'wss://relay.napplet.soy/']);
+  expect(network.query).toHaveBeenCalledTimes(1);
 });
 
 it('avoids an author relay-list lookup when the normal query already found the app', async () => {
@@ -231,14 +236,14 @@ it('does not query a previous account publisher after an account switch', async 
   const network = lookupNetwork();
   network.query.mockResolvedValue({ events: [], incomplete: false });
   let finish!: (relays: string[]) => void;
-  network.publisherRelays.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  network.routes.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
   const pending = nappletService.resolve(address);
   const rejected = expect(pending).rejects.toThrow('session-closed');
-  for (let i = 0; i < 10 && !finish; i++) await Promise.resolve();
+  for (let i = 0; i < 20 && !finish; i++) await new Promise(resolve => setTimeout(resolve, 0));
   await nappletService.activate('accountB');
   finish(['wss://author-write.example/']);
   await rejected;
-  expect(network.query).toHaveBeenCalledTimes(1);
+  expect(network.query).not.toHaveBeenCalled();
   expect(network.destroy).toHaveBeenCalledTimes(1);
 });
 

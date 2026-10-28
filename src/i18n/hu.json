@@ -473,6 +473,13 @@
     "scroll_to_unread": "Görgetés az olvasatlan üzenetekhez",
     "scroll_to_latest": "Görgetés a legújabb üzenetekhez",
     "view_profile": "Profil megtekintése",
+    "card_types": {
+      "profile": "Profil",
+      "note": "Rövid bejegyzés",
+      "application": "Alkalmazás",
+      "emoji_pack": "Matricacsomag",
+      "event": "Megosztott esemény"
+    },
     "event_reference": {
       "event": "Esemény",
       "kind": "{{kind}} típus",

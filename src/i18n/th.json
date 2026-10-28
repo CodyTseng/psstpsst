@@ -473,6 +473,13 @@
     "scroll_to_unread": "เลื่อนไปยังข้อความที่ยังไม่ได้อ่าน",
     "scroll_to_latest": "เลื่อนไปยังข้อความล่าสุด",
     "view_profile": "ดูโปรไฟล์",
+    "card_types": {
+      "profile": "โปรไฟล์",
+      "note": "โพสต์สั้น",
+      "application": "แอป",
+      "emoji_pack": "ชุดสติกเกอร์",
+      "event": "อีเวนต์ที่แชร์"
+    },
     "event_reference": {
       "event": "เหตุการณ์",
       "kind": "ชนิด {{kind}}",
