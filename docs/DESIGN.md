@@ -678,9 +678,23 @@ Application container and initial document canvases follow the host background i
 both themes, including loading and teardown. Apps may supply their own page fill.
 Opening an application enters its container immediately; loading, cancellation and
 recoverable launch errors belong there rather than replacing the app grid.
+Blocking application launch failures stay centered in the container with their
+recovery action until retried or closed; they do not use transient toasts.
 Cached apps retain a quiet themed canvas until their first frame. When local
 app code is missing or invalid, show its icon and loading state during download
-and retain that state until the first frame replaces it.
+and retain that state until the first frame replaces it. The app icon stays
+centered in the content area throughout preparation, download, verification and
+failure. Status content sits below it and scrolls when space is short; changes
+in status height never move the icon. Preparation shows only
+a loading indicator and label; byte progress starts after payload data arrives.
+Multi-file readiness may appear after the first verified file, without a zero-byte
+download label. Downloads show received
+bytes and, when the response supplies a total, a determinate progress bar and
+percentage; unknown totals use an activity indicator. Multi-file applications
+show file readiness and downloaded bytes; their bar represents ready files,
+including cache hits, rather than a byte percentage. Verification is a separate
+loading phase. Closing the application cancels its pending download without
+error feedback; loading screens do not add a separate cancellation action.
 Native sheets retain the underlying application page behind their normal dimming
 backdrop and block its input through the full sheet exit transition.
 All host sheets and dialogs cover embedded application containers, including
@@ -753,7 +767,8 @@ a previously declined update.
   may use a skeleton that matches the final layout.
 - An empty state has an icon, a short title, and optional guidance/action.
 - Keep field validation and form errors beside their inputs or form controls.
-  Other failures use the shared bottom error toast; use an alert or sheet when
+  Blocking application launch failures use the persistent container state defined
+  in §10. Other failures use the shared bottom error toast; use an alert or sheet when
   the user must decide, acknowledge, or review recovery details. Never insert
   standalone error text or banners into page content.
 - Error toasts use a danger-soft surface, danger text, a Solar Linear DangerCircle

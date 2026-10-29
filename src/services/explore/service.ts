@@ -15,12 +15,13 @@ import { readFavoriteEntries, readFavoriteReferences, readFavoriteMetadata, reor
 import { FAVORITES_PAGE_SIZE, fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, type ExploreEntry } from './model';
 import { updateApplicationMetadata, withApplicationMetadata } from './application-event';
 import { isNewerEvent } from '@/lib/nostr/event-version';
+import type { ArtifactProgress } from '@/services/napplet/artifacts';
 import { ExploreRuntime } from './runtime';
 import { assertNotAborted } from '@/platform/abort';
 import { openApplicationWindow, tryOpenApplicationWindow } from './windows';
 import { removeLocalApplication } from './local-applications';
 export const exploreStore = createStore(() => ({ account: null as string | null, loaded: false, favoriteVisibleCount: FAVORITES_PAGE_SIZE, favoritesLoadingMore: false, entries: [] as ExploreEntry[],
-  surfaces: [] as string[], runId: 0, entry: null as ExploreEntry | null, containerId: null as string | null, loading: false, error: null as string | null, accessRevision: 0 }));
+  surfaces: [] as string[], runId: 0, entry: null as ExploreEntry | null, containerId: null as string | null, loading: false, download: undefined as ArtifactProgress | undefined, error: null as string | null, accessRevision: 0 }));
 let epoch = 0, serial = 0, desktopRevision = 0;
 let pendingDesktopRevision: number | undefined;
 let activation: { account: string; promise: Promise<void> } | undefined;
@@ -331,7 +332,7 @@ export const exploreService = {
     launchLife = new AbortController();
     const runId = ++serial;
     reviewedAccess=reviewedRequired?{runId,required:[...reviewedRequired]}:undefined;
-    exploreStore.setState({ runId, entry: app, loading: true, error: null });
+    exploreStore.setState({ runId, entry: app, loading: true, download: undefined, error: null });
     return runId;
   },
   start(runId: number) {
@@ -342,7 +343,7 @@ export const exploreService = {
     if(state.runId!==runId || !state.entry || !state.error)return;
     void runtime?.stop();runtime=undefined;
     launchLife.abort();launchLife=new AbortController();
-    exploreStore.setState({containerId:null,surfaces:parents.map(parent=>parent.containerId),loading:true,error:null});
+    exploreStore.setState({containerId:null,surfaces:parents.map(parent=>parent.containerId),loading:true,download:undefined,error:null});
   },
   async configure(runId: number) {
     if (exploreStore.getState().runId !== runId || !runtime) throw new Error('session-closed');
@@ -353,7 +354,7 @@ export const exploreService = {
     if(state.runId!==runId || !state.entry || !state.containerId)return;
     void runtime?.stop();runtime=undefined;
     launchLife.abort();launchLife=new AbortController();
-    exploreStore.setState({containerId:null,surfaces:parents.map(parent=>parent.containerId),loading:true,error:null});
+    exploreStore.setState({containerId:null,surfaces:parents.map(parent=>parent.containerId),loading:true,download:undefined,error:null});
   },
   async restart(runId: number, entry: ExploreEntry) {
     const previous = exploreStore.getState(), old = runtime;
@@ -363,7 +364,7 @@ export const exploreService = {
     runtime = undefined; reviewedAccess = undefined;
     // Reserve startup before publishing state that can trigger route-driven initialization.
     const start = beginStartup(runId, Promise.resolve(old.stop()));
-    exploreStore.setState({ entry, containerId: null, surfaces: parents.map(parent => parent.containerId), loading: true, error: null });
+    exploreStore.setState({ entry, containerId: null, surfaces: parents.map(parent => parent.containerId), loading: true, download: undefined, error: null });
     await start;
     const state = exploreStore.getState();
     if (state.runId === runId && state.error) throw new Error(state.error);
@@ -380,7 +381,7 @@ export const exploreService = {
     const parent = parents.pop();
     if (!parent) { this.stop(runId); return; }
     void runtime?.stop(); runtime = parent.runtime;
-    exploreStore.setState({ entry: parent.entry, containerId: parent.containerId, surfaces: [...parents.map(frame => frame.containerId), parent.containerId], loading: false, error: null });
+    exploreStore.setState({ entry: parent.entry, containerId: parent.containerId, surfaces: [...parents.map(frame => frame.containerId), parent.containerId], loading: false, download: undefined, error: null });
   },
   async goBack(runId: number) {
     const active = runtime;
@@ -402,7 +403,7 @@ export const exploreService = {
     void runtime?.stop();
     runtime = undefined;
     for (const parent of parents.splice(0)) void parent.runtime.stop();
-    exploreStore.setState({ containerId: null, surfaces: [], entry: null, loading: false, error: null });
+    exploreStore.setState({ containerId: null, surfaces: [], entry: null, loading: false, download: undefined, error: null });
   },
   async uninstallLocal(app: ExploreEntry, account: string) {
     if (!app.local) throw new Error('invalid-local-application');
@@ -502,7 +503,8 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
     if (runtime !== instance && !parents.some(parent => parent.runtime === instance)) throw new Error('application-not-active');
   };
   const callbacks: ConstructorParameters<typeof ExploreRuntime>[2] = {
-    presented: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false }); },
+    progress: download => { if (runtime === instance && epoch === generation && !launchLife.signal.aborted) exploreStore.setState({ download }); },
+    presented: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false, download: undefined }); },
     failed: () => { if (runtime === instance && epoch === generation) exploreStore.setState({ loading: false, error: 'applications.request_failed' }); },
     theme: () => nappletService.currentTheme()?.colors,
     confirm: (prompt, signal) => { current(); return nappletService.requestApproval(prompt, signal); },
@@ -535,7 +537,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
       parents.push(parent);
       const child = createRuntime(account, app, generation, runId);
       runtime = child;
-      exploreStore.setState({ entry: app, containerId: null, loading: true, error: null });
+      exploreStore.setState({ entry: app, containerId: null, loading: true, download: undefined, error: null });
       try {
         const containerId = await child.start();
         check(account, generation);

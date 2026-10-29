@@ -3,10 +3,14 @@ import { NAPPLET_FRAME_READY_MESSAGE } from '../../ports/napplet';
 
 let mockExploreAvailable=false;
 const mockResourceResponse = jest.fn();
+const mockFetchResource = jest.fn();
+const mockAddListener = jest.fn();
 const mockCancelResource = jest.fn(async () => {});
 jest.mock('expo-modules-core', () => ({
   ...jest.requireActual('expo-modules-core'),
   requireOptionalNativeModule: () => ({ isAvailable: () => true, isExploreAvailable:()=>mockExploreAvailable, closeAsync: async () => {},
+    supportsResourceHeaders: () => true, supportsResourceProgress: () => true, addListener: mockAddListener,
+    fetchResourceAsync: (...args: unknown[]) => mockFetchResource(...args),
     fetchResourceResponseAsync: (...args: unknown[]) => mockResourceResponse(...args), cancelResourceAsync: mockCancelResource }),
 }));
 
@@ -62,4 +66,26 @@ it('keeps Explore hidden until its document reports its first frame',async()=>{
     expect(nativeSurface.get(id)?.ready).toBe(true);
     await nappletAdapter.close(id);
   } finally {mockExploreAvailable=false;}
+});
+
+it('scopes native progress to its request and stops forwarding after cancellation', async () => {
+  let listener!: (progress: { id: string; received: number; total?: number }) => void;
+  const remove = jest.fn();
+  mockAddListener.mockImplementation((_event, callback) => { listener = callback; return { remove }; });
+  let complete!: (value: string) => void;
+  mockFetchResource.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  const controller = new AbortController(), progress = jest.fn();
+  const result = nappletAdapter.fetchResource('https://public.example/app', 1024, controller.signal, { onProgress: progress });
+  const id = mockFetchResource.mock.calls.at(-1)![0];
+  listener({ id: 'other', received: 100 });
+  listener({ id, received: 512, total: 1024 });
+  expect(progress).toHaveBeenCalledTimes(1);
+  expect(progress).toHaveBeenLastCalledWith({ received: 512, total: 1024 });
+  controller.abort();
+  listener({ id, received: 1024, total: 1024 });
+  expect(progress).toHaveBeenCalledTimes(1);
+  expect(mockCancelResource).toHaveBeenLastCalledWith(id);
+  complete('AQID');
+  await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  expect(remove).toHaveBeenCalledTimes(1);
 });

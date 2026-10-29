@@ -46,6 +46,7 @@ export default function NappletRunScreen() {
       blocked: sharing || !!prompt || !!configuration || !!panel || overlayActive, restart: entry => entry.release ? nappletService.restartOpen(ownerRunId, entry.release) : undefined } : undefined}
     hidden={sharing} menuEnabled={!!running} onClose={close} onMore={()=>nappletService.openPanel('about')}
     loading={ownsRun&&launch?.showLoading&&!launch.error} error={ownsRun?launch?.error:undefined}
+    download={ownsRun ? launch?.download : undefined}
     onRetry={()=>nappletService.retryOpen(ownerRunId)}
     overlay={sharing?<ForwardTargetScreen onClose={closeShare} stayInSource/>:null}>
     {ownsRun&&running?<NappletSurface id={running.containerId} visible={focused&&!sharing} obscured={!!prompt||!!configuration||!!panel||overlayActive}/>:null}

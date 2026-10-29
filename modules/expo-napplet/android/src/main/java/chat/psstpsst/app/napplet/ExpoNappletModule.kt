@@ -35,7 +35,7 @@ class ExpoNappletModule : Module() {
   private val executor = Executors.newFixedThreadPool(4)
   private val calls = ConcurrentHashMap<String, FetchTask>()
   private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
-    .connectTimeout(10, TimeUnit.SECONDS).callTimeout(20, TimeUnit.SECONDS)
+    .connectTimeout(0, TimeUnit.SECONDS).readTimeout(0, TimeUnit.SECONDS).writeTimeout(0, TimeUnit.SECONDS)
     .proxy(java.net.Proxy.NO_PROXY)
     .dns(PublicDns()).build()
   private fun fetchResource(id: String, value: String, max: Int, accept: String?, promise: Promise,
@@ -49,7 +49,6 @@ class ExpoNappletModule : Module() {
           require(!task.cancelled.get()) { "cancelled" }
           var url = value.toHttpUrl()
           var redirects = 0
-          val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
           for (validator in listOf(etag, lastModified)) require(validator == null || validator.length <= 2048 && !validator.contains(Regex("[\\r\\n\\u0000]"))) { "invalid-validator" }
           val responseInfo = mutableMapOf<String, Any>("status" to 200)
           var downloaded: String? = null
@@ -58,15 +57,12 @@ class ExpoNappletModule : Module() {
             val literalHost = url.host.matches(Regex("[0-9.]+")) || url.host.contains(":")
             require(url.toString().length <= 4096 && (!literalHost || publicAddress(InetAddress.getByName(url.host))) &&
               url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.port == 443 && max in 1..26214400) { "blocked-by-policy" }
-            val remaining = deadline - System.nanoTime()
-            require(remaining > 0) { "timeout" }
             val builder = Request.Builder().url(url).header("Accept", accept ?: "*/*").header("Accept-Encoding", "identity")
             if (responseDetails && redirects == 0) {
               if (etag != null) builder.header("If-None-Match", etag)
               if (lastModified != null) builder.header("If-Modified-Since", lastModified)
             }
             val call = client.newCall(builder.build())
-            call.timeout().timeout(remaining, TimeUnit.NANOSECONDS)
             task.call = call
             if (task.cancelled.get()) call.cancel()
             call.execute().use { response ->
@@ -87,13 +83,26 @@ class ExpoNappletModule : Module() {
                 require(response.code == 200 && (response.header("Content-Encoding") == null || response.header("Content-Encoding") == "identity")) { "resource-unavailable" }
                 val body = response.body ?: error("resource-unavailable")
                 require(body.contentLength() <= max) { "too-large" }
+                val total = body.contentLength().takeIf { it > 0 }
+                var lastProgress = 0L
+                fun progress(received: Int, force: Boolean = false) {
+                  val now = System.nanoTime()
+                  if (!force && now - lastProgress < TimeUnit.MILLISECONDS.toNanos(100)) return
+                  lastProgress = now
+                  val event = mutableMapOf<String, Any>("id" to id, "received" to received)
+                  if (total != null && received <= total) event["total"] = total
+                  sendEvent("onResourceProgress", event)
+                }
+                progress(0, true)
                 val output = java.io.ByteArrayOutputStream()
                 body.byteStream().use { input ->
                   val buffer = ByteArray(16384)
                   while (true) { val count = input.read(buffer); if (count < 0) break
                     require(output.size() + count <= max) { "too-large" }; output.write(buffer, 0, count)
+                    progress(output.size())
                   }
                 }
+                progress(output.size(), true)
                 downloaded = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
               }
             }
@@ -122,7 +131,7 @@ class ExpoNappletModule : Module() {
         temporary.delete()
       }
     }
-    Events("onTaskActive", "onTaskClosed", "onLocalRelayEvent")
+    Events("onTaskActive", "onTaskClosed", "onLocalRelayEvent", "onResourceProgress")
     AsyncFunction("broadcastLocalRelayEventAsync") { message: String -> LocalRelayEvents.publish(message) }
     OnActivityResult { _, result -> BrowserPickers.result(result.requestCode, result.resultCode, result.data) }
     OnCreate {
@@ -190,6 +199,7 @@ class ExpoNappletModule : Module() {
     Function("isAvailable") { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) }
     Function("supportsResourceHeaders") { true }
     Function("isExploreAvailable") { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }
+    Function("supportsResourceProgress") { true }
     AsyncFunction("fetchResourceAsync") { id: String, value: String, max: Int, accept: String?, promise: Promise ->
       fetchResource(id, value, max, accept, promise)
     }

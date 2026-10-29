@@ -7,11 +7,16 @@ import { useFocusedOverlayDismiss } from '@/components/common/use-focused-overla
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { nappletService } from '@/services/napplet/service';
 import { AppButton } from '@/components/common/AppButton';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, ScrollView } from 'react-native';
 import { ApplicationIcon } from '@/components/napplet/ApplicationIcon';
 import NappletRunScreen from '../../../app/(app)/napplet-run';
 import { AppScreen } from '@/components/common/AppScreen';
+import { AppProgressBar } from '@/components/common/AppProgressBar';
+import type { ArtifactProgress } from '@/services/napplet/artifacts';
+import { AppText } from '@/components/common/AppText';
+import { showToast } from '@/stores/toast.store';
 
+jest.mock('@/stores/toast.store', () => ({ showToast: jest.fn() }));
 jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));
 jest.mock('lucide-react-native/icons/external-link', () => () => null);
 
@@ -22,7 +27,7 @@ let mockOverlayActive = false;
 let mockPanel: object | null = null;
 let mockLaunching = false;
 let mockRunId = 1;
-let mockLaunch: { release: { title: string }; pending: boolean; showLoading?: boolean; error: string | null } | null = null;
+let mockLaunch: { release: { title: string }; pending: boolean; showLoading?: boolean; download?: ArtifactProgress; error: string | null } | null = null;
 let mockRunning: object | null = { release: { title: 'App' }, containerId: 'test' };
 jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useFocusEffect: jest.fn(), useLocalSearchParams: () => ({ runId: '1' }), useNavigation: () => ({ dispatch: mockDispatch }) }));
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused, usePreventRemove: jest.fn() }));
@@ -37,13 +42,13 @@ jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null,
 jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
 jest.mock('@/components/common/AppText', () => ({ AppText: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
-jest.mock('@/components/napplet/ApplicationIcon', () => ({ ApplicationIcon: () => null }));
+jest.mock('@/components/napplet/ApplicationIcon', () => ({ APPLICATION_ICON_SIZE: 64, ApplicationIcon: () => null }));
 jest.mock('@/platform/napplet-surface', () => ({ NappletSurface: () => null }));
 jest.mock('@/platform/napplet-appearance', () => ({ useNappletAppearance: (id?: string) => id === 'test'
   ? { background: '#121212', dark: true } : undefined }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { stop: jest.fn(), goBack: jest.fn(async () => {}), openPanel: jest.fn(), startPreparedOpen: jest.fn(), retryOpen: jest.fn() } }));
 jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ running: mockRunning, launching: mockLaunching, launch: mockLaunch, runId: mockRunId, panel: mockPanel, overlayActive: mockOverlayActive, sharing: mockSharing }) }));
-jest.mock('@/theme', () => ({ spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { iconButtonSize: 32, headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text', accent: 'accent' }) }));
+jest.mock('@/theme', () => ({ contentWidth: { sheet: 480 }, radius: { full: 9999 }, spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { iconButtonSize: 32, headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text', accent: 'accent' }) }));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -134,10 +139,30 @@ it('keeps failed launches in the container and retries the same run', () => {
   let renderer!: ReactTestRenderer;
   act(() => { renderer = create(<NappletRunScreen />); });
   expect(router.back).not.toHaveBeenCalled();
+  const failure = renderer.root.findByType(AppText);
+  expect(failure.props.children).toBe('applications.download_failed');
+  expect(failure.props.accessibilityRole).toBe('alert');
+  expect(showToast).not.toHaveBeenCalled();
   const retry = renderer.root.findByType(AppButton);
   expect(retry.props.label).toBe('common.retry');
   act(() => { retry.props.onPress(); });
   expect(nappletService.retryOpen).toHaveBeenCalledWith(1);
+  mockLaunching = true;
+  mockLaunch = { ...mockLaunch!, showLoading: true, error: null };
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('applications.download_failed');
+  expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  act(() => renderer.unmount());
+});
+
+it('uses a localized fallback for unexpected launch errors', () => {
+  mockRunning = null;
+  mockLaunch = { release: { title: 'App' }, pending: false, error: 'The operation was aborted' };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(renderer.root.findByType(AppText).props.children).toBe('applications.request_failed');
+  expect(showToast).not.toHaveBeenCalled();
   act(() => renderer.unmount());
 });
 
@@ -202,5 +227,108 @@ it('allows primary-pane selections to replace a running app instead of navigatin
   expect(mockDispatch).toHaveBeenCalledWith(action);
   expect(nappletService.goBack).not.toHaveBeenCalled();
   expect(router.back).not.toHaveBeenCalled();
+  act(() => renderer.unmount());
+});
+
+it.each([undefined, 4096])('shows real download bytes with total=%s and no cancellation button', total => {
+  mockRunning = null;
+  mockLaunch = { release: { title: 'App' }, pending: false, showLoading: true, error: null,
+    download: { phase: 'downloading', received: 1024, total } };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(JSON.stringify(renderer.toJSON())).toContain('1.0 KB');
+  expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
+  if (total) {
+    expect(renderer.root.findByType(AppProgressBar).props.value).toBe(0.25);
+    expect(JSON.stringify(renderer.toJSON())).toContain('25%');
+  } else {
+    expect(renderer.root.findAllByType(AppProgressBar)).toHaveLength(0);
+    expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  }
+  mockLaunch = { ...mockLaunch, download: { phase: 'verifying', received: 4096, total: 4096 } };
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(JSON.stringify(renderer.toJSON())).toContain('applications.runtime_verifying');
+  expect(renderer.root.findAllByType(AppProgressBar)).toHaveLength(0);
+  act(() => renderer.unmount());
+});
+
+it('labels multi-file progress as file readiness rather than a byte percentage', () => {
+  mockRunning = null;
+  mockLaunch = { release: { title: 'App' }, pending: false, showLoading: true, error: null,
+    download: { phase: 'downloading', received: 2048, files: { ready: 2, total: 5 } } };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(renderer.root.findByType(AppProgressBar).props.value).toBe(0.4);
+  expect(JSON.stringify(renderer.toJSON())).toContain('applications.runtime_files_ready');
+  expect(JSON.stringify(renderer.toJSON())).toContain('applications.runtime_bytes_downloaded');
+  expect(renderer.root.findAllByType(AppText).some(node => typeof node.props.children === 'string' && node.props.children.includes('40%'))).toBe(false);
+  act(() => renderer.unmount());
+});
+
+it.each<ArtifactProgress>([
+  { phase: 'preparing', received: 0 },
+  { phase: 'downloading', received: 0 },
+  { phase: 'downloading', received: 0, total: 4096 },
+  { phase: 'downloading', received: 0, files: { ready: 0, total: 5 } },
+])('keeps preparation free of zero-byte progress: %j', download => {
+  mockRunning = null;
+  mockLaunch = { release: { title: 'App' }, pending: false, showLoading: true, error: null, download };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(renderer.root.findAllByType(AppProgressBar)).toHaveLength(0);
+  expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  expect(JSON.stringify(renderer.toJSON())).toContain('applications.runtime_loading');
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('applications.runtime_downloading');
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('0 B');
+  mockLaunch = { ...mockLaunch, download: { phase: 'downloading', received: 1024, total: 4096 } };
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(renderer.root.findByType(AppProgressBar).props.value).toBe(0.25);
+  expect(JSON.stringify(renderer.toJSON())).toContain('1.0 KB');
+  act(() => renderer.unmount());
+});
+
+it('shows cache readiness without implying that zero bytes have downloaded', () => {
+  mockRunning = null;
+  mockLaunch = { release: { title: 'App' }, pending: false, showLoading: true, error: null,
+    download: { phase: 'downloading', received: 0, files: { ready: 2, total: 5 } } };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  expect(renderer.root.findByType(AppProgressBar).props.value).toBe(0.4);
+  expect(JSON.stringify(renderer.toJSON())).toContain('applications.runtime_files_ready');
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('applications.runtime_bytes_downloaded');
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('0 B');
+  act(() => renderer.unmount());
+});
+
+it('keeps the same centered icon while loading, progress and failure content changes', () => {
+  mockRunning = null;
+  mockLaunch = { release: { title: 'App' }, pending: false, showLoading: true, error: null };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<NappletRunScreen />); });
+  const icon = renderer.root.findByType(ApplicationIcon);
+  const anchor = icon.parent;
+  const center = { flex: 1, alignItems: 'center', justifyContent: 'center' };
+  const details = { position: 'absolute', top: '50%', marginTop: 48, bottom: 0, start: 0, end: 0 };
+  expect(anchor!.props.style).toEqual(center);
+  for (const download of [
+    { phase: 'downloading' as const, received: 1024 },
+    { phase: 'downloading' as const, received: 1024, total: 4096 },
+    { phase: 'downloading' as const, received: 2048, files: { ready: 2, total: 5 } },
+    { phase: 'verifying' as const, received: 4096, total: 4096 },
+    { phase: 'preparing' as const, received: 4096 },
+  ]) {
+    mockLaunch = { ...mockLaunch!, download };
+    act(() => { renderer.update(<NappletRunScreen />); });
+    expect(renderer.root.findByType(ApplicationIcon)).toBe(icon);
+    expect(icon.parent).toBe(anchor);
+    expect(anchor!.props.style).toEqual(center);
+    expect(renderer.root.findByType(ScrollView).props.style).toEqual(details);
+  }
+  mockLaunch = { ...mockLaunch!, showLoading: false, error: 'applications.download_failed' };
+  act(() => { renderer.update(<NappletRunScreen />); });
+  expect(renderer.root.findByType(ApplicationIcon)).toBe(icon);
+  expect(icon.parent).toBe(anchor);
+  expect(renderer.root.findByType(ScrollView).props.style).toEqual(details);
+  expect(renderer.root.findByType(AppButton).props.label).toBe('common.retry');
   act(() => renderer.unmount());
 });

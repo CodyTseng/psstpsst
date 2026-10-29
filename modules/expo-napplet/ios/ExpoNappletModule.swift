@@ -32,16 +32,71 @@ private final class ResourceException: GenericException<String>, @unchecked Send
   override var reason: String { param }
 }
 
+/** Count payload bytes incrementally, excluding HTTP headers and chunk framing. */
+private struct ResourceBodyProgress {
+  private var cursor: Int?
+  private var chunked = false
+  private var remaining: Int?
+  private var separator = false
+  private var done = false
+  private var ignored = false
+  private(set) var received = 0
+  private var total: Int?
+  mutating func update(_ data: Data) -> (Int, Int?)? {
+    if ignored { return nil }
+    if cursor == nil {
+      guard let boundary = data.range(of: Data("\r\n\r\n".utf8), in: 0..<min(data.count, 32772)), boundary.lowerBound <= 32768,
+        let header = String(data: data[..<boundary.lowerBound], encoding: .utf8) else { return nil }
+      let lines = header.components(separatedBy: "\r\n")
+      guard lines.first?.split(separator: " ").dropFirst().first == "200" else { ignored = true; return nil }
+      for line in lines.dropFirst() {
+        guard let colon = line.firstIndex(of: ":") else { continue }
+        let name = line[..<colon].lowercased()
+        let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces).lowercased()
+        if name == "content-length", let length = Int(value), length > 0 { total = length }
+        if name == "transfer-encoding", value == "chunked" { chunked = true }
+      }
+      if chunked { total = nil }
+      cursor = boundary.upperBound
+    }
+    if !chunked { received = data.count - cursor!; return (received, total.flatMap { received <= $0 ? $0 : nil }) }
+    while !done {
+      if separator {
+        guard data.count - cursor! >= 2 else { break }
+        guard data[cursor!] == 13, data[cursor! + 1] == 10 else { done = true; break }
+        cursor! += 2; separator = false
+      }
+      if remaining == nil {
+        guard let end = data.range(of: Data("\r\n".utf8), in: cursor!..<min(data.count, cursor! + 1026)) else {
+          if data.count - cursor! > 1024 { done = true }
+          break
+        }
+        guard end.lowerBound - cursor! <= 1024,
+          let line = String(data: data[cursor!..<end.lowerBound], encoding: .ascii),
+          let first = line.split(separator: ";").first, let count = Int(first, radix: 16), count >= 0 else { done = true; break }
+        cursor = end.upperBound
+        if count == 0 { done = true; break }
+        remaining = count
+      }
+      let count = min(remaining!, data.count - cursor!)
+      received += count; cursor! += count; remaining! -= count
+      if remaining == 0 { remaining = nil; separator = true }
+      if count == 0 { break }
+    }
+    return (received, nil)
+  }
+}
+
 /** Connect to the validated numeric address while retaining hostname TLS verification. */
 private final class PublicFetch {
   private let queue = DispatchQueue(label: "psstpsst.napplet.resource")
   private var connection: NWConnection?
   private var terminal = false
   private var redirects = 0
-  private var deadlineStarted = false
+  private let progress: ((Int, Int?) -> Void)?
+  private var lastProgress: TimeInterval = 0
   private let completion: (Data?, String?, Int, [String: String]) -> Void
   private let bootstrap: String?
-  private let timeout: Double
   private var dnsRequest: PublicFetch?
   private static let dnsLock = NSLock()
   private static var dnsCache: [String: (address: String, expires: TimeInterval)] = [:]
@@ -52,9 +107,10 @@ private final class PublicFetch {
   private let responseDetails: Bool
   private let etag: String?
   private let lastModified: String?
-  init(_ promise: Promise, responseDetails: Bool = false, etag: String? = nil, lastModified: String? = nil, finished: @escaping () -> Void) {
+  init(_ promise: Promise, progress: ((Int, Int?) -> Void)? = nil, responseDetails: Bool = false, etag: String? = nil, lastModified: String? = nil, finished: @escaping () -> Void) {
+    self.progress = progress
     self.responseDetails = responseDetails; self.etag = etag; self.lastModified = lastModified
-    self.bootstrap = nil; self.timeout = 20
+    self.bootstrap = nil
     self.completion = { data, error, status, headers in
       finished()
       guard let data else { promise.reject(ResourceException(error ?? "network-error")); return }
@@ -67,7 +123,8 @@ private final class PublicFetch {
     }
   }
   private init(bootstrap: String, completion: @escaping (Data?, String?, Int, [String: String]) -> Void) {
-    self.bootstrap = bootstrap; self.timeout = 5; self.completion = completion
+    self.progress = nil
+    self.bootstrap = bootstrap; self.completion = completion
     self.responseDetails = false; self.etag = nil; self.lastModified = nil
   }
   func cancel() { queue.async { self.finish(nil, "cancelled") } }
@@ -79,11 +136,6 @@ private final class PublicFetch {
   }
 
   func start(_ value: String, max: Int, accept: String = "*/*") {
-    queue.async {
-      guard !self.deadlineStarted else { return }
-      self.deadlineStarted = true
-      self.queue.asyncAfter(deadline: .now() + self.timeout) { self.finish(nil, "timeout") }
-    }
     DispatchQueue.global(qos: .utility).async {
       guard ["*/*", "application/json", "application/nostr+json", "application/dns-json"].contains(accept),
         [self.etag, self.lastModified].allSatisfy({ value in value == nil || value!.utf8.count <= 2048 && !value!.contains(where: { $0 == "\r" || $0 == "\n" || $0 == "\0" }) }),
@@ -176,12 +228,21 @@ private final class PublicFetch {
     let connection = NWConnection(host: NWEndpoint.Host(address), port: 443, using: NWParameters(tls: tls))
     self.connection = connection
     var received = Data()
+    var bodyProgress = ResourceBodyProgress()
     func receive() {
       connection.receive(minimumIncompleteLength: 1, maximumLength: 32768) { data, _, complete, error in
         guard !self.terminal, self.connection === connection else { return }
-        if let data { received.append(data) }
+        if let data, !data.isEmpty {
+          received.append(data)
+        }
         guard received.count <= max + 65536 else { self.finish(nil, "too-large"); return }
         if let error { self.finish(nil, "receive-failed: \(error)"); return }
+        if self.progress != nil, let (count, total) = bodyProgress.update(received) {
+          let now = ProcessInfo.processInfo.systemUptime
+          if complete || now - self.lastProgress >= 0.1 {
+            self.lastProgress = now; self.progress?(count, total)
+          }
+        }
         if complete {
           if let target = Self.redirect(received, from: url) {
             guard self.bootstrap == nil else { self.finish(nil, "dns-unavailable"); return }
@@ -289,7 +350,7 @@ public class ExpoNappletModule: Module {
   private let lock = NSLock()
   public func definition() -> ModuleDefinition {
     Name("ExpoNapplet")
-    Events("onLocalRelayEvent")
+    Events("onLocalRelayEvent", "onResourceProgress")
     OnCreate {
       self.relayObserver = LocalRelayEvents.subscribe { [weak self] message in
         self?.sendEvent("onLocalRelayEvent", ["message": message])
@@ -317,10 +378,15 @@ public class ExpoNappletModule: Module {
     Function("isAvailable") { true }
     Function("supportsResourceHeaders") { true }
     Function("isExploreAvailable") { true }
+    Function("supportsResourceProgress") { true }
     AsyncFunction("fetchResourceAsync") { (id: String, url: String, max: Int, accept: String?, promise: Promise) in
       self.lock.lock()
       guard self.requests.count < 12 else { self.lock.unlock(); promise.reject(ResourceException("quota-exceeded")); return }
-      let request = PublicFetch(promise) { [weak self] in
+      let request = PublicFetch(promise, progress: { [weak self] received, total in
+        var event: [String: Any] = ["id": id, "received": received]
+        if let total { event["total"] = total }
+        self?.sendEvent("onResourceProgress", event)
+      }) { [weak self] in
         guard let self else { return }
         self.lock.lock(); self.requests.removeValue(forKey: id); self.lock.unlock()
       }

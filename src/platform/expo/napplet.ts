@@ -2,7 +2,7 @@ import type { ExplorePage } from '../ports/explore';
 import { assertNotAborted } from '@/platform/abort';
 import { decodeNappletBytes } from '../napplet-bytes';
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort } from '../ports/napplet';
+import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort, type ResourceProgress } from '../ports/napplet';
 import { exploreBridge } from '@/lib/napp/bridge';
 import { applicationTasksAdapter } from './application-tasks';
 import { pageAppearance, type PageAppearance } from '@/lib/page-appearance';
@@ -12,6 +12,8 @@ type NativeModule = {
   isExploreAvailable?(): boolean;
   clearPageDataAsync?(storageId: string): Promise<void>;
   supportsResourceHeaders?(): boolean;
+  supportsResourceProgress?(): boolean;
+  addListener(event: 'onResourceProgress', listener: (event: ResourceProgress & { id: string }) => void): { remove(): void };
   fetchResourceAsync(id: string, url: string, max: number, accept?: string): Promise<string>;
   fetchResourceResponseAsync?(id: string, url: string, max: number, etag?: string, lastModified?: string): Promise<{ status: 200 | 304; bytes: string; etag?: string; lastModified?: string }>;
   cancelResourceAsync(id: string): Promise<void>;
@@ -84,19 +86,23 @@ export const nappletAdapter: NappletPort = {
     const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
     if (!native) throw new Error('applications.rebuild_required');
     const headers = native.supportsResourceHeaders?.() === true;
-    if (options && !headers) throw new Error('applications.rebuild_required');
+    if (options?.accept && !headers) throw new Error('applications.rebuild_required');
     const id = `resource:${++serial}`;
     assertNotAborted(signal);
     const abort = () => {
       void native.cancelResourceAsync(id).catch(() => {});
     };
     signal?.addEventListener('abort', abort, { once: true });
+    const listener = options?.onProgress && native.supportsResourceProgress?.() ? native.addListener('onResourceProgress', ({ id: requestId, ...progress }) => {
+      if (requestId === id && !signal?.aborted) options.onProgress!(progress);
+    }) : undefined;
     try {
       const response = headers ? native.fetchResourceAsync(id, url, max, options?.accept ?? '*/*') : native.fetchResourceAsync(id, url, max);
       const bytes = await decodeNappletBytes(await response, signal);
       assertNotAborted(signal);
       return bytes;
     } finally {
+      listener?.remove();
       signal?.removeEventListener('abort', abort);
     }
   },

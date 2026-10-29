@@ -342,7 +342,7 @@ it.each([{servers:[]},{servers:['https://old.example/']}])('shares one author-se
   receive('container', JSON.stringify({ type: 'explore.navigation', phase: 'commit', origin: runtime.entry.kind === 'website' ? new URL(runtime.entry.address).origin : (runtime.entry.key === 'naddr-test' ? 'https://app.explore.psstpsst.invalid' : 'https://app.example'), document: 'one' }));
   expect(network.mediaServers).toHaveBeenCalledTimes(1);
   expect(network.mediaServers).toHaveBeenCalledWith(app.manifest.pubkey,expect.any(AbortSignal));
-  expect(loadSiteBlob).toHaveBeenCalledWith({...app,servers:['https://old.example/','https://new.example/'].filter(server=>!servers.includes(server))},'a'.repeat(64),expect.any(AbortSignal));
+  expect(loadSiteBlob).toHaveBeenCalledWith({...app,servers:['https://old.example/','https://new.example/'].filter(server=>!servers.includes(server))},'a'.repeat(64),expect.any(AbortSignal),undefined,expect.any(Function));
   expect(platform.napplet.openPage).toHaveBeenLastCalledWith(expect.objectContaining({files:expect.arrayContaining([expect.objectContaining({path:'/index.html'}),expect.objectContaining({path:'/app.js'})])}));
 });
 
@@ -474,4 +474,51 @@ it('does not resume an unrelated document or replace a successful commit with a 
   await flush();
   expect(confirm).not.toHaveBeenCalled();
   expect(platform.napplet.send).not.toHaveBeenCalled();
+});
+
+it('aggregates three concurrent downloads while counting cache hits as ready files', async () => {
+  await runtime.stop();
+  const files = Array.from({ length: 4 }, (_, i) => ({ path: `/file${i}`, hash: String(i).repeat(64), mime: 'text/plain' }));
+  const progress = jest.fn();
+  let now = 0;
+  const clock = jest.spyOn(Date, 'now').mockImplementation(() => now += 200);
+  const pending = new Map<string, () => void>();
+  jest.mocked(loadSiteBlob).mockImplementation((_source, hash, _signal, _max, report) => {
+    const n = files.findIndex(file => file.hash === hash);
+    if (n === 0) return Promise.resolve(new Uint8Array(1));
+    report?.({ phase: 'downloading', received: n + 1 });
+    return new Promise(resolve => pending.set(hash, () => resolve(new Uint8Array(n + 1))));
+  });
+  runtime = new ExploreRuntime('account', { ...entry, kind: 'nsite', files }, { progress, confirm, close: () => {}, link: () => {} });
+  try {
+    const started = runtime.start();
+    for (let i = 0; i < 8 && pending.size < 3; i++) await flush();
+    expect(pending.size).toBe(3);
+    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ phase: 'downloading', received: 9, files: { ready: 1, total: 4 } }));
+    for (const complete of pending.values()) complete();
+    await started;
+    expect(progress).toHaveBeenLastCalledWith({ phase: 'preparing', received: 9, files: { ready: 4, total: 4 } });
+  } finally { clock.mockRestore(); }
+});
+
+it('ignores late multi-file progress and aborts every worker when the container closes', async () => {
+  await runtime.stop();
+  const progress = jest.fn();
+  const signals: AbortSignal[] = [];
+  const reports: NonNullable<Parameters<typeof loadSiteBlob>[4]>[] = [];
+  jest.mocked(loadSiteBlob).mockImplementation((_source, _hash, signal, _max, report) => {
+    signals.push(signal!); reports.push(report!);
+    return new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
+  });
+  runtime = new ExploreRuntime('account', { ...entry, kind: 'napp', files: Array.from({ length: 5 }, (_, i) => ({ path: `/file${i}`, hash: String(i).repeat(64), mime: 'text/plain' })) }, { progress, confirm, close: () => {}, link: () => {} });
+  const start = runtime.start();
+  const cancelled = expect(start).rejects.toThrow('session-closed');
+  for (let i = 0; i < 8 && signals.length < 3; i++) await flush();
+  expect(signals).toHaveLength(3);
+  await runtime.stop();
+  const updates = progress.mock.calls.length;
+  for (const report of reports) report({ phase: 'downloading', received: 100 });
+  await cancelled;
+  expect(signals.every(signal => signal.aborted)).toBe(true);
+  expect(progress).toHaveBeenCalledTimes(updates);
 });

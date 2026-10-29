@@ -29,6 +29,7 @@ export default function ApplicationWindowScreen() {
       blocked: !!panel || !!napplet.prompt || !!napplet.configuration || !!napplet.panel || napplet.overlayActive,
       restart: entry => entry.release ? nappletService.restartOpen(napplet.runId, entry.release) : exploreService.restart(explore.runId, entry) } : undefined}
     loading={release ? napplet.launch?.showLoading : explore.loading} error={release ? napplet.launch?.error : explore.error}
+    download={release ? napplet.launch?.download : explore.download}
     menuEnabled={!!containerId} onClose={close}
     onMore={() => { if (release) nappletService.openPanel('about'); else setPanel('about'); }}
     onRetry={() => { if (release) nappletService.retryOpen(napplet.runId); else exploreService.retry(explore.runId); }}

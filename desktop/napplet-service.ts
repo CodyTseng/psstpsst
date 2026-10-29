@@ -125,7 +125,14 @@ export function registerNappletHandlers(
         const response = await fetchNappletResourceResponse(url, max, abort.signal, responseOptions.validators);
         return { ...response, bytes: Buffer.from(response.bytes).toString('base64') };
       }
-      return Buffer.from(await fetchNappletResource(url, max, abort.signal, accept)).toString('base64');
+      let lastProgress = 0;
+      const progress = (value: import('../src/platform/ports/napplet').ResourceProgress) => {
+        const now = Date.now();
+        if (value.received !== 0 && value.received !== value.total && now - lastProgress < 100) return;
+        lastProgress = now;
+        if (!owner.isDestroyed()) owner.webContents.send(IPC.nappletProgress, id, value);
+      };
+      return Buffer.from(await fetchNappletResource(url, max, abort.signal, accept, progress)).toString('base64');
     } catch (error) {
       // Resource failures are handled by callers; rejecting invoke logs them again in Electron.
       if (abort.signal.aborted) return null;

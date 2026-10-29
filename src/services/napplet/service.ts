@@ -10,7 +10,7 @@ import { getAccount } from '@/services/account/account-access';
 import { nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingActivity } from '@/db/schema';
 import { db } from '@/db/client';
 import { eq } from 'drizzle-orm';
-import { loadArtifact } from './artifacts';
+import { loadArtifact, type ArtifactProgress } from './artifacts';
 import {
   NAP_DOMAINS,
   type NappletInstallation,
@@ -40,7 +40,7 @@ type State = {
   market: NappletRelease[];
   launching: boolean;
   runId: number;
-  launch: { release: NappletRelease; reviewedRequired?: readonly string[]; pending: boolean; showLoading: boolean; error: string | null } | null;
+  launch: { release: NappletRelease; reviewedRequired?: readonly string[]; pending: boolean; showLoading: boolean; download?: ArtifactProgress; error: string | null } | null;
   running: { release: NappletRelease; containerId: string } | null;
   prompt: QueuedPrompt | null;
   approvalClosing: boolean;
@@ -80,6 +80,7 @@ let runtimeClosing: Promise<void> = Promise.resolve();
 const approvals = new PromptQueue((prompt, approvalClosing) => nappletStore.setState({ prompt, approvalClosing, ...(prompt ? { overlayActive: true } : {}) }));
 let theme: RuntimeTheme | null = null;
 let opening = 0;
+let launchDownload: AbortController | null = null;
 let navigatingBack: NappletRuntime | null = null;
 let runSerial = 0;
 
@@ -222,7 +223,7 @@ export const nappletService = {
     } catch (error) { check(account, epoch); throw error; }
     finally { addressRequests.delete(request); }
   },
-  async install(release: NappletRelease, expectedAccount?: string, onDownload?: () => void) {
+  async install(release: NappletRelease, expectedAccount?: string, onDownload?: () => void, options?: { signal?: AbortSignal; onProgress?: (progress: ArtifactProgress) => void }) {
     const account = nappletStore.getState().accountPubkey;
     const epoch = generation;
     if (!account) throw new Error('account-unavailable');
@@ -230,7 +231,8 @@ export const nappletService = {
       throw new Error('session-closed');
     if (release.required.some((domain) => !(NAP_DOMAINS as readonly string[]).includes(domain)))
       throw new Error('applications.unsupported');
-    await loadArtifact(release, undefined, onDownload);
+    await loadArtifact(release, options?.signal, onDownload, options?.onProgress);
+    assertNotAborted(options?.signal);
     check(account, epoch);
     desktopRevision++;
     await saveInstallation(account, release);
@@ -302,6 +304,8 @@ export const nappletService = {
     check(account, epoch);
     this.stop();
     const operation = ++opening;
+    const download = new AbortController();
+    launchDownload = download;
     nappletStore.setState({ launching: true, launch: { release, reviewedRequired: reviewedRequired ? [...reviewedRequired] : undefined, pending: false, showLoading: false, error: null } });
     const current = () => {
       check(account, epoch);
@@ -315,10 +319,15 @@ export const nappletService = {
       const launch = nappletStore.getState().launch;
       if (launch && !launch.showLoading) nappletStore.setState({ launch: { ...launch, showLoading: true } });
     };
-    if (!installed || installed.hash !== release.hash) await this.install(release, account, downloading);
+    const progress = (value: ArtifactProgress) => {
+      if (download.signal.aborted || operation !== opening) return;
+      const launch = nappletStore.getState().launch;
+      if (launch) nappletStore.setState({ launch: { ...launch, download: value } });
+    };
+    if (!installed || installed.hash !== release.hash) await this.install(release, account, downloading, { signal: download.signal, onProgress: progress });
     current();
     const declared = await authorizeRelease(release, account, current, reviewedRequired);
-    const html = await loadArtifact(release, undefined, downloading);
+    const html = await loadArtifact(release, download.signal, downloading, progress);
     current();
     const instance = new NappletRuntime({
       accountPubkey: account,
@@ -385,6 +394,8 @@ export const nappletService = {
   stop(expectedRunId?: number) {
     if (expectedRunId !== undefined && nappletStore.getState().runId !== expectedRunId) return;
     opening++;
+    launchDownload?.abort();
+    launchDownload = null;
     const old = runtime;
     runtime = null;
     approvals.cancelAll();

@@ -68,7 +68,7 @@ test('tries the next signed server after a corrupt download', async () => {
   fetchResource.mockResolvedValueOnce(corrupt).mockResolvedValueOnce(valid);
   sha256Hex.mockResolvedValueOnce('b'.repeat(64)).mockResolvedValueOnce(hash);
   await expect(fetchBlob(release, hash, 100)).resolves.toBe(valid);
-  expect(fetchResource).toHaveBeenLastCalledWith(`https://second.example/${hash}`, 100, undefined);
+  expect(fetchResource).toHaveBeenLastCalledWith(`https://second.example/${hash}`, 100, undefined, undefined);
 });
 
 test('retains the underlying failure for diagnosis when all servers fail', async () => {
@@ -104,7 +104,7 @@ test('bounds icon cache reads and downloads without reading oversized cached ass
   fetchResource.mockResolvedValue(new Uint8Array(1024));
   await expect(loadSiteBlob(release, hash, undefined, 100)).rejects.toThrow('applications.download_failed');
   expect(platform.fileSystem.readBytes).not.toHaveBeenCalled();
-  expect(fetchResource).toHaveBeenCalledWith(`https://first.example/${hash}`, 100, undefined);
+  expect(fetchResource).toHaveBeenCalledWith(`https://first.example/${hash}`, 100, undefined, undefined);
 });
 
 test('stores the same asset in separate application directories', async () => {

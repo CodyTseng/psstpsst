@@ -16,7 +16,7 @@ export const IPC = {
   nappletCapture: 'napplet:capture',
   nappletGoBack: 'napplet:go-back',
   nappletOpen: 'napplet:open', nappletClose: 'napplet:close', nappletSend: 'napplet:send', nappletBounds: 'napplet:bounds',
-  nappletMessage: 'napplet:message', nappletReply: 'napplet:reply', nappletFetch: 'napplet:fetch', nappletCancel: 'napplet:cancel',
+  nappletProgress: 'napplet:progress', nappletMessage: 'napplet:message', nappletReply: 'napplet:reply', nappletFetch: 'napplet:fetch', nappletCancel: 'napplet:cancel',
   clipboardWriteText: 'psstpsst:clipboard:write-text',
   clipboardReadText: 'psstpsst:clipboard:read-text',
   clipboardCopyAttachment: 'psstpsst:clipboard:copy-attachment',

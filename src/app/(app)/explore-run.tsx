@@ -56,7 +56,7 @@ export default function ExploreRunScreen() {
     application={state.entry?applicationPresentation(state.entry):undefined}
     onOpenWindow={canOpenWindow ? openInWindow : undefined} openingWindow={windowPending}
     menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.close(id)} onMore={()=>setPanel('about')}
-    loading={owns&&state.loading} error={owns?state.error:undefined} onRetry={()=>exploreService.retry(id)}
+    download={owns ? state.download : undefined} loading={owns&&state.loading} error={owns?state.error:undefined} onRetry={()=>exploreService.retry(id)}
     overlay={owns&&state.entry&&state.account?<ExploreApplicationSheet key={`${id}:${state.entry.key}`} entry={state.entry} account={state.account} runId={id} page={panel} onPageChange={setPanel}/>:null}>
     {owns ? state.surfaces.map(surfaceId => <View key={surfaceId} style={[StyleSheet.absoluteFill, { opacity: surfaceId === state.containerId ? 1 : 0 }, { pointerEvents: surfaceId === state.containerId ? 'auto' : 'none' }]}>
       <NappletSurface id={surfaceId} visible={focused && surfaceId === state.containerId} obscured={!!prompt||overlayActive}/>

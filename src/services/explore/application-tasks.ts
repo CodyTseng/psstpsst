@@ -6,7 +6,7 @@ import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { nappletService, nappletStore } from '@/services/napplet/service';
 import { registerNappletLifecycle, registerNappletTheme, registerNappletSourceInvalidation } from '@/services/napplet/lifecycle';
 import { NappletRuntime, type RuntimePrompt, type RuntimeTheme } from '@/services/napplet/runtime';
-import { loadArtifact } from '@/services/napplet/artifacts';
+import { loadArtifact, type ArtifactProgress } from '@/services/napplet/artifacts';
 import { NAP_DOMAINS, randomId } from '@/services/napplet/protocol';
 import { getData, setData } from '@/services/napplet/repository';
 import { readDomainPermissions, resolveDomainPermissions } from '@/services/napplet/domain-permissions';
@@ -20,7 +20,7 @@ import { shouldOpenApplicationWindow } from './open-preferences';
 import { openInlineApplication } from './inline-launch';
 
 export type ApplicationTaskState = {
-  entry: ExploreEntry; account: string; containerId?: string; loading: boolean; error?: string;
+  entry: ExploreEntry; account: string; containerId?: string; loading: boolean; download?: ArtifactProgress; error?: string;
 };
 type Session = {
   account: string; sourceId: string;
@@ -158,8 +158,9 @@ export const applicationTasks = {
       const presented = () => { if (isCurrent()) patch(id, { loading: false }); };
       if (entry.release) {
         const release = entry.release;
-        await nappletService.install(release, account); current();
-        const html = await loadArtifact(release, signal); current();
+        const onProgress = (download: ArtifactProgress) => { if (isCurrent()) patch(id, { download }); };
+        await nappletService.install(release, account, undefined, { signal, onProgress }); current();
+        const html = await loadArtifact(release, signal, undefined, onProgress); current();
         const runtime = new NappletRuntime({ accountPubkey: account, release, html, domains,
           theme, confirm, presented,
           configure: (schema, values) => { current(); nappletService.configureExternal(schema, values, value => runtime.saveConfig(value), signal); },
@@ -178,6 +179,7 @@ export const applicationTasks = {
       } else {
         const runtime = new ExploreRuntime(account, { ...entry, required }, {
           theme: () => theme().colors, confirm, presented,
+          progress: download => { if (isCurrent()) patch(id, { download }); },
           focus: () => { current(); return platform.napplet.tasks!.focus(id); },
           failed: () => { if (isCurrent()) patch(id, { loading: false, error: 'applications.request_failed' }); },
           close: () => { if (!isCurrent()) return; void this.close(id).catch(error => console.warn('[explore] Task cleanup failed', error)); },
@@ -227,7 +229,7 @@ export const applicationTasks = {
     const cleanup = Promise.resolve(old.runtime instanceof ExploreRuntime ? old.runtime.stop() : old.runtime?.close());
     const candidate: Session = { account: old.account, sourceId: old.sourceId, aliases: old.aliases, opened: old.opened, life: new AbortController(), cleanup, delivery: old.delivery };
     sessions.set(id, candidate);
-    patch(id, { entry, containerId: undefined, loading: true, error: undefined });
+    patch(id, { entry, containerId: undefined, loading: true, error: undefined, download: undefined });
     await this.start(id);
     const state = applicationTaskStore.getState().sessions.get(id);
     if (sessions.get(id) === candidate && state?.error) {
@@ -239,7 +241,7 @@ export const applicationTasks = {
     if (!session) return;
     if (session.runtime instanceof ExploreRuntime) await session.runtime.stop(); else await session.runtime?.close();
     session.runtime = undefined;
-    patch(id, { containerId: undefined, loading: true, error: undefined });
+    patch(id, { containerId: undefined, loading: true, error: undefined, download: undefined });
     await this.start(id);
   },
   async close(id: string, native = true) {

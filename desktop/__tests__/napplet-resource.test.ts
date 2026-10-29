@@ -83,3 +83,62 @@ it('bounds loops, redirected response sizes and cancellation', async () => {
   const controller = new AbortController(); controller.abort();
   await expect(fetchNappletResource('https://blossom.example/hash', 100, controller.signal)).rejects.toThrow('cancelled');
 });
+
+function streamedReply(total?: number) {
+  const response = new EventEmitter() as any;
+  response.statusCode = 200;
+  response.headers = total === undefined ? {} : { 'content-length': String(total) };
+  response.destroy = (error?: Error) => { if (error) response.emit('error', error); };
+  const req = new EventEmitter() as any;
+  req.setTimeout = () => req;
+  req.destroy = (error: Error) => { req.emit('error', error); return req; };
+  jest.mocked(request).mockImplementationOnce(((_url: URL, options: any, respond: (reply: any) => void) => {
+    req.end = () => respond(response);
+    options.signal.addEventListener('abort', () => req.destroy(new Error('cancelled')), { once: true });
+    return req;
+  }) as typeof request);
+  return response;
+}
+
+it.each([undefined, 3])('reports payload bytes with total=%s and permits active downloads longer than 20 seconds', async total => {
+  jest.useFakeTimers();
+  try {
+    const response = streamedReply(total);
+    const progress = jest.fn();
+    const result = fetchNappletResource('https://public.example/app', 100, undefined, '*/*', progress);
+    for (let i = 0; i < 3; i++) {
+      await jest.advanceTimersByTimeAsync(15000);
+      response.emit('data', Buffer.from('x'));
+    }
+    response.emit('end');
+    await expect(result).resolves.toEqual(new Uint8Array(Buffer.from('xxx')));
+    expect(progress).toHaveBeenLastCalledWith({ received: 3, total });
+    expect(jest.getTimerCount()).toBe(0);
+  } finally { jest.useRealTimers(); }
+});
+
+it('keeps stalled transfers pending until their owner cancels', async () => {
+  jest.useFakeTimers();
+  try {
+    const response = streamedReply();
+    const owner = new AbortController();
+    const result = fetchNappletResource('https://public.example/app', 100, owner.signal);
+    let settled = false;
+    void result.then(() => { settled = true; }, () => { settled = true; });
+    await jest.advanceTimersByTimeAsync(60000);
+    response.emit('data', Buffer.from('x'));
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(settled).toBe(false);
+    expect(jest.getTimerCount()).toBe(0);
+    owner.abort();
+    await expect(result).rejects.toThrow('cancelled');
+  } finally { jest.useRealTimers(); }
+});
+
+it('aborts an in-flight transfer when its owner cancels', async () => {
+  streamedReply();
+  const owner = new AbortController();
+  const result = fetchNappletResource('https://public.example/app', 100, owner.signal);
+  owner.abort();
+  await expect(result).rejects.toThrow('cancelled');
+});

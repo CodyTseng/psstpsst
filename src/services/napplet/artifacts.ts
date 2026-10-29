@@ -2,10 +2,12 @@ import { decodeNappletHtml } from '@/platform/napplet-bytes';
 import { assertNotAborted } from '@/platform/abort';
 import { base64 } from '@scure/base';
 import { platform } from '@/platform';
+import type { ResourceProgress } from '@/platform/ports/napplet';
 import type { Event } from 'nostr-tools';
 import { eventKey, eventKeyAddress, normalizeEventKey } from '@/lib/nostr/event-key';
 import { MAX_ARTIFACT_BYTES, publicUrl, resourceMime, type NappletRelease } from './protocol';
 
+export type ArtifactProgress = ResourceProgress & { phase: 'downloading' | 'verifying' | 'preparing'; files?: { ready: number; total: number } };
 type ArtifactManifest = Pick<Event, 'id' | 'kind' | 'pubkey' | 'tags'>;
 export type ArtifactSource = Pick<NappletRelease, 'servers'> & {
   eventKey?: string;
@@ -124,18 +126,23 @@ export async function fetchBlob(
   hash: string,
   maxBytes: number,
   signal?: AbortSignal,
+  onProgress?: (progress: ArtifactProgress) => void,
 ): Promise<Uint8Array> {
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('invalid-hash');
   let lastError: unknown;
   for (const server of release.servers) {
     assertNotAborted(signal);
     try {
+      onProgress?.({ received: 0, phase: 'downloading' });
       const bytes = await platform.napplet.fetchResource(
         publicUrl(`${server.replace(/\/$/, '')}/${hash}`),
         maxBytes,
         signal,
+        onProgress ? { onProgress: progress => onProgress({ ...progress, phase: 'downloading' }) } : undefined,
       );
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      assertNotAborted(signal);
+      onProgress?.({ received: bytes.length, total: bytes.length, phase: 'verifying' });
       if (bytes.length > maxBytes) throw new Error('too-large');
       if ((await platform.deviceCrypto.sha256Hex(bytes)) !== hash)
         throw new Error('hash-mismatch');
@@ -148,7 +155,7 @@ export async function fetchBlob(
   }
   throw new Error('applications.download_failed', { cause: lastError });
 }
-export async function loadArtifact(release: NappletRelease, signal?: AbortSignal, onDownload?: () => void): Promise<string> {
+export async function loadArtifact(release: NappletRelease, signal?: AbortSignal, onDownload?: () => void, onProgress?: (progress: ArtifactProgress) => void): Promise<string> {
   assertNotAborted(signal);
   const paths = await artifactPaths(release, release.hash, 'html');
   const cached = await cachedArtifact(paths, release.hash, MAX_ARTIFACT_BYTES, signal);
@@ -160,7 +167,7 @@ export async function loadArtifact(release: NappletRelease, signal?: AbortSignal
   assertNotAborted(signal);
   await recordArtifactVersion(release, [`files/${release.hash}.html`], false);
   onDownload?.();
-  const bytes = await fetchBlob(release, release.hash, MAX_ARTIFACT_BYTES, signal).catch((error) => {
+  const bytes = await fetchBlob(release, release.hash, MAX_ARTIFACT_BYTES, signal, onProgress).catch((error) => {
     assertNotAborted(signal);
     console.warn(
       '[napplet] Artifact download failed',
@@ -218,12 +225,12 @@ export function loadIcon(release: ArtifactSource & Pick<NappletRelease, 'icon'>)
 }
 
 /** Immutable assets are scoped by application identity and shared across accounts. */
-export async function loadSiteBlob(release: ArtifactSource, hash: string, signal?: AbortSignal, maxBytes = MAX_ARTIFACT_BYTES): Promise<Uint8Array> {
+export async function loadSiteBlob(release: ArtifactSource, hash: string, signal?: AbortSignal, maxBytes = MAX_ARTIFACT_BYTES, onProgress?: (progress: ArtifactProgress) => void): Promise<Uint8Array> {
   assertNotAborted(signal);
   const paths = await artifactPaths(release, hash, 'blob');
   const cached = await cachedArtifact(paths, hash, maxBytes, signal);
   if (cached) return cached;
-  const bytes = await fetchBlob(release, hash, maxBytes, signal);
+  const bytes = await fetchBlob(release, hash, maxBytes, signal, onProgress);
   assertNotAborted(signal);
   await platform.fileSystem.writeBytes(paths.path, bytes);
   return bytes;

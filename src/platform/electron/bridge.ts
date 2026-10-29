@@ -40,6 +40,7 @@ export type ElectronBridge = {
     send(id: string, message: string): Promise<void>;
     setBounds(id: string, bounds: NappletBounds, visible: boolean, interactive?: boolean): Promise<void>;
     fetch(id: string, url: string, maxBytes: number, accept?: string): Promise<string | null | { error: string; code?: string }>;
+    onProgress?(listener: (id: string, progress: import('../ports/napplet').ResourceProgress) => void): () => void;
     fetchResponse(id: string, url: string, maxBytes: number, validators?: import('../ports/napplet').ResourceValidators): Promise<null | { error: string; code?: string } | { status: 200 | 304; bytes: string; etag?: string; lastModified?: string }>;
     cancel(id: string): Promise<void>;
     onMessage(listener: (id: string, message: string) => void): () => void;

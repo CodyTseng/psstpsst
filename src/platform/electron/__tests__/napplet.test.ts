@@ -58,3 +58,24 @@ it.each([
   await expect(electronNappletAdapter.fetchResource('https://public.example/asset', 1024))
     .rejects.toMatchObject({ message: failure.error, code: 'code' in failure ? failure.code : undefined });
 });
+
+it('routes progress only to its request and removes the listener on cancellation', async () => {
+  let listener!: (id: string, progress: { received: number; total?: number }) => void;
+  const unsubscribe = jest.fn();
+  window.psstpsstDesktop!.napplet.onProgress = callback => { listener = callback; return unsubscribe; };
+  let complete!: (result: null) => void;
+  fetchResource.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  const controller = new AbortController(), progress = jest.fn();
+  const result = electronNappletAdapter.fetchResource('https://public.example/app', 1024, controller.signal, { onProgress: progress });
+  const id = fetchResource.mock.calls[0][0];
+  listener('another-request', { received: 100 });
+  listener(id, { received: 512, total: 1024 });
+  expect(progress).toHaveBeenCalledTimes(1);
+  expect(progress).toHaveBeenLastCalledWith({ received: 512, total: 1024 });
+  controller.abort();
+  listener(id, { received: 1024, total: 1024 });
+  expect(progress).toHaveBeenCalledTimes(1);
+  complete(null);
+  await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+});

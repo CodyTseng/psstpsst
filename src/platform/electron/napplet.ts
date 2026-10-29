@@ -28,6 +28,7 @@ export const electronNappletAdapter: NappletPort = {
     };
     assertNotAborted(signal);
     signal?.addEventListener('abort', abort, { once: true });
+    const unsubscribe = options?.onProgress ? bridge.onProgress?.((requestId, progress) => { if (requestId === id && !signal?.aborted) options.onProgress!(progress); }) : undefined;
     try {
       const result = await bridge.fetch(id, url, maxBytes, options?.accept);
       if (result === null) {
@@ -43,6 +44,7 @@ export const electronNappletAdapter: NappletPort = {
       assertNotAborted(signal);
       return bytes;
     } finally {
+      unsubscribe?.();
       signal?.removeEventListener('abort', abort);
     }
   },

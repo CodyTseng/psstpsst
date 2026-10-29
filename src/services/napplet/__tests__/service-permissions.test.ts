@@ -695,3 +695,29 @@ it('starts only the latest application after overlapping opens wait for initiali
   expect(NappletRuntime).toHaveBeenCalledTimes(1);
   expect(nappletStore.getState()).toMatchObject({ launching: false, running: { release: next } });
 });
+
+it.each([true, false])('aborts pending downloads on close without reviving the launch: installed=%s', async installed => {
+  stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
+  if (!installed) nappletStore.setState({ installed: [] });
+  let started!: () => void;
+  const ready = new Promise<void>(resolve => { started = resolve; });
+  let signal!: AbortSignal;
+  let report!: NonNullable<Parameters<typeof loadArtifact>[3]>;
+  jest.mocked(loadArtifact).mockImplementationOnce((_release, requestSignal, onDownload, progress) => {
+    signal = requestSignal!; report = progress!;
+    onDownload?.();
+    progress?.({ phase: 'downloading', received: 512, total: 1024 });
+    started();
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
+  });
+  const runId = nappletService.prepareOpen(app, 'accountA');
+  nappletService.startPreparedOpen(runId);
+  await ready;
+  expect(nappletStore.getState().launch?.download).toMatchObject({ received: 512, total: 1024 });
+  nappletService.stop(runId);
+  expect(signal.aborted).toBe(true);
+  report({ phase: 'downloading', received: 1024, total: 1024 });
+  await settleLaunch();
+  expect(nappletStore.getState()).toMatchObject({ launching: false, launch: null, running: null });
+  expect(NappletRuntime).not.toHaveBeenCalled();
+});

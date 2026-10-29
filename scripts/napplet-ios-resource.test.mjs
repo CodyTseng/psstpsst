@@ -62,6 +62,25 @@ extension PublicFetch {
     precondition(dnsAnswer(Data("invalid JSON".utf8)) == nil)
   }
 }
+private var known = ResourceBodyProgress()
+let header = "HTTP/1.1 200 OK\\r\\nContent-Length: 5\\r\\n\\r\\n"
+precondition(known.update(Data((header + "ab").utf8))!.0 == 2)
+precondition(known.update(Data((header + "abcde").utf8))!.1 == 5)
+private var chunked = ResourceBodyProgress()
+let wire = Array("HTTP/1.1 200 OK\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n3\\r\\nabc\\r\\n2;ext=1\\r\\nde\\r\\n0\\r\\n\\r\\n".utf8)
+var buffer = Data()
+var last = 0
+for byte in wire {
+  buffer.append(byte)
+  if let (received, total) = chunked.update(buffer) {
+    precondition(received >= last && received <= 5)
+    precondition(total == nil)
+    last = received
+  }
+}
+precondition(last == 5)
+private var unknown = ResourceBodyProgress()
+precondition(unknown.update(Data("HTTP/1.1 200 OK\\r\\n\\r\\nabcdef".utf8))!.0 == 6)
 try PublicFetch.checkDnsResponses()
 for value in ["https://127.0.0.1/", "https://198.18.0.19/", "https://[::1]/", "http://example.com/", "https://user:pass@example.com/", "https://example.com:8443/"] {
   let done = DispatchSemaphore(value: 0)
@@ -74,7 +93,7 @@ private let request = PublicFetch(Promise(done: cancelled, expected: "cancelled"
 request.cancel()
 precondition(cancelled.wait(timeout: .now() + 3) == .success)
 `);
-    execFileSync('xcrun', ['swiftc', input, '-o', output], { stdio: 'pipe' });
+    execFileSync('xcrun', ['swiftc', '-module-cache-path', join(directory, 'cache'), input, '-o', output], { stdio: 'pipe' });
     execFileSync(output, [], { stdio: 'pipe', timeout: 30000 });
   } finally {
     rmSync(directory, { recursive: true, force: true });

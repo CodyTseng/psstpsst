@@ -17,7 +17,7 @@ jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null,
 jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
 jest.mock('@/components/common/AppText', () => ({ AppText: () => null }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
-jest.mock('../ApplicationIcon', () => ({ ApplicationIcon: () => null }));
+jest.mock('../ApplicationIcon', () => ({ APPLICATION_ICON_SIZE: 64, ApplicationIcon: () => null }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/theme', () => ({ spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text' }) }));
 

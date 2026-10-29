@@ -15,7 +15,7 @@ import { randomId } from '@/services/napplet/protocol';
 import { isSignedEvent } from '@/lib/nostr/event-validation';
 import { publicEventAddress } from './event-address';
 import { encodeNappletBytes } from '@/platform/napplet-bytes';
-import { loadSiteBlob, recordArtifactVersion } from '@/services/napplet/artifacts';
+import { loadSiteBlob, recordArtifactVersion, type ArtifactProgress } from '@/services/napplet/artifacts';
 import { applicationPresentation, websiteAddress } from './model';
 import type { ExploreEntry } from './model';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
@@ -61,6 +61,7 @@ export class ExploreRuntime {
   containerId?: string;
   constructor(readonly account: string, readonly entry: ExploreEntry, private options: {
     presented?:()=>void;
+    progress?: (progress: ArtifactProgress) => void;
     focus?: () => Promise<void>;
     failed?: () => void;
     theme?: () => {
@@ -93,13 +94,30 @@ export class ExploreRuntime {
       const artifactFiles = (this.entry.files ?? []).map(file => `files/${file.hash}.blob`);
       if (!this.entry.local) await recordArtifactVersion(this.entry, artifactFiles, false);
       let total = 0;
+      const paths = [...(this.entry.files ?? [])];
+      const receivedByFile = new Float64Array(paths.length);
+      let received = 0, ready = 0, lastProgress = 0;
+      const report = (force = false) => {
+        if (this.lifetime.signal.aborted) return;
+        const now = Date.now();
+        if (!force && now - lastProgress < 100) return;
+        lastProgress = now;
+        this.options.progress?.({ phase: this.entry.local || ready === paths.length ? 'preparing' : 'downloading', received, files: { ready, total: paths.length } });
+      };
+      report(true);
       let mediaServers: Promise<string[]> | undefined;
-      const load = async (hash: string) => {
+      const load = async (hash: string, index: number) => {
+        const onProgress = (progress: ArtifactProgress) => {
+          if (this.lifetime.signal.aborted) return;
+          received += progress.received - receivedByFile[index];
+          receivedByFile[index] = progress.received;
+          report();
+        };
         if (this.entry.local) {
           const { loadLocalApplicationFile } = await import('./local-applications');
           return loadLocalApplicationFile(this.account, this.entry, hash, this.lifetime.signal);
         }
-        try { return await loadSiteBlob(this.entry, hash, this.lifetime.signal); }
+        try { return await loadSiteBlob(this.entry, hash, this.lifetime.signal, undefined, onProgress); }
         catch (error) {
           assertNotAborted(this.lifetime.signal);
           if (!(error instanceof Error) || error.message !== 'applications.download_failed' || !this.entry.manifest) throw error;
@@ -108,19 +126,20 @@ export class ExploreRuntime {
           const servers = (await mediaServers).filter(server => !this.entry.servers.includes(server));
           assertNotAborted(this.lifetime.signal);
           if (!servers.length) throw error;
-          return loadSiteBlob({ ...this.entry, servers }, hash, this.lifetime.signal);
+          return loadSiteBlob({ ...this.entry, servers }, hash, this.lifetime.signal, undefined, onProgress);
         }
       };
       // A small worker pool bounds network and memory pressure; blobs remain hash-verified.
-      const paths = [...(this.entry.files ?? [])];
       let nextFile = 0;
       const files = page.files;
       const worker = async () => {
         while (nextFile < paths.length) {
-          const file = paths[nextFile++];
+          assertNotAborted(this.lifetime.signal);
+          const index = nextFile++;
+          const file = paths[index];
           await new Promise<void>(r => setTimeout(r, 0));
           let bytes: Uint8Array;
-          try { bytes = await load(file.hash); }
+          try { bytes = await load(file.hash, index); }
           catch (error) {
             assertNotAborted(this.lifetime.signal);
             this.log('warn', 'download', { path: file.path, hash: file.hash,
@@ -128,10 +147,13 @@ export class ExploreRuntime {
               cause: error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined });
             throw error;
           }
+          assertNotAborted(this.lifetime.signal);
           total += bytes.length;
           if (total > 32 * 1024 * 1024)
             throw new Error('quota-exceeded');
           files.push({ path: file.path, mime: file.mime, body: await encodeNappletBytes(bytes, this.lifetime.signal) });
+          ready++;
+          report(ready === paths.length);
           await new Promise<void>(r => setTimeout(r, 0));
         }
       };

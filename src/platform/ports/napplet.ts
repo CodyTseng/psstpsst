@@ -7,6 +7,9 @@ export type NappletBounds = { x: number; y: number; width: number; height: numbe
 export const NAPPLET_FRAME_READY = 'psst.frameReady';
 export const NAPPLET_FRAME_READY_MESSAGE = JSON.stringify({ type: NAPPLET_FRAME_READY });
 
+export type ResourceProgress = { received: number; total?: number };
+export type ResourceOptions = { accept?: 'application/json' | 'application/nostr+json'; onProgress?: (progress: ResourceProgress) => void };
+
 export type ResourceValidators = { etag?: string; lastModified?: string };
 export type ResourceResponse = ResourceValidators & { status: 200 | 304; bytes: Uint8Array };
 
@@ -15,7 +18,7 @@ export interface NappletPort {
   windows?: ApplicationWindowsPort;
   tasks?: ApplicationTasksPort;
   fetchResourceResponse?(url: string, maxBytes: number, signal?: AbortSignal, validators?: ResourceValidators): Promise<ResourceResponse>;
-  fetchResource(url: string, maxBytes: number, signal?: AbortSignal, options?: { accept: 'application/json' | 'application/nostr+json' }): Promise<Uint8Array>;
+  fetchResource(url: string, maxBytes: number, signal?: AbortSignal, options?: ResourceOptions): Promise<Uint8Array>;
   clearPageData?(storageId: string): Promise<void>;
   openPage?(page: ExplorePage): Promise<string>;
   open(html: string): Promise<string>;
