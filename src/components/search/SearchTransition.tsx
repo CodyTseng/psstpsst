@@ -95,14 +95,14 @@ export function SearchTransition({
               inputRange: [0, 1],
               outputRange: [1, 0],
             }),
-          }, { pointerEvents: contentActive ? 'none' : 'auto' }]}
+          }, contentActive ? styles.nonInteractive : styles.interactive]}
       >
         {children}
       </Animated.View>
 
       {contentActive || retainedContent ? (
         <Animated.View
-          style={[StyleSheet.absoluteFill, styles.active, { opacity: progress }, { pointerEvents: contentActive ? 'auto' : 'none' }]}
+          style={[StyleSheet.absoluteFill, styles.active, { opacity: progress }, contentActive ? styles.interactive : styles.nonInteractive]}
         >
           {contentActive ? activeContent : retainedContent?.node}
         </Animated.View>
@@ -110,7 +110,7 @@ export function SearchTransition({
 
       {activeChrome && (active || retainedContent) ? (
         <View
-          style={[StyleSheet.absoluteFill, styles.activeChrome, { pointerEvents: active ? 'box-none' : 'none' }]}
+          style={[StyleSheet.absoluteFill, styles.activeChrome, active ? styles.passThrough : styles.nonInteractive]}
         >
           {activeChrome}
         </View>
@@ -125,6 +125,17 @@ const styles = StyleSheet.create({
   },
   active: {
     zIndex: 1,
+  },
+  // React Native Web compiles box-none into parent/child CSS rules only for
+  // registered styles. Inline box-none leaves this full-screen layer opaque to input.
+  passThrough: {
+    pointerEvents: 'box-none',
+  },
+  interactive: {
+    pointerEvents: 'auto',
+  },
+  nonInteractive: {
+    pointerEvents: 'none',
   },
   activeChrome: {
     zIndex: 2,

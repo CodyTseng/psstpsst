@@ -650,7 +650,8 @@ replace the standard header.
 
 Search fields keep the same geometry when focused. Focusing an empty search
 keeps the resting content visible; search results replace it only after the
-query contains non-whitespace text.
+query contains non-whitespace text. Search chrome intercepts input only within
+its controls; the visible list beneath remains hoverable and clickable.
 Clearing or closing search retains the last results through their exit animation
 instead of rendering an unfiltered list before the resting view returns.
 Dragging a tab's resting list during an empty search exits search mode so its
