@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { useFavoriteMetadata } from '@/hooks/use-favorite-metadata';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { useExploreShare } from '@/hooks/use-explore-share';
@@ -67,11 +68,11 @@ export default function ExploreDetailsScreen() {
     onOpen={async()=>{
       if(!app||!account)return;
       try {
-        const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...app.required])] : required;
+        const reviewed = access.approved ? undefined : app.release ? [...new Set(['shell', ...nappletAccessDomains(app.required)])] : required;
         if (await tryOpenApplicationWindow(app, account, reviewed)) return;
         if(app.release) {
           await nappletService.activateAccount(account);
-          const runId=nappletService.prepareOpen(app.release,account,access.approved?undefined:[...new Set(['shell',...app.required])]);
+          const runId=nappletService.prepareOpen(app.release,account,access.approved?undefined:[...new Set(['shell',...nappletAccessDomains(app.required)])]);
           router.push({pathname:'/napplet-run',params:{runId}});
           return;
         }

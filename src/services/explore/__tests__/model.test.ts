@@ -1,6 +1,7 @@
+import type { NappletRelease } from '@/services/napplet/protocol';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { decode, naddrEncode, neventEncode } from 'nostr-tools/nip19';
-import { applicationCopyAddress, applicationShareLink, mergeApplicationEntries, websiteEntry, parseSite, sitePath, websiteAddress, signedAddress, withVisit } from '../model';
+import { applicationRequirements, applicationPresentation, fromNapplet, applicationCopyAddress, applicationShareLink, mergeApplicationEntries, websiteEntry, parseSite, sitePath, websiteAddress, signedAddress, withVisit } from '../model';
 import type { ExploreEntry } from '../model';
 import { updateApplicationMetadata } from '../application-event';
 const key = generateSecretKey();
@@ -127,4 +128,13 @@ it('preserves list and row identities for timestamp-only refreshes', () => {
   const updated = mergeApplicationEntries(previous, [{ ...first }, { ...second, title: 'Updated' }]);
   expect(updated[0]).toBe(first);
   expect(updated[1]).toMatchObject({ title: 'Updated' });
+});
+
+
+it('omits napplet identity from access presentation while retaining the manifest API declaration', () => {
+  const release = { eventKey: 'app', title: 'App', required: ['identity', 'storage'], optional: [], servers: [], event: { kind: 35129, pubkey: 'b'.repeat(64), tags: [['d', 'app']] } } as unknown as NappletRelease;
+  expect(applicationPresentation(release).required).toEqual(['storage']);
+  expect(applicationPresentation(fromNapplet(release)).required).toEqual(['storage']);
+  expect(applicationRequirements('napplet', ['identity'])).toEqual([]);
+  expect(release.required).toEqual(['identity', 'storage']);
 });

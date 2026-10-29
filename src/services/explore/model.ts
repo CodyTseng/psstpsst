@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { normalizeSigningSource } from '@/services/signing/source';
 import { eventKey, normalizeEventKey } from '@/lib/nostr/event-key';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -79,10 +80,10 @@ export function applicationListEntry(entry: ExploreEntry): ApplicationListEntry 
   return { key: entry.key, title: entry.title, description: entry.description, kind: entry.kind, servers: entry.servers, icon: entry.icon, localIcon: entry.localIcon, files: entry.files, manifest: entry.manifest, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
 }
 export function applicationRequirements(kind: ExploreKind, declared: readonly string[]): string[] {
-  return [...new Set([...(kind === 'napp' ? ['network'] : []), ...declared])];
+  return [...new Set([...(kind === 'napp' ? ['network'] : []), ...(kind === 'napplet' ? nappletAccessDomains(declared) : declared)])];
 }
 export function applicationPresentation(entry: ExploreEntry | NappletRelease): ApplicationInfo {
-  return { localIcon: 'localIcon' in entry ? entry.localIcon : undefined, local: 'local' in entry && !!entry.local, title:entry.title,description:entry.description,kind:'kind' in entry?entry.kind:'napplet',required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : entry.required,servers:entry.servers,icon:entry.icon,
+  return { localIcon: 'localIcon' in entry ? entry.localIcon : undefined, local: 'local' in entry && !!entry.local, title:entry.title,description:entry.description,kind:'kind' in entry?entry.kind:'napplet',required:'kind' in entry ? applicationRequirements(entry.kind, entry.required) : nappletAccessDomains(entry.required),servers:entry.servers,icon:entry.icon,
     files:'files' in entry?entry.files:undefined,manifest:'event' in entry?entry.event:entry.manifest,
     publisher:'event' in entry?entry.event.pubkey:entry.manifest?.pubkey,
     origin:'kind' in entry&&entry.kind==='website'?new URL(entry.address).origin:undefined };

@@ -1213,7 +1213,8 @@ host-verified source; crypto reviews also identify the algorithm in a distinct s
 Public-key reviews show the exact public key the application will receive.
 These operations omit event-kind labels and event JSON. Their remembered rules
 remain separate by method and algorithm, apply across peers, and use the shared permission editor.
-Launching an application never grants these signer methods. Application configuration reuses the host's
+Napplets omit identity from launch access and permission switches; current-account
+public projections use the signer public-key disclosure decision. Launching an application never grants these signer methods. Application configuration reuses the host's
 settings form and serialized overlay lifecycle. Text clipboard writes do not
 show a host confirmation. File saves identify the file and require consent
 before opening the system destination picker.

@@ -143,7 +143,7 @@ export class NappletRuntime {
   private domainRequests = new Map<string, Promise<void>>();
   private deniedDomains = new Set<string>();
   constructor(private options: RuntimeOptions) {
-    this.availableDomains = [...new Set([...options.domains, ...options.release.optional.filter(domain =>
+    this.availableDomains = [...new Set([...options.domains, ...options.release.required.filter(domain => domain === 'identity'), ...options.release.optional.filter(domain =>
       (NAP_DOMAINS as readonly string[]).includes(domain))])];
     this.network = new NappletNetwork(options.accountPubkey);
     this.detachInc = incBroker.attach(this.endpoint, options.accountPubkey, (message) =>
@@ -286,6 +286,7 @@ export class NappletRuntime {
   }
   private async authorizeDomain(domain: string): Promise<void> {
     this.check();
+    if (domain === 'identity' && this.availableDomains.includes(domain)) return;
     if (this.options.domains.includes(domain) || ['signer', 'clipboard', 'browser'].includes(domain)) return;
     if (this.deniedDomains.has(domain)) throw new Error('permission-denied');
     if (!this.options.release.optional.includes(domain) || !this.availableDomains.includes(domain))
@@ -567,9 +568,16 @@ export class NappletRuntime {
   }
 
   private async identity(m: Message, op: string) {
-    const pubkey = this.options.accountPubkey;
+    if (op === 'getBlocked') throw new Error('unsupported');
+    const pubkey = await this.applicationSigner().getPublicKey();
+    const revision = this.signingPermissions.version;
+    const reply = (value: Record<string, unknown>) => {
+      this.check();
+      if (this.signingPermissions.version !== revision) throw new Error('permission-revoked');
+      this.result(m, value);
+    };
     if (op === 'getPublicKey') {
-      this.result(m, { pubkey: await this.applicationSigner().getPublicKey() });
+      reply({ pubkey });
       return;
     }
     if (op === 'getRelays') {
@@ -584,19 +592,18 @@ export class NappletRuntime {
             };
           } catch {}
         }
-      this.result(m, { relays });
+      reply({ relays });
       return;
     }
     if (op === 'getProfile') {
       const event = await this.network.replaceable(pubkey, 0);
-      this.result(m, { profile: event ? JSON.parse(event.content) : null });
+      reply({ profile: event ? JSON.parse(event.content) : null });
       return;
     }
     const kinds: Record<string, number> = { getFollows: 3, getMutes: 10000 };
-    if (op === 'getBlocked') throw new Error('unsupported');
     if (kinds[op]) {
       const event = await this.network.replaceable(pubkey, kinds[op]);
-      this.result(m, { pubkeys: event?.tags.filter((t) => t[0] === 'p').map((t) => t[1]) ?? [] });
+      reply({ pubkeys: event?.tags.filter((t) => t[0] === 'p').map((t) => t[1]) ?? [] });
       return;
     }
     if (op === 'getBadges') {
@@ -605,7 +612,7 @@ export class NappletRuntime {
         [{ kinds: [30008], authors: [pubkey], '#d': ['profile_badges'], limit: 1 }],
         this.signal,
       );
-      this.result(m, { badges: result.events });
+      reply({ badges: result.events });
       return;
     }
     if (op === 'getZaps') {
@@ -614,7 +621,7 @@ export class NappletRuntime {
         [{ kinds: [9735], '#p': [pubkey], limit: 50 }],
         this.signal,
       );
-      this.result(m, { zaps: result.events });
+      reply({ zaps: result.events });
       return;
     }
     if (op === 'getList') {
@@ -627,7 +634,7 @@ export class NappletRuntime {
       const kind = kinds[m.listType ?? m.name];
       if (!kind) throw new Error('unsupported');
       const event = await this.network.replaceable(pubkey, kind);
-      this.result(m, {
+      reply({
         entries:
           event?.tags.filter((t) => ['p', 'e', 'a', 't'].includes(t[0])).map((t) => t[1]) ?? [],
       });

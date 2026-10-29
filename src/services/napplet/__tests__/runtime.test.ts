@@ -800,7 +800,7 @@ describe('optional capabilities requested at call time', () => {
       await runtime.receive(JSON.stringify({ type: `${domain}.${operation}`, id: 'denied' }));
       expect(messages()).toEqual([{ type: `${domain}.${operation}.result`, id: 'denied', ok: false, error: 'permission-denied' }]);
       expect(stored.get('domains')).toBe('["shell"]');
-      expect(stored.get('denied-domains')).toBe(answer === 'deny' ? JSON.stringify([domain]) : undefined);
+      expect(stored.get('denied-domains')).toBe(answer === 'deny' && domain !== 'identity' ? JSON.stringify([domain]) : undefined);
     } finally { await runtime.close(); }
   });
 
@@ -820,4 +820,64 @@ describe('optional capabilities requested at call time', () => {
     expect(stored.get('domains')).toBe('["shell"]');
     expect(messages()).toEqual([]);
   });
+});
+
+
+test.each(['required', 'optional'] as const)('declared %s identity uses only signer consent and shares remembered access with NIP-07', async declaration => {
+  const config = options();
+  config.domains = ['shell'];
+  config.release = { ...release, [declaration]: ['identity'] };
+  jest.mocked(getData).mockImplementation(async (_scope, _bucket, key) => key === 'denied-domains' ? '["identity"]' : null);
+  jest.mocked(config.confirm).mockResolvedValue('allow-always');
+  const runtime = new NappletRuntime(config);
+  runtime.network.replaceable = jest.fn(async () => ({ content: JSON.stringify({ name: 'Alice', picture: 'https://example.com/avatar.png' }) } as Event));
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'shell.ready', id: 'ready' }));
+    expect(messages().at(-1)?.capabilities.domains).toContain('identity');
+    await runtime.receive(JSON.stringify({ type: 'identity.getProfile', id: 'profile' }));
+    expect(config.confirm).toHaveBeenCalledTimes(1);
+    expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({ operation: 'get-public-key' }) }), expect.anything());
+    expect(messages().at(-1)).toMatchObject({ profile: { name: 'Alice', picture: 'https://example.com/avatar.png' } });
+    await runtime.receive(JSON.stringify({ type: 'identity.getPublicKey', id: 'identity-key' }));
+    await runtime.receive(JSON.stringify({ type: 'signer.getPublicKey', id: 'nip07-key' }));
+    expect(config.confirm).toHaveBeenCalledTimes(1);
+    expect(messages().at(-1)).toMatchObject({ result: 'accountA' });
+  } finally { await runtime.close(); jest.mocked(getData).mockImplementation(async () => null); }
+});
+
+test.each(['getProfile', 'getRelays', 'getFollows', 'getMutes', 'getList', 'getZaps', 'getBadges'])('identity.%s cannot read account projections before signer approval', async operation => {
+  const config = options();
+  jest.mocked(config.confirm).mockResolvedValue('deny');
+  const runtime = new NappletRuntime(config);
+  runtime.network.replaceable = jest.fn();
+  runtime.network.query = jest.fn();
+  runtime.network.routes = jest.fn();
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: `identity.${operation}`, id: 'denied-profile' }));
+    expect(messages().at(-1)).toMatchObject({ error: 'permission-denied' });
+    expect(runtime.network.replaceable).not.toHaveBeenCalled();
+    expect(runtime.network.query).not.toHaveBeenCalled();
+    expect(runtime.network.routes).not.toHaveBeenCalled();
+  } finally { await runtime.close(); }
+});
+
+
+test('revocation during a public-profile read prevents disclosure', async () => {
+  const runtime = new NappletRuntime(options());
+  let finish!: (event: Event | null) => void;
+  let reading!: () => void;
+  const started = new Promise<void>(resolve => { reading = resolve; });
+  runtime.network.replaceable = jest.fn(() => new Promise(resolve => { finish = resolve; reading(); }));
+  await runtime.open();
+  try {
+    const pending = runtime.receive(JSON.stringify({ type: 'identity.getProfile', id: 'revoked-profile' }));
+    await started;
+    invalidateSigning(appSigningScope(runtime.scope));
+    finish({ content: JSON.stringify({ name: 'Alice' }) } as Event);
+    await pending;
+    expect(messages().at(-1)).toMatchObject({ error: 'permission-revoked' });
+    expect(messages().at(-1)?.profile).toBeUndefined();
+  } finally { await runtime.close(); }
 });

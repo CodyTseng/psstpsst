@@ -34,3 +34,11 @@ it('prepares the account on demand before reading that application permissions',
   expect(nappletService.domainPermissions).toHaveBeenCalledWith(release, 'account');
   expect(result).toMatchObject({ loaded: true, approved: true });
 });
+
+
+it('treats required identity as signer access instead of launch consent', async () => {
+  jest.mocked(nappletService.activateAccount).mockResolvedValueOnce(undefined);
+  jest.mocked(nappletService.domainPermissions).mockResolvedValueOnce(['shell']);
+  await act(async () => { renderer = create(<Probe app={{ ...release, required: ['identity'] }} />); });
+  expect(result).toMatchObject({ loaded: true, approved: true });
+});

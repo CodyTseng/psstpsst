@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { tryOpenApplicationWindow } from '@/services/explore/windows';
@@ -27,8 +28,8 @@ export default function NappletDetailScreen() {
     onOpen={async()=>{
       if(!release)return;
       try {
-        if (await tryOpenApplicationWindow(fromNapplet(release), accountPubkey ?? '', access.approved ? undefined : [...new Set(['shell', ...release.required])])) return;
-        const runId=nappletService.prepareOpen(release,accountPubkey??'',access.approved?undefined:[...new Set(['shell',...release.required])]);
+        if (await tryOpenApplicationWindow(fromNapplet(release), accountPubkey ?? '', access.approved ? undefined : [...new Set(['shell', ...nappletAccessDomains(release.required)])])) return;
+        const runId=nappletService.prepareOpen(release,accountPubkey??'',access.approved?undefined:[...new Set(['shell',...nappletAccessDomains(release.required)])]);
         router.push({pathname:'/napplet-run',params:{runId}});
       } catch {setError('applications.request_failed');}
     }}/>;

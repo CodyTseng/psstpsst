@@ -981,7 +981,10 @@ an optional `scope_key` qualifier. Addressable events derive that qualifier from
 the actual d tag; other operations may use their own trusted scope identifier.
 Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
 service with separate method scopes, independent of the cryptographic peer. Every
-call uses the current verified source. Launch access never bypasses signer
+call uses the current verified source. Napplet identity declarations expose the API
+without a domain grant; every current-account public projection requires the shared
+public-key disclosure authorization. Legacy identity domain grants and denials
+do not confer or revoke signer authority. Launch access never bypasses signer
 authorization, and revocation invalidates pending results before disclosure.
 Approvals are committed before invoking the signer; signer latency does not
 expire them. Remembered rules have no per-source count or aggregate-size quota.

@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { resolveFavoriteMetadata } from './favorite-metadata';
 import { createStore } from 'zustand/vanilla';
 import { platform } from '@/platform';
@@ -134,9 +135,9 @@ export const applicationTasks = {
         applicationPresence.set(account, canonicalSource, true);
       }
       patch(id, { entry });
-      const required = entry.release ? [...new Set(['shell', ...entry.required])] : applicationRequirements(entry.kind, entry.required);
+      const required = entry.release ? [...new Set(['shell', ...nappletAccessDomains(entry.required)])] : applicationRequirements(entry.kind, entry.required);
       if (entry.kind === 'napp' && required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('applications.unsupported');
-      const optional = entry.release?.optional.filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)) ?? [];
+      const optional = (entry.release ? nappletAccessDomains(entry.release.optional) : []).filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain));
       const sourceId = entry.release?.eventKey ?? applicationSigningSource(entry);
       const scope = { accountPubkey: account, appKey: sourceId };
       const access = entry.release ? await readDomainPermissions(scope, entry.release) : undefined;

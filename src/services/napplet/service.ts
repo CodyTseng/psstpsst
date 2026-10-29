@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { resolveApplicationMetadata } from '@/services/explore/application-metadata';
 import { fromNapplet } from '@/services/explore/model';
 import { readApplicationHandlers } from '@/services/explore/application-handlers';
@@ -96,8 +97,8 @@ function permissionsChanged() {
 }
 async function authorizeRelease(release: NappletRelease, account: string, current: () => void, reviewedRequired?: readonly string[]) {
   const scope = { accountPubkey: account, appKey: release.eventKey };
-  const required = [...new Set(['shell', ...release.required])];
-  const optional = [...new Set(release.optional.filter((domain) =>
+  const required = [...new Set(['shell', ...nappletAccessDomains(release.required)])];
+  const optional = [...new Set(nappletAccessDomains(release.optional).filter((domain) =>
     (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
   const { denied, domains } = await readDomainPermissions(scope, release);
   current();
@@ -500,14 +501,14 @@ export const nappletService = {
   async setDomainPermissions(release: NappletRelease, domains: string[], expectedAccount: string) {
     const epoch = generation;
     check(expectedAccount, epoch);
-    const allowed = new Set([...release.required, ...release.optional, 'shell']);
+    const allowed = new Set([...nappletAccessDomains(release.required), ...nappletAccessDomains(release.optional), 'shell']);
     if (domains.some((domain) => !allowed.has(domain))) throw new Error('invalid-permissions');
-    const required = ['shell', ...release.required];
+    const required = ['shell', ...nappletAccessDomains(release.required)];
     if (required.some((domain) => !domains.includes(domain))) throw new Error('required-permission');
     const scope = { accountPubkey: expectedAccount, appKey: release.eventKey };
     const { domains: previous, denied } = await readDomainPermissions(scope, release);
     check(expectedAccount, epoch);
-    const nextDenied = [...new Set([...denied, ...release.optional.filter(domain => previous.includes(domain) && !domains.includes(domain))])]
+    const nextDenied = [...new Set([...denied, ...nappletAccessDomains(release.optional).filter(domain => previous.includes(domain) && !domains.includes(domain))])]
       .filter(domain => !domains.includes(domain));
     invalidateNappletSource(expectedAccount, release.eventKey);
     await setData(scope, 'permissions', 'denied-domains', JSON.stringify(nextDenied));

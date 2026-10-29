@@ -278,7 +278,11 @@ publishEncrypted is available; NIP-04 is not. This API does not expose messaging
 keys, decrypted chat histories, wallets or arbitrary signing primitives.
 
 IDENTITY reads public Nostr projections. It never substitutes private PsstPsst
-contacts or blocks. Unsupported identity projections return an explicit error.
+contacts or blocks. Declared identity access has no domain-consent prompt or
+permission switch. Each account projection first uses the shared signer
+`get-public-key` decision, including its Once, timed and Always scopes. Existing
+identity domain grants and denials are ignored; signer decisions remain authoritative.
+Unsupported identity projections return an explicit error.
 
 ## Composition and settings
 

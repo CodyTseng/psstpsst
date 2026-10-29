@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { useEffect, useState } from 'react';
 import { Global } from '@solar-icons/react-native/category/map/Linear/Global';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
@@ -37,7 +38,7 @@ export function NappletPanel({ release, page, accountPubkey, onAction }: {
 
 export function NappletSettings({ release, accountPubkey }: { release: NappletRelease; accountPubkey: string }) {
   return <ApplicationSettings accountPubkey={accountPubkey} release={release}
-    access={release.required.some(domain=>domain!=='shell')||release.optional.length?<DomainPermissions release={release} accountPubkey={accountPubkey}/>:undefined}
+    access={nappletAccessDomains([...release.required,...release.optional]).some(domain=>domain!=='shell')?<DomainPermissions release={release} accountPubkey={accountPubkey}/>:undefined}
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
@@ -84,13 +85,13 @@ function DomainPermissions({ release, accountPubkey }: { release: NappletRelease
   const [selected, setSelected] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const required = [...new Set(['shell', ...release.required])];
-  const optional = release.optional.filter((domain) => !required.includes(domain) && (NAP_DOMAINS as readonly string[]).includes(domain));
+  const required = [...new Set(['shell', ...nappletAccessDomains(release.required)])];
+  const optional = nappletAccessDomains(release.optional).filter((domain) => !required.includes(domain) && (NAP_DOMAINS as readonly string[]).includes(domain));
   useEffect(() => {
     let active = true;
     void nappletService.domainPermissions(release, accountPubkey).then((domains) => {
       if (active) {
-        const selected = [...new Set(['shell', ...release.required, ...domains])];
+        const selected = [...new Set(['shell', ...nappletAccessDomains(release.required), ...domains])];
         setSaved(selected); setSelected(selected);
       }
     }).catch(() => { if (active) setFailed(true); });

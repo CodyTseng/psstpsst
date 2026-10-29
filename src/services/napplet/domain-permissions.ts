@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { NAP_DOMAINS, type NappletRelease } from './protocol';
 import { getData, type AppScope } from './repository';
 
@@ -9,8 +10,8 @@ export function resolveDomainPermissions(
   granted: readonly string[],
   denied: readonly string[],
 ): string[] {
-  const required = new Set(['shell', ...release.required]);
-  const optional = new Set(release.optional.filter(domain =>
+  const required = new Set(['shell', ...nappletAccessDomains(release.required)]);
+  const optional = new Set(nappletAccessDomains(release.optional).filter(domain =>
     (NAP_DOMAINS as readonly string[]).includes(domain) && !required.has(domain)));
   const blocked = new Set(denied);
   return [...new Set([

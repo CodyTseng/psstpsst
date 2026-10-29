@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -19,9 +20,9 @@ export default function NappletPermissionsScreen() {
     {app?installed&&accountPubkey?<NappletSettings key={`${accountPubkey}:${installed.eventKey}:${installed.hash}`} release={installed} accountPubkey={accountPubkey}/>
       :<View style={{gap:spacing.md}}>
         <AppText variant="subtitle">{t('applications.permissions')}</AppText>
-        <ListGroup>{[...new Set([...app.required,...app.optional])].filter(domain=>domain!=='shell').map(domain=>
+        <ListGroup>{[...new Set(nappletAccessDomains([...app.required,...app.optional]))].filter(domain=>domain!=='shell').map(domain=>
           <ListRow key={domain} title={t(`applications.capability_${domain}`,{defaultValue:domain})} value={t(app.required.includes(domain)?'applications.capabilities_required':'applications.capabilities_optional')}/>)}</ListGroup>
-        {!app.required.length&&!app.optional.length?<AppText tone="muted">{t('applications.none')}</AppText>:null}
+        {!nappletAccessDomains([...app.required,...app.optional]).some(domain=>domain!=='shell')?<AppText tone="muted">{t('applications.none')}</AppText>:null}
       </View>:null}
   </ApplicationPermissionsPage>;
 }

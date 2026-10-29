@@ -1,3 +1,4 @@
+import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { useEffect, useState } from 'react';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import { nappletService } from '@/services/napplet/service';
@@ -13,7 +14,7 @@ export function useNappletAccess(release: NappletRelease | undefined, accountPub
     if (release && accountPubkey) void nappletService.activateAccount(accountPubkey)
       .then(() => active ? nappletService.domainPermissions(release, accountPubkey) : undefined)
       .then((domains) => {
-        if (active && domains) setResult({ key, approved: ['shell', ...release.required].every((domain) => domains.includes(domain)) });
+        if (active && domains) setResult({ key, approved: ['shell', ...nappletAccessDomains(release.required)].every((domain) => domains.includes(domain)) });
       }).catch(() => { if (active) setResult({ key, error: 'applications.request_failed' }); });
     return () => { active = false; };
   }, [release, accountPubkey, key]);

@@ -379,7 +379,7 @@ it('grants only required domains when the user leaves optional capabilities disa
   const opening = nappletService.open(app);
   for (let i = 0; i < 20 && !nappletStore.getState().prompt; i++) await Promise.resolve();
   const prompt = nappletStore.getState().prompt!;
-  expect(prompt.capabilities).toEqual({ required: ['shell', 'storage'], optional: ['identity'] });
+  expect(prompt.capabilities).toEqual({ required: ['shell', 'storage'], optional: [] });
   nappletService.answer(prompt.requestId, 'domains:[]');
   nappletService.overlayClosed();
   await opening;
@@ -388,7 +388,7 @@ it('grants only required domains when the user leaves optional capabilities disa
 
 const defaultAccessApp = { ...app, required: [], optional: ['theme', 'storage', 'config', 'identity', 'resource', 'link'] };
 
-it.each([{ required: [] }, { required: ['shell'] }])('opens a napplet with only implicit access without consent: %j', async ({ required }) => {
+it.each([{ required: [] }, { required: ['shell'] }, { required: ['identity'] }])('opens a napplet with only implicit access without consent: %j', async ({ required }) => {
   const release = { ...app, required, optional: ['identity'] };
   await nappletService.open(release);
   expect(nappletStore.getState().prompt).toBeNull();
@@ -466,19 +466,20 @@ it('keeps app input blocked until the host sheet has finished exiting', async ()
 });
 
 it('preserves required domains, reloads changed app access and isolates stale accounts', async () => {
+  const release = { ...app, optional: ['resource'] };
   stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
-  await nappletService.open(app);
+  await nappletService.open(release);
   nappletService.openPanel('settings');
   const active = jest.mocked(NappletRuntime).mock.results.at(-1)!.value;
-  await expect(nappletService.setDomainPermissions(app, ['shell'], 'accountA')).rejects.toThrow('required-permission');
-  await expect(nappletService.setDomainPermissions(app, ['shell', 'storage'], 'accountB')).rejects.toThrow('session-closed');
-  await nappletService.setDomainPermissions(app, ['shell', 'storage', 'identity'], 'accountA');
+  await expect(nappletService.setDomainPermissions(release, ['shell'], 'accountA')).rejects.toThrow('required-permission');
+  await expect(nappletService.setDomainPermissions(release, ['shell', 'storage'], 'accountB')).rejects.toThrow('session-closed');
+  await nappletService.setDomainPermissions(release, ['shell', 'storage', 'resource'], 'accountA');
   expect(active.close).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['shell', 'storage', 'identity']);
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['shell', 'storage', 'resource']);
   expect(nappletStore.getState().panel?.page).toBe('settings');
-  await nappletService.setDomainPermissions(app, ['shell', 'storage'], 'accountA');
-  expect(JSON.parse(stored.get(key(scope, 'permissions', 'denied-domains'))!)).toEqual(['identity']);
-  await nappletService.setDomainPermissions(app, ['shell', 'storage', 'identity'], 'accountA');
+  await nappletService.setDomainPermissions(release, ['shell', 'storage'], 'accountA');
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'denied-domains'))!)).toEqual(['resource']);
+  await nappletService.setDomainPermissions(release, ['shell', 'storage', 'resource'], 'accountA');
   expect(JSON.parse(stored.get(key(scope, 'permissions', 'denied-domains'))!)).toEqual([]);
 });
 
