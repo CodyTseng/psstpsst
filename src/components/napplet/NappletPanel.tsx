@@ -74,7 +74,7 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
     {actions.map((action) => <ProfileAction key={action.key} shape="square" layout="fixed"
       width={actionWidth} size={actionSize}
       tone={action.key === 'favorite' && favorite ? 'danger' : 'default'}
-      singleLineLabel labelVariant="micro" icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
+      labelVariant="micro" icon={action.icon} label={action.label} accessibilityLabel={'accessibilityLabel' in action ? action.accessibilityLabel : action.label}
       onPress={() => { if (action.key === 'copy') void copyText(applicationCopyAddress(entry)); else if (action.key === 'favorite') void setFavorite(entry, !favorite); else if (action.key === 'browser') onOpenExternal?.(); else onAction(action.key); }} />)}
   </HorizontalScrollView>;
 }

@@ -91,10 +91,10 @@ test(
         for (const theme of ['light', 'dark']) {
           await page.goto(`${address}/?theme=${theme}`);
           await tile('desktop', 'Weather').click({ button: 'right' });
-          await page.getByRole('button', { name: 'Remove from My apps', exact: true }).click();
+          await page.getByRole('button', { name: 'Remove app', exact: true }).click();
           await tile('desktop', 'Weather').waitFor({ state: 'hidden' });
           await tile('recent', 'Weather').click({ button: 'right' });
-          await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
+          await page.getByRole('button', { name: 'Add app', exact: true }).click();
           await tile('desktop', 'Weather').waitFor();
           await tile('recent', 'Weather').click({ button: 'right' });
           await page.getByRole('button', { name: 'Remove from history', exact: true }).click();
@@ -224,12 +224,12 @@ test(
       await checkMenuAnchor('desktop', 'Notes', true, true);
       if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/desktop-menu-above.png` });
       assert.equal(await page.getByText('Pin', { exact: true }).count(), 0);
-      await page.getByRole('button', { name: 'Remove from My apps', exact: true }).click();
+      await page.getByRole('button', { name: 'Remove app', exact: true }).click();
       await page.waitForFunction(() => document.title === 'move:Notes:null');
       assert.equal(await tile('desktop', 'Notes').count(), 0);
       await tile('recent', 'Notes').waitFor();
       await tile('recent', 'Notes').click({ button: 'right' });
-      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
+      await page.getByRole('button', { name: 'Add app', exact: true }).click();
       await tile('desktop', 'Notes').waitFor();
       assert.equal((await order()).at(-1), 'Notes');
       const drag = async (source, name, destination, expected) => {
@@ -315,7 +315,7 @@ test(
       await page.getByRole('button', { name: 'View details', exact: true }).click();
       await page.waitForFunction(() => document.title === 'Details Reader');
       await openRecentMenu('Reader');
-      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
+      await page.getByRole('button', { name: 'Add app', exact: true }).click();
       await tile('desktop', 'Reader').waitFor();
       assert.equal((await order()).at(-1), 'Reader', 'the recent menu adds a shortcut at the end');
       await drag('desktop', 'Reader', tile('desktop', 'Weather'), 'move:Reader:1');
@@ -375,7 +375,7 @@ test(
         await page.mouse.click(readerPoint.x + 250, readerPoint.y + 20, { button: 'right' });
         await page.getByRole('button', { name: 'View details', exact: true }).waitFor();
         await page.mouse.click(20, weatherPoint.y + 20, { button: 'right' });
-        await page.getByRole('button', { name: 'Remove from My apps', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Remove app', exact: true }).waitFor();
         await page.getByRole('button', { name: 'Remove from history', exact: true }).click();
         await usedFavorite.waitFor({ state: 'hidden' });
         await readerRow.waitFor();
@@ -485,7 +485,7 @@ test(
       await olderApp.click({ trial: true });
       if (process.env.NAPPLET_GALLERY_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_GALLERY_SCREENSHOTS}/all-recent.png` });
       await olderApp.click({ button: 'right' });
-      await page.getByRole('button', { name: 'Add to My apps', exact: true }).click();
+      await page.getByRole('button', { name: 'Add app', exact: true }).click();
       await page.waitForFunction(() => document.title === 'move:App 80:9');
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await page.waitForFunction(() => !document.querySelector('[data-testid="application-recent-page"]'));
