@@ -1107,7 +1107,7 @@
     "app_title": "ऐप",
     "signing_upload": "फ़ाइल अपलोड करें",
     "signing_effect_upload": "यह फ़ाइल सार्वजनिक रूप से उपलब्ध होगी और इसमें अंतर्निहित मेटाडेटा हो सकता है।",
-    "upload_destinations": "स्टोरेज सेवाएँ",
+    "upload_destinations": "अपलोड गंतव्य",
     "capability_upload": "फ़ाइलें अपलोड करना",
     "runtime_loading": "ऐप लोड हो रहा है…",
     "runtime_downloading": "ऐप डाउनलोड हो रहा है…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "HTTP अनुरोध प्रमाणित करें",
+    "signing_service": "सेवा",
+    "signing_http_method": "HTTP विधि",
+    "signing_effect_http_auth": "यह आपके खाते से दिखाए गए HTTP अनुरोध को प्रमाणित करता है।",
+    "signing_action_remember": "इस ऐप के लिए याद रखें"
   },
   "comments": {
     "title": "समीक्षाएँ",

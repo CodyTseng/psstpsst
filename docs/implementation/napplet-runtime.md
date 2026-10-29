@@ -246,8 +246,9 @@ The shared signing service owns rules independently of app KV and UI. Its source
 is the canonical naddr for an app, or a host-verified HTTP(S) website origin (scheme, host and effective port); immutable
 legacy manifests use a canonical event ID. Each durable row binds the account,
 source, event kind and addressable d tag. Signer-access rules additionally distinguish
-methods and crypto algorithms, independently of the peer. Relay AUTH covers all
-relays for the source; upload rules bind their destination set.
+methods and crypto algorithms, independently of the peer. Relay AUTH, upload and
+HTTP authentication decisions bind the application action without destination or
+HTTP-method qualifiers.
 There is no artifact-version condition. Only exact-scope version-3 publication
 rules are imported from the legacy KV backup. A broader migration never follows
 from dropping a legacy condition.
@@ -262,12 +263,21 @@ additional required capabilities need consent, and new optional capabilities sta
 off. The separate activity journal retains the latest 32 metadata-only decisions
 per account/source, without event bodies or a claim of publication success.
 Relay AUTH and public-file uploads use the same Once, timed and Always permission
-flow. AUTH grants cover all relays for the account/source; uploads retain the
-reviewed storage destinations. Permission qualifiers live in `scope_key`: current
-addressable events use the d-tag value, and global AUTH uses the empty qualifier. Upload review includes
+flow. Decisions bind account/source/operation and apply to every destination for
+that app action. Changing a target or HTTP method does not require another
+authorization during a remembered decision. App permission edits invalidate
+pending results in every live host for that source. Permission qualifiers live in `scope_key`: current
+addressable events use the d-tag value, while authentication and upload actions
+use an empty qualifier. Upload review includes
 file metadata and authorizes the host-built Blossom authentication event.
 
-Authorized publication signs once and reports per-relay outcomes.
+Publication uses the shared application signer and its ordinary event-signing
+review, signs once, then reports per-relay outcomes without a separate publication
+approval. Publication validates generic NIP-01 fields without inferring another
+action from kind, including kinds 24242, 27235 and 22242. Encrypted publication
+first obtains NIP-44 encryption authorization,
+then reviews and signs the resulting event. Existing publication-named rule keys
+continue to identify the same event-signing decisions.
 All valid event kinds and app-data identifiers can reach user-approved generic
 publication, including account settings and protocol events.
 Consent expires 60 seconds after presentation. Signing validates the NIP-01
@@ -295,9 +305,8 @@ credited, bounded chunks across native JSON bridges. Apps cannot select local
 paths, credentials or destination servers.
 
 The host uses the current account's media-server upload plan, including its
-fallback. Public-file consent shows filename, MIME type, size and candidate
-storage services. Upload permission offers Once, timed and Always choices for
-that application's reviewed destination set, independently of ordinary event
+fallback. Public-file consent shows filename, size and candidate upload destinations. Upload permission offers Once, timed and Always choices for
+the application upload action, independently of ordinary event
 signing. Upload capability access is still required. A host-built
 kind-24242 authorization covers only the computed SHA-256 and size, expires after
 five minutes and never reaches the app. Generic publication of Blossom or

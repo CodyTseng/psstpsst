@@ -366,13 +366,13 @@ test('one-time AUTH still asks for every request and validates its actual target
     await expect(value.permissions.authorize({ ...auth, relays })).rejects.toThrow('invalid-signing-request');
 });
 
-test('upload grants continue to distinguish storage services', async () => {
+test('upload grants cover every destination for the authorized application', async () => {
   const upload: SigningRequest = { ...request, operation: 'upload', kind: 24242, scopeKey: undefined, relays: ['https://one.example/'] };
   const value = create();
   await value.permissions.authorize(upload);
   await value.permissions.authorize({ ...upload, relays: ['https://two.example/'] });
   await value.permissions.authorize(upload);
-  expect(value.confirm).toHaveBeenCalledTimes(2);
+  expect(value.confirm).toHaveBeenCalledTimes(1);
 });
 
 test('generic scope keys distinguish grants for the same event kind', async () => {
@@ -464,4 +464,95 @@ test('invalid crypto peers still fail before asking for authorization', async ()
   const signer = new ApplicationSigner({ accountPubkey: 'accountA', permissions, current: jest.fn(), signer: obtainSigner });
   await expect(signer.crypto('nip44', 'decrypt', 'invalid-peer', 'encrypted payload')).rejects.toThrow('invalid-crypto-request');
   expect(confirm).not.toHaveBeenCalled(); expect(obtainSigner).not.toHaveBeenCalled();
+});
+
+const httpAction = (url = 'https://one.example/path', method = 'GET'): SigningRequest => ({
+  operation: 'http-auth', kind: 27235, relays: [], accountPubkey: 'accountA', content: '', createdAt: 100,
+  tags: [['u', url], ['method', method]],
+});
+
+test('HTTP authentication grants belong to the application and cover every destination and method', async () => {
+  const value = create();
+  await value.permissions.authorize(httpAction());
+  await value.permissions.authorize(httpAction('https://two.example:8443/other', 'POST'));
+  await value.permissions.authorize(httpAction('http://third.example/delete', 'DELETE'));
+  expect(value.confirm).toHaveBeenCalledTimes(1);
+  expect((await value.permissions.snapshot()).rules[0].scope).toEqual({ operation: 'http-auth', kind: 27235, relays: [] });
+  const reopened = create();
+  await reopened.permissions.authorize(httpAction('https://another.example/', 'PATCH'));
+  expect(reopened.confirm).not.toHaveBeenCalled();
+  const otherApp = create(undefined, 'accountA', 'other-app.example');
+  await otherApp.permissions.authorize(httpAction());
+  expect(otherApp.confirm).toHaveBeenCalledTimes(1);
+  const otherAccount = create(undefined, 'accountB');
+  await otherAccount.permissions.authorize({ ...httpAction(), accountPubkey: 'accountB' });
+  expect(otherAccount.confirm).toHaveBeenCalledTimes(1);
+});
+
+test('HTTP authentication, Relay AUTH and uploads remain independent app actions', async () => {
+  const value = create();
+  await value.permissions.authorize(httpAction());
+  await value.permissions.authorize({ ...request, operation: 'relay-auth', kind: 22242, relays: ['wss://one.example/'] });
+  await value.permissions.authorize({ ...request, operation: 'upload', kind: 24242, relays: ['https://one.example/'] });
+  expect(value.confirm).toHaveBeenCalledTimes(3);
+  expect((await value.permissions.snapshot()).rules.map(rule => rule.scope.operation).sort()).toEqual(['http-auth', 'relay-auth', 'upload']);
+});
+
+test('app HTTP decisions support expiry, automatic rejection and restoring Ask', async () => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
+  try {
+    const value = create(jest.fn(async () => 'allow-10m'));
+    await value.permissions.authorize(httpAction());
+    await value.permissions.authorize(httpAction('https://two.example/', 'POST'));
+    expect(value.confirm).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(601001);
+    await value.permissions.authorize(httpAction('https://three.example/', 'PUT'));
+    expect(value.confirm).toHaveBeenCalledTimes(2);
+    const rule = (await value.permissions.snapshot()).rules[0];
+    await value.permissions.edit(rule, { decision: 'deny', duration: 'always' });
+    const reopened = create();
+    await expect(reopened.permissions.authorize(httpAction('https://four.example/', 'DELETE'))).rejects.toThrow('permission-denied');
+    expect(reopened.confirm).not.toHaveBeenCalled();
+    await reopened.permissions.edit(rule, { decision: 'ask', duration: 'always' });
+    await reopened.permissions.authorize(httpAction());
+    expect(reopened.confirm).toHaveBeenCalledTimes(1);
+  } finally { clock.mockRestore(); }
+});
+
+test('HTTP authorization still reviews the actual request and rejects ambiguous targets', async () => {
+  const value = create(jest.fn(async () => 'allow'));
+  await value.permissions.authorize(httpAction('https://one.example/upload', 'POST'));
+  expect(value.confirm).toHaveBeenCalledWith(expect.objectContaining({ operation: 'http-auth',
+    tags: [['u', 'https://one.example/upload'], ['method', 'POST']] }), expect.anything());
+  await value.permissions.authorize(httpAction());
+  expect(value.confirm).toHaveBeenCalledTimes(2);
+  await expect(value.permissions.authorize({ ...httpAction(), tags: [['u', 'https://one.example/'], ['method', 'GET'], ['method', 'DELETE']] })).rejects.toThrow('invalid-http-auth');
+});
+
+test('ordinary Blossom events remain independent from the host upload action', async () => {
+  const value = create();
+  await value.permissions.authorize({ ...request, operation: 'upload', kind: 24242, relays: ['https://one.example/'] });
+  const event: SigningRequest = { ...request, operation: 'sign', kind: 24242, relays: ['wss://relay.example/'], scopeKey: undefined,
+    tags: [['t', 'upload'], ['x', 'a'.repeat(64)], ['expiration', '9999999999']] };
+  await value.permissions.authorize(event);
+  expect(value.confirm).toHaveBeenCalledTimes(2);
+  expect(value.confirm).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'sign', relays: ['wss://relay.example/'] }), expect.anything());
+  expect((await value.permissions.snapshot()).rules.map(rule => rule.scope.operation).sort()).toEqual(['publish', 'upload']);
+});
+
+
+test.each(['nip04', 'nip44'] as const)('%s delegates large encryption and decryption inputs without an arbitrary character cap', async algorithm => {
+  const { permissions, confirm } = create();
+  const text = 'x'.repeat(100001);
+  const ciphertext = `ciphertext:${text}`;
+  const encrypt = jest.fn(async () => ciphertext);
+  const decrypt = jest.fn(async () => text);
+  const signer = new ApplicationSigner({ accountPubkey: 'accountA', permissions, current: jest.fn(), signer: async () => ({
+    nip04Encrypt: encrypt, nip44Encrypt: encrypt, nip04Decrypt: decrypt, nip44Decrypt: decrypt,
+  }) as unknown as Signer });
+  await expect(signer.crypto(algorithm, 'encrypt', 'b'.repeat(64), text)).resolves.toBe(ciphertext);
+  await expect(signer.crypto(algorithm, 'decrypt', 'b'.repeat(64), ciphertext)).resolves.toBe(text);
+  expect(encrypt).toHaveBeenCalledWith('b'.repeat(64), text);
+  expect(decrypt).toHaveBeenCalledWith('b'.repeat(64), ciphertext);
+  expect(confirm).toHaveBeenCalledTimes(2);
 });

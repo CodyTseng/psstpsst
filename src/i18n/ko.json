@@ -1107,7 +1107,7 @@
     "app_title": "앱",
     "signing_upload": "파일 업로드",
     "signing_effect_upload": "이 파일은 공개적으로 접근할 수 있으며 내장 메타데이터가 포함될 수 있습니다.",
-    "upload_destinations": "저장소 서비스",
+    "upload_destinations": "업로드 대상",
     "capability_upload": "파일 업로드",
     "runtime_loading": "앱 불러오는 중…",
     "runtime_downloading": "앱 다운로드 중…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "HTTP 요청 인증",
+    "signing_service": "서비스",
+    "signing_http_method": "HTTP 메서드",
+    "signing_effect_http_auth": "표시된 HTTP 요청을 내 계정으로 인증합니다.",
+    "signing_action_remember": "이 앱에 대한 결정 기억"
   },
   "comments": {
     "title": "리뷰",

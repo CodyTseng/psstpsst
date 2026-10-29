@@ -89,9 +89,18 @@ it.each(['light', 'dark'] as const)('reviews files as app consent without signin
   act(() => { renderer = create(<UploadApproval prompt={file} />); });
   const text = renderer.root.findAllByType(AppText).map((node) => node.props.children);
   expect(text).toContain('applications.signing_effect_upload');
-  expect(text).toContain('card.png'); expect(text).toContain('storage.example');
+  expect(text).toContain('card.png'); expect(text).toContain('https://storage.example/');
+  expect(text).not.toContain('image/png');
+  expect(text).not.toContain('message_detail.file_type');
+  expect(text.indexOf('card.png')).toBeLessThan(text.indexOf('https://storage.example/'));
+  expect(text.indexOf('https://storage.example/')).toBeLessThan(text.indexOf('applications.signing_effect_upload'));
+  for (const value of ['card.png', '1.0 KB', 'https://storage.example/']) {
+    const node = renderer.root.findAllByType(AppText).find(row => row.props.children === value)!;
+    expect(node.props.variant).toBe('body');
+    expect(node.props.weight).toBe('regular');
+  }
   expect(renderer.root.findAllByType(SigningActions)).toHaveLength(0);
-  for (const content of ['card.png', 'storage.example', 'applications.signing_effect_upload'])
+  for (const content of ['card.png', 'https://storage.example/', 'applications.signing_effect_upload'])
     expect(renderer.root.findAllByType(AppText).find((node) => node.props.children === content)!.props.selectable).toBe(false);
   act(() => { void button('applications.allow').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'allow');
@@ -302,12 +311,14 @@ it('shows the concrete browser permission without unrelated application requirem
   expect(texts).not.toContain('applications.capability_resource');
 });
 
-it.each(['u', 'url'])('shows the event type and HTTP authentication target from %s before opening event JSON', tag => {
-  const request = { ...prompt.signing!, operation: 'sign' as const, kind: 27235, content: '',
+it.each(['u', 'url'])('shows HTTP service and method instead of ordinary event metadata from %s before opening event JSON', tag => {
+  const request = { ...prompt.signing!, operation: 'http-auth' as const, kind: 27235, content: '',
     tags: [[tag, 'https://service.example/upload'], ['method', 'POST']] };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
-  expect(texts.some(value => typeof value === 'string' && value.includes('applications.event_http_auth'))).toBe(true);
+  expect(texts).toContain('applications.signing_http_auth');
+  expect(texts).toContain('https://service.example');
+  expect(texts).not.toContain('applications.signing_kind');
   expect(texts).toContain('https://service.example/upload');
   expect(texts).toContain('applications.signing_url');
   expect(texts).toContain('POST');
@@ -317,7 +328,7 @@ it.each(['u', 'url'])('shows the event type and HTTP authentication target from 
 it.each(['light', 'dark'] as const)('keeps the full HTTP authentication URL visible beyond reference limits in %s mode', scheme => {
   mockScheme = scheme;
   const url = `https://service.example/upload?token=${'a'.repeat(300)}`;
-  const request = { ...prompt.signing!, operation: 'sign' as const, kind: 27235, content: '',
+  const request = { ...prompt.signing!, operation: 'http-auth' as const, kind: 27235, content: '',
     tags: [...Array.from({ length: 5 }, (_, index) => ['e', String(index)]), ['u', url], ['method', 'PUT']] };
   act(() => { renderer = create(<SigningRequestDetails request={request} />); });
   const target = renderer.root.findAllByType(AppText).find(node => node.props.children === url)!;
@@ -443,4 +454,35 @@ it('keeps the requester question when compatible applications can be selected', 
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findByType(BottomSheet).props.fixedSubheader).toBeDefined();
   expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toEqual(['applications.open_with_content']);
+});
+
+
+it.each(['sign', 'publish', 'encrypt-publish'] as const)('uses ordinary signing wording for %s event decisions', operation => {
+  act(() => { renderer = create(<SigningRequestDetails request={{ ...prompt.signing!, operation }} />); });
+  const text = renderer.root.findAllByType(AppText).map(node => node.props.children);
+  expect(text).toContain('applications.signing_sign_event');
+  expect(text).toContain('applications.signing_effect_sign');
+  expect(text).not.toContain('applications.signing_effect_publish');
+  expect(text).not.toContain('applications.signing_effect_encrypted');
+});
+
+
+it('uses the standard allow and reject duration controls for an application HTTP action', () => {
+  const auth = { ...prompt, signing: { ...prompt.signing, operation: 'http-auth' as const, kind: 27235,
+    relays: ['https://api.example'], tags: [['u', 'https://api.example/path'], ['method', 'POST']] } };
+  act(() => { renderer = create(<SigningApproval prompt={auth} />); });
+  expect(renderer.root.findAllByType(AppButton).filter(node => node.props.label === 'applications.signing_duration_once')).toHaveLength(1);
+  selectDuration('allow-always');
+  act(() => { button('applications.signing_reject_countdown').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'deny-always');
+});
+
+
+it.each([24242, 27235, 22242])('renders kind %s publication as an ordinary signature', kind => {
+  act(() => { renderer = create(<SigningRequestDetails request={{ ...prompt.signing!, operation: 'sign', kind }} />); });
+  const text = renderer.root.findAllByType(AppText).map(node => node.props.children);
+  expect(text).toContain('applications.signing_sign_event');
+  expect(text).toContain('applications.signing_kind');
+  expect(text).not.toContain('applications.signing_http_auth');
+  expect(text).not.toContain('applications.signing_upload');
 });

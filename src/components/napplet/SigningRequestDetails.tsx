@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState, type ComponentProps } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { AppText } from '@/components/common/AppText';
 import { AppButton } from '@/components/common/AppButton';
-import { AppCard } from '@/components/common/AppCard';
+import { ApprovalDetails, ApprovalField, ApprovalText as SigningText } from './ApprovalDetails';
 import { Avatar } from '@/components/common/Avatar';
 import { useClipboard } from '@/hooks/use-clipboard';
 import Copy from 'lucide-react-native/icons/copy';
@@ -23,15 +22,10 @@ import ChevronUp from 'lucide-react-native/icons/chevron-up';
 export function signingAction(scope: Pick<SigningScope, 'operation' | 'kind'>, t: TFunction): string {
   if (scope.operation === 'get-public-key') return t('applications.signing_get_public_key');
   if (isSignerAccess(scope)) return `${t(scope.operation.endsWith('-encrypt') ? 'applications.crypto_encrypt' : 'applications.crypto_decrypt')} · ${scope.operation.startsWith('nip04') ? 'NIP-04' : 'NIP-44'}`;
-  if (scope.operation === 'sign') return t('applications.signing_sign_event');
+  if (scope.operation === 'http-auth') return t('applications.signing_http_auth');
   if (scope.operation === 'relay-auth') return t('applications.signing_auth');
   if (scope.operation === 'upload') return t('applications.signing_upload');
-  if (scope.operation === 'encrypt-publish') return t('applications.signing_encrypt');
-  const known: Record<number, string> = {
-    1: 'signing_post', 6: 'signing_repost', 7: 'signing_reaction',
-    30023: 'signing_article', 30078: 'signing_app_data',
-  };
-  return scope.kind !== undefined && known[scope.kind] ? t(`applications.${known[scope.kind]}`) : t('applications.signing_unknown', { kind: scope.kind });
+  return t('applications.signing_sign_event');
 }
 
 export function signingRequestTitle(scope: Pick<SigningScope, 'operation' | 'kind'>, t: TFunction): string {
@@ -86,13 +80,12 @@ export function SigningScopeDetails({ scope }: { scope: SigningScope }) {
   const { t } = useTranslation();
   return (
     <View style={{ gap: spacing.sm }}>
-      {scope.operation === 'encrypt-publish' ? <SigningText>{signingAction({ ...scope, operation: 'publish' }, t)}</SigningText> : null}
-      {scope.scopeKey !== undefined ? <SigningText>{t(scope.kind !== undefined && scope.kind >= 30000 && scope.kind < 40000 ? 'applications.signing_record' : 'applications.signing_scope_key')}: {scope.scopeKey || t('applications.signing_unnamed')}</SigningText> : null}
+      {scope.scopeKey !== undefined && scope.operation !== 'http-auth' ? <SigningText>{t(scope.kind !== undefined && scope.kind >= 30000 && scope.kind < 40000 ? 'applications.signing_record' : 'applications.signing_scope_key')}: {scope.scopeKey || t('applications.signing_unnamed')}</SigningText> : null}
       {scope.recipient ? <SigningIdentity pubkey={scope.recipient} label={t('applications.signing_recipient')} /> : null}
-      {scope.operation === 'relay-auth' ? !scope.scopeKey ? <SigningText>{t('applications.signing_auth_scope')}</SigningText> : null : <>
+      {scope.relays.length ? <>
         <SigningText variant="caption" tone="muted">{t(scope.operation === 'upload' ? 'applications.upload_destinations' : 'applications.signing_destinations')}</SigningText>
-        {scope.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
-      </>}
+        {scope.relays.map((relay) => <SigningText key={relay}>{relay}</SigningText>)}
+      </> : null}
     </View>
   );
 }
@@ -150,77 +143,73 @@ export function SigningRequestDetails({ request, showTitle = true }: {
   const previewText = verified?.request === request ? verified.text : preview.text;
   if (isSignerAccess(request)) return <View style={{ gap: spacing.lg }}>
     {showTitle ? <SigningText variant="title">{signingRequestTitle(request, t)}</SigningText> : null}
-    <SigningText>{t(request.operation === 'get-public-key' ? 'applications.signing_get_public_key_notice'
-      : request.operation.endsWith('-encrypt') ? 'applications.crypto_encrypt_notice' : 'applications.crypto_decrypt_notice')}</SigningText>
-    {request.operation === 'get-public-key' ? <AppCard variant="muted" style={{ gap: spacing.sm }}>
-      <SigningText variant="caption" tone="muted">{t('profile.public_key')}</SigningText>
-      <SigningText variant="code">{request.accountPubkey}</SigningText>
-    </AppCard> : <AppCard variant="muted" style={{ gap: spacing.md }}>
+    {request.operation === 'get-public-key' ? <ApprovalDetails>
+      <ApprovalField label={t('profile.public_key')}>
+        <SigningText>{request.accountPubkey}</SigningText>
+      </ApprovalField>
+    </ApprovalDetails> : <ApprovalDetails>
       <SigningText>{request.operation.startsWith('nip04') ? 'NIP-04' : 'NIP-44'}</SigningText>
-    </AppCard>}
+    </ApprovalDetails>}
     {request.operation.endsWith('-encrypt') ? <EncryptionPlaintext text={request.content} /> : null}
+    <SigningText tone="muted">{t(request.operation === 'get-public-key' ? 'applications.signing_get_public_key_notice'
+      : request.operation.endsWith('-encrypt') ? 'applications.crypto_encrypt_notice' : 'applications.crypto_decrypt_notice')}</SigningText>
   </View>;
   const auth = request.operation === 'relay-auth';
-  const httpAuth = request.kind === 27235;
+  const httpAuth = request.operation === 'http-auth';
   const httpUrl = httpAuth ? request.tags.find(tag => tag[0] === 'u' && tag[1])?.[1]
     ?? request.tags.find(tag => tag[0] === 'url' && tag[1])?.[1] : undefined;
   const httpMethod = httpAuth ? request.tags.find(tag => tag[0] === 'method' && tag[1])?.[1] : undefined;
-  const effect = request.operation === 'sign' ? 'signing_effect_sign' : auth ? 'signing_effect_auth' : request.operation === 'encrypt-publish' ? 'signing_effect_encrypted' : 'signing_effect_publish';
+  const effect = auth ? 'signing_effect_auth' : httpAuth ? 'signing_effect_http_auth' : 'signing_effect_sign';
   const showIdentifier = isAddressableKind(request.kind);
   const eventType = signingEventType(request.kind, t);
   const eventMetadata = eventType ? `${eventType} · ${request.kind}` : String(request.kind);
   const dTag = request.tags.find((tag) => tag[0] === 'd');
   const title = request.kind === 30023 ? request.tags.find((tag) => tag[0] === 'title')?.[1] : undefined;
   const metadata = <>
-    <View style={{ gap: spacing.sm }}>
-      <SigningText variant="caption" tone="muted">{t('applications.signing_kind')}</SigningText>
+    <ApprovalField label={t('applications.signing_kind')}>
       <SigningText>{eventMetadata}</SigningText>
-    </View>
-    {showIdentifier ? <View style={{ gap: spacing.sm }}>
-      <SigningText variant="caption" tone="muted">d</SigningText>
-      <SigningText numberOfLines={3}>
+    </ApprovalField>
+    {showIdentifier ? <ApprovalField label="d">
+      <SigningText>
         {dTag ? dTag[1] || t('applications.signing_unnamed') : t('applications.none')}
       </SigningText>
-    </View> : null}
+    </ApprovalField> : null}
   </>;
   return <View style={{ gap: spacing.lg }}>
     {showTitle ? <SigningText variant="title">{signingRequestTitle(request, t)}</SigningText> : null}
-    {request.operation === 'encrypt-publish' ? <SigningText tone="muted">{t(`applications.${effect}`)}</SigningText> : null}
-    {auth ? <AppCard variant="muted" style={{ gap: spacing.lg }}>
-      {metadata}
-      <View style={{ gap: spacing.sm }}>
-        <SigningText variant="caption" tone="muted">{t('applications.signing_auth_relay')}</SigningText>
-        <SigningText>{new URL(request.relays[0]).host}</SigningText>
-      </View>
-    </AppCard> : <>
+    {auth ? <ApprovalDetails>
+      <ApprovalField label={t('applications.signing_auth_relay')}>
+        <SigningText>{request.relays[0]}</SigningText>
+      </ApprovalField>
+    </ApprovalDetails> : <>
       {request.recipient ? <SigningIdentity pubkey={request.recipient} label={t('applications.signing_recipient')} /> : null}
-      <AppCard variant="muted" style={{ gap: spacing.lg }}>
-        {metadata}
-        {httpUrl ? <View style={{ gap: spacing.sm }}>
-          <SigningText variant="caption" tone="muted">{t('applications.signing_url')}</SigningText>
+      <ApprovalDetails>
+        {!httpAuth ? metadata : null}
+        {httpUrl ? <ApprovalField label={t('applications.signing_service')}>
+          <SigningText>{new URL(httpUrl).origin}</SigningText>
+        </ApprovalField> : null}
+        {httpUrl ? <ApprovalField label={t('applications.signing_url')}>
           <SigningText>{httpUrl}</SigningText>
-        </View> : null}
-        {httpMethod ? <View style={{ gap: spacing.sm }}>
-          <SigningText variant="caption" tone="muted">HTTP</SigningText>
+        </ApprovalField> : null}
+        {httpMethod ? <ApprovalField label={t('applications.signing_http_method')}>
           <SigningText>{httpMethod}</SigningText>
-        </View> : null}
-        {request.content.length > 0 ? <View style={{ gap: spacing.sm }}>
-          <SigningText variant="caption" tone="muted">{t('applications.signing_content')}</SigningText>
+        </ApprovalField> : null}
+        {request.content.length > 0 ? <ApprovalField label={t('applications.signing_content')}>
           {title ? <SigningText>{title}</SigningText> : null}
           {preview.fields.length ? preview.fields.map(([key, value]) => <View key={key} style={{ flexDirection: 'row', gap: spacing.md }}>
             <SigningText variant="caption" tone="muted" style={{ flex: 1 }}>{key.slice(0, 80)}</SigningText>
             <SigningText style={{ flex: 2 }}>{String(value).slice(0, 140)}</SigningText>
           </View>) : previewText ? <SigningText>{previewText.slice(0, 600)}</SigningText> : null}
-        </View> : null}
-        {references.slice(0, 4).map((tag, index) => <View key={index} style={{ gap: spacing.xs }}>
-          <SigningText variant="caption" tone="muted">{['e', 'a'].includes(tag[0]) ? t('chat.event_reference.event')
-              : tag[0] === 'method' ? 'HTTP' : t('applications.signing_destinations')}</SigningText>
+        </ApprovalField> : null}
+        {references.slice(0, 4).map((tag, index) => <ApprovalField key={index}
+          label={['e', 'a'].includes(tag[0]) ? t('chat.event_reference.event')
+              : tag[0] === 'method' ? 'HTTP' : t('applications.signing_destinations')}>
           <SigningText numberOfLines={2}>{tag[1].slice(0, 256)}</SigningText>
-        </View>)}
+        </ApprovalField>)}
         {preview.truncated || previewText.length > 600 || references.length > 4 || references.some(tag => tag[1].length > 256) ? <SigningText variant="caption" tone="muted">{t('applications.signing_truncated')}</SigningText> : null}
-      </AppCard>
+      </ApprovalDetails>
     </>}
-    {request.operation !== 'encrypt-publish' ? <SigningText tone="muted">{t(`applications.${effect}`)}</SigningText> : null}
+    <SigningText tone="muted">{t(`applications.${effect}`)}</SigningText>
     <View style={{ alignSelf: 'center' }}>
       <AppButton variant="text" labelWeight="regular" label={t(details ? 'applications.signing_hide_details' : 'applications.signing_details')}
         accessibilityState={{ expanded: details }}
@@ -229,10 +218,9 @@ export function SigningRequestDetails({ request, showTitle = true }: {
     </View>
     {details ? <View style={{ gap: spacing.lg }}>
       <EventJson request={request} />
-      {request.relays.length ? <View style={{ gap: spacing.sm }}>
-        <SigningText variant="caption" tone="muted">{t('applications.signing_destinations')}</SigningText>
-        {request.relays.map((relay) => <SigningText key={relay} variant="caption">{relay}</SigningText>)}
-      </View> : null}
+      {request.relays.length ? <ApprovalField label={t('applications.signing_destinations')}>
+        {request.relays.map((relay) => <SigningText key={relay}>{relay}</SigningText>)}
+      </ApprovalField> : null}
     </View> : null}
   </View>;
 }
@@ -245,7 +233,7 @@ function EncryptionPlaintext({ text }: { text: string }) {
   const expanded = expandedFor === text;
   const { copied, copyText } = useClipboard();
   const truncated = text.length > 600;
-  return <AppCard variant="muted" style={{ gap: spacing.sm }}>
+  return <ApprovalDetails>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
       <SigningText variant="caption" tone="muted" style={{ flex: 1 }}>{t('applications.crypto_plaintext')}</SigningText>
       <AppButton variant="text" compact labelWeight="regular" label={t(copied ? 'common.copied' : 'common.copy')}
@@ -259,7 +247,7 @@ function EncryptionPlaintext({ text }: { text: string }) {
       accessibilityState={{ expanded }}
       iconRight={expanded ? <ChevronUp size={spacing.lg} color={c.text} /> : <ChevronDown size={spacing.lg} color={c.text} />}
       onPress={() => setExpandedFor(expanded ? undefined : text)} /> : null}
-  </AppCard>;
+  </ApprovalDetails>;
 }
 
 function EventJson({ request }: { request: SigningRequest }) {
@@ -279,10 +267,3 @@ function EventJson({ request }: { request: SigningRequest }) {
     <SigningText variant="code">{json}</SigningText>
   </View>;
 }
-
-/** Signing content scrolls as one surface; explicit actions handle copying. */
-function SigningText({ style, ...props }: ComponentProps<typeof AppText>) {
-  return <AppText {...props} selectable={false} style={[style, styles.text]} />;
-}
-
-const styles = StyleSheet.create({ text: { userSelect: 'none' } });

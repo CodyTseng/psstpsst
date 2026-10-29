@@ -25,6 +25,7 @@ import { getNappletAccountPubkey, useNapplets } from '@/stores/napplet.store';
 import { contentWidth, spacing, useThemeColors } from '@/theme';
 import { SigningApproval, SigningActions, SigningDurationMenu } from './SigningApproval';
 import { SigningRequester, SigningAccountAvatar, signingRequestTitle } from './SigningRequestDetails';
+import { ApprovalText } from './ApprovalDetails';
 import { UploadApproval } from './UploadApproval';
 import { CapabilityActions, CapabilityApproval } from './CapabilityApproval';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
@@ -141,14 +142,14 @@ function NappletOverlayContent() {
     >
       {selectingApplication ? null : prompt ? <>
         {prompt.requester && !prompt.application ? <View style={{ gap: spacing.xs }}>
-          <AppText variant="subtitle">{prompt.requester.title}</AppText>
-          <AppText variant="caption" tone="muted">{prompt.requester.origin}</AppText>
+          <ApprovalText>{prompt.requester.title}</ApprovalText>
+          <ApprovalText variant="caption" tone="muted">{prompt.requester.origin}</ApprovalText>
         </View> : null}
         {prompt.app || prompt.application ? <SigningRequester app={prompt.app} application={prompt.application} /> : null}
         {prompt.upload ? <UploadApproval prompt={prompt} hideActions={!!prompt.signing} /> : prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
           onChange={(value) => setChoice({ id: prompt.requestId, value })} hideActions />
           : accessPrompt ? <CapabilityApproval key={prompt.requestId} prompt={prompt} hideActions /> : <>
-            <AppText variant="code">{prompt.detail}</AppText>
+            <ApprovalText>{prompt.detail}</ApprovalText>
             {prompt.choices ? <>
               {prompt.choices.map((option) => <AppButton key={option.key} variant="secondary" label={option.title}
                 onPress={() => nappletService.answer(prompt.requestId, option.key)} />)}

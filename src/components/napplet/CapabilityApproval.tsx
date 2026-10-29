@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { NappletRequiredAccess } from './NappletRequiredAccess';
-import { AppText } from '@/components/common/AppText';
-import { AppCard } from '@/components/common/AppCard';
+import { ApprovalDetails, ApprovalField, ApprovalText } from './ApprovalDetails';
 import { ActionRow } from '@/components/common/ActionRow';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import { nappletService } from '@/services/napplet/service';
@@ -36,33 +35,38 @@ export function CapabilityApproval({ prompt, hideActions = false }: { prompt: Qu
   const required = prompt.capabilities?.required ?? prompt.application?.required ?? prompt.app?.required ?? [];
   return <View style={{ gap: spacing.lg }}>
     {prompt.installation ? <>
-      <AppText>{t(prompt.installation.replacing ? 'applications.local_replace_notice' : 'applications.local_install_notice')}</AppText>
-      <AppCard variant="muted" style={{ gap: spacing.md }}>
-        <AppText variant="subtitle">{prompt.installation.target.title}</AppText>
-        <AppText variant="code">{prompt.installation.id}</AppText>
-        <AppText variant="caption" tone="muted">{t('applications.local_unsigned_notice')}</AppText>
-        {prompt.installation.otherInstaller ? <AppText tone="danger">{t('applications.local_other_installer_notice')}</AppText> : null}
-      </AppCard>
+      <ApprovalText>{t(prompt.installation.replacing ? 'applications.local_replace_notice' : 'applications.local_install_notice')}</ApprovalText>
+      <ApprovalDetails>
+        <ApprovalText>{prompt.installation.target.title}</ApprovalText>
+        <ApprovalText variant="code">{prompt.installation.id}</ApprovalText>
+        <ApprovalText tone="muted">{t('applications.local_unsigned_notice')}</ApprovalText>
+        {prompt.installation.otherInstaller ? <ApprovalText tone="danger">{t('applications.local_other_installer_notice')}</ApprovalText> : null}
+      </ApprovalDetails>
       <NappletRequiredAccess release={{ required: prompt.installation.target.required }} />
-    </> : browser ? <AppCard variant="muted" style={{ gap: spacing.md }}>
+    </> : browser ? <ApprovalDetails>
       {browser.action === 'permission' ? <>
         {browser.resources?.length ? [...new Set(browser.resources)].map(resource =>
-          <AppText key={resource} variant="body">{browserPermissionLabel(resource, t)}</AppText>)
-          : <AppText variant="body">{prompt.detail || t('applications.browser_permission')}</AppText>}
-      </> : <AppText variant="body">{t(`applications.browser_${browser.action}`)}</AppText>}
-      {browser.filename ? <AppText>{browser.filename}</AppText> : null}
-      {browser.url ? <>
-        <AppText variant="caption" tone="muted">{t('applications.signing_destinations')}</AppText>
-        <AppText variant="caption">{browser.url}</AppText>
+          <ApprovalText key={resource} variant="body">{browserPermissionLabel(resource, t)}</ApprovalText>)
+          : <ApprovalText variant="body">{prompt.detail || t('applications.browser_permission')}</ApprovalText>}
       </> : null}
-    </AppCard> : prompt.device ? <>
-      <AppText>{t(prompt.device.operation === 'save-file' ? 'applications.save_file_notice' : 'applications.copy_text_notice')}</AppText>
-      <AppCard variant="muted"><AppText variant="code">{prompt.detail}</AppText></AppCard>
+      {browser.filename ? <ApprovalField label={t('attach.file')}>
+        <ApprovalText>{browser.filename}</ApprovalText>
+      </ApprovalField> : null}
+      {browser.url ? <ApprovalField label={t('applications.signing_destinations')}>
+        <ApprovalText>{browser.url}</ApprovalText>
+      </ApprovalField> : null}
+    </ApprovalDetails> : prompt.device ? <>
+      <ApprovalDetails>
+        {prompt.device.operation === 'save-file' ? <ApprovalField label={t('attach.file')}>
+          <ApprovalText>{prompt.detail}</ApprovalText>
+        </ApprovalField> : <ApprovalText>{prompt.detail}</ApprovalText>}
+      </ApprovalDetails>
+      <ApprovalText tone="muted">{t(prompt.device.operation === 'save-file' ? 'applications.save_file_notice' : 'applications.copy_text_notice')}</ApprovalText>
     </> : prompt.crypto ? <>
-      <AppText>{t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt_notice' : 'applications.crypto_decrypt_notice')}</AppText>
-      <AppCard variant="muted" style={{ gap: spacing.md }}>
-        <AppText variant="body">{prompt.crypto.algorithm === 'nip04' ? 'NIP-04' : 'NIP-44'}</AppText>
-      </AppCard>
+      <ApprovalDetails>
+        <ApprovalText>{prompt.crypto.algorithm === 'nip04' ? 'NIP-04' : 'NIP-44'}</ApprovalText>
+      </ApprovalDetails>
+      <ApprovalText tone="muted">{t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt_notice' : 'applications.crypto_decrypt_notice')}</ApprovalText>
     </> : <>
       <NappletRequiredAccess release={{ required }} showHeading={false} />
     </>}

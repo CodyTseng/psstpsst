@@ -1127,7 +1127,7 @@
     "app_title": "تطبيق",
     "signing_upload": "رفع ملف",
     "signing_effect_upload": "سيكون هذا الملف متاحًا للعامة وقد يحتوي على بيانات وصفية مضمّنة.",
-    "upload_destinations": "خدمات التخزين",
+    "upload_destinations": "وجهات الرفع",
     "capability_upload": "رفع الملفات",
     "runtime_loading": "جارٍ تحميل التطبيق…",
     "runtime_downloading": "جارٍ تنزيل التطبيق…",
@@ -1320,7 +1320,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "مصادقة طلب HTTP",
+    "signing_service": "الخدمة",
+    "signing_http_method": "طريقة HTTP",
+    "signing_effect_http_auth": "يصادق هذا على طلب HTTP المعروض باستخدام حسابك.",
+    "signing_action_remember": "تذكر لهذا التطبيق"
   },
   "comments": {
     "title": "التقييمات",

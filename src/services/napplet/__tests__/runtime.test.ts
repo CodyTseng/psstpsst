@@ -1,3 +1,4 @@
+import { nip44 } from 'nostr-tools';
 import { rules as sharedRules, activity as sharedActivity } from '@/services/signing/testing/memory-repository';
 import type { Event, EventTemplate } from 'nostr-tools';
 import type { ManagedSubscribeOptions } from '@/services/relay/managed-relay-pool';
@@ -580,7 +581,7 @@ test('revoking permission discards a signature already being computed', async ()
     finish({ id: 'late' } as never);
     await pending;
     expect(runtime.network.publish).not.toHaveBeenCalled();
-    expect(messages()).toContainEqual(expect.objectContaining({ id: 'revoked', error: 'permission-denied' }));
+    expect(messages()).toContainEqual(expect.objectContaining({ id: 'revoked', error: 'permission-revoked' }));
   } finally { await runtime.close(); }
 });
 
@@ -879,5 +880,150 @@ test('revocation during a public-profile read prevents disclosure', async () => 
     await pending;
     expect(messages().at(-1)).toMatchObject({ error: 'permission-revoked' });
     expect(messages().at(-1)?.profile).toBeUndefined();
+  } finally { await runtime.close(); }
+});
+
+
+test.each(['relay.publish', 'outbox.publish'])('%s requests only ordinary signer authorization', async type => {
+  const config = options();
+  const runtime = new NappletRuntime(config);
+  runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
+  const event = { kind: 1, content: 'note', tags: [], created_at: 1 };
+  jest.mocked(runtime.network.sign).mockResolvedValue({ ...event, id: 'signed', pubkey: config.accountPubkey, sig: 'signature' });
+  jest.mocked(runtime.network.publish).mockResolvedValue({ 'wss://relay.example/': true });
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type, id: 'publish', event }));
+    expect(config.confirm).toHaveBeenCalledTimes(1);
+    expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({
+      operation: 'sign', content: 'note', relays: ['wss://relay.example/'],
+    }) }), expect.anything());
+    expect(runtime.network.sign).toHaveBeenCalledWith(event);
+    expect(runtime.network.publish).toHaveBeenCalledTimes(1);
+  } finally { await runtime.close(); }
+});
+
+test('direct signing and publication reuse legacy remembered event decisions', async () => {
+  const config = options();
+  jest.mocked(config.confirm).mockResolvedValue('allow-always');
+  const runtime = new NappletRuntime(config);
+  runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
+  const event = { kind: 30078, content: '{}', tags: [['d', 'progress']], created_at: 1 };
+  jest.mocked(runtime.network.sign).mockResolvedValue({ ...event, id: 'signed', pubkey: config.accountPubkey, sig: 'signature' });
+  jest.mocked(runtime.network.publish).mockResolvedValue({ 'wss://relay.example/': true });
+  await runtime.open();
+  try {
+    await runtime.signingPermissions.authorize({ operation: 'publish', kind: event.kind, relays: [],
+      accountPubkey: config.accountPubkey, content: event.content, tags: event.tags, createdAt: event.created_at });
+    jest.mocked(config.confirm).mockClear();
+    for (const type of ['signer.signEvent', 'outbox.publish'])
+      await runtime.receive(JSON.stringify({ type, id: type, event }));
+    expect(config.confirm).not.toHaveBeenCalled();
+    expect(runtime.network.sign).toHaveBeenCalledTimes(2);
+    expect(runtime.network.publish).toHaveBeenCalledTimes(1);
+  } finally { await runtime.close(); }
+});
+
+test.each(['allow', 'deny-encryption', 'deny-signature'])('encrypted publication delegates to encryption then signing: %s', async decision => {
+  const config = options();
+  jest.mocked(config.confirm).mockImplementation(async prompt =>
+    decision === 'deny-encryption' && prompt.signing?.operation === 'nip44-encrypt' ||
+    decision === 'deny-signature' && prompt.signing?.operation === 'sign' ? false : 'allow-always');
+  const runtime = new NappletRuntime(config);
+  runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
+  const encrypt = jest.fn(async () => 'ciphertext');
+  jest.mocked(runtime.network.getSigner).mockResolvedValue({ nip44Encrypt: encrypt } as never);
+  const event = { kind: 1, content: 'plaintext', tags: [], created_at: 1 };
+  jest.mocked(runtime.network.sign).mockImplementation(async template => ({ ...template, id: 'signed', pubkey: config.accountPubkey, sig: 'signature' }));
+  jest.mocked(runtime.network.publish).mockResolvedValue({ 'wss://relay.example/': true });
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'relay.publishEncrypted', id: 'encrypted', event, recipient: 'b'.repeat(64) }));
+    const operations = jest.mocked(config.confirm).mock.calls.map(([prompt]) => prompt.signing?.operation);
+    expect(operations).toEqual(decision === 'deny-encryption' ? ['nip44-encrypt'] : ['nip44-encrypt', 'sign']);
+    if (decision === 'allow') {
+      expect(encrypt).toHaveBeenCalledWith('b'.repeat(64), 'plaintext');
+      expect(runtime.network.sign).toHaveBeenCalledWith({ ...event, content: 'ciphertext' });
+      expect(runtime.network.publish).toHaveBeenCalledTimes(1);
+      expect(messages().at(-1)?.ok).toBe(true);
+    } else {
+      expect(runtime.network.sign).not.toHaveBeenCalled();
+      expect(runtime.network.publish).not.toHaveBeenCalled();
+      expect(messages().at(-1)?.error).toBe('permission-denied');
+    }
+  } finally { await runtime.close(); }
+});
+
+
+test('HTTP signatures reuse app authorization across methods without changing the signed event', async () => {
+  const config = options();
+  jest.mocked(config.confirm).mockResolvedValue('allow-always');
+  const runtime = new NappletRuntime(config);
+  jest.mocked(runtime.network.sign).mockImplementation(async event => ({ ...event, id: 'signed', pubkey: config.accountPubkey, sig: 'signature' }));
+  await runtime.open();
+  try {
+    for (const [id, path, method] of [['get', '/one', 'GET'], ['get-again', '/two', 'GET'], ['post', '/one', 'POST']]) {
+      const event = { kind: 27235, created_at: 1, content: '', tags: [['u', `https://api.example${path}`], ['method', method]] };
+      await runtime.receive(JSON.stringify({ type: 'signer.signEvent', id, event }));
+      expect(runtime.network.sign).toHaveBeenLastCalledWith(event);
+      expect(messages().at(-1)?.error).toBeUndefined();
+    }
+    expect(config.confirm).toHaveBeenCalledTimes(1);
+    const requests = jest.mocked(config.confirm).mock.calls.map(([prompt]) => prompt.signing!);
+    expect(requests.map(request => [request.operation, request.scopeKey, request.relays])).toEqual([
+      ['http-auth', undefined, ['https://api.example']],
+    ]);
+    expect(runtime.network.publish).not.toHaveBeenCalled();
+  } finally { await runtime.close(); }
+});
+
+
+test.each(['relay.publish', 'outbox.publish'].flatMap(type => [24242, 27235, 22242].map(kind => ({ type, kind }))))(
+  '$type publishes kind $kind through ordinary signing without treating it as an action', async ({ type, kind }) => {
+    const config = options();
+    const runtime = new NappletRuntime(config);
+    runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
+    const tags = kind === 24242 ? [['t', 'upload'], ['x', 'a'.repeat(64)], ['expiration', '9999999999']]
+      : kind === 27235 ? [['u', 'not-an-http-url'], ['method', 'not-an-http-method?']] : [['arbitrary', 'tag']];
+    const event = { kind, created_at: 1, content: 'An ordinary published event', tags };
+    const signed = { ...event, id: 'signed', pubkey: config.accountPubkey, sig: 'signature' };
+    jest.mocked(runtime.network.sign).mockResolvedValue(signed);
+    jest.mocked(runtime.network.publish).mockResolvedValue({ 'wss://relay.example/': true });
+    await runtime.open();
+    try {
+      await runtime.receive(JSON.stringify({ type, id: 'ordinary-publication', event }));
+      expect(config.confirm).toHaveBeenCalledTimes(1);
+      expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({
+        operation: 'sign', kind, content: event.content, tags, relays: ['wss://relay.example/'],
+      }) }), expect.anything());
+      expect(jest.mocked(config.confirm).mock.calls[0][0].upload).toBeUndefined();
+      expect(runtime.network.sign).toHaveBeenCalledWith(event);
+      expect(runtime.network.publish).toHaveBeenCalledWith(signed, ['wss://relay.example/'], expect.any(Function));
+      expect(messages().at(-1)).toMatchObject({ ok: true, event: signed });
+    } finally { await runtime.close(); }
+  },
+);
+
+test('large encrypted publications share consent without imposing an extra plaintext limit', async () => {
+  const config = options();
+  const runtime = new NappletRuntime(config);
+  const key = new Uint8Array(32).fill(7);
+  const nonce = new Uint8Array(32).fill(8);
+  const content = 'x'.repeat(100001);
+  const encrypt = jest.fn(async (_peer: string, text: string) => nip44.v2.encrypt(text, key, nonce));
+  jest.mocked(runtime.network.getSigner).mockResolvedValue({ nip44Encrypt: encrypt } as never);
+  runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
+  jest.mocked(runtime.network.sign).mockImplementation(async template => ({ ...template, id: 'signed', pubkey: config.accountPubkey, sig: 'signature' }));
+  jest.mocked(runtime.network.publish).mockResolvedValue({ 'wss://relay.example/': true });
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'relay.publishEncrypted', id: 'large-encrypted', recipient: 'b'.repeat(64),
+      event: { kind: 1, created_at: 1, tags: [], content } }));
+    expect(jest.mocked(config.confirm).mock.calls.map(([prompt]) => prompt.signing?.operation)).toEqual(['nip44-encrypt', 'sign']);
+    expect(encrypt).toHaveBeenCalledWith('b'.repeat(64), content);
+    expect(runtime.network.sign).toHaveBeenCalledTimes(1);
+    const encrypted = jest.mocked(runtime.network.sign).mock.calls[0][0].content;
+    expect(nip44.v2.decrypt(encrypted, key)).toBe(content);
+    expect(messages().at(-1)?.ok).toBe(true);
   } finally { await runtime.close(); }
 });

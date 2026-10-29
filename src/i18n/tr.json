@@ -1107,7 +1107,7 @@
     "app_title": "Uygulama",
     "signing_upload": "Dosya yükle",
     "signing_effect_upload": "Bu dosya herkese açık olacak ve gömülü meta veriler içerebilir.",
-    "upload_destinations": "Depolama hizmetleri",
+    "upload_destinations": "Yükleme hedefleri",
     "capability_upload": "Dosya yükleme",
     "runtime_loading": "Uygulama yükleniyor…",
     "runtime_downloading": "Uygulama indiriliyor…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "HTTP isteğini doğrula",
+    "signing_service": "Hizmet",
+    "signing_http_method": "HTTP yöntemi",
+    "signing_effect_http_auth": "Gösterilen HTTP isteği hesabınız kullanılarak doğrulanır.",
+    "signing_action_remember": "Bu uygulama için hatırla"
   },
   "comments": {
     "title": "Değerlendirmeler",

@@ -1,8 +1,6 @@
-import type { ComponentProps } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AppText } from '@/components/common/AppText';
-import { AppCard } from '@/components/common/AppCard';
+import { ApprovalDetails, ApprovalField, ApprovalText } from './ApprovalDetails';
 import { ActionRow } from '@/components/common/ActionRow';
 import { formatFileSize } from '@/lib/nostr/file-tags';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
@@ -14,18 +12,19 @@ export function UploadApproval({ prompt, hideActions = false }: { prompt: Queued
   const { t } = useTranslation();
   const upload = prompt.upload!;
   return <View style={{ gap: spacing.lg }}>
-    <UploadText>{t('applications.signing_effect_upload')}</UploadText>
-    <AppCard variant="muted" style={{ gap: spacing.sm }}>
-      <UploadText variant="subtitle">{upload.filename || t('message_detail.attachment')}</UploadText>
-      <UploadText variant="caption" tone="muted">{upload.mimeType} · {formatFileSize(upload.size)}</UploadText>
-      <UploadText variant="caption" tone="muted">{t('applications.upload_destinations')}</UploadText>
-      {upload.servers.map((server) => <UploadText key={server}>{new URL(server).host}</UploadText>)}
-    </AppCard>
+    <ApprovalDetails>
+      <ApprovalField label={t('attach.file')}>
+        <ApprovalText>{upload.filename || t('message_detail.attachment')}</ApprovalText>
+      </ApprovalField>
+      <ApprovalField label={t('message_detail.file_size')}>
+        <ApprovalText>{formatFileSize(upload.size)}</ApprovalText>
+      </ApprovalField>
+      <ApprovalField label={t('applications.upload_destinations')}>
+        {upload.servers.map((server) => <ApprovalText key={server}>{server}</ApprovalText>)}
+      </ApprovalField>
+    </ApprovalDetails>
+    <ApprovalText tone="muted">{t('applications.signing_effect_upload')}</ApprovalText>
     {!hideActions ? <ActionRow layout="horizontal" confirm={{ label: t('applications.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
       dismiss={{ label: t('common.cancel'), onPress: () => nappletService.answer(prompt.requestId, false) }} /> : null}
   </View>;
-}
-
-function UploadText({ style, ...props }: ComponentProps<typeof AppText>) {
-  return <AppText {...props} selectable={false} style={[style, { userSelect: 'none' }]} />;
 }

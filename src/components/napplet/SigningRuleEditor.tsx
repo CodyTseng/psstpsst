@@ -1,3 +1,4 @@
+import { isApplicationAction } from '@/services/signing/action-request';
 import { useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -22,8 +23,8 @@ export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed }: 
 }) {
   const { t } = useTranslation();
   return <PermissionRuleEditor rule={rule} title={signingAction(rule.scope, t)} visible={visible} onSave={onSave} onClose={onClose} onClosed={onClosed}>
-    {rule.scope.kind !== undefined ? <AppText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: rule.scope.kind })}</AppText> : null}
-    {rule.scope.operation === 'relay-auth' || rule.scope.scopeKey !== undefined || rule.scope.recipient || rule.scope.relays.length ? <SigningScopeDetails scope={rule.scope} /> : null}
+    {rule.scope.kind !== undefined && !isApplicationAction(rule.scope) ? <AppText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: rule.scope.kind })}</AppText> : null}
+    {!isApplicationAction(rule.scope) && (rule.scope.scopeKey !== undefined || rule.scope.recipient || rule.scope.relays.length) ? <SigningScopeDetails scope={rule.scope} /> : null}
   </PermissionRuleEditor>;
 }
 

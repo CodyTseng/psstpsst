@@ -49,7 +49,12 @@ methods, regardless of an `identity` requirement declaration. Injection does not
 grant account access or signing authority. Signing returns
 a signed event; it does not publish it. Public-key access uses the shared signer
 authorization service on every request, independently of launch permissions.
-Event signing uses account/source/kind/d-tag rules. All formats also receive
+Ordinary event signing uses account/source/kind/d-tag rules. Relay AUTH, HTTP
+authentication and Blossom uploads use independent account/source/action rules
+without destination or HTTP-method qualifiers. Targets remain visible in each
+review. Publishing an event never changes its authorization into HTTP, Relay AUTH or a
+host upload action based on kind. The host upload API retains its own action
+permission; ordinary Blossom events use normal event-signing decisions. All formats also receive
 NIP-04 and NIP-44 encryption/decryption methods when supported by the account's
 signer. These decisions support Once, timed and Always choices. Public-key,
 encryption and decryption grants remain separate; crypto grants also bind the

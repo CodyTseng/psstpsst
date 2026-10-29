@@ -1,3 +1,4 @@
+import { isApplicationAction } from '@/services/signing/action-request';
 import { useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -41,7 +42,7 @@ export function SigningActions({ prompt, duration, menuOpen, onMenuChange }: {
   const { t } = useTranslation();
   return <PermissionActions prompt={prompt} duration={duration} menuOpen={menuOpen} onMenuChange={onMenuChange}
     remember={canRememberSigning(prompt.signing!)}
-    label={t(prompt.signing!.operation === 'relay-auth' && !prompt.signing!.scopeKey ? 'applications.signing_auth_remember' : 'applications.signing_remember')} />;
+    label={t(isApplicationAction(prompt.signing!) ? 'applications.signing_action_remember' : 'applications.signing_remember')} />;
 }
 
 /** Signing and browser permissions share the same duration and decision controls. */
@@ -73,7 +74,7 @@ export function PermissionActions({ prompt, duration, menuOpen, onMenuChange, re
             }));
           }} /></View>
       </View>
-    </> : <AppText variant="caption" tone="muted">{t('applications.signing_unknown_notice')}</AppText>}
+    </> : <AppText tone="muted">{t('applications.signing_unknown_notice')}</AppText>}
     <SigningDecisions key={`${prompt.requestId}:${prompt.expiresAt}`} expiresAt={prompt.expiresAt}
       onApprove={() => nappletService.answer(prompt.requestId, decision)}
       onReject={() => nappletService.answer(prompt.requestId, reject)} />

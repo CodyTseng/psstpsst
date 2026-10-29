@@ -1107,7 +1107,7 @@
     "app_title": "應用程式",
     "signing_upload": "上傳檔案",
     "signing_effect_upload": "此檔案將可公開存取，並可能包含內嵌的中繼資料。",
-    "upload_destinations": "儲存服務",
+    "upload_destinations": "上傳目標",
     "capability_upload": "上傳檔案",
     "runtime_loading": "正在載入應用程式…",
     "runtime_downloading": "正在下載應用…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "此本機應用沒有經過驗證的發佈者。",
     "local_other_installer_notice": "此應用由其他來源安裝。替換後的程式碼將能存取此應用已儲存的資料。",
     "local_uninstall": "解除安裝本機應用",
-    "local_uninstall_notice": "移除此本機應用及其資料和權限？"
+    "local_uninstall_notice": "移除此本機應用及其資料和權限？",
+    "signing_http_auth": "驗證 HTTP 請求",
+    "signing_service": "服務",
+    "signing_http_method": "HTTP 方法",
+    "signing_effect_http_auth": "使用您的帳戶驗證所顯示的 HTTP 請求。",
+    "signing_action_remember": "記住此應用程式的決定"
   },
   "comments": {
     "title": "評價",

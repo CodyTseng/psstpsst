@@ -1112,7 +1112,7 @@
     "app_title": "Aplicación",
     "signing_upload": "Subir un archivo",
     "signing_effect_upload": "Este archivo será público y puede contener metadatos incrustados.",
-    "upload_destinations": "Servicios de almacenamiento",
+    "upload_destinations": "Destinos de subida",
     "capability_upload": "Subir archivos",
     "runtime_loading": "Cargando aplicación…",
     "runtime_downloading": "Descargando la aplicación…",
@@ -1305,7 +1305,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "Autenticar solicitud HTTP",
+    "signing_service": "Servicio",
+    "signing_http_method": "Método HTTP",
+    "signing_effect_http_auth": "Esto autentica la solicitud HTTP mostrada con tu cuenta.",
+    "signing_action_remember": "Recordar para esta app"
   },
   "comments": {
     "title": "Reseñas",

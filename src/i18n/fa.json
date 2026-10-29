@@ -1107,7 +1107,7 @@
     "app_title": "برنامه",
     "signing_upload": "بارگذاری فایل",
     "signing_effect_upload": "این فایل به‌صورت عمومی در دسترس خواهد بود و ممکن است فرادادهٔ تعبیه‌شده داشته باشد.",
-    "upload_destinations": "سرویس‌های ذخیره‌سازی",
+    "upload_destinations": "مقصدهای بارگذاری",
     "capability_upload": "بارگذاری فایل‌ها",
     "runtime_loading": "در حال بارگیری برنامه…",
     "runtime_downloading": "در حال دریافت برنامه…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "احراز هویت درخواست HTTP",
+    "signing_service": "سرویس",
+    "signing_http_method": "روش HTTP",
+    "signing_effect_http_auth": "این کار درخواست HTTP نمایش‌داده‌شده را با حساب شما احراز هویت می‌کند.",
+    "signing_action_remember": "به‌خاطر سپردن برای این برنامه"
   },
   "comments": {
     "title": "دیدگاه‌ها",

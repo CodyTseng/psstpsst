@@ -1107,7 +1107,7 @@
     "app_title": "应用",
     "signing_upload": "上传文件",
     "signing_effect_upload": "此文件将公开可访问，并可能包含内嵌的元数据。",
-    "upload_destinations": "存储服务",
+    "upload_destinations": "上传目标",
     "capability_upload": "上传文件",
     "runtime_loading": "正在加载应用…",
     "runtime_downloading": "正在下载应用…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "此本地应用没有经过验证的发布者。",
     "local_other_installer_notice": "此应用由其他来源安装。替换后的代码将能访问此应用已保存的数据。",
     "local_uninstall": "卸载本地应用",
-    "local_uninstall_notice": "移除此本地应用及其数据和权限？"
+    "local_uninstall_notice": "移除此本地应用及其数据和权限？",
+    "signing_http_auth": "认证 HTTP 请求",
+    "signing_service": "服务",
+    "signing_http_method": "HTTP 方法",
+    "signing_effect_http_auth": "使用您的账户认证所显示的 HTTP 请求。",
+    "signing_action_remember": "记住此应用的决定"
   },
   "comments": {
     "title": "评价",

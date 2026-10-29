@@ -1107,7 +1107,7 @@
     "app_title": "Alkalmazás",
     "signing_upload": "Fájl feltöltése",
     "signing_effect_upload": "Ez a fájl nyilvánosan elérhető lesz, és beágyazott metaadatokat tartalmazhat.",
-    "upload_destinations": "Tárolási szolgáltatások",
+    "upload_destinations": "Feltöltési célok",
     "capability_upload": "Fájlok feltöltése",
     "runtime_loading": "Alkalmazás betöltése…",
     "runtime_downloading": "App letöltése…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "HTTP-kérés hitelesítése",
+    "signing_service": "Szolgáltatás",
+    "signing_http_method": "HTTP-metódus",
+    "signing_effect_http_auth": "Ez a fiókoddal hitelesíti a megjelenített HTTP-kérést.",
+    "signing_action_remember": "Megjegyzés ehhez az alkalmazáshoz"
   },
   "comments": {
     "title": "Vélemények",

@@ -239,6 +239,25 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     await reloadedAuth.edit(authRule, { decision: 'deny', duration: 'always' });
     await assert.rejects(reloadedAuth.authorize({ ...authRequest, relays: ['wss://third.example/'] }), /permission-denied/);
     await reloadedAuth.edit(authRule, { decision: 'ask', duration: 'always' });
+    const httpRequest = (url, method) => ({ operation: 'http-auth', kind: 27235, relays: [], accountPubkey: 'A',
+      content: '', tags: [['u', url], ['method', method]], createdAt: 100 });
+    let httpPrompts = 0;
+    const httpPermissions = new SigningPermissions(scope, async () => { httpPrompts++; return 'allow-always'; }, controller.signal, () => {});
+    await httpPermissions.authorize(httpRequest('https://one.example/', 'GET'));
+    await httpPermissions.authorize(httpRequest('https://two.example/', 'POST'));
+    assert.equal(httpPrompts, 1);
+    const httpRule = (await repository.readSigningSnapshot(scope)).rules.find(rule => rule.scope.operation === 'http-auth');
+    assert.deepEqual(httpRule.scope, { operation: 'http-auth', kind: 27235, relays: [] });
+    const reloadedHttp = new SigningPermissions(scope, async () => { throw new Error('unexpected-http-prompt'); }, controller.signal, () => {});
+    await reloadedHttp.authorize(httpRequest('https://third.example/', 'DELETE'));
+    await reloadedHttp.edit(httpRule, { decision: 'deny', duration: 'always' });
+    await assert.rejects(reloadedHttp.authorize(httpRequest('https://four.example/', 'PATCH')), /permission-denied/);
+    const uploadRequest = { ...authRequest, operation: 'upload', kind: 24242, relays: ['https://media.example/'] };
+    await permissions.authorize(uploadRequest);
+    const uploadRule = (await repository.readSigningSnapshot(scope)).rules.find(rule => rule.scope.operation === 'upload');
+    assert.deepEqual(uploadRule.scope, { operation: 'upload', kind: 24242, relays: [] });
+    const reloadedUpload = new SigningPermissions(scope, async () => { throw new Error('unexpected-upload-prompt'); }, controller.signal, () => {});
+    await reloadedUpload.authorize({ ...uploadRequest, relays: ['https://different.example/'] });
     for (const scopeKey of ['resource-one', 'resource-two']) {
       await permissions.authorize({ ...authRequest, operation: 'publish', kind: 12345, scopeKey, relays: [] });
     }

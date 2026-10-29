@@ -34,3 +34,10 @@ it.each([
 it('copies only unsigned fields from a request', () => {
   expect(signingTemplate({ ...event, id: 'untrusted', pubkey: 'untrusted', sig: 'untrusted' })).toEqual(event);
 });
+
+
+it('validates generic publication events without interpreting their kind as relay authentication', () => {
+  const input = { ...event, kind: 22242, content: 'ordinary event', tags: [['custom', 'tag']] };
+  expect(signingTemplate(input, false)).toEqual(input);
+  expect(() => signingTemplate(input)).toThrow('invalid-auth');
+});

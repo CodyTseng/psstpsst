@@ -8,7 +8,6 @@ import { ApplicationSigner } from '@/services/signing/application-signer';
 import { BrowserActions } from './browser-actions';
 import type { WebLn } from './webln';
 import i18n from '@/i18n/core';
-import { signingRevision } from '@/services/signing/changes';
 import { nip19, verifyEvent } from 'nostr-tools';
 import { signingTemplate } from '@/services/signing/event-template';
 import { randomId } from '@/services/napplet/protocol';
@@ -373,22 +372,14 @@ export class ExploreRuntime {
       return signer.crypto(algorithm, operation, args[0], args[1]);
     }
     if (method === 'signEvent') {
-      const event = signingTemplate(args[0]);
       const permissions = this.permissions;
-      if (!permissions)
-        throw new Error('invalid-origin');
-      const operation = event.kind === 22242 ? 'relay-auth' : 'sign';
-      const revision = await permissions.authorize({ operation, kind: event.kind,
-        relays: operation === 'relay-auth' ? [event.tags.find(tag => tag[0] === 'relay')![1]] : [],
-        accountPubkey: this.account, content: event.content, tags: event.tags, createdAt: event.created_at });
-      current();
-      const signed = await this.network.sign(event);
-      current();
-      const scope = { accountPubkey: this.account, sourceId: this.entry.kind === 'website' ? this.origin : this.entry.key };
-      if (signingRevision(scope) !== revision)
-        throw new Error('permission-revoked');
-      return signed;
+      if (!permissions) throw new Error('invalid-origin');
+      const signer = new ApplicationSigner({ accountPubkey: this.account, permissions,
+        signer: () => this.network.getSigner(), current });
+      const { event } = await signer.signEvent(args[0], template => this.network.sign(template));
+      return event;
     }
+
     if (method === 'clipboard.writeText') {
       const application = this.entry.kind === 'website'
         ? { title: new URL(this.origin).host, description: '', servers: [], required: [], origin: this.origin }

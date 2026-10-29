@@ -91,6 +91,68 @@ test(
         }
       };
       const address = `http://127.0.0.1:${server.address().port}`;
+      if (process.env.NAPPLET_SIGNING_SCENARIO === 'request-layout') {
+        const scenarios = ['upload-review', 'public-key', 'encrypt', 'decrypt', 'browser-permission',
+          'browser-download', 'save-file', 'installation', 'auth', 'http-auth', 'capabilities', 'raw'];
+        for (const theme of ['light', 'dark']) for (const surface of ['desktop', 'touch']) {
+          for (const scenario of scenarios) {
+            await page.goto(`${address}/?scenario=${scenario}&theme=${theme}&surface=${surface}`);
+            const dialog = page.getByRole('dialog');
+            await dialog.getByRole('button', { name: 'Allow', exact: true }).waitFor();
+            await dialog.getByTestId('application-identity').waitFor();
+            await page.waitForFunction(() => {
+              const control = [...document.querySelectorAll('[role="button"]')].find(node => node.textContent === 'Allow');
+              const bounds = control?.getBoundingClientRect();
+              if (!bounds || bounds.bottom > innerHeight + 1) return false;
+              const previous = window.__requestLayoutY;
+              window.__requestLayoutY = bounds.y;
+              return previous !== undefined && Math.abs(previous - bounds.y) < 0.1;
+            });
+            const approve = await dialog.getByRole('button', { name: 'Allow', exact: true }).boundingBox();
+            assert(approve.x >= 0 && approve.x + approve.width <= 391 && approve.y + approve.height <= 841,
+              `${scenario} decisions stay in the viewport`);
+            if (scenario === 'upload-review') {
+              const filename = dialog.getByText('type-zoo-pip-caller-2026-10-29.png', { exact: true });
+              const destination = dialog.getByText('https://storage.example/', { exact: true });
+              assert.equal(await dialog.getByText('image/png', { exact: true }).count(), 0);
+              const size = dialog.getByText('1.7 MB', { exact: true });
+              const values = await Promise.all([filename, size, destination].map(locator => locator.evaluate(node => {
+                const style = getComputedStyle(node);
+                return { size: style.fontSize, weight: style.fontWeight, selection: style.userSelect,
+                  fits: node.scrollWidth <= node.clientWidth + 1 };
+              })));
+              assert(values.every(value => value.size === values[0].size), 'file values and destinations share body typography');
+              assert(values.every(value => value.weight === '400' && value.selection === 'none' && value.fits));
+              const fileBounds = await filename.boundingBox(), targetBounds = await destination.boundingBox();
+              assert(targetBounds.y > fileBounds.y + fileBounds.height, 'destinations form a separate field');
+              await dialog.getByText('https://backup.example/', { exact: true }).waitFor();
+            }
+            if (scenario === 'http-auth') {
+              await dialog.getByText('Authenticate HTTP request', { exact: true }).waitFor();
+              await dialog.getByText('https://api.example', { exact: true }).waitFor();
+              await dialog.getByText('POST', { exact: true }).waitFor();
+              await dialog.getByText('Remember for this app', { exact: true }).waitFor();
+            }
+            if (scenario === 'auth') {
+              await dialog.getByText('wss://relay.example/', { exact: true }).waitFor();
+              assert.equal(await dialog.getByText('Remember for all relays', { exact: true }).count(), 0);
+            }
+            if (scenario === 'raw') {
+              await dialog.getByText('Sign an event', { exact: true }).waitFor();
+              assert.equal(await dialog.getByText('Publish event (kind 30079)', { exact: true }).count(), 0);
+            }
+            if (scenario === 'public-key') {
+              const pubkey = dialog.getByText('a'.repeat(64), { exact: true });
+              assert(await pubkey.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'public key wraps within the card');
+            }
+            if (process.env.NAPPLET_SIGNING_SCREENSHOTS) {
+              await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${surface}-${scenario}.png` });
+            }
+          }
+        }
+        assert.deepEqual(errors, []);
+        return;
+      }
       if (process.env.NAPPLET_MEMBERSHIP_ONLY === '1') {
         for (const theme of ['light', 'dark']) {
           await page.goto(`${address}/?scenario=explore-detail&detail-actions=1&theme=${theme}`);
@@ -304,7 +366,7 @@ test(
         const approve = file.getByRole('button', { name: 'Allow', exact: true });
         await approve.click({ trial: true });
         assert.equal(await file.getByText('report.pdf', { exact: true }).count(), 1);
-        assert.equal(await file.getByText('storage.example', { exact: true }).count(), 1);
+        assert.equal(await file.getByText('https://storage.example/', { exact: true }).count(), 1);
         assert.equal(await file.getByText('Kind 24242', { exact: true }).count(), 0);
         assert.equal(await file.getByRole('button', { name: 'More information', exact: true }).count(), 0);
         assert.equal(await file.getByText('Remember this decision', { exact: true }).count(), 0);

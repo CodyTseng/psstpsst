@@ -9,7 +9,7 @@ export const signingAuthorizations = sqliteTable('signing_authorizations', {
   operation: text('operation').notNull().default('publish'),
   /** Legacy qualifier retained for migrations; current signer rules use an empty value. */
   recipient: text('recipient').notNull().default(''),
-  /** Only upload grants bind destinations; relay AUTH grants cover the source. */
+  /** App action decisions leave destinations empty; request targets remain transient. */
   destinations: text('destinations').notNull().default('[]'),
   kind: integer('kind').notNull(),
   /** Operation-specific permission qualifier; addressable events use their d-tag value. */

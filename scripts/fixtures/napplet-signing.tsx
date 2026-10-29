@@ -65,7 +65,7 @@ nappletStore.setState({
     accountPubkey: 'a'.repeat(64),
     app: { title: 'Arcade', hash: 'c'.repeat(64), event: { pubkey: 'b'.repeat(64) } } as NappletRelease,
     signing: {
-      operation: auth ? 'relay-auth' : 'publish', kind: auth ? 22242 : raw ? 30079 : 30078,
+      operation: auth ? 'relay-auth' : 'sign', kind: auth ? 22242 : raw ? 30079 : 30078,
       accountPubkey: 'a'.repeat(64), createdAt: 100, relays: ['wss://relay.example/'],
       scopeKey: auth ? undefined : 'game-progress',
       content: auth ? '' : JSON.stringify({ score: 1280, level: 4, lives: 3, ...(scroll ? { entries: Array.from({ length: 40 }, (_, index) => ({ index, value: `Entry ${index}` })) } : {}) }), tags: auth ? [] : [['d', 'game-progress']],
@@ -126,6 +126,41 @@ if (params.get('scenario') === 'queued-approvals') {
 if (params.get('scenario') === 'upload') {
   nappletStore.setState({ prompt: { ...nappletStore.getState().prompt!, queued: 0, signing: undefined,
     upload: { filename: 'report.pdf', mimeType: 'application/pdf', size: 2048, sha256: 'c'.repeat(64), servers: ['https://storage.example/'] },
+  } });
+}
+// Request-layout fixtures keep every approval on the production overlay path.
+const reviewScenario = params.get('scenario');
+if (reviewScenario === 'upload-review') {
+  const base = nappletStore.getState().prompt!;
+  nappletStore.setState({ prompt: { ...base,
+    signing: { ...base.signing!, operation: 'upload', kind: 24242, scopeKey: undefined, relays: ['https://storage.example/', 'https://backup.example/'] },
+    upload: { filename: 'type-zoo-pip-caller-2026-10-29.png', mimeType: 'image/png', size: 1782579,
+      sha256: 'c'.repeat(64), servers: ['https://storage.example/', 'https://backup.example/'] },
+  } });
+}
+if (reviewScenario === 'http-auth') {
+  const base = nappletStore.getState().prompt!;
+  nappletStore.setState({ prompt: { ...base, signing: {
+    operation: 'http-auth', kind: 27235, accountPubkey: 'a'.repeat(64), relays: ['https://api.example'],
+    tags: [['u', 'https://api.example/v1/images?format=png'], ['method', 'POST']], content: '', createdAt: 100,
+  } } });
+}
+if (reviewScenario === 'public-key' || reviewScenario === 'encrypt' || reviewScenario === 'decrypt') {
+  const base = nappletStore.getState().prompt!;
+  nappletStore.setState({ prompt: { ...base, signing: {
+    operation: reviewScenario === 'public-key' ? 'get-public-key' : reviewScenario === 'encrypt' ? 'nip44-encrypt' : 'nip04-decrypt',
+    accountPubkey: 'a'.repeat(64), relays: [], tags: [], createdAt: 100,
+    content: reviewScenario === 'encrypt' ? 'A private message for the recipient.' : '',
+  } } });
+}
+if (reviewScenario === 'browser-permission' || reviewScenario === 'browser-download' || reviewScenario === 'save-file' || reviewScenario === 'installation') {
+  const base = { ...nappletStore.getState().prompt!, signing: undefined };
+  nappletStore.setState({ prompt: { ...base,
+    ...(reviewScenario === 'browser-permission' ? { browser: { action: 'permission', resources: ['camera', 'microphone'] } }
+      : reviewScenario === 'browser-download' ? { browser: { action: 'download', filename: 'report.pdf', url: 'https://files.example/report.pdf' } }
+      : reviewScenario === 'save-file' ? { device: { operation: 'save-file' }, detail: 'report.pdf' }
+      : { installation: { target: { title: 'Local editor', description: '', servers: [], required: ['storage'] },
+        id: 'local~editor', replacing: false, otherInstaller: false } }),
   } });
 }
 if (params.get('scenario') === 'capabilities') {
@@ -348,7 +383,7 @@ function Fixture() {
     <NavigationRouteContext.Provider value={{ key: 'fixture', name: 'fixture' }}>
     <PreventRemoveContext.Provider value={{ preventedRoutes: {}, setPreventRemove: () => {} }}>
     <WindowFrame><GestureHandlerRootView style={{ flex: 1 }}>
-      <LocalRouteParamsContext.Provider value={{ id: 'd'.repeat(64),...(exploreFixtureKey?{key:exploreFixtureKey,runId:'1',permissions:params.get('scenario')==='explore-permissions'?'1':undefined}:{}) }}>
+      <LocalRouteParamsContext.Provider value={{ id: 'd'.repeat(64), ...(exploreFixtureKey?{key:exploreFixtureKey,runId:'1',permissions:params.get('scenario')==='explore-permissions'?'1':undefined}:{}) }}>
         {RuntimeScreen ? <RuntimeScreen /> : null}
         {params.has('detail-actions') ? React.createElement(require('../../src/components/common/Toast').Toast) : null}
       </LocalRouteParamsContext.Provider><NappletOverlays />

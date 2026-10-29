@@ -7,7 +7,7 @@ export type SignerAccessScope = {
   recipient?: never;
 };
 export type SigningScope = SignerAccessScope | {
-  operation: 'sign' | 'publish' | 'encrypt-publish' | 'relay-auth' | 'upload';
+  operation: 'sign' | 'publish' | 'encrypt-publish' | 'relay-auth' | 'http-auth' | 'upload';
   kind: number;
   relays: string[];
   scopeKey?: string;
@@ -46,11 +46,9 @@ export function signingScope(request: SigningScope): SigningScope {
   if (isSignerAccess(request)) return { operation: request.operation, relays: [] };
   const qualified = request.scopeKey || (request.kind !== undefined && request.kind >= 30000 && request.kind < 40000)
     ? { scopeKey: request.scopeKey ?? '' } : {};
-  if (request.operation === 'relay-auth') return { operation: request.operation, kind: request.kind, relays: [], ...qualified };
-  if (request.operation === 'upload') return {
-    operation: request.operation, kind: request.kind,
-    relays: [...new Set(request.relays.map(value => new URL(value).href))].sort(), ...qualified,
-  };
+  if (['relay-auth', 'http-auth', 'upload'].includes(request.operation))
+    return { operation: request.operation, kind: request.kind, relays: [] };
+  // Retain legacy publication-named keys so existing event-signing decisions survive.
   return { operation: 'publish', kind: request.kind, relays: [],
     ...qualified };
 }
@@ -60,12 +58,11 @@ export function signingRuleKey(request: SigningScope): string {
 export function canRememberSigning(request: SigningScope): boolean {
   if (request.scopeKey !== undefined && typeof request.scopeKey !== 'string') return false;
   if (isSignerAccess(request)) return true;
-  if (request.operation === 'relay-auth' || request.operation === 'upload') {
-    if (request.kind !== (request.operation === 'relay-auth' ? 22242 : 24242) ||
-      (request.operation === 'upload' && !request.relays.length)) return false;
+  if (['relay-auth', 'http-auth', 'upload'].includes(request.operation)) {
+    if (request.kind !== ({ 'relay-auth': 22242, 'http-auth': 27235, upload: 24242 } as Record<string, number>)[request.operation]) return false;
     return request.relays.every(value => {
       try { const url = new URL(value); return !!url.hostname && !url.username && !url.password &&
-        (request.operation === 'relay-auth' ? ['ws:', 'wss:'] : ['https:']).includes(url.protocol); }
+        (request.operation === 'relay-auth' ? ['ws:', 'wss:'] : request.operation === 'http-auth' ? ['http:', 'https:'] : ['https:']).includes(url.protocol); }
       catch { return false; }
     });
   }

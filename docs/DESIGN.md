@@ -1184,13 +1184,21 @@ generic access wording. Targets and filenames stay separate from permission name
 clipboard reads require it. Permission queries describe these same decisions.
 
 All approval sheets lead with the operation and a compact requester identity.
+Application publication uses the ordinary signing review; there is no separate
+publication permission or publication-specific title. Encryption requests and
+event-signing requests retain their own reviews.
 Signing reviews emphasize the event's readable type, kind and content before
 secondary consequences; relevant event, account and authentication targets stay
 visible before the JSON disclosure. Profile and application-data previews expose
 bounded readable fields. Approval bodies use regular body text for identities,
 values and explanations; caption text is reserved for labels and technical
-metadata. Combine event type and kind on one muted metadata line instead of
-adding nested headings. Disclosure and duration controls use regular text;
+metadata. Related request fields share one detail surface, with consistent
+label-to-value spacing and larger gaps between fields. File reviews group filename
+and size separately from storage destinations; public-access consequences
+follow the file details. Filename, size and destination values use regular
+body text with their own caption labels.
+Event signing reviews show a separate Kind field label, with the readable event
+type and numeric kind together as its body value. Disclosure and duration controls use regular text;
 header and decision-button emphasis remains shared chrome. Never show a
 pending-request count.
 Keep the requesting app icon and name in a compact body row with balanced
@@ -1204,7 +1212,7 @@ a directional chevron expands directly into the event JSON, followed by relay
 destinations. All signing content, including previews, event JSON, identities
 and relay addresses, disables text selection to preserve scrolling and gestures.
 Event JSON provides an explicit Copy action. Authentication keeps the server identity visible for the decision.
-Public-file upload reviews show the filename, type, size and storage services,
+Public-file upload reviews show the filename, size and storage services,
 with a plain-language public-access notice. They reuse the signer duration and
 Allow/Reject controls; remembered choices apply to uploads by this app to the
 reviewed storage services. Event JSON is not required for upload reviews.
@@ -1223,14 +1231,20 @@ A fixed footer contains a single-level duration menu showing the current choice
 above two horizontal Allow/Reject actions. The menu floats above its trigger
 without changing sheet layout. Duration applies to either decision and defaults
 to one request; remembered decisions retain the displayed operation's scope.
-Every valid ordinary event-signing request, including HTTP authentication,
-profiles, follow lists and application settings, offers the same duration choices.
-Event kind alone never forces one-request authorization. Relay authentication
-and uploads also default to review with the same duration choices; remembered
-AUTH controls state that remembered decisions cover all relays used by this
-application; permission management shows that scope explicitly. Upload decisions
-retain the reviewed storage-service destinations. No event
-kind or app-data identifier is categorically blocked from user-approved publication.
+Ordinary event signatures show event type, Kind and content. Relay authentication,
+HTTP authentication and file uploads describe the current action and its target.
+HTTP reviews show the complete URL and method; relay and upload reviews show the
+current target URLs. These are review details, not separate permission scopes.
+Authorization belongs to the current account and application for each action,
+covering every destination and HTTP method during its validity period. Use the
+same single duration selector and Allow/Reject row for one-request, timed and
+permanent decisions, labelled as remembered for this application. Application permission management reuses the shared rule
+list and editor; there is no separate service-management page or service approval.
+Publication reviews remain ordinary event signatures for every kind, including
+authentication and upload-authorization events. Kind alone never changes a
+publication into a host action. Profiles, follow lists and app settings retain
+ordinary signer scopes.
+No valid event kind is categorically blocked from user-approved signing.
 Signing approvals show the remaining seconds in the Reject button, based on
 a fresh review deadline when each request becomes visible. Adding queued requests
 never restarts the active countdown.

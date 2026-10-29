@@ -1117,7 +1117,7 @@
     "app_title": "Приложение",
     "signing_upload": "Загрузить файл",
     "signing_effect_upload": "Этот файл будет общедоступным и может содержать встроенные метаданные.",
-    "upload_destinations": "Сервисы хранения",
+    "upload_destinations": "Сервисы загрузки",
     "capability_upload": "Загрузка файлов",
     "runtime_loading": "Загрузка приложения…",
     "runtime_downloading": "Загрузка приложения…",
@@ -1310,7 +1310,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "Аутентифицировать HTTP-запрос",
+    "signing_service": "Сервис",
+    "signing_http_method": "Метод HTTP",
+    "signing_effect_http_auth": "Показанный HTTP-запрос будет аутентифицирован с помощью вашего аккаунта.",
+    "signing_action_remember": "Запомнить для этого приложения"
   },
   "comments": {
     "title": "Отзывы",

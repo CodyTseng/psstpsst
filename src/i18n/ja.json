@@ -1107,7 +1107,7 @@
     "app_title": "アプリ",
     "signing_upload": "ファイルをアップロード",
     "signing_effect_upload": "このファイルは公開されます。埋め込みメタデータが含まれる場合があります。",
-    "upload_destinations": "ストレージサービス",
+    "upload_destinations": "アップロード先",
     "capability_upload": "ファイルのアップロード",
     "runtime_loading": "アプリを読み込み中…",
     "runtime_downloading": "アプリをダウンロード中…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "HTTP リクエストを認証",
+    "signing_service": "サービス",
+    "signing_http_method": "HTTP メソッド",
+    "signing_effect_http_auth": "表示された HTTP リクエストをあなたのアカウントで認証します。",
+    "signing_action_remember": "このアプリの判断を記憶"
   },
   "comments": {
     "title": "レビュー",

@@ -1,3 +1,4 @@
+import { isApplicationAction } from './action-request';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, type Database } from '@/db/client';
 import { signingAuthorizations, signingActivity, localApplications } from '@/db/schema';
@@ -43,14 +44,14 @@ export async function readSigningSnapshot(scope: SigningAccountScope): Promise<S
         canonical = signingScope(access);
         if (!canRememberSigning(canonical) || row.kind !== -1) return [];
       } else {
-        if (!['publish', 'relay-auth', 'upload'].includes(operation) || !Number.isInteger(row.kind) || row.kind < 0 || row.kind > 65535) return [];
+        if (!['publish', 'relay-auth', 'http-auth', 'upload'].includes(operation) || !Number.isInteger(row.kind) || row.kind < 0 || row.kind > 65535) return [];
         let destinations: unknown;
         try { destinations = JSON.parse(row.destinations); } catch { return []; }
         if (!Array.isArray(destinations) || destinations.some(value => typeof value !== 'string') ||
-          (operation === 'relay-auth' && destinations.length)) return [];
-        const scope: SigningScope = { operation: operation as 'publish' | 'relay-auth' | 'upload', kind: row.kind, relays: destinations,
+          (['relay-auth', 'http-auth', 'upload'].includes(operation) && destinations.length)) return [];
+        const scope: SigningScope = { operation: operation as 'publish' | 'relay-auth' | 'http-auth' | 'upload', kind: row.kind, relays: destinations,
           ...(row.scopeKey || (row.kind >= 30000 && row.kind < 40000) ? { scopeKey: row.scopeKey } : {}) };
-        if (!canRememberSigning(scope)) return [];
+        if (!canRememberSigning(scope) || isApplicationAction(scope) && row.scopeKey) return [];
         canonical = signingScope(scope);
       }
       return [{ key: signingRuleKey(canonical), scope: canonical, decision: row.decision,

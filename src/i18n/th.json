@@ -1107,7 +1107,7 @@
     "app_title": "แอป",
     "signing_upload": "อัปโหลดไฟล์",
     "signing_effect_upload": "ไฟล์นี้จะเข้าถึงได้แบบสาธารณะและอาจมีข้อมูลเมตาที่ฝังอยู่",
-    "upload_destinations": "บริการจัดเก็บข้อมูล",
+    "upload_destinations": "ปลายทางการอัปโหลด",
     "capability_upload": "อัปโหลดไฟล์",
     "runtime_loading": "กำลังโหลดแอป…",
     "runtime_downloading": "กำลังดาวน์โหลดแอป…",
@@ -1300,7 +1300,12 @@
     "local_unsigned_notice": "This is a local app without a verified publisher.",
     "local_other_installer_notice": "This app was installed by a different source. Replacement code will be able to access its saved app data.",
     "local_uninstall": "Uninstall local app",
-    "local_uninstall_notice": "Remove this local app, its data and permissions?"
+    "local_uninstall_notice": "Remove this local app, its data and permissions?",
+    "signing_http_auth": "ยืนยันตัวตนสำหรับคำขอ HTTP",
+    "signing_service": "บริการ",
+    "signing_http_method": "เมธอด HTTP",
+    "signing_effect_http_auth": "การดำเนินการนี้จะยืนยันตัวตนสำหรับคำขอ HTTP ที่แสดงโดยใช้บัญชีของคุณ",
+    "signing_action_remember": "จดจำสำหรับแอปนี้"
   },
   "comments": {
     "title": "รีวิว",

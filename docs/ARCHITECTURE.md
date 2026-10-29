@@ -988,16 +988,26 @@ do not confer or revoke signer authority. Launch access never bypasses signer
 authorization, and revocation invalidates pending results before disclosure.
 Approvals are committed before invoking the signer; signer latency does not
 expire them. Remembered rules have no per-source count or aggregate-size quota.
+Application publication obtains the same event-signing consent as direct signer
+calls and then sends the signed event; it has no separate publication approval.
+Encrypted publication obtains method-scoped encryption consent before signing
+the resulting event. Legacy publication-named rule keys remain compatible with
+event-signing decisions.
 Signing, publication and local event ingestion share NIP-01 structure validation;
 transport and cache budgets do not define event validity.
 Sources are canonical eventKeys or host-verified HTTP(S) website origins (scheme,
 host and effective port), without a source type or code version; immutable legacy listings use canonical event IDs. Durable rules and a
 bounded metadata-only activity journal have separate tables. Session grants stay
-in memory. Relay AUTH and public-file uploads use explicit signer permissions
-with Once, timed and Always decisions. Relay AUTH grants cover all relays for
-that account/source and leave `scope_key` empty; upload grants retain reviewed
-storage destinations. Legacy relay-specific AUTH decisions merge to the newest
-active decision per account/source, with denial winning timestamp ties.
+in memory. Relay AUTH, HTTP authentication and uploads have independent app-action
+permissions scoped by account and verified source. Their remembered rules do not
+bind destination URLs, HTTP methods or destination sets. One-request, timed and
+permanent Allow/Reject decisions use the same authority as ordinary signatures.
+Targets and methods remain visible request details. Only the host upload API uses
+the upload action. Event publication always uses ordinary signing, including when
+the event kind represents authentication or upload authorization. Cryptographic
+input limits belong to the selected implementation, not a wrapper character cap. There is
+no global service registry or second service authorization layer. Historical grants
+are not rewritten.
 File metadata accompanies upload review, and its authorization covers the
 host-built storage authentication event. Upload bytes, temporary files and
 status belong to one execution session; stopping it cancels uploads and cleans
@@ -1005,8 +1015,7 @@ staged files. Migration retains a read-only backup of old app namespaces and
 imports only rules whose scope can be preserved exactly. Host-owned approval IDs
 bind responses to one request; cancellation invalidates queued approvals before
 a session is replaced.
-Authorization work is serialized by account and verified source across signer and
-browser permission controllers. A decision settles after sheet dismissal, and
+Signing and browser reviews serialize by account and verified source. A decision settles after sheet dismissal, and
 the next request reads authority after that decision has committed.
 Each source queue has one worker. Canceling a waiting request removes only that
 entry; canceling the active caller does not release its processing slot until

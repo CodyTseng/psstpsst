@@ -29,7 +29,6 @@ import {
 } from './protocol';
 import { dataEntries, dataKeys, getData, setData, type AppScope } from './repository';
 import { NappletUploads } from './upload';
-import { signingTemplate } from '@/services/signing/event-template';
 import { ApplicationSigner } from '@/services/signing/application-signer';
 import { queueAuthorization } from '@/services/signing/authorization-queue';
 import { NAP_DOMAINS } from './protocol';
@@ -169,7 +168,7 @@ export class NappletRuntime {
         revision = await this.signingPermissions.authorize({ operation: 'upload', kind: template.kind, relays: servers,
           accountPubkey: options.accountPubkey, content: template.content, tags: template.tags, createdAt: template.created_at },
         undefined, signal, (request, life) => options.confirm({ title: options.release.title, detail: '', app: options.release,
-          accountPubkey: options.accountPubkey, upload: { ...metadata, servers }, signing: request }, life));
+          accountPubkey: options.accountPubkey, upload: { ...metadata, servers: request.relays }, signing: request }, life));
         check();
         const event = await this.network.sign(template);
         check();
@@ -443,16 +442,7 @@ export class NappletRuntime {
         const result = await this.applicationSigner().crypto(algorithm, operation, m.event?.pubkey, m.event?.text);
         this.result(m, { result });
       } else {
-        const event = signingTemplate(m.event);
-        const operation = event.kind === 22242 ? 'relay-auth' : 'sign';
-        const revision = await this.signingPermissions.authorize({ operation, kind: event.kind,
-          relays: operation === 'relay-auth' ? [event.tags.find(tag => tag[0] === 'relay')![1]] : [], accountPubkey: this.options.accountPubkey, content: event.content,
-          tags: event.tags, createdAt: event.created_at });
-        this.check();
-        const signed = await this.network.sign(event);
-        this.check();
-        if (this.signingPermissions.version !== revision)
-          throw new Error('permission-revoked');
+        const { event: signed } = await this.applicationSigner().signEvent(m.event, template => this.network.sign(template));
         this.result(m, { result: signed });
       }
       return;
@@ -972,26 +962,15 @@ export class NappletRuntime {
     if (op === 'publishEncrypted' && m.encryption && m.encryption !== 'nip44')
       throw new Error('unsupported-encryption');
     routing = false;
-    permissionVersion = await this.signingPermissions.authorize({
-      operation: op === 'publishEncrypted' ? 'encrypt-publish' : 'publish',
-      kind: template.kind, relays, accountPubkey: this.options.accountPubkey,
-      content: template.content, tags: template.tags, createdAt: template.created_at,
-      ...(template.kind >= 30000 && template.kind < 40000
-        ? { identifier: template.tags.find((tag) => tag[0] === 'd')?.[1] ?? '' } : {}),
-      ...(op === 'publishEncrypted' ? { recipient: m.recipient } : {}),
-    });
-    current();
+    const signer = this.applicationSigner();
     if (op === 'publishEncrypted') {
-      if (m.encryption && m.encryption !== 'nip44') throw new Error('unsupported-encryption');
-      const recipient = text(m.recipient);
-      if (!/^[a-f0-9]{64}$/.test(recipient)) throw new Error('invalid-recipient');
-      const signer = await this.network.getSigner();
-      if (!signer.nip44Encrypt) throw new Error('unsupported-encryption');
-      template.content = await signer.nip44Encrypt(recipient, template.content);
+      template.content = await signer.crypto('nip44', 'encrypt', m.recipient, template.content);
       current();
     }
-    const event = await this.network.sign(template);
+    const signed = await signer.signEvent(template, event => this.network.sign(event), { publication: true, relays });
+    permissionVersion = signed.revision;
     current();
+    const event = signed.event;
     const outcomes = await this.network.publish(event, relays, (e) => this.signAuth(e));
     const ok = Object.values(outcomes).every(Boolean);
     this.result(m, {

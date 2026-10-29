@@ -1,3 +1,4 @@
+import { applicationActionRequest, isApplicationAction } from './action-request';
 import { assertNotAborted, linkAbort } from '@/platform/abort';
 import { assertCurrentSigningSource, readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
 import { normalizeSigningSource } from './source';
@@ -95,7 +96,7 @@ export class SigningPermissions {
   async authorize(input: SigningRequest, expiresAt?: number, requestSignal?: AbortSignal,
     review?: (request: SigningRequest, signal?: AbortSignal) => Promise<string | false>): Promise<number> {
     // Freeze before queueing; the caller signs this exact snapshot after consent.
-    const request: SigningRequest = JSON.parse(JSON.stringify(input));
+    const request = applicationActionRequest(JSON.parse(JSON.stringify(input)) as SigningRequest);
     return queueAuthorization(this.scope, requestSignal ? [this.signal, requestSignal] : [this.signal],
       () => this.authorizeCurrent(request, expiresAt, requestSignal, review));
   }
@@ -112,7 +113,7 @@ export class SigningPermissions {
     if (request.accountPubkey !== this.scope.accountPubkey) throw new Error('account-unavailable');
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
     if (request.operation === 'relay-auth' && !request.relays.length) throw new Error('invalid-signing-request');
-    if ((request.operation === 'relay-auth' || request.operation === 'upload') && !canRememberSigning(request)) throw new Error('invalid-signing-request');
+    if (isApplicationAction(request) && !canRememberSigning(request)) throw new Error('invalid-signing-request');
     if (isSignerAccess(request)) {
       if (!canRememberSigning(request)) throw new Error('invalid-signing-request');
     } else {
