@@ -25,7 +25,7 @@ it('queries all supported manifest kinds with an exact publisher filter and veri
   await catalogue.load('account');
   expect(query.mock.calls).toEqual([
     [['wss://relay.nostrapps.com/'], [{ kinds: [35130], authors: [publisher], limit: 200 }]],
-    [['wss://relay.napplet.soy/'], [{ kinds: [5129, 15129, 35129], authors: [publisher], limit: 200 }]],
+    [['wss://relay.napplet.soy/'], [{ kinds: [15129, 35129], authors: [publisher], limit: 200 }]],
     [['wss://relay.nsite.lol/', 'wss://relay.nosto.re/'], [{ kinds: [15128, 35128], authors: [publisher], limit: 200 }]],
   ]);
   expect(catalogue.store.getState()).toMatchObject({ loaded: true, loading: false, error: false });

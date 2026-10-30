@@ -3,9 +3,10 @@ import type { NappletNetwork } from '@/services/napplet/network';
 
 export const APPLICATION_QUERY_LIMIT = 200;
 
+/** Public directories list updating applications, excluding immutable snapshots. */
 export const APPLICATION_DISCOVERY_SOURCES = [
   { relays: ['wss://relay.nostrapps.com/'], kinds: [35130] },
-  { relays: ['wss://relay.napplet.soy/'], kinds: [5129, 15129, 35129] },
+  { relays: ['wss://relay.napplet.soy/'], kinds: [15129, 35129] },
 ];
 
 export const APPLICATION_CATALOGUE_SOURCES = [

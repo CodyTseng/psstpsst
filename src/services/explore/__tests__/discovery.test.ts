@@ -18,12 +18,20 @@ it('verifies manifests, deduplicates addresses and keeps the newest version', as
   expect(apps.map(app => app.kind).sort()).toEqual(['napp', 'nsite', 'nsite']);
 });
 
-it.each([5129,15129,35129])('discovers napplet kind %s with its verified release',async kind=>{
+it.each([15129,35129])('discovers napplet kind %s with its verified release',async kind=>{
   const event=finalizeEvent({kind,created_at:1,content:'A mini app',tags:[...(kind===35129?[['d','demo']]:[]),['x','a'.repeat(64)],['title','Mini app'],['server','https://media.example/']]},secret);
   const apps=await discoveryEntries([event]);
   expect(apps).toHaveLength(1);
   expect(apps[0].kind).toBe('napplet');
   expect(apps[0].release?.event.id).toBe(event.id);
+});
+
+it('excludes signed snapshots while retaining the updating application with the same content', async () => {
+  const tags = [['x', 'a'.repeat(64)], ['title', 'Mini app']];
+  const snapshot = finalizeEvent({ kind: 5129, created_at: 2, content: 'A mini app', tags }, secret);
+  const app = finalizeEvent({ kind: 35129, created_at: 1, content: 'A mini app', tags: [['d', 'demo'], ...tags] }, secret);
+  const entries = await discoveryEntries([snapshot, app]);
+  expect(entries.map(entry => entry.manifest?.id)).toEqual([app.id]);
 });
 
 it('queries each format only on its dedicated relays and rejects results from the wrong source', async () => {
@@ -32,7 +40,7 @@ it('queries each format only on its dedicated relays and rejects results from th
   const result = await queryApplicationCatalogue({ query } as unknown as NappletNetwork);
   expect(query.mock.calls).toEqual([
     [['wss://relay.nostrapps.com/'], [{ kinds: [35130], limit: 200 }]],
-    [['wss://relay.napplet.soy/'], [{ kinds: [5129, 15129, 35129], limit: 200 }]],
+    [['wss://relay.napplet.soy/'], [{ kinds: [15129, 35129], limit: 200 }]],
     [['wss://relay.nsite.lol/', 'wss://relay.nosto.re/'], [{ kinds: [15128, 35128], limit: 200 }]],
   ]);
   expect(result).toMatchObject({ events: [napp, nsite], incomplete: false });
@@ -80,7 +88,7 @@ it('reveals 20 entries at a time from memory before requesting the next relay pa
   await discovery.load('account');
   expect(query).toHaveBeenCalledTimes(2);
   expect(query.mock.calls[0].slice(0, 2)).toEqual([[nappRelay], [{ kinds: [35130], limit: 200 }]]);
-  expect(query.mock.calls[1][1]).toEqual([{ kinds: [5129, 15129, 35129], limit: 200 }]);
+  expect(query.mock.calls[1][1]).toEqual([{ kinds: [15129, 35129], limit: 200 }]);
 
   expect(discovery.store.getState().visibleEntries).toHaveLength(20);
   expect(discovery.store.getState().entries).toHaveLength(200);

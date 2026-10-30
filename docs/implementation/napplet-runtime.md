@@ -388,10 +388,12 @@ napplets, napps, nsites and websites. Its address entry accepts canonical Nostr
 addresses and HTTP(S) URLs without introducing a browser navigation toolbar.
 Legacy napplet routes remain valid for shared links and capability management.
 Discovery and publisher catalogues query napp kind `35130` only on
-`wss://relay.nostrapps.com/`, napplet kinds `5129`/`15129`/`35129` only on
+`wss://relay.nostrapps.com/`, napplet kinds `15129`/`35129` only on
 `wss://relay.napplet.soy/`, and nsite kinds `15128`/`35128` only on
 `wss://relay.nsite.lol/` and `wss://relay.nosto.re/`. Discovery omits the nsite
-sources; publisher catalogues retain them. Format queries run concurrently;
+sources; publisher catalogues retain them. Both directories exclude immutable
+kind-5129 snapshots; exact-address lookup, favorites and launch still support
+them. Format queries run concurrently;
 failed sources mark the result incomplete without discarding other formats.
 Each format uses one filter containing its supported kinds with `limit: 200`.
 Discovery delegates raw event pagination to `src/services/relay/relay-timeline.ts`.

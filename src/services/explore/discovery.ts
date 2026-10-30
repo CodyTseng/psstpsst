@@ -9,7 +9,7 @@ import { RelayTimeline, compareTimelineEvents } from '@/services/relay/relay-tim
 /** Verify bounded relay results without blocking a frame with a batch of signatures. */
 export async function discoveryEntries(events: Event[], eventRelays?: Map<string, string[]>): Promise<ExploreEntry[]> {
   const entries = new Map<string, ExploreEntry>();
-  for (const app of await parseApplicationEvents(events.slice(0, 500))) {
+  for (const app of await parseApplicationEvents(events.slice(0, 500).filter(event => [15128, 35128, 15129, 35129, 35130].includes(event.kind)))) {
     if (!app?.manifest) continue;
     const event = app.manifest, previous = entries.get(app.key)?.manifest;
     if (!previous || event.created_at > previous.created_at ||
