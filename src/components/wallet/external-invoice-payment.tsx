@@ -52,7 +52,7 @@ export function ExternalInvoicePayment({
       <View
         style={{
           padding: spacing.lg,
-          backgroundColor: c.onOverlay,
+          backgroundColor: c.accentForeground,
           borderRadius: radius.lg,
         }}
       >

@@ -101,7 +101,7 @@ export function AttachmentAudio({
   const progress = duration > 0 ? Math.min(1, status.currentTime / duration) : 0;
   const playing = status.playing;
 
-  // Colours track the bubble: white-on-accent for our own, accent-on-surface
+  // Colours track the bubble: contrasting-on-accent for our own, accent-on-surface
   // for a peer's — so the voice bubble matches the text bubbles around it.
   const palette = isSelf
     ? {

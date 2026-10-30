@@ -54,9 +54,30 @@ Read the effective scheme through `useThemeColors()` or
 The root owns the single system-appearance subscription so every region changes
 palette in the same render commit. Every screen must work in both modes.
 
-Accent colour is user-selectable from the closed `ACCENTS` set. Adding an
-accent requires a light/dark pair and a localized name. Other semantic colours
-do not change with the accent.
+Accent colour is user-selectable from the preset `ACCENTS` set or a custom
+light/dark pair. Presets carry a localized name and always use white foregrounds.
+Custom colours retain the exact chosen RGB and let users explicitly select black
+or white text and icons for each mode. Never infer the foreground from contrast.
+Colour-option labels and swatches keep identical metrics when selected; only
+the selection mark changes.
+An unconfigured custom mode follows the configured mode until explicitly edited;
+editing starts in the effective mode with its current accent colour.
+Swatches show the actual light colour on the physical left and dark colour on
+the right, independent of locale or active mode. A divider separates the custom
+entry; it shows a radial spectrum before selection and the chosen pair afterward.
+The shared picker provides a saturation/brightness area, hue track, HEX field,
+mode selection, foreground selection and a local sent-message bubble preview
+with text, timestamp and delivery mark on the edited mode’s chat canvas. Edits apply together
+only after confirmation.
+All content on accent fills, including message timestamps, delivery marks, and
+selection indicators, uses the shared accent foreground token family. QR modules
+use the accent and their backgrounds and quiet zones use its foreground; live
+previews and exported images retain the same pair.
+Colour-space artwork uses its own spectrum and opaque RGB values; it does not
+change host chrome. Colour controls composite their field before one rounded mask, without a
+separate resting border; focus feedback stays on the thumb. A vertical hue rail
+beside the colour field shares its height. Colour adjustment gestures take
+precedence over sheet scrolling and dismissal. Other semantic colours do not change with the accent.
 
 Use accent sparingly. It is not a page background or default icon colour. Use
 danger for destructive actions, failure feedback, and blocking prerequisites that require user action. Use `notification`,
@@ -1299,7 +1320,7 @@ Breaking a rule requires explicit approval and a reason in the PR or commit
 message.
 
 1. **No raw colours.** Use theme tokens; embedded safe-area canvases may use
-   validated document colours as defined in §2.
+   validated document colours and colour-space picker artwork as defined in §2.
 2. **No raw font metrics.** Use `AppText` variants and typography tokens.
 3. **No raw spacing.** Use the spacing scale.
 4. **Use shared primitives.** Every route starts with `AppScreen`; text, inputs,

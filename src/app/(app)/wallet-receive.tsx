@@ -399,7 +399,7 @@ export default function WalletReceiveScreen() {
               </AppText>
             </View>
 
-            <View style={{ padding: spacing.lg, backgroundColor: c.onOverlay, borderRadius: radius.lg }}>
+            <View style={{ padding: spacing.lg, backgroundColor: c.accentForeground, borderRadius: radius.lg }}>
               <QrCode data={`lightning:${invoice}`} size={240} />
             </View>
 

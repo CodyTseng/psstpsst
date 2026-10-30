@@ -133,14 +133,13 @@ export default function LoginNostrConnect() {
               {t('login.nostr_connect.subtitle')}
             </AppText>
 
-            {/* The QR tile stays white in any theme for scanner contrast (functional,
-                not theming — like NpubShareCard). `onOverlay` is the sanctioned
-                always-white token. Tapping it opens a signer installed on-device. */}
+            {/* The QR quiet zone shares the global contrasting accent foreground.
+                Tapping it opens a signer installed on-device. */}
             <Pressable
               onPress={handleOpen}
               accessibilityRole="link"
               style={{
-                backgroundColor: c.onOverlay,
+                backgroundColor: c.accentForeground,
                 borderRadius: radius.xl,
                 padding: spacing.lg,
               }}

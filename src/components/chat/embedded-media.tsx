@@ -568,11 +568,11 @@ function EmbeddedAudioFrame({
   const palette = isSelf
     ? {
         background: c.accent,
-        button: c.accentSoft,
+        button: c.accentForegroundSoft,
         icon: c.accentForeground,
         played: c.accentForeground,
-        track: c.accentSoft,
-        time: c.accentForeground,
+        track: c.accentForegroundSoft,
+        time: c.accentForegroundMuted,
       }
     : {
         background: c.surface,

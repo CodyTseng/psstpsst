@@ -105,6 +105,10 @@ the renderer's perspective on every runtime.
   secure storage. Electron boot-time metadata is the exception: the main
   process owns atomic local files for window geometry and update-check timing,
   independently of renderer startup and database migrations.
+- Appearance keeps only the current accent's light/dark palettes as derived
+  global state, updated atomically with the selected accent. Explicit foreground choices
+  are resolved during that update, never by individual controls; derived palettes
+  are not persisted and historical selections are not retained.
 - Attachment bytes live in managed files, not database blobs.
 - Private-list edits commit atomically with durable sync revisions and complete
   independently of background encryption, signing, and publication. Contacts and

@@ -7,7 +7,8 @@ import { type MessageDelivery } from '@/stores/delivery-status.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import { useThemeColors } from '@/theme';
 
-export const MESSAGE_DELIVERY_ICON_SIZE = 11;
+import { MESSAGE_DELIVERY_ICON_SIZE } from './bubble-layout';
+export { MESSAGE_DELIVERY_ICON_SIZE } from './bubble-layout';
 
 type Props = {
   delivery: MessageDelivery;

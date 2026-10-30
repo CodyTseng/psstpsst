@@ -5,13 +5,10 @@ import { G, Rect } from 'react-native-svg';
 import { captureRef } from 'react-native-view-shot';
 
 import { IS_ELECTRON } from '@/lib/platform';
+import { useThemeColors } from '@/theme';
 
-// Default near-black for scanner contrast. A brand card can pass an accent
-// `color` (still scans on the card's white quiet zone).
-const QR_DARK = '#111111';
-
-// Session cache of rasterised QRs (`data|size|color` -> file uri). The code is
-// deterministic, so once drawn we reuse a cheap <Image> on later opens instead
+// Session cache of rasterised QRs (`data|size|color|background` -> file uri).
+// The code is deterministic, so once drawn we reuse a cheap <Image> on later opens instead
 // of re-mounting ~600 SVG nodes — that mount is what stalls a sheet's slide-up,
 // so caching keeps reopens instant and smooth.
 const qrCache = new Map<string, string>();
@@ -20,7 +17,7 @@ type Props = {
   /** The string to encode (npub, nostrconnect:// URI, relay URL, …). */
   data: string;
   size: number;
-  /** Module color. Defaults to near-black; brand cards pass the accent. */
+  /** Module colour. Defaults to the global accent. */
   color?: string;
 };
 
@@ -40,10 +37,32 @@ function finderOrigin(
  * Telegram-style QR (rounded dots + eyes) for any string. On a cache miss it
  * defers the heavy SVG draw until the open animation settles, then rasterises
  * itself into a session cache; on a hit it renders the cached image immediately.
- * The caller provides the surrounding white quiet zone.
+ * The caller provides a quiet zone using the global accent foreground.
  */
-export function QrCode({ data, size, color = QR_DARK }: Props) {
-  const key = `${data}|${size}|${color}`;
+export function QrCode({ data, size, color }: Props) {
+  const c = useThemeColors();
+  const moduleColor = color ?? c.accent;
+  const cacheKey = `${data}|${size}|${moduleColor}|${c.accentForeground}`;
+  return (
+    <QrCodeSurface
+      key={cacheKey}
+      data={data}
+      size={size}
+      color={moduleColor}
+      backgroundColor={c.accentForeground}
+      cacheKey={cacheKey}
+    />
+  );
+}
+
+/** A changed colour pair starts a fresh deferred draw instead of showing stale pixels. */
+function QrCodeSurface({ data, size, color, backgroundColor, cacheKey: key }: {
+  data: string;
+  size: number;
+  color: string;
+  backgroundColor: string;
+  cacheKey: string;
+}) {
   const ref = useRef<View>(null);
   const [uri, setUri] = useState<string | null>(() => qrCache.get(key) ?? null);
   // On a cache miss, hold a blank tile until after the open animation so drawing
@@ -127,7 +146,7 @@ export function QrCode({ data, size, color = QR_DARK }: Props) {
     return (
       <Image
         source={{ uri }}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, backgroundColor }}
         fadeDuration={0}
         onError={() => {
           qrCache.delete(key);
@@ -137,15 +156,16 @@ export function QrCode({ data, size, color = QR_DARK }: Props) {
     );
   }
 
-  if (!ready) return <View style={{ width: size, height: size }} />;
+  if (!ready) return <View style={{ width: size, height: size, backgroundColor }} />;
 
   return (
-    <View ref={ref} collapsable={false} style={{ width: size, height: size }}>
+    <View ref={ref} collapsable={false} style={{ width: size, height: size, backgroundColor }}>
       <QRCodeStyled
         data={data}
         size={size}
         padding={0}
         color={color}
+        style={{ backgroundColor }}
         renderCustomPieceItem={IS_ELECTRON ? renderElectronPiece : undefined}
         {...(!IS_ELECTRON
           ? {

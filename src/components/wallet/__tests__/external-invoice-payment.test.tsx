@@ -67,7 +67,7 @@ describe('ExternalInvoicePayment', () => {
         renderer!.root
           .findAllByType(View)
           .map((view) => view.props.style?.backgroundColor),
-      ).toContain(scheme === 'light' ? lightPalette.onOverlay : darkPalette.onOverlay);
+      ).toContain(scheme === 'light' ? lightPalette.accentForeground : darkPalette.accentForeground);
       const paymentRequest = renderer!.root
         .findAllByType(AppText)
         .find((text) => text.props.children === 'lnbc-test-invoice');

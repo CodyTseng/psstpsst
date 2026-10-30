@@ -3,7 +3,7 @@ import { QrCode } from '@/components/common/QrCode';
 type Props = {
   npub: string;
   size: number;
-  /** Module color. Defaults to near-black; brand cards pass the accent. */
+  /** Module colour. Defaults to the global accent. */
   color?: string;
 };
 

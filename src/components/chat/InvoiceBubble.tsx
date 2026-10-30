@@ -32,8 +32,8 @@ export function InvoiceBubble({ invoice, isSelf, messageDescription, metaSlot }:
   const { transaction } = useInvoiceTransaction(accountPubkey, invoice.invoice);
   const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1000));
   const textColor = isSelf ? c.accentForeground : c.text;
-  const mutedColor = isSelf ? c.accentForeground + 'B8' : c.textMuted;
-  const iconBg = isSelf ? c.accentForeground + '26' : c.accentSoft;
+  const mutedColor = isSelf ? c.accentForegroundMuted : c.textMuted;
+  const iconBg = isSelf ? c.accentForegroundSoft : c.accentSoft;
   const iconColor = isSelf ? c.accentForeground : c.accent;
   const status = invoiceStatus(invoice, transaction, nowSeconds, {
     canVerifyPayment: walletLoaded ? !!wallet : true,

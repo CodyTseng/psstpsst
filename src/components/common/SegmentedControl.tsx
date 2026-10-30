@@ -172,6 +172,7 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
+            aria-selected={selected}
             onPress={() => {
               if (option.value === visualValueRef.current) return;
               const previous = visualValueRef.current;

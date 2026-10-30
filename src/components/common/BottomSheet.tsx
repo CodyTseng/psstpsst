@@ -43,6 +43,7 @@ import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
 import { createSheetContentPan, type SheetContentPanState } from './bottom-sheet-content-gesture';
 import { scheduleBottomSheetInputFocus } from './bottom-sheet-input-focus';
 import { scheduleBottomSheetOpenAnimation } from './bottom-sheet-open-animation';
+import { SheetBodyGestureContext } from './sheet-body-gestures';
 import { SheetHeader } from './SheetHeader';
 import { Toast } from './Toast';
 
@@ -315,6 +316,7 @@ function BottomSheetSurface<ItemT = never>({
     fixedSubheaderPan,
     fixedFooterPan,
     listGesture,
+    bodyGestures,
   } = useMemo(() => {
     const settleBack = () => {
       'worklet';
@@ -369,6 +371,7 @@ function BottomSheetSurface<ItemT = never>({
       fixedSubheaderPan: makeUngated(),
       fixedFooterPan: makeUngated(),
       listGesture: Gesture.Simultaneous(content, native),
+      bodyGestures: [content, native] as const,
     };
   }, [backdrop, beginDragClose, contentPanState, finishClose, height, scrollY, translateY]);
 
@@ -595,7 +598,7 @@ function BottomSheetSurface<ItemT = never>({
           </View>
         </GestureDetector>
       ) : null}
-      {body}
+      <SheetBodyGestureContext.Provider value={bodyGestures}>{body}</SheetBodyGestureContext.Provider>
       {fixedFooter != null ? (
         <GestureDetector gesture={fixedFooterPan}>
           <View

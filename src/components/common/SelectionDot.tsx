@@ -4,8 +4,8 @@ import { radius, spacing, useThemeColors } from '@/theme';
 
 /**
  * The multi-select indicator: a hollow ring when unselected, a filled accent
- * circle with a background-colour centre when selected. Shared by recipient
- * picker rows and the chat's selection-mode message column so selection reads
+ * circle with a contrasting foreground-colour centre when selected. Shared by
+ * recipient picker rows and the chat's selection-mode message column so selection reads
  * identically without stacking a circled icon inside the outer ring.
  */
 export function SelectionDot({ selected }: { selected: boolean }) {
@@ -29,7 +29,7 @@ export function SelectionDot({ selected }: { selected: boolean }) {
             width: spacing.sm,
             height: spacing.sm,
             borderRadius: radius.full,
-            backgroundColor: c.background,
+            backgroundColor: c.accentForeground,
           }}
         />
       ) : null}

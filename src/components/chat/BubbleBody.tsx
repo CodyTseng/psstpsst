@@ -148,8 +148,8 @@ function BubbleBodyBase({
   const bubbleBg = isSelf ? c.accent : c.surface;
   const textColor = isSelf ? c.accentForeground : c.text;
   // Links use accent (DESIGN §2); on the accent-filled own bubble that would
-  // vanish, so there the white foreground carries them — the underline is the
-  // shared affordance either way.
+  // vanish, so the contrasting foreground carries them. The underline remains
+  // the shared affordance either way.
   const linkColor = isSelf ? c.accentForeground : c.accent;
   const presentation = useMemo(
     () =>
@@ -196,9 +196,8 @@ function BubbleBodyBase({
       ? ANDROID_HAN_BASELINE_STYLE
       : undefined;
   // Metadata sits inside the bubble (Signal/Telegram style). Colour matches the
-  // bubble it's painted on: translucent white on the accent bubble, muted grey
-  // on a surface bubble / over the page.
-  const onBubbleColor = isSelf ? 'rgba(255,255,255,0.72)' : c.textMuted;
+  // bubble it is painted on, sharing the global accent foreground decision.
+  const onBubbleColor = isSelf ? c.accentForegroundMuted : c.textMuted;
   /** Timestamp + (own) delivery glyph, tinted for whatever it's painted on. The
    * whole row is the tap target for the delivery sheet (not just the icon). */
   function renderMeta(color: string, overMedia = false) {

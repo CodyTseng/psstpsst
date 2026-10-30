@@ -11,7 +11,7 @@ import { SectionLabel } from '@/components/common/SectionLabel';
 import { type ThemePreference, useThemeStore } from '@/stores/theme.store';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { iconStrokeWidth } from '@/theme/icons';
-import { useThemeColors } from '@/theme';
+import { spacing, useThemeColors } from '@/theme';
 
 const MODES: { value: ThemePreference; labelKey: string }[] = [
   { value: 'system', labelKey: 'appearance.system' },
@@ -34,8 +34,8 @@ export default function AppearanceSettings() {
 
   return (
     <AppScreen edges={[]}>
-      <ScrollView {...scrollProps} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: titleClearance + 8, paddingBottom: 32, gap: 24 }}>
-        <View style={{ gap: 8 }}>
+      <ScrollView {...scrollProps} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingTop: titleClearance + spacing.sm, paddingBottom: spacing['2xl'], gap: spacing.xl }}>
+        <View style={{ gap: spacing.sm }}>
           <SectionLabel>{t('appearance.mode')}</SectionLabel>
           <ListGroup>
             {MODES.map((opt) => (
@@ -53,7 +53,7 @@ export default function AppearanceSettings() {
           </ListGroup>
         </View>
 
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: spacing.sm }}>
           <SectionLabel>{t('appearance.color')}</SectionLabel>
           <AccentPicker />
         </View>
