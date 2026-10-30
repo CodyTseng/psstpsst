@@ -5,9 +5,10 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import { trySetDevicePreference } from '@/services/preferences/device-preferences.service';
 import { useThemeStore } from '@/stores/theme.store';
 import { MessageAppearancePreview } from '@/components/chat/MessageAppearancePreview';
+import { defaultThemePalettes } from '@/theme/palette';
 import { AppButton } from '../AppButton';
 import { AppText } from '../AppText';
-import { ACCENTS, type AccentSelection } from '@/theme/accents';
+import { ACCENTS, defaultAccentForeground, type AccentSelection } from '@/theme/accents';
 import { SegmentedControl } from '../SegmentedControl';
 import { AccentPicker } from '../AccentPicker';
 import { AppInput } from '../AppInput';
@@ -26,10 +27,14 @@ jest.mock('../BottomSheet', () => {
   const React = jest.requireActual('react') as typeof import('react');
   const { Gesture } = jest.requireActual('react-native-gesture-handler');
   const { SheetBodyGestureContext } = jest.requireActual('../sheet-body-gestures');
+  const { View } = jest.requireActual('react-native');
+  const { useThemeColors, useEffectiveColorScheme } = jest.requireActual('@/theme');
   return { BottomSheet: ({ children, headerAction, fixedSubheader }: { children: React.ReactNode; headerAction: React.ReactNode; fixedSubheader: React.ReactNode }) => {
+    const colors = useThemeColors();
+    const scheme = useEffectiveColorScheme();
     const gestures = React.useMemo(() => [Gesture.Pan(), Gesture.Native()], []);
     mockBodyGestures = gestures;
-    return <SheetBodyGestureContext.Provider value={gestures}>{headerAction}{fixedSubheader}{children}</SheetBodyGestureContext.Provider>;
+    return <SheetBodyGestureContext.Provider value={gestures}><View testID="sheet-accent" accessibilityValue={{ text: colors.accent }} accessibilityLabel={scheme} style={{ backgroundColor: colors.sheetBackground }} />{headerAction}{fixedSubheader}{children}</SheetBodyGestureContext.Provider>;
   } };
 });
 jest.mock('react-native-gesture-handler', () => ({
@@ -72,6 +77,28 @@ function finishClose() {
 }
 afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); });
 
+it.each(['light', 'dark'] as const)('previews sheet controls locally while editing in %s mode', (scheme) => {
+  mount(scheme);
+  open();
+  edit('#123456');
+  expect(renderer.root.findByProps({ testID: 'sheet-accent' }).props.accessibilityValue.text).toBe('#123456');
+  expect(useThemeStore.getState().accent).toBe('blue');
+  expect(trySetDevicePreference).not.toHaveBeenCalled();
+});
+
+it('switches the sheet appearance with the edited mode while retaining the app preference', () => {
+  mount('dark');
+  open();
+  for (const mode of ['light', 'dark'] as const) {
+    chooseMode(mode);
+    const sheet = renderer.root.findByProps({ testID: 'sheet-accent' });
+    expect(sheet.props.accessibilityLabel).toBe(mode);
+    expect(sheet.props.style.backgroundColor).toBe(defaultThemePalettes[mode].sheetBackground);
+    expect(useThemeStore.getState().preference).toBe('dark');
+  }
+  expect(trySetDevicePreference).not.toHaveBeenCalled();
+});
+
 it.each(['light', 'dark'] as const)('opens from the final rainbow swatch and commits on Done in %s mode', (scheme) => {
   mount(scheme);
   expect(renderer.root.findAllByType(AppInput)).toHaveLength(0);
@@ -82,7 +109,11 @@ it.each(['light', 'dark'] as const)('opens from the final rainbow swatch and com
   expect(useThemeStore.getState().accent).toBe('blue');
   expect(trySetDevicePreference).not.toHaveBeenCalled();
   act(() => { done().props.onPress(); });
-  expect(useThemeStore.getState().accent).toEqual({ [scheme]: { color: '#AABBCC', foreground: 'white' } });
+  expect(useThemeStore.getState().accent).toEqual({
+    light: { color: ACCENTS.blue.light.accent, foreground: defaultAccentForeground(ACCENTS.blue.light.accent) },
+    dark: { color: ACCENTS.blue.dark.accent, foreground: defaultAccentForeground(ACCENTS.blue.dark.accent) },
+    [scheme]: { color: '#AABBCC', foreground: 'black' },
+  });
   expect(renderer.root.findByType(BottomSheet).props.visible).toBe(false);
   finishClose();
   const custom = renderer.root.findByProps({ accessibilityLabel: 'appearance.customColor' });
@@ -172,12 +203,34 @@ function chooseForeground(foreground: 'white' | 'black') {
   act(() => { renderer.root.findByProps({ accessibilityLabel: `appearance.${foreground}Foreground` }).props.onPress(); });
 }
 
+it('updates automatic foregrounds by brightness and preserves explicit per-mode choices', () => {
+  mount();
+  open();
+  edit('#FFFFFF');
+  expect(selectedForeground()).toBe('black');
+  edit('#000000');
+  expect(selectedForeground()).toBe('white');
+  chooseForeground('black');
+  edit('#111111');
+  expect(selectedForeground()).toBe('black');
+  chooseMode('dark');
+  edit('#000000');
+  expect(selectedForeground()).toBe('white');
+  chooseMode('light');
+  expect(selectedForeground()).toBe('black');
+  act(() => { done().props.onPress(); });
+  finishClose();
+  open();
+  edit('#222222');
+  expect(selectedForeground()).toBe('black');
+});
+
 it.each(['light', 'dark'] as const)('starts editing the active %s mode using its current colour', (scheme) => {
   mount(scheme);
   open();
   expect(renderer.root.findAllByType(SegmentedControl)[0].props.value).toBe(scheme);
   expect(renderer.root.findByType(AppInput).props.value).toBe(ACCENTS.blue[scheme].accent);
-  expect(selectedForeground()).toBe('white');
+  expect(selectedForeground()).toBe(defaultAccentForeground(ACCENTS.blue[scheme].accent));
 });
 
 it('shows physical light/dark halves even while the app is in dark mode', () => {
@@ -188,7 +241,7 @@ it('shows physical light/dark halves even while the app is in dark mode', () => 
 });
 
 it('keeps an untouched mode inherited rather than saving a separate colour', () => {
-  mount();
+  mount('light', { light: { color: '#123456', foreground: 'white' } });
   open();
   edit('#FF0000');
   chooseForeground('black');
@@ -198,6 +251,23 @@ it('keeps an untouched mode inherited rather than saving a separate colour', () 
   act(() => { done().props.onPress(); });
   expect(useThemeStore.getState().accent).toEqual({ light: { color: '#FF0000', foreground: 'black' } });
   expect(useThemeStore.getState().palettes.dark).toMatchObject({ accent: '#FF0000', accentForeground: '#000000' });
+});
+
+it('copies both preset colours into the custom draft and retains the untouched mode', () => {
+  mount();
+  act(() => { renderer.root.findByProps({ accessibilityLabel: 'appearance.colors.teal' }).props.onPress(); });
+  open();
+  expect(renderer.root.findByType(AppInput).props.value).toBe(ACCENTS.teal.light.accent);
+  chooseMode('dark');
+  expect(renderer.root.findByType(AppInput).props.value).toBe(ACCENTS.teal.dark.accent);
+  edit('#123456');
+  chooseMode('light');
+  expect(renderer.root.findByType(AppInput).props.value).toBe(ACCENTS.teal.light.accent);
+  act(() => { done().props.onPress(); });
+  expect(useThemeStore.getState().accent).toEqual({
+    light: { color: ACCENTS.teal.light.accent, foreground: defaultAccentForeground(ACCENTS.teal.light.accent) },
+    dark: { color: '#123456', foreground: 'white' },
+  });
 });
 
 it('edits and saves independent per-mode colours and foregrounds atomically', () => {
@@ -250,7 +320,6 @@ it('previews the draft as a sent-message bubble with matching body and metadata 
   edit('#FF0000');
   chooseForeground('black');
   const preview = renderer.root.findByType(MessageAppearancePreview);
-  expect(preview.props.mode).toBe('light');
   const [body, time] = preview.findAllByType(AppText);
   expect(body.props.variant).toBe('message');
   expect(body.props.children).toBe('appearance.messagePreview');
@@ -258,7 +327,6 @@ it('previews the draft as a sent-message bubble with matching body and metadata 
   expect(time.props.children).toMatch(/^\d{2}:\d{2}$/);
   expect(time.props.style.color).toBe('rgba(0,0,0,0.8)');
   chooseMode('dark');
-  expect(renderer.root.findByType(MessageAppearancePreview).props.mode).toBe('dark');
   chooseForeground('white');
   expect(renderer.root.findByType(MessageAppearancePreview).props.colors.accentForeground).toBe('#FFFFFF');
   expect(useThemeStore.getState().accent).toBe('blue');

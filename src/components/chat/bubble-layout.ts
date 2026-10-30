@@ -11,3 +11,5 @@ export const BUBBLE_SELECTION_OFFSET = 32;
 
 /** Compact delivery glyph shared by message metadata and appearance previews. */
 export const MESSAGE_DELIVERY_ICON_SIZE = 11;
+/** Optical spacing between the timestamp and delivery glyph. */
+export const MESSAGE_META_GAP = 2;

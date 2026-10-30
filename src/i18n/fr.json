@@ -696,7 +696,6 @@
     "colorArea": "Saturation et luminosité",
     "saturation": "Saturation",
     "brightness": "Luminosité",
-    "colorPairHint": "Gauche : clair · Droite : sombre",
     "foreground": "Texte et icônes",
     "whiteForeground": "Blanc",
     "blackForeground": "Noir",

@@ -692,7 +692,6 @@
     "colorArea": "彩度と明度",
     "saturation": "彩度",
     "brightness": "明度",
-    "colorPairHint": "左：ライト · 右：ダーク",
     "foreground": "文字とアイコン",
     "whiteForeground": "白",
     "blackForeground": "黒",

@@ -8,34 +8,35 @@ import Animated from 'react-native-reanimated';
 import { AppText } from '@/components/common/AppText';
 import { radius, spacing } from '@/theme';
 import { iconStrokeWidth } from '@/theme/icons';
-import { defaultThemePalettes, type ThemeColors } from '@/theme/palette';
-import type { AccentMode } from '@/theme/accents';
+import { messageMetadataTypography } from '@/theme/typography';
+import type { ThemeColors } from '@/theme/palette';
 
-import { BUBBLE_MAX_WIDTH, BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, MESSAGE_DELIVERY_ICON_SIZE } from './bubble-layout';
+import { BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, MESSAGE_DELIVERY_ICON_SIZE, MESSAGE_META_GAP } from './bubble-layout';
 
 type Props = {
-  mode: AccentMode;
   colors: Pick<ThemeColors, 'accentForeground' | 'accentForegroundMuted'>;
   backgroundStyle: ComponentProps<typeof Animated.View>['style'];
 };
 
 /** Preview unsaved choices using the same geometry and metadata as sent messages. */
-export function MessageAppearancePreview({ mode, colors, backgroundStyle }: Props) {
+export function MessageAppearancePreview({ colors, backgroundStyle }: Props) {
   const { t } = useTranslation();
   const [time] = useState(() => dayjs().format('HH:mm'));
   return (
-    <View testID="message-appearance-preview" style={{ padding: spacing.md, borderRadius: radius.md,
-      backgroundColor: defaultThemePalettes[mode].background }}>
+    <View testID="message-appearance-preview">
       <Animated.View style={[{
-        alignSelf: 'flex-end', maxWidth: BUBBLE_MAX_WIDTH, borderRadius: radius.lg,
+        alignSelf: 'flex-end', maxWidth: '100%', borderRadius: radius.lg,
+        flexDirection: 'row', alignItems: 'flex-end',
         paddingHorizontal: BUBBLE_PADDING_HORIZONTAL, paddingVertical: BUBBLE_PADDING_VERTICAL,
         gap: spacing.xs,
       }, backgroundStyle]}>
-        <AppText variant="message" style={{ color: colors.accentForeground }}>
+        <AppText variant="message" numberOfLines={1} style={{ color: colors.accentForeground, flexShrink: 1,
+          includeFontPadding: false, textAlignVertical: 'center' }}>
           {t('appearance.messagePreview')}
         </AppText>
-        <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: spacing.xs }}>
-          <AppText variant="caption" style={{ color: colors.accentForegroundMuted }}>{time}</AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: MESSAGE_META_GAP }}>
+          <AppText variant="caption" weight="regular" style={{ color: colors.accentForegroundMuted,
+            ...messageMetadataTypography, includeFontPadding: false, textAlignVertical: 'center' }}>{time}</AppText>
           <Check strokeWidth={iconStrokeWidth.compact} size={MESSAGE_DELIVERY_ICON_SIZE} color={colors.accentForegroundMuted} />
         </View>
       </Animated.View>

@@ -700,7 +700,6 @@
     "colorArea": "Nasycenie i jasność",
     "saturation": "Nasycenie",
     "brightness": "Jasność",
-    "colorPairHint": "Lewa: jasny · Prawa: ciemny",
     "foreground": "Tekst i ikony",
     "whiteForeground": "Biały",
     "blackForeground": "Czarny",

@@ -692,7 +692,6 @@
     "colorArea": "飽和度與明度",
     "saturation": "飽和度",
     "brightness": "明度",
-    "colorPairHint": "左側：淺色 · 右側：深色",
     "foreground": "文字與圖示",
     "whiteForeground": "白色",
     "blackForeground": "黑色",

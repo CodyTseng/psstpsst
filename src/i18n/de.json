@@ -692,7 +692,6 @@
     "colorArea": "Sättigung und Helligkeit",
     "saturation": "Sättigung",
     "brightness": "Helligkeit",
-    "colorPairHint": "Links: hell · Rechts: dunkel",
     "foreground": "Text und Symbole",
     "whiteForeground": "Weiß",
     "blackForeground": "Schwarz",

@@ -1,4 +1,5 @@
 import { spacing } from './spacing';
+import { createContext, useContext } from 'react';
 import { Platform, type TextStyle } from 'react-native';
 
 import { IS_ELECTRON } from '@/lib/platform';
@@ -34,9 +35,13 @@ export type { FontWeight, TextVariant } from './typography';
 export { ACCENTS, ACCENT_KEYS };
 export type { AccentKey, AccentSelection };
 
+/** Transient subtree palette; draft appearance never changes persisted preferences. */
+export const ThemeColorsContext = createContext<ThemeColors | null>(null);
+
 export function useThemeColors(): ThemeColors {
+  const localColors = useContext(ThemeColorsContext);
   const scheme = useEffectiveColorScheme();
-  return useThemeStore((state) => (state.palettes ?? defaultThemePalettes)[scheme]);
+  return useThemeStore((state) => localColors ?? (state.palettes ?? defaultThemePalettes)[scheme]);
 }
 
 export { spacing } from './spacing';

@@ -5,11 +5,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import { useThemeStore } from '@/stores/theme.store';
-import { isCustomAccent, resolveAccentPair, type AccentMode, type CustomAccent } from '@/theme/accents';
+import { accentForegroundTones, isCustomAccent, resolveAccentPair, type AccentMode, type CustomAccent } from '@/theme/accents';
 import { iconStrokeWidth } from '@/theme/icons';
 import { ACCENT_KEYS, radius, spacing, uiDensity, useEffectiveColorScheme, useThemeColors } from '@/theme';
 
-import { AppText } from './AppText';
 import { ColorPickerSheet } from './ColorPickerSheet';
 import { ColorWheelSwatch } from './ColorWheelSwatch';
 
@@ -22,7 +21,6 @@ export function AccentPicker() {
   const c = useThemeColors();
   const scheme = useEffectiveColorScheme();
   const selected = useThemeStore((s) => s.accent);
-  const palettes = useThemeStore((s) => s.palettes);
   const setAccent = useThemeStore((s) => s.setAccent);
   const [session, setSession] = useState<{ colors: CustomAccent; mode: AccentMode } | null>(null);
   const [open, setOpen] = useState(false);
@@ -33,8 +31,8 @@ export function AccentPicker() {
       light={pair.light.color}
       dark={pair.dark.color}
       selected={isSelected}
-      lightForeground={palettes.light.accentForeground}
-      darkForeground={palettes.dark.accentForeground}
+      lightForeground={accentForegroundTones(pair.light.foreground).accentForeground}
+      darkForeground={accentForegroundTones(pair.dark.foreground).accentForeground}
     />
   );
   const valueLabel = (pair: ReturnType<typeof resolveAccentPair>) => ({
@@ -52,7 +50,6 @@ export function AccentPicker() {
 
   return (
     <>
-      <View style={{ gap: spacing.sm }}>
         <View style={{
           flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md,
           padding: uiDensity.cardPadding, borderRadius: radius.lg, backgroundColor: c.surfaceElevated,
@@ -76,7 +73,7 @@ export function AccentPicker() {
               onPress={() => {
                 const colors = customSelected && typeof selected === 'object'
                   ? selected
-                  : { [scheme]: { color: selectedPair[scheme].color, foreground: selectedPair[scheme].foreground } };
+                  : { light: { ...selectedPair.light }, dark: { ...selectedPair.dark } };
                 setSession({ colors, mode: scheme });
                 setOpen(true);
               }} style={frame(customSelected)}>
@@ -88,10 +85,8 @@ export function AccentPicker() {
             </Pressable>
           </View>
         </View>
-        <AppText variant="caption" tone="muted">{t('appearance.colorPairHint')}</AppText>
-      </View>
       {session != null ? (
-        <ColorPickerSheet initialColors={session.colors} initialMode={session.mode} visible={open}
+        <ColorPickerSheet initialColors={session.colors} initialMode={session.mode} autoForeground={typeof selected === 'string'} visible={open}
           onApply={(colors) => { setAccent(colors); setOpen(false); }}
           onClose={() => setOpen(false)} onClosed={() => setSession(null)} />
       ) : null}

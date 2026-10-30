@@ -1015,7 +1015,6 @@
     "colorArea": "التشبع والسطوع",
     "saturation": "التشبع",
     "brightness": "السطوع",
-    "colorPairHint": "اليسار: فاتح · اليمين: داكن",
     "foreground": "النص والأيقونات",
     "whiteForeground": "أبيض",
     "blackForeground": "أسود",

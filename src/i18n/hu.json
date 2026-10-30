@@ -692,7 +692,6 @@
     "colorArea": "Telítettség és fényerő",
     "saturation": "Telítettség",
     "brightness": "Fényerő",
-    "colorPairHint": "Bal: világos · Jobb: sötét",
     "foreground": "Szöveg és ikonok",
     "whiteForeground": "Fehér",
     "blackForeground": "Fekete",

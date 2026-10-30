@@ -1,5 +1,5 @@
 import Check from 'lucide-react-native/icons/check';
-import { useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -8,10 +8,12 @@ import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Defs, G, LinearGradient, Mask, Rect, Stop } from 'react-native-svg';
 
 import { clampUnit, colorAtPosition, hexToHsv, hsvToHex, type HSV } from '@/lib/color-picker';
-import { accentForegroundTones, normalizeCustomAccent, parseAccent, resolveAccentPair, type AccentMode, type AccentForeground, type CustomAccent } from '@/theme/accents';
-import { radius, spacing, uiDensity, useThemeColors } from '@/theme';
+import { accentForegroundTones, customAccentTones, defaultAccentForeground, normalizeCustomAccent, parseAccent, resolveAccentPair, type AccentMode, type AccentForeground, type CustomAccent } from '@/theme/accents';
+import { radius, spacing, ThemeColorsContext, uiDensity, useThemeColors } from '@/theme';
 import { colorPickerColors, colorPickerLayout } from '@/theme/color-picker';
 import { iconStrokeWidth } from '@/theme/icons';
+import { defaultThemePalettes } from '@/theme/palette';
+import { EffectiveColorSchemeContext } from '@/theme/effective-color-scheme';
 
 import { MessageAppearancePreview } from '@/components/chat/MessageAppearancePreview';
 import { AppButton } from './AppButton';
@@ -29,6 +31,7 @@ type Props = {
   visible: boolean;
   initialColors: CustomAccent;
   initialMode: AccentMode;
+  autoForeground?: boolean;
   onApply: (colors: CustomAccent) => void;
   onClose: () => void;
   onClosed: () => void;
@@ -38,12 +41,12 @@ type DraftMode = { color: string; foreground: AccentForeground };
 type Drafts = Partial<Record<AccentMode, DraftMode>>;
 
 /** Both modes remain a local draft until Done; an untouched mode follows its peer. */
-export function ColorPickerSheet({ visible, initialColors, initialMode, onApply, onClose, onClosed }: Props) {
+export function ColorPickerSheet({ visible, initialColors, initialMode, autoForeground = false, onApply, onClose, onClosed }: Props) {
   const { t } = useTranslation();
-  const c = useThemeColors();
   const [fallback] = useState(() => resolveAccentPair(initialColors));
   const [mode, setMode] = useState(initialMode);
   const [drafts, setDrafts] = useState<Drafts>(initialColors);
+  const manualForeground = useRef({ light: !autoForeground, dark: !autoForeground });
   const other = mode === 'light' ? 'dark' : 'light';
   const current = drafts[mode] ?? drafts[other] ?? fallback[mode];
   const hsv = useSharedValue(hexToHsv(fallback[initialMode].color));
@@ -51,13 +54,20 @@ export function ColorPickerSheet({ visible, initialColors, initialMode, onApply,
   const [touched, setTouched] = useState(false);
   const foregroundColors = useMemo(() => accentForegroundTones(current.foreground), [current.foreground]);
   const normalized = normalizeCustomAccent(current.color);
+  const previewColor = normalized ?? hsvToHex(value);
+  const c = useMemo(() => ({
+    ...defaultThemePalettes[mode],
+    ...customAccentTones(previewColor, defaultThemePalettes[mode].background, current.foreground),
+  }), [mode, previewColor, current.foreground]);
   const parsed = parseAccent(drafts);
   const canApply = parsed != null && typeof parsed === 'object';
   const updateFromControl = useCallback((next: HSV) => {
     setValue(next);
     setDrafts((previous) => {
       const existing = previous[mode] ?? previous[mode === 'light' ? 'dark' : 'light'] ?? fallback[mode];
-      return { ...previous, [mode]: { ...existing, color: hsvToHex(next) } };
+      const color = hsvToHex(next);
+      return { ...previous, [mode]: { color,
+        foreground: manualForeground.current[mode] ? existing.foreground : defaultAccentForeground(color) } };
     });
     setTouched(false);
   }, [fallback, mode]);
@@ -76,13 +86,15 @@ export function ColorPickerSheet({ visible, initialColors, initialMode, onApply,
   };
 
   return (
+    <EffectiveColorSchemeContext.Provider value={mode}>
+    <ThemeColorsContext.Provider value={c}>
     <BottomSheet
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}
       title={t('appearance.customColor')}
       fixedSubheader={
-        <MessageAppearancePreview mode={mode} colors={foregroundColors} backgroundStyle={previewStyle} />
+        <MessageAppearancePreview colors={foregroundColors} backgroundStyle={previewStyle} />
       }
       headerAction={
         <IconButton
@@ -111,7 +123,9 @@ export function ColorPickerSheet({ visible, initialColors, initialMode, onApply,
           error={touched && !normalized ? t('appearance.invalidColor') : undefined}
           value={current.color}
           onChangeText={(value) => {
-            setDrafts((previous) => ({ ...previous, [mode]: { ...current, color: value } }));
+            const normalized = normalizeCustomAccent(value);
+            setDrafts((previous) => ({ ...previous, [mode]: { color: value,
+              foreground: normalized && !manualForeground.current[mode] ? defaultAccentForeground(normalized) : current.foreground } }));
             setTouched(false);
             const color = normalizeCustomAccent(value);
             if (color) {
@@ -143,7 +157,10 @@ export function ColorPickerSheet({ visible, initialColors, initialMode, onApply,
                 accessibilityRole="radio" accessibilityState={{ checked: selected }} aria-checked={selected}
                 accessibilityLabel={t(`appearance.${foreground}Foreground`)}
                 label={t(`appearance.${foreground}Foreground`)} labelWeight="medium"
-                onPress={() => setDrafts((previous) => ({ ...previous, [mode]: { ...current, foreground } }))}
+                onPress={() => {
+                  manualForeground.current[mode] = true;
+                  setDrafts((previous) => ({ ...previous, [mode]: { ...current, foreground } }));
+                }}
                 iconLeft={
                   <View style={{ width: colorPickerLayout.foregroundSwatchSize, height: colorPickerLayout.foregroundSwatchSize,
                     borderRadius: radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border,
@@ -157,6 +174,8 @@ export function ColorPickerSheet({ visible, initialColors, initialMode, onApply,
         </View>
       </View>
     </BottomSheet>
+    </ThemeColorsContext.Provider>
+    </EffectiveColorSchemeContext.Provider>
   );
 }
 

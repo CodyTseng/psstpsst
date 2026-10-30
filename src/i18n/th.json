@@ -692,7 +692,6 @@
     "colorArea": "ความอิ่มตัวและความสว่าง",
     "saturation": "ความอิ่มตัว",
     "brightness": "ความสว่าง",
-    "colorPairHint": "ซ้าย: สว่าง · ขวา: มืด",
     "foreground": "ข้อความและไอคอน",
     "whiteForeground": "สีขาว",
     "blackForeground": "สีดำ",

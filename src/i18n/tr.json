@@ -692,7 +692,6 @@
     "colorArea": "Doygunluk ve parlaklık",
     "saturation": "Doygunluk",
     "brightness": "Parlaklık",
-    "colorPairHint": "Sol: açık · Sağ: koyu",
     "foreground": "Metin ve simgeler",
     "whiteForeground": "Beyaz",
     "blackForeground": "Siyah",

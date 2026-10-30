@@ -7,6 +7,8 @@ import { useSystemColorScheme } from './system-appearance';
 export type EffectiveColorScheme = 'light' | 'dark';
 
 const SystemColorSchemeContext = createContext<EffectiveColorScheme>('light');
+/** Local appearance previews do not change the saved application preference. */
+export const EffectiveColorSchemeContext = createContext<EffectiveColorScheme | null>(null);
 
 export function resolveEffectiveColorScheme(
   preference: ThemePreference,
@@ -31,7 +33,8 @@ export function SystemColorSchemeProvider({ children }: { children: ReactNode })
 }
 
 export function useEffectiveColorScheme(): EffectiveColorScheme {
+  const localScheme = useContext(EffectiveColorSchemeContext);
   const systemScheme = useContext(SystemColorSchemeContext);
   const preference = useThemeStore((state) => state.preference);
-  return resolveEffectiveColorScheme(preference, systemScheme);
+  return localScheme ?? resolveEffectiveColorScheme(preference, systemScheme);
 }

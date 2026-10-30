@@ -56,8 +56,8 @@ it('publishes the chosen colour and its foreground in one store update', () => {
 });
 
 it.each([
-  ['#A78BFA', '#FFFFFF'],
-  ['#FB923C', '#FFFFFF'],
+  ['#A78BFA', '#000000'],
+  ['#FB923C', '#000000'],
 ] as const)('uses the same foreground for custom %s in both modes', (accent, foreground) => {
   useThemeStore.getState().setAccent(accent);
   const current = useThemeStore.getState().palettes;

@@ -3,7 +3,8 @@
  * (Settings → Appearance). Each key carries a light and dark pairing of the
  * `accent` glyph/fill colour and its `accentSoft` tint, hand-tuned per mode so
  * the soft tint reads as a faint wash in light and a deep fill in dark (cf. the
- * base palettes). Presets use white foregrounds; custom foregrounds are explicitly selected.
+ * base palettes). Foregrounds default to white except on bright accents;
+ * explicit custom choices are preserved.
  * `blue` is the default and supplies the base palettes' accent/accentSoft.
  *
  * Kept in its own leaf module (no imports) so `@/stores/theme.store` can read
@@ -77,8 +78,9 @@ export function parseAccent(value: unknown): AccentSelection | null {
     if (!Object.hasOwn(value, mode)) continue;
     const entry = (value as Record<string, unknown>)[mode];
     if (!entry || typeof entry !== 'object') return null;
-    const { color, foreground = 'white' } = entry as Record<string, unknown>;
+    const { color, foreground: chosenForeground } = entry as Record<string, unknown>;
     const normalized = typeof color === 'string' ? normalizeCustomAccent(color) : null;
+    const foreground = chosenForeground === undefined && normalized ? defaultAccentForeground(normalized) : chosenForeground;
     if (!normalized || (foreground !== 'white' && foreground !== 'black')) return null;
     result[mode] = { color: normalized, foreground };
   }
@@ -97,14 +99,15 @@ export function isCustomAccent(accent: AccentSelection): accent is `#${string}` 
 export function resolveAccentPair(accent: AccentSelection): Record<AccentMode, AccentModeColor> {
   if (typeof accent === 'string') {
     if (isCustomAccent(accent)) {
-      return { light: { color: accent, foreground: 'white' }, dark: { color: accent, foreground: 'white' } };
+      const foreground = defaultAccentForeground(accent);
+      return { light: { color: accent, foreground }, dark: { color: accent, foreground } };
     }
     return {
-      light: { color: ACCENTS[accent].light.accent as `#${string}`, foreground: 'white' },
-      dark: { color: ACCENTS[accent].dark.accent as `#${string}`, foreground: 'white' },
+      light: { color: ACCENTS[accent].light.accent as `#${string}`, foreground: defaultAccentForeground(ACCENTS[accent].light.accent) },
+      dark: { color: ACCENTS[accent].dark.accent as `#${string}`, foreground: defaultAccentForeground(ACCENTS[accent].dark.accent) },
     };
   }
-  const fallback = accent.light ?? accent.dark ?? { color: ACCENTS.blue.light.accent as `#${string}`, foreground: 'white' as const };
+  const fallback = accent.light ?? accent.dark ?? { color: ACCENTS.blue.light.accent as `#${string}`, foreground: defaultAccentForeground(ACCENTS.blue.light.accent) };
   return { light: accent.light ?? fallback, dark: accent.dark ?? fallback };
 }
 
@@ -123,7 +126,17 @@ function hex(color: RGB): string {
   return '#' + color.map((channel) => channel.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
-/** Foreground is a user choice, never inferred from colour or appearance mode. */
+/** Keep white on mid-tone accents; use black once relative luminance reaches 0.3. */
+export function defaultAccentForeground(color: string): AccentForeground {
+  const [r, g, b] = rgb(color).map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance >= 0.3 ? 'black' : 'white';
+}
+
+/** Foreground tones share the same explicit or automatically chosen base. */
 export function accentForegroundTones(foreground: AccentForeground = 'white') {
   const dark = foreground === 'black';
   return {
@@ -135,11 +148,11 @@ export function accentForegroundTones(foreground: AccentForeground = 'white') {
 
 export function presetAccentTones(key: AccentKey, scheme: 'light' | 'dark') {
   const tones = ACCENTS[key][scheme];
-  return { ...tones, ...accentForegroundTones() };
+  return { ...tones, ...accentForegroundTones(defaultAccentForeground(tones.accent)) };
 }
 
 /** Preserve the chosen RGB exactly; adapt only supporting fills and foregrounds. */
-export function customAccentTones(color: `#${string}`, background: string, foreground: AccentForeground = 'white') {
+export function customAccentTones(color: `#${string}`, background: string, foreground: AccentForeground = defaultAccentForeground(color)) {
   return {
     accent: color,
     accentSoft: hex(mix(rgb(color), rgb(background), 0.88)),

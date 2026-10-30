@@ -1,5 +1,8 @@
 import { IS_ELECTRON } from '@/lib/platform';
 
+/** Compact metadata inside message bubbles, shared with appearance previews. */
+export const messageMetadataTypography = { fontSize: 11, lineHeight: 14 } as const;
+
 export const desktopUiFontFamily =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
 

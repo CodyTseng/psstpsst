@@ -22,13 +22,14 @@ import type { MessageSegment } from '@/lib/text/message-segments';
 import type { NearbyAttachmentFetchContext } from '@/services/files/file-attachment.service';
 import { useDelivery, type MessageDelivery } from '@/stores/delivery-status.store';
 import { iconStrokeWidth } from '@/theme/icons';
+import { messageMetadataTypography } from '@/theme/typography';
 import { emojiSize, radius, shadow, spacing, useThemeColors } from '@/theme';
 
 import { AttachmentAudio } from './AttachmentAudio';
 import { AttachmentFile } from './AttachmentFile';
 import { AttachmentImage } from './AttachmentImage';
 import { AttachmentVideo } from './AttachmentVideo';
-import { BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL } from './bubble-layout';
+import { BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, MESSAGE_META_GAP } from './bubble-layout';
 import { DeferredRemoteContent } from './DeferredRemoteContent';
 import { EmbeddedMediaBlock } from './embedded-media';
 import { EventReferenceCard } from './EventReferenceCard';
@@ -97,7 +98,6 @@ type BubbleBodyBaseProps = Props & {
 const ZWSP = '\u200b'; // zero-width space — lets the line break before the spacer
 const RLI = '\u2067'; // keeps the metadata spacer at logical end in RTL text
 const PDI = '\u2069';
-const MESSAGE_META_GAP = 2;
 const MESSAGE_META_HOVER_OPACITY = 0.82;
 const MESSAGE_META_PRESSED_OPACITY = 0.5;
 const FIG = '\u2007'; // figure space — width of a digit, approximates the icon gap
@@ -210,8 +210,7 @@ function BubbleBodyBase({
           style={[
             {
               color,
-              fontSize: 11,
-              lineHeight: 14,
+              ...messageMetadataTypography,
               includeFontPadding: false,
               textAlignVertical: 'center',
             },
@@ -444,8 +443,7 @@ function BubbleBodyBase({
           <Text
             selectable={false}
             style={{
-              fontSize: 11,
-              lineHeight: 14,
+              ...messageMetadataTypography,
               includeFontPadding: false,
               textAlignVertical: 'center',
               letterSpacing: liftedSpacerLetterSpacing,

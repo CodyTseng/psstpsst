@@ -55,20 +55,27 @@ The root owns the single system-appearance subscription so every region changes
 palette in the same render commit. Every screen must work in both modes.
 
 Accent colour is user-selectable from the preset `ACCENTS` set or a custom
-light/dark pair. Presets carry a localized name and always use white foregrounds.
+light/dark pair. Presets carry a localized name and default to white foregrounds
+on dark and mid-tone accents, including both default blues; bright accents use
+black, independently for each mode.
 Custom colours retain the exact chosen RGB and let users explicitly select black
-or white text and icons for each mode. Never infer the foreground from contrast.
+or white text and icons for each mode. Defaults follow the same brightness rule
+until a user explicitly chooses a foreground; explicit choices remain unchanged.
 Colour-option labels and swatches keep identical metrics when selected; only
 the selection mark changes.
 An unconfigured custom mode follows the configured mode until explicitly edited;
 editing starts in the effective mode with its current accent colour.
+Opening custom colour from a preset copies both of its light/dark colours into
+independent drafts.
 Swatches show the actual light colour on the physical left and dark colour on
 the right, independent of locale or active mode. A divider separates the custom
 entry; it shows a radial spectrum before selection and the chosen pair afterward.
 The shared picker provides a saturation/brightness area, hue track, HEX field,
 mode selection, foreground selection and a local sent-message bubble preview
-with text, timestamp and delivery mark on the edited mode’s chat canvas. Edits apply together
-only after confirmation.
+with text, timestamp and delivery mark on one line, without a separate canvas background. Edits apply together
+only after confirmation. The colour sheet previews its draft accent across its own
+controls in real time and follows the edited light/dark mode; the rest of the app
+retains the saved theme until confirmation.
 All content on accent fills, including message timestamps, delivery marks, and
 selection indicators, uses the shared accent foreground token family. QR modules
 use the accent and their backgrounds and quiet zones use its foreground; live

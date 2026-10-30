@@ -700,7 +700,6 @@
     "colorArea": "Насыщенность и яркость",
     "saturation": "Насыщенность",
     "brightness": "Яркость",
-    "colorPairHint": "Слева: светлая · Справа: тёмная",
     "foreground": "Текст и значки",
     "whiteForeground": "Белый",
     "blackForeground": "Чёрный",

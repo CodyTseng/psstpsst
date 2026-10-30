@@ -692,7 +692,6 @@
     "colorArea": "채도 및 명도",
     "saturation": "채도",
     "brightness": "명도",
-    "colorPairHint": "왼쪽: 라이트 · 오른쪽: 다크",
     "foreground": "텍스트 및 아이콘",
     "whiteForeground": "흰색",
     "blackForeground": "검은색",

@@ -696,7 +696,6 @@
     "colorArea": "Saturación y brillo",
     "saturation": "Saturación",
     "brightness": "Brillo",
-    "colorPairHint": "Izquierda: claro · Derecha: oscuro",
     "foreground": "Texto e iconos",
     "whiteForeground": "Blanco",
     "blackForeground": "Negro",

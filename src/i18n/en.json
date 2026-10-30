@@ -692,7 +692,6 @@
     "colorArea": "Saturation and brightness",
     "saturation": "Saturation",
     "brightness": "Brightness",
-    "colorPairHint": "Left: light · Right: dark",
     "foreground": "Text and icons",
     "whiteForeground": "White",
     "blackForeground": "Black",

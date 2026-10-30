@@ -1,5 +1,5 @@
 import {
-  ACCENTS, ACCENT_KEYS, customAccentTones, isCustomAccent, normalizeCustomAccent,
+  ACCENTS, ACCENT_KEYS, customAccentTones, defaultAccentForeground, isCustomAccent, normalizeCustomAccent,
   parseAccent, presetAccentTones, resolveAccentPair, serializeAccent,
 } from '../accents';
 
@@ -38,11 +38,11 @@ it.each([{}, [], { light: null }, { light: '#abc' }, { light: { color: '#xyz' } 
   'rejects malformed paired settings %j', (value) => expect(parseAccent(value)).toBeNull(),
 );
 
-it.each(ACCENT_KEYS)('uses white foregrounds for preset %s in both modes without changing its colours', (key) => {
+it.each(ACCENT_KEYS)('uses brightness-based foregrounds for preset %s without changing its colours', (key) => {
   for (const mode of ['light', 'dark'] as const) {
     expect(presetAccentTones(key, mode)).toMatchObject({
-      ...ACCENTS[key][mode], accentForeground: '#FFFFFF',
-      accentForegroundMuted: 'rgba(255,255,255,0.8)', accentForegroundSoft: 'rgba(255,255,255,0.18)',
+      ...ACCENTS[key][mode],
+      accentForeground: defaultAccentForeground(ACCENTS[key][mode].accent) === 'black' ? '#000000' : '#FFFFFF',
     });
   }
 });
@@ -60,7 +60,7 @@ it.each([
   }
 });
 
-it('uses white for old single-colour settings and copies an unconfigured mode', () => {
+it('defaults old single-colour settings by brightness and copies an unconfigured mode', () => {
   expect(resolveAccentPair('#123456')).toEqual({
     light: { color: '#123456', foreground: 'white' }, dark: { color: '#123456', foreground: 'white' },
   });
@@ -68,6 +68,24 @@ it('uses white for old single-colour settings and copies an unconfigured mode', 
     light: { color: '#ABCDEF', foreground: 'black' }, dark: { color: '#ABCDEF', foreground: 'black' },
   });
   expect(resolveAccentPair({ dark: { color: '#111111', foreground: 'white' } }).light).toEqual({ color: '#111111', foreground: 'white' });
+});
+
+it.each([
+  ['#FFFFFF', 'black'], ['#FFFF00', 'black'], ['#00FF00', 'black'],
+  ['#000000', 'white'], ['#0000FF', 'white'], ['#123456', 'white'],
+  ['#949494', 'white'], ['#959595', 'black'],
+  ['#3A76F0', 'white'], ['#5B8DF6', 'white'],
+] as const)('chooses %s foreground defaults as %s', (color, expected) => {
+  expect(defaultAccentForeground(color)).toBe(expected);
+  expect(resolveAccentPair(color).light.foreground).toBe(expected);
+  expect(parseAccent({ light: { color } })).toEqual({ light: { color, foreground: expected } });
+});
+
+it('uses white foregrounds for the default blue in both modes', () => {
+  for (const mode of ['light', 'dark'] as const) {
+    expect(resolveAccentPair('blue')[mode].foreground).toBe('white');
+    expect(presetAccentTones('blue', mode).accentForeground).toBe('#FFFFFF');
+  }
 });
 
 it('preserves independent colours and foregrounds when both modes are configured', () => {
