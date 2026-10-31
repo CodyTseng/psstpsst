@@ -597,8 +597,7 @@
     "dnd_to": "Até",
     "dnd_note": "As mensagens que chegarem durante o horário de silêncio ficam em silêncio e esperam por você no app como sempre.",
     "dnd_edit_start_title": "Início do horário de silêncio",
-    "dnd_edit_end_title": "Fim do horário de silêncio",
-    "dnd_time_hint": "Digite um horário no formato HH:MM em 24 horas."
+    "dnd_edit_end_title": "Fim do horário de silêncio"
   },
   "settings": {
     "title": "Configurações",
@@ -1351,5 +1350,22 @@
     "inherit": "Usar papel de parede geral",
     "load_failed": "Não foi possível carregar as configurações do papel de parede. Tente novamente.",
     "save_failed": "Não foi possível salvar o papel de parede. Tente novamente."
+  },
+  "date_time": {
+    "title": "Data e hora",
+    "time_format": "Formato de hora",
+    "date_format": "Formato de data",
+    "system": "Seguir o sistema",
+    "12h": "12 horas",
+    "24h": "24 horas",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Personalizado",
+    "custom_hint": "YYYY/YY = ano, M/MM = mês, D/DD = dia. Exemplo: D.M.YYYY.",
+    "custom_invalid": "Inclua um ano, um mês e um dia usando as letras indicadas.",
+    "preview": "Prévia: {{date}}",
+    "hour": "Hora",
+    "minute": "Minuto"
   }
 }

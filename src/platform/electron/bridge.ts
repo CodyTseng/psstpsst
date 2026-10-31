@@ -255,6 +255,7 @@ export type ElectronBridge = {
     unregister(): Promise<void>;
   };
   system: {
+    dateTimeSettings(): Promise<{ locale: string | null; uses24HourClock: boolean | null }>;
     openRuntimeNotices(): Promise<void>;
     openExternalUrl(url: string): Promise<void>;
     openApprovedBrowserUrl(url: string): Promise<void>;

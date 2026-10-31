@@ -1,3 +1,4 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import Check from 'lucide-react-native/icons/check';
@@ -451,6 +452,7 @@ export function MessageDetailSheet({
   onClose,
 }: Props) {
   const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const { copyText, copied, resetCopied } = useClipboard({ toastTarget: 'detail' });
   const c = useThemeColors();
   const direction = useLanguageDirection();
@@ -577,7 +579,7 @@ export function MessageDetailSheet({
             {t('message_detail.time')}
           </AppText>
           <AppText variant="body" tone="subtle">
-            {formatDetailTimestamp(sentAt)}
+            {formatDetailTimestamp(sentAt, dateTimeFormatPreferences)}
           </AppText>
         </View>
       ) : null}

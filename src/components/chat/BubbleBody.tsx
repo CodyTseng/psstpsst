@@ -1,4 +1,5 @@
-import dayjs from 'dayjs';
+import { formatTime, timeSpacer } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import Check from 'lucide-react-native/icons/check';
 import { memo, useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
@@ -101,7 +102,6 @@ const PDI = '\u2069';
 const MESSAGE_META_HOVER_OPACITY = 0.82;
 const MESSAGE_META_PRESSED_OPACITY = 0.5;
 const FIG = '\u2007'; // figure space — width of a digit, approximates the icon gap
-const TIME_WIDTH_SPACER = FIG.repeat(5); // approximate HH:mm without visible glyphs
 const HAN_SCRIPT = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 const ANDROID_HAN_BASELINE_STYLE = { transform: [{ translateY: -2 }] } as const;
 type InlineMessageSegment = Exclude<MessageSegment, { type: 'event' }>;
@@ -136,6 +136,7 @@ function BubbleBodyBase({
   presentation: preparedPresentation,
   liveDelivery,
 }: BubbleBodyBaseProps) {
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const isRTL = useIsRTL();
 
@@ -190,7 +191,8 @@ function BubbleBodyBase({
   const cardPubkey = presentation.cardPubkey;
   const invoice = presentation.invoice;
   const invoiceDescription = presentation.invoiceDescription;
-  const time = dayjs.unix(createdAt).format('HH:mm');
+  const time = formatTime(createdAt, undefined, dateTimeFormatPreferences);
+  const timeWidthSpacer = timeSpacer(time);
   const androidHanBaselineStyle =
     Platform.OS === 'android' && HAN_SCRIPT.test(content)
       ? ANDROID_HAN_BASELINE_STYLE
@@ -308,8 +310,8 @@ function BubbleBodyBase({
 
   function renderInlineText(bodySegments: InlineMessageSegment[], showMeta: boolean) {
     const metaWidthSpacer = isSelf
-      ? `${FIG}${FIG}${FIG}${TIME_WIDTH_SPACER}`
-      : `${FIG}${TIME_WIDTH_SPACER}`;
+      ? `${FIG}${FIG}${FIG}${timeWidthSpacer}`
+      : `${FIG}${timeWidthSpacer}`;
     const blockMetaSpacer = showMeta
       ? `${ZWSP}${isRTL ? `${RLI}${metaWidthSpacer}${PDI}` : metaWidthSpacer}`
       : '';

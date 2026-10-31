@@ -1,32 +1,28 @@
+import { formatTime, uses24HourClock, type DateTimeFormatPreferences } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { Host } from '@expo/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { IS_ANDROID, IS_ELECTRON, IS_IOS } from '@/lib/platform';
+import { formattingLocale } from '@/lib/locale';
 import { spacing, useEffectiveColorScheme, useThemeColors } from '@/theme';
 
 import { ActionRow } from './ActionRow';
-import { AppInput } from './AppInput';
+import { DesktopTimeOfDayPicker } from './DesktopTimeOfDayPicker';
 import { BottomSheet } from './BottomSheet';
-import { InputDialog } from './InputDialog';
 
 // The @expo/ui native views call `requireNativeView` at module scope, which
 // throws when merely imported on web — so each native module is required
 // lazily, only on its own platform (Metro defers module evaluation until the
 // require actually runs).
-type SwiftUIModule = typeof import('@expo/ui/swift-ui');
-type SwiftUIModifiersModule = typeof import('@expo/ui/swift-ui/modifiers');
+type IOSWheelsModule = typeof import('./IOSTimeOfDayWheels');
 type ComposeModule = typeof import('@expo/ui/jetpack-compose');
 
 /* eslint-disable @typescript-eslint/no-require-imports -- lazy platform-gated native modules, see above */
-const swiftUI: SwiftUIModule | null = IS_IOS ? require('@expo/ui/swift-ui') : null;
-const swiftUIModifiers: SwiftUIModifiersModule | null = IS_IOS
-  ? require('@expo/ui/swift-ui/modifiers')
-  : null;
+const iosWheels: IOSWheelsModule | null = IS_IOS ? require('./IOSTimeOfDayWheels') : null;
 const compose: ComposeModule | null = IS_ANDROID ? require('@expo/ui/jetpack-compose') : null;
 /* eslint-enable @typescript-eslint/no-require-imports */
-
-const TIME_TEXT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 /** Build a Date on an arbitrary day carrying the given local wall-clock time. */
 export function minutesToDate(minutes: number): Date {
@@ -39,12 +35,8 @@ export function dateToMinutes(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-export function formatMinutes(minutes: number, locale: string | undefined): string {
-  return new Intl.DateTimeFormat(locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(minutesToDate(minutes));
+export function formatMinutes(minutes: number, dateTimeFormatPreferences?: DateTimeFormatPreferences): string {
+  return formatTime(minutesToDate(minutes).getTime() / 1000, undefined, dateTimeFormatPreferences);
 }
 
 type Props = {
@@ -61,14 +53,15 @@ type Props = {
  * Cross-platform time-of-day editor (DESIGN §8): the native wheel/clock pickers
  * from `@expo/ui` on touch — iOS wheels inside the shared `BottomSheet`,
  * Android's Material `TimePickerDialog` summons itself — and the centered
- * `InputDialog` with an HH:MM field on Electron.
+ * `InputDialog` with separate clock fields and a day-period selector on Electron.
  */
 export function TimeOfDayPicker({ visible, onClose, title, initialMinutes, onConfirm }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
+  const is24Hour = uses24HourClock(dateTimeFormatPreferences);
   const c = useThemeColors();
   const colorScheme = useEffectiveColorScheme();
-  const [draftDate, setDraftDate] = useState(() => minutesToDate(initialMinutes));
-  const [draftText, setDraftText] = useState('');
+  const [draftMinutes, setDraftMinutes] = useState(initialMinutes);
   const [seededMinutes, setSeededMinutes] = useState<number | null>(null);
 
   // Seed the draft each time the editor opens; clear the seed on close so a
@@ -76,12 +69,7 @@ export function TimeOfDayPicker({ visible, onClose, title, initialMinutes, onCon
   // an effect (https://react.dev/learn/you-might-not-need-an-effect).
   if (visible && seededMinutes !== initialMinutes) {
     setSeededMinutes(initialMinutes);
-    setDraftDate(minutesToDate(initialMinutes));
-    setDraftText(
-      `${String(Math.floor(initialMinutes / 60)).padStart(2, '0')}:${String(
-        initialMinutes % 60,
-      ).padStart(2, '0')}`,
-    );
+    setDraftMinutes(initialMinutes);
   } else if (!visible && seededMinutes !== null) {
     setSeededMinutes(null);
   }
@@ -91,39 +79,16 @@ export function TimeOfDayPicker({ visible, onClose, title, initialMinutes, onCon
     onClose();
   }
 
-  const textMatch = TIME_TEXT_PATTERN.exec(draftText);
-  const textDraftValid = textMatch !== null;
-
-  function confirmText() {
-    if (!textMatch) return;
-    onConfirm(Number(textMatch[1]) * 60 + Number(textMatch[2]));
-    onClose();
-  }
-
   if (IS_ELECTRON) {
-    return (
-      <InputDialog
-        visible={visible}
-        onClose={onClose}
-        actionLayout="horizontal"
-        title={title}
-        confirmLabel={t('common.ok')}
-        cancelLabel={t('common.cancel')}
-        confirmDisabled={!textDraftValid}
-        onConfirm={confirmText}
-      >
-        <AppInput
-          description={t('notifications.dnd_time_hint')}
-          value={draftText}
-          onChangeText={setDraftText}
-          onSubmitEditing={confirmText}
-          placeholder="22:00"
-          maxLength={5}
-          autoFocus
-          style={{ textAlign: 'center' }}
-        />
-      </InputDialog>
-    );
+    return visible ? <DesktopTimeOfDayPicker
+      key={initialMinutes}
+      title={title}
+      initialMinutes={initialMinutes}
+      is24Hour={is24Hour}
+      locale={formattingLocale(i18n.resolvedLanguage ?? i18n.language, dateTimeFormatPreferences.systemLocale)}
+      onClose={onClose}
+      onConfirm={onConfirm}
+    /> : null;
   }
 
   if (IS_ANDROID && compose) {
@@ -132,7 +97,7 @@ export function TimeOfDayPicker({ visible, onClose, title, initialMinutes, onCon
       <Host matchContents colorScheme={colorScheme} seedColor={c.accent}>
         <compose.TimePickerDialog
           initialDate={minutesToDate(initialMinutes).toISOString()}
-          is24Hour
+          is24Hour={is24Hour}
           confirmButtonLabel={t('common.ok')}
           dismissButtonLabel={t('common.cancel')}
           color={c.accent}
@@ -143,7 +108,7 @@ export function TimeOfDayPicker({ visible, onClose, title, initialMinutes, onCon
     );
   }
 
-  if (IS_IOS && swiftUI && swiftUIModifiers) {
+  if (IS_IOS && iosWheels) {
     return (
       <BottomSheet
         visible={visible}
@@ -156,16 +121,16 @@ export function TimeOfDayPicker({ visible, onClose, title, initialMinutes, onCon
           colorScheme={colorScheme}
           style={{ alignSelf: 'center' }}
         >
-          <swiftUI.DatePicker
-            selection={draftDate}
-            displayedComponents={['hourAndMinute']}
-            onDateChange={setDraftDate}
-            modifiers={[swiftUIModifiers.datePickerStyle('wheel')]}
+          <iosWheels.IOSTimeOfDayWheels
+            minutes={draftMinutes}
+            is24Hour={is24Hour}
+            locale={formattingLocale(i18n.resolvedLanguage ?? i18n.language, dateTimeFormatPreferences.systemLocale)}
+            onChange={setDraftMinutes}
           />
         </Host>
         <ActionRow
           layout="vertical"
-          confirm={{ label: t('common.ok'), onPress: () => confirmDate(draftDate) }}
+          confirm={{ label: t('common.ok'), onPress: () => { onConfirm(draftMinutes); onClose(); } }}
         />
       </BottomSheet>
     );

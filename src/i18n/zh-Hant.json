@@ -594,8 +594,7 @@
     "dnd_to": "結束於",
     "dnd_note": "勿擾時段內收到的訊息不會發送通知，仍會照常保存在應用程式中。",
     "dnd_edit_start_title": "勿擾開始時間",
-    "dnd_edit_end_title": "勿擾結束時間",
-    "dnd_time_hint": "請輸入 24 小時制時間，格式為 HH:MM。"
+    "dnd_edit_end_title": "勿擾結束時間"
   },
   "settings": {
     "title": "設定",
@@ -1346,5 +1345,22 @@
     "inherit": "跟隨全域桌布",
     "load_failed": "無法載入桌布設定，請重試。",
     "save_failed": "無法儲存桌布，請重試。"
+  },
+  "date_time": {
+    "title": "日期與時間",
+    "time_format": "時間格式",
+    "date_format": "日期格式",
+    "system": "跟隨系統",
+    "12h": "12 小時制",
+    "24h": "24 小時制",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "自訂",
+    "custom_hint": "YYYY/YY 表示年份，M/MM 表示月份，D/DD 表示日期。例如：D.M.YYYY。",
+    "custom_invalid": "請使用支援的字母，且年份、月份、日期各出現一次。",
+    "preview": "預覽：{{date}}",
+    "hour": "小時",
+    "minute": "分鐘"
   }
 }

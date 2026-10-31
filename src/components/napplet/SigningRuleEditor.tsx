@@ -1,3 +1,5 @@
+import { formatDateTime } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { isApplicationAction } from '@/services/signing/action-request';
 import { useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
@@ -32,7 +34,8 @@ export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, on
   rule: Pick<EditableSigningRule, 'decision' | 'duration' | 'expiresAt'>; title: string; visible: boolean; children?: ReactNode;
   onSave(change: SigningRuleChange): Promise<void>; onClose(): void; onClosed(): void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const [decision, setDecision] = useState(rule.decision);
   const [period, setPeriod] = useState<'keep' | 'always' | keyof typeof SIGNING_PERIODS>('keep');
@@ -41,7 +44,7 @@ export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, on
   const [anchor, setAnchor] = useState<ContextMenuAnchor>();
   const durationRef = useRef<View>(null);
   const expires = rule.duration === 'timed' && rule.expiresAt ? t('applications.signing_until', {
-    time: new Date(rule.expiresAt).toLocaleString(i18n?.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    time: formatDateTime(rule.expiresAt / 1000, undefined, dateTimeFormatPreferences),
   }) : t(rule.duration === 'session' ? 'applications.signing_session' : 'applications.signing_duration_always');
   const options = [
     ...(rule.duration !== 'always' && rule.decision !== 'ask' ? [{ key: 'keep' as const, title: expires }] : []),

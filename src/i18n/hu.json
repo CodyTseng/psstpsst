@@ -594,8 +594,7 @@
     "dnd_to": "Eddig",
     "dnd_note": "A csendes órák alatt érkező üzenetek hangtalanok maradnak, és a megszokott módon az alkalmazásban várnak rád.",
     "dnd_edit_start_title": "Csendes órák kezdete",
-    "dnd_edit_end_title": "Csendes órák vége",
-    "dnd_time_hint": "Adj meg egy időpontot HH:MM formátumban, 24 órás beosztás szerint."
+    "dnd_edit_end_title": "Csendes órák vége"
   },
   "settings": {
     "title": "Beállítások",
@@ -1346,5 +1345,22 @@
     "inherit": "Általános háttérkép használata",
     "load_failed": "Nem sikerült betölteni a háttérkép beállításait. Próbáld újra.",
     "save_failed": "Nem sikerült menteni a háttérképet. Próbáld újra."
+  },
+  "date_time": {
+    "title": "Dátum és idő",
+    "time_format": "Időformátum",
+    "date_format": "Dátumformátum",
+    "system": "Rendszer követése",
+    "12h": "12 órás",
+    "24h": "24 órás",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Egyéni",
+    "custom_hint": "YYYY/YY = év, M/MM = hónap, D/DD = nap. Példa: D.M.YYYY.",
+    "custom_invalid": "Az év, hónap és nap egyszer szerepeljen a megadott betűkkel.",
+    "preview": "Előnézet: {{date}}",
+    "hour": "Óra",
+    "minute": "Perc"
   }
 }

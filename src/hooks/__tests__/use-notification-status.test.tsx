@@ -3,6 +3,7 @@ import { useNotificationStatus } from '../use-notification-status';
 
 let mockGranted = false;
 let mockEnabled = true;
+let mockCachedStatus: { enabled: boolean; granted: boolean } | null = null;
 const mockListeners = new Set<() => void>();
 const mockGetStatus = jest.fn(async () => ({ enabled: mockEnabled, granted: mockGranted }));
 const mockEnable = jest.fn(async () => {
@@ -14,6 +15,7 @@ const mockOpenSettings = jest.fn(async () => true);
 
 jest.mock('@/services/notifications/notification.service', () => ({
   notificationService: {
+    getCachedStatus: () => mockCachedStatus,
     getStatus: () => mockGetStatus(),
     enable: () => mockEnable(),
     disable: () => mockDisable(),
@@ -48,10 +50,22 @@ describe('notification settings authorization', () => {
     jest.clearAllMocks();
     mockGranted = false;
     mockEnabled = true;
+    mockCachedStatus = null;
   });
   afterEach(() => {
     act(() => renderer?.unmount());
     expect(mockListeners.size).toBe(0);
+  });
+
+  it('paints the last resolved value immediately while rechecking OS permission', async () => {
+    mockCachedStatus = { enabled: true, granted: true };
+    let complete!: (status: { enabled: boolean; granted: boolean }) => void;
+    mockGetStatus.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    act(() => { renderer = create(<Harness />); });
+    expect(result.enabled).toBe(true);
+    expect(result.busy).toBe(false);
+    await act(async () => { complete({ enabled: true, granted: false }); });
+    expect(result.enabled).toBe(false);
   });
 
   it('shows off when the app preference is on but macOS denies notifications', async () => {

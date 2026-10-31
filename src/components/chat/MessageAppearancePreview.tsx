@@ -1,4 +1,5 @@
-import dayjs from 'dayjs';
+import { formatTime } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import Check from 'lucide-react-native/icons/check';
 import { useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +22,9 @@ type Props = {
 /** Preview unsaved choices using the same geometry and metadata as sent messages. */
 export function MessageAppearancePreview({ colors, backgroundStyle }: Props) {
   const { t } = useTranslation();
-  const [time] = useState(() => dayjs().format('HH:mm'));
+  const dateTimeFormatPreferences = useDateTimePreferences();
+  const [previewTimestamp] = useState(() => Math.floor(Date.now() / 1000));
+  const time = formatTime(previewTimestamp, undefined, dateTimeFormatPreferences);
   return (
     <View testID="message-appearance-preview">
       <Animated.View style={[{

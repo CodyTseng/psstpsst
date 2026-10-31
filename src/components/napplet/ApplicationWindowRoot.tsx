@@ -1,3 +1,4 @@
+import { loadDateTimePreferences, watchSystemDateTime } from '@/services/preferences/date-time-preferences';
 import { connectSigningWindows } from '@/services/signing/changes';
 import { useInlineApplicationLaunch } from '@/hooks/use-inline-application-launch';
 import { connectApplicationWindows } from '@/services/explore/application-changes';
@@ -25,6 +26,7 @@ import { NappletOverlays } from './NappletOverlays';
 /** A trusted leaf host shares persistence without starting messaging or notification services. */
 export function ApplicationWindowRoot() {
   useInlineApplicationLaunch();
+  useEffect(watchSystemDateTime, []);
   useEffect(() => { connectSigningWindows(platform.napplet.windows); return () => connectSigningWindows(); }, []);
   useEffect(() => { connectApplicationWindows(platform.napplet.windows, readChangedApplicationMetadata); return () => connectApplicationWindows(); }, []);
   useEffect(() => subscribeExploreVisits(visit => {
@@ -36,7 +38,7 @@ export function ApplicationWindowRoot() {
     let active = true;
     void (async () => {
       const { entry, accountPubkey, reviewedRequired } = await readApplicationWindowLaunch();
-      await Promise.all([useThemeStore.getState().load(), useLanguageStore.getState().load(), exploreService.activate(accountPubkey)]);
+      await Promise.all([loadDateTimePreferences(), useThemeStore.getState().load(), useLanguageStore.getState().load(), exploreService.activate(accountPubkey)]);
       if (!active) return;
       useActiveAccount.setState({ activePubkey: accountPubkey, status: 'ready' });
       if (entry.release) {

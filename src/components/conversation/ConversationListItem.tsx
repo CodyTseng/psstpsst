@@ -56,7 +56,7 @@ import { createDraftPreviewSelector } from '@/lib/chat/draft-preview';
 import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import type { ComposerFile } from '@/lib/attachments/composer-file';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
-import { formatListTime } from '@/lib/time';
+import { ConversationTimestamp } from './ConversationTimestamp';
 import { platform } from '@/platform';
 import { beginChatOpenTrace, markChatNavigation } from '@/lib/perf/chat-open';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -760,18 +760,10 @@ function ConversationListItemBase({
                     ) : null}
                   </View>
                   {updatedAt != null ? (
-                    <AppText
-                      variant="caption"
-                      tone="subtle"
-                      weight="regular"
-                      numberOfLines={1}
-                      style={{ flexShrink: 0 }}
-                    >
-                      {formatListTime(
-                        updatedAt,
-                        currentMinute === undefined ? undefined : currentMinute * 60,
-                      )}
-                    </AppText>
+                    <ConversationTimestamp
+                      timestamp={updatedAt}
+                      nowTs={currentMinute === undefined ? undefined : currentMinute * 60}
+                    />
                   ) : null}
                 </View>
                 {/* Bottom line: the message preview takes the full width, with the

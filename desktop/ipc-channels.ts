@@ -114,6 +114,7 @@ export const IPC = {
   backgroundUnregister: 'psstpsst:background:unregister',
   backgroundRun: 'psstpsst:background:run',
   backgroundComplete: 'psstpsst:background:complete',
+  systemDateTimeSettings: 'psstpsst:system:date-time-settings',
   systemOpenExternal: 'psstpsst:system:open-external',
   systemOpenRuntimeNotices: 'psstpsst:system:open-runtime-notices',
   traySetUnreadCount: 'psstpsst:tray:set-unread-count',

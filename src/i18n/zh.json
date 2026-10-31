@@ -594,8 +594,7 @@
     "dnd_to": "结束于",
     "dnd_note": "免打扰时段内收到的消息不会发送通知，仍会照常保存在应用中。",
     "dnd_edit_start_title": "免打扰开始时间",
-    "dnd_edit_end_title": "免打扰结束时间",
-    "dnd_time_hint": "请输入 24 小时制时间，格式为 HH:MM。"
+    "dnd_edit_end_title": "免打扰结束时间"
   },
   "settings": {
     "title": "设置",
@@ -1346,5 +1345,22 @@
     "inherit": "跟随全局壁纸",
     "load_failed": "无法加载壁纸设置，请重试。",
     "save_failed": "无法保存壁纸，请重试。"
+  },
+  "date_time": {
+    "title": "日期与时间",
+    "time_format": "时间格式",
+    "date_format": "日期格式",
+    "system": "跟随系统",
+    "12h": "12 小时制",
+    "24h": "24 小时制",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "自定义",
+    "custom_hint": "YYYY/YY 表示年份，M/MM 表示月份，D/DD 表示日期。例如：D.M.YYYY。",
+    "custom_invalid": "请使用支持的字母，且年份、月份、日期各出现一次。",
+    "preview": "预览：{{date}}",
+    "hour": "小时",
+    "minute": "分钟"
   }
 }

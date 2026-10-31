@@ -1,3 +1,4 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { router } from 'expo-router';
 import { DownloadMinimalistic as ArrowDownToLine } from '@solar-icons/react-native/category/arrows-action/Linear/DownloadMinimalistic';
 import { UploadMinimalistic as ArrowUpFromLine } from '@solar-icons/react-native/category/arrows-action/Linear/UploadMinimalistic';
@@ -26,13 +27,14 @@ const CONTENT_INSET = spacing.lg + ICON_SIZE + spacing.md;
 
 export function WalletTransactionRow({ transaction, showSeparator = false }: Props) {
   const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const incoming = transaction.type === 'incoming';
   const pending = isPendingTransaction(transaction.state);
   const title = pending ? t('wallet.pending') : incoming ? t('wallet.received') : t('wallet.sent');
   const color = pending ? c.warning : incoming ? c.success : c.text;
   const description = walletDescriptionText(transaction.description);
-  const time = formatListTime(transaction.createdAt);
+  const time = formatListTime(transaction.createdAt, undefined, dateTimeFormatPreferences);
 
   return (
     <View>

@@ -7,6 +7,8 @@ import { AppText } from './AppText';
 
 type Props = TextInputProps & {
   invalid?: boolean;
+  /** Borderless editable segment inside a compound field. */
+  variant?: 'default' | 'segment';
   /** Short field name. Always rendered above the control as a muted caption. */
   label?: string;
   /** Supporting copy. Always rendered below the control as a muted caption. */
@@ -22,6 +24,7 @@ type Props = TextInputProps & {
 export const AppInput = forwardRef<TextInput, Props>(function AppInput(
   {
     invalid,
+    variant = 'default',
     label,
     description,
     error,
@@ -53,19 +56,23 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
   const showTruncatedPlaceholder = !multiline && placeholder != null && currentValue.length === 0;
   const textAlign = StyleSheet.flatten(style)?.textAlign;
 
+  const segment = variant === 'segment';
+  const inputTypography = segment ? typography.title : typography.body;
+
   const input = (
     <Pressable
       accessible={false}
       focusable={false}
+      tabIndex={-1}
       onPress={() => {
         if (rest.editable !== false) inputRef.current?.focus();
       }}
       style={{
-        borderWidth: 1,
+        borderWidth: segment ? 0 : 1,
         borderColor,
-        borderRadius: radius.lg,
-        backgroundColor: c.surfaceElevated,
-        paddingHorizontal: uiDensity.inputHorizontalPadding,
+        borderRadius: segment ? radius.md : radius.lg,
+        backgroundColor: segment ? 'transparent' : c.surfaceElevated,
+        paddingHorizontal: segment ? spacing.xs : uiDensity.inputHorizontalPadding,
         height: multiline ? undefined : uiDensity.inputHeight,
         minHeight: multiline ? uiDensity.multilineInputMinHeight : undefined,
         paddingVertical: multiline ? 12 : 0,
@@ -120,16 +127,21 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput(
           style={[
             {
               color: c.text,
-              fontSize: typography.body.fontSize,
-              lineHeight: typography.body.fontFamily ? typography.body.lineHeight : undefined,
-              fontFamily: typography.body.fontFamily,
+              fontSize: inputTypography.fontSize,
+              lineHeight: inputTypography.fontFamily ? inputTypography.lineHeight : undefined,
+              fontFamily: inputTypography.fontFamily,
               flex: 1,
+              // HTML inputs have an intrinsic width; constrain them to the field shell.
+              minWidth: 0,
+              width: '100%',
               paddingVertical: 0,
               // The shell owns the inset; native padding would offset the caret
               // from the separately rendered single-line placeholder.
               paddingStart: 0,
               paddingEnd: 0,
               textAlignVertical: multiline ? 'top' : 'center',
+              outlineStyle: segment ? 'solid' : undefined,
+              outlineWidth: segment ? 0 : undefined,
             },
             style,
           ]}

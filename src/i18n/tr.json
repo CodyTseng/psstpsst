@@ -594,8 +594,7 @@
     "dnd_to": "Bitiş",
     "dnd_note": "Sessiz saatlerde gelen mesajlar sessiz kalır ve her zamanki gibi uygulamada seni bekler.",
     "dnd_edit_start_title": "Sessiz saatlerin başlangıcı",
-    "dnd_edit_end_title": "Sessiz saatlerin bitişi",
-    "dnd_time_hint": "24 saat biçiminde HH:MM olarak bir saat gir."
+    "dnd_edit_end_title": "Sessiz saatlerin bitişi"
   },
   "settings": {
     "title": "Ayarlar",
@@ -1346,5 +1345,22 @@
     "inherit": "Genel duvar kağıdını kullan",
     "load_failed": "Duvar kağıdı ayarları yüklenemedi. Lütfen tekrar deneyin.",
     "save_failed": "Duvar kağıdı kaydedilemedi. Lütfen tekrar deneyin."
+  },
+  "date_time": {
+    "title": "Tarih ve saat",
+    "time_format": "Saat biçimi",
+    "date_format": "Tarih biçimi",
+    "system": "Sistemi izle",
+    "12h": "12 saat",
+    "24h": "24 saat",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Özel",
+    "custom_hint": "YYYY/YY = yıl, M/MM = ay, D/DD = gün. Örnek: D.M.YYYY.",
+    "custom_invalid": "Desteklenen harflerle yıl, ay ve günü birer kez belirtin.",
+    "preview": "Önizleme: {{date}}",
+    "hour": "Saat",
+    "minute": "Dakika"
   }
 }

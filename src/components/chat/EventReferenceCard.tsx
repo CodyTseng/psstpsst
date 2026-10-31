@@ -1,3 +1,4 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import type { Event } from 'nostr-tools';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -55,10 +56,11 @@ function EventContent({ event }: { event: Event }) {
 }
 
 function ResolvedHeader({ event, loadRemote }: { event: Event; loadRemote: boolean }) {
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const { name, profile } = useDisplayName(event.pubkey, loadRemote);
   return <MessageCardHeader title={name}
     visual={<Avatar pubkey={event.pubkey} picture={loadRemote ? profile?.picture : undefined} size={MESSAGE_CARD_VISUAL_SIZE} />}
-    subtitle={formatListTime(event.created_at)} />;
+    subtitle={formatListTime(event.created_at, undefined, dateTimeFormatPreferences)} />;
 }
 
 /** A compact neutral card for a public-event reference block. Kind 1 gets a

@@ -594,8 +594,7 @@
     "dnd_to": "To",
     "dnd_note": "Messages that arrive during quiet hours stay silent. They wait for you in the app as usual.",
     "dnd_edit_start_title": "Quiet hours start",
-    "dnd_edit_end_title": "Quiet hours end",
-    "dnd_time_hint": "Enter a time as HH:MM on a 24-hour clock."
+    "dnd_edit_end_title": "Quiet hours end"
   },
   "settings": {
     "title": "Settings",
@@ -1346,5 +1345,22 @@
     "inherit": "Use global wallpaper",
     "load_failed": "Could not load wallpaper settings. Please try again.",
     "save_failed": "Could not save the wallpaper. Please try again."
+  },
+  "date_time": {
+    "title": "Date & time",
+    "time_format": "Time format",
+    "date_format": "Date format",
+    "system": "Follow system",
+    "12h": "12-hour",
+    "24h": "24-hour",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Custom",
+    "custom_hint": "YYYY/YY = year, M/MM = month, D/DD = day. Example: D.M.YYYY.",
+    "custom_invalid": "Include one year, one month and one day using the supported letters.",
+    "preview": "Preview: {{date}}",
+    "hour": "Hour",
+    "minute": "Minute"
   }
 }

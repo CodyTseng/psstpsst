@@ -14,6 +14,7 @@ import { Camera } from '@solar-icons/react-native/category/video/Linear/Camera';
 import { QrCode } from '@solar-icons/react-native/category/security/Linear/QrCode';
 import { ServerSquare } from '@solar-icons/react-native/category/devices/Linear/ServerSquare';
 import { Refresh } from '@solar-icons/react-native/category/arrows/Linear/Refresh';
+import Clock from 'lucide-react-native/icons/clock';
 import Languages from 'lucide-react-native/icons/languages';
 import { UserCircle as CircleUserRound } from '@solar-icons/react-native/category/users/Linear/UserCircle';
 import { useEffect, useRef, useState } from 'react';
@@ -41,6 +42,7 @@ import { useScrolled } from '@/hooks/use-scrolled';
 import { useWidePaneSelection } from '@/hooks/use-wide-pane-selection';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
+import { notificationService } from '@/services/notifications/notification.service';
 import { checkForAppUpdates } from '@/services/app-update';
 import { IS_DEVELOPMENT_BUILD } from '@/lib/environment';
 import { resolveName } from '@/lib/nostr/display-name';
@@ -213,7 +215,11 @@ export function SettingsHub() {
             icon={<Bell size={22} color={c.text} />}
             title={t('settings.notifications')}
             trailing={chevron}
-            onPress={() => openInDetailPane('/notifications')}
+            onPress={() => {
+              void notificationService.prepareSettings()
+                .catch(error => console.warn('[notifications] Unable to prepare settings.', error))
+                .then(() => openInDetailPane('/notifications'));
+            }}
             active={selection.settingsItem === 'notifications'}
           />
           <ListRow
@@ -229,6 +235,13 @@ export function SettingsHub() {
             trailing={chevron}
             onPress={() => openInDetailPane('/language')}
             active={selection.settingsItem === 'language'}
+          />
+          <ListRow
+            icon={<Clock size={22} strokeWidth={iconStrokeWidth.default} color={c.text} />}
+            title={t('date_time.title')}
+            trailing={chevron}
+            onPress={() => openInDetailPane('/date-time')}
+            active={selection.settingsItem === 'date-time'}
           />
         </ListGroup>
 

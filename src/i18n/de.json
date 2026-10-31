@@ -594,8 +594,7 @@
     "dnd_to": "Bis",
     "dnd_note": "Nachrichten, die während der Ruhezeiten eingehen, bleiben lautlos. Sie warten wie gewohnt in der App auf dich.",
     "dnd_edit_start_title": "Beginn der Ruhezeiten",
-    "dnd_edit_end_title": "Ende der Ruhezeiten",
-    "dnd_time_hint": "Gib eine Uhrzeit im 24-Stunden-Format HH:MM ein."
+    "dnd_edit_end_title": "Ende der Ruhezeiten"
   },
   "settings": {
     "title": "Einstellungen",
@@ -1346,5 +1345,22 @@
     "inherit": "Allgemeinen Hintergrund verwenden",
     "load_failed": "Hintergrundeinstellungen konnten nicht geladen werden. Bitte erneut versuchen.",
     "save_failed": "Hintergrund konnte nicht gespeichert werden. Bitte erneut versuchen."
+  },
+  "date_time": {
+    "title": "Datum und Uhrzeit",
+    "time_format": "Zeitformat",
+    "date_format": "Datumsformat",
+    "system": "Systemeinstellung",
+    "12h": "12 Stunden",
+    "24h": "24 Stunden",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Benutzerdefiniert",
+    "custom_hint": "YYYY/YY = Jahr, M/MM = Monat, D/DD = Tag. Beispiel: D.M.YYYY.",
+    "custom_invalid": "Jahr, Monat und Tag müssen mit den angegebenen Buchstaben jeweils einmal vorkommen.",
+    "preview": "Vorschau: {{date}}",
+    "hour": "Stunde",
+    "minute": "Minute"
   }
 }

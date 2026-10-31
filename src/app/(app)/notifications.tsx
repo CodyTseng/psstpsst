@@ -1,9 +1,10 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { Bell } from '@solar-icons/react-native/category/notifications/Linear/Bell';
 import { ChatRoundUnread } from '@solar-icons/react-native/category/messages/Linear/ChatRoundUnread';
 import { MoonSleep } from '@solar-icons/react-native/category/weather/Linear/MoonSleep';
 import { ServerSquare } from '@solar-icons/react-native/category/devices/Linear/ServerSquare';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
@@ -18,14 +19,13 @@ import { Toggle } from '@/components/common/Toggle';
 import { DESKTOP_OS, IS_ANDROID, IS_ELECTRON, IS_IOS } from '@/lib/platform';
 import { useApnsRelayEligibility } from '@/hooks/use-apns-relay-eligibility';
 import { APNS_RELAY_URL } from '@/services/notifications/push-api';
+import { useNotificationPreferences } from '@/hooks/use-notification-preferences';
 import { useNotificationStatus } from '@/hooks/use-notification-status';
 import { platform } from '@/platform';
 import { unreadCountService } from '@/services/conversation/unread-count.service';
 import { notificationService } from '@/services/notifications/notification.service';
 import {
   DEFAULT_DND_WINDOW,
-  DEFAULT_NOTIFICATION_CONTENT_PREFERENCES,
-  type DndWindow,
   type NotificationContentPreferences,
 } from '@/services/notifications/notification-prefs';
 import { useScrolled } from '@/hooks/use-scrolled';
@@ -44,7 +44,8 @@ const DELIVERY_NOTE_KEY = IS_IOS
  */
 export default function NotificationsSettings() {
   const { scrolled, scrollProps } = useScrolled();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const relayEligibility = useApnsRelayEligibility();
@@ -53,36 +54,12 @@ export default function NotificationsSettings() {
   const notificationControlDisabled = busy || !relayEligibility.eligible;
   const unreadIndicators = useUnreadIndicatorPreference();
   const [savingUnreadIndicators, setSavingUnreadIndicators] = useState(false);
-  const [contentPreferences, setContentPreferences] =
-    useState<NotificationContentPreferences | null>(null);
+  const { contentPreferences, setContentPreferences, dndWindow, setDndWindow } = useNotificationPreferences();
   const [savingContentPreference, setSavingContentPreference] = useState<
     keyof NotificationContentPreferences | null
   >(null);
-  const [dndWindow, setDndWindow] = useState<DndWindow | null>(null);
   const [savingDnd, setSavingDnd] = useState(false);
   const [editingDndField, setEditingDndField] = useState<'start' | 'end' | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void Promise.all([
-      notificationService.getContentPreferences(),
-      notificationService.getDndWindow(),
-    ])
-      .then(([preferences, dnd]) => {
-        if (!active) return;
-        setContentPreferences(preferences);
-        setDndWindow(dnd);
-      })
-      .catch((error) => {
-        console.warn('[notifications] Unable to load notification settings.', error);
-        if (!active) return;
-        setContentPreferences(DEFAULT_NOTIFICATION_CONTENT_PREFERENCES);
-        setDndWindow(DEFAULT_DND_WINDOW);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   async function onToggle(next: boolean) {
     if (busy || !relayEligibility.eligible) return;
@@ -277,7 +254,7 @@ export default function NotificationsSettings() {
               title={t('notifications.dnd_from')}
               value={
                 dndWindow
-                  ? formatMinutes(dndWindow.startMinutes, i18n.resolvedLanguage)
+                  ? formatMinutes(dndWindow.startMinutes, dateTimeFormatPreferences)
                   : undefined
               }
               onPress={dndWindow?.enabled ? () => setEditingDndField('start') : undefined}
@@ -287,7 +264,7 @@ export default function NotificationsSettings() {
             <ListRow
               title={t('notifications.dnd_to')}
               value={
-                dndWindow ? formatMinutes(dndWindow.endMinutes, i18n.resolvedLanguage) : undefined
+                dndWindow ? formatMinutes(dndWindow.endMinutes, dateTimeFormatPreferences) : undefined
               }
               onPress={dndWindow?.enabled ? () => setEditingDndField('end') : undefined}
               loading={!dndWindow}

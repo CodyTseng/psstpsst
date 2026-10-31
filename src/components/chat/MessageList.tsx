@@ -1,3 +1,4 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import { router } from 'expo-router';
@@ -301,6 +302,7 @@ export function MessageList({
   interactive = true,
 }: Props) {
   const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const groupRef = useRef(group);
   useEffect(() => {
@@ -554,6 +556,13 @@ export function MessageList({
   // The date the header *wants* to show (topmost visible day) vs. the one it is
   // currently rendering, and whether it is presently faded in.
   const floatingTargetRef = useRef<string | null>(null);
+  const floatingTimestampRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (floatingTimestampRef.current == null) return;
+    const label = formatDateSeparator(floatingTimestampRef.current, dateTimeFormatPreferences);
+    floatingTargetRef.current = label;
+    setFloatingDate(previous => previous == null ? null : label);
+  }, [dateTimeFormatPreferences, t]);
   const displayedDateRef = useRef<string | null>(null);
   const floatingVisibleRef = useRef(false);
   // The newest message id that's released into the rendered list. Incoming
@@ -906,6 +915,8 @@ export function MessageList({
         }
       }
       if (!topMsg) return;
+      floatingTimestampRef.current = topMsg.createdAt;
+      // This callback is retained across renders; resolve current preferences when invoked.
       floatingTargetRef.current = formatDateSeparator(topMsg.createdAt);
       // When the topmost visible message is itself a day-start, its inline
       // separator is on screen — suppress the floating copy so they don't
@@ -1406,7 +1417,7 @@ export function MessageList({
           older ?? undefined,
           item.boundaryCreatedAt,
         )
-          ? formatDateSeparator(timelineItemCreatedAt(item))
+          ? formatDateSeparator(timelineItemCreatedAt(item), dateTimeFormatPreferences)
           : null;
         return (
           <>
@@ -1469,7 +1480,7 @@ export function MessageList({
           ? preparedRow.showDate
           : startsTimelineDay(item, older);
       const dateLabel = showDate
-        ? formatDateSeparator(msg.createdAt)
+        ? formatDateSeparator(msg.createdAt, dateTimeFormatPreferences)
         : null;
       // The unread divider sits above the first message past the watermark.
       const showUnread = msg.id === firstUnreadId;
@@ -1670,10 +1681,12 @@ export function MessageList({
         </>
       );
     },
+    // Date formatters read the preference snapshot outside React; invalidate visible cells on changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       accountPubkey, attachmentLabels, canShowDelivery, canSwipeReply,
       conversationKey, group, openGroupMemberProfile,
-      oldestBoundary,
+      oldestBoundary, dateTimeFormatPreferences,
       deliveriesByMessageId, firstUnreadId, flashTarget, interactive,
       presentationsByMessageId, profileMap,
       proximity, reactionsByMessageId, remoteContentMode, replySenderName,

@@ -1,3 +1,5 @@
+import { formatDateTime } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import Download from 'lucide-react-native/icons/download';
 import { Archive } from '@solar-icons/react-native/category/notes/Linear/Archive';
 import { UploadMinimalistic as Upload } from '@solar-icons/react-native/category/arrows-action/Linear/UploadMinimalistic';
@@ -41,7 +43,8 @@ import { spacing, useThemeColors } from '@/theme';
  */
 export default function DataSettings() {
   const { scrolled, scrollProps } = useScrolled();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const activePubkey = useActiveAccount((s) => s.activePubkey);
@@ -328,7 +331,7 @@ export default function DataSettings() {
                   key={latestArchive.name}
                   title={t('backup.archive_title')}
                   subtitle={t('backup.archive_created', {
-                    date: new Date(latestArchive.createdAt).toLocaleString(i18n.language),
+                    date: formatDateTime(latestArchive.createdAt / 1000, undefined, dateTimeFormatPreferences),
                   })}
                   value={formatFileSize(latestArchive.size) ?? undefined}
                   onPress={() => void handleShareArchive()}

@@ -99,7 +99,7 @@ const adapters = new Proxy({
   database,
   appState: { currentState: () => 'extension', addChangeListener: () => () => {} },
   notifications: { isAvailable: () => false, shouldNotifyNow: () => true, addUserReturnedListener: () => () => {} },
-  localization: { preferredLanguageTag: () => __locale },
+  localization: { dateTimeSettings: async () => ({ locale: __locale, uses24HourClock: null }), preferredLanguageTag: () => __locale },
   security: {
     accessStatus: async () => 'available',
     requestUnlock: async () => false,

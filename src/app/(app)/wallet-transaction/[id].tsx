@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
-import dayjs from 'dayjs';
+import { formatDateTime } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import Check from 'lucide-react-native/icons/check';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +25,7 @@ import { spacing, useThemeColors } from '@/theme';
 export default function WalletTransactionDetailScreen() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const { copyText, copiedKey: copiedField } = useClipboard({ toastTarget: 'detail' });
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
@@ -76,9 +78,9 @@ export default function WalletTransactionDetailScreen() {
                   value={formatSats(tx.feesPaidMsat, t('wallet.sats_unit'), t('wallet.unknown'))}
                 />
               ) : null}
-              <ListRow title={t('wallet.created_at')} value={formatDetailTime(tx.createdAt)} />
-              {tx.settledAt ? <ListRow title={t('wallet.settled_at')} value={formatDetailTime(tx.settledAt)} /> : null}
-              {tx.expiresAt ? <ListRow title={t('wallet.expires_at')} value={formatDetailTime(tx.expiresAt)} /> : null}
+              <ListRow title={t('wallet.created_at')} value={formatDateTime(tx.createdAt, undefined, dateTimeFormatPreferences)} />
+              {tx.settledAt ? <ListRow title={t('wallet.settled_at')} value={formatDateTime(tx.settledAt, undefined, dateTimeFormatPreferences)} /> : null}
+              {tx.expiresAt ? <ListRow title={t('wallet.expires_at')} value={formatDateTime(tx.expiresAt, undefined, dateTimeFormatPreferences)} /> : null}
             </ListGroup>
 
             {tx.invoice || tx.paymentHash || tx.preimage ? (
@@ -192,10 +194,6 @@ function formatSignedSats(
   if (incoming) return `+${amount}`;
   if (outgoing) return `-${amount}`;
   return amount;
-}
-
-function formatDetailTime(ts: number): string {
-  return dayjs.unix(ts).format('YYYY-MM-DD HH:mm');
 }
 
 function shorten(value: string): string {

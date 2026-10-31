@@ -1,3 +1,5 @@
+import { useDateTimeLoaded } from '@/stores/date-time.store';
+import { loadDateTimePreferences, watchSystemDateTime } from '@/services/preferences/date-time-preferences';
 import 'react-native-get-random-values';
 import '../global.css';
 import '@/i18n';
@@ -209,6 +211,8 @@ function RootLayoutContent() {
     ? !IS_ELECTRON || desktopLayoutLoaded
     : touchLayoutLoaded;
   const themeLoaded = useThemeStore((s) => s.loaded);
+  const dateTimeLoaded = useDateTimeLoaded();
+  useEffect(watchSystemDateTime, []);
   const languageLoaded = useLanguageStore((s) => s.loaded);
   const direction = useLanguageDirection();
   const c = useThemeColors();
@@ -333,6 +337,7 @@ function RootLayoutContent() {
       // Language preference — also gated (see below), so the first frame is already
       // in the chosen language rather than flashing the system default.
       profileAsync(profile, 'language.load', () => useLanguageStore.getState().load()),
+      loadDateTimePreferences(),
       // Composer preference (Enter-to-send) — a plain device pref; read once so the
       // chat input picks it up. No render gating: the default (Enter = newline) is
       // correct until the stored value settles.
@@ -489,7 +494,7 @@ function RootLayoutContent() {
       !secureStorageReady ||
       !layoutReady ||
       !themeLoaded ||
-      !languageLoaded ||
+      !languageLoaded || !dateTimeLoaded ||
       !nativeDirectionReady ||
       status === 'idle' ||
       status === 'loading') &&
@@ -500,7 +505,7 @@ function RootLayoutContent() {
     // (falling back to the same generic "preparing" before the first phase lands —
     // both are local work, so one calm line covers them without alarming copy).
     const phase =
-      !migrationsApplied || !layoutReady || !themeLoaded || !languageLoaded || !nativeDirectionReady
+      !migrationsApplied || !layoutReady || !themeLoaded || !languageLoaded || !dateTimeLoaded || !nativeDirectionReady
         ? 'preparing'
         : (bootPhase ?? 'preparing');
     return <AppBootScreen message={t(`boot.${phase}`)} />;

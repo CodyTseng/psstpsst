@@ -40,6 +40,8 @@ import {
 import { formatBadgeCount } from '../src/lib/badge-count';
 import { NOSTR_EVENT_URL_PREFERENCE_KEY } from '../src/lib/nostr/event-url';
 import { DesktopAppUpdater } from './app-updater';
+import { DesktopLocalization } from './system-localization';
+import { withLocaleRegion } from '../src/lib/locale';
 import { DesktopNotificationPermissions, type MacNotificationPermissions } from './notification-permissions';
 import { BackgroundScheduler } from './background-scheduler';
 import { DatabaseService } from './database-service';
@@ -105,6 +107,22 @@ let proximityService: ProximityService | null = null;
 let noiseService: NoiseService | null = null;
 let appUpdateService: DesktopAppUpdater | null = null;
 const notifications = new Map<string, Notification>();
+const desktopLocalization = new DesktopLocalization({
+  platform: process.platform,
+  locale: () => {
+    const locale = app.getSystemLocale().split('@')[0].replace(/_/g, '-');
+    return locale ? withLocaleRegion(locale, app.getLocaleCountryCode()) : null;
+  },
+  desktop: process.env.XDG_CURRENT_DESKTOP ?? '',
+  helperPath: path.join(
+    app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked/dist/native') : path.join(__dirname, 'native'),
+    process.platform === 'win32' ? 'system-localization.exe' : 'system-localization',
+  ),
+  run: async (file, args) => {
+    const { stdout } = await promisify(execFile)(file, args, { timeout: 1500, maxBuffer: 4096, windowsHide: true });
+    return stdout;
+  },
+});
 const notificationPermissions = new DesktopNotificationPermissions({
   platform: process.platform,
   isSupported: () => Notification.isSupported(),
@@ -1006,6 +1024,7 @@ function registerIpcHandlers(): void {
     if (event.senderFrame !== event.sender.mainFrame) return;
     if (typeof runId === 'string') backgroundScheduler.complete(runId);
   });
+  handle(IPC.systemDateTimeSettings, () => desktopLocalization.read());
   handle(IPC.systemOpenRuntimeNotices, async () => {
     // A fixed bundled document, never a renderer-provided filesystem path.
     const noticePath = app.isPackaged

@@ -55,6 +55,9 @@ never select an adapter themselves.
 The adapter registry is initialized before routes and services. Expo is the
 mobile default. Electron installs its adapters synchronously from the preload
 bridge before Expo Router evaluates application modules.
+Desktop clock preferences are read asynchronously in the trusted main process
+through the localization port. Focus returns refresh the read; unsupported desktop
+environments report an unknown preference so shared formatting can fall back.
 
 Android application tasks use non-exported document Activities with separate
 React surfaces on one trusted ReactHost. Each application owns its runtime,

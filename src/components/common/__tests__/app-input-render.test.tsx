@@ -2,6 +2,7 @@ import { createRef } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { ThemeColorsContext, lightPalette, darkPalette } from '@/theme';
 import { AppInput } from '../AppInput';
 import { AppText } from '../AppText';
 
@@ -18,6 +19,22 @@ describe('AppInput field chrome', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  it.each([lightPalette, darkPalette])('keeps segment chrome transparent when focused in either theme', colors => {
+    act(() => {
+      renderer = create(<ThemeColorsContext.Provider value={colors}><AppInput variant="segment" value="11" /></ThemeColorsContext.Provider>);
+    });
+    const shell = () => renderer!.root.findByType(Pressable);
+    expect(shell().props.style.borderWidth).toBe(0);
+    expect(shell().props.tabIndex).toBe(-1);
+    expect(StyleSheet.flatten(renderer!.root.findByType(TextInput).props.style)).toMatchObject({ minWidth: 0, width: '100%' });
+    expect(shell().props.style.backgroundColor).toBe('transparent');
+    act(() => { renderer!.root.findByType(TextInput).props.onFocus({}); });
+    expect(shell().props.style.backgroundColor).toBe('transparent');
+    expect(StyleSheet.flatten(renderer!.root.findByType(TextInput).props.style).outlineWidth).toBe(0);
+    act(() => { renderer!.root.findByType(TextInput).props.onBlur({}); });
+    expect(shell().props.style.backgroundColor).toBe('transparent');
   });
 
   it.each([true, false])('focuses shell clicks only when editable is %s', editable => {

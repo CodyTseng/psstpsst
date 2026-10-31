@@ -26,6 +26,8 @@ type Props<T extends string> = {
   onChange: (value: T) => void;
   /** Shrink-wrap the control and size each tab from its label. */
   compact?: boolean;
+  /** Defer expensive page changes until the indicator settles; forms commit on press. */
+  deferChange?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -48,6 +50,7 @@ export function SegmentedControl<T extends string>({
   options,
   onChange,
   compact = false,
+  deferChange = true,
   style,
 }: Props<T>) {
   const c = useThemeColors();
@@ -178,10 +181,10 @@ export function SegmentedControl<T extends string>({
               const previous = visualValueRef.current;
               visualValueRef.current = option.value;
               setVisualValue(option.value);
-              // Move the lightweight indicator first. The parent swaps the
-              // potentially expensive page only after this UI-thread animation
-              // completes, so list mounting cannot interrupt the glide.
-              startTransition(previous, option.value, true);
+              // Defer expensive page swaps until the indicator settles.
+              // Small form fields can commit immediately without waiting for motion.
+              startTransition(previous, option.value, deferChange);
+              if (!deferChange) commitSelection(option.value);
             }}
             onLayout={({ nativeEvent: { layout } }) => {
               const nextLayout = { x: layout.x, width: layout.width };

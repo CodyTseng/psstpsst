@@ -4,7 +4,7 @@ import { scheduleBackgroundDeadline } from '@/lib/background-deadline';
 import { IS_DEVELOPMENT_BUILD } from '@/lib/environment';
 import { platform } from '@/platform';
 import { getActiveAccountPubkey } from '@/services/account/account.service';
-import { getMainInboxUnreadCount } from '@/services/conversation/unread-count.service';
+import { getMainInboxUnreadCount, unreadCountService } from '@/services/conversation/unread-count.service';
 import { invalidateAllWarmedMessageTails } from '@/services/conversation/message-tail-cache';
 import { observedPeerKeyService } from '@/services/dm/observed-peer-key.service';
 import { dmService } from '@/services/dm/dm.service';
@@ -87,6 +87,12 @@ class NotificationService {
   private enabled = false;
   private contentPreferences = DEFAULT_NOTIFICATION_CONTENT_PREFERENCES;
   private contentPreferencesLoaded = false;
+  private contentPreferencesLoading: Promise<void> | null = null;
+  private dndWindow: DndWindow | null = null;
+  private dndLoading: Promise<DndWindow> | null = null;
+  private cachedStatus: NotificationStatus | null = null;
+  private statusRevision = 0;
+  private settingsWrites = new Set<Promise<void>>();
   /** Whether the native handler/channel/tap-listener have been wired. Done lazily
    * once notification permission is granted (no error if the module is absent). */
   private nativeWired = false;
@@ -116,6 +122,10 @@ class NotificationService {
     this.initialized = true;
     platform.database?.addChangeListener((event) => {
       if (!event.external) return;
+      if (!event.tableName || event.tableName === 'device_preferences') {
+        this.contentPreferencesLoaded = false;
+        this.dndWindow = null;
+      }
       invalidateAllWarmedMessageTails();
       observedPeerKeyService.invalidateCache();
     });
@@ -127,14 +137,14 @@ class NotificationService {
       });
     });
 
-    const [enabled, contentPreferences] = await Promise.all([
+    // Warm settings independently so a failed optional read cannot stop notification delivery.
+    void this.getDndWindow().catch(error => console.warn('[notifications] Unable to warm quiet-hours settings.', error));
+    const [enabled] = await Promise.all([
       getNotificationsEnabled(),
-      getNotificationContentPreferences(),
+      this.getContentPreferences(),
     ]);
     this.enabled = enabled;
     pushRegistrationService.setEnabled(enabled);
-    this.contentPreferences = contentPreferences;
-    this.contentPreferencesLoaded = true;
     platform.notifications.addUserReturnedListener(() => {
       this.resetPending();
       void pushRegistrationService.reconcile();
@@ -159,12 +169,14 @@ class NotificationService {
     });
     if (this.enabled) {
       if (!platform.notifications.isAvailable()) {
+        this.cachedStatus = { enabled: false, granted: false };
         await this.syncBackgroundMessaging();
         return;
       }
       const granted = await platform.notifications.ensurePermission(
         i18n.t('notifications.channel_name'),
       );
+      this.cachedStatus = { enabled: this.enabled, granted };
       if (!granted) {
         await this.handlePermissionLoss();
         return;
@@ -318,8 +330,15 @@ class NotificationService {
 
   private async ensureContentPreferencesLoaded(): Promise<void> {
     if (this.contentPreferencesLoaded) return;
-    this.contentPreferences = await getNotificationContentPreferences();
-    this.contentPreferencesLoaded = true;
+    if (!this.contentPreferencesLoading) {
+      this.contentPreferencesLoading = getNotificationContentPreferences().then(preferences => {
+        if (!this.contentPreferencesLoaded) {
+          this.contentPreferences = preferences;
+          this.contentPreferencesLoaded = true;
+        }
+      }).finally(() => { this.contentPreferencesLoading = null; });
+    }
+    await this.contentPreferencesLoading;
   }
 
   /** Serialize a critical section after the current one; the queue itself
@@ -457,6 +476,8 @@ class NotificationService {
   }
 
   private async handlePermissionLoss(): Promise<void> {
+    this.statusRevision += 1;
+    this.cachedStatus = { enabled: false, granted: false };
     this.enabled = false;
     pushRegistrationService.setEnabled(false);
     this.clearPendingState();
@@ -468,10 +489,27 @@ class NotificationService {
 
   // ---- Settings surface ----
 
+  /** Synchronous snapshots read only settled in-memory data, never storage or OS APIs. */
+  getCachedStatus(): NotificationStatus | null { return this.cachedStatus; }
+  getCachedContentPreferences(): NotificationContentPreferences | null {
+    return this.contentPreferencesLoaded ? this.contentPreferences : null;
+  }
+  getCachedDndWindow(): DndWindow | null { return this.dndWindow; }
+
+  /** Prepare the small device settings before navigation without requesting OS permission. */
+  async prepareSettings(): Promise<void> {
+    await Promise.allSettled([...this.settingsWrites]);
+    await Promise.all([this.getContentPreferences(), this.getDndWindow(), unreadCountService.getIndicatorsEnabled()]);
+    if (this.cachedStatus == null) await this.getStatus();
+  }
+
   async getStatus(): Promise<NotificationStatus> {
-    if (!platform.notifications.isAvailable()) return { enabled: false, granted: false };
-    const granted = await platform.notifications.hasPermission();
-    return { enabled: this.enabled, granted };
+    const revision = this.statusRevision;
+    const available = platform.notifications.isAvailable();
+    const granted = available && await platform.notifications.hasPermission();
+    const status = { enabled: available && this.enabled, granted };
+    if (revision === this.statusRevision) this.cachedStatus = status;
+    return status;
   }
 
   async getContentPreferences(): Promise<NotificationContentPreferences> {
@@ -480,24 +518,41 @@ class NotificationService {
   }
 
   async setContentPreferences(preferences: NotificationContentPreferences): Promise<void> {
-    await setNotificationContentPreferences(preferences);
-    this.contentPreferences = preferences;
-    this.contentPreferencesLoaded = true;
+    await this.trackSettingsWrite(setNotificationContentPreferences(preferences).then(() => {
+      this.contentPreferences = preferences;
+      this.contentPreferencesLoaded = true;
+    }));
   }
 
   async getDndWindow(): Promise<DndWindow> {
-    return getDndWindow();
+    if (this.dndWindow) return this.dndWindow;
+    if (!this.dndLoading) {
+      this.dndLoading = getDndWindow().then(window => {
+        this.dndWindow ??= window;
+        return this.dndWindow;
+      }).finally(() => { this.dndLoading = null; });
+    }
+    return this.dndLoading;
   }
 
   async setDndWindow(window: DndWindow): Promise<void> {
-    await setDndWindow(window);
+    await this.trackSettingsWrite(setDndWindow(window).then(() => { this.dndWindow = window; }));
+  }
+
+  private async trackSettingsWrite(write: Promise<void>): Promise<void> {
+    this.settingsWrites.add(write);
+    try { await write; } finally { this.settingsWrites.delete(write); }
   }
 
   /** Turn notifications on: request OS permission, persist the preference, schedule
    * the background poll. Returns the resulting status so the UI can surface a
    * denied (or unavailable) state. */
   async enable(): Promise<NotificationStatus> {
-    if (!platform.notifications.isAvailable()) return { enabled: false, granted: false };
+    this.statusRevision += 1;
+    if (!platform.notifications.isAvailable()) {
+      this.cachedStatus = { enabled: false, granted: false };
+      return this.cachedStatus;
+    }
     const granted = await platform.notifications.ensurePermission(
       i18n.t('notifications.channel_name'),
     );
@@ -513,10 +568,13 @@ class NotificationService {
     await retryUnreadIndicator();
     await this.syncBackgroundMessaging();
     void pushRegistrationService.reconcile();
-    return { enabled: true, granted: true };
+    this.cachedStatus = { enabled: true, granted: true };
+    return this.cachedStatus;
   }
 
   async disable(): Promise<void> {
+    this.statusRevision += 1;
+    this.cachedStatus = { enabled: false, granted: this.cachedStatus?.granted ?? false };
     this.enabled = false;
     pushRegistrationService.setEnabled(false);
     await setNotificationsEnabled(false);

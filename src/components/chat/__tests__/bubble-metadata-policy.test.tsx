@@ -1,3 +1,4 @@
+import { dateTimePreferences } from '@/services/preferences/date-time-state';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { StyleSheet } from 'react-native';
@@ -25,9 +26,11 @@ jest.mock('../QuotedReply', () => ({ QuotedReply: () => null }));
 jest.mock('../MessageDeliveryStatus', () => ({ MessageDeliveryStatus: () => null }));
 jest.mock('../MessageMetaOverlay', () => ({ MessageMetaOverlay: () => null }));
 jest.mock('@/components/emoji/CustomEmojiImage', () => ({ CustomEmojiImage: () => null }));
-jest.mock('@/components/common/AppText', () => ({ AppText: () => null }));
+jest.mock('@/components/common/AppText', () => ({ AppText: (props: object) => jest.requireActual('react').createElement('mock-text', props) }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
-jest.mock('@/platform', () => ({ platform: {} }));
+jest.mock('@/platform', () => ({ platform: { localization: { preferredLanguageTag: () => 'en-US' } } }));
+
+beforeEach(() => { act(() => dateTimePreferences.setState({ timeFormat: '24h' })); });
 jest.mock('@/stores/delivery-status.store', () => ({ useDelivery: () => null }));
 jest.mock('@/i18n/direction', () => ({ useIsRTL: () => false }));
 jest.mock('@/lib/chat/message-presentation', () => ({ prepareMessagePresentation: jest.fn() }));
@@ -88,4 +91,28 @@ it.each([
   expect(renderer.root.findByType(MessageDeliveryStatus).props.color).toBe(c.accentForegroundMuted);
   act(() => renderer.unmount());
   mockColors = undefined;
+});
+
+it.each([false, true])('updates a mounted bubble clock and whitespace reservation (lifted: %s)', (liftedCopy) => {
+  const presentation = {
+    segments: [{ type: 'text', value: 'A message that ends near its time' }],
+    cardPubkey: null, customEmojiMap: new Map(), embeddedMedia: new Map(),
+    contentBlocksWithMedia: null, contentBlocksWithoutMedia: null,
+  };
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(<BubbleBody content="A message that ends near its time" isSelf createdAt={0}
+    liftedCopy={liftedCopy} presentation={presentation as never} />); });
+  const clocks = () => renderer.root.findAllByType(AppText)
+    .map(node => node.props.children).filter(value => typeof value === 'string' && /\d+:\d+/.test(value));
+  const spacers = () => renderer.root.findAll(node => typeof node.props.children === 'string' && /^\u200b[\u00a0\u2003\u2007\u2008\u202f\u2060]+$/.test(node.props.children))
+    .map(node => node.props.children as string);
+  expect(clocks()).toHaveLength(1);
+  expect(clocks()[0]).toMatch(/^\d{2}:\d{2}$/);
+  const originalWidth = spacers()[0].length;
+  act(() => dateTimePreferences.setState({ timeFormat: '12h' }));
+  expect(clocks()[0]).toMatch(/^\d{1,2}:\d{2} [AP]M$/);
+  expect(spacers()[0].length).toBeGreaterThan(originalWidth);
+  act(() => dateTimePreferences.setState({ timeFormat: '24h' }));
+  expect(spacers()[0].length).toBe(originalWidth);
+  act(() => renderer.unmount());
 });

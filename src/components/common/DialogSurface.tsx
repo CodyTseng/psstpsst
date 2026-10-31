@@ -10,6 +10,8 @@ type Props = {
   onClosed?: () => void;
   accessibilityLabel?: string;
   maxWidth?: number;
+  /** Anchored overlays share the existing modal viewport. */
+  overlay?: ReactNode;
   children: ReactNode;
 };
 
@@ -21,6 +23,7 @@ export function DialogSurface({
   accessibilityLabel,
   maxWidth = contentWidth.dialog,
   children,
+  overlay,
 }: Props) {
   const c = useThemeColors();
   const wasVisible = useRef(visible);
@@ -73,6 +76,7 @@ export function DialogSurface({
         >
           {children}
         </View>
+        {overlay}
       </View>
     </Modal>
   );

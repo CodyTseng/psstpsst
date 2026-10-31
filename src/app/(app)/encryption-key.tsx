@@ -1,3 +1,5 @@
+import { formatDate } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import { Refresh as RefreshCw } from '@solar-icons/react-native/category/arrows/Linear/Refresh';
 import { ClockCircle as Clock3 } from '@solar-icons/react-native/category/time/Linear/ClockCircle';
@@ -35,7 +37,8 @@ const INTERVAL_SAVE_DELAY_MS = 300;
 
 export default function EncryptionKeySettings() {
   const { scrolled, scrollProps } = useScrolled();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
   const activePubkey = useActiveAccount((state) => state.activePubkey);
@@ -149,7 +152,7 @@ export default function EncryptionKeySettings() {
     createdAt === undefined
       ? undefined
       : createdAt
-        ? new Date(createdAt * 1000).toLocaleDateString(i18n.resolvedLanguage)
+        ? formatDate(createdAt, undefined, dateTimeFormatPreferences)
         : t('key_rotation.unknown_date');
   const intervalLabel =
     intervalDays === undefined

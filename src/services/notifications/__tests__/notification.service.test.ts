@@ -121,6 +121,7 @@ jest.mock('@/services/account/account.service', () => ({
 
 jest.mock('@/services/conversation/unread-count.service', () => ({
   getMainInboxUnreadCount: jest.fn(async () => 7),
+  unreadCountService: { getIndicatorsEnabled: jest.fn(async () => true) },
 }));
 
 jest.mock('../notification-filter', () => ({
@@ -296,6 +297,60 @@ describe('notificationService funnel', () => {
     await flushAggregation();
 
     expect(mockPresentedBadgeCounts).toEqual([0]);
+  });
+
+  it('provides settled settings on the first render and reuses them across visits', async () => {
+    const service = await initService();
+    expect(service.getCachedContentPreferences()).toEqual(mockContentPreferences);
+    expect(service.getCachedDndWindow()).toEqual({ enabled: mockDndActive, startMinutes: 0, endMinutes: 0 });
+    expect(service.getCachedStatus()).toEqual({ enabled: true, granted: true });
+    const prefs = jest.requireMock('../notification-prefs');
+    prefs.getNotificationContentPreferences.mockClear();
+    prefs.getDndWindow.mockClear();
+    await service.prepareSettings();
+    await service.prepareSettings();
+    expect(prefs.getNotificationContentPreferences).not.toHaveBeenCalled();
+    expect(prefs.getDndWindow).not.toHaveBeenCalled();
+  });
+
+  it('keeps delivering notifications when optional quiet-hours warming fails', async () => {
+    const prefs = jest.requireMock('../notification-prefs');
+    prefs.getDndWindow.mockRejectedValueOnce(new Error('Preference read failed'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const service = await initService();
+      expect(service.getCachedDndWindow()).toBeNull();
+      await notifyAndFlush(service, [rumor('warm-failure')]);
+      expect(mockOps).toEqual(['present:notifications.new_message']);
+    } finally { warn.mockRestore(); }
+  });
+
+  it('does not replace the settled status with an older permission result after enabling', async () => {
+    const service = await initService();
+    const native = jest.requireMock('@/platform').platform.notifications;
+    let complete!: (granted: boolean) => void;
+    native.hasPermission.mockImplementationOnce(() => new Promise<boolean>(resolve => { complete = resolve; }));
+    const oldRead = service.getStatus();
+    await service.enable();
+    complete(false);
+    await oldRead;
+    expect(service.getCachedStatus()).toEqual({ enabled: true, granted: true });
+  });
+
+  it('waits for pending settings writes before preparing a returning page', async () => {
+    const service = await initService();
+    const prefs = jest.requireMock('../notification-prefs');
+    let complete!: () => void;
+    prefs.setDndWindow.mockImplementationOnce(() => new Promise<void>(resolve => { complete = resolve; }));
+    const next = { enabled: true, startMinutes: 22 * 60, endMinutes: 8 * 60 };
+    const save = service.setDndWindow(next);
+    let prepared = false;
+    const preparing = service.prepareSettings().then(() => { prepared = true; });
+    await drainMicrotasks();
+    expect(prepared).toBe(false);
+    complete();
+    await Promise.all([save, preparing]);
+    expect(service.getCachedDndWindow()).toEqual(next);
   });
 
   it('applies the sender and message-content choices independently', async () => {

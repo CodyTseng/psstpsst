@@ -597,8 +597,7 @@
     "dnd_to": "A",
     "dnd_note": "I messaggi che arrivano durante le ore silenziose restano in silenzio e ti aspettano nell'app come sempre.",
     "dnd_edit_start_title": "Inizio delle ore silenziose",
-    "dnd_edit_end_title": "Fine delle ore silenziose",
-    "dnd_time_hint": "Inserisci un orario nel formato HH:MM con l'orologio a 24 ore."
+    "dnd_edit_end_title": "Fine delle ore silenziose"
   },
   "settings": {
     "title": "Impostazioni",
@@ -1351,5 +1350,22 @@
     "inherit": "Usa lo sfondo generale",
     "load_failed": "Impossibile caricare le impostazioni dello sfondo. Riprova.",
     "save_failed": "Impossibile salvare lo sfondo. Riprova."
+  },
+  "date_time": {
+    "title": "Data e ora",
+    "time_format": "Formato ora",
+    "date_format": "Formato data",
+    "system": "Segui il sistema",
+    "12h": "12 ore",
+    "24h": "24 ore",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Personalizzato",
+    "custom_hint": "YYYY/YY = anno, M/MM = mese, D/DD = giorno. Esempio: D.M.YYYY.",
+    "custom_invalid": "Includi un anno, un mese e un giorno usando le lettere indicate.",
+    "preview": "Anteprima: {{date}}",
+    "hour": "Ora",
+    "minute": "Minuto"
   }
 }

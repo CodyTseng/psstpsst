@@ -7,7 +7,10 @@ import { notificationService } from '@/services/notifications/notification.servi
 export function useNotificationStatus(canToggle = true) {
   const canToggleRef = useRef(canToggle);
   useLayoutEffect(() => { canToggleRef.current = canToggle; }, [canToggle]);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(() => {
+    const status = notificationService.getCachedStatus();
+    return status != null && status.enabled && status.granted;
+  });
   const [busy, setBusy] = useState(false);
   const mounted = useRef(false);
   const working = useRef(false);

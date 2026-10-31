@@ -11,4 +11,8 @@ export interface LocalizationPort {
    * or null when the OS reports no locales.
    */
   preferredLanguageTag(): string | null;
+  /** Optional notification to re-read settings, including when a desktop window regains focus. */
+  addChangeListener?(listener: () => void): () => void;
+  /** Regional date conventions and device clock override, when available. */
+  dateTimeSettings(): Promise<{ locale: string | null; uses24HourClock: boolean | null }>;
 }

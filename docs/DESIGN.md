@@ -152,6 +152,8 @@ Captions beneath circular profile actions are centered within equal-width
 columns and wrap to show the full label.
 Action rails use fixed equal-width slots for each icon and caption; labels and
 temporary confirmation text never resize the slots.
+Single-choice lists reserve an equal-size indicator slot in every row; selecting
+an option never shifts its label or value.
 
 Arabic and Persian use RTL. Use `AppText` logical alignment and logical layout
 properties (`start`, `end`, `marginStart`, `paddingEnd`). Directional icons
@@ -780,6 +782,8 @@ Profile avatars with a remote picture keep a quiet surface while loading and
 show their pubkey-derived gradient only if the picture fails. Without a picture,
 they show the gradient immediately.
 
+Notification settings reuse resolved device preferences when reopened; background
+permission refreshes do not replace settled controls with loading indicators.
 Notification controls show the effective app preference and OS permission together
 where permission can be queried. Otherwise, keep visible guidance to enable
 notifications in system settings and explain that system permission cannot be checked.
@@ -846,10 +850,21 @@ Conversation lists display and sort by the conversation's updated time; lists
 supporting pins keep pinned rows first. This time is the latest previewed
 message's authored time, or creation time when there are no messages. Arrival
 time, reactions, and draft edits never independently change it.
-List timestamps and chat date labels follow the selected app language's clock,
-date order, and month naming, using compact month labels in lists.
-Quiet-hours settings display times in 24-hour format, matching Android's picker
-and Electron's time entry.
+Time and date preferences are device-wide. Automatic dates use one complete locale:
+the app language supplies wording and date structure, with the system region filling
+in when the selected language has no explicit region. System clock overrides remain
+authoritative unless the user selects a clock format. Explicit numeric date formats
+include the year; custom patterns also control separators and zero-padding. Relative
+labels and month-group headings follow the app language. Quiet-hours displays and
+editors use the same clock preference. iOS wheels expose explicit hour ranges and a
+localized day-period column in 12-hour mode, independent of OS clock overrides.
+Desktop time entry presents hours and
+minutes as editable segments in one compact clock field, with an adjacent localized
+day-period menu in 12-hour mode. Numeric segments use text selection without an
+additional focus fill or outline, and remain reachable with Tab. Show range guidance
+only for invalid input. Message metadata reserves enough space for the formatted time,
+including localized day periods in 12-hour mode. Format changes
+update all visible timestamps immediately.
 A conversation with neither messages nor a draft reserves the normal preview
 line height without showing placeholder copy.
 Read-only group conversations may retain a hidden local draft, but their list

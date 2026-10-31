@@ -27,6 +27,8 @@ type Props = {
   onConfirm: () => void;
   /** Wider registered task dialogs may opt into another content-width token. */
   maxWidth?: number;
+  /** Anchored overlays share the existing modal viewport. */
+  overlay?: ReactNode;
   /** The entry field(s) — `AppInput` plus the field-adjacent helper/error
    * caption (below the field, start-aligned; see DESIGN §8). */
   children?: ReactNode;
@@ -52,6 +54,7 @@ export function InputDialog({
   onConfirm,
   maxWidth = contentWidth.dialog,
   children,
+  overlay,
 }: Props) {
   return (
     <DialogSurface
@@ -60,6 +63,7 @@ export function InputDialog({
       onClosed={onClosed}
       accessibilityLabel={cancelLabel}
       maxWidth={maxWidth}
+      overlay={overlay}
     >
       {title != null ? (
         <AppText variant="subtitle" align="center">

@@ -597,8 +597,7 @@
     "dnd_to": "À",
     "dnd_note": "Les messages reçus pendant les heures silencieuses restent silencieux. Ils vous attendent dans l'app comme d'habitude.",
     "dnd_edit_start_title": "Début des heures silencieuses",
-    "dnd_edit_end_title": "Fin des heures silencieuses",
-    "dnd_time_hint": "Saisissez une heure au format HH:MM sur 24 heures."
+    "dnd_edit_end_title": "Fin des heures silencieuses"
   },
   "settings": {
     "title": "Réglages",
@@ -1351,5 +1350,22 @@
     "inherit": "Utiliser le fond général",
     "load_failed": "Impossible de charger les paramètres du fond. Réessayez.",
     "save_failed": "Impossible d’enregistrer le fond. Réessayez."
+  },
+  "date_time": {
+    "title": "Date et heure",
+    "time_format": "Format de l’heure",
+    "date_format": "Format de date",
+    "system": "Suivre le système",
+    "12h": "12 heures",
+    "24h": "24 heures",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Personnalisé",
+    "custom_hint": "YYYY/YY = année, M/MM = mois, D/DD = jour. Exemple : D.M.YYYY.",
+    "custom_invalid": "Indiquez une année, un mois et un jour avec les lettres proposées.",
+    "preview": "Aperçu : {{date}}",
+    "hour": "Heure",
+    "minute": "Minute"
   }
 }

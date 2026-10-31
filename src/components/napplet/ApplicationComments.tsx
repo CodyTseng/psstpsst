@@ -1,3 +1,4 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { useErrorToast } from '@/hooks/use-error-toast';
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, FlatList, Platform, ScrollView, StyleSheet, View, type ScrollViewProps, type TextInput, type TextStyle } from 'react-native';
@@ -86,6 +87,7 @@ const CommentItem = memo(function CommentItem({ row, account, session, replying,
   const { name, profile } = useDisplayName(event.pubkey);
   const colors = useThemeColors();
   const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const guideStart = (depth: number) => spacing.lg + depth * replyIndent + avatarSize / 2;
   return <View style={{ marginTop: row.depth === 0 ? spacing.xs : 0 }}>
     <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
@@ -109,7 +111,7 @@ const CommentItem = memo(function CommentItem({ row, account, session, replying,
       <View style={{ flex: 1, gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
           <AppText variant="caption" tone="muted" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</AppText>
-          <AppText variant="caption" tone="muted">{formatListTime(event.created_at)}</AppText>
+          <AppText variant="caption" tone="muted">{formatListTime(event.created_at, undefined, dateTimeFormatPreferences)}</AppText>
         </View>
         <AppText {...userDirection} style={userTextStyle} selectable>{event.content}</AppText>
         <View style={{ alignItems: 'flex-start' }}>

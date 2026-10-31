@@ -6,6 +6,7 @@ export type SettingsSelection =
   | 'notifications'
   | 'appearance'
   | 'language'
+  | 'date-time'
   | 'relays'
   | 'media-servers'
   | 'data'
@@ -41,6 +42,7 @@ const SETTINGS_ITEM_BY_ROUTE: Readonly<Record<string, SettingsSelection>> = {
   notifications: 'notifications',
   appearance: 'appearance',
   language: 'language',
+  'date-time': 'date-time',
   relays: 'relays',
   'media-servers': 'media-servers',
   data: 'data',

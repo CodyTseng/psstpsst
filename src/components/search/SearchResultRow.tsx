@@ -1,3 +1,4 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
@@ -71,6 +72,7 @@ export function SearchResultRow({
   onPress,
   identityKind = 'relay',
 }: Props) {
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const accountPubkey = useActiveAccount((s) => s.activePubkey) ?? '';
   const isGroup = Array.isArray(groupMemberPubkeys);
@@ -164,7 +166,7 @@ export function SearchResultRow({
       </View>
       {timestamp != null ? (
         <AppText variant="caption" tone="subtle">
-          {formatListTime(timestamp)}
+          {formatListTime(timestamp, undefined, dateTimeFormatPreferences)}
         </AppText>
       ) : null}
     </Pressable>

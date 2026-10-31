@@ -1,3 +1,4 @@
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -52,6 +53,7 @@ type AlbumItem = MonthItem | RowItem;
 export default function ConversationMediaGallery() {
   const { scrolled, scrollProps, measurementProps } = useScrolled({ inverted: true });
   const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const params = useLocalSearchParams<{
     key: string | string[];
     focus?: string | string[];
@@ -121,7 +123,7 @@ export default function ConversationMediaGallery() {
       if (m !== curMonth) {
         flushRow();
         curMonth = m;
-        label = formatMonthLabel(item.createdAt);
+        label = formatMonthLabel(item.createdAt, dateTimeFormatPreferences);
         asc.push({ type: 'month', key: `m:${m}`, monthLabel: label });
       }
       buf.push(item);
@@ -129,7 +131,7 @@ export default function ConversationMediaGallery() {
     }
     flushRow();
     return asc.reverse();
-  }, [columns, items]);
+  }, [columns, items, dateTimeFormatPreferences]);
 
   // Precomputed offsets so `getItemLayout` is O(1) — lets `scrollToIndex` (the
   // anchor jump) land exactly without measuring rows first.

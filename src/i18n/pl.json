@@ -600,8 +600,7 @@
     "dnd_to": "Do",
     "dnd_note": "Wiadomości, które dotrą w godzinach ciszy, pozostaną ciche i jak zwykle poczekają na Ciebie w aplikacji.",
     "dnd_edit_start_title": "Początek godzin ciszy",
-    "dnd_edit_end_title": "Koniec godzin ciszy",
-    "dnd_time_hint": "Wpisz godzinę w formacie HH:MM w zegarze 24-godzinnym."
+    "dnd_edit_end_title": "Koniec godzin ciszy"
   },
   "settings": {
     "title": "Ustawienia",
@@ -1356,5 +1355,22 @@
     "inherit": "Użyj tapety ogólnej",
     "load_failed": "Nie udało się wczytać ustawień tapety. Spróbuj ponownie.",
     "save_failed": "Nie udało się zapisać tapety. Spróbuj ponownie."
+  },
+  "date_time": {
+    "title": "Data i czas",
+    "time_format": "Format czasu",
+    "date_format": "Format daty",
+    "system": "Zgodnie z systemem",
+    "12h": "12-godzinny",
+    "24h": "24-godzinny",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "Własny",
+    "custom_hint": "YYYY/YY = rok, M/MM = miesiąc, D/DD = dzień. Przykład: D.M.YYYY.",
+    "custom_invalid": "Użyj podanych liter, aby uwzględnić rok, miesiąc i dzień po jednym razie.",
+    "preview": "Podgląd: {{date}}",
+    "hour": "Godzina",
+    "minute": "Minuta"
   }
 }

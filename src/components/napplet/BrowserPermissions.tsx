@@ -1,3 +1,5 @@
+import { formatDateTime } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { useErrorToast } from '@/hooks/use-error-toast';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -13,7 +15,8 @@ import { PermissionRuleEditor } from './SigningRuleEditor';
 import { spacing, useThemeColors } from '@/theme';
 
 export function BrowserPermissions({ accountPubkey, sourceId }: { accountPubkey: string; sourceId: string }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const data = useBrowserPermissions(accountPubkey, sourceId);
   useErrorToast(data?.error && 'applications.request_failed');
@@ -25,7 +28,7 @@ export function BrowserPermissions({ accountPubkey, sourceId }: { accountPubkey:
       : !data.rules?.length ? null : <ListGroup>{data.rules.map(rule =>
         <ListRow key={rule.resource} title={browserPermissionLabel(rule.resource, t)}
           subtitle={rule.expiresAt === null ? t('applications.signing_duration_always') : t('applications.signing_until', {
-            time: new Date(rule.expiresAt).toLocaleString(i18n.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            time: formatDateTime(rule.expiresAt / 1000, undefined, dateTimeFormatPreferences),
           })}
           titleTrailing={<AppText variant="caption" tone={rule.decision === 'allow' ? 'success' : 'danger'}>{t(rule.decision === 'allow' ? 'applications.allow' : 'applications.signing_reject')}</AppText>}
           trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />}

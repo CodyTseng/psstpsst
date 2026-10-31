@@ -228,6 +228,8 @@ export function createElectronAdapters(): PlatformAdapters {
       openExternalUrl: (url) => bridge.system.openExternalUrl(url).then(() => true, () => false),
     },
     localization: {
+      dateTimeSettings: () => bridge.system.dateTimeSettings(),
+      addChangeListener: listener => bridge.windowFocus.onChange(focused => { if (focused) listener(); }),
       preferredLanguageTag: () => navigator.languages[0] ?? null,
     },
     audioSession: {

@@ -370,6 +370,7 @@ const bridge: ElectronBridge = {
     unregister: () => invoke(IPC.backgroundUnregister),
   },
   system: {
+    dateTimeSettings: () => invoke(IPC.systemDateTimeSettings),
     openRuntimeNotices: () => invoke(IPC.systemOpenRuntimeNotices),
     openExternalUrl: (url) => invoke(IPC.systemOpenExternal, url),
     openApprovedBrowserUrl: (url) => invoke(IPC.browserOpenExternal, url),

@@ -594,8 +594,7 @@
     "dnd_to": "종료",
     "dnd_note": "조용한 시간 동안 도착한 메시지는 알림 없이 조용히 저장되며, 평소처럼 앱에서 확인할 수 있습니다.",
     "dnd_edit_start_title": "조용한 시간 시작",
-    "dnd_edit_end_title": "조용한 시간 종료",
-    "dnd_time_hint": "24시간제 HH:MM 형식으로 시간을 입력하세요."
+    "dnd_edit_end_title": "조용한 시간 종료"
   },
   "settings": {
     "title": "설정",
@@ -1346,5 +1345,22 @@
     "inherit": "기본 배경화면 사용",
     "load_failed": "배경화면 설정을 불러오지 못했습니다. 다시 시도해 주세요.",
     "save_failed": "배경화면을 저장하지 못했습니다. 다시 시도해 주세요."
+  },
+  "date_time": {
+    "title": "날짜 및 시간",
+    "time_format": "시간 형식",
+    "date_format": "날짜 형식",
+    "system": "시스템 설정 따르기",
+    "12h": "12시간제",
+    "24h": "24시간제",
+    "ymd": "YYYY-MM-DD",
+    "dmy": "DD-MM-YYYY",
+    "mdy": "MM-DD-YYYY",
+    "custom": "사용자 지정",
+    "custom_hint": "YYYY/YY = 연도, M/MM = 월, D/DD = 일. 예: D.M.YYYY.",
+    "custom_invalid": "지원되는 문자로 연도, 월, 일을 각각 한 번씩 포함하세요.",
+    "preview": "미리 보기: {{date}}",
+    "hour": "시",
+    "minute": "분"
   }
 }

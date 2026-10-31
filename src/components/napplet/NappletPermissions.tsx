@@ -1,3 +1,5 @@
+import { formatDateTime } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import { isApplicationAction } from '@/services/signing/action-request';
 import { useErrorToast } from '@/hooks/use-error-toast';
 import { updatePermissions } from '@/services/signing/management';
@@ -39,7 +41,8 @@ function mergeRules(previous: EditableSigningRule[], saved: SigningRule[]): Edit
 }
 
 function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded = false }: { accountPubkey: string; release?: NappletRelease; sourceId?: string; initiallyExpanded?: boolean }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [history, setHistory] = useState(false);
@@ -76,7 +79,7 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
       {!data && !error && !rows.length ? <ActivityIndicator color={c.accent} /> : null}
       {rows.length ? <ListGroup>{rows.map((rule) => {
         const status = rule.duration === 'timed' && rule.expiresAt
-          ? t('applications.signing_until', { time: new Date(rule.expiresAt).toLocaleString(i18n?.resolvedLanguage, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+          ? t('applications.signing_until', { time: formatDateTime(rule.expiresAt / 1000, undefined, dateTimeFormatPreferences) })
           : t(rule.duration === 'session' ? 'applications.signing_session' : 'applications.signing_duration_always');
         const scope = [...(rule.scope.kind !== undefined && !isApplicationAction(rule.scope) ? [t('chat.event_reference.kind', { kind: rule.scope.kind })] : []), ...(rule.decision === 'ask' ? [] : [status])];
         if (rule.scope.scopeKey !== undefined) scope.push(`${rule.scope.kind !== undefined && rule.scope.kind >= 30000 && rule.scope.kind < 40000 ? 'd' : t('applications.signing_scope_key')}: ${JSON.stringify(rule.scope.scopeKey)}`);
@@ -97,7 +100,7 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
           onPress={() => setHistory(!history)} />
         {history ? <ListGroup>{activity.map((entry, index) => <ListRow key={`${entry.at}:${index}`}
           title={signingAction(entry.scope, t)}
-          subtitle={`${t(`applications.signing_${entry.decision}`)} · ${new Date(entry.at).toLocaleString(i18n?.resolvedLanguage)}`} />)}</ListGroup> : null}
+          subtitle={`${t(`applications.signing_${entry.decision}`)} · ${formatDateTime(entry.at / 1000, undefined, dateTimeFormatPreferences)}`} />)}</ListGroup> : null}
       </> : null}
     </> : null}
     {editor ? <SigningRuleEditor rule={editor.row} visible={editor.visible}

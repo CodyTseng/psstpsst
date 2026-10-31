@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import dayjs from 'dayjs';
+import { formatDateTime } from '@/lib/time';
+import { useDateTimePreferences } from '@/stores/date-time.store';
 import Check from 'lucide-react-native/icons/check';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -42,6 +43,7 @@ import { spacing, useThemeColors } from '@/theme';
 
 export default function WalletInvoiceScreen() {
   const { t } = useTranslation();
+  const dateTimeFormatPreferences = useDateTimePreferences();
   const { copyText, copiedKey: copiedField } = useClipboard({ toastTarget: 'detail' });
   const insets = useSafeAreaInsets();
   const titleClearance = useScreenHeaderClearance();
@@ -284,13 +286,13 @@ export default function WalletInvoiceScreen() {
                 />
               ) : null}
               {createdAt ? (
-                <ListRow title={t('wallet.created_at')} value={formatDetailTime(createdAt)} />
+                <ListRow title={t('wallet.created_at')} value={formatDateTime(createdAt, undefined, dateTimeFormatPreferences)} />
               ) : null}
               {settledAt ? (
-                <ListRow title={t('wallet.settled_at')} value={formatDetailTime(settledAt)} />
+                <ListRow title={t('wallet.settled_at')} value={formatDateTime(settledAt, undefined, dateTimeFormatPreferences)} />
               ) : null}
               {expiresAt ? (
-                <ListRow title={t('wallet.expires_at')} value={formatDetailTime(expiresAt)} />
+                <ListRow title={t('wallet.expires_at')} value={formatDateTime(expiresAt, undefined, dateTimeFormatPreferences)} />
               ) : null}
             </ListGroup>
 
@@ -402,10 +404,6 @@ function CopyableDetailRow({
       onPress={onCopy}
     />
   );
-}
-
-function formatDetailTime(ts: number): string {
-  return dayjs.unix(ts).format('YYYY-MM-DD HH:mm');
 }
 
 function shorten(value: string): string {
