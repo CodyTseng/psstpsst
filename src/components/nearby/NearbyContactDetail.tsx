@@ -25,6 +25,7 @@ import { BottomSheet } from '@/components/common/BottomSheet';
 import { InputDialog } from '@/components/common/InputDialog';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
+import { ChatWallpaperRow } from '@/components/settings/chat-wallpaper-row';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { ProfileAction } from '@/components/profile/ProfileAction';
 import { NearbyOutgoingRequestSheet } from '@/components/proximity/nearby-outgoing-request-sheet';
@@ -353,6 +354,7 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
 
             <View style={{ marginTop: spacing['2xl'] }}>
               <ListGroup>
+                <ChatWallpaperRow conversationKey={pubkey} />
                 <ListRow
                   icon={<Fingerprint size={22} color={c.text} />}
                   title={t('profile.public_key')}

@@ -13,6 +13,7 @@ import { AppText } from '@/components/common/AppText';
 import { GroupAvatar } from '@/components/common/GroupAvatar';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
+import { ChatWallpaperRow } from '@/components/settings/chat-wallpaper-row';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { Toggle } from '@/components/common/Toggle';
@@ -234,6 +235,9 @@ export default function GroupInfoScreen() {
                     />
                   ) : null}
                 </View>
+                <ListGroup style={{ alignSelf: 'stretch', marginTop: spacing.xl }}>
+                  <ChatWallpaperRow conversationKey={conversationKey} />
+                </ListGroup>
                 {!localOnly ? (
                   <ListGroup style={{ alignSelf: 'stretch', marginTop: spacing.xl }}>
                     <ListRow

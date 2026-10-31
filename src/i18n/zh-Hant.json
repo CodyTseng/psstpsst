@@ -1334,5 +1334,17 @@
   },
   "webln": {
     "invoice_title": "建立收款請求"
+  },
+  "wallpaper": {
+    "title": "聊天桌布",
+    "choose_photo": "新增桌布",
+    "delete": "刪除桌布",
+    "delete_confirm": "刪除這張桌布？使用它的對話將恢復預設桌布。",
+    "delete_failed": "無法刪除桌布，請重試。",
+    "custom_photo": "自選照片",
+    "none": "無桌布",
+    "inherit": "跟隨全域桌布",
+    "load_failed": "無法載入桌布設定，請重試。",
+    "save_failed": "無法儲存桌布，請重試。"
   }
 }

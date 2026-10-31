@@ -1344,5 +1344,17 @@
   },
   "webln": {
     "invoice_title": "Utwórz prośbę o płatność"
+  },
+  "wallpaper": {
+    "title": "Tapeta czatu",
+    "choose_photo": "Dodaj tapetę",
+    "delete": "Usuń tapetę",
+    "delete_confirm": "Usunąć tę tapetę? Rozmowy, które jej używają, powrócą do domyślnej tapety.",
+    "delete_failed": "Nie udało się usunąć tapety. Spróbuj ponownie.",
+    "custom_photo": "Własne zdjęcie",
+    "none": "Bez tapety",
+    "inherit": "Użyj tapety ogólnej",
+    "load_failed": "Nie udało się wczytać ustawień tapety. Spróbuj ponownie.",
+    "save_failed": "Nie udało się zapisać tapety. Spróbuj ponownie."
   }
 }

@@ -33,6 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { bottomBarHeight, headerHeight, useThemeColors } from '@/theme';
 import { AppScreen } from '@/components/common/AppScreen';
+import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
 import { PhotoCaptureModal } from '@/components/common/PhotoCaptureModal';
 import type { AttachmentSource } from '@/components/chat/AttachmentPanel';
 import {
@@ -700,6 +701,7 @@ export default function ChatPageRuntime() {
             </View>
           ) : null}
           <View style={{ flex: 1 }}>
+            <ChatWallpaper accountPubkey={accountPubkey} conversationKey={conversationKey} />
             {messageRuntimeReady ? (
               <Reanimated.View
                 entering={FadeIn.duration(150)

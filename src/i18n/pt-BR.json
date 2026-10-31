@@ -1339,5 +1339,17 @@
   },
   "webln": {
     "invoice_title": "Criar solicitação de pagamento"
+  },
+  "wallpaper": {
+    "title": "Papel de parede da conversa",
+    "choose_photo": "Adicionar papel de parede",
+    "delete": "Excluir papel de parede",
+    "delete_confirm": "Excluir este papel de parede? As conversas que o usam voltarão ao papel de parede padrão.",
+    "delete_failed": "Não foi possível excluir o papel de parede. Tente novamente.",
+    "custom_photo": "Foto personalizada",
+    "none": "Sem papel de parede",
+    "inherit": "Usar papel de parede geral",
+    "load_failed": "Não foi possível carregar as configurações do papel de parede. Tente novamente.",
+    "save_failed": "Não foi possível salvar o papel de parede. Tente novamente."
   }
 }

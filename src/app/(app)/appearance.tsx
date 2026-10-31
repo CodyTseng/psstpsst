@@ -8,6 +8,7 @@ import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
+import { ChatWallpaperRow } from '@/components/settings/chat-wallpaper-row';
 import { type ThemePreference, useThemeStore } from '@/stores/theme.store';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { iconStrokeWidth } from '@/theme/icons';
@@ -19,11 +20,7 @@ const MODES: { value: ThemePreference; labelKey: string }[] = [
   { value: 'dark', labelKey: 'appearance.dark' },
 ];
 
-/**
- * Appearance — two choices: the light/dark **mode** (follow the system, or lock
- * to Light / Dark) and the **accent colour**. Both persist per device and apply
- * app-wide the instant they're tapped (DESIGN §2).
- */
+/** Device-level theme mode, accent colour, and default chat wallpaper. */
 export default function AppearanceSettings() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
@@ -57,6 +54,10 @@ export default function AppearanceSettings() {
           <SectionLabel>{t('appearance.color')}</SectionLabel>
           <AccentPicker />
         </View>
+
+        <ListGroup>
+          <ChatWallpaperRow />
+        </ListGroup>
       </ScrollView>
       <ScreenHeader bordered={scrolled} title={t('settings.appearance')} />
     </AppScreen>

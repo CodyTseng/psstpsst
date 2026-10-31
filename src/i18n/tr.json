@@ -1334,5 +1334,17 @@
   },
   "webln": {
     "invoice_title": "Ödeme isteği oluştur"
+  },
+  "wallpaper": {
+    "title": "Sohbet duvar kağıdı",
+    "choose_photo": "Duvar kağıdı ekle",
+    "delete": "Duvar kağıdını sil",
+    "delete_confirm": "Bu duvar kağıdı silinsin mi? Bunu kullanan sohbetler varsayılan duvar kağıdına dönecek.",
+    "delete_failed": "Duvar kağıdı silinemedi. Lütfen tekrar deneyin.",
+    "custom_photo": "Özel fotoğraf",
+    "none": "Duvar kağıdı yok",
+    "inherit": "Genel duvar kağıdını kullan",
+    "load_failed": "Duvar kağıdı ayarları yüklenemedi. Lütfen tekrar deneyin.",
+    "save_failed": "Duvar kağıdı kaydedilemedi. Lütfen tekrar deneyin."
   }
 }

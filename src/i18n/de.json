@@ -1334,5 +1334,17 @@
   },
   "webln": {
     "invoice_title": "Zahlungsanforderung erstellen"
+  },
+  "wallpaper": {
+    "title": "Chat-Hintergrund",
+    "choose_photo": "Hintergrund hinzufügen",
+    "delete": "Hintergrund löschen",
+    "delete_confirm": "Diesen Hintergrund löschen? Chats, die ihn verwenden, kehren zum Standardhintergrund zurück.",
+    "delete_failed": "Hintergrund konnte nicht gelöscht werden. Bitte erneut versuchen.",
+    "custom_photo": "Eigenes Foto",
+    "none": "Kein Hintergrundbild",
+    "inherit": "Allgemeinen Hintergrund verwenden",
+    "load_failed": "Hintergrundeinstellungen konnten nicht geladen werden. Bitte erneut versuchen.",
+    "save_failed": "Hintergrund konnte nicht gespeichert werden. Bitte erneut versuchen."
   }
 }

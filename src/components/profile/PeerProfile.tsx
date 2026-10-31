@@ -36,6 +36,7 @@ import { InputDialog } from '@/components/common/InputDialog';
 import { IconButton } from '@/components/common/IconButton';
 import { ListGroup } from '@/components/common/ListGroup';
 import { ListRow } from '@/components/common/ListRow';
+import { ChatWallpaperRow } from '@/components/settings/chat-wallpaper-row';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SelfBadge } from '@/components/common/SelfBadge';
 import { Nip05Label } from '@/components/profile/Nip05Label';
@@ -423,6 +424,7 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
         {isSelf ? (
           <View style={{ marginTop: spacing.xl }}>
             <ListGroup>
+              <ChatWallpaperRow conversationKey={conversationKey} />
               {hasConversationContent ? (
                 <ListRow
                   icon={<Search size={22} color={c.text} />}
@@ -455,6 +457,7 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
         {!isSelf ? (
           <View style={{ marginTop: spacing['2xl'] }}>
             <ListGroup>
+              <ChatWallpaperRow conversationKey={conversationKey} />
               {commonGroupsLoaded && commonGroups.length > 0 ? (
                 <ListRow
                   icon={<Users size={22} color={c.text} strokeWidth={iconStrokeWidth.default} />}

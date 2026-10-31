@@ -1334,5 +1334,17 @@
   },
   "webln": {
     "invoice_title": "Fizetési kérelem létrehozása"
+  },
+  "wallpaper": {
+    "title": "Csevegés háttere",
+    "choose_photo": "Háttérkép hozzáadása",
+    "delete": "Háttérkép törlése",
+    "delete_confirm": "Törlöd ezt a háttérképet? Az ezt használó beszélgetések visszaállnak az alapértelmezett háttérképre.",
+    "delete_failed": "Nem sikerült törölni a háttérképet. Próbáld újra.",
+    "custom_photo": "Saját fénykép",
+    "none": "Nincs háttérkép",
+    "inherit": "Általános háttérkép használata",
+    "load_failed": "Nem sikerült betölteni a háttérkép beállításait. Próbáld újra.",
+    "save_failed": "Nem sikerült menteni a háttérképet. Próbáld újra."
   }
 }

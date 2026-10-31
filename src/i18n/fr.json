@@ -1339,5 +1339,17 @@
   },
   "webln": {
     "invoice_title": "Créer une demande de paiement"
+  },
+  "wallpaper": {
+    "title": "Fond de discussion",
+    "choose_photo": "Ajouter un fond",
+    "delete": "Supprimer le fond",
+    "delete_confirm": "Supprimer ce fond ? Les discussions qui l’utilisent reprendront le fond par défaut.",
+    "delete_failed": "Impossible de supprimer le fond. Réessayez.",
+    "custom_photo": "Photo personnalisée",
+    "none": "Aucun fond",
+    "inherit": "Utiliser le fond général",
+    "load_failed": "Impossible de charger les paramètres du fond. Réessayez.",
+    "save_failed": "Impossible d’enregistrer le fond. Réessayez."
   }
 }

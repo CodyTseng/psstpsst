@@ -48,6 +48,17 @@ surface, normal surface, elevated surface. Light mode uses a grey page with
 white cards; dark mode uses a near-black page with lighter cards. Do not give a
 single screen its own palette.
 
+Chat wallpapers are local user content behind the message timeline only. A
+conversation may follow the device default, use its own image, or explicitly
+show no wallpaper. Keep theme-aware shading over images for readable timeline
+metadata; headers, bubbles, and the composer retain their theme surfaces.
+Wallpaper settings use a thumbnail grid with a selected checkmark. Adding images
+keeps them in a reusable device library; choosing a tile applies immediately
+without a separate save step. No wallpaper and the conversation’s global-default
+choice belong in the same grid. A dashed add tile stays at the end of the grid.
+Selection changes keep other thumbnails visually stable. A header Edit/Done
+action exposes deletion controls on library images only.
+
 The app follows the system colour scheme unless the user selects Light or Dark.
 Read the effective scheme through `useThemeColors()` or
 `useEffectiveColorScheme()`, never React Native's `useColorScheme()` directly.

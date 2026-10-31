@@ -1334,5 +1334,17 @@
   },
   "webln": {
     "invoice_title": "创建收款请求"
+  },
+  "wallpaper": {
+    "title": "聊天壁纸",
+    "choose_photo": "添加壁纸",
+    "delete": "删除壁纸",
+    "delete_confirm": "删除这张壁纸？使用它的会话将恢复默认壁纸。",
+    "delete_failed": "无法删除壁纸，请重试。",
+    "custom_photo": "自选照片",
+    "none": "无壁纸",
+    "inherit": "跟随全局壁纸",
+    "load_failed": "无法加载壁纸设置，请重试。",
+    "save_failed": "无法保存壁纸，请重试。"
   }
 }

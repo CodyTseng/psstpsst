@@ -215,6 +215,8 @@ export async function removeAccount(pubkey: string): Promise<void> {
   // (Blobs a remaining account still references are kept.)
   await deleteAccountAttachments(pubkey);
   await deleteAccountNearbyFileData(pubkey);
+  const { removeAccountWallpapers } = await import('../preferences/chat-wallpaper.service');
+  await removeAccountWallpapers(pubkey);
   await deleteAllAccountArchives(pubkey);
   const { removeAccountLocalApplications } = await import('../explore/local-applications');
   await removeAccountLocalApplications(pubkey);

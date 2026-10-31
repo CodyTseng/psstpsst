@@ -1339,5 +1339,17 @@
   },
   "webln": {
     "invoice_title": "Crear solicitud de pago"
+  },
+  "wallpaper": {
+    "title": "Fondo del chat",
+    "choose_photo": "Añadir fondo",
+    "delete": "Eliminar fondo",
+    "delete_confirm": "¿Eliminar este fondo? Las conversaciones que lo usan volverán al fondo predeterminado.",
+    "delete_failed": "No se pudo eliminar el fondo. Inténtalo de nuevo.",
+    "custom_photo": "Foto personalizada",
+    "none": "Sin fondo",
+    "inherit": "Usar el fondo general",
+    "load_failed": "No se pudo cargar la configuración del fondo. Inténtalo de nuevo.",
+    "save_failed": "No se pudo guardar el fondo. Inténtalo de nuevo."
   }
 }

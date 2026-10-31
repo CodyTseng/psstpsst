@@ -1339,5 +1339,17 @@
   },
   "webln": {
     "invoice_title": "Crea richiesta di pagamento"
+  },
+  "wallpaper": {
+    "title": "Sfondo della chat",
+    "choose_photo": "Aggiungi sfondo",
+    "delete": "Elimina sfondo",
+    "delete_confirm": "Eliminare questo sfondo? Le conversazioni che lo usano torneranno allo sfondo predefinito.",
+    "delete_failed": "Impossibile eliminare lo sfondo. Riprova.",
+    "custom_photo": "Foto personalizzata",
+    "none": "Nessuno sfondo",
+    "inherit": "Usa lo sfondo generale",
+    "load_failed": "Impossibile caricare le impostazioni dello sfondo. Riprova.",
+    "save_failed": "Impossibile salvare lo sfondo. Riprova."
   }
 }

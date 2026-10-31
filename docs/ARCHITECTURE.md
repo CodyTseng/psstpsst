@@ -110,6 +110,13 @@ the renderer's perspective on every runtime.
   are resolved during that update, never by individual controls; derived palettes
   are not persisted and historical selections are not retained.
 - Attachment bytes live in managed files, not database blobs.
+- Chat wallpaper preferences are device-local; conversation overrides include
+  the owning account and conversation key. Persist relative managed image names,
+  resolve paths at runtime, and remove account overrides on account removal.
+  Reusable wallpaper images belong to a shared device library; changing a
+  selection or removing an account never deletes library images. Explicit library
+  deletion atomically clears every referencing preference and records a removal
+  marker before file cleanup, so failed cleanup cannot restore a deleted image.
 - Private-list edits commit atomically with durable sync revisions and complete
   independently of background encryption, signing, and publication. Contacts and
   saved groups share a revision; mute and block have separate account/list

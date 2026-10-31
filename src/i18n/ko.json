@@ -1334,5 +1334,17 @@
   },
   "webln": {
     "invoice_title": "결제 요청 만들기"
+  },
+  "wallpaper": {
+    "title": "채팅 배경화면",
+    "choose_photo": "배경화면 추가",
+    "delete": "배경화면 삭제",
+    "delete_confirm": "이 배경화면을 삭제할까요? 사용 중인 대화는 기본 배경화면으로 돌아갑니다.",
+    "delete_failed": "배경화면을 삭제하지 못했습니다. 다시 시도해 주세요.",
+    "custom_photo": "사용자 사진",
+    "none": "배경화면 없음",
+    "inherit": "기본 배경화면 사용",
+    "load_failed": "배경화면 설정을 불러오지 못했습니다. 다시 시도해 주세요.",
+    "save_failed": "배경화면을 저장하지 못했습니다. 다시 시도해 주세요."
   }
 }

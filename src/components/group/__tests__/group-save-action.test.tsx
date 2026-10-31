@@ -34,6 +34,8 @@ jest.mock('react-i18next', () => ({
 jest.mock('lucide-react-native/icons/log-out', () => () => null);
 jest.mock('lucide-react-native/icons/pencil', () => () => null);
 jest.mock('lucide-react-native/icons/user-plus', () => () => null);
+jest.mock('@/components/common/DirectionalChevron', () => ({ DirectionalChevron: () => null }));
+jest.mock('@solar-icons/react-native/category/video/Linear/Gallery', () => ({ Gallery: () => null }), { virtual: true });
 jest.mock('@solar-icons/react-native/category/notifications/Linear/Bell', () => ({
   Bell: () => null,
 }), { virtual: true });

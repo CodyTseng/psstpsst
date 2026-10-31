@@ -1334,5 +1334,17 @@
   },
   "webln": {
     "invoice_title": "Create payment request"
+  },
+  "wallpaper": {
+    "title": "Chat wallpaper",
+    "choose_photo": "Add wallpaper",
+    "delete": "Delete wallpaper",
+    "delete_confirm": "Delete this wallpaper? Conversations using it will return to the default wallpaper.",
+    "delete_failed": "Could not delete the wallpaper. Please try again.",
+    "custom_photo": "Custom photo",
+    "none": "No wallpaper",
+    "inherit": "Use global wallpaper",
+    "load_failed": "Could not load wallpaper settings. Please try again.",
+    "save_failed": "Could not save the wallpaper. Please try again."
   }
 }
