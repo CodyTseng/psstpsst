@@ -17,7 +17,7 @@ import { iconStrokeWidth } from '@/theme/icons';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePrimaryPaneFocused } from '@/hooks/use-primary-pane-focused';
-import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
+import { useExploreSearchHandoffStore, type ExploreSearchHandoff } from '@/stores/explore-search-handoff.store';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getBottomChromeInset } from '@/lib/layout/bottom-chrome';
@@ -42,22 +42,31 @@ type ExploreMode = 'my-apps' | 'discover';
 
 export default function ExploreScreen() {
   const account = useActiveAccount((s) => s.activePubkey);
-  const [mode, setMode] = useState<{ account: string | null; value: ExploreMode; handoff?: number }>({ account, value: 'my-apps' });
+  const focused = usePrimaryPaneFocused();
+  const [view, setView] = useState<{ account: string | null; value: ExploreMode; handoff: ExploreSearchHandoff | null }>({
+    account, value: 'my-apps', handoff: null,
+  });
   const { searchHandoff } = useLocalSearchParams<{ searchHandoff?: string }>();
   const pending = useExploreSearchHandoffStore(state => state.pending);
-  const id = typeof searchHandoff === 'string' ? Number(searchHandoff) : NaN;
-  const handoff = pending?.id === id && pending.account === account ? pending : undefined;
-  const input = handoff?.value;
-  if (handoff?.action && mode.handoff !== id) setMode({ account, value: 'discover', handoff: id });
+  const routeId = typeof searchHandoff === 'string' ? Number(searchHandoff) : NaN;
+  const incoming = pending?.account === account && (focused || pending.id === routeId) ? pending : null;
+  // Navigating to the selected tab can reuse its route without updating params.
+  // Retain the accepted request so consuming it or receiving late params cannot reset the filter.
+  if (view.account !== account || incoming && view.handoff?.id !== incoming.id) {
+    setView({ account, value: incoming?.action ? 'discover' : view.account === account ? view.value : 'my-apps',
+      handoff: incoming ?? (view.account === account ? view.handoff : null) });
+  }
+  const handoff = view.account === account ? view.handoff : null;
   useEffect(() => {
-    if (input !== undefined && account) {
-      useExploreSearchHandoffStore.getState().consume(id, account);
+    if (handoff && account) {
+      useExploreSearchHandoffStore.getState().consume(handoff.id, account);
     }
-  }, [input, account, id, handoff]);
-  return <AccountExplore key={`${account ?? 'signed-out'}:${searchHandoff ?? ''}`} account={account} initialAddress={input} initialAction={handoff?.action}
-    tab={mode.account === account ? mode.value : 'my-apps'} onTabChange={value => setMode(current => ({ ...current, account, value }))} />;
+  }, [account, handoff]);
+  return <AccountExplore key={`${account ?? 'signed-out'}:${handoff?.id ?? ''}`} account={account}
+    initialAddress={handoff?.value} initialAction={handoff?.action} focused={focused}
+    tab={view.account === account ? view.value : 'my-apps'} onTabChange={value => setView(current => ({ ...current, value }))} />;
 }
-function AccountExplore({ account, initialAddress, initialAction, tab, onTabChange }: { account: string | null; initialAddress?: string; initialAction?: { name: string; auxiliary: boolean }; tab: ExploreMode; onTabChange(value: ExploreMode): void }) {
+function AccountExplore({ account, initialAddress, initialAction, tab, onTabChange, focused }: { account: string | null; initialAddress?: string; initialAction?: { name: string; auxiliary: boolean }; tab: ExploreMode; onTabChange(value: ExploreMode): void; focused: boolean }) {
   const [actionFilter, setActionFilter] = useState(initialAction);
   const c = useThemeColors();
   const { t } = useTranslation();
@@ -68,7 +77,6 @@ function AccountExplore({ account, initialAddress, initialAction, tab, onTabChan
   const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
   const [query, setQuery] = useState('');
   const [searchActive, setSearchActive] = useState(false);
-  const focused = usePrimaryPaneFocused();
   const tabsNavigation = useNavigation();
   const openSearch = useCallback(() => setSearchActive(true), []);
   const closeSearch = useCallback(() => {

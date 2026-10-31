@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 
-type Handoff = { id: number; account: string; value: string; action?: { name: string; auxiliary: boolean } };
+export type ExploreSearchHandoff = { id: number; account: string; value: string; action?: { name: string; auxiliary: boolean } };
 type State = {
-  pending: Handoff | null;
-  start(input: Omit<Handoff, 'id'>): number;
+  pending: ExploreSearchHandoff | null;
+  start(input: Omit<ExploreSearchHandoff, 'id'>): number;
   consume(id: number, account: string): void;
 };
 let nextId = 0;

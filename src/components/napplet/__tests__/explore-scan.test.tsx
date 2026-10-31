@@ -291,3 +291,41 @@ it('opens action discovery and keeps its filter after consuming the handoff', as
   await act(async () => { renderer.root.findByType(ExploreDiscovery).props.onClearAction(); });
   expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toBeUndefined();
 });
+
+it('applies new action handoffs while Discover is already selected without a route-param change', async () => {
+  await act(async () => { renderer.root.findByType(SegmentedControl).props.onChange('discover'); });
+  const first = { name: 'relay', auxiliary: false };
+  await act(async () => { useExploreSearchHandoffStore.getState().start({ account: 'account', value: '', action: first }); });
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toEqual(first);
+  expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
+  const second = { name: 'edit', auxiliary: true };
+  await act(async () => { useExploreSearchHandoffStore.getState().start({ account: 'account', value: '', action: second }); });
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toEqual(second);
+  expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
+});
+
+it('keeps an applied or cleared filter when navigation params arrive after the handoff is consumed', async () => {
+  let id = 0;
+  const action = { name: 'relay', auxiliary: false };
+  await act(async () => { id = useExploreSearchHandoffStore.getState().start({ account: 'account', value: '', action }); });
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toEqual(action);
+  expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
+  await act(async () => { mockHandoff = String(id); renderer.update(<ExploreScreen />); });
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toEqual(action);
+  await act(async () => { renderer.root.findByType(ExploreDiscovery).props.onClearAction(); });
+  await act(async () => { mockHandoff = String(id + 1); renderer.update(<ExploreScreen />); });
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toBeUndefined();
+});
+
+it('waits for focus before accepting a handoff when the hidden tab has no matching route params', async () => {
+  mockFocused = false;
+  await act(async () => { renderer.update(<ExploreScreen />); });
+  const action = { name: 'relay', auxiliary: false };
+  await act(async () => { useExploreSearchHandoffStore.getState().start({ account: 'account', value: '', action }); });
+  expect(useExploreSearchHandoffStore.getState().pending?.action).toEqual(action);
+  expect(renderer.root.findAllByType(ExploreDiscovery)).toHaveLength(0);
+  mockFocused = true;
+  await act(async () => { renderer.update(<ExploreScreen />); });
+  expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
+  expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toEqual(action);
+});
