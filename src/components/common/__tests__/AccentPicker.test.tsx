@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 
+import { dateTimePreferences } from '@/services/preferences/date-time-state';
 import { trySetDevicePreference } from '@/services/preferences/device-preferences.service';
 import { useThemeStore } from '@/stores/theme.store';
 import { MessageAppearancePreview } from '@/components/chat/MessageAppearancePreview';
@@ -15,6 +16,7 @@ import { AppInput } from '../AppInput';
 import { BottomSheet } from '../BottomSheet';
 import { IconButton } from '../IconButton';
 
+jest.mock('@/i18n', () => ({ language: 'en', resolvedLanguage: 'en', t: (key: string) => key }));
 jest.mock('@/services/preferences/device-preferences.service', () => ({
   getDevicePreference: jest.fn(),
   trySetDevicePreference: jest.fn(async () => {}),
@@ -75,7 +77,7 @@ function edit(hex: string) {
 function finishClose() {
   act(() => { renderer.root.findByType(BottomSheet).props.onClosed(); });
 }
-afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); });
+afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); dateTimePreferences.setState({ timeFormat: 'system' }); });
 
 it.each(['light', 'dark'] as const)('previews sheet controls locally while editing in %s mode', (scheme) => {
   mount(scheme);
@@ -314,7 +316,8 @@ it('retains incomplete HEX input across mode changes and blocks saving either in
   expect(done().props.disabled).toBe(false);
 });
 
-it('previews the draft as a sent-message bubble with matching body and metadata foregrounds', () => {
+it.each(['12h', '24h'] as const)('previews the draft as a sent-message bubble with matching foregrounds in %s format', timeFormat => {
+  dateTimePreferences.setState({ timeFormat, systemLocale: 'en-US' });
   mount();
   open();
   edit('#FF0000');
@@ -324,7 +327,7 @@ it('previews the draft as a sent-message bubble with matching body and metadata 
   expect(body.props.variant).toBe('message');
   expect(body.props.children).toBe('appearance.messagePreview');
   expect(body.props.style.color).toBe('#000000');
-  expect(time.props.children).toMatch(/^\d{2}:\d{2}$/);
+  expect(time.props.children).toMatch(timeFormat === '24h' ? /^\d{2}:\d{2}$/ : /^\d{1,2}:\d{2} [AP]M$/);
   expect(time.props.style.color).toBe('rgba(0,0,0,0.8)');
   chooseMode('dark');
   chooseForeground('white');

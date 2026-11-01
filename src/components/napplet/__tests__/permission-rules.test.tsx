@@ -7,6 +7,7 @@ import { AppText } from '@/components/common/AppText';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import type { SigningSnapshot } from '@/services/signing/model';
+jest.mock('@/i18n', () => ({ language: 'en', resolvedLanguage: 'en', t: (key: string) => key }));
 jest.mock('@/services/signing/management',()=>({updatePermissions:jest.fn()}));
 
 let mockFocused = true;

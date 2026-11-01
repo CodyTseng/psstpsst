@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { normalizeEventKey } from '@/lib/nostr/event-key';
 import { naddrEncode } from 'nostr-tools/nip19';
 import { useApplicationAddressSearch } from '../use-application-address-search';
 import { resolveApplicationAddress } from '@/services/explore/address-search';
@@ -13,7 +14,7 @@ jest.mock('@/services/explore/discovery', () => ({ cacheApplicationAddress: jest
 let mockSaved = { account: 'account', entries: [] as ExploreEntry[] };
 jest.mock('@/stores/explore.store', () => ({ useExplore: () => mockSaved }));
 const address = (identifier: string) => naddrEncode({ kind: 35130, pubkey: 'a'.repeat(64), identifier });
-const entry = (identifier: string) => ({ key: address(identifier), address: address(identifier), title: identifier, description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null, kind: 'napp', manifest: { id: 'b'.repeat(64), pubkey: 'a'.repeat(64), kind: 35130, created_at: 1, content: '', tags: [], sig: 'c'.repeat(128) } }) as ExploreEntry;
+const entry = (identifier: string) => ({ key: normalizeEventKey(address(identifier)), address: address(identifier), title: identifier, description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null, kind: 'napp', manifest: { id: 'b'.repeat(64), pubkey: 'a'.repeat(64), kind: 35130, created_at: 1, content: '', tags: [['d', identifier]], sig: 'c'.repeat(128) } }) as ExploreEntry;
 const cache: ApplicationAddressCache = { account: null, entries: [] };
 const empty: ExploreEntry[] = [];
 let state: ReturnType<typeof useApplicationAddressSearch>;

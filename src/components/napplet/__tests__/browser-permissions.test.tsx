@@ -5,6 +5,7 @@ import { ListRow } from '@/components/common/ListRow';
 import { clearBrowserPermissions, saveBrowserPermissions } from '@/services/explore/browser-permission-store';
 
 const mockRules = [{ resource: 'clipboard-read', decision: 'allow' as const, expiresAt: null, updatedAt: 1 }];
+jest.mock('@/i18n', () => ({ language: 'en', resolvedLanguage: 'en', t: (key: string) => key }));
 jest.mock('@/hooks/use-browser-permissions', () => ({ useBrowserPermissions: () => ({ rules: mockRules }) }));
 jest.mock('@/stores/napplet.store', () => ({ useNappletAccountPubkey: () => 'account' }));
 jest.mock('@/services/explore/browser-permission-store', () => ({ clearBrowserPermissions: jest.fn(), saveBrowserPermissions: jest.fn() }));

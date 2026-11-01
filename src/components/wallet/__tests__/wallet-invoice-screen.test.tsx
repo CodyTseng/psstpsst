@@ -8,6 +8,7 @@ import { ExternalInvoicePayment } from '@/components/wallet/external-invoice-pay
 const INVOICE = 'lnbc1u1qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 let mockParams: Record<string, string> = { invoice: INVOICE, role: 'received' };
 
+jest.mock('@/i18n', () => ({ language: 'en', resolvedLanguage: 'en', t: (key: string) => key }));
 jest.mock('expo-router', () => ({
   router: { back: jest.fn(), push: jest.fn() },
   useLocalSearchParams: () => mockParams,

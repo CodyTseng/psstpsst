@@ -11,6 +11,7 @@ import { resolveApplicationMetadata } from '../application-metadata';
 jest.mock('@/services/nostr/event-cache-retention', () => ({ pruneEventCache: jest.fn(async () => {}), favoriteCoordinates: '' }));
 jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActual('../testing/memory-cache').replaceableCache);
 jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('../testing/memory-cache').immutableCache);
+jest.mock('../local-applications', () => ({ readLocalApplication: jest.fn(async () => undefined) }));
 jest.mock('../repository', () => ({ readEntries: jest.fn() }));
 jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
 const secret = generateSecretKey(), author = getPublicKey(secret);
