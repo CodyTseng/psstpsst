@@ -2,37 +2,34 @@ import { nip19, type Event, type Filter } from 'nostr-tools';
 import { platform } from '@/platform';
 import { assertNotAborted } from '@/platform/abort';
 import { localRelay } from '@/services/local-relay';
-import { NappletNetwork, relayUrls } from '@/services/napplet/network';
+import { ApplicationNetwork, relayUrls } from '@/services/applications/network';
 import { publicUrl } from '@/services/napplet/protocol';
 import { publicEventAddress } from './event-address';
-import { metadataFilters } from '@/services/napplet/metadata-batch';
+import { PublicIdentityData, profileMetadata, followedPubkeys } from '@/services/applications/public-identity';
 import { isPublicKey, normalizePublicKey, LIST_KINDS, SET_KINDS, listItems, resolvedSet, type SetPointer } from './lists';
 
 const newer = (a: Event, b: Event) => a.created_at > b.created_at || a.created_at === b.created_at && a.id < b.id;
 const pause = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 type Cached = { value: any; expires: number; bytes: number };
-type MetadataRequest = { pubkey: string; kind: number; resolve(event: Event | null): void; reject(error: unknown): void };
 
 /** Bounded public projections; neither private account caches nor chat tables enter this API. */
 export class NappData {
   private cache = new Map<string, Cached>();
   private cacheBytes = 0;
   private inflight = new Map<string, Promise<any>>();
-  private metadataQueue: MetadataRequest[] = [];
-  private metadataTimer?: ReturnType<typeof setTimeout>;
+  private identity: PublicIdentityData;
   private profiles = new Map<string, { user: any; text: string; time: number; id: string; bytes: number }>();
   private profileBytes = 0;
   private seeded?: Promise<void>;
-  constructor(readonly account: string, readonly network: NappletNetwork, readonly signal: AbortSignal) {
+  constructor(readonly account: string, readonly network: ApplicationNetwork, readonly signal: AbortSignal) {
+    this.identity = new PublicIdentityData(network, signal);
     const detach = localRelay.subscribe({}, event => {
-      for (const key of [`metadata:${event.pubkey}:${event.kind}`, `sets:${event.pubkey}:${event.kind}`]) {
-        const cached = this.cache.get(key); if (cached) { this.cacheBytes -= cached.bytes; this.cache.delete(key); }
-      }
+      const key = `sets:${event.pubkey}:${event.kind}`, cached = this.cache.get(key);
+      if (cached) { this.cacheBytes -= cached.bytes; this.cache.delete(key); }
       if (event.kind === 0) this.index(event);
     });
     signal.addEventListener('abort', () => {
-      detach(); clearTimeout(this.metadataTimer);
-      for (const request of this.metadataQueue.splice(0)) request.reject(new Error('session-closed'));
+      detach();
       this.cache.clear(); this.profiles.clear();
     }, { once: true });
   }
@@ -70,70 +67,13 @@ export class NappData {
     return response;
   }
   metadata(pubkey: string, kind: number): Promise<Event | null> {
-    try { pubkey = normalizePublicKey(pubkey); } catch (error) { return Promise.reject(error); }
-    return this.memo(`metadata:${pubkey}:${kind}`, () => {
-      if (kind === 10002) return this.network.replaceable(pubkey, kind, this.signal);
-      return new Promise((resolve, reject) => {
-        this.metadataQueue.push({ pubkey, kind, resolve, reject });
-        this.metadataTimer ??= setTimeout(() => { this.metadataTimer = undefined; void this.flushMetadata(); }, 8);
-      });
-    });
-  }
-  private async flushMetadata() {
-    const requests = this.metadataQueue.splice(0);
-    type Read = { request: MetadataRequest; event: Event | null; complete: number; error?: unknown };
-    const reads = new Map<string, Read>(), byAuthor = new Map<string, Read[]>();
-    for (const request of requests) {
-      const read: Read = { request, event: null, complete: 0 };
-      reads.set(`${request.pubkey}:${request.kind}`, read);
-      const author = byAuthor.get(request.pubkey) ?? []; author.push(read); byAuthor.set(request.pubkey, author);
-    }
-    const merge = (event: Event) => {
-      const read = reads.get(`${event.pubkey}:${event.kind}`);
-      if (read && (!read.event || newer(event, read.event))) read.event = event;
-    };
-    try {
-      for (const filters of metadataFilters(requests)) { for (const event of await localRelay.query(filters)) merge(event); this.check(); }
-      const authors = [...byAuthor.keys()];
-      const routes = new Map<string, Map<string, Read>>();
-      // NIP-65 lookups themselves are coalesced by NappletNetwork before these routed reads start.
-      await Promise.all(authors.map(async pubkey => {
-        const targets = await this.network.routes([pubkey], 'write', false, this.signal); this.check();
-        for (const relay of targets) {
-          const routed = routes.get(relay) ?? new Map<string, Read>();
-          for (const read of byAuthor.get(pubkey)!) routed.set(`${pubkey}:${read.request.kind}`, read);
-          routes.set(relay, routed);
-        }
-      }));
-      const jobs: { relay: string; filters: Filter[]; affected: Read[] }[] = [];
-      for (const [relay, routed] of routes) for (const filters of metadataFilters([...routed.values()].map(read => read.request))) {
-        const keys = new Set(filters.flatMap(filter => filter.authors!.flatMap(author => filter.kinds!.map(kind => `${author}:${kind}`))));
-        jobs.push({ relay, filters, affected: [...routed.entries()].filter(([key]) => keys.has(key)).map(([, read]) => read) });
-      }
-      await Promise.all(Array.from({ length: Math.min(jobs.length, 4) }, async () => {
-        for (let job = jobs.shift(); job; job = jobs.shift()) {
-          try {
-            const result = await this.query([job.relay], job.filters);
-            for (const event of result.events) merge(event);
-            for (const read of job.affected) {
-              if (!result.incomplete) read.complete++;
-              else read.error = new Error('network-error');
-            }
-          } catch (error) { for (const read of job.affected) read.error = error; }
-        }
-      }));
-      this.check();
-      for (const read of reads.values()) {
-        if (!read.event && !read.complete && read.error) read.request.reject(read.error);
-        else read.request.resolve(read.event);
-      }
-    } catch (error) { for (const request of requests) request.reject(error); }
+    return this.identity.metadata(pubkey, kind);
   }
   async list(method: string, pubkey: string) {
     const kind = LIST_KINDS[method];
     if (kind === undefined) throw new Error('unsupported-method');
     const event = await this.metadata(pubkey, kind);
-    return { event, items: listItems(kind, event) };
+    return { event, items: kind === 3 ? await followedPubkeys(event, () => this.check()) : listItems(kind, event) };
   }
   async sets(method: string, pubkey: string) {
     pubkey = normalizePublicKey(pubkey);
@@ -220,8 +160,7 @@ export class NappData {
   private index(event: Event) {
     const old = this.profiles.get(event.pubkey);
     if (old && (old.time > event.created_at || old.time === event.created_at && old.id <= event.id)) return old.user;
-    let metadata: Record<string, unknown> = {};
-    try { const parsed = JSON.parse(event.content); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) metadata = parsed; } catch { /* Malformed metadata remains an identifiable public author. */ }
+    const metadata = profileMetadata(event);
     const npub = nip19.npubEncode(event.pubkey);
     const user = { pubkey: event.pubkey, npub, event, metadata, lastUpdated: event.created_at, image: typeof metadata.picture === 'string' ? metadata.picture : undefined,
       shortName: [metadata.name, metadata.display_name].find(value => typeof value === 'string' && value.trim()) ?? `${npub.slice(0, 8)}…${npub.slice(-4)}` };
@@ -259,9 +198,7 @@ export class NappData {
     const identity = await this.resolveIdentifier(raw);
     if (!identity) throw new Error('invalid-pubkey');
     const hints = typeof request === 'object' && request ? relayUrls((request as any).relays, []) : [];
-    const event = identity.relays.length || hints.length
-      ? (await this.query([...new Set([...hints, ...identity.relays])], [{ kinds: [0], authors: [identity.pubkey], limit: 1 }])).events.reduce<Event | null>((best, e) => !best || newer(e, best) ? e : best, null)
-      : await this.metadata(identity.pubkey, 0);
+    const { event } = await this.identity.profile(identity.pubkey, [...hints, ...identity.relays]);
     if (event) return this.index(event);
     const npub = nip19.npubEncode(identity.pubkey);
     return { pubkey: identity.pubkey, npub, metadata: {}, lastUpdated: 0, shortName: `${npub.slice(0, 8)}…${npub.slice(-4)}` };

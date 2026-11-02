@@ -1,15 +1,15 @@
 import { NappData } from '../data';
-import type { NappletNetwork } from '@/services/napplet/network';
+import type { ApplicationNetwork } from '@/services/applications/network';
 
 jest.mock('@/services/local-relay', () => ({ localRelay: { subscribe: () => () => {}, query: async () => [] } }));
-jest.mock('@/services/napplet/network', () => ({ relayUrls: (urls: string[]) => urls }));
+jest.mock('@/services/applications/network', () => ({ relayUrls: (urls: string[]) => urls }));
 
 it('merges authors only on the relays to which they were routed', async () => {
   jest.useFakeTimers();
   const a = 'a'.repeat(64), b = 'b'.repeat(64), target = 'c'.repeat(64), life = new AbortController();
   const query = jest.fn(async (_relays: string[], filters: any[]) => ({ incomplete: false,
     events: filters.flatMap(filter => filter.authors.map((pubkey: string) => ({ id: pubkey, pubkey, kind: 3, created_at: 1, content: '', tags: [['p', target]], sig: '' }))) }));
-  const network = { routes: async ([author]: string[]) => author === a ? ['wss://shared.example/', 'wss://only-a.example/'] : ['wss://shared.example/'], query } as unknown as NappletNetwork;
+  const network = { routes: async ([author]: string[]) => author === a ? ['wss://shared.example/', 'wss://only-a.example/'] : ['wss://shared.example/'], query } as unknown as ApplicationNetwork;
   try {
     const data = new NappData(a, network, life.signal);
     const first = data.list('loadFollowsList', a), second = data.list('loadFollowsList', b);

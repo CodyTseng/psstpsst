@@ -4,7 +4,7 @@ import { naddrEncode, neventEncode } from 'nostr-tools/nip19';
 import { parseApplicationAddressQuery, resolveApplicationAddress } from '../address-search';
 import { parseSite, websiteEntry } from '../model';
 import { readEntries } from '../repository';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { cacheApplicationEvent } from '../application-cache';
 import { resolveApplicationMetadata } from '../application-metadata';
 
@@ -13,7 +13,7 @@ jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActua
 jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('../testing/memory-cache').immutableCache);
 jest.mock('../local-applications', () => ({ readLocalApplication: jest.fn(async () => undefined) }));
 jest.mock('../repository', () => ({ readEntries: jest.fn() }));
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 const secret = generateSecretKey(), author = getPublicKey(secret);
 const pointer = (kind = 35130, relays: string[] = [], identifier = kind < 30000 ? '' : 'app') =>
   naddrEncode({ kind, pubkey: author, identifier, relays });
@@ -31,7 +31,7 @@ beforeEach(() => {
   query.mockReset().mockResolvedValue({ events: [manifest()], incomplete: false });
   routes.mockReset().mockResolvedValue(['wss://write.example/']);
   mediaServers.mockReset().mockResolvedValue([]);
-  jest.mocked(NappletNetwork).mockImplementation(() => ({ query, routes, destroy, mediaServers }) as unknown as NappletNetwork);
+  jest.mocked(ApplicationNetwork).mockImplementation(() => ({ query, routes, destroy, mediaServers }) as unknown as ApplicationNetwork);
 });
 
 it('distinguishes keywords, URLs, Nostr URIs and naddr share URLs', () => {
@@ -49,7 +49,7 @@ it('returns a canonical in-memory match despite different relay hints without re
   const app = parseSite(manifest());
   expect(await resolveApplicationAddress('account', target(35130, ['wss://hint.example']), [app], signal())).toMatchObject({ key: app.key, manifest: app.manifest });
   expect(readEntries).not.toHaveBeenCalled();
-  expect(NappletNetwork).not.toHaveBeenCalled();
+  expect(ApplicationNetwork).not.toHaveBeenCalled();
 });
 
 it('reads a locally saved application before querying relays', async () => {
@@ -57,7 +57,7 @@ it('reads a locally saved application before querying relays', async () => {
   await cacheApplicationEvent(app);
   expect(await resolveApplicationAddress('account', target(), [], signal())).toMatchObject(app);
   expect(readEntries).not.toHaveBeenCalled();
-  expect(NappletNetwork).not.toHaveBeenCalled();
+  expect(ApplicationNetwork).not.toHaveBeenCalled();
 });
 
 it('queries only naddr relay hints and never falls back when they return no application', async () => {
@@ -99,7 +99,7 @@ it('rejects signed events for a different application and forged manifests', asy
 it('constructs a website result without inventing a publisher or relay lookup', async () => {
   const address = parseApplicationAddressQuery('https://example.com/path')!;
   expect(await resolveApplicationAddress('account', address, [], signal())).toEqual(websiteEntry('https://example.com/path'));
-  expect(NappletNetwork).not.toHaveBeenCalled();
+  expect(ApplicationNetwork).not.toHaveBeenCalled();
 });
 
 it.each([5129, 15129, 35129, 15128, 35128, 35130])('uses the same verified ID/database/relay pipeline for kind %s', async kind => {

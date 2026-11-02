@@ -15,17 +15,11 @@ import {
   type ManagedSubscribeOptions,
 } from '@/services/relay/managed-relay-pool';
 import type { Signer } from '@/services/signer/signer.interface';
-import { MARKET_RELAYS, eventWeight, publicUrl } from './protocol';
-import { RelayBudget } from './relay-budget';
-import { metadataFilters } from './metadata-batch';
-import { groupOutboxAuthors, outboxWriteRelays } from './outbox-routing';
-
-export function relayUrls(values: unknown, fallback = MARKET_RELAYS): string[] {
-  const urls = values == null ? fallback : values;
-  if (!Array.isArray(urls) || urls.some((v) => typeof v !== 'string'))
-    throw new Error('invalid-relays');
-  return [...new Set(urls.map((v) => publicUrl(v, true)))];
-}
+import { eventWeight, publicUrl } from '@/services/napplet/protocol';
+import { RelayBudget } from '@/services/napplet/relay-budget';
+import { metadataFilters } from '@/services/napplet/metadata-batch';
+import { groupOutboxAuthors, outboxWriteRelays } from '@/services/napplet/outbox-routing';
+export { relayUrls } from './relay-urls';
 const livePools = new Set<ManagedRelayPool>();
 type MetadataWaiter = { resolve(event: Event | null): void; reject(error: unknown): void; cleanup(): void };
 type PendingMetadata = { key: string; pubkey: string; kind: number; waiters: Set<MetadataWaiter>; batch?: MetadataBatch };
@@ -49,7 +43,7 @@ function observePools() {
     .catch(() => {});
 }
 /** Application relay pools never cross account or AUTH boundaries. */
-export class NappletNetwork {
+export class ApplicationNetwork {
   readonly pool = new ManagedRelayPool({
     observeLifecycle: false,
     verifyEvent: (e, relay) => Number.isFinite(eventWeight(e)) && verifyEventNativeFirst(e, relay),
@@ -189,25 +183,20 @@ export class NappletNetwork {
   }
   private async flushMetadata() {
     const queued = [...this.metadataQueue]; this.metadataQueue.clear();
-    const groups = new Map<boolean, PendingMetadata[]>();
-    for (const request of queued) if (request.waiters.size) {
-      const discovery = request.kind === 10002 || request.kind === 10063;
-      const group = groups.get(discovery) ?? []; group.push(request); groups.set(discovery, group);
-    }
-    const jobs: { discovery: boolean; requests: PendingMetadata[] }[] = [];
-    for (const [discovery, requests] of groups) for (let offset = 0; offset < requests.length; offset += 32)
-      jobs.push({ discovery, requests: requests.slice(offset, offset + 32) });
+    const requests = queued.filter(request => request.waiters.size);
+    const jobs: PendingMetadata[][] = [];
+    for (let offset = 0; offset < requests.length; offset += 32) jobs.push(requests.slice(offset, offset + 32));
     await Promise.all(Array.from({ length: Math.min(jobs.length, 4) }, async () => {
-      for (let job = jobs.shift(); job; job = jobs.shift()) await this.fetchMetadataBatch(job.requests, job.discovery);
+      for (let job = jobs.shift(); job; job = jobs.shift()) await this.fetchMetadataBatch(job);
     }));
   }
-  private async fetchMetadataBatch(requests: PendingMetadata[], discovery: boolean) {
+  private async fetchMetadataBatch(requests: PendingMetadata[]) {
     requests = requests.filter(request => request.waiters.size);
     if (!requests.length) return;
     const batch: MetadataBatch = { requests, controller: new AbortController() };
     for (const request of requests) request.batch = batch;
     const events = new Map<string, Event>(), completed = new Set<string>(), failures = new Map<string, unknown>();
-    const relays = discovery ? [...new Set([...MARKET_RELAYS, ...DISCOVERY_RELAYS])] : MARKET_RELAYS;
+    const relays = DISCOVERY_RELAYS;
     try {
       for (const filters of metadataFilters(requests)) {
         const affected = requests.filter(request => filters.some(filter => filter.kinds!.includes(request.kind) && filter.authors!.includes(request.pubkey)));
@@ -309,11 +298,11 @@ export class NappletNetwork {
                 }
               }) ?? [];
           if (required && !candidates.length) throw new Error('recipient-relays-unavailable');
-          for (const url of candidates.length ? candidates : MARKET_RELAYS) urls.add(url);
+          for (const url of candidates.length ? candidates : DISCOVERY_RELAYS) urls.add(url);
         }),
       );
     }
-    return urls.size ? [...urls] : required ? [] : MARKET_RELAYS;
+    return urls.size ? [...urls] : required ? [] : DISCOVERY_RELAYS;
   }
   async publish(
     event: Event,

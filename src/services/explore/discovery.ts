@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { matchFilters, type Event } from 'nostr-tools';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { parseApplicationEvents } from './application-event';
 import { type ExploreEntry } from './model';
 import { APPLICATION_DISCOVERY_SOURCES, APPLICATION_QUERY_LIMIT } from './catalogue-relays';
@@ -116,7 +116,7 @@ export class ApplicationDiscovery {
   private read(account: string, refresh: boolean): Promise<void> {
     this.store.setState(refresh ? { loading: true, error: false } : { loadingMore: true, error: false });
     const request = (async () => {
-      let network: NappletNetwork | undefined;
+      let network: ApplicationNetwork | undefined;
       const page: ExploreEntry[] = [];
       try {
         await yieldFrame();
@@ -124,7 +124,7 @@ export class ApplicationDiscovery {
         let hasMore = true;
         while (page.length < DISPLAY_PAGE_SIZE && hasMore && !error) {
           const result = await this.timeline.next(async (relay, filter, signal) => {
-            network ??= new NappletNetwork(account);
+            network ??= new ApplicationNetwork(account);
             const result = await network.query([relay], [filter], signal);
             await this.remember(result.events.filter(event => matchFilters([filter], event)), result.eventRelays);
             return result;

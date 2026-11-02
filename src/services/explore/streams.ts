@@ -3,13 +3,13 @@ import { assertNotAborted } from '@/platform/abort';
 import { localRelay } from '@/services/local-relay';
 import { localFilters } from '@/services/local-relay/filters';
 import { relayFilters } from '@/services/napplet/filters';
-import { NappletNetwork, relayUrls } from '@/services/napplet/network';
+import { ApplicationNetwork, relayUrls } from '@/services/applications/network';
 
 const privateKinds = new Set([4, 13, 14, 15, 1059]);
 /** Streams belong to a document; accepted public events belong to the device cache. */
 export class ExploreStreams {
   private streams = new Map<string, () => void>();
-  constructor(private network: NappletNetwork, private diagnostic: (phase: string, details: object) => void = () => {}) {}
+  constructor(private network: ApplicationNetwork, private diagnostic: (phase: string, details: object) => void = () => {}) {}
   close(id: string) { this.streams.get(id)?.(); this.streams.delete(id); }
   clear() { for (const id of this.streams.keys()) this.close(id); }
   async open(method: string, args: any[], signal: AbortSignal, send: (message: object) => Promise<void>, auth: (event: EventTemplate) => Promise<Event>) {

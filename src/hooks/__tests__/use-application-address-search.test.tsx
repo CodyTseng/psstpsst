@@ -7,7 +7,7 @@ import { resolveApplicationAddress } from '@/services/explore/address-search';
 import { cacheApplicationAddress, type ApplicationAddressCache } from '@/services/explore/discovery';
 import type { ExploreEntry } from '@/services/explore/model';
 
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 jest.mock('@/services/explore/repository', () => ({ readEntries: jest.fn() }));
 jest.mock('@/services/explore/address-search', () => ({ ...jest.requireActual('@/services/explore/address-query'), resolveApplicationAddress: jest.fn() }));
 jest.mock('@/services/explore/discovery', () => ({ cacheApplicationAddress: jest.fn() }));

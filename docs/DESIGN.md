@@ -1147,6 +1147,8 @@ from their verified HTML, Web App Manifest and conventional favicon files.
 Explore formats share their detail page, runtime chrome, information panel, and
 permission controls. Format-specific capabilities supply content within those
 shared layouts rather than defining separate page designs.
+Capability declarations do not imply consent prompts. Common Nostr actions
+require no capability approval; their mutations use the shared signer review.
 Application details reveal their body after application metadata and the initial
 access check settle; comments load independently.
 Unavailable capabilities have a parenthesized status and danger tone in the required-access list, with one

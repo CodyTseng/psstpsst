@@ -4,25 +4,25 @@ import { parseFavoriteReference } from '../favorites-protocol';
 import { resolveFavoriteMetadata } from '../favorite-metadata';
 import { cacheFavoriteMetadata, readEntries } from '../repository';
 import { subscribeFavoritesChanged } from '../favorites-events';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { websiteEntry } from '../model';
 jest.mock('@/services/nostr/event-cache-retention', () => ({ pruneEventCache: jest.fn(async () => {}), favoriteCoordinates: '' }));
 jest.mock('@/services/relay/replaceable-events.service', () => jest.requireActual('../testing/memory-cache').replaceableCache);
 jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('../testing/memory-cache').immutableCache);
 jest.mock('../repository', () => ({ cacheFavoriteMetadata: jest.fn(async () => {}), readEntries: jest.fn(async () => []) }));
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 const secret = generateSecretKey(), author = getPublicKey(secret);
 const query = jest.fn(), routes = jest.fn(), destroy = jest.fn(), mediaServers = jest.fn();
 beforeEach(() => {
   clearApplicationTestCache();
   jest.clearAllMocks(); query.mockReset(); routes.mockResolvedValue(['wss://write.example/']); mediaServers.mockResolvedValue([]);
   jest.mocked(readEntries).mockResolvedValue([]);
-  jest.mocked(NappletNetwork).mockImplementation(() => ({ query, routes, destroy, mediaServers }) as unknown as NappletNetwork);
+  jest.mocked(ApplicationNetwork).mockImplementation(() => ({ query, routes, destroy, mediaServers }) as unknown as ApplicationNetwork);
 });
 it('does no metadata work for ordinary websites', async () => {
   const app = websiteEntry('https://example.com/');
   expect(await resolveFavoriteMetadata('account', app, new AbortController().signal)).toBe(app);
-  expect(NappletNetwork).not.toHaveBeenCalled(); expect(cacheFavoriteMetadata).not.toHaveBeenCalled();
+  expect(ApplicationNetwork).not.toHaveBeenCalled(); expect(cacheFavoriteMetadata).not.toHaveBeenCalled();
 });
 it('verifies and caches one hinted application without changing membership or recency', async () => {
   const event = finalizeEvent({ kind: 35130, created_at: 1, content: '', tags: [['d', 'notes'], ['title', 'Notes'], ['path', '/index.html', 'a'.repeat(64)]] }, secret);

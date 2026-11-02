@@ -1238,6 +1238,7 @@
     "capability_identity": "公开账号信息",
     "capability_intent": "打开其他应用",
     "capability_relay": "读取和发布 Nostr 事件",
+    "capability_common": "常用 Nostr 操作",
     "capability_outbox": "账号中继路由",
     "capability_inc": "与其他应用通信",
     "capability_config": "应用设置",

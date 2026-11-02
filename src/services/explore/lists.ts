@@ -1,5 +1,7 @@
-import { nip19, type Event } from 'nostr-tools';
+import type { Event } from 'nostr-tools';
 import { publicUrl } from '@/services/napplet/protocol';
+import { isPublicKey } from '@/services/applications/public-identity-model';
+export { isPublicKey, normalizePublicKey } from '@/services/applications/public-identity-model';
 
 export const LIST_KINDS: Record<string, number> = {
   loadFollowsList: 3, loadMuteList: 10000, loadPins: 10001, loadRelayList: 10002,
@@ -11,15 +13,6 @@ export const LIST_KINDS: Record<string, number> = {
   loadAuthoredPodcasts: 10064, loadWikiAuthors: 10101, loadWikiRelays: 10102,
 };
 export const SET_KINDS: Record<string, number> = { loadFollowSets: 30000, loadRelaySets: 30002, loadEmojiSets: 30030 };
-export const isPublicKey = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-export function normalizePublicKey(value: unknown): string {
-  if (typeof value !== 'string') throw new Error('invalid-pubkey');
-  if (/^[a-f0-9]{64}$/i.test(value)) return value.toLowerCase();
-  const decoded = nip19.decode(value.replace(/^nostr:/, ''));
-  if (decoded.type === 'npub') return decoded.data;
-  if (decoded.type === 'nprofile') return decoded.data.pubkey;
-  throw new Error('invalid-pubkey');
-}
 export type SetPointer = { kind: number; pubkey: string; identifier: string; relays: string[] };
 function pointer(tag: string[], expected?: number): SetPointer | undefined {
   const [kind, pubkey, ...identifier] = (tag[1] ?? '').split(':');

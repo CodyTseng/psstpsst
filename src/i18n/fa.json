@@ -1211,6 +1211,7 @@
     "capability_identity": "اطلاعات عمومی حساب",
     "capability_intent": "باز کردن برنامه‌های دیگر",
     "capability_relay": "خواندن و انتشار رویدادهای Nostr",
+    "capability_common": "عملیات رایج Nostr",
     "capability_outbox": "مسیریابی رله‌های حساب",
     "capability_inc": "ارتباط با برنامه‌های دیگر",
     "capability_config": "تنظیمات برنامه",

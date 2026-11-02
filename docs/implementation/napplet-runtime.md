@@ -21,8 +21,12 @@ saved defaults apply only while the target remains an eligible library member.
 
 These proposals are drafts. Domain availability is not a declaration of complete
 conformance to every evolving proposal. The host implements shell, theme,
-storage, resource, link, identity, relay, outbox, upload, intent, inc and config. Unknown
+storage, resource, link, identity, common, relay, outbox, upload, intent, inc and config. Unknown
 messages and application-supplied reply envelopes have no authority.
+
+Declared `common` APIs need no capability consent. Public reads and identifier
+conversion run directly; social mutations use the shared event-signing consent.
+Follow reads and mutations resolve the account's write relays.
 
 The document exposes supported, declared optional interfaces even before a grant.
 The host gates execution, shares concurrent requests for one capability, and
@@ -215,7 +219,7 @@ On a local miss, app-address lookup queries embedded relay hints alongside the m
 the exact kind, author and case-sensitive identifier, with a one-event limit.
 For pointers without relay hints but with an author, a miss falls back to that
 publisher's public NIP-65 write and unmarked relays. Relay-list metadata is sought
-on the market and standard discovery relays. Failed or rejected reads and invalid
+on the standard public discovery relays. Failed or rejected reads and invalid
 manifests are not reported as a completed lookup with no matching app.
 Each address lookup owns a bounded, disposable relay reader, so browsing different
 publishers does not exhaust a long-lived app's destination budget. Account changes

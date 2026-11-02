@@ -1211,6 +1211,7 @@
     "capability_identity": "Herkese açık hesap bilgileri",
     "capability_intent": "Diğer uygulamaları aç",
     "capability_relay": "Nostr olaylarını oku ve yayınla",
+    "capability_common": "Yaygın Nostr işlemleri",
     "capability_outbox": "Hesap röle yönlendirmesi",
     "capability_inc": "Diğer uygulamalarla iletişim",
     "capability_config": "Uygulama ayarları",

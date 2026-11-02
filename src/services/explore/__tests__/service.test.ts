@@ -28,7 +28,7 @@ jest.mock('@/services/account/account-receive-guard',()=>({canReceiveForAccount:
 jest.mock('@/services/napplet/artifacts',()=>({loadArtifact:jest.fn()}));
 jest.mock('@/services/napplet/runtime',()=>({NappletRuntime:jest.fn()}));
 jest.mock('@/services/napplet/service',()=>({nappletStore:{getState:()=>({accountPubkey:'account'})},nappletService:{activate:jest.fn(async()=>{}),activateAccount:jest.fn(async()=>{}),install:jest.fn(async()=>{}),stop:jest.fn(),requestApproval:jest.fn(async()=> 'allow'),currentTheme:()=>undefined}}));
-jest.mock('@/services/napplet/network',()=>({NappletNetwork:jest.fn()}));
+jest.mock('@/services/applications/network',()=>({ApplicationNetwork:jest.fn()}));
 jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn(),invalidateNappletSource:jest.fn()}));
 jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{})}));
 jest.mock('@/services/napplet/repository',()=>({getData:jest.fn(async()=>null),setData:jest.fn(async()=>{})}));

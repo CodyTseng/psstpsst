@@ -1,12 +1,12 @@
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event, type EventTemplate } from 'nostr-tools';
 import { ApplicationCommentsSession, APPLICATION_COMMENT_RELAYS } from '../comments';
 import { commentTemplate, type CommentTarget } from '../comments-protocol';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { getActiveAccountPubkey } from '@/services/account/account.service';
 import { nappletLifecycle } from '@/services/napplet/lifecycle';
 
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 jest.mock('@/services/account/account-receive-guard', () => ({ canReceiveForAccount: jest.fn() }));
 jest.mock('@/services/account/account.service', () => ({ getActiveAccountPubkey: jest.fn() }));
 const secret = generateSecretKey(), account = getPublicKey(secret);
@@ -30,9 +30,9 @@ beforeEach(() => {
   subscribe.mockReset().mockImplementation((options: { onEvent(event: Event): void }) => { deliver = options.onEvent; return () => {}; });
   jest.mocked(canReceiveForAccount).mockResolvedValue(true);
   jest.mocked(getActiveAccountPubkey).mockResolvedValue(account);
-  jest.mocked(NappletNetwork).mockImplementation(() => ({
+  jest.mocked(ApplicationNetwork).mockImplementation(() => ({
     query, sign, publish, routes, destroy, subscribe,
-  }) as unknown as NappletNetwork);
+  }) as unknown as ApplicationNetwork);
   session = new ApplicationCommentsSession(account, target);
 });
 afterEach(() => session.stop());

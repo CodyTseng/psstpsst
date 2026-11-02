@@ -1,10 +1,10 @@
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { discoveryEntries, ApplicationDiscovery, cacheApplicationAddress, getDiscoveryStore } from '../discovery';
 import { queryApplicationCatalogue } from '../catalogue-relays';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 
 jest.mock('../application-cache', () => ({ cacheApplicationEvent: jest.fn(async () => {}) }));
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 const secret = generateSecretKey();
 const manifest = (kind: number, created_at = 1) => finalizeEvent({ kind, created_at, content: 'Description',
   tags: [...(kind === 15128 ? [] : [['d', 'demo']]), ['title', 'Demo'], ['path', '/index.html', 'a'.repeat(64)], ['server', 'https://media.example/']] }, secret);
@@ -37,7 +37,7 @@ it('excludes signed snapshots while retaining the updating application with the 
 it('queries each format only on its dedicated relays and rejects results from the wrong source', async () => {
   const napp = manifest(35130), nsite = manifest(35128);
   const query = jest.fn().mockResolvedValue({ events: [napp, nsite], incomplete: false });
-  const result = await queryApplicationCatalogue({ query } as unknown as NappletNetwork);
+  const result = await queryApplicationCatalogue({ query } as unknown as ApplicationNetwork);
   expect(query.mock.calls).toEqual([
     [['wss://relay.nostrapps.com/'], [{ kinds: [35130], limit: 200 }]],
     [['wss://relay.napplet.soy/'], [{ kinds: [15129, 35129], limit: 200 }]],
@@ -52,14 +52,14 @@ it.each(['reject', 'error', 'incomplete'])('retains other formats when one catal
   if (failure === 'reject') query.mockRejectedValueOnce(new Error('offline'));
   else query.mockResolvedValueOnce({ events: [], incomplete: true, ...(failure === 'error' ? { error: 'network-error' } : {}) });
   query.mockResolvedValueOnce({ events: [nsite], incomplete: false });
-  expect(await queryApplicationCatalogue({ query } as unknown as NappletNetwork))
+  expect(await queryApplicationCatalogue({ query } as unknown as ApplicationNetwork))
     .toMatchObject({ events: [napp, nsite], incomplete: true });
   expect(query).toHaveBeenCalledTimes(3);
 });
 
 it('reports total catalogue failure without querying fallback relays', async () => {
   const query = jest.fn().mockRejectedValue(new Error('offline'));
-  await expect(queryApplicationCatalogue({ query } as unknown as NappletNetwork)).rejects.toThrow('catalogue-unavailable');
+  await expect(queryApplicationCatalogue({ query } as unknown as ApplicationNetwork)).rejects.toThrow('catalogue-unavailable');
   expect(query).toHaveBeenCalledTimes(3);
 });
 
@@ -78,7 +78,7 @@ function setup(data: Record<string, ReturnType<typeof manifest>[]>) {
     incomplete: false,
   }));
   const destroy = jest.fn();
-  jest.mocked(NappletNetwork).mockImplementation(() => ({ query, destroy }) as unknown as NappletNetwork);
+  jest.mocked(ApplicationNetwork).mockImplementation(() => ({ query, destroy }) as unknown as ApplicationNetwork);
   return { query, destroy, discovery: new ApplicationDiscovery() };
 }
 

@@ -15,7 +15,7 @@ import { NAPPLET_FRAME_READY_MESSAGE } from '@/platform/ports/napplet';
 import { fetchBlob } from './artifacts';
 import { reconcileConfig, validateSchema, validateValues, type ConfigSchema } from './config';
 import { buildDocument } from './document';
-import { NappletNetwork, relayUrls } from './network';
+import { ApplicationNetwork, relayUrls } from '@/services/applications/network';
 import { relayFilters } from './filters';
 import { SigningPermissions, appSigningScope, type SigningRequest } from './signing-permissions';
 import { subscribeSigning } from '@/services/signing/changes';
@@ -34,6 +34,9 @@ import { queueAuthorization } from '@/services/signing/authorization-queue';
 import { NAP_DOMAINS } from './protocol';
 import { readDomainPermissions } from './domain-permissions';
 import { getBlockedPubkeys } from '@/services/dm/block.service';
+import { CommonActions, type CommonCheck } from './common';
+import { isImplicitNappletDomain } from './access-domains';
+import { PublicIdentityData, followedPubkeys, rememberPublishedIdentity } from '@/services/applications/public-identity';
 
 export type RuntimePromptChoice = { key: string; title: string; application?: ApplicationListEntry };
 export type RuntimePrompt = {
@@ -96,6 +99,7 @@ const requests: Record<string, readonly string[]> = {
   upload: ['info', 'status', 'upload', 'transfer.start', 'transfer.chunk', 'transfer.end'],
   link: ['open'],
   relay: ['query', 'subscribe', 'close', 'publish', 'publishEncrypted'],
+  common: ['encodeNip19', 'decodeNip19', 'getProfile', 'follows', 'follow', 'unfollow', 'react', 'report'],
   outbox: ['getEvent', 'query', 'subscribe', 'close', 'publish', 'resolveRelays'],
   config: ['registerSchema', 'get', 'subscribe', 'unsubscribe', 'openSettings'],
   intent: ['invoke', 'available', 'handlers'],
@@ -117,7 +121,7 @@ const text = (value: unknown, max = 256): string => {
 /** One authenticated application endpoint. Every async continuation rechecks this lifetime. */
 export class NappletRuntime {
   readonly endpoint = `endpoint:${randomId()}`;
-  readonly network: NappletNetwork;
+  readonly network: ApplicationNetwork;
   readonly scope: AppScope;
   readonly signingPermissions: SigningPermissions;
   private uploads: NappletUploads;
@@ -142,10 +146,12 @@ export class NappletRuntime {
   private readonly availableDomains: string[];
   private domainRequests = new Map<string, Promise<void>>();
   private deniedDomains = new Set<string>();
+  private commonActions?: CommonActions;
+  private publicIdentity?: PublicIdentityData;
   constructor(private options: RuntimeOptions) {
-    this.availableDomains = [...new Set([...options.domains, ...options.release.required.filter(domain => domain === 'identity'), ...options.release.optional.filter(domain =>
+    this.availableDomains = [...new Set([...options.domains, ...options.release.required.filter(isImplicitNappletDomain), ...options.release.optional.filter(domain =>
       (NAP_DOMAINS as readonly string[]).includes(domain))])];
-    this.network = new NappletNetwork(options.accountPubkey);
+    this.network = new ApplicationNetwork(options.accountPubkey);
     this.detachInc = incBroker.attach(this.endpoint, options.accountPubkey, (message) =>
       this.send(message),
     );
@@ -224,6 +230,8 @@ export class NappletRuntime {
     this.instanceData.clear();
     this.pending.clear();
     this.network.destroy();
+    this.commonActions?.close();
+    this.commonActions = undefined;
     const id = this.container;
     this.container = null;
     if (id) await platform.napplet.close(id);
@@ -286,7 +294,7 @@ export class NappletRuntime {
   }
   private async authorizeDomain(domain: string): Promise<void> {
     this.check();
-    if (domain === 'identity' && this.availableDomains.includes(domain)) return;
+    if (isImplicitNappletDomain(domain) && this.availableDomains.includes(domain)) return;
     if (this.options.domains.includes(domain) || ['signer', 'clipboard', 'browser'].includes(domain)) return;
     if (this.deniedDomains.has(domain)) throw new Error('permission-denied');
     if (!this.options.release.optional.includes(domain) || !this.availableDomains.includes(domain))
@@ -393,6 +401,14 @@ export class NappletRuntime {
     }
   }
   private fail(message: Message, error: string) {
+    if (message.type === 'common.follows') {
+      this.result(message, { ok: false, pubkeys: [], error });
+      return;
+    }
+    if (message.type === 'common.getProfile') {
+      this.result(message, { ok: false, pubkey: '', profile: null, error });
+      return;
+    }
     if (message.type === 'upload.transfer.start') {
       this.send({ type: 'psst.upload.ack', id: message.id, seq: message.seq, error });
       return;
@@ -419,6 +435,28 @@ export class NappletRuntime {
     else this.result(message, { ok: false, error });
   }
   private async dispatch(m: Message, domain: string, op: string): Promise<void> {
+    if (domain === 'common') {
+      this.commonActions ??= new CommonActions({
+        account: this.options.accountPubkey,
+        network: this.network,
+        identity: this.publicIdentity ??= new PublicIdentityData(this.network, this.signal),
+        publish: (template, current) => this.publish({ event: template }, 'common', 'publish', current),
+      });
+      let revision = this.signingPermissions.version;
+      const current: CommonCheck = () => {
+        this.check();
+        if (this.signingPermissions.version !== revision) throw new Error('permission-revoked');
+      };
+      current.authorized = authorizedRevision => {
+        this.check();
+        if (this.signingPermissions.version !== authorizedRevision) throw new Error('permission-revoked');
+        revision = authorizedRevision;
+      };
+      const result = await this.commonActions.handle(op, m, current);
+      current();
+      this.result(m, result);
+      return;
+    }
     if (domain === 'browser') {
       if (typeof m.event?.method !== 'string' || !m.event.method.startsWith('browser.') || !Array.isArray(m.event.args)) throw new Error('invalid-request');
       this.browser ??= new BrowserActions({ account: this.options.accountPubkey, sourceId: normalizeSigningSource(this.options.release.eventKey), application: applicationPresentation(this.options.release), signal: this.signal,
@@ -590,14 +628,16 @@ export class NappletRuntime {
       return;
     }
     if (op === 'getProfile') {
-      const event = await this.network.replaceable(pubkey, 0);
-      reply({ profile: event ? JSON.parse(event.content) : null });
+      const identity = this.publicIdentity ??= new PublicIdentityData(this.network, this.signal);
+      const { event, metadata } = await identity.profile(pubkey);
+      reply({ profile: event ? metadata : null });
       return;
     }
     const kinds: Record<string, number> = { getFollows: 3, getMutes: 10000 };
     if (kinds[op]) {
-      const event = await this.network.replaceable(pubkey, kinds[op]);
-      reply({ pubkeys: event?.tags.filter((t) => t[0] === 'p').map((t) => t[1]) ?? [] });
+      const identity = this.publicIdentity ??= new PublicIdentityData(this.network, this.signal);
+      const event = await identity.metadata(pubkey, kinds[op]);
+      reply({ pubkeys: op === 'getFollows' ? await followedPubkeys(event, () => this.check()) : event?.tags.filter((t) => t[0] === 'p').map((t) => t[1]) ?? [] });
       return;
     }
     if (op === 'getBadges') {
@@ -931,11 +971,12 @@ export class NappletRuntime {
           },
     );
   }
-  private async publish(m: Message, domain: string, op: string) {
+  private async publish(m: Message, domain: string, op: string, check?: CommonCheck) {
     let routing = true;
     const routingExpiresAt = Date.now() + 25000;
     let permissionVersion: number | undefined;
     const current = () => {
+      check?.();
       this.check();
       if (routing && Date.now() >= routingExpiresAt) throw new Error('timeout');
       if (permissionVersion !== undefined && permissionVersion !== this.signingPermissions.version) throw new Error('permission-denied');
@@ -972,18 +1013,23 @@ export class NappletRuntime {
       current();
     }
     const signed = await signer.signEvent(template, event => this.network.sign(event), { publication: true, relays });
+    check?.authorized?.(signed.revision);
     permissionVersion = signed.revision;
     current();
     const event = signed.event;
     const outcomes = await this.network.publish(event, relays, (e) => this.signAuth(e));
+    current();
+    if (domain !== 'common' && Object.values(outcomes).some(Boolean)) rememberPublishedIdentity(this.network, event);
     const ok = Object.values(outcomes).every(Boolean);
-    this.result(m, {
+    const result = {
       ok,
       event,
       eventId: event.id,
       relays: outcomes,
       ...(ok ? {} : { error: 'partial-publication' }),
-    });
+    };
+    if (domain !== 'common') this.result(m, result);
+    return result;
   }
   private async intent(m: Message, op: string) {
     const releases = await this.options.handlers();

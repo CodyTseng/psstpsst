@@ -1221,6 +1221,7 @@
     "capability_identity": "Открытые сведения об аккаунте",
     "capability_intent": "Открывать другие приложения",
     "capability_relay": "Читать и публиковать события Nostr",
+    "capability_common": "Основные действия Nostr",
     "capability_outbox": "Маршрутизация реле аккаунта",
     "capability_inc": "Связь с другими приложениями",
     "capability_config": "Настройки приложения",

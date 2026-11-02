@@ -1211,6 +1211,7 @@
     "capability_identity": "Nyilvános fiókadatok",
     "capability_intent": "Más appok megnyitása",
     "capability_relay": "Nostr-események olvasása és közzététele",
+    "capability_common": "Gyakori Nostr-műveletek",
     "capability_outbox": "Fiók relay-útválasztása",
     "capability_inc": "Kommunikáció más appokkal",
     "capability_config": "App beállításai",

@@ -1216,6 +1216,7 @@
     "capability_identity": "Información pública de la cuenta",
     "capability_intent": "Abrir otras aplicaciones",
     "capability_relay": "Leer y publicar eventos de Nostr",
+    "capability_common": "Acciones comunes de Nostr",
     "capability_outbox": "Enrutamiento de relays de la cuenta",
     "capability_inc": "Comunicarse con otras aplicaciones",
     "capability_config": "Ajustes de la aplicación",

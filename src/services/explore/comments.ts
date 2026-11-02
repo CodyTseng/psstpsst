@@ -4,7 +4,7 @@ import { assertNotAborted } from '@/platform/abort';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { getActiveAccountPubkey } from '@/services/account/account.service';
 import { registerNappletLifecycle } from '@/services/napplet/lifecycle';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
 import { MARKET_RELAYS } from '@/services/napplet/protocol';
 import { CommentIndex, MAX_THREAD_COMMENTS, type CommentRow } from './comments-index';
@@ -21,7 +21,7 @@ export type CommentsState = { rows: CommentRow[]; loading: boolean; loaded: bool
 export class ApplicationCommentsSession {
   readonly store = createStore<CommentsState>(() => ({ rows: [], loading: false, loaded: false, error: false, hasMore: true }));
   private index = new CommentIndex();
-  private network?: NappletNetwork;
+  private network?: ApplicationNetwork;
   private lifetime?: AbortController;
   private reading?: Promise<void>;
   private relayRequest?: Promise<string[]>;
@@ -36,7 +36,7 @@ export class ApplicationCommentsSession {
   start() {
     if (this.network) return;
     this.lifetime = new AbortController();
-    this.network = new NappletNetwork(this.account);
+    this.network = new ApplicationNetwork(this.account);
     active.add(this);
     void this.load(true);
   }
@@ -48,16 +48,16 @@ export class ApplicationCommentsSession {
     this.reading = undefined; this.relayRequest = undefined; this.posting = undefined; this.draining = undefined;
     this.store.setState({ loading: false });
   }
-  private check(network: NappletNetwork, signal: AbortSignal) {
+  private check(network: ApplicationNetwork, signal: AbortSignal) {
     assertNotAborted(signal);
     if (this.network !== network) throw new Error('session-closed');
   }
-  private async checkAccount(network: NappletNetwork, signal: AbortSignal) {
+  private async checkAccount(network: ApplicationNetwork, signal: AbortSignal) {
     const [available, current] = await Promise.all([canReceiveForAccount(this.account), getActiveAccountPubkey()]);
     this.check(network, signal);
     if (!available || current !== this.account) throw new Error('account-unavailable');
   }
-  private resolveRelays(network: NappletNetwork, signal: AbortSignal): Promise<string[]> {
+  private resolveRelays(network: ApplicationNetwork, signal: AbortSignal): Promise<string[]> {
     if (this.relayRequest) return this.relayRequest;
     const request = (async () => {
       const inbox = this.target.author
@@ -101,7 +101,7 @@ export class ApplicationCommentsSession {
       });
     }, 0);
   }
-  private async merge(events: Event[], network: NappletNetwork, signal: AbortSignal) {
+  private async merge(events: Event[], network: ApplicationNetwork, signal: AbortSignal) {
     let changed = false;
     let verified = 0;
     for (let i = 0; i < Math.min(events.length, 500); i++) {

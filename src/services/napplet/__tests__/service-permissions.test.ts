@@ -4,7 +4,7 @@ import { rules as signingRules, activity as signingActivity } from '@/services/s
 import { signingRuleKey } from '../signing-permissions';
 import { NappletRuntime } from '../runtime';
 import { loadArtifact } from '../artifacts';
-import { NappletNetwork } from '../network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { naddrEncode, neventEncode, noteEncode } from 'nostr-tools/nip19';
 import { nappletService, nappletStore } from '../service';
@@ -24,7 +24,7 @@ jest.mock('@/services/nostr/cached-events.service', () => jest.requireActual('..
 jest.mock('@/db/client', () => ({ db: {} }));
 jest.mock('@/services/account/account-access', () => ({ getAccount: jest.fn(async () => ({ pubkey: 'accountA' })) }));
 jest.mock('../artifacts', () => ({ loadArtifact: jest.fn(async () => '') }));
-jest.mock('../network', () => ({ NappletNetwork: jest.fn(() => ({ destroy: jest.fn(), query: jest.fn(), publisherRelays: jest.fn(async () => []) })) }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn(() => ({ destroy: jest.fn(), query: jest.fn(), publisherRelays: jest.fn(async () => []) })) }));
 jest.mock('../repository', () => ({ clearRecent: jest.fn(async () => {}), saveDesktopOrder: jest.fn(async () => {}), getData: jest.fn(), setData: jest.fn(), installations: jest.fn(), saveInstallation: jest.fn(async () => {}), markRecent: jest.fn(async () => {}) }));
 jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
   scope: { accountPubkey: options.accountPubkey, appKey: options.release.eventKey },
@@ -125,7 +125,7 @@ function addressFixture(relays: string[] = []) {
 
 function lookupNetwork() {
   const network = { destroy: jest.fn(), query: jest.fn(), routes: jest.fn(async () => [] as string[]), mediaServers: jest.fn(async () => [] as string[]), publisherRelays: jest.fn(async () => [] as string[]) };
-  jest.mocked(NappletNetwork).mockImplementationOnce(() => network as unknown as NappletNetwork);
+  jest.mocked(ApplicationNetwork).mockImplementationOnce(() => network as unknown as ApplicationNetwork);
   return network;
 }
 
@@ -133,12 +133,12 @@ it('resolves installed apps locally for scanned addresses, pasted IDs and share 
   const { event, address } = addressFixture(['wss://publisher.example/']);
   const release = parseManifest(event) as NappletInstallation;
   nappletStore.setState({ installed: [release] });
-  const connections = jest.mocked(NappletNetwork).mock.calls.length;
+  const connections = jest.mocked(ApplicationNetwork).mock.calls.length;
   for (const input of [address, `nostr:${address}`, `https://napplet.example/${address}`,
     event.id, neventEncode({ id: event.id, relays: ['wss://publisher.example/'] }), noteEncode(event.id)]) {
     expect(await nappletService.resolve(input)).toBe(release);
   }
-  expect(NappletNetwork).toHaveBeenCalledTimes(connections);
+  expect(ApplicationNetwork).toHaveBeenCalledTimes(connections);
 });
 
 it('uses the newest locally known coordinate without substituting an exact event ID', async () => {
@@ -388,8 +388,8 @@ it('grants only required domains when the user leaves optional capabilities disa
 
 const defaultAccessApp = { ...app, required: [], optional: ['theme', 'storage', 'config', 'identity', 'resource', 'link'] };
 
-it.each([{ required: [] }, { required: ['shell'] }, { required: ['identity'] }])('opens a napplet with only implicit access without consent: %j', async ({ required }) => {
-  const release = { ...app, required, optional: ['identity'] };
+it.each([{ required: [] }, { required: ['shell'] }, { required: ['identity'] }, { required: ['common'] }])('opens a napplet with only implicit access without consent: %j', async ({ required }) => {
+  const release = { ...app, required, optional: ['identity', 'common'] };
   await nappletService.open(release);
   expect(nappletStore.getState().prompt).toBeNull();
   expect(jest.mocked(NappletRuntime).mock.calls.at(-1)![0].domains).toEqual(['shell']);

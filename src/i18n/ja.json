@@ -1211,6 +1211,7 @@
     "capability_identity": "アカウントの公開情報",
     "capability_intent": "他のアプリを開く",
     "capability_relay": "Nostrイベントの読み取りと公開",
+    "capability_common": "一般的な Nostr 操作",
     "capability_outbox": "アカウントのリレー経路",
     "capability_inc": "他のアプリとの通信",
     "capability_config": "アプリの設定",

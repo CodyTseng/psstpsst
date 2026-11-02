@@ -1211,6 +1211,7 @@
     "capability_identity": "सार्वजनिक खाता जानकारी",
     "capability_intent": "अन्य ऐप खोलें",
     "capability_relay": "Nostr इवेंट पढ़ें और प्रकाशित करें",
+    "capability_common": "सामान्य Nostr कार्रवाइयाँ",
     "capability_outbox": "खाते की रिले रूटिंग",
     "capability_inc": "अन्य ऐप से संवाद",
     "capability_config": "ऐप सेटिंग",

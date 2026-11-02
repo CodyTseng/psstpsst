@@ -1,7 +1,7 @@
 import { WebLn } from '../webln';
 import { ExploreRuntime } from '../runtime';
 import { platform } from '@/platform';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { memoryRepository, rules } from '@/services/signing/testing/memory-repository';
 import { invalidateSigning } from '@/services/signing/changes';
 import type { ExploreEntry } from '../model';
@@ -17,7 +17,7 @@ jest.mock('@/services/local-relay', () => ({ localRelay: { add: jest.fn(async ()
 jest.mock('@/services/napplet/repository',()=>({getData:jest.fn(async()=>null),setData:jest.fn(async()=>{})}));
 jest.mock('@/services/napplet/artifacts', () => ({ fetchBlob: jest.fn(), loadSiteBlob: jest.fn(), recordArtifactVersion: jest.fn(async () => {}) }));
 jest.mock('@/platform', () => ({ platform: { napplet: { openPage: jest.fn(async () => 'container'), close: jest.fn(async () => { }), send: jest.fn(async () => { }), addMessageListener: jest.fn(() => () => { }) } } }));
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn().mockImplementation(() => ({ destroy: jest.fn(), sign: jest.fn(async (event) => ({ ...event, pubkey: 'account' })) })) }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn().mockImplementation(() => ({ destroy: jest.fn(), sign: jest.fn(async (event) => ({ ...event, pubkey: 'account' })) })) }));
 const entry: ExploreEntry = { key: 'https://site.example/path', address: 'https://site.example/path', title: 'Site', kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
 let receive: (id: string, raw: string) => void;
 const flush = () => new Promise<void>(r => setTimeout(r, 0));
@@ -54,7 +54,7 @@ it('reviews and signs a complete large event without rewriting its timestamp or 
   expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({
     kind: 3, content: event.content, tags: event.tags, createdAt: event.created_at,
   }) }), expect.any(AbortSignal));
-  expect(jest.mocked(NappletNetwork).mock.results.at(-1)!.value.sign).toHaveBeenCalledWith(event);
+  expect(jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value.sign).toHaveBeenCalledWith(event);
 });
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -162,12 +162,12 @@ it('discards an approval when its document navigates away', async () => {
   answer('allow');
   await flush();
   expect(platform.napplet.send).not.toHaveBeenCalled();
-  const network = (NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
+  const network = (ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value;
   expect(network.sign).not.toHaveBeenCalled();
 });
 it('does not return a signature revoked while the signer was working', async () => {
   let finish!: (value: unknown) => void;
-  const network = (NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
+  const network = (ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value;
   network.sign.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   message('https://site.example', 'one');
   await flush();
@@ -181,7 +181,7 @@ it('does not return a signature revoked while the signer was working', async () 
 
 it('returns a slow signature and retains the remembered decision', async () => {
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
-  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  const network = jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value;
   network.sign.mockImplementation(async () => { clock.mockReturnValue(61000); return { sig: 'slow' }; });
   try {
     message('https://site.example', 'one');
@@ -204,7 +204,7 @@ it('verifies and publishes large signed events using the shared event structure'
       ...Array.from({ length: 1000 }, (_, index) => ['p', index.toString(16).padStart(64, '0')]),
       ['custom', ...Array.from({ length: 32 }, () => 'x'.repeat(5000))],
     ] }, generateSecretKey());
-  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  const network = jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value;
   network.publish = jest.fn(async () => ({ 'wss://relay.example/': true }));
   for (const method of ['verifyEvent', 'publish']) {
     receive('container', JSON.stringify({ type: 'explore.request', origin: 'https://app.explore.psstpsst.invalid', document: 'one',
@@ -224,11 +224,11 @@ it.each(['getPublicKey', 'signEvent'])('returns a denied %s request without logg
   expect(confirm).toHaveBeenCalled();
   expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.error).toBe('permission-denied');
   expect(warningLog).not.toHaveBeenCalled();
-  expect((NappletNetwork as jest.Mock).mock.results.at(-1)!.value.sign).not.toHaveBeenCalled();
+  expect((ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value.sign).not.toHaveBeenCalled();
 });
 
 it('still warns when an approved signing operation fails', async () => {
-  (NappletNetwork as jest.Mock).mock.results.at(-1)!.value.sign.mockRejectedValueOnce(new Error('signer-unavailable'));
+  (ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value.sign.mockRejectedValueOnce(new Error('signer-unavailable'));
   message('https://site.example', 'one');
   await flush();
   expect(warningLog).toHaveBeenCalledWith('[explore]', 'Site', 'signEvent', { error: 'signer-unavailable' });
@@ -293,15 +293,18 @@ it('reads public profiles and relay lists without declared capabilities', async 
   runtime = new ExploreRuntime('account', { ...entry, kind: 'napp', required: [], files: [] }, { confirm, close: () => {}, link: () => {} });
   await runtime.start();
   receive('container', JSON.stringify({ type: 'explore.navigation', phase: 'commit', origin: runtime.entry.kind === 'website' ? new URL(runtime.entry.address).origin : (runtime.entry.key === 'naddr-test' ? 'https://app.explore.psstpsst.invalid' : 'https://app.example'), document: 'one' }));
-  const network = (NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
+  const network = (ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value;
   network.replaceable = jest.fn(async (_pubkey, kind) => kind === 0
     ? { content: JSON.stringify({ name: 'Cody' }) }
     : { tags: [['r', 'wss://relay.example', 'read'], ['r', 'wss://relay.example/', 'write'], ['r', 'https://invalid.example']] });
   const pubkey = 'a'.repeat(64);
+  network.routes = jest.fn(async () => ['wss://relay.example/']);
+  network.query = jest.fn(async () => ({ events: [{ id: 'profile', pubkey, kind: 0, created_at: 1, tags: [], content: JSON.stringify({ name: 'Cody' }) }], incomplete: false }));
   const request = async (method: string, args: unknown[]) => {
+    const count = jest.mocked(platform.napplet.send).mock.calls.length;
     receive('container', JSON.stringify({ type: 'explore.request', origin: 'https://app.example', document: 'one',
       raw: JSON.stringify({ id: method, nonce: 'test-document', method, args }) }));
-    await flush();
+    for (let i = 0; i < 30 && jest.mocked(platform.napplet.send).mock.calls.length === count; i++) await flush();
     return JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply;
   };
   expect((await request('profile', [{ pubkey }])).result).toMatchObject({ pubkey, shortName: 'Cody', metadata: { name: 'Cody' } });
@@ -332,7 +335,7 @@ it.each([{servers:[]},{servers:['https://old.example/']}])('shares one author-se
   const app={...entry,kind:'nsite' as const,servers,manifest:{pubkey:'b'.repeat(64),kind:35128,id:'c'.repeat(64),tags:[['d','site']]} as import('nostr-tools').Event,
     files:[{path:'/index.html',hash:'a'.repeat(64),mime:'text/html'},{path:'/app.js',hash:'c'.repeat(64),mime:'text/javascript'}]};
   runtime=new ExploreRuntime('account',app,{confirm,close:()=>{},link:()=>{}});
-  const network=(NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
+  const network=(ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value;
   network.mediaServers=jest.fn(async()=>['https://old.example/','https://new.example/']);
   jest.mocked(loadSiteBlob).mockImplementation(async(source)=>{
     if(!source.servers.includes('https://new.example/'))throw new Error('applications.download_failed');
@@ -351,7 +354,7 @@ it('does not open a nsite after cancellation while author servers are loading',a
   const app={...entry,kind:'nsite' as const,manifest:{pubkey:'b'.repeat(64),kind:35128,id:'c'.repeat(64),tags:[['d','site']]} as import('nostr-tools').Event,
     files:[{path:'/index.html',hash:'a'.repeat(64),mime:'text/html'}]};
   runtime=new ExploreRuntime('account',app,{confirm,close:()=>{},link:()=>{}});
-  const network=(NappletNetwork as jest.Mock).mock.results.at(-1)!.value;
+  const network=(ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value;
   let finish!:(servers:string[])=>void;
   let started!:()=>void;
   const loading=new Promise<void>(resolve=>{started=resolve;});
@@ -431,7 +434,7 @@ it.each([true, false])('settles native response-download policy before commit (a
   receive('container', JSON.stringify({ type: 'explore.request', document: 'provisional', origin: 'https://site.example',
     raw: JSON.stringify({ id: 'js-during-download', nonce: 'test-document', method: 'signEvent', args: [{ kind: 1, content: '', created_at: 1, tags: [] }] }) }));
   await flush();
-  expect(jest.mocked(NappletNetwork).mock.results.at(-1)!.value.sign).not.toHaveBeenCalled();
+  expect(jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value.sign).not.toHaveBeenCalled();
 });
 
 it('rejects mismatched policy sources and non-download requests before commit', async () => {
@@ -454,7 +457,7 @@ it('resumes a retained document with fresh authority without reviving its cancel
   receive('container', JSON.stringify({ type: 'explore.navigation', phase: 'resume', previousDocument: 'one', document: 'resumed', origin: 'https://site.example', url: entry.address }));
   answer('allow');
   await flush();
-  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  const network = jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value;
   expect(network.sign).not.toHaveBeenCalled();
   expect(platform.napplet.send).not.toHaveBeenCalled();
   confirm.mockResolvedValue('allow');

@@ -1,5 +1,5 @@
 import type { Event } from 'nostr-tools';
-import type { NappletNetwork } from '@/services/napplet/network';
+import type { ApplicationNetwork } from '@/services/applications/network';
 
 export const APPLICATION_QUERY_LIMIT = 200;
 
@@ -15,7 +15,7 @@ export const APPLICATION_CATALOGUE_SOURCES = [
 ];
 
 /** Catalogue membership comes only from each format's dedicated relays. */
-export async function queryApplicationCatalogue(network: NappletNetwork, author?: string) {
+export async function queryApplicationCatalogue(network: ApplicationNetwork, author?: string) {
   const results = await Promise.allSettled(APPLICATION_CATALOGUE_SOURCES.map(async source => network.query(source.relays,
     [{ kinds: source.kinds, limit: APPLICATION_QUERY_LIMIT, ...(author ? { authors: [author] } : {}) }])));
   const events: Event[] = [];

@@ -12,6 +12,7 @@ export const NAP_DOMAINS = [
   'upload',
   'link',
   'identity',
+  'common',
   'intent',
   'relay',
   'outbox',

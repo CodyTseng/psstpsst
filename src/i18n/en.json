@@ -1239,6 +1239,7 @@
     "capability_identity": "Public account information",
     "capability_intent": "Open other apps",
     "capability_relay": "Read and publish Nostr events",
+    "capability_common": "Common Nostr actions",
     "capability_outbox": "Account relay routing",
     "capability_inc": "Communicate with other apps",
     "capability_config": "App settings",

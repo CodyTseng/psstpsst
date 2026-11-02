@@ -1,14 +1,15 @@
 import type { Event } from 'nostr-tools';
-import { MARKET_RELAYS, publicUrl } from './protocol';
+import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
+import { publicUrl } from './protocol';
 
 export function outboxWriteRelays(event: Event | null): string[] {
   const relays = new Set<string>();
   for (const tag of event?.tags ?? []) {
     if (tag[0] !== 'r' || tag[2] && tag[2] !== 'write') continue;
     try { relays.add(publicUrl(tag[1], true)); } catch { /* Ignore unusable relay hints. */ }
-    if (relays.size > 8) return MARKET_RELAYS;
+    if (relays.size > 8) return DISCOVERY_RELAYS;
   }
-  return relays.size ? [...relays] : MARKET_RELAYS;
+  return relays.size ? [...relays] : DISCOVERY_RELAYS;
 }
 
 /** Prefer shared destinations, retaining redundant coverage before pruning small groups. */

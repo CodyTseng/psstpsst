@@ -1,5 +1,5 @@
 import { createStore } from 'zustand/vanilla';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { discoveryEntries, discoveryStore } from './discovery';
 import { queryApplicationCatalogue } from './catalogue-relays';
 import type { ExploreEntry } from './model';
@@ -23,9 +23,9 @@ function createCatalogue(pubkey: string) {
       if (!refresh && updatedAt && Date.now() - updatedAt < 5 * 60 * 1000) return Promise.resolve();
       store.setState({ loading: true, error: false });
       const request = (async () => {
-        let network: NappletNetwork | undefined;
+        let network: ApplicationNetwork | undefined;
         try {
-          network = new NappletNetwork(account);
+          network = new ApplicationNetwork(account);
           const result = await queryApplicationCatalogue(network, pubkey);
           // Relay filters are a request; verify both authorship and signatures locally.
           const entries = await discoveryEntries(result.events.filter(event => event.pubkey === pubkey), result.eventRelays);

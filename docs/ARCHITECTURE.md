@@ -1004,7 +1004,7 @@ the actual d tag; other operations may use their own trusted scope identifier.
 Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
 service with separate method scopes, independent of the cryptographic peer. Every
 call uses the current verified source. Napplet identity declarations expose the API
-without a domain grant; every current-account public projection requires the shared
+without a domain grant; its current-account projections require the shared
 public-key disclosure authorization. Legacy identity domain grants and denials
 do not confer or revoke signer authority. Launch access never bypasses signer
 authorization, and revocation invalidates pending results before disclosure.
@@ -1012,6 +1012,15 @@ Approvals are committed before invoking the signer; signer latency does not
 expire them. Remembered rules have no per-source count or aggregate-size quota.
 Application publication obtains the same event-signing consent as direct signer
 calls and then sends the signed event; it has no separate publication approval.
+Common API declarations require no domain consent; public reads need no prompt.
+Common social mutations use event-signing authorization. Public follow-list mutations
+serialize per account across napplet runtimes and never modify private contacts.
+Napp and napplet runtimes share account-scoped `ApplicationNetwork` transport and
+`PublicIdentityData` profile/list reads. Format adapters own only their response
+shapes; relay routing, public-cache merging and completeness checks stay shared.
+Successful public metadata publications refresh active views within the same account.
+Public metadata discovery and missing account routes use `DISCOVERY_RELAYS`;
+application catalogue relays never serve as generic account-data fallbacks.
 Encrypted publication obtains method-scoped encryption consent before signing
 the resulting event. Legacy publication-named rule keys remain compatible with
 event-signing decisions.

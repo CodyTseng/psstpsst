@@ -1211,6 +1211,7 @@
     "capability_identity": "공개 계정 정보",
     "capability_intent": "다른 앱 열기",
     "capability_relay": "Nostr 이벤트 읽기 및 게시",
+    "capability_common": "일반 Nostr 작업",
     "capability_outbox": "계정 릴레이 라우팅",
     "capability_inc": "다른 앱과 통신",
     "capability_config": "앱 설정",

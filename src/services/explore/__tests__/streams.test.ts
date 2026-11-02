@@ -1,9 +1,9 @@
 import { ExploreStreams } from '../streams';
 import { localRelay } from '@/services/local-relay';
-import type { NappletNetwork } from '@/services/napplet/network';
+import type { ApplicationNetwork } from '@/services/applications/network';
 
 jest.mock('@/services/local-relay',()=>({localRelay:{subscribe:jest.fn(),add:jest.fn()}}));
-jest.mock('@/services/napplet/network',()=>({relayUrls:(urls:string[])=>urls}));
+jest.mock('@/services/applications/network',()=>({relayUrls:(urls:string[])=>urls}));
 const filters={kinds:[1]};
 const flush=()=>new Promise<void>(resolve=>setTimeout(resolve,10));
 
@@ -11,7 +11,7 @@ beforeEach(()=>jest.clearAllMocks());
 it('does not close a subscription when a historical burst exceeds 128 events',async()=>{
  jest.useFakeTimers();
  let options:any;
- const streams=new ExploreStreams({subscribe:jest.fn(input=>{options=input;return()=>{};})} as unknown as NappletNetwork);
+ const streams=new ExploreStreams({subscribe:jest.fn(input=>{options=input;return()=>{};})} as unknown as ApplicationNetwork);
  const send=jest.fn(async(_message:any)=>{});
  try {
   await streams.open('relaySubscribe',['burst',['wss://relay.example/'],filters,{}],new AbortController().signal,send,jest.fn());
@@ -22,7 +22,7 @@ it('does not close a subscription when a historical burst exceeds 128 events',as
  } finally { streams.clear();jest.useRealTimers(); }
 });
 it('forwards remote filter extensions and limits unchanged',async()=>{
- const subscribe=jest.fn((_options:any)=>()=>{}),streams=new ExploreStreams({subscribe} as unknown as NappletNetwork);
+ const subscribe=jest.fn((_options:any)=>()=>{}),streams=new ExploreStreams({subscribe} as unknown as ApplicationNetwork);
  const filter={search:'x'.repeat(5000),'#client':['custom'],limit:100000,extension:true};
  await streams.open('relaySubscribe',['remote',['wss://relay.example/'],filter,{}],new AbortController().signal,jest.fn(async()=>{}),jest.fn());
  expect(subscribe.mock.calls[0][0].filters).toEqual([filter]);
@@ -33,7 +33,7 @@ it('loads all author routes before opening outbox subscriptions and preserves ea
  let resolve!:(routes:Map<string,string[]>)=>void;
  const outboxRoutes=jest.fn(()=>new Promise<Map<string,string[]>>(done=>{resolve=done;}));
  const subscribe=jest.fn((_options:any,_auth:any)=>()=>{});
- const streams=new ExploreStreams({outboxRoutes,subscribe} as unknown as NappletNetwork),signal=new AbortController();
+ const streams=new ExploreStreams({outboxRoutes,subscribe} as unknown as ApplicationNetwork),signal=new AbortController();
  const first={authors,kinds:[1],limit:100000},second={authors:[authors[0]],kinds:[30023],'#d':['x'.repeat(5000)]};
  const pending=streams.open('outboxSubscribe',['outbox',[],[first,second],{}],signal.signal,jest.fn(async()=>{}),jest.fn());
  expect(outboxRoutes).toHaveBeenCalledWith(authors,signal.signal);expect(subscribe).not.toHaveBeenCalled();
@@ -43,7 +43,7 @@ it('loads all author routes before opening outbox subscriptions and preserves ea
  streams.clear();
 });
 it('ends local subscription listeners with their document without touching shared data',async()=>{
- const network={} as NappletNetwork,streams=new ExploreStreams(network),signal=new AbortController(),send=jest.fn(async()=>{}),cleanup=jest.fn();
+ const network={} as ApplicationNetwork,streams=new ExploreStreams(network),signal=new AbortController(),send=jest.fn(async()=>{}),cleanup=jest.fn();
  let deliver!:(event:any)=>void;
  jest.mocked(localRelay.subscribe).mockImplementation((_filters,listener)=>{deliver=listener;return cleanup;});
  await streams.open('storeSubscribe',['local',filters],signal.signal,send,jest.fn());
@@ -54,7 +54,7 @@ it('ends local subscription listeners with their document without touching share
 it('stores public remote events before delivering them and EOSE',async()=>{
  let options:any;
  const cleanup=jest.fn(),subscribe=jest.fn(input=>{options=input;return cleanup;});
- const streams=new ExploreStreams({subscribe} as unknown as NappletNetwork),signal=new AbortController(),send=jest.fn(async(_message:any)=>{});
+ const streams=new ExploreStreams({subscribe} as unknown as ApplicationNetwork),signal=new AbortController(),send=jest.fn(async(_message:any)=>{});
  await streams.open('relaySubscribe',['remote',['wss://relay.example/'],filters,{}],signal.signal,send,jest.fn());
  options.onEvent({id:'initial',content:'note',tags:[]});options.onEnd([{url:'wss://relay.example/',status:'eose',received:1}]);
  await flush();
@@ -67,7 +67,7 @@ it('stores public remote events before delivering them and EOSE',async()=>{
 });
 it('delivers events and EOSE from a fast relay without waiting for another relay',async()=>{
  const subscriptions=new Map<string,any>(),subscribe=jest.fn(options=>{subscriptions.set(options.relays[0],options);return()=>{};});
- const streams=new ExploreStreams({subscribe} as unknown as NappletNetwork),send=jest.fn(async(_message:any)=>{});
+ const streams=new ExploreStreams({subscribe} as unknown as ApplicationNetwork),send=jest.fn(async(_message:any)=>{});
  await streams.open('relaySubscribe',['remote',['wss://fast.example/','wss://slow.example/'],filters,{}],new AbortController().signal,send,jest.fn());
  subscriptions.get('wss://fast.example/').onEvent({id:'first',content:'note',tags:[]});
  await flush();expect(send).toHaveBeenCalledWith(expect.objectContaining({phase:'event',event:expect.objectContaining({id:'first'})}));
@@ -81,7 +81,7 @@ it('delivers events and EOSE from a fast relay without waiting for another relay
 it('does not turn relay failures or timeouts into EOSE notifications',async()=>{
  let options:any;
  const subscribe=jest.fn(input=>{options=input;return()=>{};});
- const streams=new ExploreStreams({subscribe} as unknown as NappletNetwork),send=jest.fn(async()=>{});
+ const streams=new ExploreStreams({subscribe} as unknown as ApplicationNetwork),send=jest.fn(async()=>{});
  await streams.open('relaySubscribe',['remote',['wss://relay.example/'],filters,{}],new AbortController().signal,send,jest.fn());
  options.onEnd([{url:'wss://relay.example/',status:'eose',received:0,reason:'query timed out'}]);
  await flush();expect(send).not.toHaveBeenCalled();streams.clear();

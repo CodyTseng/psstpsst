@@ -1,7 +1,7 @@
 import { verifyEvent } from 'nostr-tools';
 import { assertNotAborted } from '@/platform/abort';
 import type { ApplicationEndpoint, ApplicationEnvelope } from '@/platform/ports/application-messaging';
-import type { NappletNetwork } from '@/services/napplet/network';
+import type { ApplicationNetwork } from '@/services/applications/network';
 import { eventWeight, randomId } from '@/services/napplet/protocol';
 import { localRelay } from '@/services/local-relay';
 import { publicEventAddress } from './event-address';
@@ -33,7 +33,7 @@ export class NappCapabilities {
   private detach?: () => void;
   private stopping?: Promise<void>;
   private scope: { accountPubkey: string; appKey: string };
-  constructor(private account: string, private entry: ExploreEntry, private network: NappletNetwork, private options: Options, readonly instance = randomId()) {
+  constructor(private account: string, private entry: ExploreEntry, private network: ApplicationNetwork, private options: Options, readonly instance = randomId()) {
     this.scope = { accountPubkey: account, appKey: entry.key };
     options.signal.addEventListener('abort', () => { void this.stop(); }, { once: true });
   }

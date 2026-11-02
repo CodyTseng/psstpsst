@@ -1,9 +1,9 @@
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { discoveryEntries, discoveryStore } from '../discovery';
 import { publisherCatalogue } from '../publishers';
 
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn() }));
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 let secret: Uint8Array;
 let publisher: string;
 const query = jest.fn();
@@ -14,7 +14,7 @@ const manifest = (created_at = 1, signer = secret) => finalizeEvent({ kind: 3513
 beforeEach(() => {
   secret = generateSecretKey(); publisher = getPublicKey(secret);
   query.mockReset().mockResolvedValue({ events: [], incomplete: false }); destroy.mockClear();
-  jest.mocked(NappletNetwork).mockClear().mockImplementation(() => ({ query, destroy }) as unknown as NappletNetwork);
+  jest.mocked(ApplicationNetwork).mockClear().mockImplementation(() => ({ query, destroy }) as unknown as ApplicationNetwork);
   discoveryStore.setState({ entries: [] });
 });
 
@@ -74,5 +74,5 @@ it('keeps separate publishers independent when their requests finish out of orde
 
 it.each(['invalid', ['a'.repeat(64)], undefined])('rejects malformed route identifiers before requesting relay data: %j', value => {
   expect(() => publisherCatalogue(value as string)).toThrow('invalid-publisher');
-  expect(NappletNetwork).not.toHaveBeenCalled();
+  expect(ApplicationNetwork).not.toHaveBeenCalled();
 });

@@ -2,7 +2,8 @@ import { platform } from '@/platform';
 import { eventKey, eventKeyAddress } from '@/lib/nostr/event-key';
 import type { ExplorePage, ExploreMessage } from '@/platform/ports/explore';
 import { assertNotAborted } from '@/platform/abort';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
+import { profileMetadata, rememberPublishedIdentity } from '@/services/applications/public-identity';
 import { SigningPermissions } from '@/services/signing/permissions';
 import { ApplicationSigner } from '@/services/signing/application-signer';
 import { BrowserActions } from './browser-actions';
@@ -32,7 +33,7 @@ const isPermissionDenied = (error: unknown) => error instanceof Error && error.m
 export class ExploreRuntime {
   private lifetime = new AbortController();
   private documentLife = new AbortController();
-  private network: NappletNetwork;
+  private network: ApplicationNetwork;
   private streams: ExploreStreams;
   private capabilities?: NappCapabilities;
   private readonly instance = randomId();
@@ -77,7 +78,7 @@ export class ExploreRuntime {
     launch?: (entry: ExploreEntry) => Promise<void>;
     installed?: (entry: ExploreEntry) => void;
     replaced?: (entry?: ExploreEntry) => void;
-  }) { this.network = new NappletNetwork(account); this.streams = new ExploreStreams(this.network); }
+  }) { this.network = new ApplicationNetwork(account); this.streams = new ExploreStreams(this.network); }
   async start() {
     if (!platform.napplet.openPage)
       throw new Error('applications.rebuild_required');
@@ -496,7 +497,8 @@ export class ExploreRuntime {
     if (method === 'profile' || method === 'relayList') {
       const pubkey = method === 'profile' && typeof args[0] === 'object' ? args[0]?.pubkey : args[0];
       if (typeof pubkey !== 'string' || !/^[a-f0-9]{64}$/.test(pubkey)) throw new Error('invalid-pubkey');
-      const event = await this.network.replaceable(pubkey, method === 'profile' ? 0 : 10002, signal);
+      const data = this.data ??= new NappData(this.account, this.network, signal);
+      const event = await data.metadata(pubkey, method === 'profile' ? 0 : 10002);
       current();
       if (method === 'relayList') {
         const items = new Map<string, { url: string; read: boolean; write: boolean }>();
@@ -511,11 +513,7 @@ export class ExploreRuntime {
         }
         return { event, items: [...items.values()] };
       }
-      let metadata: Record<string, unknown> = {};
-      try {
-        const value = JSON.parse(event?.content ?? '{}');
-        if (value && typeof value === 'object' && !Array.isArray(value)) metadata = value;
-      } catch { /* A malformed metadata event still identifies its public author. */ }
+      const metadata = profileMetadata(event);
       const npub = nip19.npubEncode(pubkey);
       const name = [metadata.name, metadata.display_name].find(value => typeof value === 'string' && value.trim());
       return { pubkey, npub, event, metadata, shortName: name ?? `${npub.slice(0, 12)}…${npub.slice(-4)}` };
@@ -532,7 +530,9 @@ export class ExploreRuntime {
         throw new Error('invalid-event');
       const relays = args[1] ?? await this.network.routes([event.pubkey], 'write');
       current();
-      return this.network.publish(event, relays);
+      const result = await this.network.publish(event, relays);
+      if (Object.values(result).some(Boolean)) rememberPublishedIdentity(this.network, event);
+      return result;
     }
     throw new Error('unsupported-method');
   }

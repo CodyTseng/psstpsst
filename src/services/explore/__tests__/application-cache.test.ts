@@ -7,7 +7,7 @@ let mockDatabase: ReturnType<typeof applicationTestDatabase> | undefined;
 const mockQuery = jest.fn();
 jest.mock('@/db/client', () => mockDatabase ??= jest.requireActual('../testing/database').applicationTestDatabase());
 jest.mock('@/platform', () => ({ platform: { appState: { currentState: () => 'active' } } }));
-jest.mock('@/services/napplet/network', () => ({ NappletNetwork: jest.fn(() => ({ query: mockQuery,
+jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn(() => ({ query: mockQuery,
   routes: async () => ['wss://write.example/'], mediaServers: async () => [], destroy: () => {} })) }));
 jest.mock('@/services/relay/relay-pool', () => ({ relayPool: { query: jest.fn() } }));
 

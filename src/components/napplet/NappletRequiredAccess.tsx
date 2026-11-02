@@ -14,7 +14,7 @@ export function NappletRequiredAccess({ release, showHeading = true, unsupported
     {showHeading ? <AppText variant="subtitle">{t('applications.capabilities_required')}</AppText> : null}
     {unsupported.length ? <AppText variant="caption" tone="danger">{t('applications.unsupported')}</AppText> : null}
     <ListGroup>{required.map((domain) => {
-      const name=t(`applications.capability_${({network:'resource',common:'relay'} as Record<string,string>)[domain] ?? domain}`, { defaultValue: domain });
+      const name=t(`applications.capability_${({network:'resource'} as Record<string,string>)[domain] ?? domain}`, { defaultValue: domain });
       const unavailable=unsupported.includes(domain);
       return <ListRow key={domain} titleTone={unavailable ? 'danger' : 'default'}
         title={unavailable ? t('applications.capability_unsupported', { name }) : name} />;

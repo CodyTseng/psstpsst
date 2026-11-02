@@ -1,7 +1,7 @@
 import { NappCapabilities } from '../capabilities';
 import { applicationMessaging } from '../messaging';
 import type { ExploreEntry } from '../model';
-import type { NappletNetwork } from '@/services/napplet/network';
+import type { ApplicationNetwork } from '@/services/applications/network';
 
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/services/local-relay', () => ({ localRelay: {} }));
@@ -35,7 +35,7 @@ beforeEach(() => {
   launch = jest.fn(async () => connectTarget());
   received = jest.fn();
   applications = jest.fn(async () => favorites);
-  capabilities = new NappCapabilities(account, caller, {} as NappletNetwork, {
+  capabilities = new NappCapabilities(account, caller, {} as ApplicationNetwork, {
     signal: life.signal, send: jest.fn(async () => {}), confirm, configure: jest.fn(),
     applications, launch,
   }, 'caller-instance');

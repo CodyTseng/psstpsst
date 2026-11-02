@@ -3,10 +3,20 @@ import { ActivityIndicator } from 'react-native';
 import { ApplicationDetailsPage } from '../ApplicationDetailsPage';
 import { ApplicationOpenSetting } from '../ApplicationOpenSetting';
 import { NappletRequiredAccess } from '../NappletRequiredAccess';
+import { NAP_DOMAINS } from '@/services/napplet/protocol';
 import { applicationPresentation, type ExploreEntry } from '@/services/explore/model';
 let mockMembershipReady = true;
 
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: { defaultValue?: string; name?: string }) => key === 'applications.capability_unsupported' ? `${options?.name} (not supported)` : options?.defaultValue ?? key }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({
+  t: (key: string, options?: { defaultValue?: string; name?: string }) => {
+    if (key === 'applications.capability_unsupported') return `${options?.name} (not supported)`;
+    if (key.startsWith('applications.capability_')) {
+      const labels = jest.requireActual('@/i18n/en.json').applications as Record<string, string>;
+      return labels[key.slice('applications.'.length)] ?? options?.defaultValue ?? key;
+    }
+    return options?.defaultValue ?? key;
+  },
+}) }));
 jest.mock('@/components/common/AppScreen', () => ({ AppScreen: 'Screen' }));
 jest.mock('@/components/common/AppText', () => ({ AppText: 'Text' }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: 'Button' }));
@@ -75,9 +85,18 @@ it('marks unsupported requirements in one list with a single explanation', () =>
   let renderer!: ReactTestRenderer;
   act(() => { renderer=create(<NappletRequiredAccess release={{ required: ['shell', 'network', 'ui', 'dev', 'ui'] }} unsupported={['ui', 'dev']} />); });
   expect(renderer.root.findAllByType('ListRow' as never).map(node=>[node.props.title,node.props.titleTone]))
-    .toEqual([['network','default'],['ui (not supported)','danger'],['dev (not supported)','danger']]);
+    .toEqual([['Network resource access','default'],['Application interface components (not supported)','danger'],['Install and replace local apps (not supported)','danger']]);
   expect(renderer.root.findAllByType('Text' as never).map(node=>node.props.children))
     .toEqual(['applications.capabilities_required','applications.unsupported']);
+  act(() => renderer.unmount());
+});
+
+it('shows distinct supported common and relay capabilities', () => {
+  let renderer!: ReactTestRenderer;
+  const required = ['common', 'relay'];
+  act(() => { renderer = create(<NappletRequiredAccess release={{ required }} unsupported={required.filter(domain => !(NAP_DOMAINS as readonly string[]).includes(domain))} />); });
+  expect(renderer.root.findAllByType('ListRow' as never).map(node => [node.props.title, node.props.titleTone]))
+    .toEqual([['Common Nostr actions', 'default'], ['Read and publish Nostr events', 'default']]);
   act(() => renderer.unmount());
 });
 

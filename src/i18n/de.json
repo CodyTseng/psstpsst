@@ -1211,6 +1211,7 @@
     "capability_identity": "Öffentliche Kontoinformationen",
     "capability_intent": "Andere Apps öffnen",
     "capability_relay": "Nostr-Ereignisse lesen und veröffentlichen",
+    "capability_common": "Gängige Nostr-Aktionen",
     "capability_outbox": "Relay-Routing des Kontos",
     "capability_inc": "Mit anderen Apps kommunizieren",
     "capability_config": "App-Einstellungen",

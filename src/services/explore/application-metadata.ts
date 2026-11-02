@@ -4,7 +4,7 @@ import { invalidateReplaceableEvents } from '@/services/relay/replaceable-events
 import { assertNotAborted } from '@/platform/abort';
 import { parseNostrEventReference } from '@/lib/nostr/event-reference';
 import { normalizeRelayUrls } from '@/lib/nostr/relay-url';
-import { NappletNetwork } from '@/services/napplet/network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { ensureReplaceableFresh, type ReplaceableKey } from '@/services/relay/replaceable-events.service';
 import { parseApplicationEvents } from './application-event';
 import { APPLICATION_CATALOGUE_SOURCES } from './catalogue-relays';
@@ -19,7 +19,7 @@ type MetadataRequest = { life: AbortController; consumers: number; settled: bool
 const resolving = new Map<string, MetadataRequest>();
 export { subscribeApplicationChanges as subscribeApplicationMetadata } from './application-changes';
 
-async function relaysFor(network: NappletNetwork, entry: ExploreEntry, kind: number | undefined, signal: AbortSignal) {
+async function relaysFor(network: ApplicationNetwork, entry: ExploreEntry, kind: number | undefined, signal: AbortSignal) {
   const reference = parseNostrEventReference(entry.address);
   if (reference?.relays.length) return reference.relays;
   const writes = reference?.author ? await network.routes([reference.author], 'write', true, signal).catch(() => []) : [];
@@ -32,8 +32,8 @@ async function relaysFor(network: NappletNetwork, entry: ExploreEntry, kind: num
 export async function refreshApplicationMetadata(account: string, entries: ExploreEntry[], signal: AbortSignal): Promise<void> {
   const pending = entries.filter(entry => applicationCoordinate(entry) && (retryAfter.get(entry.key) ?? 0) <= Date.now());
   if (!pending.length) return;
-  let network: NappletNetwork | undefined;
-  const getNetwork = () => network ??= new NappletNetwork(account);
+  let network: ApplicationNetwork | undefined;
+  const getNetwork = () => network ??= new ApplicationNetwork(account);
   const abort = () => network?.destroy(); signal.addEventListener('abort', abort, { once: true });
   const key = (coordinate: ReplaceableKey) => JSON.stringify([coordinate.pubkey, coordinate.kind, coordinate.dTag ?? '']);
   const bySource = new Map(pending.map(entry => [entry.key, entry]));
@@ -148,7 +148,7 @@ async function fetchApplicationMetadata(account: string, entry: ExploreEntry, si
   const reference = parseNostrEventReference(entry.address);
   if (!reference) throw new Error('applications.invalid_manifest');
   const coordinate = applicationCoordinate(entry);
-  const network = new NappletNetwork(account);
+  const network = new ApplicationNetwork(account);
   const abort = () => network.destroy(); signal.addEventListener('abort', abort, { once: true });
   try {
     const kind = coordinate?.kind;

@@ -19,16 +19,16 @@ afterEach(() => { act(() => renderer.unmount()); });
 
 it('shows required access immediately and distinguishes enabled and disabled optional access', () => {
   const onToggle = jest.fn();
-  act(() => { renderer = create(<ApplicationAccessControls required={['shell', 'common']}
+  act(() => { renderer = create(<ApplicationAccessControls required={['shell', 'common', 'relay']}
     optional={['network', 'appearance']} selected={['shell', 'common', 'network']} onToggle={onToggle} />); });
   const rows = renderer.root.findAllByType(ListRow);
   expect(rows.map(row => row.props.title)).toEqual([
-    'applications.capability_relay', 'applications.capability_resource', 'applications.capability_appearance',
+    'applications.capability_common', 'applications.capability_relay', 'applications.capability_resource', 'applications.capability_appearance',
   ]);
   expect(rows[0].props.value).toBe('applications.capabilities_required');
-  expect(rows[1].props.subtitle).toBe('applications.permissions_enabled');
-  expect(rows[2].props.subtitle).toBe('applications.permissions_disabled');
-  const toggle = rows[2].props.trailing;
+  expect(rows[2].props.subtitle).toBe('applications.permissions_enabled');
+  expect(rows[3].props.subtitle).toBe('applications.permissions_disabled');
+  const toggle = rows[3].props.trailing;
   expect(toggle.type).toBe(Toggle);
   expect(toggle.props.accessibilityLabel).toBe('applications.capability_appearance');
   act(() => { toggle.props.onValueChange(true); });

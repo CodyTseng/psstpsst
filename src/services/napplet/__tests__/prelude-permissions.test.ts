@@ -5,8 +5,9 @@ import { nappletPrelude } from '../prelude.generated';
 type Api = {
   identity: { getPublicKey(): Promise<unknown> };
   inc: { channel: { list(): Promise<unknown> } };
+  common: { follows(): Promise<unknown> };
 };
-function sdk(domain: 'identity' | 'inc') {
+function sdk(domain: 'identity' | 'inc' | 'common') {
   const listeners: ((event: unknown) => void)[] = [];
   const parent = { postMessage: jest.fn() };
   const window = {
@@ -18,16 +19,25 @@ function sdk(domain: 'identity' | 'inc') {
   runInNewContext(nappletPrelude, context);
   context.NappletShimPrelude.install({ domains: [domain] });
   return {
-    request: () => domain === 'identity' ? window.napplet.identity.getPublicKey() : window.napplet.inc.channel.list(),
+    request: () => domain === 'identity' ? window.napplet.identity.getPublicKey() : domain === 'common' ? window.napplet.common.follows() : window.napplet.inc.channel.list(),
     reply: (data: object, source: object = parent) => {
       for (const listener of listeners) listener({ source, data });
     },
-    type: domain === 'identity' ? 'identity.getPublicKey.result' : 'inc.channel.list.result',
+    type: domain === 'identity' ? 'identity.getPublicKey.result' : domain === 'common' ? 'common.follows.result' : 'inc.channel.list.result',
   };
 }
 
 beforeEach(() => { jest.useFakeTimers(); });
 afterEach(() => { jest.clearAllTimers(); jest.useRealTimers(); });
+
+it.each([true, false])('preserves pinned common result envelopes with ok=%s', async ok => {
+  const client = sdk('common');
+  const pending = client.request();
+  const result = ok ? { ok, pubkeys: ['a'.repeat(64)] } : { ok, pubkeys: [], error: 'permission-denied' };
+  client.reply({ type: client.type, id: 'request', ...result });
+  await expect(pending).resolves.toEqual(result);
+  expect(jest.getTimerCount()).toBe(0);
+});
 
 for (const domain of ['identity', 'inc'] as const) {
   it.each(['permission-denied', 'quota-exceeded'])(`rejects ${domain} error responses immediately: %s`, async error => {

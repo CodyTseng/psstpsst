@@ -1,12 +1,12 @@
 import type { Event } from 'nostr-tools';
 import { groupOutboxAuthors, outboxWriteRelays } from '../outbox-routing';
-import { MARKET_RELAYS } from '../protocol';
+import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
 
 it('uses default relays for missing or excessive write lists and respects read-only hints', () => {
-  expect(outboxWriteRelays(null)).toEqual(MARKET_RELAYS);
+  expect(outboxWriteRelays(null)).toEqual(DISCOVERY_RELAYS);
   const event = { tags: [['r', 'wss://read.example', 'read'], ['r', 'wss://write.example', 'write'], ['r', 'wss://both.example']] } as Event;
   expect(outboxWriteRelays(event)).toEqual(['wss://write.example/', 'wss://both.example/']);
-  expect(outboxWriteRelays({ tags: Array.from({ length: 9 }, (_, i) => ['r', `wss://relay-${i}.example`]) } as Event)).toEqual(MARKET_RELAYS);
+  expect(outboxWriteRelays({ tags: Array.from({ length: 9 }, (_, i) => ['r', `wss://relay-${i}.example`]) } as Event)).toEqual(DISCOVERY_RELAYS);
 });
 
 it('greedily prunes redundant small groups while preserving two destinations per author', () => {

@@ -1211,6 +1211,7 @@
     "capability_identity": "ข้อมูลบัญชีสาธารณะ",
     "capability_intent": "เปิดแอปอื่น",
     "capability_relay": "อ่านและเผยแพร่เหตุการณ์ Nostr",
+    "capability_common": "การดำเนินการ Nostr ทั่วไป",
     "capability_outbox": "การกำหนดเส้นทางรีเลย์ของบัญชี",
     "capability_inc": "สื่อสารกับแอปอื่น",
     "capability_config": "การตั้งค่าแอป",

@@ -1231,6 +1231,7 @@
     "capability_identity": "معلومات الحساب العامة",
     "capability_intent": "فتح تطبيقات أخرى",
     "capability_relay": "قراءة أحداث Nostr ونشرها",
+    "capability_common": "إجراءات Nostr الشائعة",
     "capability_outbox": "توجيه مرحّلات الحساب",
     "capability_inc": "التواصل مع تطبيقات أخرى",
     "capability_config": "إعدادات التطبيق",

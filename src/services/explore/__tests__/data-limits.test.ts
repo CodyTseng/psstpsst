@@ -2,21 +2,21 @@ import type { Event } from 'nostr-tools';
 import { NappData } from '../data';
 import { publicEventAddress } from '../event-address';
 import { localRelay } from '@/services/local-relay';
-import type { NappletNetwork } from '@/services/napplet/network';
+import type { ApplicationNetwork } from '@/services/applications/network';
 
 jest.mock('@/services/local-relay', () => ({ localRelay: { subscribe: () => () => {}, query: jest.fn(async () => []) } }));
-jest.mock('@/services/napplet/network', () => ({ relayUrls: (urls: string[]) => urls }));
+jest.mock('@/services/applications/network', () => ({ relayUrls: (urls: string[]) => urls }));
 
 it('loads every requested event beyond 1000 IDs using internal batches', async () => {
   const ids = Array.from({ length: 1201 }, (_, i) => i.toString(16).padStart(64, '0'));
   jest.mocked(localRelay.query).mockImplementation(async (input: any) => input.ids.map((id: string) => ({ id } as Event)));
-  const life = new AbortController(), data = new NappData('account', {} as NappletNetwork, life.signal);
+  const life = new AbortController(), data = new NappData('account', {} as ApplicationNetwork, life.signal);
   try { expect((await data.loadEvents(ids)).map(event => event.id)).toEqual(ids); }
   finally { life.abort(); }
 });
 
 it('resolves every referenced set beyond the former 128-pointer limit', async () => {
-  const life = new AbortController(), data = new NappData('account', {} as NappletNetwork, life.signal);
+  const life = new AbortController(), data = new NappData('account', {} as ApplicationNetwork, life.signal);
   const items = Array.from({ length: 150 }, (_, i) => ({ kind: 30002, pubkey: 'a'.repeat(64), identifier: String(i), relays: [] }));
   jest.spyOn(data, 'list').mockResolvedValue({ event: null, items });
   const load = jest.spyOn(data, 'loadEvent').mockResolvedValue(null);

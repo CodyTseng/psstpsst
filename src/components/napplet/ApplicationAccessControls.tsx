@@ -16,7 +16,7 @@ export function ApplicationAccessControls({required,optional=[],selected,failed=
   const {t}=useTranslation(),c=useThemeColors();
   useErrorToast(failed && 'applications.request_failed');
   const visibleRequired=required.filter(domain=>domain!=='shell');
-  const label=(domain:string)=>t(`applications.capability_${({network:'resource',common:'relay'} as Record<string,string>)[domain]??domain}`,{defaultValue:domain});
+  const label=(domain:string)=>t(`applications.capability_${({network:'resource'} as Record<string,string>)[domain]??domain}`,{defaultValue:domain});
   if(!visibleRequired.length&&!optional.length)return null;
   return <View style={{gap:spacing.xl}}>
     {visibleRequired.length?<View style={{gap:spacing.md}}>

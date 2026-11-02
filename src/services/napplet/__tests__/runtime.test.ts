@@ -7,11 +7,29 @@ import { NAP_DOMAINS, type NappletRelease } from '../protocol';
 import { platform } from '@/platform';
 import { NAPPLET_FRAME_READY_MESSAGE } from '@/platform/ports/napplet';
 import { getData, setData } from '../repository';
-import { NappletNetwork } from '../network';
+import { ApplicationNetwork } from '@/services/applications/network';
 import { invalidateSigning } from '@/services/signing/changes';
 import { appSigningScope } from '../signing-permissions';
 import { getBlockedPubkeys } from '@/services/dm/block.service';
 
+jest.mock('@/services/local-relay', () => ({ localRelay: { subscribe: () => () => {}, query: async () => [] } }));
+jest.mock('@/services/applications/public-identity', () => {
+  const actual = jest.requireActual('@/services/applications/public-identity');
+  return { ...actual, PublicIdentityData: jest.fn().mockImplementation(network => ({
+    metadata: (key: string, kind: number) => network.replaceable(key, kind),
+    published: jest.fn(),
+    profile: async (key: string) => {
+      const event = await network.replaceable(key, 0);
+      return { event, metadata: actual.profileMetadata(event) };
+    },
+    follows: async (key: string) => {
+      const routes = await network.routes([key], 'write');
+      const result = await network.query(routes, [{ kinds: [3], authors: [key], limit: 1 }]);
+      if (result.incomplete || result.error) throw new Error(result.error ?? 'network-error');
+      return result.events[0] ?? null;
+    },
+  })) };
+});
 jest.mock('@/services/dm/block.service', () => ({ getBlockedPubkeys: jest.fn(async () => []) }));
 jest.mock('@/services/explore/browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
@@ -47,8 +65,8 @@ jest.mock('../repository', () => ({
   setData: jest.fn(async () => {}),
   dataKeys: jest.fn(async () => []),
 }));
-jest.mock('../network', () => ({
-  NappletNetwork: jest.fn().mockImplementation(() => ({
+jest.mock('@/services/applications/network', () => ({
+  ApplicationNetwork: jest.fn().mockImplementation(() => ({
     destroy: jest.fn(),
     sign: jest.fn(),
     publish: jest.fn(),
@@ -135,7 +153,7 @@ test('NIP-07 works without declared domains and signs without publishing', async
 test.each(['signer.signEvent', 'outbox.publish'])('%s preserves large valid events and future timestamps', async type => {
   const config = options();
   const runtime = new NappletRuntime(config);
-  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  const network = jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value;
   const event = { kind: 3, created_at: Math.floor(Date.now() / 1000) + 365 * 86400,
     content: 'x'.repeat(70000), tags: [
       ...Array.from({ length: 1000 }, (_, index) => ['p', index.toString(16).padStart(64, '0')]),
@@ -397,7 +415,7 @@ test('undeclared domains and reply-shaped messages cannot invoke a handler', asy
   } finally {
     await runtime.close();
   }
-  expect(NappletNetwork).toHaveBeenCalledWith('accountA');
+  expect(ApplicationNetwork).toHaveBeenCalledWith('accountA');
 });
 
 test.each([
@@ -627,7 +645,7 @@ it.each(['pending requests', 'call budget'])('accepts upload starts beyond the f
 it('asks for each file as app consent and signs Blossom authentication only after approval', async () => {
   const config = options();
   const runtime = new NappletRuntime(config);
-  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  const network = jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value;
   jest.mocked(network.sign).mockImplementation(async (template: EventTemplate) => ({ ...template, pubkey: 'a'.repeat(64), id: 'b'.repeat(64), sig: 'd'.repeat(128) }));
   await runtime.open();
   await transferFile(runtime, 'file-one');
@@ -647,7 +665,7 @@ it('denying an upload never signs its authorization or sends the file', async ()
   const config = options();
   jest.mocked(config.confirm).mockResolvedValue(false);
   const runtime = new NappletRuntime(config);
-  const network = jest.mocked(NappletNetwork).mock.results.at(-1)!.value;
+  const network = jest.mocked(ApplicationNetwork).mock.results.at(-1)!.value;
   await runtime.open();
   await transferFile(runtime, 'denied-file');
   for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1061,4 +1079,108 @@ test('large encrypted publications share consent without imposing an extra plain
     expect(nip44.v2.decrypt(encrypted, key)).toBe(content);
     expect(messages().at(-1)?.ok).toBe(true);
   } finally { await runtime.close(); }
+});
+
+test('common public helpers and follows require no consent', async () => {
+  const config = options();
+  const runtime = new NappletRuntime(config);
+  runtime.network.routes = jest.fn(async () => ['wss://account.example/']);
+  runtime.network.query = jest.fn(async () => ({ events: [{ kind: 3, pubkey: 'accountA', tags: [['p', 'a'.repeat(64)]] } as Event], incomplete: false }));
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'common.encodeNip19', id: 'encode', input: { type: 'npub', hex: 'a'.repeat(64) } }));
+    expect(messages().at(-1)).toMatchObject({ id: 'encode', ok: true, nip19Type: 'npub' });
+    expect(config.confirm).not.toHaveBeenCalled();
+    jest.mocked(config.confirm).mockResolvedValue('deny');
+    await runtime.receive(JSON.stringify({ type: 'common.follows', id: 'follows' }));
+    expect(messages().at(-1)).toMatchObject({ id: 'follows', ok: true, pubkeys: ['a'.repeat(64)] });
+    expect(config.confirm).not.toHaveBeenCalled();
+  } finally { await runtime.close(); }
+});
+
+test.each(['allow', 'allow-session', 'allow-10m', 'allow-always', 'deny'])('common follow uses ordinary event-signing authorization: %s', async answer => {
+  const config = options();
+  jest.mocked(config.confirm).mockResolvedValue(answer);
+  const runtime = new NappletRuntime(config);
+  runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
+  runtime.network.query = jest.fn(async () => ({ events: [], incomplete: false }));
+  runtime.network.sign = jest.fn(async template => ({ ...template, pubkey: 'accountA', id: 'event', sig: '' }));
+  runtime.network.publish = jest.fn(async () => ({ 'wss://relay.example/': true }));
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'common.follow', id: 'follow', pubkeys: ['a'.repeat(64)] }));
+    expect(config.confirm).toHaveBeenCalledTimes(1);
+    expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({ operation: 'sign', kind: 3 }) }), expect.anything());
+    if (answer.startsWith('allow')) {
+      expect(runtime.network.sign).toHaveBeenCalledWith(expect.objectContaining({ kind: 3, tags: [['p', 'a'.repeat(64)]] }));
+      expect(messages().filter(message => message.id === 'follow')).toEqual([expect.objectContaining({ type: 'common.follow.result', ok: true, eventId: 'event' })]);
+      if (answer !== 'allow') {
+        await runtime.receive(JSON.stringify({ type: 'common.follow', id: 'follow-again', pubkeys: ['b'.repeat(64)] }));
+        expect(config.confirm).toHaveBeenCalledTimes(1);
+        expect(messages().at(-1)).toMatchObject({ id: 'follow-again', ok: true, eventId: 'event' });
+      }
+    } else {
+      expect(runtime.network.sign).not.toHaveBeenCalled();
+      expect(runtime.network.publish).not.toHaveBeenCalled();
+      expect(messages().at(-1)).toMatchObject({ id: 'follow', error: 'permission-denied' });
+    }
+  } finally { await runtime.close(); }
+});
+
+test.each(['revoke', 'close'])('%s during a common profile read prevents disclosure', async action => {
+  const runtime = new NappletRuntime(options());
+  let finish!: (event: Event | null) => void;
+  let reading!: () => void;
+  const started = new Promise<void>(resolve => { reading = resolve; });
+  runtime.network.replaceable = jest.fn(() => new Promise(resolve => { finish = resolve; reading(); }));
+  await runtime.open();
+  try {
+    const pending = runtime.receive(JSON.stringify({ type: 'common.getProfile', id: 'profile', target: 'a'.repeat(64) }));
+    await started;
+    if (action === 'revoke') invalidateSigning(appSigningScope(runtime.scope));
+    else await runtime.close();
+    finish({ content: JSON.stringify({ name: 'Alice' }) } as Event);
+    await pending;
+    if (action === 'revoke') expect(messages().at(-1)).toMatchObject({ id: 'profile', ok: false, error: 'permission-revoked' });
+    expect(messages().some(message => message.profile?.name === 'Alice')).toBe(false);
+  } finally { await runtime.close(); }
+});
+
+test.each(['revoke', 'close'])('%s during common signing prevents publication', async action => {
+  const config = options();
+  jest.mocked(config.confirm).mockResolvedValue('allow-always');
+  const runtime = new NappletRuntime(config);
+  runtime.network.routes = jest.fn(async () => ['wss://relay.example/']);
+  runtime.network.query = jest.fn(async () => ({ events: [], incomplete: false }));
+  let finish!: (event: Event) => void;
+  let signing!: () => void;
+  let template!: EventTemplate;
+  const started = new Promise<void>(resolve => { signing = resolve; });
+  runtime.network.sign = jest.fn(input => { template = input; return new Promise(resolve => { finish = resolve; signing(); }); });
+  runtime.network.publish = jest.fn();
+  await runtime.open();
+  try {
+    const pending = runtime.receive(JSON.stringify({ type: 'common.follow', id: 'follow', pubkeys: ['a'.repeat(64)] }));
+    await started;
+    if (action === 'revoke') invalidateSigning(appSigningScope(runtime.scope));
+    else await runtime.close();
+    finish({ ...template, id: 'event', pubkey: 'accountA', sig: '' });
+    await pending;
+    expect(runtime.network.publish).not.toHaveBeenCalled();
+    if (action === 'revoke') expect(messages().at(-1)).toMatchObject({ id: 'follow', error: 'permission-revoked' });
+    expect(messages().some(message => message.eventId === 'event')).toBe(false);
+  } finally { await runtime.close(); }
+});
+
+test.each(['required', 'optional'] as const)('declared %s common access bypasses domain consent and legacy denials', async declaration => {
+  const config = { ...options(), domains: ['shell'], release: { ...release, [declaration]: ['common'] } };
+  jest.mocked(config.confirm).mockResolvedValue('deny');
+  jest.mocked(getData).mockImplementation(async (_scope, _bucket, key) => key === 'denied-domains' ? '["common"]' : null);
+  const runtime = new NappletRuntime(config);
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'common.encodeNip19', id: 'encode', input: { type: 'npub', hex: 'a'.repeat(64) } }));
+    expect(config.confirm).not.toHaveBeenCalled();
+    expect(messages().at(-1)).toMatchObject({ id: 'encode', ok: true, nip19Type: 'npub' });
+  } finally { await runtime.close(); jest.mocked(getData).mockImplementation(async () => null); }
 });

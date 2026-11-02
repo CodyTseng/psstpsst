@@ -1,7 +1,7 @@
 import type { Event } from 'nostr-tools';
 import type { ManagedSubscribeOptions, QueryRelayResult } from '@/services/relay/managed-relay-pool';
 import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
-import { NappletNetwork, relayUrls } from '../network';
+import { ApplicationNetwork, relayUrls } from '@/services/applications/network';
 
 jest.mock('@/lib/platform', () => ({ IS_ANDROID: true }));
 jest.mock('@/services/relay/relay-pool', () => ({ verifyEventNativeFirst: jest.fn() }));
@@ -20,8 +20,27 @@ it('preserves explicit relay lists beyond the former eight-relay cap', () => {
   expect(relayUrls(urls)).toEqual(urls);
 });
 
+it('defaults generic relay queries to public discovery relays', () => {
+  expect(relayUrls(undefined)).toEqual(DISCOVERY_RELAYS);
+  expect(relayUrls(undefined)).not.toContain('wss://relay.napplet.soy/');
+});
+
+it.each(['missing', 'failed'] as const)('falls back to public relays when account routes are %s', async status => {
+  const network = new ApplicationNetwork(author);
+  jest.spyOn(network, 'replaceable').mockImplementation(async () => {
+    if (status === 'failed') throw new Error('network-error');
+    return null;
+  });
+  try {
+    expect(await network.routes([author], 'write')).toEqual(DISCOVERY_RELAYS);
+    expect(await network.routes([author], 'read')).toEqual(DISCOVERY_RELAYS);
+    expect(await network.routes([], 'write')).toEqual(DISCOVERY_RELAYS);
+    expect(await network.outboxRoutes([author], new AbortController().signal)).toEqual(new Map(DISCOVERY_RELAYS.map(url => [url, [author]])));
+  } finally { network.destroy(); }
+});
+
 it('queries every requested relay and returns more than 500 events', async () => {
-  const network = new NappletNetwork('account');
+  const network = new ApplicationNetwork('account');
   const urls = Array.from({ length: 30 }, (_, i) => `wss://relay-${i}.example/`);
   const query = jest.spyOn(network.pool, 'query').mockImplementation(async options => {
     for (let i = 0; i < 600; i++) options.onEvent?.({ id: String(i), kind: 1, tags: [], content: '' } as unknown as Event);
@@ -37,7 +56,7 @@ it('queries every requested relay and returns more than 500 events', async () =>
 });
 
 it('fetches relay metadata for every outbox author before producing grouped routes', async () => {
-  const network = new NappletNetwork('account');
+  const network = new ApplicationNetwork('account');
   const authors = Array.from({ length: 150 }, (_, i) => i.toString(16).padStart(64, '0'));
   const lookup = jest.spyOn(network, 'replaceable').mockImplementation(async () => ({ tags: [['r', 'wss://shared-a.example/'], ['r', 'wss://shared-b.example/']] } as Event));
   try {
@@ -53,7 +72,7 @@ it.each([
   [{ url: relay, status: 'eose', received: 0, reason: 'query timed out' }, true, 'network-error'],
   [{ url: relay, status: 'connection-failed', received: 0, reason: 'TLS failed' }, true, 'network-error'],
 ] as [QueryRelayResult, boolean, string | undefined][])('distinguishes an actual EOSE from a rejected or timed-out read', async (result, incomplete, error) => {
-  const network = new NappletNetwork('account');
+  const network = new ApplicationNetwork('account');
   let subscription!: ManagedSubscribeOptions;
   const close = jest.fn();
   jest.spyOn(network.pool, 'subscribe').mockImplementation((options) => { subscription = options; return close; });
@@ -66,7 +85,7 @@ it.each([
 });
 
 it.each(['eose', 'connection-failed'] as const)('preserves events from a hinted relay when another relay reports %s', async status => {
-  const network = new NappletNetwork('account');
+  const network = new ApplicationNetwork('account');
   const subscriptions = new Map<string, ManagedSubscribeOptions>();
   jest.spyOn(network.pool, 'subscribe').mockImplementation(options => { subscriptions.set(options.relays[0], options); return () => {}; });
   const event = { id: 'b'.repeat(64), pubkey: author, kind: 35129, created_at: 100, content: 'App', tags: [['d', 'App/应用']], sig: 'c'.repeat(128) } as Event;
@@ -83,7 +102,7 @@ it.each(['eose', 'connection-failed'] as const)('preserves events from a hinted 
 });
 
 it('preserves a successful empty response when another relay exceeds the read budget', async () => {
-  const network = new NappletNetwork('account');
+  const network = new ApplicationNetwork('account');
   const subscriptions = new Map<string, ManagedSubscribeOptions>();
   jest.spyOn(network.pool, 'subscribe').mockImplementation(options => {
     const url = options.relays[0];
@@ -100,7 +119,7 @@ it('preserves a successful empty response when another relay exceeds the read bu
 });
 
 it('discovers NIP-65 on metadata relays and returns only safe write or unmarked destinations', async () => {
-  const network = new NappletNetwork('account');
+  const network = new ApplicationNetwork('account');
   const event = { id: 'b'.repeat(64), pubkey: author, kind: 10002, created_at: 100, content: '', sig: 'c'.repeat(128), tags: [
     ['r', 'wss://read-only.example', 'read'], ['r', 'wss://write.example', 'write'],
     ['r', 'wss://unmarked.example'], ['r', 'wss://write.example/', 'write'],
@@ -109,7 +128,7 @@ it('discovers NIP-65 on metadata relays and returns only safe write or unmarked 
   const query = jest.spyOn(network, 'query').mockResolvedValue({ events: [event], incomplete: false });
   try {
     expect(await network.publisherRelays(author)).toEqual(['wss://write.example/', 'wss://unmarked.example/']);
-    expect(query.mock.calls[0][0]).toEqual(expect.arrayContaining(DISCOVERY_RELAYS));
+    expect(query.mock.calls[0][0]).toEqual(DISCOVERY_RELAYS);
     expect(query.mock.calls[0][1]).toEqual([{ authors: [author], kinds: [10002], limit: 1 }]);
     await network.publisherRelays(author);
     expect(query).toHaveBeenCalledTimes(1);
@@ -117,7 +136,7 @@ it('discovers NIP-65 on metadata relays and returns only safe write or unmarked 
 });
 
 it('coalesces publisher relay-list lookups before resolving author routes', async () => {
-  const network = new NappletNetwork('account'), other = 'b'.repeat(64);
+  const network = new ApplicationNetwork('account'), other = 'b'.repeat(64);
   const events = [author, other].map((pubkey, index) => ({ id: String(index + 1).repeat(64), pubkey, kind: 10002, created_at: 100,
     content: '', sig: 'c'.repeat(128), tags: [['r', `wss://author-${index}.example/`]] }) as Event);
   const query = jest.spyOn(network, 'query').mockResolvedValue({ events, incomplete: false });
