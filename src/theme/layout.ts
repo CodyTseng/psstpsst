@@ -164,3 +164,9 @@ export const density = {
     },
   },
 } as const;
+
+
+/** Compact desktop utility windows reserve an identity column beside their content. */
+export const desktopUtility = {
+  iconSize: 64,
+} as const;

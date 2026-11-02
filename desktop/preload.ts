@@ -157,6 +157,10 @@ const bridge: ElectronBridge = {
     },
   },
   appUpdate: {
+    isHost: process.argv.includes('--psstpsst-update-window=1'),
+    openWindow: () => invoke(IPC.appUpdateOpenWindow),
+    closeWindow: () => invoke(IPC.appUpdateCloseWindow),
+    skipVersion: () => invoke(IPC.appUpdateSkipVersion),
     check: () => invoke(IPC.appUpdateCheck),
     getStatus: () => invoke(IPC.appUpdateGetStatus),
     download: () => invoke(IPC.appUpdateDownload),
@@ -330,6 +334,12 @@ const bridge: ElectronBridge = {
     setUnreadCount: (count) => invoke(IPC.traySetUnreadCount, count),
   },
   windowChrome: {
+    getAppearance: () => invoke(IPC.windowChromeGetAppearance),
+    onAppearance(listener) {
+      const handler = (_event: unknown, appearance: import('../src/platform/ports/window-chrome').WindowAppearance) => listener(appearance);
+      ipcRenderer.on(IPC.windowChromeAppearance, handler);
+      return () => { ipcRenderer.removeListener(IPC.windowChromeAppearance, handler); };
+    },
     setTitle: title => invoke(IPC.windowChromeSetTitle, title),
     setTheme: (theme) => invoke(IPC.windowChromeSetTheme, theme),
     setScreenshotPreview: (enabled) => invoke(IPC.windowChromeSetScreenshotPreview, enabled),

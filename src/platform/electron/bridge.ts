@@ -9,7 +9,7 @@ import type {
   ConfirmationDialogOptions,
   NoticeDialogOptions,
 } from '../ports/confirmation-dialog';
-import type { WindowChromeTheme } from '../ports/window-chrome';
+import type { WindowAppearance, WindowChromeTheme } from '../ports/window-chrome';
 import type { NotificationPresentationContent } from '../ports/notifications';
 
 export type ElectronFileStat = {
@@ -46,6 +46,10 @@ export type ElectronBridge = {
     onMessage(listener: (id: string, message: string) => void): () => void;
   };
   appUpdate: {
+    readonly isHost: boolean;
+    openWindow(): Promise<void>;
+    closeWindow(): Promise<void>;
+    skipVersion(): Promise<void>;
     check(): Promise<AppUpdateStatus>;
     getStatus(): Promise<AppUpdateStatus>;
     download(): Promise<void>;
@@ -231,6 +235,8 @@ export type ElectronBridge = {
     setUnreadCount(count: number): Promise<void>;
   };
   windowChrome: {
+    getAppearance(): Promise<WindowAppearance | null>;
+    onAppearance(listener: (appearance: WindowAppearance) => void): () => void;
     setTitle(title: string): Promise<void>;
     setTheme(theme: WindowChromeTheme): Promise<void>;
     setScreenshotPreview(enabled: boolean): Promise<void>;

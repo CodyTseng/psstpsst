@@ -21,6 +21,7 @@ export {
   contentWidth,
   density,
   desktopChrome,
+  desktopUtility,
   mediaGrid,
   wideLayout,
 } from './layout';

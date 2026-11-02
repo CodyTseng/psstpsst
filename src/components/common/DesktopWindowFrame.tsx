@@ -14,6 +14,8 @@ import { View } from 'react-native';
 import { AppText } from '@/components/common/AppText';
 import { DESKTOP_OS, IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
+import { useThemeStore } from '@/stores/theme.store';
+import { serializeAccent } from '@/theme/accents';
 import { desktopChrome, spacing, uiDensity, useThemeColors } from '@/theme';
 
 const TITLEBAR_HEIGHT = desktopChrome.titlebarHeight;
@@ -80,12 +82,15 @@ export function useImmersiveDesktopTitlebarWhileMounted(enabled: boolean) {
  * the centred product name. An immersive route turns it into a transparent
  * overlay so artwork continues beneath the OS caption buttons.
  */
-function DesktopTitlebar({ immersive, application }: { immersive: boolean; application: WindowTitlebar | null }) {
+function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: { immersive: boolean; application: WindowTitlebar | null; defaultTitle?: string }) {
   const c = useThemeColors();
+  const preference = useThemeStore(state => state.preference);
+  const accent = useThemeStore(state => serializeAccent(state.accent));
+  const appearanceLoaded = useThemeStore(state => state.loaded);
   const dragRef = useDesktopWindowDragRegion();
   const actionRef = useDesktopWindowDragRegion(false);
   const height = application ? desktopChrome.applicationTitlebarHeight : TITLEBAR_HEIGHT;
-  const title = application?.title ?? 'PsstPsst';
+  const title = application?.title ?? defaultTitle;
   useLayoutEffect(() => {
     if (DESKTOP_OS === 'darwin') return;
     const node = actionRef.current as unknown as HTMLElement | null;
@@ -98,13 +103,14 @@ function DesktopTitlebar({ immersive, application }: { immersive: boolean; appli
   // overlay) on the effective theme, including Settings → Appearance overrides.
   useEffect(() => {
     void platform.windowChrome.setTheme({
+      ...(appearanceLoaded ? { appearance: { preference, accent } } : {}),
       backgroundColor: c.background,
       titlebarColor: c.surfaceMuted,
       symbolColor: c.text,
       transparentTitlebar: immersive,
       titlebarHeight: height,
     });
-  }, [c.background, c.surfaceMuted, c.text, immersive, height]);
+  }, [c.background, c.surfaceMuted, c.text, immersive, height, appearanceLoaded, preference, accent]);
 
   return (
     <View
@@ -147,7 +153,7 @@ function DesktopTitlebar({ immersive, application }: { immersive: boolean; appli
  * app, or overlays it for a focused immersive route. Other runtimes render
  * children untouched.
  */
-export function DesktopWindowFrame({ children }: { children: ReactNode }) {
+export function DesktopWindowFrame({ children, title }: { children: ReactNode; title?: string }) {
   const c = useThemeColors();
   const [immersive, setImmersive] = useState(false);
   const [titlebar, setTitlebar] = useState<WindowTitlebar | null>(null);
@@ -156,7 +162,7 @@ export function DesktopWindowFrame({ children }: { children: ReactNode }) {
     <ImmersiveTitlebarContext.Provider value={setImmersive}>
     <WindowTitlebarContext.Provider value={setTitlebar}>
       <View style={{ flex: 1, backgroundColor: c.background }}>
-        <DesktopTitlebar immersive={immersive} application={titlebar} />
+        <DesktopTitlebar immersive={immersive} application={titlebar} defaultTitle={title} />
         <View style={{ flex: 1 }}>{children}</View>
       </View>
     </WindowTitlebarContext.Provider>

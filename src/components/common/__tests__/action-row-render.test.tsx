@@ -47,6 +47,20 @@ describe('ActionRow layout', () => {
     ]);
   });
 
+
+  it('keeps compact desktop alternatives before the sole primary action', () => {
+    act(() => {
+      renderer = create(<ActionRow layout="horizontal" compact size="sm"
+        auxiliary={{ label: 'Skip this version', onPress: jest.fn() }}
+        dismiss={{ label: 'Remind me later', onPress: jest.fn() }}
+        confirm={{ label: 'Download update', onPress: jest.fn() }} />);
+    });
+    const buttons = renderer!.root.findAllByType(AppButton);
+    expect(buttons.map(button => button.props.label)).toEqual(['Skip this version', 'Remind me later', 'Download update']);
+    expect(buttons.map(button => button.props.variant)).toEqual(['secondary', 'secondary', 'primary']);
+    expect(buttons.every(button => button.props.corner === 'sm' && button.props.fullWidth === false)).toBe(true);
+  });
+
   it('places the vertical confirm action above the dismiss action', () => {
     act(() => {
       renderer = create(

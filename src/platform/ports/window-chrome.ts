@@ -1,5 +1,13 @@
+/** Device appearance shared by trusted desktop windows. Accents use their persisted encoding. */
+export type WindowAppearance = {
+  preference: 'system' | 'light' | 'dark';
+  accent: string;
+};
+
 /** Theme applied to platform-owned window chrome (the desktop title bar area). */
 export type WindowChromeTheme = {
+  /** Present only after the device appearance preference has loaded. */
+  appearance?: WindowAppearance;
   /** Opaque hex colour of the app page, used for the pre-paint window fill. */
   backgroundColor: string;
   /** Opaque hex colour of the renderer-drawn title bar (caption overlay fill). */
@@ -17,6 +25,8 @@ export type WindowChromeTheme = {
  * theme. Mobile has no window chrome to style; the Expo adapter is a no-op.
  */
 export interface WindowChromePort {
+  getAppearance(): Promise<WindowAppearance | null>;
+  addAppearanceListener(listener: (appearance: WindowAppearance) => void): () => void;
   /** Desktop host-window focus; native runtimes supply Activity foreground ownership. */
   getFocusState(): Promise<boolean>;
   addFocusListener(listener: (focused: boolean) => void): () => void;

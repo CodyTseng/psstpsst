@@ -69,3 +69,16 @@ it('keeps an unset mode linked to the configured mode across reloads', async () 
   expect(useThemeStore.getState().palettes.light.accent).toBe('#FFFF00');
   expect(useThemeStore.getState().palettes.light.accentForeground).toBe('#000000');
 });
+
+
+it('applies a window appearance snapshot without persisting or echoing it', () => {
+  useThemeStore.getState().applyAppearance({ preference: 'dark', accent: 'purple' });
+  const state = useThemeStore.getState();
+  expect(state.preference).toBe('dark');
+  expect(state.accent).toBe('purple');
+  expect(state.palettes.dark.accent).not.toBe(defaultThemePalettes.dark.accent);
+  expect(trySetDevicePreference).not.toHaveBeenCalled();
+  const palettes = state.palettes;
+  useThemeStore.getState().applyAppearance({ preference: 'dark', accent: 'purple' });
+  expect(useThemeStore.getState().palettes).toBe(palettes);
+});

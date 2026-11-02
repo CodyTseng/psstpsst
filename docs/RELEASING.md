@@ -589,14 +589,28 @@ with the app. Verify notifications in a signed build: first authorization, denia
 opening System Settings, and toggling OS permission while the settings screen is
 open. The in-app toggle must refresh when returning to the app.
 
-Packaged builds check the public `codytseng/psstpsst` GitHub Releases feed after
+Production packaged builds check the public `codytseng/psstpsst` GitHub Releases feed after
 startup and when the window returns to the foreground, at most roughly once per
 24 hours. The last attempt time persists across restarts; manual checks in
-Me → Check for updates bypass this interval and can reopen declined update prompts.
+Me → Check for updates bypass this interval and can reopen skipped or deferred
+updates. Checks do not open a window until an update is available. The independent
+update window displays download progress and can close without cancelling the
+download. Later defers reminders for 24 hours; Skip this version persists only for
+that release. Both choices survive restarts and never prevent manual checks.
 A new version is never downloaded automatically, and a downloaded
 version is never installed on quit: the user confirms each phase separately.
 The updater supports the signed macOS DMG/ZIP, Windows NSIS, and Linux AppImage
 targets.
+
+Development and unpackaged builds open a simulated update window on manual
+checks, without querying the production feed or installing application files.
+They never check automatically. Preview release notes stay in English; window
+controls follow the application language.
+
+The update window requests full changelogs from the GitHub provider, retaining
+version headings for available releases newer than the installed version and
+no newer than the target. GitHub’s feed may omit older releases; the window links
+to full release history rather than claiming unavailable notes are complete.
 
 The publish configuration creates the platform update metadata (`latest-mac.yml`,
 Linux's architecture-aware files, and the separate

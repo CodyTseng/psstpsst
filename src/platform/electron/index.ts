@@ -35,6 +35,10 @@ export function createElectronAdapters(): PlatformAdapters {
     napplet: electronNappletAdapter,
     bundledNotices: electronBundledNoticesAdapter,
     appUpdate: {
+      isHost: bridge.appUpdate?.isHost ?? false,
+      openWindow: () => bridge.appUpdate.openWindow(),
+      closeWindow: () => bridge.appUpdate.closeWindow(),
+      skipVersion: () => bridge.appUpdate.skipVersion(),
       check: () => bridge.appUpdate.check(),
       getStatus: () => bridge.appUpdate.getStatus(),
       download: () => bridge.appUpdate.download(),
@@ -76,6 +80,8 @@ export function createElectronAdapters(): PlatformAdapters {
       },
     },
     windowChrome: {
+      getAppearance: () => bridge.windowChrome.getAppearance(),
+      addAppearanceListener: listener => bridge.windowChrome.onAppearance(listener),
       getFocusState: async () => bridge.windowFocus.isFocused(),
       addFocusListener: listener => bridge.windowFocus.onChange(listener),
       setTitle: title => bridge.windowChrome.setTitle(title),

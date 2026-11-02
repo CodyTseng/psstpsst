@@ -304,7 +304,8 @@ tabs.
 
 Radius values come from the theme scale. Ordinary controls use medium/large
 radii, cards use `xl`, and only inherently circular elements use `full`. Avoid
-super-rounded containers and nested cards.
+super-rounded containers and nested cards. Compact desktop utility actions use
+small corners and intrinsic widths rather than full-width form buttons.
 
 Chat message bubbles use equal radii on all four corners, regardless of sender.
 
@@ -810,10 +811,21 @@ banners, and manual read/unread actions without disabling system notifications.
 In-app arrival banners and system notifications share conversation eligibility:
 only accepted, unmuted conversations qualify; message requests never notify.
 
-Electron application updates require separate download and install
-confirmations. Declining either action must not start it implicitly later.
-Manual update checks provide explicit result feedback and allow users to revisit
-a previously declined update.
+Electron application updates use one independent, reusable window after a new
+version is found; checking never opens a window. Downloads show progress and
+continue when the window closes. Download and restart/install require separate
+explicit actions. Later defers reminders; Skip this version persists suppression
+for that release only. Manual checks report results and can reopen skipped or
+deferred updates, active downloads, and ready installers. Update windows pair
+application identity with a concise version summary, keep release notes in a
+bounded scrolling region, and align Skip, Later, and Download in one compact
+action row with the primary action at inline-end. Application artwork retains
+rounded corners. The window follows the main application’s appearance and
+accent immediately, including changes made while the update window is open.
+Release history keeps descending version headings for every available release
+in the upgrade range. Empty or abbreviated notes remain explicit, and full
+release history stays accessible. Remote note markup renders as inert, readable
+text using host typography.
 
 - Never infer “loaded” from an empty array. Wait for an explicit resolved flag.
 - Fast local reads use a blank stable placeholder; genuinely slow remote reads

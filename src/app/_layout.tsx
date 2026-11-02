@@ -41,6 +41,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AccountSwitchOverlay } from '@/components/account/AccountSwitchOverlay';
 import { AppBootScreen } from '@/components/common/AppBootScreen';
 import { AppErrorScreen } from '@/components/common/AppErrorScreen';
+import { AppUpdateWindowRoot } from '@/components/common/AppUpdateWindow';
 import { AppUpdatePromptHost } from '@/components/common/AppUpdatePromptHost';
 import { ConfirmationDialogHost } from '@/components/common/ConfirmationDialogHost';
 import { DesktopWindowFrame } from '@/components/common/DesktopWindowFrame';
@@ -165,6 +166,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 export default function RootLayout() {
+  const { t } = useTranslation();
   useEffect(() => {
     if (!IS_ELECTRON) void platform.screenOrientation.setVideoActive(false).catch(() => {});
   }, []);
@@ -176,14 +178,14 @@ export default function RootLayout() {
   return (
     <SystemColorSchemeProvider>
       <View {...webDirectionProps} style={{ flex: 1, direction }}>
-        <DesktopWindowFrame>
+        <DesktopWindowFrame title={IS_ELECTRON && platform.appUpdate.isHost ? t('app_update.window_title') : undefined}>
           {/* Keep native event owners mounted while account gates replace screens.
               In particular, dismissing a focused onboarding input must not tear
               down the keyboard animation listeners during its final frames. */}
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <SafeAreaProvider>
-                {platform.napplet.windows?.isHost ? <ApplicationWindowRoot /> : <RootLayoutContent />}
+                {IS_ELECTRON && platform.appUpdate.isHost ? <AppUpdateWindowRoot /> : platform.napplet.windows?.isHost ? <ApplicationWindowRoot /> : <RootLayoutContent />}
               </SafeAreaProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

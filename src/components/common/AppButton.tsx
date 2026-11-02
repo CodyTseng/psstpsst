@@ -47,10 +47,10 @@ type Props = Omit<PressableProps, 'children' | 'style'> & {
   contentAlign?: 'center' | 'baseline';
   contentJustify?: 'center' | 'start';
   fullWidth?: boolean;
-  /** Corner radius: `lg` (default, the standard button) or `full` (a pill that
+  /** Corner radius: `sm` for compact desktop utility actions, `lg` (default, the standard button) or `full` (a pill that
    * hugs its content — pair with `fullWidth={false}`). Unframed artwork tiles
    * use `none` so the icon's own rounded clipping cannot cut into its caption. */
-  corner?: 'lg' | 'full' | 'none';
+  corner?: 'sm' | 'lg' | 'full' | 'none';
   /** Icon-button parity: instead of the text-button height + wide horizontal
    * padding, hug the content with an **equal inset on all four sides** (like
    * `IconButton`). For chevron/icon (+ badge) pills — pair with
@@ -158,7 +158,7 @@ export function AppButton({
   const quietChrome = variant === 'ghost' || variant === 'text' || variant === 'accentText';
   const textColor = largeNumericLabel ? c.text : v.text;
   const isDisabled = disabled || loading;
-  const buttonRadius = corner === 'none' ? 0 : corner === 'full' ? radius.full : radius.lg;
+  const buttonRadius = corner === 'none' ? 0 : corner === 'full' ? radius.full : corner === 'sm' ? radius.sm : radius.lg;
   // Text chrome stays visually equal to its text line. Expand only the hit
   // target, so accessibility does not force a larger layout box.
   const resolvedHitSlop = hitSlop ?? (textChrome ? compactInset : undefined);

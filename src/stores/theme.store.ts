@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { WindowAppearance } from '@/platform/ports/window-chrome';
 
 import {
   getDevicePreference,
@@ -29,6 +30,8 @@ type State = {
    * the first painted frame already uses the right palette — no flash). */
   loaded: boolean;
   load: () => Promise<void>;
+  /** Apply the main window's device preference without persisting or echoing it. */
+  applyAppearance: (appearance: WindowAppearance) => void;
   setPreference: (preference: ThemePreference) => void;
   setAccent: (accent: AccentSelection) => void;
 };
@@ -38,6 +41,12 @@ export const useThemeStore = create<State>((set, get) => ({
   accent: 'blue',
   palettes: defaultThemePalettes,
   loaded: false,
+  applyAppearance: ({ preference, accent: value }) => {
+    const accent = parseAccent(value);
+    if (!isPreference(preference) || !accent) return;
+    if (get().preference === preference && serializeAccent(get().accent) === serializeAccent(accent)) return;
+    set({ preference, accent, palettes: createThemePalettes(accent) });
+  },
   load: async () => {
     try {
       const [storedPreference, storedAccent] = await Promise.all([

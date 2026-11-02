@@ -39,7 +39,12 @@ import {
 
 import { formatBadgeCount } from '../src/lib/badge-count';
 import { NOSTR_EVENT_URL_PREFERENCE_KEY } from '../src/lib/nostr/event-url';
+import type { WindowAppearance } from '../src/platform/ports/window-chrome';
+import { parseAccent, serializeAccent } from '../src/theme/accents';
 import { DesktopAppUpdater } from './app-updater';
+import { PreviewAppUpdater } from './app-update-preview';
+import { AppUpdateWindow } from './app-update-window';
+import { UpdatePreferences } from './update-preferences';
 import { DesktopLocalization } from './system-localization';
 import { withLocaleRegion } from '../src/lib/locale';
 import { DesktopNotificationPermissions, type MacNotificationPermissions } from './notification-permissions';
@@ -90,7 +95,7 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow: BrowserWindow | null = null;
 const applicationWindows = new ApplicationWindows({
-  create: () => createWindow(true), parent: () => mainWindow, trusted: isTrustedSender,
+  create: () => createWindow('application'), parent: () => mainWindow, trusted: isTrustedSender,
   url: () => `${(DEVELOPMENT_RENDERER_ORIGIN ?? 'app://renderer').replace(/\/$/, '')}/application-window`,
   cleanup: owner => { void databaseService?.cleanupOwner(owner); void fileService?.cleanupOwner(owner); },
 });
@@ -106,6 +111,9 @@ let vaultGateway: DesktopVaultGateway | null = null;
 let proximityService: ProximityService | null = null;
 let noiseService: NoiseService | null = null;
 let appUpdateService: DesktopAppUpdater | null = null;
+let appUpdateWindow: AppUpdateWindow | null = null;
+let updatePreferences: UpdatePreferences | null = null;
+let windowAppearance: WindowAppearance | null = null;
 const notifications = new Map<string, Notification>();
 const desktopLocalization = new DesktopLocalization({
   platform: process.platform,
@@ -229,7 +237,7 @@ function scheduleBackgroundTask(minimumIntervalMinutes: number): void {
 }
 
 function isTrustedSender(event: IpcMainInvokeEvent): boolean {
-  if (event.sender !== mainWindow?.webContents && !applicationWindows.owns(event.sender)) return false;
+  if (event.sender !== mainWindow?.webContents && !applicationWindows.owns(event.sender) && !appUpdateWindow?.owns(event.sender)) return false;
   if (event.senderFrame !== event.sender.mainFrame) return false;
   return isTrustedRendererLocation(event.senderFrame.url);
 }
@@ -318,19 +326,30 @@ async function loadNotificationIcon(value: unknown): Promise<NativeImage | undef
 function registerIpcHandlers(): void {
   applicationWindows.register();
   registerNappletHandlers(isTrustedSender, () => mainWindow);
-  handle(IPC.appUpdateCheck, async () => {
-    if (!appUpdateService || !app.isPackaged || IS_DEVELOPMENT_APP) {
+  const updateHandle = (channel: string, listener: (event: IpcMainInvokeEvent) => unknown) => {
+    handle(channel, event => {
+      if (event.sender !== mainWindow?.webContents && !appUpdateWindow?.owns(event.sender)) {
+        throw new Error('Application windows cannot control application updates');
+      }
+      return listener(event);
+    });
+  };
+  updateHandle(IPC.appUpdateCheck, async () => {
+    if (!appUpdateService) {
       throw new Error('Application updates are unavailable');
     }
-    await appUpdateService.check();
+    if (!appUpdateWindow?.isOpen) await appUpdateService.check();
     return appUpdateService.getStatus();
   });
-  handle(IPC.appUpdateGetStatus, () => appUpdateService?.getStatus() ?? { state: 'idle' });
-  handle(IPC.appUpdateDownload, () => {
+  updateHandle(IPC.appUpdateGetStatus, () => appUpdateService?.getStatus() ?? { state: 'idle' });
+  updateHandle(IPC.appUpdateOpenWindow, () => appUpdateWindow?.open());
+  updateHandle(IPC.appUpdateCloseWindow, () => appUpdateWindow?.close());
+  updateHandle(IPC.appUpdateSkipVersion, () => appUpdateWindow?.skipVersion());
+  updateHandle(IPC.appUpdateDownload, () => {
     if (!appUpdateService) throw new Error('Application updater is unavailable');
     return appUpdateService.download();
   });
-  handle(IPC.appUpdateInstall, () => {
+  updateHandle(IPC.appUpdateInstall, () => {
     if (!appUpdateService) throw new Error('Application updater is unavailable');
     return appUpdateService.install();
   });
@@ -458,17 +477,29 @@ function registerIpcHandlers(): void {
     if (process.platform === 'darwin') app.setBadgeCount(count);
     return setTrayUnreadCount(count);
   });
+  handle(IPC.windowChromeGetAppearance, () => windowAppearance);
   handle(IPC.windowChromeSetTitle, (event, title) => {
     BrowserWindow.fromWebContents(event.sender)?.setTitle(validateString(title, 'window title', 256));
   });
   handle(IPC.windowChromeSetTheme, (event, theme) => {
     const value = (theme ?? {}) as {
+      appearance?: WindowAppearance;
       backgroundColor?: unknown;
       titlebarColor?: unknown;
       symbolColor?: unknown;
       transparentTitlebar?: unknown;
       titlebarHeight?: unknown;
     };
+    if (event.sender === mainWindow?.webContents && value.appearance) {
+      const { preference, accent: rawAccent } = value.appearance;
+      const accent = parseAccent(rawAccent);
+      if (!['system', 'light', 'dark'].includes(preference) || !accent) throw new TypeError('Invalid window appearance');
+      const next = { preference, accent: serializeAccent(accent) };
+      if (windowAppearance?.preference !== next.preference || windowAppearance?.accent !== next.accent) {
+        windowAppearance = next;
+        appUpdateWindow?.setAppearance(next);
+      }
+    }
     const backgroundColor = validateHexColor(value.backgroundColor, 'window background');
     const titlebarColor = validateHexColor(value.titlebarColor, 'title bar background');
     const symbolColor = validateHexColor(value.symbolColor, 'title bar symbol');
@@ -1088,22 +1119,26 @@ async function registerProtocols(): Promise<void> {
   });
 }
 
-function createWindow(application = false): BrowserWindow {
+function createWindow(kind: 'main' | 'application' | 'update' = 'main'): BrowserWindow {
+  const application = kind === 'application';
+  const auxiliary = kind !== 'main';
+  const update = kind === 'update';
   // The renderer may take a moment to report the effective theme; guess from
   // the OS scheme so the pre-paint frame and caption overlay start close.
   const initialChrome = nativeTheme.shouldUseDarkColors
     ? WINDOW_CHROME_COLORS.dark
     : WINDOW_CHROME_COLORS.light;
-  const saved = application ? undefined : windowStateStore?.state;
+  const saved = auxiliary ? undefined : windowStateStore?.state;
   const bounds = saved
     ? fitWindowBounds(saved.bounds, screen.getDisplayMatching(saved.bounds).workArea)
     : null;
   const window = new BrowserWindow({
     title: APP_IDENTITY.name,
-    ...(bounds ?? { width: 960, height: 720 }),
+    ...(bounds ?? (update ? { width: 640, height: 440 } : { width: 960, height: 720 })),
     useContentSize: !bounds,
-    minWidth: WINDOW_MIN_WIDTH,
-    minHeight: WINDOW_MIN_HEIGHT,
+    minWidth: update ? 560 : WINDOW_MIN_WIDTH,
+    minHeight: update ? 380 : WINDOW_MIN_HEIGHT,
+    ...(update ? { maximizable: false, fullscreenable: false } : {}),
     show: false,
     backgroundColor: initialChrome.background,
     // The themed title bar is renderer-drawn (`DesktopWindowFrame`): macOS
@@ -1127,8 +1162,9 @@ function createWindow(application = false): BrowserWindow {
       webSecurity: true,
       backgroundThrottling: false,
       additionalArguments: [
-        `--psstpsst-proximity-available=${!application && proximityService?.isAvailable() ? '1' : '0'}`,
+        `--psstpsst-proximity-available=${!auxiliary && proximityService?.isAvailable() ? '1' : '0'}`,
         `--psstpsst-application-window=${application ? '1' : '0'}`,
+        `--psstpsst-update-window=${update ? '1' : '0'}`,
       ],
     },
   });
@@ -1157,7 +1193,7 @@ function createWindow(application = false): BrowserWindow {
     if (saved?.maximized) window.maximize();
     window.show();
     const captureState = () => {
-      if (!application && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
+      if (!auxiliary && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
     };
     window.on('resize', captureState);
     window.on('move', captureState);
@@ -1174,7 +1210,11 @@ function createWindow(application = false): BrowserWindow {
   };
   window.on('focus', sendWindowPresence);
   window.on('focus', () => {
-    if (!shuttingDown) void appUpdateService?.checkIfDue();
+    if (!IS_DEVELOPMENT_APP && !shuttingDown && !auxiliary && !appUpdateWindow?.isOpen) {
+      void appUpdateService?.checkIfDue().then(() => {
+        if (appUpdateService) appUpdateWindow?.onStatus(appUpdateService.getStatus());
+      });
+    }
   });
   window.on('blur', sendWindowPresence);
   window.on('show', sendWindowPresence);
@@ -1191,8 +1231,8 @@ function createWindow(application = false): BrowserWindow {
     if (!isTrustedRendererLocation(url)) event.preventDefault();
   });
   window.on('close', (event) => {
-    if (!application && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
-    if (application) return;
+    if (!auxiliary && !screenshotPreviewWindow.active) windowStateStore?.capture(window);
+    if (auxiliary) return;
     void windowStateStore?.flush();
     if (shuttingDown) return;
     event.preventDefault();
@@ -1317,19 +1357,39 @@ async function start(): Promise<void> {
   } catch {
     // Missing or invalid metadata makes the next foreground check due.
   }
+  updatePreferences = new UpdatePreferences(path.join(userDataPath, 'update-preferences.json'));
+  await updatePreferences.load();
+  appUpdateWindow = new AppUpdateWindow({
+    create: () => {
+      const window = createWindow('update');
+      const owner = window.webContents.id;
+      window.once('closed', () => { void databaseService?.cleanupOwner(owner); });
+      return window;
+    },
+    url: `${(DEVELOPMENT_RENDERER_ORIGIN ?? 'app://renderer').replace(/\/$/, '')}/app-update-window`,
+    status: () => appUpdateService?.getStatus() ?? { state: 'idle' },
+    preferences: updatePreferences,
+  });
+  const previewUpdater = IS_DEVELOPMENT_APP ? new PreviewAppUpdater(app.getVersion()) : null;
   appUpdateService = new DesktopAppUpdater({
     lastCheckedAt,
     saveLastCheckedAt: (timestamp) => writeFileAtomic(
       updateCheckPath, JSON.stringify({ lastCheckedAt: timestamp }),
     ),
-    enabled: app.isPackaged && !IS_DEVELOPMENT_APP,
-    updater: autoUpdater,
-    emitStatus: (status) => mainWindow?.webContents.send(IPC.appUpdateStatus, status),
+    enabled: true,
+    preview: previewUpdater !== null,
+    updater: previewUpdater ?? autoUpdater,
+    emitStatus: (status) => {
+      mainWindow?.webContents.send(IPC.appUpdateStatus, status);
+      appUpdateWindow?.onStatus(status);
+    },
     prepareToInstall: async () => {
+      if (previewUpdater) return;
       if (shuttingDown) throw new Error('Application shutdown is already in progress');
       shuttingDown = true;
       if (mainWindow && !screenshotPreviewWindow.active) windowStateStore?.capture(mainWindow);
       await windowStateStore?.flush();
+      await updatePreferences?.flush().catch(error => console.warn('[updates] Preference flush failed:', error));
       backgroundScheduler.stop();
       proximityService?.close();
       const results = await Promise.allSettled([
@@ -1432,6 +1492,7 @@ app.on('before-quit', (event) => {
   const closeServices = Promise.allSettled([
     clipboardSnapshots?.stop() ?? Promise.resolve(),
     windowStateStore?.flush() ?? Promise.resolve(),
+    updatePreferences?.flush() ?? Promise.resolve(),
     databaseService?.close() ?? Promise.resolve(),
     noiseService?.close() ?? Promise.resolve(),
     keyVaultService?.destroy() ?? Promise.resolve(),

@@ -28,7 +28,10 @@ Dependencies point inward. Core code does not know which runtime is active.
 
 Development and production use separate installed identities, OS permissions,
 URL schemes, and local data. Desktop identity is fixed by packaged metadata
-(unpackaged runs are development); development must never consume production updates.
+(unpackaged runs are development); development must never consume production
+updates. Manual development checks use an isolated updater simulator, including
+simulated installation; automatic update checks and real update installation
+remain production-only.
 
 ## 2. Layer boundaries
 
@@ -80,8 +83,13 @@ session identifiers, so process death removes stale tasks rather than restoring
 account authority from intent extras.
 
 Electron application-binary updates run in the main process behind the
-`appUpdate` port. The renderer owns localized consent, while automatic download
-and install-on-quit remain disabled so each phase requires an explicit action.
+`appUpdate` port. A singleton, account-free renderer window owns localized
+consent and progress without starting account services. Main-process atomic
+preferences own skipped versions and deferred reminders independently of window
+lifetime. Automatic download and install-on-quit remain disabled so each phase
+requires an explicit action. The main host publishes loaded device appearance
+through window chrome; the update leaf applies snapshots without persisting or
+echoing them.
 
 ## 3. Persistence and ownership
 

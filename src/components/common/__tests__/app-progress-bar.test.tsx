@@ -17,6 +17,7 @@ it.each(['light', 'dark'])('uses the current %s theme and exposes accessible pro
   expect(track.props.accessibilityRole).toBe('progressbar');
   expect(track.props.accessibilityLabel).toBe('Downloading app');
   expect(track.props.accessibilityValue).toEqual({ min: 0, max: 100, now: 25 });
+  expect(track.props['aria-valuenow']).toBe(25);
   expect(fill.props.style.width).toBe('25%');
   act(() => renderer.unmount());
 });

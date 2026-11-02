@@ -1,4 +1,4 @@
-/** Routes explicit checks through the single mounted update-consent presenter. */
+/** Routes explicit checks through the mounted main-window update-check handler. */
 let checkHandler: (() => Promise<void>) | null = null;
 
 export function registerAppUpdateCheck(handler: () => Promise<void>): () => void {
