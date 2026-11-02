@@ -10,7 +10,9 @@ import { getData, setData } from '../repository';
 import { NappletNetwork } from '../network';
 import { invalidateSigning } from '@/services/signing/changes';
 import { appSigningScope } from '../signing-permissions';
+import { getBlockedPubkeys } from '@/services/dm/block.service';
 
+jest.mock('@/services/dm/block.service', () => ({ getBlockedPubkeys: jest.fn(async () => []) }));
 jest.mock('@/services/explore/browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn(async () => {}) }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
@@ -847,7 +849,7 @@ test.each(['required', 'optional'] as const)('declared %s identity uses only sig
   } finally { await runtime.close(); jest.mocked(getData).mockImplementation(async () => null); }
 });
 
-test.each(['getProfile', 'getRelays', 'getFollows', 'getMutes', 'getList', 'getZaps', 'getBadges'])('identity.%s cannot read account projections before signer approval', async operation => {
+test.each(['getProfile', 'getRelays', 'getFollows', 'getMutes', 'getBlocked', 'getList', 'getZaps', 'getBadges'])('identity.%s cannot read account projections before signer approval', async operation => {
   const config = options();
   jest.mocked(config.confirm).mockResolvedValue('deny');
   const runtime = new NappletRuntime(config);
@@ -861,9 +863,42 @@ test.each(['getProfile', 'getRelays', 'getFollows', 'getMutes', 'getList', 'getZ
     expect(runtime.network.replaceable).not.toHaveBeenCalled();
     expect(runtime.network.query).not.toHaveBeenCalled();
     expect(runtime.network.routes).not.toHaveBeenCalled();
+    expect(getBlockedPubkeys).not.toHaveBeenCalled();
   } finally { await runtime.close(); }
 });
 
+test.each([{ pubkeys: [] }, { pubkeys: ['a'.repeat(64), 'b'.repeat(64)] }])('identity.getBlocked returns the authorized account block list: %j', async ({ pubkeys }) => {
+  jest.mocked(getBlockedPubkeys).mockResolvedValueOnce(pubkeys);
+  const config = options('accountB');
+  const runtime = new NappletRuntime(config);
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'identity.getBlocked', id: 'blocked', accountPubkey: 'accountA' }));
+    expect(config.confirm).toHaveBeenCalledWith(expect.objectContaining({ signing: expect.objectContaining({ operation: 'get-public-key' }) }), expect.anything());
+    expect(getBlockedPubkeys).toHaveBeenCalledTimes(1);
+    expect(getBlockedPubkeys).toHaveBeenCalledWith('accountB');
+    expect(messages().at(-1)).toEqual({ type: 'identity.getBlocked.result', id: 'blocked', pubkeys });
+  } finally { await runtime.close(); }
+});
+
+test.each(['revoke', 'close'])('%s during a block-list read prevents disclosure', async action => {
+  const runtime = new NappletRuntime(options());
+  let finish!: (pubkeys: string[]) => void;
+  let reading!: () => void;
+  const started = new Promise<void>(resolve => { reading = resolve; });
+  jest.mocked(getBlockedPubkeys).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; reading(); }));
+  await runtime.open();
+  try {
+    const pending = runtime.receive(JSON.stringify({ type: 'identity.getBlocked', id: 'blocked' }));
+    await started;
+    if (action === 'revoke') invalidateSigning(appSigningScope(runtime.scope));
+    else await runtime.close();
+    finish(['a'.repeat(64)]);
+    await pending;
+    if (action === 'revoke') expect(messages().at(-1)).toMatchObject({ id: 'blocked', error: 'permission-revoked' });
+    expect(messages().some(message => 'pubkeys' in message)).toBe(false);
+  } finally { await runtime.close(); }
+});
 
 test('revocation during a public-profile read prevents disclosure', async () => {
   const runtime = new NappletRuntime(options());

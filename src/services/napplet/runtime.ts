@@ -33,6 +33,7 @@ import { ApplicationSigner } from '@/services/signing/application-signer';
 import { queueAuthorization } from '@/services/signing/authorization-queue';
 import { NAP_DOMAINS } from './protocol';
 import { readDomainPermissions } from './domain-permissions';
+import { getBlockedPubkeys } from '@/services/dm/block.service';
 
 export type RuntimePromptChoice = { key: string; title: string; application?: ApplicationListEntry };
 export type RuntimePrompt = {
@@ -558,7 +559,6 @@ export class NappletRuntime {
   }
 
   private async identity(m: Message, op: string) {
-    if (op === 'getBlocked') throw new Error('unsupported');
     const pubkey = await this.applicationSigner().getPublicKey();
     const revision = this.signingPermissions.version;
     const reply = (value: Record<string, unknown>) => {
@@ -568,6 +568,10 @@ export class NappletRuntime {
     };
     if (op === 'getPublicKey') {
       reply({ pubkey });
+      return;
+    }
+    if (op === 'getBlocked') {
+      reply({ pubkeys: await getBlockedPubkeys(pubkey) });
       return;
     }
     if (op === 'getRelays') {
