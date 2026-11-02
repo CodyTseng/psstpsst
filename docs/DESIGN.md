@@ -525,6 +525,8 @@ Mobile is touch-first. Electron uses the same semantic components with compact
 density tokens, pointer hover, keyboard shortcuts, and native-first fonts.
 macOS Electron window chrome uses a compact title bar while preserving native
 traffic-light clearance and a reliable drag region.
+Windows and Linux windows omit the application menu bar; macOS retains its
+native application menu.
 Electron suppresses Chromium focus outlines across all controls; keyboard
 shortcuts remain supported, but visible keyboard-focus navigation is not a
 product interaction convention.

@@ -1273,6 +1273,9 @@ async function readClipboardFilePaths(): Promise<string[]> {
 }
 
 async function start(): Promise<void> {
+  if (process.platform === 'linux' || process.platform === 'win32') {
+    Menu.setApplicationMenu(null);
+  }
   app.setAppUserModelId(APP_IDENTITY.id);
   const userDataPath = app.getPath('userData');
   windowStateStore = new WindowStateStore(path.join(userDataPath, 'window-state.json'));
