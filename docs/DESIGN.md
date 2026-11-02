@@ -323,6 +323,13 @@ Motion is short, restrained, interruptible, and tied to a state transition.
 Message bubbles accept swipe-to-reply from the trailing edge toward the leading
 edge. The physical direction reverses in RTL layouts.
 
+Conversation rows expose their swipe actions through a long-press menu on
+mobile and a right-click menu on Electron. Touch menus use touch density and
+give one light haptic when the hold threshold is reached.
+Touch conversation menus center horizontally on the touch point, clamped to
+safe viewport bounds. They prefer the space above the touch point and fall
+back below when there is insufficient room above.
+
 Quoted replies in messages and the composer jump to their source message when
 pressed. Smooth scrolling uses message positions within the loaded list,
 not visibility callbacks, and stays within a bounded message span. Other

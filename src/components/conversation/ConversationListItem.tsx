@@ -8,7 +8,7 @@ import { TrashBinTrash as Trash2 } from '@solar-icons/react-native/category/ui/L
 import type { ComponentProps, ComponentType } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated as RNAnimated, Platform, StyleSheet, View } from 'react-native';
+import { Animated as RNAnimated, Platform, StyleSheet, View, type GestureResponderEvent } from 'react-native';
 
 import {
   InteractivePressable as Pressable,
@@ -56,6 +56,7 @@ import { createDraftPreviewSelector } from '@/lib/chat/draft-preview';
 import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import type { ComposerFile } from '@/lib/attachments/composer-file';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
+import { impact } from '@/lib/haptics';
 import { ConversationTimestamp } from './ConversationTimestamp';
 import { platform } from '@/platform';
 import { beginChatOpenTrace, markChatNavigation } from '@/lib/perf/chat-open';
@@ -120,6 +121,8 @@ type Props = {
 const ACTION_WIDTH = SWIPE_ACTION_WIDTH;
 const SWIPE_ACTIVATION_DISTANCE = 24;
 const SWIPE_VERTICAL_FAILURE_DISTANCE = 12;
+const MENU_DENSITY = IS_ELECTRON ? 'pointer' : 'touch';
+const MENU_ICON_SIZE = CONTEXT_MENU_ICON_SIZE[MENU_DENSITY];
 
 type DesktopPressableProps = ComponentProps<typeof Pressable> & {
   onContextMenu?: (event: DesktopContextMenuEvent) => void;
@@ -418,6 +421,13 @@ function ConversationListItemBase({
     setContextMenuAnchor({ x, y });
   }, []);
 
+  const handleLongPress = useCallback((event: GestureResponderEvent) => {
+    const { pageX, pageY } = event.nativeEvent;
+    closeOpenSwipeable();
+    impact('light');
+    setContextMenuAnchor({ x: pageX, y: pageY });
+  }, []);
+
   useEffect(
     () => () => {
       if (openingResetFrameRef.current != null) {
@@ -446,9 +456,9 @@ function ConversationListItemBase({
       key: 'unread',
       title: t(unread ? 'conversations.read' : 'conversations.unread'),
       icon: unread ? (
-        <MessageCircle size={CONTEXT_MENU_ICON_SIZE.pointer} color={c.text} />
+        <MessageCircle size={MENU_ICON_SIZE} color={c.text} />
       ) : (
-        <MessageCircleMore size={CONTEXT_MENU_ICON_SIZE.pointer} color={c.text} />
+        <MessageCircleMore size={MENU_ICON_SIZE} color={c.text} />
       ),
       onPress: () => onToggleUnread(conversationKey, unreadCount),
     });
@@ -459,7 +469,7 @@ function ConversationListItemBase({
       title: t(pinned ? 'conversations.unpin' : 'conversations.pin'),
       icon: (
         <Pin
-          size={CONTEXT_MENU_ICON_SIZE.pointer}
+          size={MENU_ICON_SIZE}
           color={c.text}
           fill={pinned ? c.text : 'transparent'}
         />
@@ -472,16 +482,16 @@ function ConversationListItemBase({
       key: 'mute',
       title: t(muted ? 'conversations.unmute' : 'conversations.mute'),
       icon: muted ? (
-        <Bell size={CONTEXT_MENU_ICON_SIZE.pointer} color={c.text} />
+        <Bell size={MENU_ICON_SIZE} color={c.text} />
       ) : (
-        <BellOff size={CONTEXT_MENU_ICON_SIZE.pointer} color={c.text} />
+        <BellOff size={MENU_ICON_SIZE} color={c.text} />
       ),
       onPress: () => onToggleMute(conversationKey, muted),
     });
     contextMenuItems.push({
       key: 'delete',
       title: t('conversations.delete'),
-      icon: <Trash2 size={CONTEXT_MENU_ICON_SIZE.pointer} color={c.danger} />,
+      icon: <Trash2 size={MENU_ICON_SIZE} color={c.danger} />,
       tone: 'danger',
       separatorBefore: true,
       onPress: () => {
@@ -656,6 +666,7 @@ function ConversationListItemBase({
         fallbackHoverOpacity={false}
         pressFeedback="immediate"
         onContextMenu={IS_ELECTRON && rowActionsEnabled ? handleContextMenu : undefined}
+        onLongPress={!IS_ELECTRON && rowActionsEnabled ? handleLongPress : undefined}
         // Visible-row warming already owns database I/O. Starting a cold read
         // under the finger cannot reliably finish before release and can return
         // decoding work exactly when navigation needs the JS thread.
@@ -828,6 +839,9 @@ function ConversationListItemBase({
       {contextMenuAnchor ? (
         <ContextMenu
           anchor={contextMenuAnchor}
+          density={MENU_DENSITY}
+          align={IS_ELECTRON ? 'start' : 'center'}
+          placement={IS_ELECTRON ? 'below' : 'auto'}
           items={contextMenuItems}
           onClose={closeContextMenu}
         />
