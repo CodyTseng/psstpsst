@@ -51,6 +51,14 @@ class AndroidApkCheckTest(unittest.TestCase):
     def test_accepts_reader_for_every_packaged_abi(self):
         self.assertEqual(checker.check_apk(self.apk()), ["arm64-v8a", "x86_64"])
 
+    def test_split_rejects_wrong_or_additional_abis(self):
+        split = lambda: self.apk(omitted=("lib/x86_64/libzxingcpp_android.so",))
+        self.assertEqual(checker.check_apk(split(), expected_abi="arm64-v8a"), ["arm64-v8a"])
+        with self.assertRaisesRegex(ValueError, "Expected only x86_64"):
+            checker.check_apk(split(), expected_abi="x86_64")
+        with self.assertRaisesRegex(ValueError, "Expected only arm64-v8a"):
+            checker.check_apk(self.apk(), expected_abi="arm64-v8a")
+
     def test_rejects_proprietary_library_model_and_secondary_dex(self):
         for entry in (
             {"lib/arm64-v8a/libbarhopper_v3.so": b"binary"},

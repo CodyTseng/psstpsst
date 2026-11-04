@@ -2,13 +2,8 @@
 
 set -euo pipefail
 
-readonly IMAGE="registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie@sha256:9cb68105642ca4e7b295f0ceab10f069f5b3247dc18fa7c36046e9d81aa469a8"
+readonly IMAGE="registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie@sha256:1ea8bef1820bff06c2974e31b4fc4c79c364cd24231b86e71fa4b926797e0dac"
 readonly PROJECT_DIR="/home/vagrant/build/chat.psstpsst.app"
-readonly NODE_VERSION="24.15.0"
-readonly NODE_ARCHIVE="node-v${NODE_VERSION}-linux-x64.tar.xz"
-readonly NODE_SHA256="472655581fb851559730c48763e0c9d3bc25975c59d518003fc0849d3e4ba0f6"
-readonly TEMPLATE_SHA256="b5796fa7a2de78499e81ec2b2b7aa2ad25f3702d61daaed2ddb7c23757e98b49"
-readonly JDK_PACKAGE_VERSION="17.0.20.1+1-1~deb12u1"
 
 if [[ "${1:-}" == "--check-image" ]]; then
   docker manifest inspect "$IMAGE" > /dev/null
@@ -29,48 +24,82 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
   output_dir="${1:-$repo_root/release/fdroid-build}"
   mkdir -p "$output_dir"
   output_dir="$(cd "$output_dir" && pwd)"
+  snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/psstpsst-android-source.XXXXXX")"
+  trap 'rm -rf "$snapshot_dir"' EXIT
+  node "$repo_root/scripts/create-android-source-archive.mjs" "$repo_root" "$snapshot_dir/source.tar"
+  tar -xOf "$snapshot_dir/source.tar" ./scripts/build-android-reproducible.sh > "$snapshot_dir/build-android.sh"
+  source_date_epoch="${SOURCE_DATE_EPOCH:-$(git -C "$repo_root" show -s --format=%ct HEAD)}"
+  docker_mounts=(
+    --mount "type=bind,src=$snapshot_dir/source.tar,dst=/source.tar,readonly"
+    --mount "type=bind,src=$snapshot_dir/build-android.sh,dst=/build-android.sh,readonly"
+    --mount "type=bind,src=$output_dir,dst=/output"
+  )
+  if [[ -n "${ANDROID_SDK_ARCHIVES:-}" ]]; then
+    sdk_archives="$(cd "$ANDROID_SDK_ARCHIVES" && pwd)"
+    docker_mounts+=(--mount "type=bind,src=$sdk_archives,dst=/sdk-archives,readonly")
+  fi
+  if [[ -n "${ANDROID_NPM_CACHE:-}" ]]; then
+    npm_cache="$(cd "$ANDROID_NPM_CACHE" && pwd)"
+    test -d "$npm_cache/_cacache"
+    docker_mounts+=(--mount "type=bind,src=$npm_cache/_cacache,dst=/npm-download-cache,readonly")
+  fi
+  if [[ -n "${ANDROID_GRADLE_DOWNLOADS:-}" ]]; then
+    gradle_downloads="$(cd "$ANDROID_GRADLE_DOWNLOADS" && pwd)"
+    docker_mounts+=(--mount "type=bind,src=$gradle_downloads,dst=/gradle-downloads,readonly")
+  fi
 
   docker run --rm --platform linux/amd64 \
-    --mount "type=bind,src=$repo_root,dst=/workspace,readonly" \
-    --mount "type=bind,src=$output_dir,dst=/output" \
+    "${docker_mounts[@]}" \
     --env ANDROID_RELEASE_UNSIGNED="${ANDROID_RELEASE_UNSIGNED:-1}" \
     --env ANDROID_BUILD_APK="${ANDROID_BUILD_APK:-1}" \
     --env ANDROID_BUILD_BUNDLE="${ANDROID_BUILD_BUNDLE:-0}" \
     --env PSSTPSST_FDROID_CONTAINER=1 \
+    --env SOURCE_DATE_EPOCH="$source_date_epoch" \
     "$IMAGE" \
-    bash /workspace/scripts/build-android-reproducible.sh
+    bash /build-android.sh
   exit
 fi
 
 if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
-  echo 'deb https://deb.debian.org/debian bookworm main' > /etc/apt/sources.list.d/psstpsst-bookworm.list
-  echo 'deb https://security.debian.org/debian-security bookworm-security main' >> /etc/apt/sources.list.d/psstpsst-bookworm.list
+  echo 'deb https://deb.debian.org/debian forky main' > /etc/apt/sources.list.d/psstpsst-forky.list
   apt-get update
-  apt-get install -y openjdk-17-jdk-headless ca-certificates curl xz-utils sudo
-  test "$(dpkg-query -W -f='${Version}' openjdk-17-jdk-headless)" = "$JDK_PACKAGE_VERSION"
+  apt-get install -y -t forky nodejs npm sudo
 
-  curl --fail --location --retry 3 \
-    "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE}" \
-    --output /tmp/psstpsst-node.tar.xz
-  echo "${NODE_SHA256}  /tmp/psstpsst-node.tar.xz" | sha256sum -c -
-  mkdir -p /opt/psstpsst-node
-  tar -xJf /tmp/psstpsst-node.tar.xz --strip-components=1 -C /opt/psstpsst-node
-
+  # Optional, trusted upstream ZIPs avoid downloading large archives on unreliable connections.
+  # Each container receives its own copies and installs the SDK from scratch.
+  if [[ -d /sdk-archives ]]; then
+    mkdir -p /root/.cache/sdkmanager
+    find /sdk-archives -maxdepth 1 -type f -name '*.zip' -exec cp '{}' /root/.cache/sdkmanager/ \;
+  fi
   sdkmanager --sdk_root=/opt/android-sdk \
     'platforms;android-36' \
     'build-tools;35.0.0' \
     'build-tools;36.0.0' \
     'cmake;3.22.1' \
-    'ndk;27.1.12297006' \
-    'ndk;27.0.12077973'
+    'ndk;27.1.12297006'
 
   mkdir -p "$PROJECT_DIR"
-  cp -a /workspace/. "$PROJECT_DIR/"
-  chown -R vagrant:vagrant /home/vagrant
+  tar -xf /source.tar -C "$PROJECT_DIR"
+  chown -R vagrant:vagrant "$PROJECT_DIR"
+  if [[ -d /npm-download-cache ]]; then
+    mkdir -p /home/vagrant/.npm/_cacache
+    cp -a /npm-download-cache/. /home/vagrant/.npm/_cacache/
+    chown -R vagrant:vagrant /home/vagrant/.npm
+  fi
+  if [[ -d /gradle-downloads ]]; then
+    mkdir -p /home/vagrant/.cache/gradlew-fdroid /home/vagrant/.gradle/caches/modules-2/files-2.1
+    if [[ -d /gradle-downloads/wrapper ]]; then
+      cp -a /gradle-downloads/wrapper/. /home/vagrant/.cache/gradlew-fdroid/
+    fi
+    if [[ -d /gradle-downloads/maven-files ]]; then
+      cp -a /gradle-downloads/maven-files/. /home/vagrant/.gradle/caches/modules-2/files-2.1/
+    fi
+    chown -R vagrant:vagrant /home/vagrant/.cache/gradlew-fdroid /home/vagrant/.gradle
+  fi
 
   sudo --preserve-env --user vagrant env \
     HOME=/home/vagrant \
-    PATH="/opt/psstpsst-node/bin:/usr/lib/jvm/java-17-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/android-sdk/tools:/opt/android-sdk/platform-tools" \
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/android-sdk/tools:/opt/android-sdk/platform-tools" \
     PSSTPSST_FDROID_CONTAINER=1 \
     PSSTPSST_FDROID_USER=1 \
     ANDROID_RELEASE_UNSIGNED="${ANDROID_RELEASE_UNSIGNED:-1}" \
@@ -79,12 +108,18 @@ if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
     bash "$PROJECT_DIR/scripts/build-android-reproducible.sh"
 
   if [[ "${ANDROID_BUILD_APK:-1}" == "1" ]]; then
-    if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
-      artifact="$PROJECT_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk"
-    else
-      artifact="$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk"
-    fi
-    install -m 0644 "$artifact" /output/app-release.apk
+    for abi in universal armeabi-v7a arm64-v8a x86 x86_64; do
+      if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
+        artifact="$PROJECT_DIR/android/app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
+      else
+        artifact="$PROJECT_DIR/android/app/build/outputs/apk/release/app-${abi}-release.apk"
+      fi
+      if [[ "$abi" == universal ]]; then
+        install -m 0644 "$artifact" /output/app-release.apk
+      else
+        install -m 0644 "$artifact" "/output/app-${abi}-release.apk"
+      fi
+    done
   fi
   if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
     install -m 0644 "$PROJECT_DIR/android/app/build/outputs/bundle/release/app-release.aab" /output/app-release.aab
@@ -99,27 +134,26 @@ export CI=1
 export ELECTRON_SKIP_BINARY_DOWNLOAD=1
 export EXPO_PUBLIC_APP_ENV=production
 export GRADLE_USER_HOME=/home/vagrant/.gradle
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export LC_ALL=C.UTF-8
 export NODE_ENV=production
-export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:?Pass the source commit timestamp from the host.}"
 export TZ=UTC
 
-test "$(node --version)" = "v${NODE_VERSION}"
-test "$(npm --version)" = '11.12.1'
-npm ci --include=dev --ignore-scripts
+# Record the actual environment instead of pinning distribution patch releases.
+java -version
+node --version
+npm --version
+if [[ -d /npm-download-cache ]]; then
+  npm ci --include=dev --ignore-scripts --offline --no-audit
+else
+  npm ci --include=dev --ignore-scripts
+fi
 npm run postinstall
 find node_modules -type d -name local-maven-repo -prune -exec rm -rf {} +
-echo "${TEMPLATE_SHA256}  node_modules/expo/template.tgz" | sha256sum -c -
-npm run android:prebuild -- --template ./node_modules/expo/template.tgz
-
-if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
-  sed -i '/signingConfig signingConfigs.debug/d' android/app/build.gradle
-  rm android/app/debug.keystore
-fi
+npm run android:prebuild
 
 find . -name gradle-wrapper.jar -type f -delete
-(cd android && gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain -PreactNativeDevServerIp=127.0.0.1) > android-dependencies.txt
+(cd android && gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
 node scripts/check-android-dependencies.mjs android-dependencies.txt
 release_tasks=()
 if [[ "${ANDROID_BUILD_APK:-1}" == "1" ]]; then
@@ -128,15 +162,25 @@ fi
 if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
   release_tasks+=(:app:bundleRelease)
 fi
-(cd android && gradle "${release_tasks[@]}" --no-daemon --max-workers=2 -PreactNativeDevServerIp=127.0.0.1)
+signing_args=()
+if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" != "1" ]]; then
+  signing_args+=(-PpsstpsstDebugSigning=true)
+fi
+(cd android && gradle "${release_tasks[@]}" "${signing_args[@]}" -PpsstpsstAbiSplits=true --no-daemon --max-workers=2)
 
 if [[ "${ANDROID_BUILD_APK:-1}" == "1" ]]; then
-  if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
-    artifact="android/app/build/outputs/apk/release/app-release-unsigned.apk"
-  else
-    artifact="android/app/build/outputs/apk/release/app-release.apk"
-  fi
-  python3 scripts/check-android-apk.py "$artifact"
+  for abi in universal armeabi-v7a arm64-v8a x86 x86_64; do
+    if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
+      artifact="android/app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
+    else
+      artifact="android/app/build/outputs/apk/release/app-${abi}-release.apk"
+    fi
+    if [[ "$abi" == universal ]]; then
+      python3 scripts/check-android-apk.py "$artifact"
+    else
+      python3 scripts/check-android-apk.py "$artifact" "$abi"
+    fi
+  done
 fi
 if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
   python3 scripts/check-android-apk.py android/app/build/outputs/bundle/release/app-release.aab

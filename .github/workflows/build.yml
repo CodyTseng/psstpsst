@@ -230,7 +230,7 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - uses: android-actions/setup-android@v4
 
@@ -254,6 +254,16 @@ jobs:
             echo "::warning::The isolated Android build failed; retrying once with a fresh container."
           done
 
+      - name: Verify independent APK rebuild
+        if: needs.validate-version.outputs.apk == 'true' && env.HAS_ANDROID_SIGNING == 'true'
+        env:
+          ANDROID_RELEASE_UNSIGNED: '1'
+          ANDROID_BUILD_APK: '1'
+          ANDROID_BUILD_BUNDLE: '0'
+        run: |
+          bash scripts/build-android-reproducible.sh release/fdroid-rebuild
+          node scripts/compare-android-builds.mjs release/fdroid-build release/fdroid-rebuild
+
       - name: Sign and verify APK
         if: needs.validate-version.outputs.apk == 'true'
         shell: bash
@@ -265,7 +275,14 @@ jobs:
         run: |
           node scripts/release-signing.mjs sign-android \
             release/fdroid-build/app-release.apk \
-            release/PsstPsst-android.apk
+            release/PsstPsst-android-universal.apk
+          for target in armeabi-v7a:arm32 arm64-v8a:arm64 x86:x86 x86_64:x64; do
+            abi="${target%:*}"
+            architecture="${target#*:}"
+            node scripts/release-signing.mjs sign-android \
+              "release/fdroid-build/app-${abi}-release.apk" \
+              "release/PsstPsst-android-${architecture}.apk"
+          done
 
       - name: Upload APK
         if: needs.validate-version.outputs.apk == 'true'
@@ -316,7 +333,14 @@ jobs:
             --requirement scripts/fdroid-reproducibility-requirements.txt
           node scripts/verify-fdroid-reproducibility.mjs \
             release/fdroid-build/app-release.apk \
-            release/PsstPsst-android.apk
+            release/PsstPsst-android-universal.apk
+          for target in armeabi-v7a:arm32 arm64-v8a:arm64 x86:x86 x86_64:x64; do
+            abi="${target%:*}"
+            architecture="${target#*:}"
+            node scripts/verify-fdroid-reproducibility.mjs \
+              "release/fdroid-build/app-${abi}-release.apk" \
+              "release/PsstPsst-android-${architecture}.apk"
+          done
 
       - name: Report F-Droid audit failure
         if: always() && steps.fdroid_audit.outcome == 'failure'

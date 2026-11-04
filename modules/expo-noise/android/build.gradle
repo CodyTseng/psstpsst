@@ -7,6 +7,7 @@ group = 'chat.psstpsst.app'
 version = '0.1.0'
 
 android {
+  ndkVersion rootProject.ext.ndkVersion
   namespace 'chat.psstpsst.app.noise'
   compileSdk rootProject.ext.compileSdkVersion
 

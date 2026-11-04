@@ -3,8 +3,8 @@
 This guide covers the `Build Apps` workflow in
 [`build.yml`](../.github/workflows/build.yml), Android distribution through
 Zapstore, F-Droid, and Google Play, and local iOS builds. CI currently builds macOS
-arm64, Windows x64/arm64, Linux x64/arm64, a universal Android APK, and a signed
-Android App Bundle (AAB) when Android credentials are configured. It does not build
+arm64, Windows x64/arm64, Linux x64/arm64, a universal Android APK plus four ABI
+APKs, and a signed Android App Bundle (AAB) when Android credentials are configured. It does not build
 or upload iOS apps, submit to Google Play or F-Droid, or publish Nostr events to Zapstore.
 
 ## Development and production identities
@@ -122,20 +122,31 @@ installers, the signed AAB, and desktop update metadata. Publish the draft manua
 Re-runs may replace draft assets but refuse to modify a published release.
 
 Android release builds run in the pinned F-Droid buildserver image through
-`scripts/build-android-reproducible.sh`. The script copies the checkout to
-`/home/vagrant/build/chat.psstpsst.app`, fixes Node.js/npm and the Android native
-toolchain, sets `SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
+`scripts/build-android-reproducible.sh`. The script exports tracked and non-ignored
+working-tree sources to an archive, leaving dependencies, generated native
+projects, previous outputs, and Git metadata on the host. It extracts that archive
+at `/home/vagrant/build/chat.psstpsst.app`, uses the buildserver's Java 21 and Debian
+Forky Node.js/npm packages, provisions the Android native toolchain, sets
+`SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
 Android module from source. Selected signed Android packages are built unsigned
-inside the container and signed on the GitHub runner. CI sets `ANDROID_BUILD_APK`
+inside the container and signed on the GitHub runner. Credentialed APK builds
+run twice in separate clean containers; all five unsigned APKs must match
+byte for byte before signing. CI sets `ANDROID_BUILD_APK`
 and `ANDROID_BUILD_BUNDLE` to select the Gradle tasks and output files; AAB signing
 uses `jarsigner`. APK/AAB content checks both enforce the ZXing-C++ scanner and
 exclude ML Kit. The container script defaults to APK-only builds for independent
 F-Droid rebuilds.
+The host provides the source commit timestamp, so the isolated source export also
+works from a Git worktree. Production prebuilds fix the React Native dev-server
+IP for reproducibility; development prebuilds retain Metro host discovery.
+An explicit `SOURCE_DATE_EPOCH` takes precedence over the current HEAD timestamp,
+allowing independent builds to retain the same timestamp during local development.
 The signer preserves the unsigned APK's ZIP alignment metadata and disables the
 legacy v1 scheme, which is unnecessary at minimum SDK 24, so F-Droid can copy
 the v2/v3 signature onto an independent rebuild. After uploading the normal APK
-artifact, CI performs that exact copy with checksum-pinned `apksigcopier` and
-verifies the result with `apksigner` as a non-blocking audit. An audit failure is
+artifacts, CI performs that exact copy for the universal APK and every ABI APK
+with checksum-pinned `apksigcopier` and verifies the result with `apksigner` as a
+non-blocking audit. An audit failure is
 reported as a warning but does not prevent the draft release. Manual runs
 without Android credentials retain the generated debug signature. The isolated
 Android build is retried once in a fresh container to tolerate a transient
@@ -152,6 +163,7 @@ To check changes to the signing and F-Droid verification helpers, run:
 node --test scripts/release-signing.test.mjs
 node --test scripts/build-targets.test.mjs
 node --test scripts/build-android-bundle.test.mjs scripts/release-assets.test.mjs
+node --test scripts/android-release-config.test.mjs scripts/compare-android-builds.test.mjs
 node --test scripts/verify-fdroid-reproducibility.test.mjs
 ```
 
@@ -165,7 +177,7 @@ checksum-pinned verifier dependency and compare the unsigned and signed APKs:
 python3 -m pip install --no-deps --only-binary=:all: --require-hashes \
   --requirement scripts/fdroid-reproducibility-requirements.txt
 node scripts/verify-fdroid-reproducibility.mjs \
-  release/fdroid-build/app-release.apk release/PsstPsst-android.apk
+  release/fdroid-build/app-release.apk release/PsstPsst-android-universal.apk
 ```
 
 ## Add GitHub configuration
@@ -359,13 +371,15 @@ All four values must be nonempty. CI installs Android Build Tools 36.0.0,
 generates the native project from the checked-in Expo configuration, and runs
 Gradle's `:app:assembleRelease`. It then replaces the template's debug signature
 using `apksigner`, verifies the resulting APK, and uploads
-`PsstPsst-android.apk`. The decoded keystore exists only in a temporary
-directory during signing and is removed afterward. Passwords are read from
-environment variables, not passed as literal command arguments.
+`PsstPsst-android-universal.apk` plus `PsstPsst-android-<architecture>.apk` for each ABI. The decoded
+keystore exists only in a temporary directory during signing and is removed
+afterward. Passwords are read from environment variables, not passed as literal
+command arguments.
 
 No production credentials are written into the generated Gradle project. This
 keeps source builds independent of CI signing credentials. Running Gradle alone
-still produces a debug-signed release-mode APK. For the same signing flow locally,
+produces unsigned release packages. `npm run android:build` explicitly opts into
+`-PpsstpsstDebugSigning=true` for local installable APKs. For the same signing flow locally,
 load the four `ANDROID_*` values into your environment and run:
 
 ```bash
@@ -377,8 +391,8 @@ npm run android:prebuild
 npm run android:build
 node scripts/release-signing.mjs check android
 node scripts/release-signing.mjs sign-android \
-  android/app/build/outputs/apk/release/app-release.apk \
-  release/PsstPsst-android.apk
+  android/app/build/outputs/apk/release/app-universal-release.apk \
+  release/PsstPsst-android-universal.apk
 ```
 
 The SDK path above is the usual macOS location; use your SDK path on other
@@ -392,7 +406,7 @@ fingerprint printed by the signing step:
 
 ```bash
 keytool -list -v -keystore /absolute/path/to/psstpsst-release.keystore -alias psstpsst
-"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs release/PsstPsst-android.apk
+"$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs release/PsstPsst-android-universal.apk
 ```
 
 See Android's [signing guide](https://developer.android.com/studio/publish/app-signing)
@@ -404,10 +418,10 @@ CI runs that select AAB upload `PsstPsst-android.aab` as the `android-aab` Actio
 artifact; tag runs also attach it to the draft GitHub Release. Download that file
 and upload it to a Google Play Console testing track before promoting it to
 production. APK distribution through GitHub, Zapstore, and F-Droid continues
-to use `PsstPsst-android.apk`. AAB files cannot be installed directly on a device.
+to use `PsstPsst-android-universal.apk`. AAB files cannot be installed directly on a device.
 
 For a local build, load the same four `ANDROID_*` signing variables used for APK
-releases, install JDK 17 and the Android SDK, and run:
+releases, install JDK 21 and the Android SDK, and run:
 
 ```bash
 npm run android:prebuild
@@ -417,8 +431,8 @@ node scripts/release-signing.mjs sign-android-bundle \
   release/PsstPsst-android.aab
 ```
 
-The bundle command temporarily disables the generated release debug signature
-and restores `android/app/build.gradle` after Gradle exits. The signing helper
+The bundle command builds an unsigned AAB without editing generated Gradle files.
+The signing helper
 requires complete credentials, rejects already-signed input, and uses `jarsigner`
 to sign and strictly verify the bundle against the configured certificate. It
 removes failed output and the temporary keystore; passwords are read from
@@ -434,18 +448,54 @@ Google Play uses for delivered APKs. This workflow reuses the APK credentials fo
 the upload signature; if a separate upload key is registered in Play Console,
 configure the AAB signing step with that key instead. Keep the production
 application ID `chat.psstpsst.app` and increase `expo.android.versionCode` for each
-new upload; APK and AAB from the same release share the version code.
+new upload. The universal APK and AAB share `10 * expo.android.versionCode`;
+ABI APKs use the suffixes documented below.
 
 See Android's [bundle build guide](https://developer.android.com/build/building-cmdline)
 and [Play App Signing guide](https://developer.android.com/studio/publish/app-signing).
 
 ### Zapstore and F-Droid
 
+Android builds require JDK 21. Reviewed React Native and Expo patches select
+Java 21 compilers while the generated project retains Java/Kotlin bytecode
+target 17. The generated `gradle/gradle-daemon-jvm.properties` also selects Java
+21 for the Gradle runtime. Upstream CI and F-Droid use this same configuration.
+JDK distribution
+patch releases are not hardcoded; independent rebuilds must still match.
+
+Release builds enable R8 code optimization and resource shrinking through
+`expo-build-properties`. The `with-android-release` config plugin persists the
+APK split and version-code configuration across clean Expo prebuilds.
+`npm run android:build` and CI pass `-PpsstpsstAbiSplits=true`; development builds
+keep one APK. Gradle writes `app-universal-release.apk` and
+`app-<abi>-release.apk`. A build restricted with
+`-PreactNativeArchitectures=<abi>` emits only that ABI and its universal output.
+
+`app.json` stores the base release counter. Installed Android version codes are
+`10 * counter` for the universal APK and AAB, and `10 * counter + suffix` for ABI
+APKs: `armeabi-v7a=1`, `arm64-v8a=2`, `x86=3`, `x86_64=4`. For counter 13 these
+are 130 and 131–134. Increment the base counter for every release; never assign
+an ABI digit above the counter. This makes the next release newer across all
+distribution channels.
+
+CI signs, checks, uploads, and audits all five APKs. Zapstore continues to use
+`PsstPsst-android-universal.apk`. F-Droid has four build entries, each selecting one ABI
+and its matching `PsstPsst-android-<architecture>.apk` reference binary. Its
+`VercodeOperation` list applies the same suffixes when checking tags.
+
+Public APK filenames use `universal`, `arm32`, `arm64`, `x86`, and `x64`.
+The ABI-specific names map to `armeabi-v7a`, `arm64-v8a`, `x86`, and `x86_64`,
+respectively. Gradle output paths continue to use the Android ABI identifiers.
+See F-Droid's [ABI split guide](https://f-droid.org/en/docs/Submitting_to_F-Droid_Quick_Start_Guide/#setup-abi-split).
+
 Store copy and the icon live in `fastlane/metadata/android/en-US/`. Keep
 `title.txt`, `short_description.txt` (under 80 characters),
 `full_description.txt`, and `changelogs/<versionCode>.txt` (at most 500
 characters) up to date before each release tag. GitHub draft release notes use
 the matching version section from the root [CHANGELOG.md](../CHANGELOG.md).
+Use the installed version codes for Fastlane changelog filenames: copy the
+same Android summary to the universal code and all four ABI codes (for example,
+130–134), rather than using only the base counter from `app.json`.
 
 Changelog conventions:
 

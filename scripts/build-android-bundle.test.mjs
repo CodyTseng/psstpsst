@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { buildAndroidBundle } from './build-android-bundle.mjs';
 
 for (const exitCode of [0, 1]) {
-  test(`bundle build restores APK signing configuration after Gradle exits with ${exitCode}`, () => {
+  test(`bundle build leaves Gradle configuration untouched after exiting with ${exitCode}`, () => {
     const dir = mkdtempSync(join(tmpdir(), 'psstpsst-bundle-build-'));
     try {
       const gradlePath = join(dir, 'app', 'build.gradle');
@@ -20,6 +20,7 @@ for (const exitCode of [0, 1]) {
       writeFileSync(wrapper, `#!/bin/sh
 test "$1" = ':app:bundleRelease' || exit 2
 test "$EXPO_PUBLIC_APP_ENV" = production || exit 2
+test "$2" = '-PpsstpsstDebugSigning=false' || exit 2
 test ! -f app/build/outputs/bundle/release/app-release.aab || exit 2
 cp app/build.gradle during-build.gradle
 echo fixture > app/build/outputs/bundle/release/app-release.aab
@@ -31,7 +32,7 @@ exit ${exitCode}
       assert.equal(readFileSync(gradlePath, 'utf8'), original);
       const duringBuild = readFileSync(join(dir, 'during-build.gradle'), 'utf8');
       assert.match(duringBuild, /debug \{\n      signingConfig signingConfigs.debug/);
-      assert.match(duringBuild, /release \{\n      signingConfig null/);
+      assert.equal(duringBuild, original);
       assert.equal(existsSync(output), exitCode === 0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -39,15 +40,10 @@ exit ${exitCode}
   });
 }
 
-test('unexpected native signing configuration is left untouched', () => {
+test('bundle build requires a generated Android project', () => {
   const dir = mkdtempSync(join(tmpdir(), 'psstpsst-bundle-config-'));
   try {
-    mkdirSync(join(dir, 'app'));
-    const gradlePath = join(dir, 'app', 'build.gradle');
-    const original = 'android { buildTypes { release { signingConfig signingConfigs.production } } }';
-    writeFileSync(gradlePath, original);
-    assert.throws(() => buildAndroidBundle(dir), /Expected the Expo/);
-    assert.equal(readFileSync(gradlePath, 'utf8'), original);
+    assert.throws(() => buildAndroidBundle(dir), /android:prebuild/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

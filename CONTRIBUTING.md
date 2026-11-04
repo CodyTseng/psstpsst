@@ -17,7 +17,7 @@ issue with technical details.
 - Node.js 22 and npm (matching CI)
 - For iOS: macOS, Xcode 26.4 or newer, CocoaPods, and an Apple development
   team for device signing
-- For Android: Android Studio, the Android SDK and NDK, and JDK 17 (matching CI)
+- For Android: Android Studio, the Android SDK and NDK, and JDK 21 (matching CI)
 - For Electron Nearby support: Xcode command-line tools on macOS, or stable
   Rust on Windows and Linux. Windows also needs the MSVC build tools; Linux
   needs a C/C++ toolchain and pkg-config. The helper builds its vendored D-Bus

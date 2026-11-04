@@ -3,7 +3,11 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const RELEASE_ASSET_NAMES = Object.freeze([
-  'PsstPsst-android.apk',
+  'PsstPsst-android-universal.apk',
+  'PsstPsst-android-arm32.apk',
+  'PsstPsst-android-arm64.apk',
+  'PsstPsst-android-x86.apk',
+  'PsstPsst-android-x64.apk',
   'PsstPsst-android.aab',
   'latest-mac.yml',
   'latest-x64.yml',
@@ -27,7 +31,8 @@ export const RELEASE_ASSET_NAMES = Object.freeze([
 export function findMissingReleaseAssets(directory) {
   return RELEASE_ASSET_NAMES.filter((name) => {
     try {
-      return !statSync(join(directory, name)).isFile();
+      const artifact = statSync(join(directory, name));
+      return !artifact.isFile() || artifact.size === 0;
     } catch {
       return true;
     }

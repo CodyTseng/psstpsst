@@ -16,6 +16,11 @@ module.exports = function withLocalNotifications(config, { icon }) {
       await mkdir(directory, { recursive: true });
       await writeFile(join(directory, 'notification_icon.png'), source);
     }));
+    // Native notification modules resolve this drawable by name at runtime.
+    const rawDirectory = join(mod.modRequest.platformProjectRoot, 'app/src/main/res/raw');
+    await mkdir(rawDirectory, { recursive: true });
+    await writeFile(join(rawDirectory, 'psstpsst_notification_keep.xml'),
+      '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/notification_icon" />\n');
     return mod;
   }]);
 };

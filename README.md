@@ -98,15 +98,18 @@ JavaScript, so no Metro server is needed to run them. They use the production id
 
 ### Android APK
 
+Install JDK 21 before building Android.
+
 ```bash
 npm run android:prebuild
 npm run android:build
 ```
 
 The universal APK is written to
-`android/app/build/outputs/apk/release/app-release.apk`. Transfer it to an Android
-device and open it to install, or use
-`adb install -r android/app/build/outputs/apk/release/app-release.apk`.
+`android/app/build/outputs/apk/release/app-universal-release.apk`. Smaller
+`app-<abi>-release.apk` files are generated alongside it. Transfer the matching
+APK to an Android device and open it to install, or use
+`adb install -r android/app/build/outputs/apk/release/app-universal-release.apk`.
 
 This is a release-mode build, signed with the generated project's **debug key**
 for local use. It is not signed with the official release key and cannot update

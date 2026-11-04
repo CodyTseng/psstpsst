@@ -1,3 +1,9 @@
+diff --git a/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle b/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+--- a/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
++++ b/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+@@ -58 +58 @@
+-    kotlin.jvmToolchain(17)
++    kotlin.jvmToolchain(21)
 diff --git a/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift b/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift
 index c1983bd..e0bfcf7 100644
 --- a/node_modules/expo-modules-core/ios/Core/DynamicTypes/DynamicDataType.swift

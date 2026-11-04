@@ -44,7 +44,7 @@ Check release dependencies and the built APK:
 (cd android && ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
 node scripts/check-android-dependencies.mjs android-dependencies.txt
 (cd android && ./gradlew :app:assembleRelease)
-python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release.apk
+python3 scripts/check-android-apk.py android/app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
 CI runs both guards. The APK must include ZXing-C++ for every packaged ABI,

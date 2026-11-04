@@ -5,7 +5,7 @@ import sys
 import zipfile
 
 
-def check_apk(path, *, bundle=False):
+def check_apk(path, *, bundle=False, expected_abi=None):
     with zipfile.ZipFile(path) as apk:
         entries = {}
         for name in apk.namelist():
@@ -29,6 +29,8 @@ def check_apk(path, *, bundle=False):
         abis = {name.split("/")[1] for name in names if re.fullmatch(r"lib/[^/]+/[^/]+\.so", name)}
         if not abis:
             raise ValueError("APK contains no native libraries")
+        if expected_abi is not None and abis != {expected_abi}:
+            raise ValueError(f"Expected only {expected_abi}, found {', '.join(sorted(abis))}")
         for abi in sorted(abis):
             if f"lib/{abi}/libzxingcpp_android.so" not in names:
                 raise ValueError(f"APK is missing the ZXing-C++ reader for {abi}")
@@ -41,7 +43,10 @@ def check_apk(path, *, bundle=False):
 
 if __name__ == "__main__":
     try:
-        abis = check_apk(sys.argv[1], bundle=sys.argv[1].endswith(".aab"))
+        abis = check_apk(
+            sys.argv[1], bundle=sys.argv[1].endswith(".aab"),
+            expected_abi=sys.argv[2] if len(sys.argv) > 2 else None,
+        )
     except (IndexError, OSError, ValueError, zipfile.BadZipFile) as error:
         print(f"Android package check failed: {error}", file=sys.stderr)
         sys.exit(1)

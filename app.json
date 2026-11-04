@@ -175,11 +175,16 @@
       [
         "expo-build-properties",
         {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          },
           "ios": {
             "usePrecompiledModules": false
           }
         }
       ],
+      "./plugins/with-android-release",
       "expo-web-browser",
       "expo-asset",
       "./plugins/with-notification-extension"

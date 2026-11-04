@@ -1,190 +1,93 @@
-# F-Droid submission preparation
+# F-Droid source builds
 
-`metadata/chat.psstpsst.app.yml` is a disabled submission draft for the official
-F-Droid repository. It is not a self-hosted repository configuration or proof
-that the application meets F-Droid's inclusion requirements. Copy the completed
-file into a fork of https://gitlab.com/fdroid/fdroiddata for validation and review.
+`metadata/chat.psstpsst.app.yml` is the submission draft for the official
+F-Droid repository. Its four ABI entries remain disabled until a new upstream
+release containing these changes passes F-Droid's independent verification.
+The previous MR passed reproducibility for **26.9.1**, using an older build
+configuration; that result does not certify this new Java 21/R8/ABI build.
 
-## Previous release inputs
+Local validation on 2026-11-04 passed the Java 21 arm64 unsigned Release build,
+R8/resource shrinking, APK content checks, and all four ABI version-code checks.
+All 60 Android Java compile tasks select JDK 21 and bytecode target 17. A Java 17
+launcher also correctly selects the Java 21 daemon through the project criteria.
+Full Linux container validation is currently in progress; the complete build and
+independent APK byte comparison have not yet passed.
 
-The signing key and reproducibility investigation are based on the public
-`v0.2.2` release (version code `4`), commit
-`06bcb7204216e100aae7a5bd704a6057150d0041`. Its `AllowedAPKSigningKeys` matches
-the certificate reported by `apksigner verify --print-certs` on the published
-`PsstPsst-0.2.2-android.apk`.
+## Shared build configuration
 
-The [upstream Android build log](https://github.com/codytseng/psstpsst/actions/runs/35362574131/job/105657242487)
-records Node.js `22.23.2`, npm `10.9.8`, Temurin `17.0.20+1`, Android API `36`,
-Build Tools `36.0.0`, NDK `27.1.12297006`, and CMake `3.22.1`.
-The recipe uses Node.js `24.15.0` and its bundled npm `11.12.1` to match the
-maintainer's local development environment. These differ from the published
-release's Node/npm versions, so APK reproducibility must be verified with this
-change. It provisions the checksum-verified Linux x64 Node distribution and
-requests the Android SDK packages. It explicitly uses the
-checksum-verified `expo/template.tgz` from the release lockfile's Expo
-`57.0.22` package; that template selects Gradle `9.3.1`.
+Upstream CI and F-Droid use the official buildserver's Java 21 and Debian
+Forky's Node.js/npm packages. There is no downloaded Node distribution, old
+Bookworm repository, machine-specific `JAVA_HOME`, or exact Debian JDK patch
+version requirement. The upstream container image remains pinned by digest;
+actual Java, Node, and npm versions are recorded in its build log.
 
-The JDK is Debian OpenJDK 17 from Bookworm and its security repository because
-the Trixie build image provides JDK 21. This is not an exact reproduction of the
-upstream Temurin installation. The recipe checks the exact Debian package
-version and fails instead of silently accepting a toolchain update. Dependency
-scanning and APK reproducibility must pass before enabling this build. No broad
-scanner exclusions are configured.
+The lockfile and reviewed `patch-package` patches select the framework inputs:
 
-## Local validation status (2026-09-21)
+- The React Native Gradle plugin and Expo KSP use a Java 21 compiler. The
+  application and Android libraries retain Java/Kotlin bytecode target 17.
+- Gradle's generated `gradle-daemon-jvm.properties` selects Java 21 for the
+  build runtime, independently of a developer's shell or IDE JDK selection.
+- Expo Android modules build from source through `package.json` autolinking.
+  Remove unused `local-maven-repo` directories before F-Droid scanning.
+- `npm run android:prebuild` uses the template in the installed, lockfile-pinned
+  Expo package. Config plugins own R8, resource shrinking, Gradle memory,
+  the production-only deterministic dev-server IP, unsigned release signing,
+  and ABI version codes. Development builds retain Metro host discovery.
+- All Android libraries, including Expo SQLite, use the same NDK as the Expo app.
 
-Validation used the official Linux amd64 `buildserver-trixie` image at digest
-`sha256:f81172f142454bccb6e198739d40bf3a98a393f09805140c1aa8b49807d0e3b7`
-and fdroidserver commit `a35fdfddd9c66823987a410566a6101186e39c84`, running
-the CI-style `--on-server --test --refresh-scanner --no-tarball` build in an
-isolated container. Tool provisioning, npm installation, source patches, the
-template checksum, and Android prebuild passed. The installed Debian JDK was
-`17.0.20.1+1-1~deb12u1`.
+F-Droid retains explicit, narrow scanner exceptions for Hermes and legitimate
+Maven declarations. `scandelete` removes dependency scanner findings and the
+unused generated debug keystore. It then invokes Gradle directly in the generated
+`android/` directory. Upstream-only dependency/APK checks stay in release CI.
 
-The initial source scan stopped with 235 findings. The recipe now builds every
-Expo Android module from source, removes bundled local Maven prebuilts, deletes
-scanner findings under dependencies, and uses narrow scanner exceptions for the
-permitted Linux Hermes compiler and legitimate local Maven declarations. The
-second source scan passed without disabling scanning or ignoring all of
-`node_modules`.
+## ABI outputs and verification
 
-The complete release build also passed. It built 2,263 Gradle tasks in about
-88 minutes under x86_64 emulation, produced an unsigned four-ABI APK, passed the
-project's Android dependency and APK checks, and then ran F-Droid's automatic
-comparison against the published `v0.2.2` APK.
+`app.json` stores the base release counter. Installed version codes are
+`10 * counter + suffix`, with suffixes `armeabi-v7a=1`, `arm64-v8a=2`, `x86=3`,
+`x86_64=4`; the universal APK and AAB use suffix 0. `VercodeOperation` tracks the
+four ABI codes. Each entry selects its ABI through `reactNativeArchitectures`
+and compares against its public `PsstPsst-android-<architecture>.apk` binary:
+`armeabi-v7a → arm32`, `arm64-v8a → arm64`, `x86 → x86`, `x86_64 → x64`.
 
-That reproducibility comparison failed. Both APK payloads contain the same 2,221
-paths, but 58 entries differ: two baseline-profile files, `classes3.dex` through
-`classes5.dex`, 52 native libraries, and `resources.arsc`. The JavaScript bundle
-and all other payload entries match. The published APK used Expo prebuilts while
-the compliant recipe compiles those modules from source, so `v0.2.2` cannot use
-the current `Binaries` path.
+For credentialed APK releases, upstream CI builds twice in separate clean
+containers from source archives that exclude ignored dependencies, generated
+native projects, previous outputs, and Git metadata. Working-tree source edits
+are included for local verification, and the host supplies the commit timestamp.
+CI compares all five unsigned APKs before signing. A mismatch fails
+the release build. The later signature-copy audit checks signing compatibility;
+F-Droid's own build and signature verification remain the final independent test.
+The long-lived signing key is never supplied to F-Droid.
 
-## v0.2.3 validation status (2026-09-22)
+For unreliable SDK download connections, set `ANDROID_SDK_ARCHIVES` to a local
+directory of verified official SDK/NDK ZIPs. The script mounts it read-only and
+copies the archives into each container's disposable sdkmanager cache. Installed
+SDK directories and project build outputs are never shared between builds.
+`ANDROID_NPM_CACHE` similarly accepts an npm cache prepared for Linux x64 from
+the lockfile. Only `_cacache` is mounted and copied into the fresh container;
+npm then installs offline and validates package integrity. User npm configuration,
+credentials, installed dependencies, and compiled outputs are not copied.
+`ANDROID_GRADLE_DOWNLOADS` accepts a `wrapper/` directory containing downloaded
+Gradle distributions and a `maven-files/` directory containing only upstream
+`modules-2/files-2.1` artifacts. Gradle project caches, transformed artifacts, and
+project build outputs are not shared.
 
-The published `v0.2.3` tag resolves to commit
-`2f4621ec9bff1e02c19ebfda58add32ab9169ab4` (version code `5`). The
-published Android APK has the signing certificate listed in
-`AllowedAPKSigningKeys`.
+## Updating the submission
 
-In the same F-Droid buildserver container, `fdroid readmeta`, `fdroid lint`,
-the source scan, the Android dependency check, and the four-ABI release build
-passed. Gradle completed 2,263 tasks in 1 hour 4 minutes, and the project's APK
-scanner check passed. F-Droid's download of the GitHub reference APK timed out
-after receiving about 101 MB. The complete published APK was downloaded with
-`gh`, copied into the container, and compared with the rebuilt unsigned APK
-using the same `fdroidserver.common.verify_apks` function.
+1. Build a new upstream release; do not replace assets on an existing release.
+2. Set each metadata entry to the new version, ABI version code, and full source
+   commit hash. Check that all four upstream APKs have `AllowedAPKSigningKeys`.
+3. Copy the draft into a fdroiddata checkout. Remove `disable` in the validation
+   copy and run `fdroid readmeta`, `fdroid lint`, `fdroid rewritemeta`, and
+   `fdroid build --server chat.psstpsst.app:<ABI version code>` for every ABI.
+4. Submit only the verified entries. Enable `AutoUpdateMode: Version` after
+   `fdroid checkupdates` correctly generates all four ABI entries.
 
-That comparison failed. Apart from the three signing entries in the published
-APK, both APKs contain the same 2,332 paths. Only three payload entries differ:
-`assets/dexopt/baseline.prof`, `classes3.dex`, and `resources.arsc`. The
-JavaScript bundle and native libraries match. `aapt2 dump resources` shows one
-logical resource difference: `react_native_dev_server_ip` is `172.17.0.2` in
-the published APK and `192.168.215.2` in the rebuild. React Native's Gradle
-plugin uses the build host's IP unless `reactNativeDevServerIp` is set.
-Disassembly of `classes3.dex` shows a different registration order for Glide's
-Expo Image modules and a different generated `GlideIndexer` class name. The
-baseline profile also differs; its exact relationship to the DEX difference
-has not been verified.
+## References
 
-The recipe remains disabled because `v0.2.3` predates the fixes. To keep
-developer-signed reproducible builds, publish and verify a new version.
-Alternatively, remove `Binaries` and `AllowedAPKSigningKeys` and let F-Droid
-sign its source build under a separate signing lineage.
-
-The unreleased build recipe now passes `reactNativeDevServerIp=127.0.0.1` in both
-build paths and uses the reproducible Glide KSP `5.0.9` processor through
-`patches/expo-image+57.0.5.patch`. The Expo Image runtime remains on Glide
-`5.0.5`. The container build passed, and cleaning and rebuilding Expo Image
-produced the same unsigned APK SHA-256. A new release is still required for
-F-Droid's comparison with a published APK.
-
-The `v0.2.4` release build pins the official amd64 `buildserver-trixie` image at
-digest `sha256:9cb68105642ca4e7b295f0ceab10f069f5b3247dc18fa7c36046e9d81aa469a8`,
-which identifies fdroidserver commit `8f52ae3ce287bc28964db544b970b88dce9c38bf`.
-This replaces the unavailable historical digest above; the registry no longer
-serves that manifest.
-
-## v0.2.4 validation status (2026-09-26)
-
-The published `v0.2.4` tag resolves to commit
-`e19b07d2ebbd5a434fcedacd6596bb86729fa41b` (version code `6`). Its Android APK
-has SHA-256
-`6ef224247948ef2fcb1f22cb0c5f8b00ac63f9569bd5e978f82a1acffc6145a4` and the
-certificate listed in `AllowedAPKSigningKeys`.
-
-Two independent clean builds in fresh pinned containers produced byte-identical
-unsigned APKs of 147,046,827 bytes with SHA-256
-`8ec19695a3911e69fadef6cc496bda4fe9cd5a5dbc1bf8ffead05a5973bdc1fd`. The exact
-recipe passed `fdroid readmeta`, `fdroid lint`, the fdroidserver source scan with
-zero findings, the dependency policy check, the four-ABI APK check, and Android
-16 KiB ZIP alignment verification. One intervening build failed while fetching
-an Android dependency from Google Maven; an unchanged fresh retry succeeded.
-
-The rebuilt and published APKs have the same 2,332 non-signature paths and
-byte-identical extracted payloads. F-Droid's official signature-copy comparison
-still rejects the published APK: Build Tools 36 `apksigner` rewrote 662 local ZIP
-headers with Android alignment extra fields while signing, so the copied v2/v3
-signature no longer authenticates the independently built APK. Signing a
-disposable copy with preserved alignment and without the legacy v1 scheme made
-the same official comparison pass.
-
-The release helper now preserves alignment and disables the legacy v1 signature,
-which is unnecessary at the app's minimum SDK 24 and otherwise introduces ZIP
-entry timestamps that cannot be reconstructed byte-for-byte. CI copies every
-generated v2/v3 release signature onto the container-built APK with
-checksum-pinned `apksigcopier` and verifies the result with `apksigner` in a
-non-blocking post-upload audit. An F-Droid-specific failure is reported without
-blocking the normal APK or draft release. The published `v0.2.4` asset must not
-be replaced, so this recipe remains disabled. A new release using the corrected
-signing path must be built and verified before submission.
-
-## Before enabling the recipe
-
-1. Publish a release containing the signature-copy-compatible signing fix. Do
-   not replace a published release asset to make a later rebuild match. Record
-   the new tag's full commit hash in the build entry.
-2. Verify the new APK's certificate with `apksigner verify --print-certs` and
-   compare its SHA-256 fingerprint with `AllowedAPKSigningKeys`. Never provide
-   the keystore to F-Droid.
-3. Test the recipe's toolchain provisioning in the F-Droid build VM. Releases
-   after `v0.2.2` use the pinned buildserver image through
-   `scripts/build-android-reproducible.sh`; refresh the image digest, tool
-   versions, archive checksums, and template checksum together when updating
-   that environment.
-4. Review the narrow scanner exceptions and dependency licenses with the
-   packagers. Existing FCM/ML Kit checks remain only a subset of this review.
-5. Remove `disable` in the validation copy, then run `fdroid readmeta`,
-   `fdroid lint chat.psstpsst.app`, `fdroid rewritemeta chat.psstpsst.app`, and
-   `fdroid build --server chat.psstpsst.app:13` in the configured fdroiddata
-   checkout. Compare the rebuilt APK with the published APK using F-Droid's
-   reproducible-build verification.
-6. Enable automatic updates only after the first verified build, using
-   `AutoUpdateMode: Version`. Test `fdroid checkupdates chat.psstpsst.app`;
-   version name and code are read from `app.json` at release tags because the
-   Android project is generated rather than committed.
-
-For the initial fdroiddata merge request, include only the latest verified
-build; do not submit a disabled build entry. The Android Fastlane folder
-already contains English title, descriptions, icon, screenshots, and changelog.
-Its screenshots currently show an iPhone frame; review Android captures before
-submission. The universal APK contains four ABIs and is about 147 MB, so review
-ABI splits if the F-Droid maintainers request a smaller download. The issue
-tracker provides public maintainer contact; add a public author email only if
-the maintainer chooses to publish one. Review optional third-party relay and
-media endpoints with packagers when assessing AntiFeatures.
-
-The recipe generates Android before scanning so dependencies are visible to
-F-Droid, removes the generated debug signing references, and requests an
-unsigned release APK. `Binaries` selects the upstream developer-signed artifact
-only after verification. The recipe never runs the private release-signing
-helper. The `sudo` setup runs only on the dedicated F-Droid build server; a
-local build requires manually provisioning the same tools. The local container
-run above does not constitute an approved official F-Droid build.
-
-References: [submission guide](https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/),
-[metadata reference](https://f-droid.org/docs/Build_Metadata_Reference/),
-[inclusion policy](https://f-droid.org/docs/Inclusion_Policy/), and
-[reproducible builds](https://f-droid.org/docs/Reproducible_Builds/). The
-[new app merge request checklist](https://gitlab.com/fdroid/fdroiddata/-/blob/master/.gitlab/merge_request_templates/App%20inclusion.md)
-also describes the submission requirements.
+- [CastLab metadata](https://gitlab.com/fdroid/fdroiddata/-/blob/master/metadata/app.fedilab.castlab.yml)
+  demonstrates adapting React Native toolchains to Java 21.
+- [evcc metadata](https://gitlab.com/fdroid/fdroiddata/-/blob/master/metadata/io.evcc.android.yml)
+  demonstrates generating an Expo Android project and invoking Gradle directly.
+- [PsstPsst's verified previous build](https://gitlab.com/codytseng98/fdroiddata/-/jobs/16771663400)
+- [F-Droid ABI split guide](https://f-droid.org/en/docs/Submitting_to_F-Droid_Quick_Start_Guide/#setup-abi-split)
+- [F-Droid reproducible builds](https://f-droid.org/en/docs/Reproducible_Builds/)
