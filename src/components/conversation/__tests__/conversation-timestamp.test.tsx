@@ -31,7 +31,7 @@ describe.each([
   const initialPreferences = dateTimePreferences.getState();
   const initialLanguage = i18n.language;
   beforeEach(async () => {
-    dateTimePreferences.setState({ timeFormat: '12h', dateFormat: 'ymd' });
+    dateTimePreferences.setState({ timeFormat: '12h', dateFormat: 'ymd', systemLocale: 'en-US' });
     await i18n.changeLanguage('en');
   });
   afterEach(async () => {
@@ -41,9 +41,13 @@ describe.each([
   });
   const label = () => renderer.root.findByType(AppText).props.children;
 
-  it('updates a mounted clock immediately without changing its timestamp or minute', () => {
+  it.each([
+    ['en-US', '1:05 PM'],
+    ['en-GB', '1:05 pm'],
+  ])('updates a mounted clock immediately in %s without changing its timestamp or minute', (systemLocale, expected) => {
+    dateTimePreferences.setState({ systemLocale });
     act(() => { renderer = create(<Timestamp timestamp={unix(2026, 10, 20, 13, 5)} nowTs={unix(2026, 10, 20, 15)} />); });
-    expect(label()).toBe('1:05 PM');
+    expect(label()).toBe(expected);
     act(() => { dateTimePreferences.setState({ timeFormat: '24h' }); });
     expect(label()).toBe('13:05');
   });

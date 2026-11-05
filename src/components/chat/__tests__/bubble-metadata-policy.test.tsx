@@ -30,7 +30,7 @@ jest.mock('@/components/common/AppText', () => ({ AppText: (props: object) => je
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('@/platform', () => ({ platform: { localization: { preferredLanguageTag: () => 'en-US' } } }));
 
-beforeEach(() => { act(() => dateTimePreferences.setState({ timeFormat: '24h' })); });
+beforeEach(() => { act(() => dateTimePreferences.setState({ timeFormat: '24h', systemLocale: 'en-US' })); });
 jest.mock('@/stores/delivery-status.store', () => ({ useDelivery: () => null }));
 jest.mock('@/i18n/direction', () => ({ useIsRTL: () => false }));
 jest.mock('@/lib/chat/message-presentation', () => ({ prepareMessagePresentation: jest.fn() }));
@@ -93,7 +93,13 @@ it.each([
   mockColors = undefined;
 });
 
-it.each([false, true])('updates a mounted bubble clock and whitespace reservation (lifted: %s)', (liftedCopy) => {
+it.each([
+  [false, 'en-US', /^\d{1,2}:\d{2} [AP]M$/],
+  [true, 'en-US', /^\d{1,2}:\d{2} [AP]M$/],
+  [false, 'en-GB', /^\d{1,2}:\d{2} [ap]m$/],
+  [true, 'en-GB', /^\d{1,2}:\d{2} [ap]m$/],
+] as const)('updates a mounted bubble clock and whitespace reservation (lifted: %s, locale: %s)', (liftedCopy, systemLocale, clockPattern) => {
+  dateTimePreferences.setState({ systemLocale });
   const presentation = {
     segments: [{ type: 'text', value: 'A message that ends near its time' }],
     cardPubkey: null, customEmojiMap: new Map(), embeddedMedia: new Map(),
@@ -110,7 +116,7 @@ it.each([false, true])('updates a mounted bubble clock and whitespace reservatio
   expect(clocks()[0]).toMatch(/^\d{2}:\d{2}$/);
   const originalWidth = spacers()[0].length;
   act(() => dateTimePreferences.setState({ timeFormat: '12h' }));
-  expect(clocks()[0]).toMatch(/^\d{1,2}:\d{2} [AP]M$/);
+  expect(clocks()[0]).toMatch(clockPattern);
   expect(spacers()[0].length).toBeGreaterThan(originalWidth);
   act(() => dateTimePreferences.setState({ timeFormat: '24h' }));
   expect(spacers()[0].length).toBe(originalWidth);

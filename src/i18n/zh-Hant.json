@@ -625,6 +625,7 @@
     "wallet_trust_confirm": "Connect wallet"
   },
   "app_update": {
+    "preview_message": "更新預覽。下載與安裝皆為模擬。",
     "check": "檢查更新",
     "up_to_date": "目前已是最新版本",
     "check_failed": "無法檢查更新，請稍後重試。",
