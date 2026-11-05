@@ -4,12 +4,11 @@ import type { NotificationCommunication } from '@/platform/ports/notifications';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { firstGroupId } from '@/lib/nostr/group-messaging';
 
-import { filterNotifiableMessages } from './notification-filter';
+import { discardNotificationEvents } from './notification-events.service';
+import { filterNotifiableMessages, type NotificationCandidate } from './notification-filter';
 import { getNotificationPreview } from './notification-preview';
 import {
-  getNotificationsEnabled,
   getNotificationContentPreferences,
-  isDndActiveNow,
   type NotificationContentPreferences,
 } from './notification-prefs';
 
@@ -18,9 +17,11 @@ export async function evaluateNotificationRumors(
   rumors: Rumor[],
   accountPubkey: string,
   userPresent: boolean,
-): Promise<Rumor[]> {
-  if (userPresent || rumors.length === 0 || !await getNotificationsEnabled() ||
-    await isDndActiveNow()) return [];
+): Promise<NotificationCandidate[]> {
+  if (userPresent) {
+    await discardNotificationEvents(accountPubkey, 'system');
+    return [];
+  }
   return filterNotifiableMessages(rumors, accountPubkey);
 }
 

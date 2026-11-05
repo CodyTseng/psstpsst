@@ -1,168 +1,31 @@
-import type { ConversationWithLast } from '@/hooks/use-conversations';
+import type { ClaimedNotificationEvent } from '@/services/notifications/notification-events.service';
+import { selectIncomingNotification } from '../incoming-message-banner-state';
 
-import {
-  conversationMessageBaseline,
-  findIncomingConversation,
-} from '../incoming-message-banner-state';
-
-function item({
-  key,
-  messageId,
-  sender = key,
-  unreadCount = 1,
-  orderAt = 1,
-  muted = false,
-  hasReplied = true,
-  deliveryKind = 'relay',
-}: {
-  key: string;
-  messageId: string;
-  sender?: string;
-  unreadCount?: number;
-  orderAt?: number;
-  muted?: boolean;
-  hasReplied?: boolean;
-  deliveryKind?: 'relay' | 'proximity';
-}): ConversationWithLast {
+const options = { chatsVisible: false, quietRequests: false };
+function event(id: string, orderAt: number, kind: 'message' | 'request' = 'request'): ClaimedNotificationEvent {
   return {
-    conversation: {
-      accountPubkey: 'self',
-      conversationKey: key,
-      deliveryKind,
-      name: null,
-      proximityAccountPubkey: null,
-      createdAt: orderAt,
-      createdOrderAt: orderAt,
-      updatedAt: orderAt,
-      updatedOrderAt: orderAt,
-      lastMessageAt: orderAt,
-      lastMessageOrderAt: orderAt,
-      lastMessageId: messageId,
-      lastReadAt: 0,
-      lastReadOrderAt: 0,
-      lastReadMessageId: null,
-      unreadCount,
-      hasReplied,
-      muted,
-      pinned: false,
-      deleted: false,
-      deletedAt: null,
-      deletedOrderAt: null,
-      groupId: null,
-      memberPubkeys: null,
-      membersBootstrapOrderAt: null,
-      membersBootstrapEventId: null,
-      membersActionOrderAt: null,
-      membersActionEventId: null,
-      nameOrderAt: null,
-      nameEventId: null,
-    },
-    lastMessageContent: 'Hello',
-    lastMessageKind: 14,
-    lastMessageTags: [],
-    lastMessageSenderPubkey: sender,
-  };
+    event: { kind },
+    conversation: { conversationKey: id, lastMessageId: 'newer-head', hasReplied: kind === 'message' },
+    message: { id, orderAt, createdAt: 100, content: 'source preview', kind: 14, tags: [], senderPubkey: id },
+  } as unknown as ClaimedNotificationEvent;
 }
 
-describe('incoming message banner state', () => {
-  it('does not surface messages present in the initial baseline', () => {
-    const current = [item({ key: 'alice', messageId: 'm1' })];
-    const baseline = conversationMessageBaseline(current);
-
-    expect(findIncomingConversation(baseline, current, 'self', 'bob')).toBeNull();
-  });
-
-  it('selects the newest new incoming message outside the active chat', () => {
-    const previous = conversationMessageBaseline([
-      item({ key: 'alice', messageId: 'm1', unreadCount: 0 }),
-      item({ key: 'carol', messageId: 'm2', unreadCount: 0 }),
-    ]);
-    const current = [
-      item({ key: 'alice', messageId: 'm3', orderAt: 3 }),
-      item({ key: 'carol', messageId: 'm4', orderAt: 4 }),
-    ];
-
-    expect(findIncomingConversation(previous, current, 'self', 'bob')?.conversation.conversationKey)
-      .toBe('carol');
-  });
-
-  it('surfaces a newly-created conversation after the baseline is established', () => {
-    const current = [item({ key: 'alice', messageId: 'm1' })];
-
-    expect(findIncomingConversation(new Map(), current, 'self', 'bob')).toBe(current[0]);
-  });
-
-  it('does not treat manually marking an existing message unread as an arrival', () => {
-    const previous = conversationMessageBaseline([
-      item({ key: 'alice', messageId: 'm1', unreadCount: 0 }),
-    ]);
-    const current = [item({ key: 'alice', messageId: 'm1', unreadCount: 1 })];
-
-    expect(findIncomingConversation(previous, current, 'self', 'bob')).toBeNull();
-  });
-
-  it('ignores new messages in both new and existing unaccepted requests', () => {
-    const previous = conversationMessageBaseline([
-      item({ key: 'existing-request', messageId: 'old', hasReplied: false }),
-    ]);
-    const current = [
-      item({ key: 'new-request', messageId: 'new', hasReplied: false }),
-      item({ key: 'existing-request', messageId: 'newer', unreadCount: 2, hasReplied: false }),
-    ];
-
-    expect(findIncomingConversation(previous, current, 'self', 'bob')).toBeNull();
-  });
-
-  it('does not let a newer request hide an eligible incoming message', () => {
-    const accepted = item({ key: 'alice', messageId: 'accepted', orderAt: 1 });
-    const request = item({ key: 'stranger', messageId: 'request', orderAt: 2, hasReplied: false });
-
-    expect(findIncomingConversation(new Map(), [accepted, request], 'self', 'bob')).toBe(accepted);
-  });
-
-  it('does not notify for an old request when it is accepted, but notifies for its next message', () => {
-    const request = item({ key: 'alice', messageId: 'old', hasReplied: false });
-    const accepted = item({ key: 'alice', messageId: 'old' });
-
-    expect(findIncomingConversation(
-      conversationMessageBaseline([request]), [accepted], 'self', 'bob',
-    )).toBeNull();
-
-    const next = item({ key: 'alice', messageId: 'new', unreadCount: 2 });
-    expect(findIncomingConversation(
-      conversationMessageBaseline([accepted]), [next], 'self', 'bob',
-    )).toBe(next);
-  });
-
-  it('ignores reactions like system notifications', () => {
-    const reaction = { ...item({ key: 'alice', messageId: 'reaction' }), lastMessageKind: 7 };
-
-    expect(findIncomingConversation(new Map(), [reaction], 'self', 'bob')).toBeNull();
-  });
-
-  it('ignores the active chat, muted chats, and outgoing messages', () => {
-    const previous = conversationMessageBaseline([
-      item({ key: 'active', messageId: 'a1', unreadCount: 0 }),
-      item({ key: 'muted', messageId: 'm1', unreadCount: 0 }),
-      item({ key: 'outgoing', messageId: 'o1', unreadCount: 0 }),
-    ]);
-    const current = [
-      item({ key: 'active', messageId: 'a2' }),
-      item({ key: 'muted', messageId: 'm2', muted: true }),
-      item({ key: 'outgoing', messageId: 'o2', sender: 'self' }),
-    ];
-
-    expect(findIncomingConversation(previous, current, 'self', 'active')).toBeNull();
-  });
-
-  it('treats the peer sender as incoming for Nearby conversations', () => {
-    const previous = conversationMessageBaseline([
-      item({ key: 'nearby-peer', messageId: 'm1', unreadCount: 0, deliveryKind: 'proximity' }),
-    ]);
-    const current = [
-      item({ key: 'nearby-peer', messageId: 'm2', deliveryKind: 'proximity' }),
-    ];
-
-    expect(findIncomingConversation(previous, current, 'self', 'other')).toBe(current[0]);
-  });
+it('presents the event source independently of a newer conversation head', () => {
+  const next = selectIncomingNotification([event('first', 100)], null, options)!;
+  expect(next.conversation.lastMessageId).toBe('first');
+  expect(next.lastMessageContent).toBe('source preview');
+});
+it('selects the newest eligible event', () => {
+  expect(selectIncomingNotification([event('b', 100), event('a', 200)], null, options)?.conversation.conversationKey).toBe('a');
+});
+it('suppresses the open conversation', () => {
+  expect(selectIncomingNotification([event('open', 100)], 'open', options)).toBeNull();
+});
+it('allows request notices on Chats while hiding regular chat notices', () => {
+  expect(selectIncomingNotification([event('chat', 200, 'message'), event('request', 100)], null,
+    { ...options, chatsVisible: true })?.conversation.conversationKey).toBe('request');
+});
+it('quiet mode only suppresses requests', () => {
+  expect(selectIncomingNotification([event('request', 200), event('chat', 100, 'message')], null,
+    { ...options, quietRequests: true })?.conversation.conversationKey).toBe('chat');
 });

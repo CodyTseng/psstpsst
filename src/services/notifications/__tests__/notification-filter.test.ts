@@ -1,105 +1,19 @@
 import type { Rumor } from '@/db/schema/types';
 import { filterNotifiableMessages } from '../notification-filter';
-import { groupConversationKey } from '@/lib/nostr/group-messaging';
+import { takeNotificationEvents } from '../notification-events.service';
 
-let mockRows: { conversationKey: string; muted: boolean; hasReplied: boolean }[] = [];
-const mockWhere = jest.fn(async () => mockRows);
+jest.mock('../notification-events.service', () => ({ takeNotificationEvents: jest.fn() }));
+const take = jest.mocked(takeNotificationEvents);
 
-jest.mock('@/db/client', () => ({
-  db: {
-    select: jest.fn(() => ({
-      from: jest.fn(() => ({ where: mockWhere })),
-    })),
-  },
-}));
+it('delivers committed events even when the local receiver stored no rumors', async () => {
+  const rumor = { id: 'extension-owned' } as Rumor;
+  take.mockResolvedValueOnce({ events: [{ event: { kind: 'request' }, message: { rumor } }] as never, more: false, throughId: 1 });
+  expect(await filterNotifiableMessages([], 'account')).toEqual([{ rumor, kind: 'request' }]);
+});
 
-const ACCOUNT = 'account-pubkey';
-
-function rumor(id: string, pubkey = 'sender-pubkey', overrides: Partial<Rumor> = {}): Rumor {
-  return {
-    id,
-    pubkey,
-    kind: 14,
-    created_at: 1_700_000_000,
-    tags: [['p', ACCOUNT]],
-    content: 'hi',
-    ...overrides,
-  } as Rumor;
-}
-
-describe('filterNotifiableMessages', () => {
-  beforeEach(() => {
-    mockRows = [];
-    mockWhere.mockClear();
-  });
-
-  it('rejects self-copies, reactions, and unsupported CC messages without querying SQLite', async () => {
-    const result = await filterNotifiableMessages(
-      [
-        rumor('self', ACCOUNT),
-        rumor('reaction', 'sender-a', { kind: 7 }),
-        rumor('group', 'sender-a', { tags: [['p', ACCOUNT], ['p', 'sender-b']] }),
-      ],
-      ACCOUNT,
-    );
-
-    expect(result).toEqual([]);
-    expect(mockWhere).not.toHaveBeenCalled();
-  });
-
-  it('allows an accepted unmuted group by its hashed h identity', async () => {
-    mockRows = [{
-      conversationKey: groupConversationKey('family'),
-      muted: false,
-      hasReplied: true,
-    }];
-    const group = rumor('group', 'sender-a', {
-      tags: [['p', ACCOUNT], ['p', 'sender-b'], ['h', 'family']],
-    });
-
-    const result = await filterNotifiableMessages([group], ACCOUNT);
-
-    expect(result).toEqual([group]);
-    expect(mockWhere).toHaveBeenCalledTimes(1);
-  });
-
-  it('allows only replied, unmuted conversations in one batch query', async () => {
-    mockRows = [
-      { conversationKey: 'sender-a', muted: false, hasReplied: true },
-      { conversationKey: 'sender-b', muted: true, hasReplied: true },
-      { conversationKey: 'sender-c', muted: false, hasReplied: false },
-    ];
-    const allowed = rumor('a', 'sender-a');
-
-    const result = await filterNotifiableMessages(
-      [allowed, rumor('b', 'sender-b'), rumor('c', 'sender-c')],
-      ACCOUNT,
-    );
-
-    expect(result).toEqual([allowed]);
-    expect(mockWhere).toHaveBeenCalledTimes(1);
-  });
-
-  it('deduplicates repeated rumor ids before querying and returning', async () => {
-    mockRows = [{ conversationKey: 'sender-a', muted: false, hasReplied: true }];
-    const first = rumor('same', 'sender-a');
-
-    const result = await filterNotifiableMessages(
-      [first, rumor('same', 'sender-a')],
-      ACCOUNT,
-    );
-
-    expect(result).toEqual([first]);
-    expect(mockWhere).toHaveBeenCalledTimes(1);
-  });
-
-  it('chunks large conversation sets into bounded SQLite queries', async () => {
-    const rumors = Array.from({ length: 501 }, (_, index) =>
-      rumor(`rumor-${index}`, `sender-${index}`),
-    );
-
-    await filterNotifiableMessages(rumors, ACCOUNT);
-
-    expect(mockWhere).toHaveBeenCalledTimes(2);
-  });
+it('drains bounded pages through one fixed high-water mark', async () => {
+  take.mockResolvedValueOnce({ events: [], more: true, throughId: 300 });
+  take.mockResolvedValueOnce({ events: [], more: false, throughId: 300 });
+  await filterNotifiableMessages([], 'account');
+  expect(take).toHaveBeenLastCalledWith('account', 'system', 300);
 });

@@ -566,6 +566,8 @@
     "no_dm_support": "Dieser Nutzer kann noch keine verschlüsselten Nachrichten empfangen."
   },
   "notifications": {
+    "quiet_requests_label": "Nachrichtenanfragen dezent anzeigen",
+    "quiet_requests_note": "Einen Punkt statt der Anzahl ungelesener Unterhaltungen anzeigen und Benachrichtigungen für neue Nachrichtenanfragen ausschalten.",
     "title": "Benachrichtigungen",
     "enable_label": "Benachrichtigungen erlauben",
     "unread_indicators_label": "Hinweise auf neue Nachrichten anzeigen",

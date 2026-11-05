@@ -34,7 +34,7 @@ export async function processApnsGiftWrap(
     });
     const qualifying = await evaluateNotificationRumors(rumors, input.accountPubkey, runtime.userPresent);
     if (!runtime.isCurrent() || qualifying.length === 0) continue;
-    const latest = qualifying.reduce((current: Rumor, candidate) =>
+    const latest = qualifying.map(candidate => candidate.rumor).reduce((current: Rumor, candidate) =>
       isMessageOrderNewer(
         { orderAt: messageOrderAt(candidate), id: candidate.id },
         { orderAt: messageOrderAt(current), id: current.id },

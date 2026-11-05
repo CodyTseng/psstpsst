@@ -2,17 +2,24 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useEffect } from 'react';
 import type { DatabaseSync } from 'node:sqlite';
 
-import { useHasUnreadRequests } from '../use-conversations';
+import { useHasUnreadRequests, useUnreadRequestCount } from '../use-conversations';
 
 let mockIndicatorsEnabled = true;
 const mockUnsubscribe = jest.fn();
-const mockAddChangeListener = jest.fn(() => mockUnsubscribe);
+const mockChangeListeners = new Set<(event: { tableName?: string }) => void>();
+const mockAddChangeListener = jest.fn((listener: (event: { tableName?: string }) => void) => {
+  mockChangeListeners.add(listener);
+  return () => {
+    mockChangeListeners.delete(listener);
+    mockUnsubscribe();
+  };
+});
 jest.mock('@/stores/unread-count.store', () => ({
   useUnreadCount: () => 0,
   useUnreadIndicatorsEnabled: () => mockIndicatorsEnabled,
 }));
 jest.mock('@/platform', () => ({
-  platform: { database: { addChangeListener: () => mockAddChangeListener() } },
+  platform: { database: { addChangeListener: (listener: (event: { tableName?: string }) => void) => mockAddChangeListener(listener) } },
 }));
 jest.mock('@/db/client', () => {
   const { DatabaseSync } = jest.requireActual('node:sqlite');
@@ -39,8 +46,11 @@ const { sqlite, queries } = jest.requireMock('@/db/client') as {
 };
 let renderer: ReactTestRenderer | undefined;
 let result = false;
+let count = 0;
 function Harness({ account }: { account: string }) {
   const hasUnreadRequests = useHasUnreadRequests(account);
+  const unreadCount = useUnreadRequestCount(account);
+  useEffect(() => { count = unreadCount; }, [unreadCount]);
   useEffect(() => { result = hasUnreadRequests; }, [hasUnreadRequests]);
   return null;
 }
@@ -68,12 +78,13 @@ afterEach(() => {
 });
 afterAll(() => sqlite.close());
 
-it('checks for one unread request without counting all matches', async () => {
+it('counts unread conversations while the dot query stops after one match', async () => {
   seed('self', 'alice');
   seed('self', 'bob', 10);
   await render();
   expect(result).toBe(true);
-  expect(queries).toHaveLength(1);
+  expect(queries).toHaveLength(2);
+  expect(count).toBe(2);
   expect(queries[0]).toMatch(/limit \?/i);
   expect(queries[0]).not.toMatch(/count\(/i);
 });
@@ -85,6 +96,7 @@ it('excludes read, accepted, deleted, and other-account conversations', async ()
   seed('other', 'stranger');
   await render();
   expect(result).toBe(false);
+  expect(count).toBe(0);
 });
 
 it('rejects retained results immediately on account switches', async () => {
@@ -97,33 +109,56 @@ it('rejects retained results immediately on account switches', async () => {
   expect(result).toBe(false);
   await render('other');
   expect(result).toBe(false);
+  expect(count).toBe(0);
 });
 
-it('does not query or subscribe with indicators disabled or without an account', async () => {
+it('hides request counts and dots without querying when global indicators are disabled', async () => {
   seed('self', 'alice');
   mockIndicatorsEnabled = false;
   await render();
   expect(result).toBe(false);
+  expect(count).toBe(0);
   expect(queries).toHaveLength(0);
   expect(mockAddChangeListener).not.toHaveBeenCalled();
-  mockIndicatorsEnabled = true;
-  await render('');
-  expect(result).toBe(false);
-  expect(queries).toHaveLength(0);
 });
 
-it('unsubscribes when disabled and rechecks current rows when enabled again', async () => {
+it('does not query or subscribe without an account', async () => {
+  await render('');
+  expect(result).toBe(false);
+  expect(count).toBe(0);
+  expect(queries).toHaveLength(0);
+  expect(mockAddChangeListener).not.toHaveBeenCalled();
+});
+
+it('unsubscribes when indicators are disabled and restores the request count when enabled', async () => {
   seed('self', 'alice');
   await render();
-  expect(result).toBe(true);
+  expect(count).toBe(1);
   mockIndicatorsEnabled = false;
   await render();
   expect(result).toBe(false);
-  expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
-  expect(queries).toHaveLength(1);
-  sqlite.exec('UPDATE conversations SET unread_count = 0');
+  expect(count).toBe(0);
+  expect(mockUnsubscribe).toHaveBeenCalledTimes(2);
   mockIndicatorsEnabled = true;
   await render();
-  expect(result).toBe(false);
-  expect(queries).toHaveLength(2);
+  expect(count).toBe(1);
+  expect(queries).toHaveLength(4);
+});
+
+it('updates the Contacts count when a new request arrives in the foreground', async () => {
+  await render();
+  expect(count).toBe(0);
+  await act(async () => {
+    seed('self', 'new-stranger', 1);
+    for (const listener of mockChangeListeners) listener({ tableName: 'conversations' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+  });
+  expect(count).toBe(1);
+  expect(result).toBe(true);
+  await act(async () => {
+    sqlite.exec('UPDATE conversations SET unread_count = 20');
+    for (const listener of mockChangeListeners) listener({ tableName: 'conversations' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+  });
+  expect(count).toBe(1);
 });

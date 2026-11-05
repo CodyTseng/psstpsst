@@ -1,3 +1,5 @@
+import { notificationEvents } from '@/db/schema/notification-events';
+import { recordNotificationEvent, type NotificationConversationState } from '@/services/notifications/notification-events.service';
 import { and, asc, count, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
@@ -873,21 +875,28 @@ export class DmService {
       return;
     }
     const deletedOrderAt = Date.now();
-    await db
-      .update(conversations)
-      .set({
-        deleted: true,
-        deletedAt: Math.floor(deletedOrderAt / 1000),
-        deletedOrderAt,
-        hasReplied: false,
-        unreadCount: 0,
-      })
-      .where(
-        and(
-          eq(conversations.accountPubkey, accountPubkey),
-          eq(conversations.conversationKey, conversationKey),
-        ),
-      );
+    await db.transaction(async tx => {
+      await tx
+        .update(conversations)
+        .set({
+          deleted: true,
+          deletedAt: Math.floor(deletedOrderAt / 1000),
+          deletedOrderAt,
+          hasReplied: false,
+          unreadCount: 0,
+        })
+        .where(
+          and(
+            eq(conversations.accountPubkey, accountPubkey),
+            eq(conversations.conversationKey, conversationKey),
+          ),
+        );
+
+      await tx.delete(notificationEvents).where(and(
+        eq(notificationEvents.accountPubkey, accountPubkey),
+        eq(notificationEvents.conversationKey, conversationKey),
+      ));
+    });
 
     // Free this conversation's decrypted attachments (reference-counted, so a
     // blob shared with another live conversation is kept). Backgrounded and
@@ -1387,16 +1396,17 @@ export class DmService {
           rumor: result.rumor,
           sourceRelays,
           intake,
+          userPresent: context.userPresent,
           active: this.isConversationActive(accountPubkey, conversationKey),
           senderBlocked: blocked,
           checkAccountOwnership: this.independentReceiver,
           syncCursor,
         });
         if (groupResult.handled) {
-          if (groupResult.stored && isCurrent()) {
+          if ((groupResult.stored || groupResult.promoted.length > 0) && isCurrent()) {
             const visibleRumors = Array.from(
               new Map(
-                [result.rumor, ...groupResult.promoted].map((visible) => [visible.id!, visible]),
+                [...(groupResult.stored ? [result.rumor] : []), ...groupResult.promoted].map((visible) => [visible.id!, visible]),
               ).values(),
             );
             if (intake !== 'history' && intake !== 'archive') {
@@ -2105,6 +2115,7 @@ export class DmService {
               .all(),
           )).length > 0;
       const repliedNow = isOutgoing || senderIsContact;
+      let afterForNotification: NotificationConversationState | null = null;
 
       if (existing.length === 0) {
         await profileAsync(profile, 'db.insertConversation', () =>
@@ -2131,6 +2142,10 @@ export class DmService {
             })
             .run(),
         );
+        afterForNotification = {
+          deleted: false, hasReplied: repliedNow, muted: false,
+          unreadCount: bumpUnread ? 1 : 0, lastMessageId: isReaction ? null : rumor.id!,
+        };
       } else {
         const conv = existing[0];
         // A deleted conversation must not be resurrected by an old / re-delivered
@@ -2206,7 +2221,22 @@ export class DmService {
               )
               .run(),
           );
+          afterForNotification = {
+            deleted: isNewest ? false : conv.deleted,
+            hasReplied: repliedNow || conv.hasReplied, muted: conv.muted,
+            unreadCount: unread,
+            lastMessageId: isNewest && !isReaction ? rumor.id! : conv.lastMessageId,
+          };
         }
+      }
+      if (afterForNotification) {
+        await recordNotificationEvent(tx, {
+          accountPubkey, conversationKey, rumor,
+          before: existing[0] ?? null, after: afterForNotification,
+          eligible: options.intake === 'live' || options.intake === 'recovery',
+          incoming: !isOutgoing,
+          userPresent: this.receivePresence ?? !platform.notifications.shouldNotifyNow(),
+        });
       }
       return true;
       }),

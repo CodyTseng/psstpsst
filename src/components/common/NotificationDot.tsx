@@ -9,7 +9,11 @@ import { useThemeColors } from '@/theme';
  * search-user button when requests are waiting). Position it with `style`
  * (absolute, over the target icon's top-right corner). No border.
  */
-export function NotificationDot({ size = 8, style }: { size?: number; style?: ViewStyle }) {
+export function NotificationDot({ size = 8, style, tone = 'notification' }: {
+  size?: number;
+  style?: ViewStyle;
+  tone?: 'notification' | 'neutral';
+}) {
   const c = useThemeColors();
   return (
     <View
@@ -18,7 +22,7 @@ export function NotificationDot({ size = 8, style }: { size?: number; style?: Vi
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: c.notification,
+          backgroundColor: tone === 'neutral' ? c.interactionOverlay : c.notification,
         },
         style,
       ]}

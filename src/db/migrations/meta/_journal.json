@@ -547,6 +547,20 @@
       "when": 1793664000000,
       "tag": "0077_event-keys",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1793750400000,
+      "tag": "0078_group-arrival-eligibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1793836800000,
+      "tag": "0079_notification-events",
+      "breakpoints": true
     }
   ]
 }

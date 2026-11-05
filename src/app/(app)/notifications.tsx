@@ -19,6 +19,7 @@ import { Toggle } from '@/components/common/Toggle';
 import { DESKTOP_OS, IS_ANDROID, IS_ELECTRON, IS_IOS } from '@/lib/platform';
 import { useApnsRelayEligibility } from '@/hooks/use-apns-relay-eligibility';
 import { APNS_RELAY_URL } from '@/services/notifications/push-api';
+import { useQuietMessageRequests } from '@/hooks/use-quiet-message-requests';
 import { useNotificationPreferences } from '@/hooks/use-notification-preferences';
 import { useNotificationStatus } from '@/hooks/use-notification-status';
 import { platform } from '@/platform';
@@ -26,6 +27,7 @@ import { unreadCountService } from '@/services/conversation/unread-count.service
 import { notificationService } from '@/services/notifications/notification.service';
 import {
   DEFAULT_DND_WINDOW,
+  setQuietMessageRequests,
   type NotificationContentPreferences,
 } from '@/services/notifications/notification-prefs';
 import { useScrolled } from '@/hooks/use-scrolled';
@@ -53,6 +55,9 @@ export default function NotificationsSettings() {
   const { enabled, busy, toggle, openSettings } = useNotificationStatus(relayEligibility.eligible);
   const notificationControlDisabled = busy || !relayEligibility.eligible;
   const unreadIndicators = useUnreadIndicatorPreference();
+  const quietRequests = useQuietMessageRequests();
+  const [quietRequestDraft, setQuietRequestDraft] = useState<boolean | null>(null);
+  const [savingQuietRequests, setSavingQuietRequests] = useState(false);
   const [savingUnreadIndicators, setSavingUnreadIndicators] = useState(false);
   const { contentPreferences, setContentPreferences, dndWindow, setDndWindow } = useNotificationPreferences();
   const [savingContentPreference, setSavingContentPreference] = useState<
@@ -89,6 +94,19 @@ export default function NotificationsSettings() {
         message: t('notifications.unavailable_message'),
         okLabel: t('common.ok'),
       });
+    }
+  }
+
+  async function onQuietRequestsToggle(quiet: boolean) {
+    setQuietRequestDraft(quiet);
+    setSavingQuietRequests(true);
+    try {
+      await setQuietMessageRequests(quiet);
+    } catch (error) {
+      console.warn('[notifications] Unable to update message request settings.', error);
+    } finally {
+      setQuietRequestDraft(null);
+      setSavingQuietRequests(false);
     }
   }
 
@@ -273,6 +291,25 @@ export default function NotificationsSettings() {
           </ListGroup>
           <AppText variant="caption" tone="muted" style={{ paddingHorizontal: spacing.xs }}>
             {t('notifications.dnd_note')}
+          </AppText>
+        </View>
+        <View style={{ gap: spacing.sm }}>
+          <ListGroup>
+            <ListRow
+              title={t('notifications.quiet_requests_label')}
+              loading={!quietRequests.resolved}
+              trailing={quietRequests.resolved ? (
+                <Toggle
+                  value={quietRequestDraft ?? quietRequests.quiet}
+                  onValueChange={onQuietRequestsToggle}
+                  disabled={savingQuietRequests}
+                  accessibilityLabel={t('notifications.quiet_requests_label')}
+                />
+              ) : undefined}
+            />
+          </ListGroup>
+          <AppText variant="caption" tone="muted" style={{ paddingHorizontal: spacing.xs }}>
+            {t('notifications.quiet_requests_note')}
           </AppText>
         </View>
         <View style={{ gap: spacing.sm }}>

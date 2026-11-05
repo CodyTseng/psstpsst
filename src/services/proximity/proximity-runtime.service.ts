@@ -1,3 +1,4 @@
+import { recordNotificationEvent } from '@/services/notifications/notification-events.service';
 import { and, asc, desc, eq, inArray, isNotNull, like } from 'drizzle-orm';
 import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
 
@@ -3493,6 +3494,16 @@ class ProximityService {
               eq(conversations.conversationKey, peerPubkey),
             ),
           );
+      }
+      if (!archive && incoming && !reaction) {
+        const [after] = await tx.select().from(conversations).where(and(
+          eq(conversations.accountPubkey, accountPubkey), eq(conversations.conversationKey, peerPubkey),
+        )).limit(1);
+        if (after) await recordNotificationEvent(tx, {
+          accountPubkey, conversationKey: peerPubkey, rumor, before: existing ?? null, after,
+          eligible: true, incoming: true, userPresent: !platform.notifications.shouldNotifyNow(),
+          systemSupported: false,
+        });
       }
       return true;
     });

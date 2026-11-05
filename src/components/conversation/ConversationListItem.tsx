@@ -80,6 +80,7 @@ type Props = {
   /** Current unix-minute bucket, used to refresh and calculate relative time. */
   currentMinute?: number;
   unreadCount: number;
+  unreadBadgeMode?: 'count' | 'dot';
   muted: boolean;
   identityKind?: 'relay' | 'proximity';
   /** Pinned to the top of the inbox (floated off the page with a surface fill). */
@@ -275,6 +276,7 @@ function ConversationListItemBase({
   updatedAt,
   currentMinute,
   unreadCount,
+  unreadBadgeMode = 'count',
   muted,
   identityKind = 'relay',
   pinned,
@@ -816,6 +818,7 @@ function ConversationListItemBase({
                   {unreadCount > 0 ? (
                     <CountBadge
                       count={unreadCount}
+                      mode={unreadBadgeMode}
                       tone={muted ? 'neutral' : 'notification'}
                       size="sm"
                     />

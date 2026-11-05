@@ -566,6 +566,8 @@
     "no_dm_support": "이 사용자는 아직 암호화된 메시지를 받을 수 없습니다."
   },
   "notifications": {
+    "quiet_requests_label": "메시지 요청 조용히 표시",
+    "quiet_requests_note": "읽지 않은 대화 수 대신 작은 점을 표시하고 새 메시지 요청 알림을 끕니다.",
     "title": "알림",
     "enable_label": "알림 허용",
     "unread_indicators_label": "새 메시지 표시 보기",

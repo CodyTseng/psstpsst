@@ -10,9 +10,8 @@ import { IncomingMessageBanner } from '../IncomingMessageBanner';
 import { messageArrivalFeedback } from '@/lib/haptics';
 import { noticeDismissal } from '@/theme/motion';
 
-let mockInbox: ConversationWithLast[] = [];
+let mockArrival: ConversationWithLast | null = null;
 let mockPreference: 'light' | 'dark' = 'light';
-const mockRequests: ConversationWithLast[] = [];
 const mockSpringCompletions: ((finished: boolean) => void)[] = [];
 let mockUserPresent = true;
 jest.mock('@/platform', () => ({
@@ -60,10 +59,7 @@ jest.mock('react-native-reanimated', () => {
     }),
   };
 });
-jest.mock('@/hooks/use-conversations', () => ({
-  useMainInboxConversations: () => ({ conversations: mockInbox, loaded: true }),
-  useRequestConversations: () => ({ conversations: mockRequests, loaded: true }),
-}));
+jest.mock('@/hooks/use-message-arrivals', () => ({ useIncomingMessageArrival: () => mockArrival }));
 jest.mock('@/hooks/use-display-name', () => ({ useDisplayName: () => ({ name: 'Alice' }) }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -75,22 +71,29 @@ jest.mock('@/stores/theme.store', () => ({
   useThemeStore: (selector: (state: unknown) => unknown) => selector({ accent: 'blue', preference: mockPreference }),
 }));
 
-function message(id: string, unreadCount: number): ConversationWithLast {
-  return {
+let fixtureEpoch = 0;
+const fixtureOrders = new Map<string, number>();
+
+function message(id: string, unreadCount: number, hasReplied = true, conversationKey = 'alice'): ConversationWithLast {
+  const messageId = `${fixtureEpoch}:${id}`;
+  if (!fixtureOrders.has(messageId)) fixtureOrders.set(messageId, fixtureOrders.size + 1);
+  const row = {
     conversation: {
-      conversationKey: 'alice', deliveryKind: 'relay', lastMessageId: id,
-      unreadCount, hasReplied: true, muted: false, lastMessageOrderAt: unreadCount,
+      accountPubkey: 'self', conversationKey, deliveryKind: 'relay', lastMessageId: messageId,
+      unreadCount, hasReplied, muted: false, lastMessageOrderAt: fixtureOrders.get(messageId)!,
     },
-    lastMessageSenderPubkey: 'alice', lastMessageKind: 14, lastMessageContent: 'Hello',
-    lastMessageTags: [],
+    lastMessageSenderPubkey: 'alice', lastMessageKind: 14, lastMessageContent: 'Hello', lastMessageTags: [],
   } as unknown as ConversationWithLast;
+
+  return row;
 }
 
 let renderer: ReactTestRenderer;
 const onOpen = jest.fn();
-function render(enabled = true, activeConversationKey: string | null = null) {
+function render(enabled = true, activeConversationKey: string | null = null,
+  requestOptions: { quietRequests?: boolean; chatsVisible?: boolean } = {}) {
   const element = <IncomingMessageBanner accountPubkey="self"
-    activeConversationKey={activeConversationKey} enabled={enabled} onOpen={onOpen} />;
+    activeConversationKey={activeConversationKey} enabled={enabled} onOpen={onOpen} {...requestOptions} />;
   act(() => {
     if (renderer) renderer.update(element);
     else renderer = create(element);
@@ -98,8 +101,10 @@ function render(enabled = true, activeConversationKey: string | null = null) {
 }
 
 beforeEach(() => {
+  fixtureEpoch += 1;
+  fixtureOrders.clear();
   jest.useFakeTimers();
-  mockInbox = [message('old', 1)];
+  mockArrival = null;
   onOpen.mockClear();
   jest.mocked(messageArrivalFeedback).mockClear();
   jest.mocked(withSpring).mockClear();
@@ -120,7 +125,7 @@ function pan() {
 }
 function arrive() {
   render();
-  mockInbox = [message('new', 2)];
+  mockArrival = message('new', 2);
   render();
 }
 function beginDrag(y: number) {
@@ -138,15 +143,15 @@ it('gives one notification-style haptic per appearance without repeating it for 
   render(false);
   expect(messageArrivalFeedback).not.toHaveBeenCalled();
   render();
-  mockInbox = [message('new', 2)];
+  mockArrival = message('new', 2);
   render();
   expect(messageArrivalFeedback).toHaveBeenCalledWith();
-  mockInbox = [message('newer', 3)];
+  mockArrival = message('newer', 3);
   render();
   expect(messageArrivalFeedback).toHaveBeenCalledTimes(1);
   render(false);
   render();
-  mockInbox = [message('next-appearance', 4)];
+  mockArrival = message('next-appearance', 4);
   render();
   expect(messageArrivalFeedback).toHaveBeenCalledTimes(2);
 });
@@ -203,7 +208,7 @@ it('preserves a newer arrival if an older dismissal completes late', () => {
   arrive();
   beginDrag(-50);
   act(() => { pan().onFinalize({ velocityY: -200 }, true); });
-  mockInbox = [message('newer', 3)];
+  mockArrival = message('newer', 3);
   render();
   finishSpring();
   expect(renderer.root.findAllByType(InteractivePressable)).toHaveLength(1);
@@ -219,7 +224,7 @@ it.each([['light', lightPalette], ['dark', darkPalette]] as const)(
     mockPreference = preference;
     render();
     expect(renderer.toJSON()).toBeNull();
-    mockInbox = [message('new', 2)];
+    mockArrival = message('new', 2);
     render();
     const card = renderer.root.findByType(InteractivePressable);
     expect(StyleSheet.flatten(card.props.style)).toMatchObject({
@@ -231,41 +236,26 @@ it.each([['light', lightPalette], ['dark', darkPalette]] as const)(
   },
 );
 
-it('keeps the baseline while Chats is visible and never replays arrivals on leaving it', () => {
-  render(false);
-  mockInbox = [message('seen-in-chats', 2)];
+it('dismisses a visible notice without replaying it when indicators change', () => {
+  arrive();
   render(false);
   render(true);
   expect(renderer.toJSON()).toBeNull();
-  mockInbox = [message('new', 3)];
-  render(true);
-  expect(renderer.root.findAllByType(InteractivePressable)).toHaveLength(1);
 });
 
-it('suppresses the visible conversation and clears an existing notice when it opens', () => {
-  render(true, 'alice');
-  mockInbox = [message('visible-in-chat', 2)];
-  render(true, 'alice');
-  render(true, 'bob');
-  expect(renderer.toJSON()).toBeNull();
-  mockInbox = [message('new', 3)];
-  render(true, 'bob');
-  expect(renderer.root.findAllByType(InteractivePressable)).toHaveLength(1);
+it('dismisses a notice when its conversation opens', () => {
+  arrive();
   render(true, 'alice');
   render(true, 'bob');
   expect(renderer.toJSON()).toBeNull();
 });
 
-it('clears a visible banner when Chats becomes visible and expires after four seconds', () => {
-  render();
-  mockInbox = [message('new', 2)];
-  render();
-  render(false);
-  render(true);
-  expect(renderer.toJSON()).toBeNull();
-  mockInbox = [message('newest', 3)];
-  render();
-  expect(renderer.root.findAllByType(InteractivePressable)).toHaveLength(1);
-  act(() => jest.advanceTimersByTime(4000));
+it('allows request notices on Chats and clears them when quiet mode is enabled', () => {
+  render(true, null, { chatsVisible: true });
+  mockArrival = message('request', 1, false, 'stranger');
+  render(true, null, { chatsVisible: true });
+  expect(messageArrivalFeedback).toHaveBeenCalledTimes(1);
+  render(true, null, { chatsVisible: true, quietRequests: true });
+  render(true, null, { chatsVisible: true });
   expect(renderer.toJSON()).toBeNull();
 });

@@ -569,6 +569,8 @@
     "no_dm_support": "Questo utente non può ancora ricevere messaggi crittografati."
   },
   "notifications": {
+    "quiet_requests_label": "Richieste di messaggi discrete",
+    "quiet_requests_note": "Mostra un punto al posto del numero di conversazioni non lette e disattiva le notifiche per le nuove richieste di messaggi.",
     "title": "Notifiche",
     "enable_label": "Consenti notifiche",
     "unread_indicators_label": "Mostra indicatori dei nuovi messaggi",

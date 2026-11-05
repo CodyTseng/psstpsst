@@ -14,6 +14,7 @@ import { isMessageOrderNewer, messageOrderAt } from '@/lib/nostr/message-order';
 
 import { registerBackgroundPoll, unregisterBackgroundPoll } from './background-task';
 import { evaluateNotificationRumors, buildNotificationContent } from './notification-policy';
+import { discardNotificationEvents } from './notification-events.service';
 import { pushRegistrationService } from './push-registration.service';
 import {
   DEFAULT_NOTIFICATION_CONTENT_PREFERENCES,
@@ -21,6 +22,7 @@ import {
   getDndWindow,
   getNotificationContentPreferences,
   getNotificationsEnabled,
+  getQuietMessageRequests,
   getUnreadIndicatorsEnabled,
   isDndActiveNow,
   setBatteryOptimizationPrompted,
@@ -72,10 +74,9 @@ type NotifyOptions = {
  *   Android, main-process timer on desktop; disabled on iOS), runs `dmService.pollForNotifications`,
  *   and hands the freshly-stored rumors here.
  *
- * The funnel dedups by rumor id, so a rumor that arrives twice (live listener
- * AND a poll in the same JS session) counts once; on Android headless the
- * listener never ran, so the poll's funnel call is the only counter. Whether
- * "now" is a good time to notify is the port's call (`shouldNotifyNow`):
+ * The funnel claims durable notification events, so app, extension, live
+ * listener and poll share at-most-once ownership. The platform port decides
+ * whether now is a good time to notify (`shouldNotifyNow`):
  * mobile gates on the app being strictly backgrounded, desktop on the window
  * being hidden or unfocused.
  *
@@ -101,14 +102,11 @@ class NotificationService {
   private backgroundMessagingQueue: Promise<void> = Promise.resolve();
   /** Qualifying messages seen since the user last returned to the app. */
   private pendingCount = 0;
+  private pendingRequestCount = 0;
+  private latestPendingAcceptedRumor: Rumor | null = null;
   /** The newest qualifying message in the current aggregate. Keeping one rumor
    * bounds preview memory even during a very large background burst. */
   private latestPendingRumor: Rumor | null = null;
-  /** Ids of rumors already evaluated in this away stint — the dedup that keeps
-   * the live and poll producers from filtering or counting one message twice.
-   * Cleared together with the count when the user returns, so it stays
-   * bounded by one background stint's worth of messages. */
-  private processedIds = new Set<string>();
   /** A fixed-window flush timer. New messages join the existing window rather
    * than resetting it, so a continuous stream can never postpone delivery. */
   private scheduledFlush: ScheduledFlush | null = null;
@@ -122,6 +120,9 @@ class NotificationService {
     this.initialized = true;
     platform.database?.addChangeListener((event) => {
       if (!event.external) return;
+      if ((!event.tableName || event.tableName === 'notification_events') && platform.notifications.shouldNotifyNow()) {
+        void this.notifyNewRumors([]).catch(error => console.warn('[notifications] Unable to deliver committed events.', error));
+      }
       if (!event.tableName || event.tableName === 'device_preferences') {
         this.contentPreferencesLoaded = false;
         this.dndWindow = null;
@@ -147,6 +148,11 @@ class NotificationService {
     pushRegistrationService.setEnabled(enabled);
     platform.notifications.addUserReturnedListener(() => {
       this.resetPending();
+      const returnedAt = Date.now();
+      const account = dmService.getAccountPubkey();
+      if (account) void discardNotificationEvents(account, 'system', returnedAt).catch(error => {
+        console.warn('[notifications] Unable to discard background events on return.', error);
+      });
       void pushRegistrationService.reconcile();
     });
     platform.pushNotifications?.addTokenChangedListener(() => {
@@ -254,15 +260,14 @@ class NotificationService {
 
   /**
    * The single counting funnel. Feed it freshly-stored rumors — from the live
-   * `onNewMessage` hook or the background poll — and it dedups, filters
-   * (self / reaction / group / muted / message-request rules), then adds them
+   * `onNewMessage` hook, external database invalidation or background poll —
+   * and it claims eligible durable events, then adds them
    * to one short aggregation window. Called on a cold background-task launch
    * too, where `init` never ran: the preference is then read from storage
    * instead of the in-memory flag.
    */
   async notifyNewRumors(rumors: Rumor[], options: NotifyOptions = {}): Promise<void> {
     const epoch = this.notificationEpoch;
-    if (rumors.length === 0) return;
     if (!(await this.isEnabled())) return;
     // Quiet hours: messages arriving inside the window are stored and counted
     // as unread, but never notify — nothing is queued for later delivery.
@@ -276,17 +281,20 @@ class NotificationService {
     let flushPromise: Promise<void> | null = null;
     await this.enqueue(async () => {
       if (epoch !== this.notificationEpoch) return;
-      const unseen = rumors.filter((rumor) => !this.processedIds.has(rumor.id));
-      const qualifying = await evaluateNotificationRumors(unseen, accountPubkey, !platform.notifications.shouldNotifyNow());
+      const qualifying = await evaluateNotificationRumors(rumors, accountPubkey, !platform.notifications.shouldNotifyNow());
       if (epoch !== this.notificationEpoch || this.isReceiveBlocked(accountPubkey)) return;
-      for (const rumor of unseen) this.processedIds.add(rumor.id);
       if (qualifying.length === 0) return;
 
       // Settings or presence can change while filtering waits on SQLite.
       if (epoch !== this.notificationEpoch || !this.enabled || !platform.notifications.shouldNotifyNow()) return;
 
       this.pendingCount += qualifying.length;
-      for (const rumor of qualifying) {
+      for (const candidate of qualifying) {
+        const rumor = candidate.rumor;
+        if (candidate.kind === 'request') this.pendingRequestCount += 1;
+        else if (!this.latestPendingAcceptedRumor || this.isNewer(rumor, this.latestPendingAcceptedRumor)) {
+          this.latestPendingAcceptedRumor = rumor;
+        }
         if (!this.latestPendingRumor || this.isNewer(rumor, this.latestPendingRumor)) {
           this.latestPendingRumor = rumor;
         }
@@ -350,7 +358,7 @@ class NotificationService {
   }
 
   /** The user is looking at the app again: clear the running tally (and the
-   * dedup set with it) and dismiss the standing notification. Queued so it
+   * pending batch with it) and dismiss the standing notification. Queued so it
    * can't interleave with an in-flight present. */
   private resetPending(): void {
     this.clearPendingState();
@@ -416,6 +424,8 @@ class NotificationService {
     // pending aggregate so it is not delivered after the window ends.
     if (await isDndActiveNow()) {
       this.pendingCount = 0;
+      this.pendingRequestCount = 0;
+      this.latestPendingAcceptedRumor = null;
       this.latestPendingRumor = null;
       return;
     }
@@ -426,6 +436,14 @@ class NotificationService {
       return;
     }
 
+    // A request preference change during the aggregation window must not send
+    // a queued request alert or discard unrelated accepted-message alerts.
+    if (this.pendingRequestCount > 0 && await getQuietMessageRequests()) {
+      this.pendingCount -= this.pendingRequestCount;
+      this.pendingRequestCount = 0;
+      this.latestPendingRumor = this.latestPendingAcceptedRumor;
+      if (this.pendingCount === 0) return;
+    }
     const count = this.pendingCount;
     await this.ensureContentPreferencesLoaded();
     const accountPubkey = await getActiveAccountPubkey();
@@ -471,8 +489,9 @@ class NotificationService {
       this.scheduledFlush = null;
     }
     this.pendingCount = 0;
+    this.pendingRequestCount = 0;
+    this.latestPendingAcceptedRumor = null;
     this.latestPendingRumor = null;
-    this.processedIds.clear();
   }
 
   private async handlePermissionLoss(): Promise<void> {
@@ -482,6 +501,8 @@ class NotificationService {
     pushRegistrationService.setEnabled(false);
     this.clearPendingState();
     await setNotificationsEnabled(false);
+    const account = dmService.getAccountPubkey() ?? await getActiveAccountPubkey();
+    if (account) await discardNotificationEvents(account, 'system');
     await this.syncBackgroundMessaging();
     await platform.notifications.dismissAll();
     void pushRegistrationService.reconcile();
@@ -578,6 +599,8 @@ class NotificationService {
     this.enabled = false;
     pushRegistrationService.setEnabled(false);
     await setNotificationsEnabled(false);
+    const account = dmService.getAccountPubkey() ?? await getActiveAccountPubkey();
+    if (account) await discardNotificationEvents(account, 'system');
     this.clearPendingState();
     await this.enqueue(async () => {
       this.clearPendingState();

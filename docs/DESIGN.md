@@ -100,8 +100,12 @@ precedence over sheet scrolling and dismissal. Other semantic colours do not cha
 Use accent sparingly. It is not a page background or default icon colour. Use
 danger for destructive actions, failure feedback, and blocking prerequisites that require user action. Use `notification`,
 not danger, for unread state.
-The Contacts tab shows a small dot when unread message requests exist, without
-a number. The Chats tab retains its unread message count.
+The Contacts tab counts unread message-request conversations, not messages;
+individual request rows retain their unread message counts. Quiet message
+requests is an opt-in device setting that replaces both kinds of request counts
+with small dots and suppresses request notifications. The global new-message
+indicator setting also gates request counts, dots, and arrival banners. The Chats
+tab retains its unread message count.
 
 Muted conversation unread counts and disconnected Nearby radar markers use the
 shared neutral overlay colour with `textMuted` foregrounds. Conversation-list
@@ -807,9 +811,17 @@ live in a standard navigation row below the notification toggle in the same grou
 Disabled notification controls use muted labels and icons; missing relay guidance
 uses the danger tone while its settings destination remains available.
 Disabling new-message indicators hides unread counts, dots, dividers, arrival
-banners, and manual read/unread actions without disabling system notifications.
-In-app arrival banners and system notifications share conversation eligibility:
-only accepted, unmuted conversations qualify; message requests never notify.
+banners, and manual read/unread actions for both accepted chats and message
+requests without disabling system notifications.
+In-app arrival banners and system notifications announce each newly created,
+unmuted unread request once by default; later messages in that request never
+notify. Deleted conversations reappear as unread requests when a newer message
+arrives, without another request alert. Request banners can appear while Chats is visible because requests live
+outside that list. Quiet message requests suppresses both kinds of request
+notifications. Accepted conversations retain their ordinary message alerts.
+System notifications still require global consent and respect quiet hours.
+Backup imports, history backfill, and promotion of pending historical messages
+never trigger system notifications, arrival banners, or arrival haptics.
 
 Electron application updates use one independent, reusable window after a new
 version is found; checking never opens a window. Downloads show progress and

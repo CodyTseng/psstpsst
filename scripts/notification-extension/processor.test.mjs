@@ -80,13 +80,24 @@ function fixture(content = 'private message', { invalidRumorId = false } = {}) {
   const event = finalizeEvent({ kind: 1059, created_at: rumor.created_at, tags: [['p', account]],
     content: nip44.v2.encrypt(JSON.stringify(seal), nip44.v2.utils.getConversationKey(ephemeral, getPublicKey(encryption))),
   }, ephemeral);
-  return { account, rumor, event, seal, recipientEncryptionPubkey: getPublicKey(encryption), keys: new Map([
+  function followup(content) {
+    const nextRumor = { ...rumor, content };
+    nextRumor.id = getEventHash(nextRumor);
+    const nextSeal = finalizeEvent({ kind: 13, created_at: rumor.created_at,
+      tags: [['n', getPublicKey(senderEncryption)]],
+      content: nip44.v2.encrypt(JSON.stringify(nextRumor), nip44.v2.utils.getConversationKey(senderEncryption, getPublicKey(encryption))),
+    }, sender);
+    return finalizeEvent({ kind: 1059, created_at: rumor.created_at, tags: [['p', account]],
+      content: nip44.v2.encrypt(JSON.stringify(nextSeal), nip44.v2.utils.getConversationKey(ephemeral, getPublicKey(encryption))),
+    }, ephemeral);
+  }
+  return { account, rumor, event, seal, followup, recipientEncryptionPubkey: getPublicKey(encryption), keys: new Map([
     [`encryption_keys_${account}`, JSON.stringify([{ privkey: Buffer.from(encryption).toString('hex'), createdAt: rumor.created_at }])],
     [`identity_privkey_${account}`, Buffer.from(identity).toString('hex')],
   ]) };
 }
 
-async function database(input, { enabled = true, accepted = true, muted = false, blocked = false, dnd = false, preview = false } = {}, location = ':memory:') {
+async function database(input, { enabled = true, accepted = true, muted = false, blocked = false, dnd = false, preview = false, quietRequests = false } = {}, location = ':memory:') {
   const sqlite = new DatabaseSync(location);
   for (const entry of journal.entries) {
     const sql = await readFile(resolve(`src/db/migrations/${entry.tag}.sql`), 'utf8');
@@ -96,6 +107,7 @@ async function database(input, { enabled = true, accepted = true, muted = false,
   sqlite.prepare('INSERT INTO device_preferences (key, value, updated_at) VALUES (?, ?, ?)').run('notifications.enabled', enabled ? '1' : '0', 1);
   // The UI points to a different account; extension intake must ignore it.
   sqlite.prepare('INSERT INTO device_preferences (key, value, updated_at) VALUES (?, ?, ?)').run('active_account_pubkey', 'f'.repeat(64), 1);
+  if (quietRequests) sqlite.prepare('INSERT INTO device_preferences (key, value, updated_at) VALUES (?, ?, ?)').run('notifications.quietMessageRequests', '1', 1);
   if (dnd) {
     const minute = new Date().getHours() * 60 + new Date().getMinutes();
     sqlite.prepare('INSERT INTO device_preferences (key, value, updated_at) VALUES (?, ?, ?)').run('notifications.dndWindow', JSON.stringify({ enabled: true, startMinutes: minute, endMinutes: (minute + 1) % 1440 }), 1);
@@ -222,7 +234,7 @@ test('ID delivery uses fixed authenticated HTTP before the same receiver', async
   } finally { sqlite.close(); }
 });
 
-for (const options of [{ enabled: false }, { muted: true }, { accepted: false }, { dnd: true }]) {
+for (const options of [{ enabled: false }, { muted: true }, { accepted: false, quietRequests: true }, { dnd: true }]) {
   test(`notification policy suppresses after persistence: ${JSON.stringify(options)}`, async () => {
     const input = fixture();
     const sqlite = await database(input, options);
@@ -362,5 +374,35 @@ test('sender opt-in supplies communication identity and avatar without exposing 
     assert.equal(result.communication.recipientId, input.account);
     assert.equal(result.communication.conversationId, `${input.account}:${input.rumor.pubkey}`);
     assert.ok(!result.body.includes(input.rumor.content));
+  } finally { sqlite.close(); }
+});
+
+test('new requests alert once across independent runtimes and quiet mode suppresses them', async () => {
+  for (const quietRequests of [false, true]) {
+    const input = fixture();
+    const sqlite = await database(input, { accepted: false, quietRequests });
+    // Exercise creation rather than the preseeded conversation fixture.
+    sqlite.prepare('DELETE FROM conversations').run();
+    try {
+      assert.equal((await receive(sqlite, input, { type: 'event', data: input.event })).status,
+        quietRequests ? 'suppress' : 'notify');
+      const next = input.followup('another message in the same request');
+      assert.equal((await receive(sqlite, input, { type: 'event', data: next })).status, 'suppress');
+      assert.equal(sqlite.prepare('SELECT count(*) AS n FROM messages').get().n, 2);
+      assert.equal(sqlite.prepare('SELECT unread_count FROM conversations').get().unread_count, 2);
+    } finally { sqlite.close(); }
+  }
+});
+
+test('foreground extension intake leaves a durable arrival for the app instead of a system alert', async () => {
+  const input = fixture();
+  const sqlite = await database(input, { accepted: false });
+  try {
+    const result = await receive(sqlite, input, { type: 'event', data: input.event }, { present: true });
+    assert.equal(result.status, 'suppress');
+    assert.deepEqual(sqlite.prepare('SELECT message_id, kind, target FROM notification_events').all().map(row => ({ ...row })),
+      [{ message_id: input.rumor.id, kind: 'request', target: 'foreground' }]);
+    await receive(sqlite, input, { type: 'event', data: input.event }, { present: true });
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM notification_events').get().n, 1);
   } finally { sqlite.close(); }
 });

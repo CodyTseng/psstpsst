@@ -44,3 +44,5 @@ export * from './local-relay';
 
 export * from './webln-payments';
 export * from './local-applications';
+
+export * from './notification-events';

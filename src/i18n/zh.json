@@ -566,6 +566,8 @@
     "no_dm_support": "对方暂时无法接收加密消息"
   },
   "notifications": {
+    "quiet_requests_label": "弱化消息请求",
+    "quiet_requests_note": "仅显示小圆点，不显示未读会话数，也不通知新的消息请求。",
     "title": "通知",
     "enable_label": "允许通知",
     "unread_indicators_label": "显示新消息标识",

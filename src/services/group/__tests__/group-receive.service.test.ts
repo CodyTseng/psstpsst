@@ -1,3 +1,5 @@
+import { groupConversationKey } from '@/lib/nostr/group-messaging';
+import { filterNotifiableMessages } from '@/services/notifications/notification-filter';
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { Rumor } from '@/db/schema';
@@ -90,7 +92,12 @@ function rumor(
   } as Rumor;
 }
 
+function hasEvent(message: Rumor, account = ACCOUNT): boolean {
+  return !!mockDatabase!.sqlite.prepare('SELECT id FROM notification_events WHERE account_pubkey = ? AND message_id = ?').get(account, message.id!);
+}
+
 beforeAll(() => {
+  mockDatabase!.sqlite.exec("INSERT INTO device_preferences (key,value,updated_at) VALUES ('notifications.enabled','1',1)");
   mockDatabase!.sqlite.prepare(
     "INSERT INTO accounts (pubkey, signer_type, added_at, sort_order) VALUES (?, 'nsec', 1, 0)",
   ).run(ACCOUNT);
@@ -123,6 +130,7 @@ it.each(['live', 'recovery', 'history', 'archive'] as const)(
       member_pubkeys: JSON.stringify([ACCOUNT, BOB, CAROL]), name: 'Recovered group',
       members_bootstrap_event_id: message.id, last_message_id: message.id, has_replied: 0,
     });
+    expect(hasEvent(message, ACCOUNT)).toBe(intake === 'live' || intake === 'recovery');
   },
 );
 
@@ -524,4 +532,70 @@ it('promotes a quarantined action when an earlier prerequisite arrives', async (
     'SELECT member_pubkeys FROM conversations WHERE group_id = ?',
   ).get(h) as { member_pubkeys: string };
   expect(JSON.parse(state.member_pubkeys)).toEqual([ACCOUNT, BOB, CAROL, DAVE]);
+});
+
+it('announces a new group request once while later group messages remain silent', async () => {
+  const groupId = 'new-request-alert';
+  const first = rumor('e1', BOB, 100, [['p', ACCOUNT], ['h', groupId]], 'hello');
+  const later = rumor('e2', BOB, 101, [['p', ACCOUNT], ['h', groupId]], 'again');
+  for (const message of [first, later]) {
+    expect(await groupReceiveService.receive({
+      accountPubkey: ACCOUNT, rumor: message, intake: 'live', active: false,
+      senderBlocked: false,
+    })).toMatchObject({ stored: true });
+  }
+  expect(hasEvent(first, ACCOUNT)).toBe(true);
+  expect(hasEvent(later, ACCOUNT)).toBe(false);
+});
+
+it.each(['history', 'archive'] as const)('does not promote %s into an arrival when a live prerequisite unlocks it', async (intake) => {
+  const h = `silent-promotion-${intake}`;
+  const bootstrap = rumor(`silent-bootstrap-${intake}`, BOB, 100, [['p', ACCOUNT], ['h', h]], 'hello');
+  await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: bootstrap, intake: 'live', active: false, senderBlocked: false });
+  const historical = rumor(`silent-pending-${intake}`, CAROL, 120,
+    [['p', ACCOUNT], ['p', DAVE], ['h', h], ['action', 'invite', DAVE]]);
+  await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: historical, intake, active: false, senderBlocked: false });
+  const prerequisite = rumor(`silent-prerequisite-${intake}`, BOB, 110,
+    [['p', ACCOUNT], ['p', CAROL], ['h', h], ['action', 'invite', CAROL]]);
+  const result = await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: prerequisite, intake: 'live', active: false, senderBlocked: false });
+  expect(result.promoted).toEqual(expect.arrayContaining([historical]));
+  expect(hasEvent(result.promoted.find(item => item.id === historical.id)!, ACCOUNT)).toBe(false);
+  expect(hasEvent(prerequisite, ACCOUNT)).toBe(false);
+});
+
+it.each(['live', 'recovery', 'history', 'archive'] as const)('preserves %s provenance on actual group replay deliveries', async (intake) => {
+  const h = `delivered-provenance-${intake}`;
+  const bootstrap = rumor(`delivered-bootstrap-${intake}`, BOB, 100, [['p', ACCOUNT], ['h', h]], 'hello');
+  await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: bootstrap, intake: 'live', active: false, senderBlocked: false });
+  mockDatabase!.sqlite.prepare('UPDATE conversations SET has_replied = 1 WHERE account_pubkey = ? AND group_id = ?').run(ACCOUNT, h);
+  const pending = rumor(`delivered-pending-${intake}`, CAROL, 120,
+    [['p', ACCOUNT], ['p', DAVE], ['h', h], ['action', 'invite', DAVE]]);
+  await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: pending, intake, active: false, senderBlocked: false });
+  const prerequisite = rumor(`delivered-prerequisite-${intake}`, BOB, 110,
+    [['p', ACCOUNT], ['p', CAROL], ['h', h], ['action', 'invite', CAROL]]);
+  const result = await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: prerequisite, intake: 'live', active: false, senderBlocked: false });
+  const delivered = [...new Map([prerequisite, ...result.promoted].map(item => [item.id, item])).values()];
+  const actualPrerequisite = delivered.find(item => item.id === prerequisite.id)!;
+  const actualPending = delivered.find(item => item.id === pending.id)!;
+  expect(actualPrerequisite).not.toBe(prerequisite);
+  expect(hasEvent(actualPrerequisite, ACCOUNT)).toBe(true);
+  const livePending = intake === 'live' || intake === 'recovery';
+  expect(hasEvent(actualPending, ACCOUNT)).toBe(livePending);
+  const deliveredEvents = await filterNotifiableMessages(delivered, ACCOUNT);
+  expect(deliveredEvents.map(item => item.rumor.id)).toEqual(livePending
+    ? expect.arrayContaining([actualPrerequisite.id, actualPending.id]) : [actualPrerequisite.id]);
+});
+
+it('restores a deleted group request without another alert', async () => {
+  const h = 'deleted-request-restoration';
+  const first = rumor('deleted-first', BOB, 100, [['p', ACCOUNT], ['h', h]], 'hello');
+  await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: first, intake: 'live', active: false, senderBlocked: false });
+  const key = groupConversationKey(h);
+  mockDatabase!.sqlite.prepare('UPDATE conversations SET deleted = 1, has_replied = 0, unread_count = 0, last_read_order_at = 100000, deleted_order_at = 101000 WHERE conversation_key = ?').run(key);
+  mockDatabase!.sqlite.prepare('DELETE FROM notification_events WHERE conversation_key = ?').run(key);
+  const restored = rumor('deleted-restored', BOB, 102, [['p', ACCOUNT], ['h', h]], 'again');
+  await groupReceiveService.receive({ accountPubkey: ACCOUNT, rumor: restored, intake: 'live', active: false, senderBlocked: false });
+  expect(mockDatabase!.sqlite.prepare('SELECT deleted, has_replied, unread_count FROM conversations WHERE conversation_key = ?').get(key))
+    .toEqual({ deleted: 0, has_replied: 0, unread_count: 1 });
+  expect(hasEvent(restored)).toBe(false);
 });

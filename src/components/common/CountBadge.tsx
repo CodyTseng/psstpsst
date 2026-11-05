@@ -4,6 +4,7 @@ import { formatBadgeCount } from '@/lib/badge-count';
 import { countBadge, radius, useThemeColors } from '@/theme';
 
 import { AppText } from './AppText';
+import { NotificationDot } from './NotificationDot';
 
 /** Badge color treatments. Every fill is a theme token (no raw hex):
  * - `notification` — the soft unread red (vs `danger`, kept for destructive); white count.
@@ -22,19 +23,24 @@ type Size = keyof typeof countBadge;
 /**
  * Pill with a `micro` count, capped at "99+". The app's standard unread /
  * notification count badge (conversation rows, tab bar, etc.). A `0` renders
- * nothing.
+ * nothing. Request surfaces may use dot mode without changing unread state.
  */
 export function CountBadge({
   count,
   tone = 'notification',
   size = 'md',
+  mode = 'count',
 }: {
   count: number;
   tone?: Tone;
   size?: Size;
+  mode?: 'count' | 'dot';
 }) {
   const c = useThemeColors();
   if (count <= 0) return null;
+  if (mode === 'dot') {
+    return <NotificationDot tone={tone === 'notification' ? 'notification' : 'neutral'} />;
+  }
   const metrics = countBadge[size];
   const { bg, fg } = {
     notification: { bg: c.notification, fg: c.onOverlay },

@@ -16,7 +16,12 @@ jest.mock('../push-registration.service', () => ({
  * user-returned reset, and independently opt-in preview details.
  */
 
+const mockClaimedIds = new Set<string>();
+const mockRequestIds = new Set<string>();
+jest.mock('../notification-events.service', () => ({ discardNotificationEvents: jest.fn(async () => {}) }));
+
 let mockEnabledPref = true;
+let mockQuietRequests = false;
 let mockUnreadIndicatorsEnabled = true;
 let mockPermission = true;
 let mockShouldNotify = true;
@@ -126,7 +131,11 @@ jest.mock('@/services/conversation/unread-count.service', () => ({
 
 jest.mock('../notification-filter', () => ({
   filterNotifiableMessages: jest.fn(async (rumors: Rumor[]) =>
-    mockFilterAllows ? rumors : [],
+    mockFilterAllows ? rumors.filter(rumor => {
+      if (mockClaimedIds.has(rumor.id!)) return false;
+      mockClaimedIds.add(rumor.id!);
+      return true;
+    }).map(rumor => ({ rumor, kind: mockRequestIds.has(rumor.id!) ? 'request' : 'message' })) : [],
   ),
 }));
 
@@ -154,6 +163,7 @@ jest.mock('../notification-prefs', () => ({
   getBatteryOptimizationPrompted: jest.fn(async () => mockBatteryOptimizationPrompted),
   getNotificationContentPreferences: jest.fn(async () => mockContentPreferences),
   getNotificationsEnabled: jest.fn(async () => mockEnabledPref),
+  getQuietMessageRequests: jest.fn(async () => mockQuietRequests),
   getUnreadIndicatorsEnabled: jest.fn(async () => mockUnreadIndicatorsEnabled),
   setBatteryOptimizationPrompted: jest.fn(async () => {
     mockBatteryOptimizationPrompted = true;
@@ -235,10 +245,13 @@ async function initService(): Promise<NotificationServiceModule['notificationSer
 
 describe('notificationService funnel', () => {
   beforeEach(() => {
+    mockClaimedIds.clear();
+    mockRequestIds.clear();
     jest.useFakeTimers();
     jest.resetModules();
 
     mockEnabledPref = true;
+    mockQuietRequests = false;
     mockUnreadIndicatorsEnabled = true;
     mockPermission = true;
     mockShouldNotify = true;
@@ -587,7 +600,7 @@ describe('notificationService funnel', () => {
     expect(mockOps).toEqual(['present:notifications.new_messages:2']);
   });
 
-  it('never notifies for a message request (hasReplied = false)', async () => {
+  it('does not notify when the filter rejects a request', async () => {
     mockFilterAllows = false;
     const service = await initService();
 
@@ -676,8 +689,9 @@ describe('notificationService funnel', () => {
 
     expect(mockDismissAllCount).toBe(2);
 
-    // The count (and the dedup set) reset: a re-delivered r1 counts again.
+    // Returning resets the tally; an already claimed message cannot notify again.
     await notifyAndFlush(service, [rumor('r1')]);
+    await notifyAndFlush(service, [rumor('r3')]);
     expect(mockOps).toEqual([
       'present:notifications.new_messages:2',
       'present:notifications.new_message',
@@ -723,4 +737,17 @@ describe('notificationService funnel', () => {
 
     expect(mockOps).toEqual([]);
   });
+
+it.each([false, true])('drops queued request alerts after quiet mode is enabled, preserving accepted messages: %s', async (includeAccepted) => {
+  const service = await initService();
+  const request = rumor('new-request');
+  mockRequestIds.add(request.id!);
+  const pending = service.notifyNewRumors(includeAccepted ? [rumor('accepted'), request] : [request]);
+  await drainMicrotasks();
+  mockQuietRequests = true;
+  await flushAggregation();
+  await pending;
+  expect(mockOps).toEqual(includeAccepted ? ['present:notifications.new_message'] : []);
+});
+
 });

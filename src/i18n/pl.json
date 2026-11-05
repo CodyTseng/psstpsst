@@ -572,6 +572,8 @@
     "no_dm_support": "Ten użytkownik nie może jeszcze odbierać szyfrowanych wiadomości."
   },
   "notifications": {
+    "quiet_requests_label": "Dyskretne prośby o wiadomość",
+    "quiet_requests_note": "Pokaż kropkę zamiast liczby nieprzeczytanych rozmów i wyłącz powiadomienia o nowych prośbach o wiadomość.",
     "title": "Powiadomienia",
     "enable_label": "Zezwól na powiadomienia",
     "unread_indicators_label": "Pokazuj wskaźniki nowych wiadomości",

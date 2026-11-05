@@ -21,6 +21,7 @@ jest.mock('@/services/notifications/notification.service', () => ({ notification
 jest.mock('@/services/notifications/notification-prefs', () => ({ DEFAULT_DND_WINDOW: {}, DEFAULT_NOTIFICATION_CONTENT_PREFERENCES: {} }));
 jest.mock('@/services/conversation/unread-count.service', () => ({ unreadCountService: {} }));
 jest.mock('@/stores/unread-count.store', () => ({ useUnreadIndicatorPreference: () => ({ enabled: true, resolved: true }) }));
+jest.mock('@/hooks/use-quiet-message-requests', () => ({ useQuietMessageRequests: () => ({ quiet: false, resolved: true }) }));
 jest.mock('@/stores/date-time.store', () => ({ useDateTimePreferences: () => ({}) }));
 jest.mock('@/hooks/use-notification-status', () => ({ useNotificationStatus: () => ({ enabled: true, busy: false }) }));
 jest.mock('@/hooks/use-apns-relay-eligibility', () => ({ useApnsRelayEligibility: () => ({ resolved: true, eligible: true }) }));
@@ -46,8 +47,8 @@ it('shows resolved controls on the first render of every visit while async refre
     const rows = renderer.root.findAllByType(ListRow);
     expect(rows.every(row => !row.props.loading)).toBe(true);
     const toggles = renderer.root.findAllByType(Toggle);
-    expect(toggles).toHaveLength(5);
-    expect(toggles.every(toggle => toggle.props.value === true)).toBe(true);
+    expect(toggles).toHaveLength(6);
+    expect(toggles.filter(toggle => toggle.props.accessibilityLabel !== 'notifications.quiet_requests_label').every(toggle => toggle.props.value === true)).toBe(true);
     expect(rows.find(row => row.props.title === 'notifications.dnd_from')!.props.value).toBe('1320');
     act(() => renderer.unmount());
   }

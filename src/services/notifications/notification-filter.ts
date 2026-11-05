@@ -1,64 +1,21 @@
-import { and, eq, inArray } from 'drizzle-orm';
-
-import { db } from '@/db/client';
-import { conversations } from '@/db/schema';
 import type { Rumor } from '@/db/schema/types';
-import { isNotifiableConversation } from '@/lib/conversation/notification-eligibility';
-import { deriveConversationKey } from '@/lib/nostr/conversation-key';
-import { firstGroupId, groupConversationKey } from '@/lib/nostr/group-messaging';
-import { getPTags } from '@/lib/nostr/tags';
 
-const KIND_REACTION = 7;
-const CONVERSATION_QUERY_CHUNK_SIZE = 500;
+import { takeNotificationEvents, type NotificationKind } from './notification-events.service';
 
-/**
- * Filter one batch of freshly-stored rumors before notification delivery. Cheap
- * message-only rules run first, then conversation state is fetched in bounded
- * `IN` queries instead of one SQLite query per rumor. Blocked senders are
- * dropped before storage, so they never reach this layer.
- */
+export type NotificationCandidate = { rumor: Rumor; kind: NotificationKind };
+
+/** The incoming rumor batch only wakes delivery. Eligibility and ownership come
+ * from committed events, so another runtime can deliver an extension-owned insert. */
 export async function filterNotifiableMessages(
-  rumors: Rumor[],
+  _rumors: Rumor[],
   accountPubkey: string,
-): Promise<Rumor[]> {
-  const candidates = new Map<string, { rumor: Rumor; conversationKey: string }>();
-  for (const rumor of rumors) {
-    if (candidates.has(rumor.id)) continue;
-    if (rumor.pubkey === accountPubkey || rumor.kind === KIND_REACTION) continue;
-
-    const groupId = firstGroupId(rumor.tags);
-    const conversationKey = groupId
-      ? groupConversationKey(groupId)
-      : deriveConversationKey(rumor.pubkey, getPTags(rumor.tags), accountPubkey);
-    if (conversationKey !== null) candidates.set(rumor.id, { rumor, conversationKey });
+): Promise<NotificationCandidate[]> {
+  const candidates: NotificationCandidate[] = [];
+  let throughId: number | undefined;
+  while (true) {
+    const batch = await takeNotificationEvents(accountPubkey, 'system', throughId);
+    for (const row of batch.events) candidates.push({ rumor: row.message.rumor, kind: row.event.kind });
+    if (!batch.more) return candidates;
+    throughId = batch.throughId;
   }
-  if (candidates.size === 0) return [];
-
-  const conversationKeys = Array.from(
-    new Set(Array.from(candidates.values(), (candidate) => candidate.conversationKey)),
-  );
-  const allowed = new Set<string>();
-  for (let offset = 0; offset < conversationKeys.length; offset += CONVERSATION_QUERY_CHUNK_SIZE) {
-    const chunk = conversationKeys.slice(offset, offset + CONVERSATION_QUERY_CHUNK_SIZE);
-    const rows = await db
-      .select({
-        conversationKey: conversations.conversationKey,
-        muted: conversations.muted,
-        hasReplied: conversations.hasReplied,
-      })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.accountPubkey, accountPubkey),
-          inArray(conversations.conversationKey, chunk),
-        ),
-      );
-    for (const row of rows) {
-      if (isNotifiableConversation(row)) allowed.add(row.conversationKey);
-    }
-  }
-
-  return Array.from(candidates.values())
-    .filter((candidate) => allowed.has(candidate.conversationKey))
-    .map((candidate) => candidate.rumor);
 }

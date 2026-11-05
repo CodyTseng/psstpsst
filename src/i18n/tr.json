@@ -566,6 +566,8 @@
     "no_dm_support": "Bu kullanıcı henüz şifreli mesaj alamıyor."
   },
   "notifications": {
+    "quiet_requests_label": "Sessiz mesaj istekleri",
+    "quiet_requests_note": "Okunmamış sohbet sayısı yerine bir nokta göster ve yeni mesaj isteklerinin bildirimlerini kapat.",
     "title": "Bildirimler",
     "enable_label": "Bildirimlere izin ver",
     "unread_indicators_label": "Yeni mesaj göstergelerini göster",

@@ -1,3 +1,5 @@
+import m0079 from './0079_notification-events.sql';
+import m0078 from './0078_group-arrival-eligibility.sql';
 import m0076 from './0076_local-applications.sql';
 import m0077 from './0077_event-keys.sql';
 import m0075 from './0075_webln-payments.sql';
@@ -161,6 +163,8 @@ m0073,
 m0074,
 m0075,
 m0076,
-m0077
+m0077,
+m0078,
+m0079
     }
   }

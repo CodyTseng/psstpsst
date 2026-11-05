@@ -17,6 +17,7 @@ import { SectionLabel } from '@/components/common/SectionLabel';
 import { ConversationListItem } from '@/components/conversation/ConversationListItem';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useRequestConversations } from '@/hooks/use-conversations';
+import { useQuietMessageRequests } from '@/hooks/use-quiet-message-requests';
 import { useFocusAfterTransition } from '@/hooks/use-focus-after-transition';
 import { closeOpenSwipeable } from '@/lib/gestures';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '@/lib/platform';
@@ -26,8 +27,8 @@ import { markAllRequestConversationsAsRead } from '@/services/conversation/conve
 import { setConversationMuted } from '@/services/conversation/conversation-prefs.service';
 import { dmService } from '@/services/dm/dm.service';
 import { useActiveAccount } from '@/stores/active-account.store';
-import { showToast } from '@/stores/toast.store';
 import { useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
+import { showToast } from '@/stores/toast.store';
 import { spacing, typography, useThemeColors } from '@/theme';
 
 export default function SearchUser() {
@@ -37,6 +38,7 @@ export default function SearchUser() {
   const titleClearance = useScreenHeaderClearance();
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const { conversations: requestItems } = useRequestConversations(accountPubkey ?? '');
+  const { quiet: quietRequests } = useQuietMessageRequests();
   const unreadIndicatorsEnabled = useUnreadIndicatorsEnabled();
 
   const [input, setInput] = useState('');
@@ -45,9 +47,7 @@ export default function SearchUser() {
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const inputRef = useFocusAfterTransition();
   const hasUnreadRequests = useMemo(
-    () =>
-      unreadIndicatorsEnabled &&
-      requestItems.some((item) => item.conversation.unreadCount > 0),
+    () => unreadIndicatorsEnabled && requestItems.some((item) => item.conversation.unreadCount > 0),
     [requestItems, unreadIndicatorsEnabled],
   );
   const attachmentLabels = useMemo(
@@ -221,6 +221,7 @@ export default function SearchUser() {
                 lastMessageSenderPubkey={item.lastMessageSenderPubkey}
                 updatedAt={conv.updatedAt}
                 unreadCount={unreadIndicatorsEnabled ? conv.unreadCount : 0}
+                unreadBadgeMode={quietRequests ? 'dot' : 'count'}
                 muted={conv.muted}
                 onPress={() => openRequestConversation(conv.conversationKey)}
                 onToggleMute={() => {

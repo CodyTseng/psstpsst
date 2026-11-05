@@ -254,11 +254,17 @@ export function useRequestCount(accountPubkey: string): number {
  * requests stay listed but no longer light the indicator.
  */
 export function useHasUnreadRequests(accountPubkey: string): boolean {
+  return useUnreadRequestCount(accountPubkey, true) > 0;
+}
+
+/** Count unread request conversations while indicators are enabled.
+ * Dot-only callers stop after one match. */
+export function useUnreadRequestCount(accountPubkey: string, dotOnly = false): number {
   const indicatorsEnabled = useUnreadIndicatorsEnabled();
   const enabled = indicatorsEnabled && accountPubkey.length > 0;
   const { data, isResolved } = useLiveQuery(
     db
-      .select({ accountPubkey: conversations.accountPubkey })
+      .select({ n: dotOnly ? conversations.unreadCount : count() })
       .from(conversations)
       .where(
         and(
@@ -269,10 +275,10 @@ export function useHasUnreadRequests(accountPubkey: string): boolean {
         ),
       )
       .limit(1),
-    [accountPubkey, enabled],
+    [accountPubkey, enabled, dotOnly],
     { enabled },
   );
-  return enabled && isResolved && data.length > 0;
+  return enabled && isResolved ? (dotOnly ? Number(data.length > 0) : data[0]?.n ?? 0) : 0;
 }
 
 export function useConversation(

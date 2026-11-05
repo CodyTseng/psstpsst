@@ -566,6 +566,8 @@
     "no_dm_support": "このユーザーはまだ暗号化メッセージを受信できません。"
   },
   "notifications": {
+    "quiet_requests_label": "メッセージリクエストを控えめに表示",
+    "quiet_requests_note": "未読の会話数の代わりに小さな点を表示し、新しいメッセージリクエストの通知をオフにします。",
     "title": "通知",
     "enable_label": "通知を許可",
     "unread_indicators_label": "新着メッセージの印を表示",

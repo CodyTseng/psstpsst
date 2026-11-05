@@ -1,65 +1,27 @@
 import type { ConversationWithLast } from '@/hooks/use-conversations';
-import { isNotifiableConversation } from '@/lib/conversation/notification-eligibility';
+import { isMessageOrderNewer } from '@/lib/nostr/message-order';
+import type { ClaimedNotificationEvent } from '@/services/notifications/notification-events.service';
 
-export type ConversationMessageBaseline = ReadonlyMap<
-  string,
-  { lastMessageId: string | null; unreadCount: number }
->;
-
-export function conversationMessageBaseline(
-  items: ConversationWithLast[],
-): Map<string, { lastMessageId: string | null; unreadCount: number }> {
-  return new Map(
-    items.map((item) => [
-      item.conversation.conversationKey,
-      {
-        lastMessageId: item.conversation.lastMessageId,
-        unreadCount: item.conversation.unreadCount,
-      },
-    ]),
-  );
-}
-
-/** Finds the newest newly-arrived incoming message outside the open chat. */
-export function findIncomingConversation(
-  previous: ConversationMessageBaseline,
-  items: ConversationWithLast[],
-  accountPubkey: string,
+/** Presentation uses the event's source message, independently of list refreshes. */
+export function selectIncomingNotification(
+  events: ClaimedNotificationEvent[],
   activeConversationKey: string | null,
+  options: { chatsVisible: boolean; quietRequests: boolean },
 ): ConversationWithLast | null {
-  let newest: ConversationWithLast | null = null;
-
-  for (const item of items) {
-    const conversation = item.conversation;
-    const prior = previous.get(conversation.conversationKey);
-    const messageChanged =
-      !!conversation.lastMessageId && conversation.lastMessageId !== prior?.lastMessageId;
-    const unreadIncreased = conversation.unreadCount > (prior?.unreadCount ?? 0);
-    const incoming =
-      item.lastMessageSenderPubkey != null &&
-      (conversation.deliveryKind === 'proximity'
-        ? item.lastMessageSenderPubkey === conversation.conversationKey
-        : item.lastMessageSenderPubkey !== accountPubkey);
-
-    if (
-      conversation.conversationKey === activeConversationKey ||
-      !isNotifiableConversation(conversation) ||
-      item.lastMessageKind === 7 ||
-      !messageChanged ||
-      !unreadIncreased ||
-      !incoming
-    ) {
-      continue;
-    }
-
-    if (
-      !newest ||
-      (conversation.lastMessageOrderAt ?? Number.NEGATIVE_INFINITY) >
-        (newest.conversation.lastMessageOrderAt ?? Number.NEGATIVE_INFINITY)
-    ) {
-      newest = item;
-    }
+  let latest: ClaimedNotificationEvent | null = null;
+  for (const row of events) {
+    if (row.conversation.conversationKey === activeConversationKey ||
+      (row.event.kind === 'request' ? options.quietRequests : options.chatsVisible)) continue;
+    if (!latest || isMessageOrderNewer(
+      { id: row.message.id, orderAt: row.message.orderAt },
+      { id: latest.message.id, orderAt: latest.message.orderAt },
+    )) latest = row;
   }
-
-  return newest;
+  if (!latest) return null;
+  const { conversation, message } = latest;
+  return {
+    conversation: { ...conversation, lastMessageId: message.id, lastMessageAt: message.createdAt, lastMessageOrderAt: message.orderAt },
+    lastMessageContent: message.content, lastMessageKind: message.kind,
+    lastMessageTags: message.tags, lastMessageSenderPubkey: message.senderPubkey,
+  };
 }

@@ -5,11 +5,12 @@ import {
 import { IS_IOS } from '@/lib/platform';
 
 /** Device-level preference. iOS requires explicit consent before APNs registration. */
-const ENABLED_KEY = 'notifications.enabled';
+export const ENABLED_KEY = 'notifications.enabled';
 const BATTERY_OPTIMIZATION_PROMPTED_KEY = 'notifications.batteryOptimizationPrompted';
 const CONTENT_PREFERENCES_KEY = 'notifications.contentPreferences';
-const DND_WINDOW_KEY = 'notifications.dndWindow';
-const UNREAD_INDICATORS_KEY = 'notifications.unreadIndicators';
+export const DND_WINDOW_KEY = 'notifications.dndWindow';
+export const UNREAD_INDICATORS_KEY = 'notifications.unreadIndicators';
+export const QUIET_MESSAGE_REQUESTS_KEY = 'notifications.quietMessageRequests';
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -63,6 +64,15 @@ export async function setUnreadIndicatorsEnabled(enabled: boolean): Promise<void
   await setDevicePreference(UNREAD_INDICATORS_KEY, enabled ? '1' : '0');
 }
 
+/** Quiet requests use a dot without arrival banners or system notifications. Default off. */
+export async function getQuietMessageRequests(): Promise<boolean> {
+  return (await getDevicePreference(QUIET_MESSAGE_REQUESTS_KEY)) === '1';
+}
+
+export async function setQuietMessageRequests(quiet: boolean): Promise<void> {
+  await setDevicePreference(QUIET_MESSAGE_REQUESTS_KEY, quiet ? '1' : '0');
+}
+
 export async function getNotificationContentPreferences(): Promise<NotificationContentPreferences> {
   const stored = await getDevicePreference(CONTENT_PREFERENCES_KEY);
   if (!stored) return DEFAULT_NOTIFICATION_CONTENT_PREFERENCES;
@@ -99,7 +109,10 @@ function isValidMinute(value: unknown): value is number {
 }
 
 export async function getDndWindow(): Promise<DndWindow> {
-  const stored = await getDevicePreference(DND_WINDOW_KEY);
+  return parseDndWindow(await getDevicePreference(DND_WINDOW_KEY));
+}
+
+export function parseDndWindow(stored: string | null): DndWindow {
   if (!stored) return DEFAULT_DND_WINDOW;
   try {
     const value = JSON.parse(stored) as Partial<DndWindow>;

@@ -569,6 +569,8 @@
     "no_dm_support": "Cet utilisateur ne peut pas encore recevoir de messages chiffrés."
   },
   "notifications": {
+    "quiet_requests_label": "Demandes de messages discrètes",
+    "quiet_requests_note": "Afficher un point au lieu du nombre de conversations non lues et désactiver les notifications des nouvelles demandes de messages.",
     "title": "Notifications",
     "enable_label": "Autoriser les notifications",
     "unread_indicators_label": "Afficher les indicateurs de nouveaux messages",

@@ -566,6 +566,8 @@
     "no_dm_support": "Ez a felhasználó még nem tud titkosított üzeneteket fogadni."
   },
   "notifications": {
+    "quiet_requests_label": "Visszafogott üzenetkérelmek",
+    "quiet_requests_note": "Pont megjelenítése az olvasatlan beszélgetések száma helyett, és az új üzenetkérelmek értesítéseinek kikapcsolása.",
     "title": "Értesítések",
     "enable_label": "Értesítések engedélyezése",
     "unread_indicators_label": "Új üzenetek jelzéseinek megjelenítése",

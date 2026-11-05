@@ -20,6 +20,8 @@ export const pendingGroupRumors = sqliteTable(
     sourceRelays: text('source_relays', { mode: 'json' }).$type<string[]>(),
     pendingReason: text('pending_reason').$type<PendingGroupRumorReason>().notNull(),
     receivedAt: integer('received_at').notNull(),
+    /** Preserve arrival provenance through quarantine and database replay. */
+    arrivalEligible: integer('arrival_eligible', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.accountPubkey, t.messageId] }),

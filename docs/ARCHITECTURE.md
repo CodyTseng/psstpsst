@@ -463,9 +463,25 @@ writers before reading their transaction snapshots, and share only messaging
 credentials through Keychain after the first device unlock. Independent receivers
 check durable account ownership inside writes, including account removal. External
 writes invalidate bounded foreground caches and live queries. A successful insert
-owns notification eligibility; duplicate envelopes or rumor IDs never produce a
-second alert attempt. Missing keys and failed decryption remain retryable after
-key reload, with bounded failure deduplication within a receive session.
+owns notification eligibility. The message transaction applies one before/after
+conversation rule: accepted incoming messages may notify, while a request may
+notify only on its first real message. Deleted rows reappear as unread requests
+without a new-request alert. Existing requests never alert again after read/unread
+transitions, follow-up messages or restarts. Archive/history writes remain silent;
+quarantined group rumors persist live-receipt eligibility so replay cannot turn
+historical promotion into a live arrival. Legacy pending rows default to silent.
+
+Eligible inserts write a shared, indexed notification event in the same transaction.
+Receipt-time presence routes it to foreground or system delivery. App and extension
+consume bounded batches by atomically removing claimed events; delivery after claim
+is best-effort and at-most-once. Settings and current read/mute/deletion state are
+rechecked at claim time. Disallowed and expired events are discarded without
+catch-up. Foreground presentation reads the event's source message directly;
+conversation-list snapshots never establish eligibility or consume events. External
+App Group writes wake the foreground consumer, including when the extension owned
+the original insert. Deleting a conversation removes its pending events atomically.
+Missing keys and failed decryption remain retryable after key reload, with bounded
+failure deduplication within a receive session.
 
 iOS notification presence holds its App Group file lock only while the main app
 is active, releasing it before background suspension. Transient probe contention

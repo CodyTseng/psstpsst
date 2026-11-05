@@ -13,15 +13,8 @@ import { AppText } from '@/components/common/AppText';
 import { InteractionOverlay } from '@/components/common/InteractionOverlay';
 import { InteractivePressable } from '@/components/common/InteractivePressable';
 import { MessagePreviewText } from '@/components/chat/MessagePreviewText';
-import {
-  conversationMessageBaseline,
-  findIncomingConversation,
-} from '@/components/chat/incoming-message-banner-state';
-import {
-  useMainInboxConversations,
-  useRequestConversations,
-  type ConversationWithLast,
-} from '@/hooks/use-conversations';
+import type { ConversationWithLast } from '@/hooks/use-conversations';
+import { useIncomingMessageArrival } from '@/hooks/use-message-arrivals';
 import { useDisplayName } from '@/hooks/use-display-name';
 import { attachmentLabel } from '@/lib/nostr/attachment-label';
 import { messageArrivalFeedback } from '@/lib/haptics';
@@ -54,19 +47,20 @@ type Props = {
   accountPubkey: string;
   activeConversationKey: string | null;
   enabled: boolean;
+  ready?: boolean;
+  quietRequests?: boolean;
+  chatsVisible?: boolean;
   onOpen: (href: string) => void;
 };
 
-export function IncomingMessageBanner({ accountPubkey, activeConversationKey, enabled, onOpen }: Props) {
+export function IncomingMessageBanner({
+  accountPubkey, activeConversationKey, enabled, onOpen,
+  quietRequests = false, chatsVisible = false, ready = true,
+}: Props) {
+  const incoming = useIncomingMessageArrival(accountPubkey, { ready, enabled, quietRequests, chatsVisible, activeConversationKey });
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { conversations: inbox, loaded: inboxLoaded } =
-    useMainInboxConversations(accountPubkey);
-  const { conversations: requests, loaded: requestsLoaded } =
-    useRequestConversations(accountPubkey);
-  const items = useMemo(() => [...inbox, ...requests], [inbox, requests]);
-  const baselineRef = useRef<ReturnType<typeof conversationMessageBaseline> | null>(null);
   const [visibleItem, setVisibleItem] = useState<ConversationWithLast | null>(null);
   const [interacting, setInteracting] = useState(false);
   const dismissMessage = useCallback((messageId: string) => {
@@ -76,26 +70,22 @@ export function IncomingMessageBanner({ accountPubkey, activeConversationKey, en
   }, []);
 
   useEffect(() => {
-    if (!inboxLoaded || !requestsLoaded) return;
-    const nextBaseline = conversationMessageBaseline(items);
-    const previous = baselineRef.current;
-    baselineRef.current = nextBaseline;
-    if (!previous || !enabled) {
-      setVisibleItem(null);
-      return;
-    }
+    if (!incoming) return;
+    // Receiving an externally claimed event is the only source of a new notice.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisibleItem(incoming);
+  }, [incoming]);
 
-    const incoming = findIncomingConversation(
-      previous,
-      items,
-      accountPubkey,
-      activeConversationKey,
-    );
-    if (incoming) setVisibleItem(incoming);
-    else setVisibleItem((current) =>
-      current?.conversation.conversationKey === activeConversationKey ? null : current,
-    );
-  }, [accountPubkey, activeConversationKey, enabled, inboxLoaded, items, requestsLoaded]);
+  useEffect(() => {
+    // Visibility changes can dismiss a notice, but never replay a claimed event.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisibleItem(current => {
+      if (!current || !ready || !enabled || current.conversation.accountPubkey !== accountPubkey ||
+        current.conversation.conversationKey === activeConversationKey ||
+        (current.conversation.hasReplied ? chatsVisible : quietRequests)) return null;
+      return current;
+    });
+  }, [accountPubkey, ready, enabled, activeConversationKey, chatsVisible, quietRequests]);
 
   const visibleMessageId = visibleItem?.conversation.lastMessageId;
   useEffect(() => {
@@ -108,8 +98,9 @@ export function IncomingMessageBanner({ accountPubkey, activeConversationKey, en
     return () => clearTimeout(timer);
   }, [visibleMessageId, interacting]);
 
-  if (!visibleItem || !enabled ||
-    visibleItem.conversation.conversationKey === activeConversationKey) return null;
+  if (!visibleItem || !ready || !enabled || visibleItem.conversation.accountPubkey !== accountPubkey ||
+    visibleItem.conversation.conversationKey === activeConversationKey ||
+    (visibleItem.conversation.hasReplied ? chatsVisible : quietRequests)) return null;
 
   const conversation = visibleItem.conversation;
   return (

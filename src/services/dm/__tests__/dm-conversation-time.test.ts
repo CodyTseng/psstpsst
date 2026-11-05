@@ -62,7 +62,7 @@ jest.mock('@/services/conversation/message-tail-cache', () => ({ mergeStoredMess
 jest.mock('@/services/crypto/nip17-gift-wrap', () => ({ KIND_CHAT: 14, KIND_FILE: 15, KIND_REACTION: 7 }));
 jest.mock('@/services/account/account.service', () => ({}));
 jest.mock('@/services/files/media-index.service', () => ({ recordEmbeddedMedia: jest.fn() }));
-jest.mock('@/services/files/file-attachment.service', () => ({}));
+jest.mock('@/services/files/file-attachment.service', () => ({ deleteConversationAttachments: jest.fn(async () => {}) }));
 jest.mock('@/services/relay/relay-list.service', () => ({}));
 jest.mock('@/services/relay/relay-pool', () => ({}));
 jest.mock('@/services/self-events/self-event-stream.service', () => ({}));
@@ -88,7 +88,12 @@ const receiver = dmService as unknown as {
 const ACCOUNT = 'a'.repeat(64);
 const PEER = 'b'.repeat(64);
 
+function hasEvent(message: Rumor, account = ACCOUNT): boolean {
+  return !!mockDatabase!.sqlite.prepare('SELECT id FROM notification_events WHERE account_pubkey = ? AND message_id = ?').get(account, message.id!);
+}
+
 beforeAll(() => {
+  mockDatabase!.sqlite.exec("INSERT INTO device_preferences (key,value,updated_at) VALUES ('notifications.enabled','1',1)");
   mockDatabase!.sqlite.prepare(
     "INSERT INTO accounts (pubkey, signer_type, added_at, sort_order) VALUES (?, 'nsec', 1, 0)",
   ).run(ACCOUNT);
@@ -142,4 +147,93 @@ it('updates time only with the newest non-reaction message across all intake pat
   assertTime('6', 500);
   expect(await receive('6', 500, 'live')).toBe(false);
   assertTime('6', 500);
+});
+
+it('marks only the creating receive transaction across batches and receiver restarts', async () => {
+  const peer = 'e'.repeat(64);
+  const make = (id: string, at: number) => ({
+    id: id.repeat(64), pubkey: peer, kind: 14, created_at: at,
+    content: 'request', tags: [['p', ACCOUNT]],
+  } as Rumor);
+  const first = make('a', 100);
+  const later = make('b', 101);
+  await receiver.storeRumor(first, ACCOUNT, undefined, undefined, { intake: 'recovery' });
+  await receiver.storeRumor(later, ACCOUNT, undefined, undefined, { intake: 'recovery' });
+  expect(hasEvent(first, ACCOUNT)).toBe(true);
+  expect(hasEvent(later, ACCOUNT)).toBe(false);
+  expect(hasEvent(first, 'other-account')).toBe(false);
+  const replay = make('a', 100);
+  expect(await receiver.storeRumor(replay, ACCOUNT, undefined, undefined, { intake: 'live' })).toBe(false);
+  expect(hasEvent(replay, ACCOUNT)).toBe(true);
+  // A new service instance still sees the existing request in SQLite.
+  const restarted = new (dmService.constructor as new () => typeof receiver)();
+  const afterRestart = make('c', 102);
+  await restarted.storeRumor(afterRestart, ACCOUNT, undefined, undefined, { intake: 'live' });
+  expect(hasEvent(afterRestart, ACCOUNT)).toBe(false);
+});
+
+it('does not announce history imports or subsequent live messages as new requests', async () => {
+  const peer = 'f'.repeat(64);
+  for (const [id, intake] of [['d', 'history'], ['e', 'live']] as const) {
+    const message = { id: id.repeat(64), pubkey: peer, kind: 14, created_at: 200,
+      content: 'history', tags: [['p', ACCOUNT]] } as Rumor;
+    await receiver.storeRumor(message, ACCOUNT, undefined, undefined, { intake });
+    expect(hasEvent(message, ACCOUNT)).toBe(false);
+  }
+});
+
+it('does not notify again when a read request gets another unread message', async () => {
+  const peer = 'e'.repeat(64);
+  mockDatabase!.sqlite.prepare(`UPDATE conversations SET unread_count = 0,
+    last_read_order_at = 102000 WHERE account_pubkey = ? AND conversation_key = ?`)
+    .run(ACCOUNT, peer);
+  const message = { id: 'f'.repeat(64), pubkey: peer, kind: 14, created_at: 103,
+    content: 'again', tags: [['p', ACCOUNT]] } as Rumor;
+  await receiver.storeRumor(message, ACCOUNT, undefined, undefined, { intake: 'live' });
+  expect(hasEvent(message, ACCOUNT)).toBe(false);
+});
+
+it.each(['history', 'archive'] as const)('keeps %s inserts in new and existing conversations ineligible for all arrival notifications', async (intake) => {
+  const peer = intake === 'history' ? '7'.repeat(64) : '8'.repeat(64);
+  for (let index = 0; index < 2; index++) {
+    const message = { id: `${intake}-${index}`, pubkey: peer, kind: 14, created_at: 300 + index,
+      content: 'historical', tags: [['p', ACCOUNT]] } as Rumor;
+    await receiver.storeRumor(message, ACCOUNT, undefined, undefined, { intake });
+    expect(hasEvent(message, ACCOUNT)).toBe(false);
+  }
+});
+
+it('discards an unobserved request on deletion and keeps its archive restoration silent', async () => {
+  jest.useFakeTimers();
+  try {
+    const peer = '9'.repeat(64);
+    const now = Math.floor(Date.now() / 1000);
+    const first = { id: 'delete-unobserved', pubkey: peer, kind: 14, created_at: now - 1,
+      content: 'live', tags: [['p', ACCOUNT]] } as Rumor;
+    await receiver.storeRumor(first, ACCOUNT, undefined, undefined, { intake: 'live' });
+    expect(hasEvent(first)).toBe(true);
+    await dmService.deleteConversation(ACCOUNT, peer);
+    expect(hasEvent(first)).toBe(false);
+    const historical = { ...first, id: 'archive-after-delete', created_at: now + 1 } as Rumor;
+    await receiver.storeRumor(historical, ACCOUNT, undefined, undefined, { intake: 'archive' });
+    expect(mockDatabase!.sqlite.prepare('SELECT deleted FROM conversations WHERE account_pubkey = ? AND conversation_key = ?').get(ACCOUNT, peer)).toEqual({ deleted: 0 });
+    expect(hasEvent(historical, ACCOUNT)).toBe(false);
+    await jest.runOnlyPendingTimersAsync();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it.each(['live', 'archive'] as const)('restores a deleted request on %s without another alert', async intake => {
+  const peer = `deleted-${intake}`;
+  const first = { id: `original-${intake}`, pubkey: peer, kind: 14, created_at: 100,
+    content: 'first', tags: [['p', ACCOUNT]] } as Rumor;
+  await receiver.storeRumor(first, ACCOUNT, undefined, undefined, { intake: 'live' });
+  mockDatabase!.sqlite.prepare('UPDATE conversations SET deleted = 1, has_replied = 0, unread_count = 0, last_read_order_at = 100000, deleted_order_at = 101000 WHERE conversation_key = ?').run(peer);
+  mockDatabase!.sqlite.prepare('DELETE FROM notification_events WHERE conversation_key = ?').run(peer);
+  const restored = { ...first, id: `restored-${intake}`, created_at: 102 };
+  await receiver.storeRumor(restored, ACCOUNT, undefined, undefined, { intake });
+  expect(mockDatabase!.sqlite.prepare('SELECT deleted, has_replied, unread_count FROM conversations WHERE conversation_key = ?').get(peer))
+    .toEqual({ deleted: 0, has_replied: 0, unread_count: 1 });
+  expect(hasEvent(restored)).toBe(false);
 });

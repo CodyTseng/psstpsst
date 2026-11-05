@@ -566,6 +566,8 @@
     "no_dm_support": "This user can't receive encrypted messages yet."
   },
   "notifications": {
+    "quiet_requests_label": "Quiet message requests",
+    "quiet_requests_note": "Show a dot instead of an unread conversation count and turn off notifications for new message requests.",
     "title": "Notifications",
     "enable_label": "Allow notifications",
     "unread_indicators_label": "Show new message indicators",

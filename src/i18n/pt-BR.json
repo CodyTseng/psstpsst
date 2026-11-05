@@ -569,6 +569,8 @@
     "no_dm_support": "Este usuário ainda não pode receber mensagens criptografadas."
   },
   "notifications": {
+    "quiet_requests_label": "Solicitações de mensagens discretas",
+    "quiet_requests_note": "Mostrar um ponto em vez da contagem de conversas não lidas e desativar as notificações de novas solicitações de mensagens.",
     "title": "Notificações",
     "enable_label": "Permitir notificações",
     "unread_indicators_label": "Mostrar indicadores de novas mensagens",

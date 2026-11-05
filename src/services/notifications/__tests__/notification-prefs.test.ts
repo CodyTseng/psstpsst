@@ -7,6 +7,8 @@
 
 import {
   DEFAULT_DND_WINDOW,
+  getQuietMessageRequests,
+  setQuietMessageRequests,
   getDndWindow,
   getNotificationsEnabled,
   setNotificationsEnabled,
@@ -132,4 +134,12 @@ describe('isDndActiveNow', () => {
   it('is inactive when no preference was ever stored', async () => {
     await expect(isDndActiveNow()).resolves.toBe(false);
   });
+});
+
+it('defaults to prominent requests and persists the quiet opt-in', async () => {
+  expect(await getQuietMessageRequests()).toBe(false);
+  await setQuietMessageRequests(true);
+  expect(await getQuietMessageRequests()).toBe(true);
+  await setQuietMessageRequests(false);
+  expect(await getQuietMessageRequests()).toBe(false);
 });
