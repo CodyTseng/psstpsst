@@ -136,6 +136,9 @@ and `ANDROID_BUILD_BUNDLE` to select the Gradle tasks and output files; AAB sign
 uses `jarsigner`. APK/AAB content checks both enforce the ZXing-C++ scanner and
 exclude ML Kit. The container script defaults to APK-only builds for independent
 F-Droid rebuilds.
+APKs and AABs use separate Gradle invocations: APKs enable ABI splits, while AABs
+disable them to satisfy AGP's R8 resource shrinker. Verified APKs are staged before
+switching the variant configuration for the bundle.
 The host provides the source commit timestamp, so the isolated source export also
 works from a Git worktree. Production prebuilds fix the React Native dev-server
 IP for reproducibility; development prebuilds retain Metro host discovery.
@@ -163,6 +166,7 @@ To check changes to the signing and F-Droid verification helpers, run:
 node --test scripts/release-signing.test.mjs
 node --test scripts/build-targets.test.mjs
 node --test scripts/build-android-bundle.test.mjs scripts/release-assets.test.mjs
+node --test scripts/build-android-artifacts.test.mjs scripts/create-android-source-archive.test.mjs
 node --test scripts/android-release-config.test.mjs scripts/compare-android-builds.test.mjs
 node --test scripts/verify-fdroid-reproducibility.test.mjs
 ```

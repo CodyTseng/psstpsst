@@ -63,11 +63,17 @@ test('clean prebuild declares a portable Java 21 Gradle runtime', async () => {
   }
 });
 
-test('prebuild replaces existing Gradle defaults without duplicating properties', async () => {
-  const properties = [{ type: 'property', key: 'org.gradle.jvmargs', value: '-Xmx2048m' }];
-  const updated = await runMod('gradleProperties', properties);
-  assert.equal(updated.filter((item) => item.key === 'org.gradle.jvmargs').length, 1);
-  assert.ok(updated.find((item) => item.key === 'org.gradle.jvmargs').value.includes('MaxMetaspaceSize=1024m'));
+test('prebuild preserves template or developer JVM and concurrency settings', async () => {
+  const properties = [
+    { type: 'property', key: 'org.gradle.jvmargs', value: '-Xmx2048m -XX:MaxMetaspaceSize=512m' },
+    { type: 'property', key: 'kotlin.daemon.jvmargs', value: '-Xmx2048m' },
+    { type: 'property', key: 'org.gradle.workers.max', value: '6' },
+  ];
+  const keys = new Set(properties.map(item => item.key));
+  const updated = await runMod('gradleProperties', structuredClone(properties));
+  assert.deepEqual(updated.filter(item => keys.has(item.key)), properties);
+  const defaults = await runMod('gradleProperties', []);
+  assert.ok(!defaults.some(item => keys.has(item.key)));
   assert.equal(updated.find((item) => item.key === 'reactNativeDevServerIp').value, '127.0.0.1');
   assert.deepEqual(await runMod('gradleProperties', structuredClone(updated)), updated);
 });

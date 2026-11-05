@@ -6,12 +6,14 @@ release containing these changes passes F-Droid's independent verification.
 The previous MR passed reproducibility for **26.9.1**, using an older build
 configuration; that result does not certify this new Java 21/R8/ABI build.
 
-Local validation on 2026-11-04 passed the Java 21 arm64 unsigned Release build,
-R8/resource shrinking, APK content checks, and all four ABI version-code checks.
-All 60 Android Java compile tasks select JDK 21 and bytecode target 17. A Java 17
-launcher also correctly selects the Java 21 daemon through the project criteria.
-Full Linux container validation is currently in progress; the complete build and
-independent APK byte comparison have not yet passed.
+An earlier validation run on 2026-11-05 passed Linux unsigned Release APK builds
+for all four ABIs and the universal package, including R8/resource shrinking and
+APK content checks, with temporary memory and concurrency overrides. The current
+flow uses Expo/Gradle defaults; a full Linux build with those defaults remains
+unverified. Local toolchain checks confirmed that all 60 Android Java compile tasks
+select JDK 21 and bytecode target 17; a Java 17 launcher also selects the Java 21
+daemon through the project criteria. A complete Linux AAB build, independent APK
+byte comparison, and F-Droid signature verification remain unverified.
 
 ## Shared build configuration
 
@@ -30,7 +32,7 @@ The lockfile and reviewed `patch-package` patches select the framework inputs:
 - Expo Android modules build from source through `package.json` autolinking.
   Remove unused `local-maven-repo` directories before F-Droid scanning.
 - `npm run android:prebuild` uses the template in the installed, lockfile-pinned
-  Expo package. Config plugins own R8, resource shrinking, Gradle memory,
+  Expo package. Config plugins own R8, resource shrinking,
   the production-only deterministic dev-server IP, unsigned release signing,
   and ABI version codes. Development builds retain Metro host discovery.
 - All Android libraries, including Expo SQLite, use the same NDK as the Expo app.
@@ -48,6 +50,11 @@ unused generated debug keystore. It then invokes Gradle directly in the generate
 four ABI codes. Each entry selects its ABI through `reactNativeArchitectures`
 and compares against its public `PsstPsst-android-<architecture>.apk` binary:
 `armeabi-v7a → arm32`, `arm64-v8a → arm64`, `x86 → x86`, `x86_64 → x64`.
+
+APK and AAB builds use separate Gradle invocations. APKs enable ABI splits;
+the AAB disables them because AGP's R8 resource shrinker rejects multiple ABI
+resource outputs when packaging a bundle. Verified APKs are staged before
+switching the variant configuration, and the compiled native libraries are reused.
 
 For credentialed APK releases, upstream CI builds twice in separate clean
 containers from source archives that exclude ignored dependencies, generated
@@ -70,6 +77,13 @@ credentials, installed dependencies, and compiled outputs are not copied.
 Gradle distributions and a `maven-files/` directory containing only upstream
 `modules-2/files-2.1` artifacts. Gradle project caches, transformed artifacts, and
 project build outputs are not shared.
+
+JVM memory and Gradle concurrency use the template and tool defaults, without
+additional project-specific limits. `ANDROID_KEEP_FAILED_CONTAINER=1` retains
+a failed container and its source bind-mount snapshot for inspection. The output directory records the
+container ID and `source-snapshot.path`; remove both the container and that
+snapshot after diagnosis. Successful containers and snapshots are still removed.
+These diagnostic settings do not reuse project outputs between independent builds.
 
 ## Updating the submission
 

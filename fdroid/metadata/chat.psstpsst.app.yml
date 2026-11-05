@@ -55,7 +55,7 @@ Builds:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle
         :app:assembleRelease -PpsstpsstAbiSplits=true
-        -PreactNativeArchitectures=armeabi-v7a --no-daemon --max-workers=2
+        -PreactNativeArchitectures=armeabi-v7a --no-daemon
     ndk: 27.1.12297006
 
   - versionName: 26.10.6
@@ -98,7 +98,7 @@ Builds:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle
         :app:assembleRelease -PpsstpsstAbiSplits=true
-        -PreactNativeArchitectures=arm64-v8a --no-daemon --max-workers=2
+        -PreactNativeArchitectures=arm64-v8a --no-daemon
     ndk: 27.1.12297006
 
   - versionName: 26.10.6
@@ -140,7 +140,7 @@ Builds:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle
         :app:assembleRelease -PpsstpsstAbiSplits=true
-        -PreactNativeArchitectures=x86 --no-daemon --max-workers=2
+        -PreactNativeArchitectures=x86 --no-daemon
     ndk: 27.1.12297006
 
   - versionName: 26.10.6
@@ -183,7 +183,7 @@ Builds:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle
         :app:assembleRelease -PpsstpsstAbiSplits=true
-        -PreactNativeArchitectures=x86_64 --no-daemon --max-workers=2
+        -PreactNativeArchitectures=x86_64 --no-daemon
     ndk: 27.1.12297006
 
 AllowedAPKSigningKeys:

@@ -128,7 +128,7 @@
     "ios:dev": "EXPO_PUBLIC_APP_ENV=development expo run:ios --device --no-bundler",
     "ios:prebuild:dev": "EXPO_PUBLIC_APP_ENV=development expo prebuild --platform ios --clean",
     "android:prebuild": "EXPO_PUBLIC_APP_ENV=production expo prebuild --platform android --clean --no-install --template ./node_modules/expo/template.tgz",
-    "android:build": "cd android && EXPO_PUBLIC_APP_ENV=production ./gradlew :app:assembleRelease --no-daemon --max-workers=2 -PpsstpsstAbiSplits=true -PpsstpsstDebugSigning=true",
+    "android:build": "cd android && EXPO_PUBLIC_APP_ENV=production ./gradlew :app:assembleRelease --no-daemon -PpsstpsstAbiSplits=true -PpsstpsstDebugSigning=true",
     "android:bundle": "EXPO_PUBLIC_APP_ENV=production node scripts/build-android-bundle.mjs",
     "ios:prebuild": "EXPO_PUBLIC_APP_ENV=production expo prebuild --platform ios --clean",
     "ios:build": "EXPO_PUBLIC_APP_ENV=production expo run:ios --configuration Release --device --no-bundler",

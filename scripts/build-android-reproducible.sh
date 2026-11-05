@@ -25,7 +25,13 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
   mkdir -p "$output_dir"
   output_dir="$(cd "$output_dir" && pwd)"
   snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/psstpsst-android-source.XXXXXX")"
-  trap 'rm -rf "$snapshot_dir"' EXIT
+  keep_snapshot=0
+  cleanup_snapshot() {
+    if [[ "$keep_snapshot" != "1" ]]; then
+      rm -rf "$snapshot_dir"
+    fi
+  }
+  trap cleanup_snapshot EXIT
   node "$repo_root/scripts/create-android-source-archive.mjs" "$repo_root" "$snapshot_dir/source.tar"
   tar -xOf "$snapshot_dir/source.tar" ./scripts/build-android-reproducible.sh > "$snapshot_dir/build-android.sh"
   source_date_epoch="${SOURCE_DATE_EPOCH:-$(git -C "$repo_root" show -s --format=%ct HEAD)}"
@@ -48,7 +54,12 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
     docker_mounts+=(--mount "type=bind,src=$gradle_downloads,dst=/gradle-downloads,readonly")
   fi
 
-  docker run --rm --platform linux/amd64 \
+  docker_args=(run --platform linux/amd64)
+  if [[ "${ANDROID_KEEP_FAILED_CONTAINER:-0}" != "1" ]]; then
+    docker_args+=(--rm)
+  fi
+  docker_status=0
+  docker "${docker_args[@]}" --cidfile "$snapshot_dir/container.id" \
     "${docker_mounts[@]}" \
     --env ANDROID_RELEASE_UNSIGNED="${ANDROID_RELEASE_UNSIGNED:-1}" \
     --env ANDROID_BUILD_APK="${ANDROID_BUILD_APK:-1}" \
@@ -56,8 +67,22 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
     --env PSSTPSST_FDROID_CONTAINER=1 \
     --env SOURCE_DATE_EPOCH="$source_date_epoch" \
     "$IMAGE" \
-    bash /build-android.sh
-  exit
+    bash /build-android.sh || docker_status=$?
+  if [[ -s "$snapshot_dir/container.id" ]]; then
+    install -m 0644 "$snapshot_dir/container.id" "$output_dir/container.id"
+    if [[ "${ANDROID_KEEP_FAILED_CONTAINER:-0}" == "1" ]]; then
+      container_id="$(cat "$snapshot_dir/container.id")"
+      if [[ "$docker_status" == "0" ]]; then
+        docker rm "$container_id" > /dev/null
+      else
+        keep_snapshot=1
+        printf '%s\n' "$snapshot_dir" > "$output_dir/source-snapshot.path"
+        echo "Failed Android build container retained: $container_id" >&2
+        echo "Source snapshot retained: $snapshot_dir" >&2
+      fi
+    fi
+  fi
+  exit "$docker_status"
 fi
 
 if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
@@ -109,20 +134,16 @@ if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
 
   if [[ "${ANDROID_BUILD_APK:-1}" == "1" ]]; then
     for abi in universal armeabi-v7a arm64-v8a x86 x86_64; do
-      if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
-        artifact="$PROJECT_DIR/android/app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
-      else
-        artifact="$PROJECT_DIR/android/app/build/outputs/apk/release/app-${abi}-release.apk"
-      fi
       if [[ "$abi" == universal ]]; then
-        install -m 0644 "$artifact" /output/app-release.apk
+        name=app-release.apk
       else
-        install -m 0644 "$artifact" "/output/app-${abi}-release.apk"
+        name="app-${abi}-release.apk"
       fi
+      install -m 0644 "$PROJECT_DIR/release/android-artifacts/$name" "/output/$name"
     done
   fi
   if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
-    install -m 0644 "$PROJECT_DIR/android/app/build/outputs/bundle/release/app-release.aab" /output/app-release.aab
+    install -m 0644 "$PROJECT_DIR/release/android-artifacts/app-release.aab" /output/app-release.aab
   fi
   exit
 fi
@@ -153,35 +174,6 @@ find node_modules -type d -name local-maven-repo -prune -exec rm -rf {} +
 npm run android:prebuild
 
 find . -name gradle-wrapper.jar -type f -delete
-(cd android && gradle :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
+(cd android && gradle --no-daemon :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
 node scripts/check-android-dependencies.mjs android-dependencies.txt
-release_tasks=()
-if [[ "${ANDROID_BUILD_APK:-1}" == "1" ]]; then
-  release_tasks+=(:app:assembleRelease)
-fi
-if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
-  release_tasks+=(:app:bundleRelease)
-fi
-signing_args=()
-if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" != "1" ]]; then
-  signing_args+=(-PpsstpsstDebugSigning=true)
-fi
-(cd android && gradle "${release_tasks[@]}" "${signing_args[@]}" -PpsstpsstAbiSplits=true --no-daemon --max-workers=2)
-
-if [[ "${ANDROID_BUILD_APK:-1}" == "1" ]]; then
-  for abi in universal armeabi-v7a arm64-v8a x86 x86_64; do
-    if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
-      artifact="android/app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
-    else
-      artifact="android/app/build/outputs/apk/release/app-${abi}-release.apk"
-    fi
-    if [[ "$abi" == universal ]]; then
-      python3 scripts/check-android-apk.py "$artifact"
-    else
-      python3 scripts/check-android-apk.py "$artifact" "$abi"
-    fi
-  done
-fi
-if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
-  python3 scripts/check-android-apk.py android/app/build/outputs/bundle/release/app-release.aab
-fi
+bash scripts/build-android-artifacts.sh

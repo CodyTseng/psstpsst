@@ -9,7 +9,7 @@ export function buildAndroidBundle(directory = resolve('android')) {
   const output = join(directory, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab');
   rmSync(output, { force: true });
   try {
-    const result = spawnSync('./gradlew', [':app:bundleRelease', '-PpsstpsstDebugSigning=false', '--no-daemon', '--max-workers=2'], {
+    const result = spawnSync('./gradlew', [':app:bundleRelease', '-PpsstpsstDebugSigning=false', '-PpsstpsstAbiSplits=false', '--no-daemon'], {
       cwd: directory, env: { ...process.env, EXPO_PUBLIC_APP_ENV: 'production' }, stdio: 'inherit',
     });
     if (result.error) throw result.error;

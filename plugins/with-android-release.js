@@ -81,9 +81,7 @@ subprojects {
     return config;
   });
   config = withGradleProperties(config, (config) => {
-    const properties = {
-      'org.gradle.jvmargs': '-Xmx3072m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8',
-    };
+    const properties = {};
     if (['1', 'true'].includes(process.env.CI)) {
       properties['org.gradle.vfs.watch'] = 'false';
     }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createAndroidSourceArchive } from './create-android-source-archive.mjs';
@@ -60,6 +60,8 @@ const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 const args = process.argv.slice(2);
 fs.writeFileSync(process.env.TEST_DOCKER_ARGS, JSON.stringify(args));
+const cidfile = args[args.indexOf('--cidfile') + 1];
+fs.writeFileSync(cidfile, 'test-build-container');
 const mount = args.find((arg) => arg.includes('dst=/source.tar'));
 const archive = mount.split(',').find((part) => part.startsWith('src=')).slice(4);
 const bootstrapMount = args.find((arg) => arg.includes('dst=/build-android.sh'));
@@ -73,6 +75,7 @@ process.exit(Number(process.env.TEST_DOCKER_STATUS || listing.status));
     const result = spawnSync('bash', [join(root, 'scripts/build-android-reproducible.sh'), join(directory, 'output')], {
       cwd: root, encoding: 'utf8', env: {
         ...process.env,
+        TMPDIR: directory,
         PATH: `${directory}:${process.env.PATH}`,
         TEST_DOCKER_ARGS: argsFile,
         TEST_SOURCE_FILES: filesFile,
@@ -92,14 +95,17 @@ process.exit(Number(process.env.TEST_DOCKER_STATUS || listing.status));
     assert.ok(!existsSync(archive));
     const files = readFileSync(filesFile, 'utf8').trim().split('\n');
     assert.ok(files.includes('./package.json'));
+    assert.ok(files.includes('./scripts/build-android-artifacts.sh'));
     assert.ok(!files.some((file) => /^\.\/(?:node_modules|android|ios|release|\.git)\//.test(file)));
     const failed = spawnSync('bash', [join(root, 'scripts/build-android-reproducible.sh'), join(directory, 'output')], {
       cwd: root, encoding: 'utf8', env: {
         ...process.env,
+        TMPDIR: directory,
         PATH: `${directory}:${process.env.PATH}`,
         TEST_DOCKER_ARGS: argsFile,
         TEST_SOURCE_FILES: filesFile,
         TEST_DOCKER_STATUS: '17',
+        ANDROID_KEEP_FAILED_CONTAINER: '1',
         SOURCE_DATE_EPOCH: '12345',
         PSSTPSST_FDROID_CONTAINER: '',
       },
@@ -107,8 +113,12 @@ process.exit(Number(process.env.TEST_DOCKER_STATUS || listing.status));
     assert.equal(failed.status, 17, failed.stderr);
     const failedArgs = JSON.parse(readFileSync(argsFile, 'utf8'));
     assert.ok(failedArgs.includes('SOURCE_DATE_EPOCH=12345'));
+    assert.ok(!failedArgs.includes('--rm'));
+    assert.equal(readFileSync(join(directory, 'output/container.id'), 'utf8'), 'test-build-container');
     const failedArchive = failedArgs.find((arg) => arg.includes('dst=/source.tar')).split(',').find((part) => part.startsWith('src=')).slice(4);
-    assert.ok(!existsSync(failedArchive));
+    assert.ok(existsSync(failedArchive));
+    assert.ok(existsSync(join(dirname(failedArchive), 'build-android.sh')));
+    assert.equal(readFileSync(join(directory, 'output/source-snapshot.path'), 'utf8').trim(), dirname(failedArchive));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

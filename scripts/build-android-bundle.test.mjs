@@ -21,6 +21,7 @@ for (const exitCode of [0, 1]) {
 test "$1" = ':app:bundleRelease' || exit 2
 test "$EXPO_PUBLIC_APP_ENV" = production || exit 2
 test "$2" = '-PpsstpsstDebugSigning=false' || exit 2
+test "$3" = '-PpsstpsstAbiSplits=false' || exit 2
 test ! -f app/build/outputs/bundle/release/app-release.aab || exit 2
 cp app/build.gradle during-build.gradle
 echo fixture > app/build/outputs/bundle/release/app-release.aab
