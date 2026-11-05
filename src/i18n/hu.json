@@ -1120,6 +1120,9 @@
   },
   "applications": {
     "open_with_title": "Megnyitás ezzel",
+    "other_apps": "Más alkalmazások",
+    "view_other_apps": "Más alkalmazások megtekintése",
+    "no_more_apps": "Nem található több alkalmazás",
     "open_with_profile": "A(z) „{{app}}” egy profilt szeretne megnyitni. Melyik alkalmazást szeretné használni?",
     "open_with_content": "A(z) „{{app}}” tartalmat szeretne megnyitni egy alkalmazásban. Melyik alkalmazást szeretné használni?",
     "no_compatible_apps": "Nincs elérhető kompatibilis alkalmazás",

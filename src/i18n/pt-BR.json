@@ -1125,6 +1125,9 @@
   },
   "applications": {
     "open_with_title": "Abrir com",
+    "other_apps": "Outros aplicativos",
+    "view_other_apps": "Ver outros aplicativos",
+    "no_more_apps": "Nenhum outro aplicativo encontrado",
     "open_with_profile": "“{{app}}” quer abrir um perfil. Qual app você quer usar?",
     "open_with_content": "“{{app}}” quer abrir conteúdo em um app. Qual você quer usar?",
     "no_compatible_apps": "Nenhum app compatível disponível",

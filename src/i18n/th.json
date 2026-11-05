@@ -1120,6 +1120,9 @@
   },
   "applications": {
     "open_with_title": "เปิดด้วยแอปใด",
+    "other_apps": "แอปอื่นๆ",
+    "view_other_apps": "ดูแอปอื่นๆ",
+    "no_more_apps": "ไม่พบแอปเพิ่มเติม",
     "open_with_profile": "“{{app}}” ต้องการเปิดโปรไฟล์ คุณต้องการใช้แอปใด?",
     "open_with_content": "“{{app}}” ต้องการเปิดเนื้อหาในแอป คุณต้องการใช้แอปใด?",
     "no_compatible_apps": "ไม่มีแอปที่รองรับ",

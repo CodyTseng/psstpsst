@@ -1120,6 +1120,9 @@
   },
   "applications": {
     "open_with_title": "アプリを選択",
+    "other_apps": "その他のアプリ",
+    "view_other_apps": "その他のアプリを表示",
+    "no_more_apps": "これ以上のアプリは見つかりませんでした",
     "open_with_profile": "「{{app}}」がプロフィールを開こうとしています。どのアプリで開きますか？",
     "open_with_content": "「{{app}}」がコンテンツを開こうとしています。どのアプリで開きますか？",
     "no_compatible_apps": "対応するアプリがありません",

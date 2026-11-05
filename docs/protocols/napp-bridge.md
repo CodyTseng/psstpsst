@@ -157,16 +157,27 @@ or publish anything. See [implementation and limits](../implementation/napp-ui-d
 `napp.registerAction(pattern, handler?)` registers a document-scoped handler;
 omitting the callback permits a popstate-only handler. `napp.action(name, payload,
 options?)` selects a live handler belonging to an application in My apps or a verified
-My apps entry declaring the action. Both paths use the caller's account.
+My apps entry declaring the action, with compatible verified catalogue entries
+available in the same chooser. All paths use the caller's account.
 An explicit call to the caller's exact live document instance dispatches directly
 without My apps membership or a chooser, after checking its registered action and
-mode. Other instances, including another window of the same app, require My apps
-membership. Removing an app excludes its running handlers from subsequent
-cross-application selection and delivery.
+mode. Explicit calls to other instances, including another window of the same
+app, require My apps membership. Removing an app excludes its running handlers
+from saved candidates; a compatible catalogue entry can still be chosen explicitly.
 The chooser names the caller and content purpose and asks which app to
 open it with. Candidate rows reuse discovery's icons, names, publishers and format
-labels. An empty chooser offers capability-filtered Discover; an unavailable
-explicit instance offers no discovery handoff. Failure diagnostics include the
+labels. Compatible My apps appear first; other verified apps are browsed and
+selected inline, with bounded catalogue pagination and retry. Scrolling to the end reveals
+the next matching window; incompatible or already-buffered pages advance
+automatically until that window fills, an error occurs, or the catalogue ends.
+Each chooser stops after three consecutive remote query pages add no compatible
+apps, counting neither cached cursor advancement nor already-added duplicates
+as new results. A new compatible result resets the counter. The stop applies
+only to this chooser; it never marks the shared catalogue exhausted. Catalogue loading
+requires an explicit request to view other apps when saved candidates exist; otherwise it
+starts automatically. Selection launches
+through normal access review without adding a shortcut. An unavailable explicit
+instance offers no catalogue alternatives. Failure diagnostics include the
 action name, instance identifiers and routing rejection reason, never payloads. Closing the empty chooser settles
 as `permission-denied`, like cancelling a populated chooser. The sheet's Close action dismisses only this handoff. Android launches
 selected applications in independent document tasks and focuses an existing task

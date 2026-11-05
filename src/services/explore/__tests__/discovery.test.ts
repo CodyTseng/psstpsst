@@ -92,8 +92,10 @@ it('reveals 20 entries at a time from memory before requesting the next relay pa
 
   expect(discovery.store.getState().visibleEntries).toHaveLength(20);
   expect(discovery.store.getState().entries).toHaveLength(200);
+  expect(discovery.store.getState().queryPages).toBe(2);
   for (let i = 0; i < 9; i++) await discovery.loadMore('account');
   expect(discovery.store.getState().visibleEntries).toHaveLength(200);
+  expect(discovery.store.getState().queryPages).toBe(2);
   expect(query).toHaveBeenCalledTimes(2);
   await discovery.loadMore('account');
   expect(query.mock.calls[2].slice(0, 2)).toEqual([[nappRelay], [{ kinds: [35130], limit: 200, until: 801 }]]);
@@ -255,4 +257,61 @@ it('shares exact-address metadata without merging discovery catalogues', async (
   expect(napps.getState().addressCache).toMatchObject({ account: 'account', entries: [entry] });
   expect(all.getState().entries).toBe(fullEntries);
   expect(napps.getState().entries).toBe(nappEntries);
+});
+
+it('returns control after three remote pages of invalid manifests without exhausting the shared timeline', async () => {
+  const invalid = Array.from({ length: 610 }, (_, index) => finalizeEvent({ kind: 35130, created_at: 1000 - index,
+    content: '', tags: [['d', `invalid-${index}`]] }, secret));
+  const valid = uniqueManifest(35130, 1, 'valid-after-invalid-pages');
+  const { query } = setup({ [nappRelay]: [...invalid, valid] });
+  const discovery = new ApplicationDiscovery('napps');
+  await discovery.load('account');
+  expect(query).toHaveBeenCalledTimes(3);
+  expect(discovery.store.getState()).toMatchObject({ queryPages: 3, visibleEntries: [], hasMore: true, error: false });
+  await discovery.loadMore('account');
+  expect(discovery.store.getState().visibleEntries.map(app => app.manifest?.id)).toEqual([valid.id]);
+});
+
+it('allows the next page to start as soon as the store publishes idle', async () => {
+  const { discovery } = setup({ [nappRelay]: Array.from({ length: 80 }, (_, i) => uniqueManifest(35130, 1000 - i)) });
+  await discovery.load('account');
+  let next: Promise<void> | undefined;
+  let requested = false;
+  const detach = discovery.store.subscribe((state, before) => {
+    if (before.loadingMore && !state.loadingMore && !requested) {
+      requested = true;
+      next = discovery.loadMore('account');
+    }
+  });
+  try {
+    await discovery.loadMore('account');
+    await next;
+    expect(discovery.store.getState().visibleEntries).toHaveLength(60);
+  } finally { detach(); }
+});
+
+it('publishes idle only after a queued refresh releases ownership, allowing automatic pagination to continue', async () => {
+  const events = Array.from({ length: 60 }, (_, i) => uniqueManifest(35130, 1000 - i));
+  const { query, discovery } = setup({ [nappRelay]: events });
+  let finish!: (value: { events: typeof events; incomplete: boolean }) => void;
+  query.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const first = discovery.load('account');
+  const refresh = discovery.load('account', true);
+  let next: Promise<void> | undefined;
+  let requested = false;
+  const detach = discovery.store.subscribe((state, before) => {
+    if ((before.loading || before.loadingMore) && !state.loading && !state.loadingMore && !requested) {
+      requested = true;
+      next = discovery.loadMore('account');
+    }
+  });
+  try {
+    while (!finish) await flush();
+    finish({ events, incomplete: false });
+    await first;
+    await refresh;
+    await next;
+    expect(discovery.store.getState().visibleEntries).toHaveLength(40);
+    expect(discovery.store.getState()).toMatchObject({ loading: false, loadingMore: false });
+  } finally { detach(); }
 });

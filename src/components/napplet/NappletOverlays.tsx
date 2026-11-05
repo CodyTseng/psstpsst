@@ -1,11 +1,10 @@
-import { useActiveAccount } from '@/stores/active-account.store';
-import { router } from 'expo-router';
 import { Compass } from '@solar-icons/react-native/category/map/Linear/Compass';
-import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
 import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { SectionLabel } from '@/components/common/SectionLabel';
+import { useApplicationChoices } from '@/hooks/use-application-choices';
 import { useTranslation } from 'react-i18next';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
 import { fromNapplet } from '@/services/explore/model';
@@ -61,6 +60,7 @@ function NappletOverlayContent() {
   const duration = choice?.id === prompt?.requestId ? choice?.value ?? 'allow' : 'allow';
   const showingPanel = prompt || configuration ? null : panel;
   const selectingApplication = prompt?.applicationSelection;
+  const applicationChoices = useApplicationChoices(selectingApplication ? prompt : null);
   const accessPrompt = !!prompt && !prompt.signing && !prompt.upload && !selectingApplication
     && !!(prompt.capabilities || prompt.application || prompt.browser || prompt.device || prompt.crypto);
   const requestAccount = prompt?.signing?.accountPubkey ?? prompt?.accountPubkey;
@@ -91,22 +91,42 @@ function NappletOverlayContent() {
       title={selectingApplication ? t('applications.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt' : 'applications.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('applications.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'applications.permissions' : `applications.browser_${prompt.browser.action}`) : accessPrompt ? t('applications.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('applications.details') : showingPanel?.page === 'settings' ? t('applications.permissions_manage') : t('applications.settings'))}
       headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
-      fixedSubheader={selectingApplication && !!prompt?.choices?.length ? <AppText>
+      fixedSubheader={selectingApplication && !!applicationChoices.choices.length ? <AppText>
         {t(selectingApplication.content === 'profile' ? 'applications.open_with_profile' : 'applications.open_with_content', { app: selectingApplication.requester })}
       </AppText> : undefined}
       listProps={selectingApplication && prompt ? {
-        data: prompt.choices ?? [], keyExtractor: choice => choice.key,
+        data: applicationChoices.choices, keyExtractor: choice => choice.key,
         initialNumToRender: 8,
-        contentContainerStyle: { paddingBottom: prompt.choices?.length ? spacing.lg : 0 },
-        ListEmptyComponent: <View style={{ alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.md }}>
+        contentContainerStyle: { paddingBottom: selectingApplication.discovery && prompt.accountPubkey ? 0 : spacing.lg },
+        ListEmptyComponent: applicationChoices.loading || applicationChoices.error || applicationChoices.hasMore ? null : <View style={{ alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.md }}>
           <Compass size={spacing['2xl']} color={colors.textMuted} />
-          <AppText variant="body" tone="muted" align="center">
+          <AppText variant="title" align="center">
             {selectingApplication.discovery
-              ? t('applications.open_with_empty', { app: selectingApplication.requester })
+              ? t('applications.no_compatible_apps')
               : t('applications.handler_closed')}
           </AppText>
         </View>,
-        renderItem: ({ item }) => <ApplicationChoiceRow choice={item} requestId={prompt.requestId}/>,
+        onEndReached: applicationChoices.more,
+        onEndReachedThreshold: 0.3,
+        ListFooterComponent: selectingApplication.discovery && prompt.accountPubkey ?
+          <View style={applicationChoices.canDiscover || applicationChoices.error || applicationChoices.manualLoading
+            ? { padding: spacing.lg }
+            : { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg, minHeight: spacing.xl + spacing.sm + spacing.lg, justifyContent: 'center' }}>
+            {applicationChoices.canDiscover || applicationChoices.error || applicationChoices.manualLoading ?
+              <AppButton variant="secondary" loading={applicationChoices.loading}
+                label={t(applicationChoices.footerAction === 'retry' ? 'common.retry' : 'applications.view_other_apps')}
+                onPress={applicationChoices[applicationChoices.footerAction]} />
+              : applicationChoices.loading ? <ActivityIndicator size="small" color={colors.textMuted} />
+                : !applicationChoices.hasMore && applicationChoices.choices.length > 0 ?
+                  <AppText variant="caption" tone="muted" align="center">{t('applications.no_more_apps')}</AppText> : null}
+          </View> : null,
+        renderItem: ({ item, index }) => <>
+          {selectingApplication.discovery && (index === 0 || index === applicationChoices.savedCount) ?
+            <SectionLabel style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }}>
+              {t(index < applicationChoices.savedCount ? 'applications.my_apps' : 'applications.other_apps')}
+            </SectionLabel> : null}
+          <ApplicationChoiceRow choice={item} requestId={prompt.requestId}/>
+        </>,
       } : undefined}
       scrollResetKey={prompt?.requestId ?? (configuration ? 'configuration' : panel?.page ?? 'closed')}
       onClosed={() => { nappletService.overlayClosed(); const work = pending.current; pending.current = null; work?.(); }}
@@ -118,22 +138,7 @@ function NappletOverlayContent() {
       }}
       modalOverlay={prompt && menuOpen && menu ? <SigningDurationMenu anchor={menu.anchor} duration={duration}
         onChange={(value) => setChoice({ id: prompt.requestId, value })} onClose={() => setMenu(undefined)} /> : undefined}
-      fixedFooter={selectingApplication?.discovery && prompt && !prompt.choices?.length ? <AppButton label={t('applications.discover')} onPress={() => {
-        const filter = selectingApplication.discovery!;
-        const account = prompt.accountPubkey;
-        if (!account) return;
-        pending.current = () => {
-          if (useActiveAccount.getState().activePubkey !== account) return;
-          if (platform.napplet.windows?.isHost) {
-            void platform.napplet.windows.action({ type: 'discover', accountPubkey: account, ...filter }).catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
-            return;
-          }
-          const id = useExploreSearchHandoffStore.getState().start({ account, value: '', action: filter });
-          router.navigate({ pathname: '/explore', params: { searchHandoff: String(id) } });
-          void platform.napplet.tasks?.showHost().catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
-        };
-        nappletService.answer(prompt.requestId, false);
-      }} /> : prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
+      fixedFooter={prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
         {prompt?.signing ? <SigningActions prompt={prompt} duration={duration} menuOpen={menuOpen}
           onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} />
           : prompt ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={menuOpen}

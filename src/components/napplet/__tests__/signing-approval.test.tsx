@@ -1,10 +1,10 @@
-import { getNappletAccountPubkey } from '@/stores/napplet.store';
 import { router } from 'expo-router';
+import { discoverApplications, loadMoreApplications } from '@/services/explore/discovery';
+import type { ExploreEntry } from '@/services/explore/model';
 import { BottomSheet } from '@/components/common/BottomSheet';
-import { useExploreSearchHandoffStore } from '@/stores/explore-search-handoff.store';
 import { WalletApproval } from '../WalletApproval';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { SigningApproval, SigningActions } from '../SigningApproval';
 import { NappletOverlays } from '../NappletOverlays';
 import { UploadApproval } from '../UploadApproval';
@@ -19,7 +19,11 @@ import { nappletService } from '@/services/napplet/service';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import { platform } from '@/platform';
 import { getEventHash, serializeEvent } from 'nostr-tools';
-import { darkPalette, lightPalette } from '@/theme';
+import { darkPalette, lightPalette, spacing } from '@/theme';
+
+let mockDiscovery = { entries: [] as ExploreEntry[], loaded: true, loading: false, loadingMore: false, error: false, hasMore: false, queryPages: 0 };
+jest.mock('@/stores/explore-discovery.store', () => ({ useDiscovery: () => mockDiscovery }));
+jest.mock('@/services/explore/discovery', () => ({ discoverApplications: jest.fn(async () => {}), loadMoreApplications: jest.fn(async () => {}) }));
 
 jest.mock('@solar-icons/react-native/category/map/Linear/Compass', () => ({ Compass: () => null }), { virtual: true });
 jest.mock('lucide-react-native/icons/external-link', () => () => null);
@@ -72,7 +76,7 @@ const prompt = {
   requestId: 'request-A', expiresAt: Date.now() + 60000, queued: 0, title: 'Game', detail: '',
   signing: { operation: 'publish', kind: 1, accountPubkey: 'a'.repeat(64), content: 'Hello from the app', tags: [], createdAt: 100, relays: ['wss://relay.example/'] },
 } satisfies QueuedPrompt;
-afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); mockApprovalClosing = false; mockActiveAccount = 'a'.repeat(64); useExploreSearchHandoffStore.setState({ pending: null }); });
+afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); mockApprovalClosing = false; mockActiveAccount = 'a'.repeat(64); mockDiscovery = { entries: [], loaded: true, loading: false, loadingMore: false, error: false, hasMore: false, queryPages: 0 }; });
 function selectDuration(value: string) {
   act(() => { renderer.root.findByType(SigningActions).props.onMenuChange({ x: 180, y: 700 }); });
   const menu = renderer.root.findByType(ActionMenuPanel);
@@ -408,25 +412,188 @@ it('retains a dedicated wallet sheet until its dismissal completes', () => {
   expect(renderer.root.findAllByType(WalletApproval)).toHaveLength(0);
 });
 
-it.each(['light', 'dark'] as const)('opens Discover without an initialized napplet account in %s mode', scheme => {
+it.each(['light', 'dark'] as const)('loads compatible apps inline in %s mode', scheme => {
   mockScheme = scheme;
   mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
   act(() => { renderer = create(<NappletOverlays />); });
   const sheet = renderer.root.findByType(BottomSheet);
-  expect(sheet.props.fixedSubheader).toBeUndefined();
-  const text = renderer.root.findAllByType(AppText);
-  expect(text.map(node => node.props.children)).toEqual(['applications.open_with_empty', 'applications.discover']);
-  expect(text[0].props).toMatchObject({ children: 'applications.open_with_empty', variant: 'body', tone: 'muted' });
-  expect(button('applications.discover')).toBeDefined();
-  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'common.cancel')).toBe(false);
-  expect(getNappletAccountPubkey()).toBeNull();
-  act(() => { button('applications.discover').props.onPress(); });
-  expect(nappletService.answer).toHaveBeenLastCalledWith('empty', false);
+  expect(sheet.props.fixedFooter).toBeUndefined();
+  expect(discoverApplications).toHaveBeenCalledWith('a'.repeat(64), false, 'napps');
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toEqual(['applications.no_compatible_apps']);
   expect(router.navigate).not.toHaveBeenCalled();
-  act(() => { renderer.root.findByType(BottomSheet).props.onClosed(); });
-  expect(useExploreSearchHandoffStore.getState().pending).toMatchObject({ account: 'a'.repeat(64), action: { name: 'edit', auxiliary: false } });
-  expect(router.navigate).toHaveBeenCalledWith({ pathname: '/explore', params: { searchHandoff: expect.any(String) } });
+});
+
+it('prioritizes saved apps, deduplicates discovered apps and filters action and mode', async () => {
+  const app = (key: string, action = 'edit', auxiliary = false) => ({ key, address: key, title: key, kind: 'napp', servers: [], description: '', required: [], desktopPosition: null, lastUsedAt: null,
+    manifest: { id: key, kind: 35130, pubkey: 'a'.repeat(64), created_at: 1, content: '', sig: '',
+      tags: [['action', action], ...(auxiliary ? [['mode', 'auxiliary']] : [])] } }) satisfies ExploreEntry;
+  mockDiscovery.entries = [app('saved'), app('other'), app('wrong-action', 'profile'), app('wrong-mode', 'edit', true)];
+  mockPrompt = { requestId: 'choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    accountPubkey: 'a'.repeat(64), choices: [{ key: 'source:saved', title: 'Saved', application: { key: 'saved', title: 'Saved', kind: 'napp', servers: [] } }],
+    applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  const sheet = () => renderer.root.findByType(BottomSheet);
+  expect(sheet().props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved']);
+  expect(discoverApplications).not.toHaveBeenCalled();
+  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_other_apps');
+  mockDiscovery = { ...mockDiscovery, loading: true, loadingMore: true, error: true };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(sheet().props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved']);
+  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_other_apps');
+  expect(discoverApplications).not.toHaveBeenCalled();
+  mockDiscovery = { ...mockDiscovery, loading: false, loadingMore: false, error: false };
+  await act(async () => { sheet().props.listProps.ListFooterComponent.props.children.props.onPress(); });
+  expect(discoverApplications).toHaveBeenCalledWith('a'.repeat(64), false, 'napps');
+  expect(sheet().props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved', 'discovery:other']);
+  jest.mocked(discoverApplications).mockClear();
+  mockPrompt = { ...mockPrompt!, requestId: 'next-choice' };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(sheet().props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved']);
+  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_other_apps');
+  expect(discoverApplications).not.toHaveBeenCalled();
+});
+
+it('keeps loading, retry and pagination inside the picker without showing premature empty state', async () => {
+  mockPrompt = { requestId: 'choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+  mockDiscovery.loading = true;
+  mockDiscovery.loaded = false;
+  act(() => { renderer = create(<NappletOverlays />); });
+  expect(renderer.root.findByType(BottomSheet).props.listProps.ListEmptyComponent).toBeNull();
+  mockDiscovery = { ...mockDiscovery, loading: false, error: true };
+  act(() => { renderer.update(<NappletOverlays />); });
+  await act(async () => { renderer.root.findByType(BottomSheet).props.listProps.ListFooterComponent.props.children.props.onPress(); });
+  expect(discoverApplications).toHaveBeenLastCalledWith('a'.repeat(64), true, 'napps');
+  mockDiscovery = { ...mockDiscovery, loaded: true, error: false, hasMore: true };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(loadMoreApplications).toHaveBeenCalledWith('a'.repeat(64), 'napps');
+});
+
+it.each([
+  ['light', 'discover'], ['dark', 'discover'],
+] as const)('preserves the %s %s footer button and label while its request is pending', async (scheme, action) => {
+  mockScheme = scheme;
+  mockDiscovery.hasMore = true;
+  mockPrompt = { requestId: 'stable-footer', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    accountPubkey: 'a'.repeat(64), choices: [{ key: 'source:saved', title: 'Saved' }],
+    applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  const footer = () => renderer.root.findByType(BottomSheet).props.listProps.ListFooterComponent;
+  let finish!: () => void;
+  const request = new Promise<void>(resolve => { finish = resolve; });
+  jest.mocked(discoverApplications).mockReturnValueOnce(request);
+  const before = footer();
+  const label = before.props.children.props.label;
+  act(() => { before.props.children.props.onPress(); });
+  const during = footer();
+  expect(during.type).toBe(before.type);
+  expect(during.props.style).toEqual(before.props.style);
+  expect(during.props.children.type).toBe(AppButton);
+  expect(during.props.children.props).toMatchObject({ label, loading: true });
+  expect(renderer.root.findByType(BottomSheet).props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved']);
+  mockDiscovery = { ...mockDiscovery, hasMore: false, queryPages: 0 };
+  await act(async () => { finish(); });
+  expect(footer().props.children.props.children).toBe('applications.no_more_apps');
+});
+
+const choiceApp = (index: number, action = 'edit'): ExploreEntry => ({ key: `app-${index}`, address: `app-${index}`, title: `App ${index}`,
+  kind: 'napp', servers: [], description: '', required: [], desktopPosition: null, lastUsedAt: null,
+  manifest: { id: String(index), kind: 35130, pubkey: 'a'.repeat(64), created_at: index, content: '', sig: '', tags: [['action', action]] } });
+function automaticChoicePrompt(): QueuedPrompt {
+  return { requestId: 'automatic-choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+    accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+}
+
+it('reveals cached compatible apps in windows on scroll, without redundant requests or a More button', () => {
+  mockDiscovery.entries = Array.from({ length: 45 }, (_, i) => choiceApp(i));
+  mockPrompt = automaticChoicePrompt();
+  act(() => { renderer = create(<NappletOverlays />); });
+  const list = () => renderer.root.findByType(BottomSheet).props.listProps;
+  expect(list().data).toHaveLength(20);
+  expect(list().ListFooterComponent.props.children).toBeNull();
+  act(() => { list().onEndReached(); });
+  expect(list().data).toHaveLength(40);
+  act(() => { list().onEndReached(); });
+  expect(list().data).toHaveLength(45);
+  act(() => { list().onEndReached(); });
+  expect(list().data).toHaveLength(45);
+  expect(loadMoreApplications).not.toHaveBeenCalled();
+  expect(list().ListFooterComponent.props.children.props).toMatchObject({ children: 'applications.no_more_apps', variant: 'caption', tone: 'muted', align: 'center' });
+});
+
+it('automatically advances incompatible pages until the requested matching window fills', () => {
+  const first = Array.from({ length: 20 }, (_, i) => choiceApp(i));
+  mockDiscovery = { ...mockDiscovery, entries: first, hasMore: true };
+  mockPrompt = automaticChoicePrompt();
+  act(() => { renderer = create(<NappletOverlays />); });
+  const list = () => renderer.root.findByType(BottomSheet).props.listProps;
+  expect(loadMoreApplications).not.toHaveBeenCalled();
+  const restingFooterStyle = list().ListFooterComponent.props.style;
+  expect(restingFooterStyle).toMatchObject({ paddingTop: spacing.sm, paddingBottom: spacing.lg, minHeight: spacing.xl + spacing.sm + spacing.lg });
+  expect(list().contentContainerStyle.paddingBottom).toBe(0);
+  act(() => { list().onEndReached(); });
+  expect(loadMoreApplications).toHaveBeenCalledTimes(1);
+  expect(list().ListFooterComponent.props.children.type).toBe(ActivityIndicator);
+  expect(list().ListFooterComponent.props.style).toEqual(restingFooterStyle);
+  act(() => { list().onEndReached(); });
+  expect(loadMoreApplications).toHaveBeenCalledTimes(1);
+  mockDiscovery = { ...mockDiscovery, entries: [...first, choiceApp(20, 'profile')] };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(list().data).toHaveLength(20);
+  expect(loadMoreApplications).toHaveBeenCalledTimes(2);
+  mockDiscovery = { ...mockDiscovery, entries: [...mockDiscovery.entries, ...Array.from({ length: 20 }, (_, i) => choiceApp(i + 21))], hasMore: false, queryPages: 0 };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(list().data).toHaveLength(40);
+  expect(list().ListFooterComponent.props.children.props).toMatchObject({ children: 'applications.no_more_apps', variant: 'caption', tone: 'muted', align: 'center' });
+  expect(list().ListFooterComponent.props.style).toEqual(restingFooterStyle);
+  act(() => { list().onEndReached(); });
+  expect(loadMoreApplications).toHaveBeenCalledTimes(2);
+});
+
+it('stops only this chooser after three empty remote pages, excluding buffered pagination', () => {
+  mockDiscovery.hasMore = true;
+  mockPrompt = automaticChoicePrompt();
+  act(() => { renderer = create(<NappletOverlays />); });
+  const list = () => renderer.root.findByType(BottomSheet).props.listProps;
+  const page = (queryPages: number, entry: ExploreEntry) => {
+    mockDiscovery = { ...mockDiscovery, queryPages, entries: [...mockDiscovery.entries, entry] };
+    act(() => { renderer.update(<NappletOverlays />); });
+  };
+  page(1, choiceApp(1, 'profile'));
+  page(1, choiceApp(2, 'profile'));
+  page(1, choiceApp(3, 'profile'));
+  expect(list().ListFooterComponent.props.children.type).toBe(ActivityIndicator);
+  page(2, choiceApp(4, 'profile'));
+  expect(list().ListFooterComponent.props.children.type).toBe(ActivityIndicator);
+  page(3, choiceApp(5, 'profile'));
+  expect(list().ListEmptyComponent).not.toBeNull();
+  expect(list().ListFooterComponent.props.children).toBeNull();
+  expect(mockDiscovery.hasMore).toBe(true);
+  const requests = jest.mocked(loadMoreApplications).mock.calls.length;
+  act(() => { list().onEndReached(); });
+  expect(loadMoreApplications).toHaveBeenCalledTimes(requests);
+  mockPrompt = { ...mockPrompt!, requestId: 'new-lookup' };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(list().ListFooterComponent.props.children.type).toBe(ActivityIndicator);
+  expect(jest.mocked(loadMoreApplications).mock.calls.length).toBeGreaterThan(requests);
+});
+
+it('resets the empty-page budget when a new compatible app arrives and keeps results at the limit', () => {
+  mockDiscovery.hasMore = true;
+  mockPrompt = automaticChoicePrompt();
+  act(() => { renderer = create(<NappletOverlays />); });
+  const list = () => renderer.root.findByType(BottomSheet).props.listProps;
+  for (let queryPages = 1; queryPages <= 5; queryPages++) {
+    mockDiscovery = { ...mockDiscovery, queryPages, entries: [...mockDiscovery.entries,
+      choiceApp(queryPages, queryPages === 3 ? 'edit' : 'profile')] };
+    act(() => { renderer.update(<NappletOverlays />); });
+    expect(list().ListFooterComponent.props.children.type).toBe(ActivityIndicator);
+  }
+  mockDiscovery = { ...mockDiscovery, queryPages: 6, entries: [...mockDiscovery.entries, choiceApp(6, 'profile')] };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(list().data.map((choice: { key: string }) => choice.key)).toEqual(['discovery:app-3']);
+  expect(list().ListFooterComponent.props.children.props.children).toBe('applications.no_more_apps');
 });
 
 it('does not offer Discover for an unavailable explicit instance', () => {
@@ -434,18 +601,7 @@ it('does not offer Discover for an unavailable explicit instance', () => {
     choices: [], applicationSelection: { requester: 'Timeline', content: 'content', unavailable: 'instance' } };
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.handler_closed')).toBe(true);
-  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'applications.discover')).toBe(false);
-});
-
-it('discards a Discover handoff when the active account changes during dismissal', () => {
-  mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
-    accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
-  act(() => { renderer = create(<NappletOverlays />); });
-  act(() => { button('applications.discover').props.onPress(); });
-  mockActiveAccount = 'b'.repeat(64);
-  act(() => { renderer.root.findByType(BottomSheet).props.onClosed(); });
-  expect(router.navigate).not.toHaveBeenCalled();
-  expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
+  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'applications.view_other_apps')).toBe(false);
 });
 
 it('keeps the requester question when compatible applications can be selected', () => {

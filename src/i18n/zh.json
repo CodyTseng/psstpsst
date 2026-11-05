@@ -1120,6 +1120,9 @@
   },
   "applications": {
     "open_with_title": "用哪个应用打开？",
+    "other_apps": "其他应用",
+    "view_other_apps": "查看其他应用",
+    "no_more_apps": "找不到更多应用了",
     "open_with_profile": "“{{app}}”想打开用户资料。要用哪个应用打开？",
     "open_with_content": "“{{app}}”想在应用中打开内容。要用哪个应用打开？",
     "no_compatible_apps": "暂无可用的应用",

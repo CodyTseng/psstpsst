@@ -3,6 +3,9 @@ import { applicationMessaging } from '../messaging';
 import type { ExploreEntry } from '../model';
 import type { ApplicationNetwork } from '@/services/applications/network';
 
+let mockCatalogue: ExploreEntry[] = [];
+jest.mock('../discovery', () => ({ getDiscoveryStore: () => ({ getState: () => ({ entries: mockCatalogue }) }) }));
+
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/services/local-relay', () => ({ localRelay: {} }));
 jest.mock('@/services/napplet/repository', () => ({ getData: jest.fn(), setData: jest.fn() }));
@@ -30,6 +33,7 @@ async function connectTarget(owner = account, actions = ['edit'], auxiliary = fa
 beforeEach(() => {
   warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
   favorites = [target];
+  mockCatalogue = [];
   life = new AbortController();
   confirm = jest.fn(async () => 'instance:target-instance');
   launch = jest.fn(async () => connectTarget());
@@ -145,4 +149,27 @@ it.each(['mode-mismatch', 'action-not-registered'])('still validates explicit se
   const name = reason === 'action-not-registered' ? 'edit' : 'relay';
   await expect(capabilities.handle('action', [name, {}, { instance: 'caller-instance', auxiliary: reason === 'mode-mismatch' }])).rejects.toThrow('permission-denied');
   expect(warning).toHaveBeenCalledWith('[explore] Action handler unavailable', expect.objectContaining({ reason }));
+});
+
+it('launches an explicitly selected compatible catalogue app without adding it to My apps', async () => {
+  favorites = [];
+  mockCatalogue = [target];
+  confirm.mockResolvedValue('discovery:target');
+  const detach = messaging.onMessage((instance, message) => {
+    if (instance === 'target-instance') void messaging.request(instance, { type: 'actionResult', requestId: message.requestId, result: 'discovered' });
+  });
+  try {
+    await expect(capabilities.handle('action', ['edit', {}])).resolves.toBe('discovered');
+    expect(launch).toHaveBeenCalledWith(target);
+    expect(favorites).toEqual([]);
+  } finally { detach(); }
+});
+
+it.each(['missing', 'wrong-action', 'wrong-mode', 'explicit-instance'])('rejects an invalid catalogue selection: %s', async reason => {
+  favorites = [];
+  mockCatalogue = reason === 'missing' ? [] : [{ ...target, manifest: { tags: reason === 'wrong-action' ? [['action', 'profile']] :
+    [['action', 'edit'], ...(reason === 'wrong-mode' ? [['mode', 'auxiliary']] : [])] } } as ExploreEntry];
+  confirm.mockResolvedValue('discovery:target');
+  await expect(capabilities.handle('action', ['edit', {}, reason === 'explicit-instance' ? { instance: 'target-instance' } : {}])).rejects.toThrow('permission-denied');
+  expect(launch).not.toHaveBeenCalled();
 });

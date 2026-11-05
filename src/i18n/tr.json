@@ -1120,6 +1120,9 @@
   },
   "applications": {
     "open_with_title": "Birlikte aç",
+    "other_apps": "Diğer uygulamalar",
+    "view_other_apps": "Diğer uygulamaları görüntüle",
+    "no_more_apps": "Başka uygulama bulunamadı",
     "open_with_profile": "“{{app}}” bir profil açmak istiyor. Hangi uygulamayı kullanmak istersiniz?",
     "open_with_content": "“{{app}}” içeriği bir uygulamada açmak istiyor. Hangi uygulamayı kullanmak istersiniz?",
     "no_compatible_apps": "Uyumlu uygulama yok",

@@ -867,10 +867,12 @@ it never imports application discovery, installation or visit orchestration.
 Application membership controls query the committed plaintext list or local
 application row through async live queries, independently of Explore navigation
 and metadata hydration. An unresolved membership is distinct from non-membership.
-Cross-application action and intent handlers derive membership only from the
-current account's My apps library. Installations, history and live endpoints do not
-grant membership. Dispatch rechecks membership after target selection;
-removing an app excludes it from subsequent handoffs without closing its app.
+Saved cross-application action and intent handlers derive membership only from
+the current account's My apps library; dispatch rechecks saved membership after
+selection. Napp action choosers may also explicitly select verified catalogue
+entries matching the requested action and mode, without granting membership.
+These launches retain ordinary access review and account-bound endpoint checks.
+Installations, history and live endpoints never grant membership.
 An explicit action to the caller’s exact live document instance is internal
 dispatch: it checks account, source, registered action and mode without requiring
 My apps membership or prompting for another application.

@@ -11,6 +11,7 @@ import type { RuntimePrompt } from '@/services/napplet/runtime';
 import { applicationMessaging } from './messaging';
 import { matchesAction, supportsApplicationAction } from './action-matching';
 import { applicationListEntry, type ExploreEntry } from './model';
+import { getDiscoveryStore } from './discovery';
 
 type Options = {
   signal: AbortSignal;
@@ -124,10 +125,10 @@ export class NappCapabilities {
       try { publisher = publicEventAddress(endpoint.sourceId).author; } catch { /* Metadata may be unavailable for a live endpoint. */ }
       return { key: `instance:${endpoint.instance}`, title: endpoint.title,
         application: app ? { ...applicationListEntry(app), title: endpoint.title } : { key: endpoint.sourceId, title: endpoint.title, kind: 'napp' as const, servers: [], publisher } };
-    }), ...applications.map(app => ({ key: `source:${app.key}`, title: app.title, application: applicationListEntry(app) }))].slice(0, 64);
-    if (!choices.length) {
-      const requested = options.instance ? endpoints.find(endpoint => endpoint.instance === options.instance) : undefined;
-      const reason = !options.instance ? 'no-matching-app' : !requested ? 'instance-not-running'
+    }), ...applications.map(app => ({ key: `source:${app.key}`, title: app.title, application: applicationListEntry(app) }))];
+    if (!choices.length && options.instance) {
+      const requested = endpoints.find(endpoint => endpoint.instance === options.instance);
+      const reason = !requested ? 'instance-not-running'
         : requested !== self && !known.has(requested.sourceId) ? 'app-not-added'
           : !!requested.auxiliary !== !!options.auxiliary ? 'mode-mismatch' : 'action-not-registered';
       this.warn('Action handler unavailable', { requester: this.entry.title, action: name,
@@ -135,17 +136,22 @@ export class NappCapabilities {
         reason, runningInstances: endpoints.length, addedApps: known.size, registeredActions: requested?.actions });
       await this.options.confirm({ title: this.entry.title, detail: '', choices: [], accountPubkey: this.account,
         applicationSelection: { requester: this.entry.title, content: name === 'profile' || name === 'view:0' ? 'profile' : 'content',
-          ...(options.instance ? { unavailable: 'instance' as const } : { discovery: { name: name as string, auxiliary: !!options.auxiliary } }) } }, this.options.signal);
+          unavailable: 'instance' } }, this.options.signal);
       this.check();
       throw new Error('permission-denied');
     }
     const selected = await this.options.confirm({ title: this.entry.title, detail: '', choices,
-      applicationSelection: { requester: this.entry.title, content: name === 'profile' || name === 'view:0' ? 'profile' : 'content' } }, this.options.signal);
+      accountPubkey: this.account,
+      applicationSelection: { requester: this.entry.title, content: name === 'profile' || name === 'view:0' ? 'profile' : 'content',
+        ...(!options.instance ? { discovery: { name: name as string, auxiliary: !!options.auxiliary } } : {}) } }, this.options.signal);
     this.check();
-    if (!selected || !choices.some(choice => choice.key === selected)) throw new Error('permission-denied');
+    const discovered = !options.instance && typeof selected === 'string' && selected.startsWith('discovery:')
+      ? getDiscoveryStore('napps').getState().entries.find(app => `discovery:${app.key}` === selected &&
+        supportsApplicationAction(app, { name: name as string, auxiliary: !!options.auxiliary })) : undefined;
+    if (!selected || (!discovered && !choices.some(choice => choice.key === selected))) throw new Error('permission-denied');
     const selectedSource = available.find(e => `instance:${e.instance}` === selected)?.sourceId ??
       applications.find(app => `source:${app.key}` === selected)?.key;
-    const current = (await this.options.applications()).find(app => app.key === selectedSource);
+    const current = discovered ?? (await this.options.applications()).find(app => app.key === selectedSource);
     this.check();
     if (!current) throw new Error('handler-unavailable');
     let target = available.find(e => `instance:${e.instance}` === selected)?.instance;
@@ -153,9 +159,11 @@ export class NappCapabilities {
       if (!current.local?.actions.some(pattern => matchesAction(pattern, name as string)) && !current.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string))) throw new Error('handler-unavailable');
       await this.options.launch(current); this.check();
       target = await this.request({ type: 'wait', sourceId: current.key, name });
-      const favorites = await this.options.applications();
-      this.check();
-      if (!favorites.some(app => app.key === selectedSource)) throw new Error('handler-unavailable');
+      if (!discovered) {
+        const favorites = await this.options.applications();
+        this.check();
+        if (!favorites.some(app => app.key === selectedSource)) throw new Error('handler-unavailable');
+      }
     }
     return this.request({ type: 'invoke', target, name, payload });
   }

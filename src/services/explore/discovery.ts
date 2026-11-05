@@ -25,6 +25,7 @@ export type ApplicationDiscoveryScope = 'all' | 'napps';
 export type ApplicationAddressCache = { account: string | null; entries: ExploreEntry[] };
 const DISPLAY_PAGE_SIZE = 20;
 const RELAY_PAGE_SIZE = APPLICATION_QUERY_LIMIT;
+const MAX_QUERY_PAGES_PER_READ = 3;
 const CACHE_MS = 5 * 60 * 1000;
 const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 const compare = (a: ExploreEntry, b: ExploreEntry) => compareTimelineEvents(a.manifest!, b.manifest!);
@@ -39,7 +40,7 @@ const createTimeline = (scope: ApplicationDiscoveryScope) => new RelayTimeline(A
 export class ApplicationDiscovery {
   readonly store = createStore(() => ({
     addressCache: { account: null, entries: [] } as ApplicationAddressCache,
-    entries: [] as ExploreEntry[], visibleEntries: [] as ExploreEntry[], loading: false, loadingMore: false, loaded: false, error: false, hasMore: false,
+    entries: [] as ExploreEntry[], visibleEntries: [] as ExploreEntry[], loading: false, loadingMore: false, loaded: false, error: false, hasMore: false, queryPages: 0,
   }));
   private timeline: RelayTimeline;
   private shown = new Set<string>();
@@ -47,6 +48,7 @@ export class ApplicationDiscovery {
   private cached: ExploreEntry[] = [];
   private parsed = new Map<string, ExploreEntry | undefined>();
   private updatedAt = 0;
+  private queryPages = 0;
   private pending?: Promise<void>;
   private pendingRefresh?: Promise<void>;
 
@@ -60,7 +62,11 @@ export class ApplicationDiscovery {
       if (!refresh) return this.pending;
       const queued = this.pending.then(() => this.reload(account));
       this.pendingRefresh = queued;
-      void queued.finally(() => { if (this.pendingRefresh === queued) this.pendingRefresh = undefined; });
+      const settled = () => {
+        if (this.pendingRefresh === queued) this.pendingRefresh = undefined;
+        this.publishIdle();
+      };
+      void queued.then(settled, settled);
       return queued;
     }
     if (!refresh && this.updatedAt && Date.now() - this.updatedAt < CACHE_MS) return Promise.resolve();
@@ -118,6 +124,7 @@ export class ApplicationDiscovery {
     const request = (async () => {
       let network: ApplicationNetwork | undefined;
       const page: ExploreEntry[] = [];
+      let queried = 0;
       try {
         await yieldFrame();
         let error = false;
@@ -126,6 +133,8 @@ export class ApplicationDiscovery {
           const result = await this.timeline.next(async (relay, filter, signal) => {
             network ??= new ApplicationNetwork(account);
             const result = await network.query([relay], [filter], signal);
+            queried++;
+            this.queryPages++;
             await this.remember(result.events.filter(event => matchFilters([filter], event)), result.eventRelays);
             return result;
           }, DISPLAY_PAGE_SIZE - page.length);
@@ -139,21 +148,33 @@ export class ApplicationDiscovery {
           }
           error = result.incomplete;
           hasMore = result.hasMore;
+          // Return control even when remote pages contain only invalid manifests.
+          if (queried >= MAX_QUERY_PAGES_PER_READ) break;
         }
         if (!refresh || page.length || !error) {
           const visibleEntries = refresh ? page : [...this.store.getState().visibleEntries, ...page];
-          this.store.setState({ entries: this.cached, visibleEntries, loaded: true, error, hasMore });
+          this.store.setState({ entries: this.cached, visibleEntries, loaded: true, error, hasMore, queryPages: this.queryPages });
           if (!error) this.updatedAt = Date.now();
         } else this.store.setState({ error: true });
       } catch { this.store.setState({ error: true }); }
       finally {
         network?.destroy();
-        this.store.setState({ loading: false, loadingMore: false });
       }
     })();
     this.pending = request;
-    void request.finally(() => { if (this.pending === request) this.pending = undefined; });
+    const settled = () => {
+      if (this.pending === request) this.pending = undefined;
+      this.publishIdle();
+    };
+    void request.then(settled, settled);
     return request;
+  }
+
+  private publishIdle() {
+    // An idle observer may immediately start the next read. Release both read
+    // and queued-refresh ownership before publishing that transition.
+    if (!this.pending && !this.pendingRefresh)
+      this.store.setState({ loading: false, loadingMore: false, queryPages: this.queryPages });
   }
 }
 

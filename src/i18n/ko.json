@@ -1120,6 +1120,9 @@
   },
   "applications": {
     "open_with_title": "열 앱 선택",
+    "other_apps": "다른 앱",
+    "view_other_apps": "다른 앱 보기",
+    "no_more_apps": "더 이상 앱을 찾을 수 없습니다",
     "open_with_profile": "“{{app}}”에서 프로필을 열려고 합니다. 어떤 앱으로 열까요?",
     "open_with_content": "“{{app}}”에서 콘텐츠를 열려고 합니다. 어떤 앱으로 열까요?",
     "no_compatible_apps": "사용 가능한 호환 앱이 없습니다",

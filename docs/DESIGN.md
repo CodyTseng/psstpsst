@@ -1028,7 +1028,7 @@ the newly selected language.
 My apps lists napps, napplets, nsites and websites added by the current account.
 Shared UI calls them apps; napplet refers only to that specific format. Adding
 an app makes it eligible for compatible handoffs without granting access.
-Removing it excludes subsequent handoffs while preserving history, data and
+Removing it excludes saved-handler suggestions while preserving history, data and
 permissions. Add actions use a plus icon; remove actions use a trash icon. Reversible removal from
 My apps uses danger text and icons across menus, buttons and action rails.
 Runtime action rails place application membership actions after utility actions.
@@ -1177,12 +1177,25 @@ and name the requesting app. Candidate rows reuse the discovery list's app icon,
 name, description and publisher attribution. Choosing a row opens that app;
 The sheet's Close action dismisses only this handoff, without a duplicate Cancel
 footer. These choosers omit access-review language,
-signing-account labels and raw protocol action names. When no compatible app is
-available, keep the sheet title and show one body-style explanation naming the
-requester, with a single Discover action filtered to the required capability.
-Omit the selection question and repeated empty-state heading. Active capability
-filters show their requested action in a compact, dismissible label; only show
-no results after matching discovery pages settle.
+signing-account labels and raw protocol action names. My apps candidates appear
+first. With compatible My apps, catalogue browsing starts only after the user
+chooses to view other apps; without them, it starts automatically. Background catalogue
+updates never expand a picker that has not opted into discovery. Compatible
+catalogue candidates follow saved choices in the same sheet. Selecting a
+discovered app retains normal access review without adding it to My apps. Catalogue
+loading and retry stay inline; scrolling to the end reveals the next matching
+window and automatically advances past incompatible catalogue pages. Stop the
+current lookup after three consecutive remote pages add no compatible apps;
+buffered pagination does not consume that budget. Saved
+choices remain selectable while discovery loads. Loading preserves footer
+geometry. Automatic loading and completion share a compact footer slot with no
+button-height reservation or duplicate list-bottom padding. Pagination uses a
+standalone muted spinner without a button surface or More action, with more
+clearance below the indicator than above it. An exhausted non-empty list ends
+with a muted completion caption in the same footer slot. Show a complete empty state only after the
+catalogue is exhausted or the empty-page limit is reached.
+Active capability filters in Explore show their requested action in a compact,
+dismissible label; only show no results after matching discovery pages settle.
 
 Application More opens app information with Copy address, Share, Permissions and
 Reload actions. Copy omits the `nostr:` prefix; sharing includes it. Both retain
