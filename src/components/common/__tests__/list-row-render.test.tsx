@@ -246,4 +246,23 @@ describe('ListRow layout', () => {
     expect(row.props.disabled).toBe(false);
     expect(row.props.hoverFeedback).toBe(false);
   });
+  it('keeps search-row opening and fill controls outside each other', () => {
+    const open = jest.fn();
+    const fill = jest.fn();
+    act(() => { renderer = create(<ListRow variant="search" title="https://example.com/" onPress={open}
+      trailing={<InteractivePressable accessibilityRole="button" accessibilityLabel="Fill address" onPress={fill}><View /></InteractivePressable>} />); });
+    const controls = renderer!.root.findAllByType(InteractivePressable);
+    const primary = controls.find(node => node.props.accessibilityLabel === 'https://example.com/')!;
+    const secondary = controls.find(node => node.props.accessibilityLabel === 'Fill address')!;
+    expect(primary).toBeDefined();
+    expect(secondary).toBeDefined();
+    for (let parent = secondary.parent; parent; parent = parent.parent) expect(parent).not.toBe(primary);
+    act(() => { primary.props.onPress(); });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(fill).not.toHaveBeenCalled();
+    act(() => { secondary.props.onPress(); });
+    expect(fill).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
 });

@@ -207,6 +207,7 @@
     "or": "أو"
   },
   "search": {
+    "fill_address": "إدراج العنوان",
     "clear": "مسح البحث",
     "placeholder": "بحث",
     "contacts_placeholder": "البحث في جهات الاتصال",

@@ -1,3 +1,5 @@
+import { ListRow } from '@/components/common/ListRow';
+import { readSearchHistory } from '@/services/explore/search-history';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ActivityIndicator } from 'react-native';
 import { naddrEncode } from 'nostr-tools/nip19';
@@ -19,6 +21,10 @@ import { uiDensity } from '@/theme';
 import { resolveApplicationAddress } from '@/services/explore/address-search';
 import { exploreService } from '@/services/explore/service';
 import { discoveryStore } from '@/services/explore/discovery';
+
+jest.mock('@/components/common/ListRow', () => ({ ListRow: 'ListRow' }));
+jest.mock('@/db/client', () => ({ db: {} }));
+jest.mock('@/services/explore/search-history', () => ({ ...jest.requireActual('@/services/explore/search-history'), readSearchHistory: jest.fn(async () => []) }));
 
 const mockNavigate = jest.fn();
 const mockTabsNavigation = { addListener: jest.fn(() => () => {}), getState: () => ({ index: 0, routes: [{ name: 'explore' }] }) };
@@ -45,17 +51,18 @@ jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: ({ left, ri
 jest.mock('@/components/search/SearchTransition', () => ({ SearchTransition: ({ active, contentActive, activeChrome, activeContent, children }: { active: boolean; contentActive: boolean; activeChrome: React.ReactNode; activeContent: React.ReactNode; children: React.ReactNode }) => <>{active ? activeChrome : null}{contentActive ? activeContent : children}</> }));
 jest.mock('@/components/search/SearchBar', () => ({ SearchBar: 'SearchBar', SEARCH_BAR_SCREEN_GUTTER: 12 }));
 jest.mock('@/components/common/IconButton', () => ({ IconButton: 'IconButton' }));
+jest.mock('lucide-react-native/icons/arrow-up-left', () => ({ __esModule: true, default: () => null }));
 jest.mock('lucide-react-native/icons/rotate-ccw-clock', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: 'Button' }));
 jest.mock('@/components/common/AppText', () => ({ AppText: 'Text' }));
 jest.mock('@/components/common/QrScanButton', () => ({ QrScanButton: 'ScanButton' }));
 jest.mock('@/components/common/SegmentedControl', () => ({ SegmentedControl: 'Tabs' }));
-jest.mock('@/components/napplet/ExploreDiscovery', () => ({ ExploreDiscovery: ({ header }: { header?: React.ReactNode }) => <>{header}</> }));
+jest.mock('@/components/napplet/ExploreDiscovery', () => ({ ExploreDiscovery: ({ header, suggestions }: { header?: React.ReactNode; suggestions?: React.ReactNode }) => <>{header}{suggestions}</> }));
 jest.mock('@/components/napplet/ApplicationGrid', () => ({ ApplicationGrid: ({ header }: { header?: React.ReactNode }) => <>{header}</> }));
 jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ Widget: () => null }), { virtual: true });
 
 let renderer: ReactTestRenderer;
-beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockFocused = true; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<ExploreScreen />); }); });
+beforeEach(async () => { jest.useFakeTimers(); jest.clearAllMocks(); jest.mocked(readSearchHistory).mockResolvedValue([]); discoveryStore.setState({ addressCache: { account: null, entries: [] } }); mockHandoff = undefined; mockFocused = true; mockExplore = { account: 'account', loaded: true, entries: [] }; useExploreSearchHandoffStore.setState({ pending: null }); await act(async () => { renderer = create(<ExploreScreen />); }); });
 afterEach(() => { act(() => renderer?.unmount()); jest.useRealTimers(); });
 
 it('does not flash a spinner or empty state for a quick local Favorites read', async () => {
@@ -328,4 +335,39 @@ it('waits for focus before accepting a handoff when the hidden tab has no matchi
   await act(async () => { renderer.update(<ExploreScreen />); });
   expect(useExploreSearchHandoffStore.getState().pending).toBeNull();
   expect(renderer.root.findByType(ExploreDiscovery).props.actionFilter).toEqual(action);
+});
+
+
+it('opens visited suggestions directly while the trailing action only fills the input', async () => {
+  jest.mocked(readSearchHistory).mockResolvedValue(['https://example.com/notes', 'https://other.com/']);
+  await act(async () => { renderer.root.findByType(SearchBar).props.onPress(); });
+  const suggestions = () => renderer.root.findAllByType(ListRow);
+  expect(suggestions()).toHaveLength(0);
+  const input = () => renderer.root.findAllByType(SearchBar).find(node => node.props.autoFocus)!;
+  await act(async () => { input().props.onChangeText('example'); });
+  expect(suggestions()).toHaveLength(1);
+  const stopPropagation = jest.fn();
+  await act(async () => { suggestions()[0].props.trailing.props.onPress({ stopPropagation }); });
+  expect(stopPropagation).toHaveBeenCalled();
+  expect(input().props.value).toBe('https://example.com/notes');
+  expect(suggestions()).toHaveLength(0);
+  expect(exploreService.prepare).not.toHaveBeenCalled();
+  await act(async () => { input().props.onChangeText('   '); });
+  expect(renderer.root.findByType(SearchTransition).props.contentActive).toBe(false);
+  await act(async () => { input().props.onChangeText('example'); });
+  await act(async () => { suggestions()[0].props.onPress(); });
+  expect(renderer.root.findByType(SearchTransition).props.active).toBe(false);
+  await act(async () => { await jest.runOnlyPendingTimersAsync(); });
+  expect(exploreService.prepare).toHaveBeenCalledWith(expect.objectContaining({ key: 'https://example.com/notes' }), 'account');
+});
+
+
+it('opens website search results directly without navigating through details', async () => {
+  await act(async () => { renderer.root.findByType(SearchBar).props.onPress(); });
+  await act(async () => { renderer.root.findAllByType(SearchBar).find(node => node.props.autoFocus)!.props.onChangeText('example.com'); });
+  const website = { key: 'https://example.com/', address: 'https://example.com/', kind: 'website', desktopPosition: null } as ExploreEntry;
+  await act(async () => { await renderer.root.findByType(ExploreDiscovery).props.onOpenWebsite(website); });
+  expect(exploreService.prepare).toHaveBeenCalledWith(website, 'account');
+  expect(mockNavigate).toHaveBeenCalledWith('/explore-run?runId=7');
+  expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('explore-details'));
 });

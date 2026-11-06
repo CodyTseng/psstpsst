@@ -98,6 +98,8 @@ schema and migrations live in `src/db/`. Database access is asynchronous from
 the renderer's perspective on every runtime.
 
 - Every account-owned row is keyed by `account_pubkey`.
+- Explore URL suggestions read a bounded window of committed website visits
+  from account-owned, device-local history. Lookups and input edits never record visits.
 - Messages are immutable and deduplicated by event ID.
 - Conversations are read models derived from messages and relationship state.
 - Conversation `updated_at` and `updated_order_at` equal the timestamps of the

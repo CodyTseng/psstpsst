@@ -15,12 +15,13 @@ type Props<T extends MenuApplication> = {
   onFavorite(app: T): void | Promise<void>;
   onRemove?: (app: T) => void;
   onDetails(app: T): void;
+  onOpenWebsite?: (app: T) => void;
   onPermissions(app: T): void;
   onShare(app: T): void;
 };
 
 /** Catalogue and history rows share pointer-anchored menus without grid drag state. */
-function ContextRow<T extends MenuApplication>({ app, favorite, testID, onFavorite, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
+function ContextRow<T extends MenuApplication>({ app, favorite, testID, onFavorite, onRemove, onDetails, onOpenWebsite, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);
   const application = useMemo(() => ({ ...app, kind: app.kind ?? 'napplet' as const, publisher: app.manifest?.pubkey ?? app.release?.event.pubkey }), [app]);
@@ -35,7 +36,7 @@ function ContextRow<T extends MenuApplication>({ app, favorite, testID, onFavori
       const point = desktopContextMenuPoint(event);
       if (point) setAnchor(point);
     } } : {})}>
-    <ApplicationListRow application={application} onPress={() => onDetails(app)}
+    <ApplicationListRow application={application} onPress={() => { if (app.kind === 'website' && onOpenWebsite) onOpenWebsite(app); else onDetails(app); }}
       onLongPress={showMenu}
       accessibilityActions={[
         { name: 'details', label: t('applications.details') },

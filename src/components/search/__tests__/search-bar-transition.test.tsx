@@ -6,11 +6,7 @@ import { SearchBar } from '../SearchBar';
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-jest.mock(
-  '@solar-icons/react-native/category/search/Linear/Magnifer',
-  () => ({ Magnifer: () => null }),
-  { virtual: true },
-);
+jest.mock('lucide-react-native/icons/search', () => () => null, { virtual: true });
 jest.mock('lucide-react-native/icons/x', () => () => null, { virtual: true });
 jest.mock('react-native-reanimated', () => {
   const transition = { duration: () => transition };
@@ -28,6 +24,8 @@ jest.mock('@/lib/platform', () => ({ IS_IOS: false }));
 jest.mock('@/theme/icons', () => ({ iconStrokeWidth: { default: 2 } }));
 jest.mock('@/theme', () => ({
   radius: { md: 12 },
+  iconStrokeWidth: { default: 1.5 },
+  searchFieldLayout: { iconSize: 18, accessorySize: 24, gap: 8, paddingHorizontal: 12, actionOffset: 4, borderWidth: 1 },
   spacing: { md: 12 },
   typography: { body: { fontSize: 16, lineHeight: 20, fontFamily: undefined } },
   uiDensity: { searchBarHeight: 40 },

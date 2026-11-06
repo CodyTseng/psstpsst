@@ -279,6 +279,7 @@
     "or": "또는"
   },
   "search": {
+    "fill_address": "주소 입력란에 채우기",
     "clear": "검색 지우기",
     "placeholder": "검색",
     "contacts_placeholder": "연락처 검색",

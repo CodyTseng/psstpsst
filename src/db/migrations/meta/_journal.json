@@ -561,6 +561,20 @@
       "when": 1793836800000,
       "tag": "0079_notification-events",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1793923200000,
+      "tag": "0080_explore-search-history",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1794009600000,
+      "tag": "0081_website-visit-suggestions",
+      "breakpoints": true
     }
   ]
 }

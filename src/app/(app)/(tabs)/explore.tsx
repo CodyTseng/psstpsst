@@ -1,3 +1,7 @@
+import { ListRow } from '@/components/common/ListRow';
+import ArrowUpLeft from 'lucide-react-native/icons/arrow-up-left';
+import { useDirectionalIconStyle } from '@/i18n/direction';
+import { useExploreSearchHistory } from '@/hooks/use-explore-search-history';
 import { showToast } from '@/stores/toast.store';
 import { tryOpenApplicationWindow } from '@/services/explore/windows';
 import { SegmentedControl } from '@/components/common/SegmentedControl';
@@ -9,8 +13,8 @@ import { resolveApplicationAddress } from '@/services/explore/address-search';
 import { cacheApplicationAddress, discoveryStore } from '@/services/explore/discovery';
 import { useApplicationFavorite } from '@/hooks/use-application-favorite';
 import { useExploreShare } from '@/hooks/use-explore-share';
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
-import { BackHandler, Keyboard, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { BackHandler, Keyboard, ScrollView, TextInput, View } from 'react-native';
 import { DelayedActivityIndicator } from '@/components/common/DelayedActivityIndicator';
 import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
 import { iconStrokeWidth } from '@/theme/icons';
@@ -35,7 +39,7 @@ import { ApplicationGrid } from '@/components/napplet/ApplicationGrid';
 import { nappletService } from '@/services/napplet/service';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { usePrimaryPaneNavigation } from '@/components/navigation/primary-pane-navigation';
-import { bottomBarHeight, spacing, uiDensity, useThemeColors } from '@/theme';
+import { bottomBarHeight, searchFieldLayout, spacing, uiDensity, useThemeColors } from '@/theme';
 
 const SEARCH_HEIGHT = uiDensity.searchBarHeight + spacing.sm;
 type ExploreMode = 'my-apps' | 'discover';
@@ -77,6 +81,9 @@ function AccountExplore({ account, initialAddress, initialAction, tab, onTabChan
   const desktop = useMemo(() => state.entries.filter(a=>a.desktopPosition!==null).sort((a,b)=>a.desktopPosition!-b.desktopPosition!), [state.entries]);
   const [query, setQuery] = useState('');
   const [searchActive, setSearchActive] = useState(false);
+  const { suggestions } = useExploreSearchHistory(account, searchActive, query);
+  const searchInput = useRef<TextInput>(null);
+  const directionalIconStyle = useDirectionalIconStyle();
   const tabsNavigation = useNavigation();
   const openSearch = useCallback(() => setSearchActive(true), []);
   const closeSearch = useCallback(() => {
@@ -228,13 +235,25 @@ function AccountExplore({ account, initialAddress, initialAction, tab, onTabChan
       <SearchTransition active={searchActive} contentActive={searching} focused={focused}
         onActivate={openSearch} onCancel={closeSearch}
         activeChrome={<View style={{ paddingTop: clearance, paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER, paddingBottom: spacing.sm }}>
-          <SearchBar value={query} onChangeText={changeQuery} placeholder={t('applications.search_placeholder')}
-            shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} autoFocus />
+          <SearchBar ref={searchInput} value={query} onChangeText={changeQuery} placeholder={t('applications.search_placeholder')}
+            shortcutHint={SEARCH_ACTIVATION_SHORTCUT_LABEL} autoFocus onSubmitEditing={() => {
+              const address = parseApplicationAddressQuery(query);
+              if (!address || address.type === 'invalid') return;
+              setScan({ value: query });
+            }} />
         </View>}
         activeContent={<View style={{ flex: 1, paddingTop: clearance + SEARCH_HEIGHT }}>
           {account ? <ExploreDiscovery actionFilter={actionFilter} onClearAction={() => setActionFilter(undefined)} query={query} scope={tab} favorites={desktop} account={account}
+            suggestions={suggestions.length ? <View style={{ paddingHorizontal: SEARCH_BAR_SCREEN_GUTTER }}>
+              {suggestions.map(address => <ListRow key={address} variant="search" title={address}
+                icon={<RotateCcwClock size={searchFieldLayout.iconSize} strokeWidth={iconStrokeWidth.default} color={c.textMuted} />}
+                onPress={() => { closeSearch(); setScan({ value: address }); }}
+                trailing={<IconButton variant="plain" size={searchFieldLayout.accessorySize} accessibilityLabel={t('search.fill_address')}
+                  icon={<ArrowUpLeft size={searchFieldLayout.iconSize} strokeWidth={iconStrokeWidth.default} color={c.textMuted} style={directionalIconStyle} />}
+                  onPress={event => { event.stopPropagation(); changeQuery(address); searchInput.current?.focus(); }} />} />)}
+            </View> : undefined}
             bottomInset={bottomInset} onScrollChange={setSearchScrolled} onDetails={showSearchDetails}
-            onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : null}
+            onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} onOpenWebsite={open} /> : null}
         </View>}>
         <View style={{ flex: 1, paddingTop: clearance }}>
           {scanLoading || tab === 'my-apps' && (!state.loaded || state.account !== account) ? <View>
@@ -243,7 +262,7 @@ function AccountExplore({ account, initialAddress, initialAction, tab, onTabChan
           </View> : account && tab === 'discover' ? <ExploreDiscovery actionFilter={actionFilter} onClearAction={() => setActionFilter(undefined)} scope={tab} favorites={desktop} account={account}
             header={restingSearch} headerHeight={SEARCH_HEIGHT} onScrollBeginDrag={stopEmptySearch}
             bottomInset={bottomInset} onScrollChange={setScrolled} onDetails={showSearchDetails}
-            onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} /> : desktop.length ? (
+            onShare={share} onFavorite={toggleFavorite} onPermissions={showPermissions} onOpenWebsite={open} /> : desktop.length ? (
             <ApplicationGrid header={restingSearch} onScrollBeginDrag={stopEmptySearch}
               visibleCount={state.favoriteVisibleCount} loadingMore={state.favoritesLoadingMore} onLoadMore={loadMoreFavorites}
               onPermissions={showPermissions} onShare={share}

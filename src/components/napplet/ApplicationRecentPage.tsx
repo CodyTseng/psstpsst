@@ -17,6 +17,7 @@ import { type RecentAppActions } from './ApplicationRecentTile';
 
 type Props<T extends GridApp> = Omit<RecentAppActions<T>, 'onOpen'> & {
   recent: T[];
+  onOpenWebsite?: (app: T) => void;
   favoritePositions?: ReadonlyMap<string, number | null>;
   loaded?: boolean;
   error?: string | null;
@@ -25,7 +26,7 @@ type Props<T extends GridApp> = Omit<RecentAppActions<T>, 'onOpen'> & {
   onLoadMore?: () => void;
 };
 
-export function ApplicationRecentPage<T extends GridApp>({ recent, favoritePositions, loaded = true, error, onBack, loadingMore, onLoadMore, onAdd, onUnfavorite, onRemove, onDetails, onPermissions, onShare }: Props<T>) {
+export function ApplicationRecentPage<T extends GridApp>({ recent, favoritePositions, loaded = true, error, onBack, loadingMore, onLoadMore, onAdd, onUnfavorite, onRemove, onDetails, onOpenWebsite, onPermissions, onShare }: Props<T>) {
   const { t } = useTranslation();
   useErrorToast(error, 'primary');
   const c = useThemeColors();
@@ -53,7 +54,7 @@ export function ApplicationRecentPage<T extends GridApp>({ recent, favoritePosit
       </View>}
       renderItem={({ item }) => <ApplicationRecentRow app={item} testID={`all-recent-app-${item.key}`}
         desktopPosition={favoritePositions ? favoritePositions.get(item.key) ?? null : undefined}
-        onAdd={onAdd} onUnfavorite={onUnfavorite} onRemove={onRemove} onDetails={onDetails} onPermissions={onPermissions} onShare={onShare} />}
+        onAdd={onAdd} onUnfavorite={onUnfavorite} onRemove={onRemove} onDetails={onDetails} onOpenWebsite={onOpenWebsite} onPermissions={onPermissions} onShare={onShare} />}
 
       />}
     </View>

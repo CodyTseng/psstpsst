@@ -13,6 +13,7 @@ import {
 
 import { radius, spacing, uiDensity, useThemeColors } from '@/theme';
 
+import { SearchRowLayout } from './SearchRowLayout';
 import { AppText } from './AppText';
 import { ListGroupContext } from './list-group-context';
 import { InteractionOverlay } from './InteractionOverlay';
@@ -36,7 +37,7 @@ const VALUE_MAX_WIDTH = '68%';
  * hairline aligns with the title and clears the icon. */
 export const ROW_CONTENT_INSET = ROW_PADDING_H + ICON_SLOT + ICON_GAP; // 60 mobile / 56 Electron
 
-type Variant = 'card' | 'plain' | 'embedded' | 'list' | 'inline';
+type Variant = 'card' | 'plain' | 'embedded' | 'list' | 'inline' | 'search';
 type TitleTone = 'default' | 'muted' | 'danger' | 'accent';
 type ValueTone = 'default' | 'muted' | 'success' | 'warning' | 'danger';
 type ValuePlacement = 'trailing' | 'below';
@@ -100,7 +101,8 @@ type Props = Pick<PressableProps, 'onLongPress' | 'accessibilityActions' | 'onAc
    * `plain` = borderless sheet-option row; `embedded` = opaque content whose
    * parent owns the fixed card border/radius (for swipeable wrappers);
    * `list` = transparent, full-width row with rectangular feedback;
-   * `inline` = compact metadata aligned with surrounding text. */
+   * `inline` = compact metadata aligned with surrounding text;
+   * `search` = the shared three-column search layout. */
   variant?: Variant;
   /** Content-height inline metadata; expanded hit slop preserves its touch target. */
   compact?: boolean;
@@ -151,6 +153,14 @@ export function ListRow({
   const c = useThemeColors();
   const grouped = useContext(ListGroupContext);
   const [hoverAccessoryVisible, setHoverAccessoryVisible] = useState(false);
+
+  if (!grouped && variant === 'search') {
+    return <SearchRowLayout icon={icon} action={trailing} onPress={onPress} onLongPress={onLongPress}
+      accessibilityLabel={title} accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction} disabled={disabled}>
+      <AppText variant="body" numberOfLines={1}>{title}</AppText>
+    </SearchRowLayout>;
+  }
 
   const titleColor = { default: c.text, muted: c.textMuted, danger: c.danger, accent: c.accent }[titleTone];
   const valueColor = {

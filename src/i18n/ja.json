@@ -279,6 +279,7 @@
     "or": "または"
   },
   "search": {
+    "fill_address": "アドレスを入力欄に挿入",
     "clear": "検索をクリア",
     "placeholder": "検索",
     "contacts_placeholder": "連絡先を検索",

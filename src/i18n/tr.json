@@ -279,6 +279,7 @@
     "or": "ya da"
   },
   "search": {
+    "fill_address": "Adresi doldur",
     "clear": "Aramayı temizle",
     "placeholder": "Ara",
     "contacts_placeholder": "Kişilerde ara",

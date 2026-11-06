@@ -279,6 +279,7 @@
     "or": "o"
   },
   "search": {
+    "fill_address": "Insertar dirección",
     "clear": "Borrar búsqueda",
     "placeholder": "Buscar",
     "contacts_placeholder": "Buscar contactos",

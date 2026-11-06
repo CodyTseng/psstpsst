@@ -1,3 +1,5 @@
+import m0081 from './0081_website-visit-suggestions.sql';
+import m0080 from './0080_explore-search-history.sql';
 import m0079 from './0079_notification-events.sql';
 import m0078 from './0078_group-arrival-eligibility.sql';
 import m0076 from './0076_local-applications.sql';
@@ -165,6 +167,8 @@ m0075,
 m0076,
 m0077,
 m0078,
-m0079
+m0079,
+m0080,
+m0081
     }
   }

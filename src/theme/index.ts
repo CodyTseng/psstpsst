@@ -63,6 +63,16 @@ export const emojiPickerLayout = {
  * tab screen and a chat doesn't shift the bottom edge. The safe-area inset is
  * added on top of this by each bar. */
 export const uiDensity = IS_ELECTRON ? density.desktop : density.mobile;
+/** Shared geometry for search inputs and their suggestion rows. */
+export const searchFieldLayout = {
+  iconSize: 18,
+  accessorySize: spacing.xl,
+  gap: spacing.sm,
+  paddingHorizontal: spacing.md,
+  actionOffset: spacing.xs,
+  borderWidth: 1,
+} as const;
+
 /** Runtime-sized numeric badge geometry shared by navigation and content. */
 export const countBadge = uiDensity.countBadge;
 export const bottomBarHeight = uiDensity.bottomBarHeight;

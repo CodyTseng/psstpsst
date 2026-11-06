@@ -1090,6 +1090,20 @@ addresses use author write relays plus format-specific sources. Exact lookup
 begins only when the live input parses as a complete address; unfinished or
 malformed edits stay in ordinary local search without validation errors or Retry.
 Domain-like input defaults to HTTPS, preserving its path, query, and fragment.
+Active search offers matching previously opened website URLs only for
+non-whitespace input, excluding the complete current address. Clicking a
+suggestion opens the website directly; a separate trailing action fills and
+focuses the field for editing. Lookups and input edits never create history.
+Clearing the field hides suggestions and restores the resting content.
+Website result rows open directly; their menus retain the explicit details action.
+Search inputs and URL suggestions share three columns: leading icon, flexible
+text, and trailing action. Both icon columns and text starts align across rows.
+Leading search and history glyphs use the same icon family, size, and stroke.
+The leading column fits the glyph width without reserving a button-sized slot.
+The trailing column applies one shared end offset to compensate for the button's
+internal whitespace, balancing the row's visible outer gaps. Suggestions render
+ordinary single-line text, not disabled input fields. Primary row actions and
+secondary controls are sibling targets, never nested buttons.
 Search lookups that fail or find no match show the normal no-results state,
 without error toasts or Retry actions. Explicit scan and open actions retain
 strict address validation. Address results
@@ -1101,15 +1115,16 @@ with a single-line description and publisher avatar/name below the title. Artwor
 has no format border. Website rows show a muted web label below the title;
 signed-application rows omit format badges. Application information shows
 the format as muted caption text
-beneath the title. Both modes open the shared application
-details. My apps displays only saved shortcuts in its vertically scrolling
+beneath the title. Signed-application results open shared details; website
+results open directly. My apps displays only saved shortcuts in its vertically scrolling
 grid without a redundant section heading. My apps reads and reveals local
 application metadata in pages of 50 as the user scrolls. Both Explore modes keep the leading
 header history action, which opens the dedicated recent-use page;
 recent apps do not appear inline in My apps. History loads on entry and appends
 50 older entries at a time as the user scrolls. History reuses Discover application
 rows with artwork, a single-line description and publisher identity. Pressing a
-history row opens application details. Running-state dots remain
+history row opens application details for signed apps and directly opens websites.
+Running-state dots remain
 clearly visible, straddle the icon artwork's logical bottom-end corner, and use
 a page-background ring to separate them from artwork. Compact list icons use a
 smaller dot. Hover and press dim only

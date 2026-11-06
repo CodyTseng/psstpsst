@@ -54,3 +54,17 @@ it('keeps discovery rows free of membership buttons and opens details on press',
   expect(onDetails).toHaveBeenCalledWith(app);
   expect(onFavorite).not.toHaveBeenCalled();
 });
+
+
+it('opens website rows directly while retaining explicit menu details', async () => {
+  const website = { ...app, key: 'https://example.com/', kind: 'website' as const };
+  const onOpenWebsite = jest.fn();
+  await act(async () => { renderer = create(<ApplicationContextRow {...props} app={website} onOpenWebsite={onOpenWebsite} />); });
+  const row = renderer.root.findByType(ApplicationListRow);
+  act(() => { row.props.onPress(); });
+  expect(onOpenWebsite).toHaveBeenCalledWith(website);
+  expect(onDetails).not.toHaveBeenCalled();
+  await act(async () => { row.props.onLongPress({ nativeEvent: { pageX: 80, pageY: 320 } }); });
+  act(() => { renderer.root.findByType(ApplicationMenu).props.onDetails(website); });
+  expect(onDetails).toHaveBeenCalledWith(website);
+});

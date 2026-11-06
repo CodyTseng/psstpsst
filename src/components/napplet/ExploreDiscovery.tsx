@@ -22,8 +22,10 @@ import { ApplicationContextRow } from './ApplicationContextRow';
 
 const EMPTY_ENTRIES: ExploreEntry[] = [];
 
-export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions, onShare, bottomInset, onScrollChange, query = '', actionFilter, onClearAction, header, headerHeight = 0, onScrollBeginDrag, scope = 'discover', favorites = EMPTY_ENTRIES }: {
+export function ExploreDiscovery({ account, onDetails, onOpenWebsite, onFavorite, onPermissions, onShare, bottomInset, onScrollChange, query = '', suggestions, actionFilter, onClearAction, header, headerHeight = 0, onScrollBeginDrag, scope = 'discover', favorites = EMPTY_ENTRIES }: {
   actionFilter?: ApplicationActionFilter; onClearAction?: () => void;
+  suggestions?: ReactNode;
+  onOpenWebsite?: (app: ExploreEntry) => void;
   header?: ReactNode; headerHeight?: number; onScrollBeginDrag?: () => void;
   account: string; onDetails: (app: ExploreEntry) => void;
   onFavorite: (app: ExploreEntry) => void | Promise<void>; onPermissions: (app: ExploreEntry) => void; onShare: (app: ExploreEntry) => void;
@@ -126,7 +128,7 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
     ListFooterComponent={scope === 'discover' && (!searching || actionFilter) && state.loadingMore && (!actionFilter || data.length > 0) ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} /> : null}
     onScroll={scroll} scrollEventThrottle={1}
     contentContainerStyle={{ paddingBottom: bottomInset, flexGrow: 1 }}
-    ListHeaderComponent={actionFilter || error ? <>{actionFilter ? <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs, alignItems: 'flex-start' }}>
+    ListHeaderComponent={suggestions || actionFilter || error ? <>{suggestions}{actionFilter ? <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs, alignItems: 'flex-start' }}>
       <AppButton variant="secondary" size="sm" fullWidth={false} corner="full" labelVariant="caption"
         label={filterLabel}
         accessibilityLabel={`${filterLabel}. ${t('applications.show_all_apps')}`}
@@ -137,13 +139,13 @@ export function ExploreDiscovery({ account, onDetails, onFavorite, onPermissions
     </View> : null}</> : null}
     ListEmptyComponent={filteredPending || address.active && address.loading || cataloguePending && (searching || !pullRefreshing)
       ? <ActivityIndicator size="small" color={c.textMuted} style={{ padding: spacing.lg }} />
-      : !error && (searching || scope === 'my-apps' || !state.error && !state.loading && !state.hasMore) ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
+      : !suggestions && !error && (searching || scope === 'my-apps' || !state.error && !state.loading && !state.hasMore) ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg }}>
         <Compass size={spacing['3xl']} color={c.textMuted} />
         <AppText variant="title" align="center">{t(searching || scope === 'my-apps' ? 'search.empty' : actionFilter ? 'applications.no_compatible_apps' : 'applications.discovery_empty')}</AppText>
         {!searching && scope === 'discover' ? <AppButton variant="secondary" label={t('common.retry')} onPress={refresh} /> : null}
       </View> : null}
     renderItem={({ item }) => <ApplicationContextRow app={item} favorite={favoriteKeys.has(item.key)}
-      onDetails={onDetails} onFavorite={onFavorite} onPermissions={onPermissions} onShare={onShare} />} />
+      onDetails={onDetails} onOpenWebsite={onOpenWebsite} onFavorite={onFavorite} onPermissions={onPermissions} onShare={onShare} />} />
 
   </View>;
 }

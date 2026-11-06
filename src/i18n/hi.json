@@ -279,6 +279,7 @@
     "or": "या"
   },
   "search": {
+    "fill_address": "पता भरें",
     "clear": "खोज साफ़ करें",
     "placeholder": "खोजें",
     "contacts_placeholder": "संपर्क खोजें",

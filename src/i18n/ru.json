@@ -279,6 +279,7 @@
     "or": "или"
   },
   "search": {
+    "fill_address": "Подставить адрес",
     "clear": "Очистить поиск",
     "placeholder": "Поиск",
     "contacts_placeholder": "Поиск контактов",

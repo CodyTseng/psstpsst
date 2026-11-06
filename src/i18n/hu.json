@@ -279,6 +279,7 @@
     "or": "vagy"
   },
   "search": {
+    "fill_address": "Cím beillesztése",
     "clear": "Keresés törlése",
     "placeholder": "Keresés",
     "contacts_placeholder": "Keresés a névjegyek között",

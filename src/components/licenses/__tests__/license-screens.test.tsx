@@ -37,7 +37,7 @@ jest.mock('@solar-icons/react-native/category/notes/Linear/DocumentText', () => 
 jest.mock('@solar-icons/react-native/category/arrows/Linear/SquareArrowRightUp', () => ({ SquareArrowRightUp: () => null }), { virtual: true });
 jest.mock('lucide-react-native/icons/chevron-left', () => () => null, { virtual: true });
 jest.mock('lucide-react-native/icons/chevron-right', () => () => null, { virtual: true });
-jest.mock('@solar-icons/react-native/category/search/Linear/Magnifer', () => ({ Magnifer: () => null }), { virtual: true });
+jest.mock('lucide-react-native/icons/search', () => () => null, { virtual: true });
 jest.mock('lucide-react-native/icons/x', () => () => null, { virtual: true });
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,

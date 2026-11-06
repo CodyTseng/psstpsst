@@ -279,6 +279,7 @@
     "or": "或"
   },
   "search": {
+    "fill_address": "填入網址",
     "clear": "清除搜尋",
     "placeholder": "搜尋",
     "contacts_placeholder": "搜尋聯絡人",

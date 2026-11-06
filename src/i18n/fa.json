@@ -279,6 +279,7 @@
     "or": "یا"
   },
   "search": {
+    "fill_address": "درج نشانی",
     "clear": "پاک کردن جستجو",
     "placeholder": "جستجو",
     "contacts_placeholder": "جستجوی مخاطبان",
