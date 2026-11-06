@@ -156,16 +156,16 @@ or publish anything. See [implementation and limits](../implementation/napp-ui-d
 
 `napp.registerAction(pattern, handler?)` registers a document-scoped handler;
 omitting the callback permits a popstate-only handler. `napp.action(name, payload,
-options?)` selects a live handler belonging to an application in My apps or a verified
-My apps entry declaring the action, with compatible verified catalogue entries
-available in the same chooser. All paths use the caller's account.
+options?)` selects compatible My apps entries or same-account live applications
+with matching verified declarations and registered handlers. Verified catalogue
+entries with matching declarations are available in the same chooser. A running
+application need not belong to My apps; removing its shortcut does not make a
+compatible live handler unavailable.
 An explicit call to the caller's exact live document instance dispatches directly
 without My apps membership or a chooser, after checking its registered action and
-mode. Explicit calls to other instances, including another window of the same
-app, require My apps membership. Removing an app excludes its running handlers
-from saved candidates; a compatible catalogue entry can still be chosen explicitly.
-The chooser names the caller and content purpose and asks which app to
-open it with. Candidate rows reuse discovery's icons, names, publishers and format
+mode. Other instances require compatible declarations and registration.
+The chooser asks which app to open the content with and shows the exact action
+or intent identifier as supporting text for its remember-choice control. Candidate rows reuse discovery's icons, names, publishers and format
 labels. Compatible My apps appear first; other verified apps are browsed and
 selected inline, with bounded catalogue pagination and retry. Scrolling to the end reveals
 the next matching window; incompatible or already-buffered pages advance
@@ -183,8 +183,11 @@ as `permission-denied`, like cancelling a populated chooser. The sheet's Close a
 selected applications in independent document tasks and focuses an existing task
 when delivering an action to its live handler. Options may identify one live
 `instance` or request an `auxiliary` application. Exact patterns match; `view`
-also matches `view:<kind>`. Specific view actions require a verified event of
-that kind. Generic view actions retain an unresolved reference when resolution
+also matches `view:<kind>` in both declarations and live registrations. Resolved
+generic views use the concrete kind for routing, offering both specific and
+generic viewers. Generic handlers receive the action named `view`. Specific view
+actions require a verified event of that kind. Generic view actions retain an
+unresolved reference when resolution
 fails. `napp.instance` identifies the container synchronously; awaiting
 `napp.ready` ensures its host endpoint has connected.
 

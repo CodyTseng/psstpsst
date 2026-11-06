@@ -73,7 +73,8 @@ export class ApplicationMessagingBroker {
         };
         const timer = setTimeout(() => finish(new Error('action-timeout')), 120000);
         this.pending.set(requestId, { sender: instance, target: target.instance, resolve: value => finish(undefined, value), reject: error => finish(error) });
-        try { target.send({ type: 'action', requestId, name: message.name, payload: message.payload, sender: instance }); }
+        const name = target.actions.includes(message.name) ? message.name : 'view';
+        try { target.send({ type: 'action', requestId, name, payload: message.payload, sender: instance }); }
         catch { finish(new Error('endpoint-closed')); }
       });
     }

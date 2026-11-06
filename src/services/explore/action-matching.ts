@@ -1,6 +1,7 @@
 import type { ExploreEntry } from './model';
 
 export type ApplicationActionFilter = { name: string; auxiliary: boolean };
+/** Generic viewers accept any specific event kind; other actions match exactly. */
 export const matchesAction = (pattern: string, name: string) => pattern === name || pattern === 'view' && name.startsWith('view:');
 
 export function supportsApplicationAction(app: ExploreEntry, filter: ApplicationActionFilter): boolean {

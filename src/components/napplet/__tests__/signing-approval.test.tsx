@@ -607,12 +607,12 @@ it('does not offer Discover for an unavailable explicit instance', () => {
   expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'applications.view_other_apps')).toBe(false);
 });
 
-it('keeps the requester question when compatible applications can be selected', () => {
+it('omits redundant requester text when compatible applications can be selected', () => {
   mockPrompt = { requestId: 'choices', queued: 0, title: 'Timeline', detail: '',
     choices: [{ key: 'target', title: 'Target' }], applicationSelection: { requester: 'Timeline', content: 'content' } };
   act(() => { renderer = create(<NappletOverlays />); });
-  expect(renderer.root.findByType(BottomSheet).props.fixedSubheader).toBeDefined();
-  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toEqual(['applications.open_with_content']);
+  expect(renderer.root.findByType(BottomSheet).props.fixedSubheader).toBeUndefined();
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).not.toContain('Timeline');
 });
 
 
@@ -647,17 +647,20 @@ it.each([24242, 27235, 22242])('renders kind %s publication as an ordinary signa
 });
 
 
-it.each(['light', 'dark'] as const)('offers opt-in default selection without carrying it into another request in %s mode', mode => {
+it.each([['light', 'profile'], ['dark', 'view:0']] as const)('offers opt-in default selection without carrying it into another request in %s mode for %s', (mode, name) => {
   mockScheme = mode;
   mockPrompt = { requestId: 'remember-A', queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'account', choices: [{ key: 'source:target', title: 'Target' }],
-    applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+    applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name, auxiliary: false } } };
   act(() => { renderer = create(<NappletOverlays />); });
   const row = () => renderer.root.findByType(BottomSheet).props.listProps.renderItem({ item: mockPrompt!.choices![0], index: 0 }).props.children[1];
   expect(row().props.remember).toBe(false);
   const first = renderer.root.findByType(BottomSheet).props.listProps.renderItem({ item: mockPrompt!.choices![0], index: 0 });
   expect(first.props.children[0].props.children).toBe('applications.available_apps');
   const card = () => renderer.root.findAllByType(ListRow).find(node => node.props.accessibilityRole === 'switch')!;
+  expect(card().props.title).toBe('applications.always_open_type');
+  expect(card().props.subtitle).toBe(name);
+  expect(card().props.accessibilityLabel).toContain(name);
   expect(card().props.accessibilityState).toEqual({ checked: false });
   act(() => { card().props.onPress(); });
   expect(row().props.remember).toBe(true);

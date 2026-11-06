@@ -26,7 +26,6 @@ import { ApplicationChoiceSectionHeader } from './application-choice-section-hea
 import { applicationChoiceFooter } from './application-choice-footer';
 import { spacing, useThemeColors } from '@/theme';
 import { ApplicationListRow } from './ApplicationListRow';
-import { handlerTypeLabel } from './handler-type-label';
 
 export function DefaultApplicationsPage({ account }: { account: string }) {
   const { t } = useTranslation();
@@ -66,7 +65,9 @@ export function DefaultApplicationsPage({ account }: { account: string }) {
       fixedSubheader={defaults.selected ? <View style={{ gap: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <View style={{ flex: 1, gap: spacing.xs }}>
-            <AppText weight="semibold">{handlerTypeLabel(defaults.selected.type, t)}</AppText>
+            <AppText weight="semibold">{defaults.selected.type.name}</AppText>
+            {defaults.selected.type.kind === 'action' && defaults.selected.type.auxiliary ?
+              <AppText variant="caption" tone="muted">{t('applications.auxiliary_mode')}</AppText> : null}
             <AppText variant="caption" tone="muted">
               {t('applications.default_app_current', { app: defaults.selected.title || t('applications.handler_unavailable') })}
             </AppText>
@@ -115,7 +116,8 @@ function DefaultApplicationRow({ account, preference, onSelect }: {
   const { t } = useTranslation();
   const c = useThemeColors();
   const application = useDefaultHandlerApplication(account, preference);
-  return <ListRow variant="list" title={handlerTypeLabel(preference.type, t)}
+  return <ListRow variant="list" title={preference.type.name}
+    subtitle={preference.type.kind === 'action' && preference.type.auxiliary ? t('applications.auxiliary_mode') : undefined}
     value={preference.title || t('applications.handler_unavailable')}
     valueLeading={<ApplicationIcon release={application} size={spacing.xl} />}
     trailing={<DirectionalChevron size={18} color={c.textMuted} />}

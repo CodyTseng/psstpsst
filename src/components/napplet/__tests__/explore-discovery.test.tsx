@@ -333,16 +333,17 @@ it.each(['light', 'dark'] as const)('finds compatible apps beyond the visible pa
   const app = (key: string, action: string, auxiliary = false) => ({ key, title: key, kind: 'napp',
     manifest: { tags: [['action', action], ...(auxiliary ? [['mode', 'auxiliary']] : [])] } }) as ExploreEntry;
   const wrong = app('wrong', 'edit');
-  const match = app('match', 'view');
+  const match = app('match', 'view:1');
   mockState.entries = [wrong]; mockState.visibleEntries = [wrong];
   await act(async () => { renderer = create(screen()); });
   expect(loadMoreApplications).toHaveBeenCalledWith('account', 'napps');
   expect(useDiscovery).toHaveBeenLastCalledWith('napps');
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.discovery_empty')).toBe(false);
-  mockState.entries = [wrong, match, app('auxiliary', 'view:1', true)];
+  const generic = app('generic', 'view');
+  mockState.entries = [wrong, generic, match, app('auxiliary', 'view:1', true)];
   mockState.hasMore = false;
   await act(async () => { renderer.update(screen()); });
-  expect(renderer.root.findByType(FlatList).props.data).toEqual([match]);
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([generic, match]);
   const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'applications.action_filter: view:1')!;
   expect(filter).toBeDefined();
   await act(async () => { filter.props.onPress(); });

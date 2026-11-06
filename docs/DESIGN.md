@@ -1202,10 +1202,12 @@ surfaces.
 Explore settings manages account-specific default applications by content type
 and operation. Default rows pair the application name with a compact application
 icon on its leading side. Handoff choosers offer an opt-in to use the selected application
-for future requests of that exact type. This opt-in sits below the requester
-explanation and above the application choices in a surfaced settings card. The
+for future requests of that exact type. This opt-in sits above the application
+choices in a surfaced settings card, with the persistent behavior as its primary
+label and the exact action or intent identifier as supporting text. The
 whole card toggles the choice and owns its switch accessibility; its visual
-switch accessory is passive. Keep the requester explanation brief; the title already identifies the selection task. Application choosers have
+switch accessory is passive. The chooser omits redundant requester text when
+opened from an application. Application choosers have
 no automatic expiry and remain open until selection, dismissal, or requester
 cancellation. Preferences can be replaced or reset to
 Ask every time; unavailable defaults return to the chooser. Changing an action
@@ -1219,14 +1221,15 @@ spacing, and the same catalogue-browsing footer. Explicit live-instance
 requests never use or create defaults. Remembering a choice does not add a shortcut
 or grant application access.
 
-Action handoffs without a usable default explicitly ask which app should open the requested content
-and name the requesting app. Candidate rows reuse the discovery list's app icon,
+Action handoffs without a usable default ask which app should open the requested content. Candidate rows reuse the discovery list's app icon,
 name, description and publisher attribution, with denser row spacing than
-browsing lists. The requester explanation uses muted supporting text. Choosing
-a row opens that app;
+browsing lists. Choosing a row opens that app.
 The sheet's Close action dismisses only this handoff, without a duplicate Cancel
 footer. These choosers omit access-review language,
-signing-account labels and raw protocol action names. Available apps combine
+signing-account labels. Handoff choosers and default-application settings display
+exact action or intent identifiers without friendly-name mappings, so distinct
+operations remain distinguishable. Default-application rows and their editing
+sheets identify auxiliary mode separately from the exact action name. Available apps combine
 compatible My apps with running applications whose declarations and live handlers
 match the request. Available candidates appear first. With available candidates,
 catalogue browsing starts only after the user
@@ -1463,7 +1466,8 @@ message.
 14. **Use logical direction.** No hard-coded left/right text alignment.
 15. **Record new conventions here.** Keep implementation narratives out.
 16. **Use plain-language UI copy.** Protocol terminology stays out of ordinary
-    product surfaces.
+    product surfaces, except exact action and intent identifiers in application
+    handoff choosers and default-application settings.
 17. **Never flash an empty state while loading.** Gate on resolved state.
 18. **Do not use `autoFocus` on pushed screens.** Use
     `useFocusAfterTransition`.

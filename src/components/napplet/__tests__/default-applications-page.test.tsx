@@ -28,15 +28,16 @@ jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ 
 let renderer: ReactTestRenderer;
 afterEach(() => act(() => renderer?.unmount()));
 
-it('uses the shared discovery picker and saves another app from its catalogue row', () => {
-  const save = jest.fn(), discover = jest.fn(), more = jest.fn();
-  const selected = { type: { kind: 'action' as const, name: 'view:30023', auxiliary: false }, sourceId: 'reader', title: 'Reader' };
+it.each(['profile', 'view:0', 'view:30023'].flatMap(name => [false, true].map(auxiliary => ({ name, auxiliary }))))(
+  'preserves $name and auxiliary=$auxiliary in settings and the shared discovery picker', ({ name, auxiliary }) => {
+  const save = jest.fn(), discover = jest.fn(), more = jest.fn(), select = jest.fn();
+  const selected = { type: { kind: 'action' as const, name, auxiliary }, sourceId: 'reader', title: 'Reader' };
   const saved = { key: 'reader', address: 'reader', title: 'Reader', kind: 'napp' as const, servers: [],
     description: '', required: [], desktopPosition: 0, lastUsedAt: null };
   jest.mocked(useDefaultHandlers).mockReturnValue({
-    entries: [selected], selected, selectionId: 2, loaded: true, error: false,
+    entries: [selected, { ...selected, type: { ...selected.type, auxiliary: !auxiliary } }], selected, selectionId: 2, loaded: true, error: false,
     candidates: { entries: [saved], loaded: true, error: false }, saving: false, saveError: false,
-    save, select: jest.fn(), retry: jest.fn(),
+    save, select, retry: jest.fn(),
   });
   jest.mocked(useApplicationChoices).mockReturnValue({
     choices: [{ key: 'source:reader', title: 'Reader', application: saved }, { key: 'discovery:other', title: 'Other reader', application: { key: 'other', title: 'Other reader', kind: 'napp', servers: [] } }],
@@ -46,9 +47,19 @@ it('uses the shared discovery picker and saves another app from its catalogue ro
   act(() => { renderer = create(<DefaultApplicationsPage account="account" />); });
   expect(useApplicationChoices).toHaveBeenLastCalledWith(expect.objectContaining({
     accountPubkey: 'account', requestId: 'default:2',
-    applicationSelection: expect.objectContaining({ discovery: { name: 'view:30023', auxiliary: false } }),
+    applicationSelection: expect.objectContaining({ discovery: { name, auxiliary } }),
   }));
+  const rows = renderer.root.findAllByType('ListRow' as never).filter(row => row.props.title === name);
+  expect(rows).toHaveLength(2);
+  expect(rows[0].props.subtitle).toBe(auxiliary ? 'applications.auxiliary_mode' : undefined);
+  expect(rows[1].props.subtitle).toBe(auxiliary ? undefined : 'applications.auxiliary_mode');
+  act(() => { rows[0].props.onPress(); });
+  expect(select).toHaveBeenCalledWith(selected);
   const sheet = renderer.root.findByType(BottomSheet);
+  expect(sheet.props.fixedSubheader.props.children[0].props.children[0].props.children[0].props.children).toBe(name);
+  const modeLabel = sheet.props.fixedSubheader.props.children[0].props.children[0].props.children[1];
+  if (auxiliary) expect(modeLabel.props.children).toBe('applications.auxiliary_mode');
+  else expect(modeLabel).toBeNull();
   expect(sheet.props.title).toBe('applications.default_app_title');
   act(() => { sheet.props.listProps.ListFooterComponent.props.children.props.onPress(); });
   expect(discover).toHaveBeenCalled();

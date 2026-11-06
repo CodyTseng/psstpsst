@@ -3,7 +3,6 @@ import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { handlerTypeLabel } from './handler-type-label';
 import { ListRow } from '@/components/common/ListRow';
 import { Toggle } from '@/components/common/Toggle';
 import { ApplicationChoiceSectionHeader } from './application-choice-section-header';
@@ -97,21 +96,16 @@ function NappletOverlayContent() {
       title={selectingApplication ? t('applications.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt' : 'applications.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('applications.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'applications.permissions' : `applications.browser_${prompt.browser.action}`) : accessPrompt ? t('applications.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('applications.details') : showingPanel?.page === 'settings' ? t('applications.permissions_manage') : t('applications.settings'))}
       headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
-      fixedSubheader={selectingApplication && !!applicationChoices.choices.length ? <View style={{ gap: spacing.sm }}>
-        <AppText variant="caption" tone="muted">
-          {t(selectingApplication.content === 'profile' ? 'applications.open_with_profile' : 'applications.open_with_content', { app: selectingApplication.requester })}
-        </AppText>
-        {prompt && (selectingApplication.discovery || selectingApplication.intent) ?
-          <ListRow variant="card" verticalPadding="sm" title={handlerTypeLabel(selectingApplication.discovery
-            ? { kind: 'action', ...selectingApplication.discovery } : { kind: 'intent', name: selectingApplication.intent! }, t)}
-            subtitle={t('applications.always_open_type')} subtitleMultiline
+      fixedSubheader={selectingApplication && !!applicationChoices.choices.length && prompt &&
+        (selectingApplication.discovery || selectingApplication.intent) ?
+          <ListRow variant="card" verticalPadding="sm" title={t('applications.always_open_type')}
+            subtitle={selectingApplication.discovery?.name ?? selectingApplication.intent!} subtitleMultiline
             onPress={() => setRememberChoice({ id: prompt.requestId, value: !remember })}
             accessibilityRole="switch" accessibilityState={{ checked: remember }}
-            accessibilityLabel={t('applications.always_open_type')}
+            accessibilityLabel={`${t('applications.always_open_type')}, ${selectingApplication.discovery?.name ?? selectingApplication.intent!}`}
             trailing={<View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               <Toggle value={remember} onValueChange={value => setRememberChoice({ id: prompt.requestId, value })} />
-            </View>} /> : null}
-      </View> : undefined}
+            </View>} /> : undefined}
       listProps={selectingApplication && prompt ? {
         data: applicationChoices.choices, keyExtractor: choice => choice.key,
         initialNumToRender: 8,

@@ -1,3 +1,4 @@
+import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { applicationEntryFromAddress, resolveApplicationReference } from '../application-reference';
 import { readDefaultActionHandler, setDefaultHandler } from '../default-handlers';
 import { NappCapabilities } from '../capabilities';
@@ -424,4 +425,32 @@ it('does not retry an action after invocation has reached the default handler', 
     expect(confirm).not.toHaveBeenCalled();
     expect(received).toHaveBeenCalledTimes(1);
   } finally { detach(); }
+});
+
+
+it.each(['view:30023', 'view'])('offers specific and generic readers for a resolved article requested through %s', async requested => {
+  const reader = { ...target, manifest: { ...target.manifest!, tags: [['action', 'view:30023']] } };
+  const generic = { ...target, key: 'generic', title: 'Generic viewer', manifest: { ...target.manifest!, tags: [['action', 'view']] } };
+  favorites = [generic, reader];
+  await connectTarget(account, ['view', 'view:30023']);
+  await messaging.connect({ instance: 'generic-instance', accountPubkey: account, sourceId: generic.key,
+    title: generic.title, actions: ['view'], domains: [] });
+  const event = finalizeEvent({ kind: 30023, created_at: 1, tags: [['d', 'article']], content: 'Article' }, generateSecretKey());
+  const detach = messaging.onMessage((instance, message) => {
+    if (instance === 'target-instance' || instance === 'generic-instance') {
+      received(instance, message);
+      void messaging.request(instance, { type: 'actionResult', requestId: message.requestId, result: 'opened' });
+    }
+  });
+  try {
+    await expect(capabilities.handle('action', [requested, event])).resolves.toBe('opened');
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ choices: expect.arrayContaining([expect.objectContaining({ key: 'instance:target-instance' }), expect.objectContaining({ key: 'instance:generic-instance' })]) }), life.signal);
+    expect(received).toHaveBeenCalledWith('target-instance', expect.objectContaining({ name: 'view:30023', payload: event }));
+    jest.mocked(readDefaultActionHandler).mockResolvedValue({ type: { kind: 'action', name: 'view:30023', auxiliary: false }, sourceId: generic.key, title: generic.title });
+    confirm.mockClear();
+    await expect(capabilities.handle('action', [requested, event])).resolves.toBe('opened');
+    expect(confirm).not.toHaveBeenCalled();
+    expect(received).toHaveBeenLastCalledWith('generic-instance', expect.objectContaining({ name: 'view', payload: event }));
+    expect(launch).not.toHaveBeenCalled();
+  } finally { detach(); await messaging.disconnect('generic-instance'); }
 });
