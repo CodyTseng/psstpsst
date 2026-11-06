@@ -59,6 +59,7 @@ jest.mock('@/components/common/QrScanButton', () => ({ QrScanButton: 'ScanButton
 jest.mock('@/components/common/SegmentedControl', () => ({ SegmentedControl: 'Tabs' }));
 jest.mock('@/components/napplet/ExploreDiscovery', () => ({ ExploreDiscovery: ({ header, suggestions }: { header?: React.ReactNode; suggestions?: React.ReactNode }) => <>{header}{suggestions}</> }));
 jest.mock('@/components/napplet/ApplicationGrid', () => ({ ApplicationGrid: ({ header }: { header?: React.ReactNode }) => <>{header}</> }));
+jest.mock('@solar-icons/react-native/category/settings/Linear/Settings', () => ({ Settings: () => null }), { virtual: true });
 jest.mock('@solar-icons/react-native/category/settings/Linear/Widget', () => ({ Widget: () => null }), { virtual: true });
 
 let renderer: ReactTestRenderer;
@@ -93,7 +94,7 @@ it('shows the grid when the local Favorites snapshot is ready', async () => {
 
 it('uses the shared header-sized scanner and points empty Favorites to Discover', async () => {
   const scanner = renderer.root.findByType(QrScanButton);
-  expect(renderer.root.findByType(ScreenHeader).props.right.type).toBe(QrScanButton);
+  expect(renderer.root.findByType(ScreenHeader).props.left.type).toBe(QrScanButton);
   expect(renderer.root.findByType(ScreenHeader).props.title).toBeUndefined();
   expect(renderer.root.findByType(ScreenHeader).props.below).toBeUndefined();
   expect(renderer.root.findByType(ScreenHeader).props.belowHeight).toBeUndefined();
@@ -218,30 +219,30 @@ it('shares query text across modes and restricts Favorites keyword scope to shor
   expect(renderer.root.findByType(ExploreDiscovery).props.scope).toBe('discover');
 });
 
-it('keeps history accessible in both modes and recent apps out of the Favorites grid', async () => {
+it('keeps settings accessible in both modes and recent apps out of the Favorites grid', async () => {
   const favorite = { key: 'favorite', desktopPosition: 0, lastUsedAt: null } as ExploreEntry;
   const recent = { key: 'recent', desktopPosition: null, lastUsedAt: 10 } as ExploreEntry;
   mockExplore.entries = [favorite, recent];
   await act(async () => { renderer.update(<ExploreScreen />); });
   expect(renderer.root.findByType(ApplicationGrid).props.items).toEqual([favorite]);
   expect(renderer.root.findByType(ApplicationGrid).props.recent).toBeUndefined();
-  const history = renderer.root.findByType(IconButton);
-  expect(history.props.accessibilityLabel).toBe('applications.recent');
-  await act(async () => { history.props.onPress(); });
-  expect(mockNavigate).toHaveBeenCalledWith('/explore-recent');
+  const settings = renderer.root.findByType(IconButton);
+  expect(settings.props.accessibilityLabel).toBe('settings.title');
+  await act(async () => { settings.props.onPress(); });
+  expect(mockNavigate).toHaveBeenCalledWith('/explore-settings');
   await act(async () => { renderer.root.findByType(SegmentedControl).props.onChange('discover'); });
-  const discoverHistory = renderer.root.findByType(IconButton);
-  expect(discoverHistory.props.accessibilityLabel).toBe('applications.recent');
-  await act(async () => { discoverHistory.props.onPress(); });
-  expect(mockNavigate).toHaveBeenLastCalledWith('/explore-recent');
+  const discoverSettings = renderer.root.findByType(IconButton);
+  expect(discoverSettings.props.accessibilityLabel).toBe('settings.title');
+  await act(async () => { discoverSettings.props.onPress(); });
+  expect(mockNavigate).toHaveBeenLastCalledWith('/explore-settings');
 });
 
-it('shows empty Favorites for accounts with only recent apps while keeping history accessible', async () => {
+it('shows empty Favorites for accounts with only recent apps while keeping settings accessible', async () => {
   mockExplore.entries = [{ key: 'recent', desktopPosition: null, lastUsedAt: 10 } as ExploreEntry];
   await act(async () => { renderer.update(<ExploreScreen />); });
   expect(renderer.root.findAllByType(ApplicationGrid)).toHaveLength(0);
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.empty_title')).toBe(true);
-  expect(renderer.root.findByType(IconButton).props.accessibilityLabel).toBe('applications.recent');
+  expect(renderer.root.findByType(IconButton).props.accessibilityLabel).toBe('settings.title');
 });
 
 

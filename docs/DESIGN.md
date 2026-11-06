@@ -1057,9 +1057,9 @@ Details resolve initial membership and measure responsive action placement
 before revealing the body, so provisional button layouts never shift visible
 content. Later permission or membership refreshes retain the presented body.
 
-Explore keeps compact My apps/Discover mode selection beside Scan in its fixed
-header, without a redundant Explore title. Like Chats and Contacts, its resting
-search field belongs to the scrolling content; tapping it opens the shared search
+Explore keeps compact My apps/Discover mode selection between leading Scan and
+trailing Settings actions in its fixed header, without a redundant Explore title.
+Like Chats and Contacts, its resting search field belongs to the scrolling content; tapping it opens the shared search
 transition, with editable chrome fixed only while search is active. Discover
 pull-to-refresh uses the native platform control below the resting search field;
 the field collapses during upward scrolling and stays still during pull/rebound.
@@ -1118,8 +1118,8 @@ the format as muted caption text
 beneath the title. Signed-application results open shared details; website
 results open directly. My apps displays only saved shortcuts in its vertically scrolling
 grid without a redundant section heading. My apps reads and reveals local
-application metadata in pages of 50 as the user scrolls. Both Explore modes keep the leading
-header history action, which opens the dedicated recent-use page;
+application metadata in pages of 50 as the user scrolls. Both Explore modes open
+Explore settings from the header; settings contains the history entry to the dedicated recent-use page;
 recent apps do not appear inline in My apps. History loads on entry and appends
 50 older entries at a time as the user scrolls. History reuses Discover application
 rows with artwork, a single-line description and publisher identity. Pressing a

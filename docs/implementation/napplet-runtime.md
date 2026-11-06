@@ -437,7 +437,7 @@ search field occupies the second row. Keyword search uses only desktop shortcuts
 in My apps and the fetched catalogue in Discover. The results component keeps
 per-query display windows, and My apps keyword search never starts discovery
 reads. Clearing a My apps search restores its shortcut grid. My apps omits the recent
-preview; the leading header action in both modes opens `/explore-recent`. Recent-only accounts
+preview; the trailing header action in both modes opens `/explore-settings`, which links to `/explore-recent`. Recent-only accounts
 show the empty My apps state while retaining that history entry point. History
 uses the shared discovery row in a virtualized list, opening details on press. Discovery and history share pointer-anchored menus for
 details, permissions, sharing and Add app/Remove app; history always exposes

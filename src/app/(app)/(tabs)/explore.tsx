@@ -18,6 +18,7 @@ import { BackHandler, Keyboard, ScrollView, TextInput, View } from 'react-native
 import { DelayedActivityIndicator } from '@/components/common/DelayedActivityIndicator';
 import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
 import { iconStrokeWidth } from '@/theme/icons';
+import { Settings } from '@solar-icons/react-native/category/settings/Linear/Settings';
 import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePrimaryPaneFocused } from '@/hooks/use-primary-pane-focused';
@@ -213,14 +214,11 @@ function AccountExplore({ account, initialAddress, initialAction, tab, onTabChan
     <AppScreen edges={[]}>
       <ScreenHeader
         back={false}
-        left={<IconButton variant="plain" size={uiDensity.headerActionSize}
-          icon={<RotateCcwClock size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.text} />}
-          accessibilityLabel={t('applications.recent')} onPress={() => navigation.open('/explore-recent')} />}
         bordered={searching ? searchScrolled : scrolled}
         titleControl={<SegmentedControl compact value={tab}
           options={[{ value: 'my-apps', label: t('applications.my_apps') }, { value: 'discover', label: t('applications.discover') }]}
           onChange={value => { onTabChange(value); setScrolled(false); }} />}
-        right={
+        left={
           <QrScanButton variant="plain" size={uiDensity.headerActionSize} iconSize={uiDensity.headerActionIconSize}
             onScanned={data => {
               closeSearch();
@@ -231,6 +229,9 @@ function AccountExplore({ account, initialAddress, initialAction, tab, onTabChan
             }}
           />
         }
+        right={<IconButton variant="plain" size={uiDensity.headerActionSize}
+          icon={<Settings size={uiDensity.headerActionIconSize} color={c.text} />}
+          accessibilityLabel={t('settings.title')} onPress={() => navigation.open('/explore-settings')} />}
       />
       <SearchTransition active={searchActive} contentActive={searching} focused={focused}
         onActivate={openSearch} onCancel={closeSearch}
