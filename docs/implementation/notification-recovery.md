@@ -6,7 +6,7 @@ the run. This accommodates randomized envelope timestamps; it is not a durable
 arrival cursor. Older messages wait for foreground history recovery.
 
 After refreshing routing and encryption-key metadata, the poll visits each DM
-relay with `since`, `until`, and `limit: 200`. Each relay keeps its own `until`;
+relay with `since`, `until`, and `limit: 500`. Each relay keeps its own `until`;
 rounds alternate between relays. Events are processed and stored before moving
 the boundary. Processed gift-wrap IDs skip repeated decryption and notification.
 Only one page is retained by the pager at a time.
@@ -18,12 +18,10 @@ complete a page; timeout reasons remain available for diagnostics. CLOSED and
 connection failures leave the page incomplete, although received messages are
 still stored. Other relays can continue when one fails.
 
-When a page contains only events at the current boundary second and fills the
-requested limit, the poll doubles that limit, up to 3,200. A still-saturated
-second interrupts that relay instead of decrementing the timestamp and skipping
-events. NIP-01 offers no secondary event-ID cursor: a relay that silently caps
-results below the requested limit can still hide events sharing one timestamp.
-This protocol cannot guarantee completeness against such a relay.
+History and recovery share a fixed page limit of 500. Once a query is confined to the current
+boundary second, it moves to the preceding second without raising that limit.
+NIP-01 offers no secondary event-ID cursor, so events sharing a timestamp beyond
+the relay's returned page may remain undiscovered. Boundary reads are best-effort.
 
 Polling does not read or write `forwardSince` or `backwardUntil`. Interruption
 does not seal any history frontier; the next poll rechecks its recent window.

@@ -265,17 +265,19 @@ it.each(['destroy', 'key-change'])('cancels pending reconnect recovery on %s', a
   expect(setPendingForwardScan).not.toHaveBeenCalled();
 });
 
-it.each(['android', 'electron'])('skips recent foreground recovery on %s without moving its watermark', async platformName => {
+it.each(['android', 'electron'])('skips foreground recovery just under 15 minutes on %s without moving its watermark', async platformName => {
   mockPlatform = platformName;
-  const now = Math.floor(Date.now() / 1000);
-  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: now - 30, backwardUntil: 0 });
-  await dmService.init(options);
-  changeAppState('active');
-  await flush();
-  expect(getRelaySyncCursor).toHaveBeenCalled();
-  expect(relayPool.query).not.toHaveBeenCalled();
-  expect(setForwardSince).not.toHaveBeenCalled();
-  expect(setPendingForwardScan).not.toHaveBeenCalled();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000_000);
+  try {
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1_000_000 - 899, backwardUntil: 0 });
+    await dmService.init(options);
+    changeAppState('active');
+    await flush();
+    expect(getRelaySyncCursor).toHaveBeenCalled();
+    expect(relayPool.query).not.toHaveBeenCalled();
+    expect(setForwardSince).not.toHaveBeenCalled();
+    expect(setPendingForwardScan).not.toHaveBeenCalled();
+  } finally { clock.mockRestore(); }
 });
 
 it('scans on iOS foreground entry even when its watermark is recent', async () => {
@@ -299,7 +301,7 @@ it('scans a recent watermark on cold initialization instead of applying the fore
   expect(setForwardSince).toHaveBeenCalled();
 });
 
-it.each([3600, 3601, -30])('scans on foreground entry when the watermark age is %i seconds', async age => {
+it.each([900, 901, -30])('scans on foreground entry when the watermark age is %i seconds', async age => {
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000_000);
   try {
     jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1_000_000 - age, backwardUntil: 0 });
@@ -908,7 +910,7 @@ it.each(['closed', 'connection-failed', 'auth-failed'])('retries only the relay 
   }
 });
 
-it('expands a full boundary second before advancing the relay cursor', async () => {
+it('keeps a fixed page limit when a boundary second is full', async () => {
   mockAppState = 'active';
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
   try {
@@ -923,8 +925,8 @@ it('expands a full boundary second before advancing the relay cursor', async () 
     await dmService.init(options);
     await flush();
     expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => [opts.filter?.until, opts.filter?.limit]))
-      .toEqual([[1000, 500], [1000, 1000], [999, 500]]);
-    expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(events.map(event => event.id));
+      .toEqual([[1000, 500], [999, 500]]);
+    expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(events.slice(0, 500).map(event => event.id));
     expect(setForwardSince).toHaveBeenCalledWith(self, 'wss://fresh.example', 1000);
     expect(jest.mocked(setPendingForwardScan).mock.calls.map(([, , scan]) => scan.nextUntil))
       .toEqual([1000, 999]);
@@ -964,8 +966,8 @@ it('rechecks the inclusive lower boundary second before completing forward cover
     await flush();
     expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) =>
       [opts.filter?.since, opts.filter?.until, opts.filter?.limit]))
-      .toEqual([[1000, through, 500], [1000, 1000, 500], [1000, 1000, 1000]]);
-    expect(getProcessedGiftWrapIds).toHaveBeenLastCalledWith(events.map(event => event.id));
+      .toEqual([[1000, through, 500], [1000, 1000, 500]]);
+    expect(getProcessedGiftWrapIds).toHaveBeenLastCalledWith(events.slice(0, 500).map(event => event.id));
     expect(setForwardSince).toHaveBeenCalledWith(self, 'wss://fresh.example', through);
   } finally { clock.mockRestore(); }
 });
@@ -1009,7 +1011,7 @@ it('resumes a fixed forward window after interruption, then catches up to the ne
   } finally { clock.mockRestore(); }
 });
 
-it('does not checkpoint a full saturated timestamp boundary or claim its forward coverage', async () => {
+it('continues past a full timestamp boundary without expanding requests', async () => {
   mockAppState = 'active';
   const relay = 'wss://fresh.example';
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
@@ -1027,9 +1029,9 @@ it('does not checkpoint a full saturated timestamp boundary or claim its forward
     await dmService.init(options);
     await flush();
     expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => [opts.filter?.until, opts.filter?.limit]))
-      .toEqual([[900, 500], [900, 1000], [900, 2000], [900, 3200]]);
-    expect(setPendingForwardScan).not.toHaveBeenCalled();
-    expect(setForwardSince).not.toHaveBeenCalled();
+      .toEqual([[900, 500], [899, 500]]);
+    expect(setPendingForwardScan).toHaveBeenCalledWith(self, relay, { ...checkpoint, nextUntil: 899 });
+    expect(setForwardSince).toHaveBeenCalledWith(self, relay, 1000);
   } finally { clock.mockRestore(); }
 });
 

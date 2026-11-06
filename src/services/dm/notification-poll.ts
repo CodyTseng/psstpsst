@@ -1,11 +1,6 @@
 import type { Event, EventTemplate } from 'nostr-tools';
 
-import { relayPool } from '../relay/relay-pool';
-import { RelayQueryError } from '../relay/relay-query-error';
-import { DEFAULT_EOSE_TIMEOUT_MS, isEffectiveEose } from '../relay/relay-read';
-
-const PAGE_SIZE = 200;
-const MAX_BOUNDARY_PAGE_SIZE = 3200;
+import { readGiftWrapPage } from './gift-wrap-pager';
 
 type PollOptions = {
   label?: string;
@@ -27,67 +22,39 @@ type PollOptions = {
  */
 export async function pollRecentGiftWraps(options: PollOptions): Promise<string[]> {
   const pending = Array.from(new Set(options.relays), (url) => ({
-    url, until: options.until, limit: PAGE_SIZE,
+    url, until: options.until,
   }));
   const interrupted: string[] = [];
   const current = () => !options.abort.aborted && options.isCurrent();
   while (pending.length > 0 && current()) {
     // Rotate between relays so a large inbox cannot starve other replicas.
     const relay = pending.shift()!;
-    let completed = false;
-    const events = await relayPool.query({
+    const result = await readGiftWrapPage({
       label: options.label ?? 'dm.notification-poll',
-      relays: [relay.url],
-      filter: {
-        kinds: [1059], '#p': [options.accountPubkey],
-        since: options.since, until: relay.until, limit: relay.limit,
-      },
-      timeoutMs: DEFAULT_EOSE_TIMEOUT_MS,
+      accountPubkey: options.accountPubkey,
+      relayUrl: relay.url,
+      since: options.since,
+      until: relay.until,
       abort: options.abort,
+      isCurrent: options.isCurrent,
       signAuth: options.signAuth,
       onReceived: options.onReceived,
-      onComplete: (info) => {
-        completed = info.relays.length === 1 && isEffectiveEose(info.relays[0]);
+      onPage: async (page) => {
+        for (const event of page) {
+          if (!current()) break;
+          await options.onEvent(event);
+        }
       },
-    }).catch((error: unknown) => {
-      if (!current() || error instanceof RelayQueryError) return [];
-      throw error;
     });
-    if (!current()) break;
-
-    let oldest = relay.until;
-    let count = 0;
-    for (const event of events) {
-      if (!current()) break;
-      if (event.created_at < options.since || event.created_at > relay.until) continue;
-      oldest = Math.min(oldest, event.created_at);
-      count++;
-      await options.onEvent(event);
-    }
-    if (!current()) break;
-    if (!completed) {
+    if (result.status === 'aborted') break;
+    if (result.status === 'interrupted') {
       interrupted.push(relay.url);
       continue;
     }
-    if (count === 0) continue;
-    if (oldest < relay.until) {
-      // Re-read the entire boundary second before crossing it, including when
-      // it equals `since`. Local processed IDs absorb the overlap.
-      relay.until = oldest;
-      relay.limit = PAGE_SIZE;
-    } else if (count >= relay.limit) {
-      if (relay.limit === MAX_BOUNDARY_PAGE_SIZE) {
-        // NIP-01 has no secondary event-ID cursor. Never silently skip a
-        // saturated second; leave the window unconfirmed for a later retry.
-        interrupted.push(relay.url);
-        continue;
-      }
-      relay.limit = Math.min(relay.limit * 2, MAX_BOUNDARY_PAGE_SIZE);
-    } else {
-      relay.until--;
-      relay.limit = PAGE_SIZE;
+    if (result.status === 'page' && result.nextUntil >= options.since) {
+      relay.until = result.nextUntil;
+      pending.push(relay);
     }
-    if (relay.until >= options.since) pending.push(relay);
   }
   return interrupted;
 }

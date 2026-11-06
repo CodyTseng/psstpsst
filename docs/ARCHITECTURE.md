@@ -421,7 +421,7 @@ and state-machine details.
    is a best-effort policy, not proof that a relay returned every stored event.
    Tasks start only while the app
    is active, including foreground re-entry. On non-iOS foreground re-entry,
-   a forward watermark less than one hour old skips a new forward scan;
+   a forward watermark less than 15 minutes old skips a new forward scan;
    pending forward windows and unfinished deep history still resume. Cold
    initialization and retries are not throttled. iOS scans on each foreground
    entry because it has no persistent background subscription.
@@ -431,8 +431,10 @@ and state-machine details.
    a fixed pending forward window and its last completed page checkpoint.
    Recovery finishes that window before scanning a newer gap; only completion
    atomically advances the watermark and clears the checkpoint. A scan includes
-   and rechecks its lower boundary second before completing;
+   and rechecks its lower boundary second at a fixed page limit before completing;
    timestamp-only pagination remains best-effort against relay result caps.
+   History, reconnect recovery, and notification polls share one 500-event pager;
+   only the history caller persists paging checkpoints.
    An already-started pass may continue after backgrounding; foreground transitions do not start overlapping
    passes for the same relay. Group history finalization uses the conservative
    coverage intersection of the currently configured DM relays. Background polls,
@@ -444,8 +446,8 @@ and state-machine details.
    arrival intake and never advances history cursors or checkpoints. Only
    history scans update those durable frontiers. Account/key changes cancel stale work.
    Notification polls page only a fixed recent overlap window, independently per
-   relay, and never advance the persisted history cursors. Failures and saturated
-   timestamp boundaries leave coverage unconfirmed. See
+   relay, and never advance the persisted history cursors. Failures leave the
+   window incomplete; timestamp boundaries are rechecked without raising limits. See
    [notification recovery](implementation/notification-recovery.md) for paging limits.
 3. The service removes and verifies any transport envelope, then verifies the
    author, recipient, event ID, and supported rumor kind before storage.

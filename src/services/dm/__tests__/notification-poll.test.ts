@@ -67,20 +67,22 @@ it('continues after short pages imposed by a lower server limit', async () => {
   expect(query.mock.calls.length).toBeGreaterThan(7);
 });
 
-it('expands a saturated second before crossing it', async () => {
+it('rechecks a full boundary second at a fixed limit and continues to older events', async () => {
   serve({ [first]: [
     ...Array.from({ length: 550 }, (_, i) => event(i, 500)), event(999, 499),
   ] });
   expect(await poll()).toEqual([]);
-  expect(received.size).toBe(551);
-  expect(query.mock.calls.map(([opts]) => opts.filter!.limit)).toContain(800);
+  expect(received.size).toBe(501);
+  expect(received.has('999')).toBe(true);
+  expect(query.mock.calls.every(([opts]) => opts.filter!.limit === 500)).toBe(true);
 });
 
-it('leaves a still-saturated boundary unconfirmed instead of skipping older messages', async () => {
+it('finishes a full timestamp boundary without increasing the page limit', async () => {
   serve({ [first]: Array.from({ length: 3300 }, (_, i) => event(i, 500)) });
-  expect(await poll()).toEqual([first]);
-  expect(query.mock.calls.every(([opts]) => opts.filter!.until! >= 500)).toBe(true);
-  expect(query.mock.calls.at(-1)![0].filter!.limit).toBe(3200);
+  expect(await poll()).toEqual([]);
+  expect(received.size).toBe(500);
+  expect(query.mock.calls.map(([opts]) => opts.filter!.until)).toEqual([1000, 500, 499]);
+  expect(query.mock.calls.every(([opts]) => opts.filter!.limit === 500)).toBe(true);
 });
 
 it('accepts timeout EOSE and continues paging both relays', async () => {

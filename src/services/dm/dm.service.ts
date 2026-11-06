@@ -62,8 +62,6 @@ import {
   loadAccountDmRelays,
   ownKeyTransferRelays,
 } from '../relay/relay-list.service';
-import { RelayQueryError } from '../relay/relay-query-error';
-import { DEFAULT_EOSE_TIMEOUT_MS, isEffectiveEose } from '../relay/relay-read';
 import { relayPool } from '../relay/relay-pool';
 import { selfEventStream } from '../self-events/self-event-stream.service';
 import { syncStatusStore } from './sync-status';
@@ -97,6 +95,7 @@ import {
 import { isActiveConversationVisible } from './active-conversation';
 import { receiveSessionStore } from './receive-session';
 import { pollRecentGiftWraps } from './notification-poll';
+import { readGiftWrapPage } from './gift-wrap-pager';
 import {
   isNewerAnnouncement,
   MessagingKeySyncRequiredError,
@@ -114,10 +113,7 @@ import {
 
 /** Recovery rechecks randomized gift-wrap timestamps with an extra hour of margin. */
 const FORWARD_OVERLAP_SECONDS = 2 * 24 * 60 * 60 + 60 * 60; // 2 days + 1h margin
-const FOREGROUND_HISTORY_INTERVAL_SECONDS = 60 * 60;
-/** History backfill page size (per relay, per round). */
-const BACKFILL_PAGE = 500;
-const BACKFILL_MAX_BOUNDARY_PAGE = 3200;
+const FOREGROUND_HISTORY_INTERVAL_SECONDS = 15 * 60;
 /** `backwardUntil` sentinel meaning history is fully backfilled. */
 const BACKFILL_DONE = 0;
 function yieldToUi(): Promise<void> {
@@ -1854,8 +1850,7 @@ export class DmService {
 
   /** Page only one replica, with bounded memory and a UI yield per new envelope.
    * Wire and timeout EOSE finish a page; CLOSED and failed connections do not.
-   * Re-read a timestamp boundary before crossing it;
-   * saturated boundaries stay unconfirmed instead of silently losing messages. */
+   * Re-read a timestamp boundary with a fixed page size before crossing it. */
   private async drainWindow(
     accountPubkey: string,
     relayUrl: string,
@@ -1864,50 +1859,29 @@ export class DmService {
     epoch: number,
     onPageAdvance?: (until: number) => void | Promise<void>,
   ): Promise<'drained' | 'interrupted' | 'aborted'> {
-    let limit = BACKFILL_PAGE;
     while (this.syncEpoch === epoch && until >= floor) {
-      let completed = false;
-      const events = await relayPool.query({
+      const result = await readGiftWrapPage({
         label: 'dm.backfill',
+        accountPubkey,
+        relayUrl,
+        since: floor,
+        until,
         abort: this.receiveAbort?.signal,
-        relays: [relayUrl],
-        filter: { kinds: [KIND_GIFT_WRAP], '#p': [accountPubkey], since: floor, until, limit },
-        timeoutMs: DEFAULT_EOSE_TIMEOUT_MS,
+        isCurrent: () => this.syncEpoch === epoch,
         signAuth: this.signAuth ?? undefined,
         onReceived: (url, id) => this.recordGiftWrapSeen(id, url),
-        onComplete: (info) => {
-          completed = info.relays.length === 1 && isEffectiveEose(info.relays[0]);
+        onPage: async (page) => {
+          const processedIds = await getProcessedGiftWrapIds(page.map(event => event.id));
+          for (const event of page) {
+            if (this.syncEpoch !== epoch) return;
+            if (processedIds.has(event.id)) continue;
+            await this.processGiftWrap(event, 'history');
+            await yieldToUi();
+          }
         },
-      }).catch((error: unknown) => {
-        if (this.syncEpoch !== epoch || error instanceof RelayQueryError) return [];
-        throw error;
       });
-      if (this.syncEpoch !== epoch) return 'aborted';
-      const page = Array.from(new Map(events
-        .filter(event => event.created_at >= floor && event.created_at <= until)
-        .map(event => [event.id, event])).values()).sort((a, b) => b.created_at - a.created_at);
-      const processedIds = await getProcessedGiftWrapIds(page.map(event => event.id));
-      for (const event of page) {
-        if (this.syncEpoch !== epoch) return 'aborted';
-        if (processedIds.has(event.id)) continue;
-        await this.processGiftWrap(event, 'history');
-        await yieldToUi();
-      }
-      if (this.syncEpoch !== epoch) return 'aborted';
-      if (!completed) return 'interrupted';
-      if (page.length === 0) return 'drained';
-      const oldest = page[page.length - 1].created_at;
-      if (oldest < until) {
-        until = oldest;
-        limit = BACKFILL_PAGE;
-      } else if (page.length >= limit) {
-        if (limit === BACKFILL_MAX_BOUNDARY_PAGE) return 'interrupted';
-        limit = Math.min(limit * 2, BACKFILL_MAX_BOUNDARY_PAGE);
-        continue;
-      } else {
-        until--;
-        limit = BACKFILL_PAGE;
-      }
+      if (result.status !== 'page') return result.status;
+      until = result.nextUntil;
       await onPageAdvance?.(until);
     }
     return this.syncEpoch === epoch ? 'drained' : 'aborted';
