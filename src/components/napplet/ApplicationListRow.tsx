@@ -12,16 +12,16 @@ import { RunningApplicationIcon } from './RunningApplicationIcon';
 export const APPLICATION_LIST_ICON_SIZE = spacing['2xl'] + spacing.sm;
 
 /** Discovery and application handoffs share one recognizable application row. */
-export const ApplicationListRow = memo(function ApplicationListRow({ application, onPress, compact = false, ...interactions }: {
-  application: ApplicationListEntry; onPress(): void; compact?: boolean;
+export const ApplicationListRow = memo(function ApplicationListRow({ application, onPress, ...interactions }: {
+  application: ApplicationListEntry; onPress(): void;
 } & Pick<ComponentProps<typeof ListRow>, 'onLongPress' | 'accessibilityActions' | 'onAccessibilityAction' | 'disabled' | 'active' | 'selectionMode' | 'trailing' | 'accessibilityRole' | 'accessibilityState'>) {
   const { t } = useTranslation();
   const { name, profile } = useDisplayName(application.publisher ?? '');
   const website = application.kind === 'website';
   const description = application.description?.trim().replace(/\s+/g, ' ');
   return <ListRow {...interactions} variant="list" title={application.title} subtitleMultiline
-    iconWidth={APPLICATION_LIST_ICON_SIZE} iconAlign="start" verticalPadding={compact ? "sm" : "md"}
-    subtitleContent={website || description || application.publisher ? <View style={{ gap: compact ? 0 : spacing.xs }}>
+    iconWidth={APPLICATION_LIST_ICON_SIZE} iconAlign="start" verticalPadding="md"
+    subtitleContent={website || description || application.publisher ? <View style={{ gap: spacing.xs }}>
       {website ? <AppText variant="caption" tone="muted" selectable={false} style={{ userSelect: 'none' }}>{t('applications.formats.website')}</AppText> : null}
       {description ? <AppText variant="caption" tone="muted" numberOfLines={1} selectable={false} style={{ userSelect: 'none' }}>{description}</AppText> : null}
       {application.publisher ? <View testID="discovery-publisher" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>

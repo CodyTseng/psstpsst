@@ -94,7 +94,7 @@ export function DefaultApplicationsPage({ account }: { account: string }) {
             <ApplicationChoiceSectionHeader>
               {t(index === 0 ? 'applications.available_apps' : 'applications.other_apps')}
             </ApplicationChoiceSectionHeader> : null}
-          <ApplicationListRow compact application={item.application ?? { title: item.title, kind: 'napp', servers: [] }}
+          <ApplicationListRow application={item.application ?? { title: item.title, kind: 'napp', servers: [] }}
             accessibilityRole="radio" accessibilityState={{ checked: item.application?.key === defaults.selected?.sourceId }}
             trailing={<View style={{ width: spacing.xl, height: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
               {item.application?.key === defaults.selected?.sourceId ?

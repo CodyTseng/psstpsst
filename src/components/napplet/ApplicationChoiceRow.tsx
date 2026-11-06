@@ -8,5 +8,5 @@ export const ApplicationChoiceRow = memo(function ApplicationChoiceRow({ choice,
 }) {
   const application = useMemo(() => choice.application ?? { title: choice.title, kind: 'napp' as const, servers: [] }, [choice]);
   const open = useCallback(() => nappletService.answer(requestId, remember ? `default:${choice.key}` : choice.key), [requestId, choice.key, remember]);
-  return <ApplicationListRow compact application={application} onPress={open}/>;
+  return <ApplicationListRow application={application} onPress={open}/>;
 });

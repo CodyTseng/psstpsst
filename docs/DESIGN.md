@@ -677,7 +677,9 @@ attachments sent inside a conversation. Opening a shared destination resets the
 detail history so Back returns to the primary pane instead of a previous chat.
 
 Use the shared, state-driven `BottomSheet` for task flows. Do not use
-`@gorhom/bottom-sheet` or introduce another overlay system.
+`@gorhom/bottom-sheet` or introduce another overlay system. Desktop sheets cap
+their height below the window title bar, including application toolbars, with
+standard gutter clearance above the card.
 
 Camera scanning surfaces omit the title bar and use a floating close action at
 the top start edge. On narrow touch layouts, scanner entry slides up from the
@@ -1222,8 +1224,8 @@ requests never use or create defaults. Remembering a choice does not add a short
 or grant application access.
 
 Action handoffs without a usable default ask which app should open the requested content. Candidate rows reuse the discovery list's app icon,
-name, description and publisher attribution, with denser row spacing than
-browsing lists. Choosing a row opens that app.
+name, description and publisher attribution through the same shared row, with
+identical row padding and description-to-publisher spacing across browsing and selection. Choosing a row opens that app.
 The sheet's Close action dismisses only this handoff, without a duplicate Cancel
 footer. These choosers omit access-review language,
 signing-account labels. Handoff choosers and default-application settings display

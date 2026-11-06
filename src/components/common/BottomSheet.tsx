@@ -38,7 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IS_ELECTRON } from '@/lib/platform';
 import { isWideLayoutSize } from '@/lib/layout/wide-layout';
 import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
-import { contentWidth, radius, spacing, useThemeColors } from '@/theme';
+import { contentWidth, desktopChrome, radius, spacing, useThemeColors } from '@/theme';
 
 import { createSheetContentPan, type SheetContentPanState } from './bottom-sheet-content-gesture';
 import { scheduleBottomSheetInputFocus } from './bottom-sheet-input-focus';
@@ -466,8 +466,11 @@ function BottomSheetSurface<ItemT = never>({
 
   if (!mounted) return null;
 
-  // Never let the card exceed the screen: cap it just below the top safe area.
-  const maxCardHeight = height - insets.top - 12;
+  // Reserve desktop chrome even when the modal covers the full window.
+  const topClearance = IS_ELECTRON
+    ? Math.max(insets.top, desktopChrome.titlebarHeight, desktopChrome.applicationTitlebarHeight) + spacing.lg
+    : insets.top + spacing.md;
+  const maxCardHeight = Math.max(0, height - topClearance);
   const grabberPaddingTop = title != null ? spacing.sm : spacing.md;
   const grabberPaddingBottom = title != null ? 0 : spacing.lg;
   const grabberHeight = grabberPaddingTop + spacing.xs + grabberPaddingBottom;
