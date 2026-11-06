@@ -83,12 +83,13 @@ it('leaves a still-saturated boundary unconfirmed instead of skipping older mess
   expect(query.mock.calls.at(-1)![0].filter!.limit).toBe(3200);
 });
 
-it('stores partial results on timeout but does not page past them, while another relay continues', async () => {
+it('accepts timeout EOSE and continues paging both relays', async () => {
   serve({ [second]: [event(2, 300)] });
   query.mockImplementationOnce(async (opts) => complete(opts, [event(1, 500)], 'query timed out'));
-  expect(await poll({ relays: [first, second] })).toEqual([first]);
+  expect(await poll({ relays: [first, second] })).toEqual([]);
   expect(received).toEqual(new Set(['1', '2']));
-  expect(query.mock.calls.filter(([opts]) => opts.relays[0] === first)).toHaveLength(1);
+  expect(query.mock.calls.filter(([opts]) => opts.relays[0] === first)).toHaveLength(2);
+  expect(query.mock.calls.every(([opts]) => opts.timeoutMs === 25_000)).toBe(true);
 });
 
 it('does not accept effective EOSE on CLOSED as a completed page', async () => {

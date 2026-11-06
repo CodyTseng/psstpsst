@@ -2,12 +2,13 @@ import type { Event, EventTemplate } from 'nostr-tools';
 
 import { relayPool } from '../relay/relay-pool';
 import { RelayQueryError } from '../relay/relay-query-error';
+import { DEFAULT_EOSE_TIMEOUT_MS, isEffectiveEose } from '../relay/relay-read';
 
 const PAGE_SIZE = 200;
 const MAX_BOUNDARY_PAGE_SIZE = 3200;
-const QUERY_TIMEOUT_MS = 8000;
 
 type PollOptions = {
+  label?: string;
   accountPubkey: string;
   relays: string[];
   since: number;
@@ -33,23 +34,20 @@ export async function pollRecentGiftWraps(options: PollOptions): Promise<string[
   while (pending.length > 0 && current()) {
     // Rotate between relays so a large inbox cannot starve other replicas.
     const relay = pending.shift()!;
-    let wireEose = false;
+    let completed = false;
     const events = await relayPool.query({
-      label: 'dm.notification-poll',
+      label: options.label ?? 'dm.notification-poll',
       relays: [relay.url],
       filter: {
         kinds: [1059], '#p': [options.accountPubkey],
         since: options.since, until: relay.until, limit: relay.limit,
       },
-      timeoutMs: QUERY_TIMEOUT_MS,
+      timeoutMs: DEFAULT_EOSE_TIMEOUT_MS,
       abort: options.abort,
       signAuth: options.signAuth,
       onReceived: options.onReceived,
       onComplete: (info) => {
-        // Effective EOSE also includes deadlines and CLOSED. Only the actual
-        // wire marker permits moving past this page's time boundary.
-        wireEose = info.relays.length === 1 &&
-          info.relays[0].status === 'eose' && info.relays[0].reason == null;
+        completed = info.relays.length === 1 && isEffectiveEose(info.relays[0]);
       },
     }).catch((error: unknown) => {
       if (!current() || error instanceof RelayQueryError) return [];
@@ -67,7 +65,7 @@ export async function pollRecentGiftWraps(options: PollOptions): Promise<string[
       await options.onEvent(event);
     }
     if (!current()) break;
-    if (!wireEose) {
+    if (!completed) {
       interrupted.push(relay.url);
       continue;
     }

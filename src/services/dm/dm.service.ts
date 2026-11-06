@@ -13,6 +13,7 @@ import {
 } from '@/db/schema';
 import type { Rumor } from '@/db/schema/types';
 import { platform } from '@/platform';
+import { IS_IOS } from '@/lib/platform';
 import { deriveConversationKey } from '@/lib/nostr/conversation-key';
 import { normalizeRelayUrls } from '@/lib/nostr/relay-url';
 import { buildEmojiTag, type CustomEmoji } from '@/lib/nostr/custom-emoji';
@@ -62,6 +63,7 @@ import {
   ownKeyTransferRelays,
 } from '../relay/relay-list.service';
 import { RelayQueryError } from '../relay/relay-query-error';
+import { DEFAULT_EOSE_TIMEOUT_MS, isEffectiveEose } from '../relay/relay-read';
 import { relayPool } from '../relay/relay-pool';
 import { selfEventStream } from '../self-events/self-event-stream.service';
 import { syncStatusStore } from './sync-status';
@@ -110,15 +112,12 @@ import {
   resolvePeersMessagingMetadata,
 } from './peer-encryption-key.service';
 
-/** The live tail opens at `now - this`, so a new gift wrap whose `created_at` was
- * randomized up to 2 days into the past (NIP-59) is still caught live. The
- * re-received overlap is cheap — already-seen ids skip decryption. */
+/** Recovery rechecks randomized gift-wrap timestamps with an extra hour of margin. */
 const FORWARD_OVERLAP_SECONDS = 2 * 24 * 60 * 60 + 60 * 60; // 2 days + 1h margin
+const FOREGROUND_HISTORY_INTERVAL_SECONDS = 60 * 60;
 /** History backfill page size (per relay, per round). */
 const BACKFILL_PAGE = 500;
 const BACKFILL_MAX_BOUNDARY_PAGE = 3200;
-/** Backfill round query timeout. */
-const BACKFILL_QUERY_TIMEOUT_MS = 25_000;
 /** `backwardUntil` sentinel meaning history is fully backfilled. */
 const BACKFILL_DONE = 0;
 function yieldToUi(): Promise<void> {
@@ -247,8 +246,11 @@ export class DmService {
   /** Pending debounce for rebuilding every REQ after another device changed
    * our own 10002/10050 relay lists (see `scheduleRelayListReinit`). */
   private relayListReinitTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Wall-clock anchor shared by the live tail and this session's backfill. */
-  private subscribedAt = 0;
+  private liveReadyRelays = new Set<string>();
+  private reconnectRecoveryTasks = new Map<string, { revision: number }>();
+  private inFlightReconnectTasks = new Set<Promise<void>>();
+  private historyStartRequested = false;
+  private skipRecentForwardOnReady = false;
   private listeners = new Set<DmServiceListener>();
   /** Owned by long-lived UI (the app shell); NOT cleared on destroy. */
   private syncRequestListeners = new Set<(event: Event) => void>();
@@ -305,8 +307,6 @@ export class DmService {
   private syncEpoch = 0;
   private receiveAbort: AbortController | null = null;
   private initializing = false;
-  /** Only a complete backfill plus uninterrupted live intake can replace a recovery poll. */
-  private historyBackfillComplete = false;
   private historyBackfillTasks = new Map<string, Promise<void>>();
   private inFlightHistoryTasks = new Set<Promise<void>>();
   private historyCompletedRelays = new Set<string>();
@@ -314,8 +314,6 @@ export class DmService {
   private historyRetryAttempts = new Map<string, number>();
   private removeHistoryAppStateListener: (() => void) | null = null;
   private removeUserReturnedListener: (() => void) | null = null;
-  private liveCoverageBroken = false;
-  private liveStatus: 'connecting' | 'degraded' | 'connected' | null = null;
   private notificationPolls = new Set<AbortController>();
   private latestKeyAnnouncement: Event | null = null;
 
@@ -390,8 +388,6 @@ export class DmService {
       );
 
       checkCurrent();
-      this.subscribedAt = Math.floor(Date.now() / 1000);
-
       this.signAuth = signWithIdentity;
       this.signSeal = signWithIdentity;
       const signAuth = signWithIdentity;
@@ -422,19 +418,24 @@ export class DmService {
 
       configureSyncRelays(opts.accountPubkey, this.dmRelays);
 
-      // The live tail only needs *new* wraps, not the whole history nor the gap
-      // since we were last open — both are the paged backfill's job (a relay caps
-      // each filter at `limit`, so a `since`-only sub can't be trusted to backfill
-      // a large gap). It opens at a fixed `now - overlap` window: just enough to
-      // catch a "new" wrap whose NIP-59 `created_at` was randomized into the recent
-      // past. The re-received overlap is cheap — already-seen ids skip decryption.
-      const since = Math.max(0, this.subscribedAt - FORWARD_OVERLAP_SECONDS);
-
+      // Receive only future arrivals, including backdated wraps. Paged history
+      // starts after effective EOSE so its cutoff cannot precede live readiness.
       this.dmLiveSubUnsub = profileSync(profile, 'relay.subscribeDmLive', () =>
         relayPool.subscribe({
           label: 'dm.live',
           relays: this.dmRelays,
-          filters: [{ kinds: [KIND_GIFT_WRAP], '#p': [opts.accountPubkey], since }],
+          filters: [{ kinds: [KIND_GIFT_WRAP], '#p': [opts.accountPubkey], limit: 0 }],
+          onRelayEose: (relayUrl) => {
+            if (this.syncEpoch !== epoch) return;
+            if (this.liveReadyRelays.has(relayUrl)) {
+              this.startRelayReconnectRecovery(relayUrl);
+              return;
+            }
+            this.liveReadyRelays.add(relayUrl);
+            if (this.historyStartRequested) {
+              this.startRelayHistoryBackfill(relayUrl, this.skipRecentForwardOnReady);
+            }
+          },
           onEvent: (event, relayUrl) => {
             if (this.syncEpoch !== epoch) return;
             this.recordGiftWrapSeen(event.id, relayUrl);
@@ -455,10 +456,6 @@ export class DmService {
           // subscription is down and restores it after any relay recovers.
           onStatusChange: (status) => {
             if (this.syncEpoch === epoch) {
-              if (this.liveStatus !== null && this.liveStatus !== 'connecting' && status !== 'connected') {
-                this.liveCoverageBroken = true;
-              }
-              this.liveStatus = status;
               syncStatusStore.getState().setConnected(status !== 'connecting');
             }
           },
@@ -474,7 +471,7 @@ export class DmService {
         const enteredForeground = state === 'active' && previousState !== 'active';
         previousState = state;
         if (enteredForeground && this.syncEpoch === epoch) {
-          this.startHistoryBackfill();
+          this.startHistoryBackfill(!IS_IOS);
           relayMessageOutbox.wake(opts.accountPubkey);
         }
       });
@@ -524,9 +521,10 @@ export class DmService {
     for (const timer of this.historyRetryTimers.values()) clearTimeout(timer);
     this.historyRetryTimers.clear();
     this.historyRetryAttempts.clear();
-    this.historyBackfillComplete = false;
-    this.liveCoverageBroken = false;
-    this.liveStatus = null;
+    this.liveReadyRelays.clear();
+    this.reconnectRecoveryTasks.clear();
+    this.historyStartRequested = false;
+    this.skipRecentForwardOnReady = false;
     this.latestKeyAnnouncement = null;
     this.dmLiveSubUnsub?.();
     this.dmLiveSubUnsub = null;
@@ -561,6 +559,7 @@ export class DmService {
     await Promise.all([
       relayMessageOutbox.waitForIdle(),
       Promise.allSettled(Array.from(this.inFlightHistoryTasks)),
+      Promise.allSettled(Array.from(this.inFlightReconnectTasks)),
       (async () => {
         while (this.inFlightGiftWrapTasks.size > 0) {
           await Promise.allSettled(Array.from(this.inFlightGiftWrapTasks));
@@ -1485,11 +1484,9 @@ export class DmService {
     // so a cold poll cannot overwrite a live/init session across async reads.
     if (this.initializing || options.abort?.aborted) return [];
     if (this.accountPubkey && this.accountPubkey !== accountPubkey) return [];
-    if (
-      this.accountPubkey === accountPubkey && this.historyBackfillComplete &&
-      !this.liveCoverageBroken && relayPool.hasHealthySubscription('dm.live') &&
-      selfEventStream.isHealthy()
-    ) return [];
+    // Healthy live intake already receives new messages; history coverage and
+    // earlier disconnects do not justify a concurrent notification scan.
+    if (this.accountPubkey === accountPubkey && relayPool.hasHealthySubscription('dm.live')) return [];
     const epoch = this.syncEpoch;
     const receiver = new DmService();
     const controller = new AbortController();
@@ -1591,6 +1588,61 @@ export class DmService {
     }
   }
 
+  /** Recover reconnect arrivals without advancing history cursors or checkpoints.
+   * One task per relay coalesces reconnects; a later reconnect requests another
+   * pass inside that task so a fixed earlier cutoff cannot hide the new gap. */
+  private startRelayReconnectRecovery(relayUrl: string): void {
+    const existing = this.reconnectRecoveryTasks.get(relayUrl);
+    if (existing) {
+      existing.revision++;
+      return;
+    }
+    const accountPubkey = this.accountPubkey;
+    const signAuth = this.signAuth;
+    const abort = this.receiveAbort?.signal;
+    if (!accountPubkey || !signAuth || !abort || abort.aborted) return;
+    const epoch = this.syncEpoch;
+    const isCurrent = () => this.syncEpoch === epoch && !abort.aborted;
+    const recovery = { revision: 0 };
+    const since = Math.max(0, Math.floor(Date.now() / 1000) - FORWARD_OVERLAP_SECONDS);
+    // Queue the work after registering it so synchronous relay callbacks cannot
+    // admit a second task for the same replica.
+    const task = Promise.resolve().then(async () => {
+      while (isCurrent()) {
+        const revision = recovery.revision;
+        const interrupted = await pollRecentGiftWraps({
+          label: 'dm.reconnect-recovery',
+          accountPubkey,
+          relays: [relayUrl],
+          since,
+          until: Math.floor(Date.now() / 1000),
+          abort,
+          isCurrent,
+          signAuth,
+          onReceived: (url, id) => this.recordGiftWrapSeen(id, url),
+          onEvent: async (event) => {
+            if (!isCurrent()) return;
+            await this.processGiftWrap(event, 'recovery', peekSyncCursor(accountPubkey));
+            await yieldToUi();
+          },
+        });
+        if (!isCurrent()) return;
+        if (recovery.revision !== revision) continue;
+        if (interrupted.length > 0) {
+          console.warn('[dm] Reconnect recovery incomplete; retry on the next reconnect or history scan.', relayUrl);
+        }
+        return;
+      }
+    }).catch((error: unknown) => {
+      if (isCurrent()) console.warn('[dm] Reconnect recovery failed.', relayUrl, error);
+    }).finally(() => {
+      this.inFlightReconnectTasks.delete(task);
+      if (this.reconnectRecoveryTasks.get(relayUrl) === recovery) this.reconnectRecoveryTasks.delete(relayUrl);
+    });
+    this.reconnectRecoveryTasks.set(relayUrl, recovery);
+    this.inFlightReconnectTasks.add(task);
+  }
+
   /** Record (idempotently) that `relayUrl` delivered the gift wrap `giftWrapId`.
    * Fires for every relay's delivery — including ones arriving after the first,
    * which `onEvent` dedups away — so the source-relay set becomes a true union. */
@@ -1665,15 +1717,17 @@ export class DmService {
 
   /** Every relay owns a task, durable frontiers, and retry backoff. Foreground
    * starts work; an admitted pass may finish after backgrounding. */
-  private startHistoryBackfill(): void {
+  private startHistoryBackfill(skipRecentForward = false): void {
     if (platform.appState.currentState() !== 'active' || !this.accountPubkey || !this.dmLiveSubUnsub) return;
-    for (const relayUrl of this.dmRelays) this.startRelayHistoryBackfill(relayUrl);
+    this.historyStartRequested = true;
+    this.skipRecentForwardOnReady = skipRecentForward;
+    for (const relayUrl of this.dmRelays) this.startRelayHistoryBackfill(relayUrl, skipRecentForward);
   }
 
-  private startRelayHistoryBackfill(relayUrl: string): void {
+  private startRelayHistoryBackfill(relayUrl: string, skipRecentForward = false): void {
     if (
       platform.appState.currentState() !== 'active' || !this.accountPubkey ||
-      !this.dmLiveSubUnsub || this.historyBackfillTasks.has(relayUrl)
+      !this.dmLiveSubUnsub || !this.liveReadyRelays.has(relayUrl) || this.historyBackfillTasks.has(relayUrl)
     ) return;
     const retry = this.historyRetryTimers.get(relayUrl);
     if (retry) clearTimeout(retry);
@@ -1682,9 +1736,8 @@ export class DmService {
     const epoch = this.syncEpoch;
     const through = Math.floor(Date.now() / 1000);
     this.historyCompletedRelays.delete(relayUrl);
-    this.historyBackfillComplete = false;
     syncStatusStore.getState().setBackfilling(true);
-    const task = this.backfillRelayHistory(accountPubkey, relayUrl, epoch, through)
+    const task = this.backfillRelayHistory(accountPubkey, relayUrl, epoch, through, skipRecentForward)
       .then((complete) => {
         if (this.syncEpoch !== epoch) return;
         if (complete) {
@@ -1704,9 +1757,9 @@ export class DmService {
         if (this.syncEpoch !== epoch || this.historyBackfillTasks.get(relayUrl) !== task) return;
         this.historyBackfillTasks.delete(relayUrl);
         syncStatusStore.getState().setBackfilling(this.historyBackfillTasks.size > 0);
-        this.historyBackfillComplete = this.dmRelays.every(url => this.historyCompletedRelays.has(url));
+        const historyBackfillComplete = this.dmRelays.every(url => this.historyCompletedRelays.has(url));
         const coverage = peekSyncCursor(accountPubkey);
-        if (this.historyBackfillComplete && coverage?.backwardUntil === BACKFILL_DONE && coverage.forwardSince !== null) {
+        if (historyBackfillComplete && coverage?.backwardUntil === BACKFILL_DONE && coverage.forwardSince !== null) {
           return groupReceiveService.finalizeCoveredHistory(accountPubkey, coverage.forwardSince)
             .catch(error => console.warn('[dm] Failed to finalize covered group history.', error));
         }
@@ -1730,10 +1783,17 @@ export class DmService {
    * once from the start; persisted processed IDs skip redundant decryption. */
   private async backfillRelayHistory(
     accountPubkey: string, relayUrl: string, epoch: number, through: number,
+    skipRecentForward: boolean,
   ): Promise<boolean> {
     const cursor = await getRelaySyncCursor(accountPubkey, relayUrl);
     if (this.syncEpoch !== epoch) return false;
-    const forwardComplete = await this.recoverForwardHistory(
+    // Only foreground re-entry is throttled. Initial startup, interrupted
+    // forward windows, and unfinished deep history still recover immediately.
+    const recent = skipRecentForward && cursor.forwardSince !== null &&
+      through >= cursor.forwardSince && through - cursor.forwardSince < FOREGROUND_HISTORY_INTERVAL_SECONDS;
+    const skipForward = recent && !await getPendingForwardScan(accountPubkey, relayUrl);
+    if (this.syncEpoch !== epoch) return false;
+    const forwardComplete = skipForward || await this.recoverForwardHistory(
       accountPubkey, relayUrl, cursor.forwardSince, through, epoch,
     );
     if (this.syncEpoch !== epoch) return false;
@@ -1775,7 +1835,8 @@ export class DmService {
         if (this.syncEpoch !== epoch) return false;
       }
       const window = scan;
-      const result = await this.drainWindow(
+      // The first anchor has no forward range; deep history covers its past.
+      const result = window.floor === window.through ? 'drained' : await this.drainWindow(
         accountPubkey, relayUrl, window.nextUntil, window.floor, epoch,
         nextUntil => setPendingForwardScan(accountPubkey, relayUrl, { ...window, nextUntil }),
       );
@@ -1792,8 +1853,8 @@ export class DmService {
   }
 
   /** Page only one replica, with bounded memory and a UI yield per new envelope.
-   * A deadline, CLOSED, or failed connection can supply useful events but cannot
-   * confirm page coverage. Re-read a timestamp boundary before crossing it;
+   * Wire and timeout EOSE finish a page; CLOSED and failed connections do not.
+   * Re-read a timestamp boundary before crossing it;
    * saturated boundaries stay unconfirmed instead of silently losing messages. */
   private async drainWindow(
     accountPubkey: string,
@@ -1804,19 +1865,18 @@ export class DmService {
     onPageAdvance?: (until: number) => void | Promise<void>,
   ): Promise<'drained' | 'interrupted' | 'aborted'> {
     let limit = BACKFILL_PAGE;
-    while (this.syncEpoch === epoch && until > floor) {
-      let wireEose = false;
+    while (this.syncEpoch === epoch && until >= floor) {
+      let completed = false;
       const events = await relayPool.query({
         label: 'dm.backfill',
         abort: this.receiveAbort?.signal,
         relays: [relayUrl],
-        filter: { kinds: [KIND_GIFT_WRAP], '#p': [accountPubkey], until, limit },
-        timeoutMs: BACKFILL_QUERY_TIMEOUT_MS,
+        filter: { kinds: [KIND_GIFT_WRAP], '#p': [accountPubkey], since: floor, until, limit },
+        timeoutMs: DEFAULT_EOSE_TIMEOUT_MS,
         signAuth: this.signAuth ?? undefined,
         onReceived: (url, id) => this.recordGiftWrapSeen(id, url),
         onComplete: (info) => {
-          wireEose = info.relays.length === 1 && info.relays[0].status === 'eose' &&
-            info.relays[0].reason == null;
+          completed = info.relays.length === 1 && isEffectiveEose(info.relays[0]);
         },
       }).catch((error: unknown) => {
         if (this.syncEpoch !== epoch || error instanceof RelayQueryError) return [];
@@ -1824,7 +1884,7 @@ export class DmService {
       });
       if (this.syncEpoch !== epoch) return 'aborted';
       const page = Array.from(new Map(events
-        .filter(event => event.created_at <= until)
+        .filter(event => event.created_at >= floor && event.created_at <= until)
         .map(event => [event.id, event])).values()).sort((a, b) => b.created_at - a.created_at);
       const processedIds = await getProcessedGiftWrapIds(page.map(event => event.id));
       for (const event of page) {
@@ -1834,7 +1894,7 @@ export class DmService {
         await yieldToUi();
       }
       if (this.syncEpoch !== epoch) return 'aborted';
-      if (!wireEose) return 'interrupted';
+      if (!completed) return 'interrupted';
       if (page.length === 0) return 'drained';
       const oldest = page[page.length - 1].created_at;
       if (oldest < until) {

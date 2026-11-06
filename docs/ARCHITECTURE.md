@@ -314,6 +314,10 @@ Caller cancellation releases active and queued queries without closing shared
 sockets. If every relay fails, the query reports a network error; failures must
 not be cached as confirmed empty results. Queries collect events from the same
 subscriptions as live consumers and close them after the initial read ends.
+The default EOSE wait is 25 seconds from sending each physical REQ, independently
+of connection setup and without resetting on events. A missing wire EOSE becomes
+a timeout EOSE with its reason retained for diagnostics. Live subscriptions stay
+open afterward; late wire EOSE does not complete the same subscription twice.
 EOSE does not remove a subscription; receiving and reconnecting continue only
 while its owner keeps it registered. REQ and AUTH handling are shared.
 
@@ -402,7 +406,9 @@ and state-machine details.
    Old announcements and same-key republications do not interrupt receiving.
    A fresh key check and initialization must precede resumption; missing keys
    require key transfer first.
-   Live subscriptions then receive a bounded recent tail.
+   Live subscriptions use `limit: 0` without timestamp bounds, receiving new
+   relay arrivals without replaying stored envelopes. History cutoffs are chosen
+   only after that relay's live subscription reaches wire or timeout EOSE.
    Metadata refresh waits for all routing targets to settle, then selects the
    newest known events. At least one effective EOSE is required despite failed replicas.
    With no completed response, startup retries without enabling message intake.
@@ -410,21 +416,35 @@ and state-machine details.
    cursors. A newly added relay inherits both frontiers from the existing relay
    with the smallest covered interval; an existing relay retains its own progress.
    Failed relays retain their gaps and retry with bounded backoff without
-   blocking healthy replicas. Only a wire EOSE confirms page coverage; deadlines
-   and relay closures never advance a frontier. Tasks start only while the app
-   is active, including foreground re-entry. Forward recovery re-reads the
+   blocking healthy replicas. Wire or timeout EOSE completes a page; connection,
+   AUTH, and relay-closure failures never advance a frontier. Timeout completion
+   is a best-effort policy, not proof that a relay returned every stored event.
+   Tasks start only while the app
+   is active, including foreground re-entry. On non-iOS foreground re-entry,
+   a forward watermark less than one hour old skips a new forward scan;
+   pending forward windows and unfinished deep history still resume. Cold
+   initialization and retries are not throttled. iOS scans on each foreground
+   entry because it has no persistent background subscription.
+   Forward recovery re-reads the
    gift-wrap randomization window before its previous wall-clock watermark;
    processed envelope IDs deduplicate the overlap. Each account/relay persists
-   a fixed pending forward window and its last wire-confirmed page checkpoint.
+   a fixed pending forward window and its last completed page checkpoint.
    Recovery finishes that window before scanning a newer gap; only completion
-   atomically advances the watermark and clears the checkpoint. An already-started
-   pass may continue after backgrounding; foreground transitions do not start overlapping
+   atomically advances the watermark and clears the checkpoint. A scan includes
+   and rechecks its lower boundary second before completing;
+   timestamp-only pagination remains best-effort against relay result caps.
+   An already-started pass may continue after backgrounding; foreground transitions do not start overlapping
    passes for the same relay. Group history finalization uses the conservative
    coverage intersection of the currently configured DM relays. Background polls,
    socket recovery, and background session reinitialization never start history
-   backfill. Account/key changes still cancel stale work.
+   backfill. Reconnected live subscriptions instead page a separate recent
+   49-hour recovery window, including while backgrounded. Each relay has at most
+   one recovery task; reconnects during paging are coalesced into that task,
+   which checks the latest reconnect before finishing. Recovery uses normal
+   arrival intake and never advances history cursors or checkpoints. Only
+   history scans update those durable frontiers. Account/key changes cancel stale work.
    Notification polls page only a fixed recent overlap window, independently per
-   relay, and never advance the persisted history cursors. Timeouts and saturated
+   relay, and never advance the persisted history cursors. Failures and saturated
    timestamp boundaries leave coverage unconfirmed. See
    [notification recovery](implementation/notification-recovery.md) for paging limits.
 3. The service removes and verifies any transport envelope, then verifies the
@@ -519,9 +539,9 @@ active. Relay ping/idle detection remains owned by `nostr-tools`; Android uses
 a longer heartbeat interval and longer backoff for persistent background failures.
 The resident headless task is reused across service updates because transport
 timeouts still depend on RN timers. The periodic WorkManager poll remains a recovery
-path. It skips redundant reads only after history backfill completes in an
-uninterrupted live session whose DM and own-metadata subscriptions have received wire EOSE
-and whose sockets have recent inbound traffic. Otherwise it immediately presents
+path. Android and Electron skip notification polling whenever the active account's
+DM subscription is healthy, regardless of history progress, earlier disconnects,
+or own-metadata subscription health. Otherwise the poll immediately presents
 its result because a cold task cannot
 assume the resident native clock is running. iOS has no periodic background
 worker: APNs invokes the notification extension, which uses the shared gift-wrap

@@ -190,7 +190,7 @@ export async function getPendingForwardScan(accountPubkey: string, relayUrl: str
   return cursors.get(normalizeRelayUrl(relayUrl))?.pendingForward ?? null;
 }
 
-/** Persist only after the page's intake has finished and wire EOSE confirms it. */
+/** Persist after page intake finishes and wire or timeout EOSE ends the read. */
 export function setPendingForwardScan(
   accountPubkey: string, relayUrl: string, scan: ForwardSyncScan,
 ): Promise<void> {

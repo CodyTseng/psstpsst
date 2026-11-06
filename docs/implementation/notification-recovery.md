@@ -12,10 +12,11 @@ the boundary. Processed gift-wrap IDs skip repeated decryption and notification.
 Only one page is retained by the pager at a time.
 
 The next query includes the oldest returned timestamp again. Even a short page
-needs another query: a relay may impose a smaller result limit. Empty wire-EOSE
-responses finish a relay. Deadlines, CLOSED, and connection failures cannot
-confirm a page, although messages already received are still stored. Other
-relays can continue when one fails.
+needs another query: a relay may impose a smaller result limit. Empty EOSE
+responses finish a relay. Wire EOSE and the 25-second timeout fallback both
+complete a page; timeout reasons remain available for diagnostics. CLOSED and
+connection failures leave the page incomplete, although received messages are
+still stored. Other relays can continue when one fails.
 
 When a page contains only events at the current boundary second and fills the
 requested limit, the poll doubles that limit, up to 3,200. A still-saturated

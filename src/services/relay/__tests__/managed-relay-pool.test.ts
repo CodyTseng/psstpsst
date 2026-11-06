@@ -130,12 +130,83 @@ describe('ManagedRelayPool', () => {
     pool.destroy();
   });
 
-  test('does not treat a query deadline as proof of a healthy subscription', async () => {
-    const { pool } = createHarness();
-    pool.subscribe({ label: 'dm.live', relays: [RELAY_A], filter: { kinds: [1059] }, onEvent: () => {} });
+  test('uses a 25-second fallback EOSE without closing a live subscription', async () => {
+    const { pool, relays } = createHarness();
+    const onRelayEose = jest.fn();
+    pool.subscribe({ label: 'dm.live', relays: [RELAY_A], filter: { kinds: [1059] }, onEvent: () => {}, onRelayEose });
     await flushPromises();
-    await jest.advanceTimersByTimeAsync(6_000);
-    expect(pool.hasHealthySubscription('dm.live')).toBe(false);
+    expect(relays[0].subscriptions[0].params.eoseTimeout).toBe(25_000);
+    await jest.advanceTimersByTimeAsync(24_999);
+    expect(onRelayEose).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1);
+    expect(onRelayEose).toHaveBeenCalledWith(RELAY_A);
+    expect(relays[0].subscriptions[0].subscription.closed).toBe(false);
+    relays[0]._onmessage({ data: 'heartbeat response' } as MessageEvent);
+    expect(pool.hasHealthySubscription('dm.live')).toBe(true);
+    pool.destroy();
+  });
+
+  test('does not report a late wire EOSE again after timeout completion', async () => {
+    const { pool, relays } = createHarness();
+    const onRelayEose = jest.fn();
+    pool.subscribe({ relays: [RELAY_A], filter: { kinds: [1059], limit: 0 }, onEvent: () => {}, onRelayEose });
+    await flushPromises();
+    await jest.advanceTimersByTimeAsync(25_000);
+    expect(onRelayEose).toHaveBeenCalledTimes(1);
+    relays[0].emitEose();
+    expect(onRelayEose).toHaveBeenCalledTimes(1);
+    pool.destroy();
+  });
+
+  test('starts EOSE waiting after connection setup and does not reset it for events', async () => {
+    const connect = jest.spyOn(FakeRelay.prototype, 'connect').mockImplementationOnce(async function (this: FakeRelay) {
+      await new Promise<void>(resolve => setTimeout(resolve, 4_000));
+      this.connected = true;
+    });
+    const { pool, relays } = createHarness();
+    const onRelayEose = jest.fn();
+    try {
+      pool.subscribe({ relays: [RELAY_A], filter: {}, onEvent: () => {}, onRelayEose });
+      await jest.advanceTimersByTimeAsync(4_000);
+      expect(relays[0].subscriptions).toHaveLength(1);
+      await jest.advanceTimersByTimeAsync(24_999);
+      relays[0].emitEvent(eventAt('during-initial-read', 100));
+      expect(onRelayEose).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      expect(onRelayEose).toHaveBeenCalledTimes(1);
+    } finally { pool.destroy(); connect.mockRestore(); }
+  });
+
+  test('provides timeout EOSE for reconnected subscriptions whose initial read already ended', async () => {
+    const { pool, relays } = createHarness();
+    const onRelayEose = jest.fn();
+    const onEnd = jest.fn();
+    pool.subscribe({ relays: [RELAY_A], filter: { limit: 0 }, onEvent: () => {}, onRelayEose, onEnd });
+    await flushPromises();
+    await jest.advanceTimersByTimeAsync(25_000);
+    expect(onEnd.mock.calls[0][0]).toEqual([{ url: RELAY_A, status: 'eose', received: 0, reason: 'query timed out' }]);
+    relays[0].hardClose();
+    await jest.advanceTimersByTimeAsync(1_000);
+    await jest.advanceTimersByTimeAsync(25_000);
+    expect(onRelayEose.mock.calls).toEqual([[RELAY_A], [RELAY_A]]);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(relays[1].subscriptions[0].subscription.closed).toBe(false);
+    pool.destroy();
+  });
+
+  test('reports wire EOSE once per physical subscription and again after reconnecting', async () => {
+    const { pool, relays } = createHarness();
+    const onRelayEose = jest.fn();
+    pool.subscribe({ relays: [RELAY_A], filter: { kinds: [1059], limit: 0 }, onEvent: () => {}, onRelayEose });
+    await flushPromises();
+    relays[0].emitEose();
+    relays[0].emitEose();
+    expect(onRelayEose).toHaveBeenCalledTimes(1);
+    relays[0].hardClose();
+    await jest.advanceTimersByTimeAsync(1_000);
+    relays[1].emitEose();
+    relays[1].emitEose();
+    expect(onRelayEose.mock.calls).toEqual([[RELAY_A], [RELAY_A]]);
     pool.destroy();
   });
 
@@ -1139,6 +1210,11 @@ class FakeRelay {
     let closed = false;
     const subscription = {
       eosed: false,
+      receivedEose: () => {
+        if (subscription.eosed) return;
+        subscription.eosed = true;
+        params.oneose?.();
+      },
       get closed() {
         return closed;
       },

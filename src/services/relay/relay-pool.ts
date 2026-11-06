@@ -14,6 +14,7 @@ import { verifyAcceleratedSchnorr } from '@/services/crypto/crypto-accelerator';
 
 import type { Signer } from '../signer/signer.interface';
 import { RelayQueryError } from './relay-query-error';
+import { DEFAULT_EOSE_TIMEOUT_MS } from './relay-read';
 import {
   ManagedRelayPool,
   type QueryObservers,
@@ -87,7 +88,7 @@ class RelayPool {
 
   /** Wait for every relay to settle; reject if none reaches effective EOSE. */
   async query(opts: QueryOpts): Promise<Event[]> {
-    const timeout = opts.timeoutMs ?? 6_000;
+    const timeout = opts.timeoutMs ?? DEFAULT_EOSE_TIMEOUT_MS;
     const filters = opts.filters ?? (opts.filter ? [opts.filter] : []);
     const span = createPerfSpan('relay.query', {
       label: opts.label ?? 'unknown',

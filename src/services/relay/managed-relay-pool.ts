@@ -18,12 +18,12 @@ import { platform, type AppStateStatus, type NetworkStateSnapshot } from '@/plat
 
 import { LifecycleRelay } from './lifecycle-relay';
 import { RelayQueryError } from './relay-query-error';
+import { DEFAULT_EOSE_TIMEOUT_MS } from './relay-read';
 
 const CONNECTION_TIMEOUT_MS = 5_000;
 const AUTH_TIMEOUT_MS = 8_000;
 const AUTH_APPROVAL_TIMEOUT_MS = 1_020_000;
 const RELAY_IDLE_TIMEOUT_MS = 30_000;
-const LONG_LIVED_EOSE_TIMEOUT_MS = 2_147_000_000;
 const LIVE_DEDUP_LIMIT = 8_192;
 const DEFAULT_MAX_CONCURRENT_QUERIES_PER_RELAY = 5;
 const RETRY_BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000, 60_000];
@@ -41,6 +41,8 @@ type ManagedSubscribeBase = QueryObservers & {
   onEvent: (event: Event, relayUrl: string) => void;
   /** Initial read ended on every relay; the subscription stays active until closed. */
   onEose?: () => void;
+  /** Wire or timeout EOSE once per physical subscription, including reconnects. */
+  onRelayEose?: (relayUrl: string) => void;
   /** Initial per-relay outcomes, also delivered if closed before the read ends. */
   onEnd?: (results: QueryRelayResult[]) => void;
   timeoutMs?: number;
@@ -136,6 +138,7 @@ type RetrySchedule = {
 type PhysicalSubscription = {
   subscription: Subscription;
   generation: number;
+  cancelEoseTimeout?: () => void;
 };
 
 type LogicalSubscription = {
@@ -260,7 +263,7 @@ export class ManagedRelayPool {
         this.subscriptionIdsByRelay.set(url, ids);
       }
       ids.add(id);
-      const connectionTimeout = Math.min(CONNECTION_TIMEOUT_MS, options.timeoutMs ?? 6_000);
+      const connectionTimeout = Math.min(CONNECTION_TIMEOUT_MS, options.timeoutMs ?? DEFAULT_EOSE_TIMEOUT_MS);
       const read = logical.reads.get(url)!;
       read.timer = setTimeout(() => {
         notifyQueryObserver(() => options.onerror?.(url, new Error('connection timed out')));
@@ -498,7 +501,7 @@ export class ManagedRelayPool {
     for (const url of this.subscriptionIdsByRelay.keys()) this.recoverRelay(url);
   }
 
-  /** A socket flag alone cannot prove liveness. Require an actual EOSE for
+  /** A socket flag alone cannot prove liveness. Require an effective EOSE for
    * every current physical subscription and recent inbound traffic (including
    * nostr-tools heartbeats), so a suspended or half-open socket cannot hide a poll. */
   hasHealthySubscription(label: string, now = Date.now()): boolean {
@@ -691,13 +694,21 @@ export class ManagedRelayPool {
     this.clearSubscriptionRetryTimer(logical, url);
 
     const read = logical.reads.get(url)!;
-    if (!read.result) {
-      if (read.timer) clearTimeout(read.timer);
-      read.timer = setTimeout(() => {
-        this.settleSubscriptionRead(logical, url, 'eose', 'query timed out');
-      }, logical.options.timeoutMs ?? 6_000);
-    }
+    if (read.timer) clearTimeout(read.timer);
+    read.timer = null;
+    existing?.cancelEoseTimeout?.();
     const physical = {} as PhysicalSubscription;
+    let eoseNotified = false;
+    let timedOut = false;
+    const eoseTimeout = logical.options.timeoutMs ?? DEFAULT_EOSE_TIMEOUT_MS;
+    // Register before nostr-tools' timer to retain the timeout reason. The
+    // native-backed deadline also works when Android suspends JS timers.
+    physical.cancelEoseTimeout = scheduleBackgroundDeadline(() => {
+      if (logical.closed || logical.physical.get(url) !== physical || !relay.connected ||
+        this.connections.get(url)?.generation !== generation) return;
+      timedOut = true;
+      physical.subscription.receivedEose();
+    }, eoseTimeout);
     const subscription = relay.subscribe(logical.options.filters.map(cloneFilter), {
       label: logical.options.label,
       alreadyHaveEvent: (id) =>
@@ -716,13 +727,15 @@ export class ManagedRelayPool {
       },
       oninvalidevent: logical.options.onInvalidEvent,
       oneose: () => {
-        if (logical.closed || logical.physical.get(url) !== physical) return;
+        if (logical.closed || logical.physical.get(url) !== physical || eoseNotified) return;
+        eoseNotified = true;
+        physical.cancelEoseTimeout?.();
         logical.retryAttempts.delete(url);
-        this.settleSubscriptionRead(logical, url, 'eose');
+        this.settleSubscriptionRead(logical, url, 'eose', timedOut ? 'query timed out' : undefined);
+        if (!logical.closed) notifyQueryObserver(() => logical.options.onRelayEose?.(url));
       },
       onclose: (reason) => this.handlePhysicalSubscriptionClose(logical, url, physical, reason),
-      // The shared initial-read timer owns timeout completion and AUTH resets.
-      eoseTimeout: LONG_LIVED_EOSE_TIMEOUT_MS,
+      eoseTimeout,
     });
     physical.subscription = subscription;
     physical.generation = generation;
@@ -737,6 +750,7 @@ export class ManagedRelayPool {
     reason: string,
   ): void {
     if (logical.physical.get(url) !== physical) return;
+    physical.cancelEoseTimeout?.();
     logical.physical.delete(url);
     this.notifySubscriptionStatus(logical);
     if (logical.closed || reason === 'relay connection closed by us') return;
@@ -872,6 +886,7 @@ export class ManagedRelayPool {
       }
     }
     for (const physical of logical.physical.values()) {
+      physical.cancelEoseTimeout?.();
       physical.subscription.close('closed by caller');
     }
     logical.physical.clear();

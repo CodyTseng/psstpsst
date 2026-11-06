@@ -16,7 +16,10 @@ jest.mock('../managed-relay-pool', () => ({
 jest.mock('@/services/crypto/crypto-accelerator', () => ({ verifyAcceleratedSchnorr: jest.fn() }));
 jest.mock('@/lib/platform', () => ({ IS_ANDROID: false }));
 jest.mock('@/platform', () => ({
-  platform: { appState: { currentState: () => 'active' } },
+  platform: {
+    appState: { currentState: () => 'active' },
+    backgroundMessaging: { isAvailable: () => false },
+  },
 }));
 
 beforeEach(() => {
@@ -106,6 +109,7 @@ it('reports an empty successful lookup through completion', async () => {
   mockQuery.mockResolvedValue({ events: [], status: 'complete', relays: [] });
   const onComplete = jest.fn();
   await expect(relayPool.query({ relays: ['wss://a.example'], filter: {}, onComplete })).resolves.toEqual([]);
+  expect(mockQuery.mock.calls[0][0].timeoutMs).toBe(25_000);
   expect(onComplete).toHaveBeenCalledWith({ eosed: true, status: 'complete', relays: [] });
 });
 
