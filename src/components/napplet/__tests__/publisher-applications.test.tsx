@@ -6,6 +6,7 @@ import { darkPalette, lightPalette } from '@/theme';
 import PublisherApplicationsScreen from '../../../app/(app)/explore-publisher';
 import { ApplicationListRow } from '../ApplicationListRow';
 import { AppText } from '@/components/common/AppText';
+import { AppButton } from '@/components/common/AppButton';
 import type { ExploreEntry } from '@/services/explore/model';
 
 const pubkey = 'a'.repeat(64);
@@ -63,6 +64,49 @@ it('opens a published application through the shared detail route with its catal
   await act(async () => { row.root.findByType(ApplicationListRow).props.onPress(); });
   expect(router.push).toHaveBeenCalledWith({ pathname: '/explore-details', params: { key: 'app-key', publisher: pubkey, catalog: '1' } });
   act(() => row.unmount());
+});
+
+it('opens the publisher conversation immediately and collapses repeated contact taps', async () => {
+  await act(async () => { renderer = create(<PublisherApplicationsScreen />); });
+  const contact = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'applications.contact_author')!;
+  expect(contact.props.disabled).toBe(false);
+  await act(async () => {
+    contact.props.onPress();
+    contact.props.onPress();
+  });
+  expect(router.push).toHaveBeenCalledTimes(1);
+  expect(router.push).toHaveBeenCalledWith(`/chat/${pubkey}`);
+});
+
+it('offers expansion only for overflowing bios and resets when the bio changes', async () => {
+  mockAbout = 'A long publisher biography that wraps across several lines.';
+  await act(async () => { renderer = create(<PublisherApplicationsScreen />); });
+  const bio = () => renderer.root.findAllByType(AppText).find(node => node.props.selectable)!;
+  const toggle = () => renderer.root.findAllByType(AppButton).find(node =>
+    ['applications.expand_bio', 'applications.collapse_bio'].includes(node.props.label));
+  const measure = async (height: number) => {
+    const probes = renderer.root.findAllByType(AppText).filter(node => node.props.onLayout);
+    await act(async () => {
+      probes.find(node => node.props.numberOfLines === 5)!.props.onLayout({ nativeEvent: { layout: { height: 100 } } });
+      probes.find(node => node.props.numberOfLines === 6)!.props.onLayout({ nativeEvent: { layout: { height } } });
+    });
+  };
+
+  expect(bio().props.numberOfLines).toBe(5);
+  await measure(100);
+  expect(toggle()).toBeUndefined();
+  await measure(120);
+  expect(toggle()!.props.label).toBe('applications.expand_bio');
+  await act(async () => { toggle()!.props.onPress(); });
+  expect(bio().props.numberOfLines).toBeUndefined();
+  expect(toggle()!.props.accessibilityState).toEqual({ expanded: true });
+  await act(async () => { toggle()!.props.onPress(); });
+  expect(bio().props.numberOfLines).toBe(5);
+  await act(async () => { toggle()!.props.onPress(); });
+  mockAbout = 'Updated biography.';
+  await act(async () => { renderer.update(<PublisherApplicationsScreen />); });
+  expect(bio().props.numberOfLines).toBe(5);
+  expect(toggle()).toBeUndefined();
 });
 
 it('rejects array-valued publisher parameters without querying applications', async () => {

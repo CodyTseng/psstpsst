@@ -15,6 +15,7 @@ type MetadataRefresh = {
 type MetadataFlight = {
   searchRelays: Set<string>;
   promise: Promise<PeerMessagingDeliveryMetadata>;
+  relayQuery: { started: boolean; listeners: Set<() => void> };
 };
 
 const metadataRefreshes = new Map<string, MetadataRefresh>();
@@ -88,18 +89,29 @@ export function resolvePeerMessagingMetadata(opts: {
   const existing = metadataFlights.get(flightKey);
   if (existing) {
     for (const relay of opts.searchRelays) existing.searchRelays.add(relay);
+    if (opts.onRelayQuery) {
+      if (existing.relayQuery.started) opts.onRelayQuery();
+      else existing.relayQuery.listeners.add(opts.onRelayQuery);
+    }
     return existing.promise;
   }
   const searchRelays = new Set(opts.searchRelays);
+  const relayQuery: MetadataFlight['relayQuery'] = { started: false, listeners: new Set() };
+  if (opts.onRelayQuery) relayQuery.listeners.add(opts.onRelayQuery);
   const promise = resolvePeerMessagingMetadataInternal({
     peerPubkey: opts.peerPubkey,
     searchRelays,
     force: opts.force === true,
-    onRelayQuery: opts.onRelayQuery,
+    onRelayQuery: () => {
+      if (relayQuery.started) return;
+      relayQuery.started = true;
+      for (const listener of relayQuery.listeners) listener();
+      relayQuery.listeners.clear();
+    },
   }).finally(() => {
     if (metadataFlights.get(flightKey)?.promise === promise) metadataFlights.delete(flightKey);
   });
-  metadataFlights.set(flightKey, { searchRelays, promise });
+  metadataFlights.set(flightKey, { searchRelays, promise, relayQuery });
   return promise;
 }
 
@@ -138,13 +150,14 @@ async function resolvePeerMessagingMetadataInternal(opts: {
   const [preparedKey, preparedRelays] = await Promise.all([
     knownKey.encryptionPubkey
       ? Promise.resolve(knownKey)
-      : preparePeerEncryptionKey({ peerPubkey: opts.peerPubkey }),
+      : preparePeerEncryptionKey({ peerPubkey: opts.peerPubkey, onRelayQuery: opts.onRelayQuery }),
     knownRelays && knownRelays.length > 0
       ? Promise.resolve(knownRelays)
       : fetchDmRelays({
           pubkey: opts.peerPubkey,
           searchRelays: Array.from(opts.searchRelays),
           force: true,
+          onRelayQuery: opts.onRelayQuery,
         }),
   ]);
   return {

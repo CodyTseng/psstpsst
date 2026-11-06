@@ -16,6 +16,7 @@ import { useActiveAccount } from '@/stores/active-account.store';
 import { usePublisherApplications } from '@/stores/explore-publisher.store';
 import { isPublisher } from '@/services/explore/publishers';
 import { applicationListEntry, type ExploreEntry } from '@/services/explore/model';
+import { pushOnce } from '@/lib/navigation';
 import { spacing, useThemeColors } from '@/theme';
 
 export default function PublisherApplicationsScreen() {
@@ -58,8 +59,15 @@ function PublisherApplications({ pubkey }: { pubkey: string }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             <Avatar pubkey={pubkey} picture={profile?.picture} size={spacing['3xl']} />
             <AppText variant="title" numberOfLines={1} style={{ flex: 1 }}>{name}</AppText>
+            <View style={{ flexShrink: 1 }}>
+              <AppButton label={t('applications.contact_author')} variant="secondary" size="sm"
+                labelVariant="caption" fullWidth={false}
+                disabled={!account} onPress={() => {
+                  if (account) pushOnce(`/chat/${encodeURIComponent(pubkey)}`);
+                }} />
+            </View>
           </View>
-          {profile?.about?.trim() ? <AppText tone="muted" selectable>{profile.about.trim()}</AppText> : null}
+          {profile?.about?.trim() ? <PublisherBio key={`${pubkey}:${profile.about}`} text={profile.about.trim()} /> : null}
         </View>
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
           paddingHorizontal: spacing.lg, paddingVertical: spacing.lg, gap: spacing.lg }}>
@@ -78,6 +86,27 @@ function PublisherApplications({ pubkey }: { pubkey: string }) {
         </View> : null}
       renderItem={({ item }) => <PublisherApplicationRow entry={item} pubkey={pubkey} />} />
   </AppScreen>;
+}
+
+function PublisherBio({ text }: { text: string }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const [collapsedHeight, setCollapsedHeight] = useState(0);
+  const [overflowHeight, setOverflowHeight] = useState(0);
+  const overflows = overflowHeight > collapsedHeight && collapsedHeight > 0;
+
+  return <View style={{ gap: spacing.sm }}>
+    {/* Bounded layout probes also work in Electron, where onTextLayout is unavailable. */}
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+      aria-hidden style={{ position: 'absolute', start: 0, end: 0, opacity: 0, pointerEvents: 'none' }}>
+      <AppText numberOfLines={5} onLayout={event => setCollapsedHeight(event.nativeEvent.layout.height)}>{text}</AppText>
+      <AppText numberOfLines={6} onLayout={event => setOverflowHeight(event.nativeEvent.layout.height)}>{text}</AppText>
+    </View>
+    <AppText tone="muted" selectable numberOfLines={expanded ? undefined : 5}>{text}</AppText>
+    {overflows ? <AppButton label={t(expanded ? 'applications.collapse_bio' : 'applications.expand_bio')}
+      variant="accentText" labelVariant="caption" compact compactAxis="none"
+      accessibilityState={{ expanded }} onPress={() => setExpanded(value => !value)} /> : null}
+  </View>;
 }
 
 const PublisherApplicationRow = memo(function PublisherApplicationRow({ entry, pubkey }: { entry: ExploreEntry; pubkey: string }) {

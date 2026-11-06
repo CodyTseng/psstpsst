@@ -63,15 +63,18 @@ it('returns complete local metadata immediately and queues its background refres
     pendingAnnouncement.promise,
   );
   jest.mocked(fetchDmRelays).mockReturnValue(pendingRelays.promise);
+  const onRelayQuery = jest.fn();
 
   await expect(resolvePeerMessagingMetadata({
     peerPubkey: 'local-peer',
     searchRelays: [],
+    onRelayQuery,
   })).resolves.toEqual({
     encryptionPubkey: 'local-key',
     dmRelays: ['wss://local.example'],
   });
   expect(encryptionKeyWatcher.resolveAnnouncement).not.toHaveBeenCalled();
+  expect(onRelayQuery).not.toHaveBeenCalled();
 
   pendingAnnouncement.resolve(null);
   pendingRelays.resolve(['wss://local.example']);
@@ -113,7 +116,68 @@ it('waits for missing key and relay metadata before resolving', async () => {
     pubkey: 'missing-peer',
     searchRelays: ['wss://search.example'],
     force: true,
+    onRelayQuery: expect.any(Function),
   });
+});
+
+it.each(['key', 'relays'] as const)('reports a missing %s lookup only when it leaves local state', async missing => {
+  const local = deferred<ReturnType<typeof sealEvidence> | null>();
+  const queried = deferred<void>();
+  const remote = deferred<null>();
+  const onRelayQuery = jest.fn();
+  jest.mocked(observedPeerKeyService.resolve).mockReturnValue(local.promise);
+  jest.mocked(getKnownDmRelays).mockResolvedValue(missing === 'key' ? ['wss://peer.example'] : null);
+  jest.mocked(encryptionKeyWatcher.resolveAnnouncement).mockImplementation((_peer, onQuery) => {
+    onQuery?.();
+    queried.resolve();
+    return remote.promise;
+  });
+  jest.mocked(fetchDmRelays).mockImplementation(async opts => {
+    opts.onRelayQuery?.();
+    queried.resolve();
+    await remote.promise;
+    return ['wss://peer.example'];
+  });
+
+  const result = resolvePeerMessagingMetadata({ peerPubkey: 'peer', searchRelays: [], onRelayQuery });
+  expect(onRelayQuery).not.toHaveBeenCalled();
+  local.resolve(missing === 'key' ? null : sealEvidence('peer', 'key'));
+  await queried.promise;
+  expect(onRelayQuery).toHaveBeenCalledTimes(1);
+  remote.resolve(null);
+  await result;
+});
+
+it('notifies concurrent callers joining before and after a shared relay query starts', async () => {
+  const local = deferred<null>();
+  const queried = deferred<void>();
+  const remote = deferred<string[]>();
+  jest.mocked(observedPeerKeyService.resolve).mockReturnValue(local.promise);
+  jest.mocked(encryptionKeyWatcher.resolveAnnouncement).mockImplementation(async (_peer, onQuery) => {
+    onQuery?.();
+    return null;
+  });
+  jest.mocked(fetchDmRelays).mockImplementation(opts => {
+    opts.onRelayQuery?.();
+    queried.resolve();
+    return remote.promise;
+  });
+  const early = jest.fn();
+  const late = jest.fn();
+  // Prefetch can own the request before the chat subscribes to its progress.
+  const first = resolvePeerMessagingMetadata({ peerPubkey: 'peer', searchRelays: [] });
+  const second = resolvePeerMessagingMetadata({ peerPubkey: 'peer', searchRelays: [], onRelayQuery: early });
+  expect(early).not.toHaveBeenCalled();
+  local.resolve(null);
+  await queried.promise;
+  expect(early).toHaveBeenCalledTimes(1);
+  const third = resolvePeerMessagingMetadata({ peerPubkey: 'peer', searchRelays: [], onRelayQuery: late });
+  expect(late).toHaveBeenCalledTimes(1);
+  remote.resolve(['wss://peer.example']);
+  await Promise.all([first, second, third]);
+  expect(early).toHaveBeenCalledTimes(1);
+  expect(late).toHaveBeenCalledTimes(1);
+  expect(fetchDmRelays).toHaveBeenCalledTimes(1);
 });
 
 it('force-refreshes both key and relay metadata through the same resolver', async () => {
