@@ -9,6 +9,8 @@ import { loadSiteBlob } from '@/services/napplet/artifacts';
 import { getData } from '@/services/napplet/repository';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { localRelay } from '@/services/local-relay';
+jest.mock('../application-reference', () => ({ applicationEntryFromAddress: jest.fn(), resolveApplicationReference: jest.fn() }));
+jest.mock('../default-handlers', () => ({ readDefaultActionHandler: jest.fn(async () => null), setDefaultHandler: jest.fn(async () => {}) }));
 jest.mock('../webln', () => ({ WebLn: jest.fn().mockImplementation(() => ({ handle: jest.fn(async () => true) })) }));
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn(async () => {}) }));

@@ -10,6 +10,8 @@ import { NappletOverlays } from '../NappletOverlays';
 import { UploadApproval } from '../UploadApproval';
 import { CapabilityActions, CapabilityApproval } from '../CapabilityApproval';
 import { AppButton } from '@/components/common/AppButton';
+import { ListRow } from '@/components/common/ListRow';
+import { Toggle } from '@/components/common/Toggle';
 import { AppText } from '@/components/common/AppText';
 import { SigningIdentity, SigningAccountAvatar, SigningRequestDetails } from '../SigningRequestDetails';
 import type { NappletRelease } from '@/services/napplet/protocol';
@@ -56,6 +58,7 @@ jest.mock('@/platform', () => ({ platform: { napplet: {}, deviceCrypto: { sha256
 jest.mock('@/services/napplet/repository', () => ({ getData: jest.fn(), setData: jest.fn() }));
 
 jest.mock('@/components/common/Avatar', () => ({ Avatar: () => null }));
+jest.mock('@/components/common/Toggle', () => ({ Toggle: 'Toggle' }));
 jest.mock('../ApplicationChoiceRow', () => ({ ApplicationChoiceRow: () => null }));
 jest.mock('../ApplicationTaskContext', () => ({ useOwnsApplicationTaskOverlays: () => true }));
 jest.mock('../NappletPanel', () => ({ NappletPanel: () => null, NappletPanelActions: () => null }));
@@ -73,7 +76,7 @@ jest.mock('@/stores/napplet.store', () => ({ getNappletAccountPubkey: () => null
 
 let renderer: ReactTestRenderer;
 const prompt = {
-  requestId: 'request-A', expiresAt: Date.now() + 60000, queued: 0, title: 'Game', detail: '',
+  requestId: 'request-A', queued: 0, title: 'Game', detail: '',
   signing: { operation: 'publish', kind: 1, accountPubkey: 'a'.repeat(64), content: 'Hello from the app', tags: [], createdAt: 100, relays: ['wss://relay.example/'] },
 } satisfies QueuedPrompt;
 afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); mockApprovalClosing = false; mockActiveAccount = 'a'.repeat(64); mockDiscovery = { entries: [], loaded: true, loading: false, loadingMore: false, error: false, hasMore: false, queryPages: 0 }; });
@@ -128,7 +131,7 @@ it('uses exactly two side-by-side decisions and applies the selected time to ref
   selectDuration('allow-1h');
   expect(renderer.root.findByType(ActionRow).props.layout).toBe('horizontal');
   expect(renderer.root.findAllByType(AppButton).filter((node) => node.props.label === 'applications.signing_block')).toHaveLength(0);
-  act(() => { void button('applications.signing_reject_countdown').props.onPress(); });
+  act(() => { void button('applications.signing_reject').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'deny-1h');
 });
 
@@ -369,7 +372,7 @@ it('browser sensitive permissions reuse duration controls for both allow and rej
   expect(button('applications.signing_period_1h')).toBeDefined();
   act(() => { button('applications.signing_approve').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith(prompt.requestId, 'allow-1h');
-  act(() => { button('applications.signing_reject_countdown').props.onPress(); });
+  act(() => { button('applications.signing_reject').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith(prompt.requestId, 'deny-1h');
 });
 
@@ -414,7 +417,7 @@ it('retains a dedicated wallet sheet until its dismissal completes', () => {
 
 it.each(['light', 'dark'] as const)('loads compatible apps inline in %s mode', scheme => {
   mockScheme = scheme;
-  mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+  mockPrompt = { requestId: 'empty', queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
   act(() => { renderer = create(<NappletOverlays />); });
   const sheet = renderer.root.findByType(BottomSheet);
@@ -429,7 +432,7 @@ it('prioritizes saved apps, deduplicates discovered apps and filters action and 
     manifest: { id: key, kind: 35130, pubkey: 'a'.repeat(64), created_at: 1, content: '', sig: '',
       tags: [['action', action], ...(auxiliary ? [['mode', 'auxiliary']] : [])] } }) satisfies ExploreEntry;
   mockDiscovery.entries = [app('saved'), app('other'), app('wrong-action', 'profile'), app('wrong-mode', 'edit', true)];
-  mockPrompt = { requestId: 'choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+  mockPrompt = { requestId: 'choices', queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'a'.repeat(64), choices: [{ key: 'source:saved', title: 'Saved', application: { key: 'saved', title: 'Saved', kind: 'napp', servers: [] } }],
     applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
   act(() => { renderer = create(<NappletOverlays />); });
@@ -455,7 +458,7 @@ it('prioritizes saved apps, deduplicates discovered apps and filters action and 
 });
 
 it('keeps loading, retry and pagination inside the picker without showing premature empty state', async () => {
-  mockPrompt = { requestId: 'choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+  mockPrompt = { requestId: 'choices', queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
   mockDiscovery.loading = true;
   mockDiscovery.loaded = false;
@@ -475,7 +478,7 @@ it.each([
 ] as const)('preserves the %s %s footer button and label while its request is pending', async (scheme, action) => {
   mockScheme = scheme;
   mockDiscovery.hasMore = true;
-  mockPrompt = { requestId: 'stable-footer', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+  mockPrompt = { requestId: 'stable-footer', queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'a'.repeat(64), choices: [{ key: 'source:saved', title: 'Saved' }],
     applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
   act(() => { renderer = create(<NappletOverlays />); });
@@ -501,7 +504,7 @@ const choiceApp = (index: number, action = 'edit'): ExploreEntry => ({ key: `app
   kind: 'napp', servers: [], description: '', required: [], desktopPosition: null, lastUsedAt: null,
   manifest: { id: String(index), kind: 35130, pubkey: 'a'.repeat(64), created_at: index, content: '', sig: '', tags: [['action', action]] } });
 function automaticChoicePrompt(): QueuedPrompt {
-  return { requestId: 'automatic-choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+  return { requestId: 'automatic-choices', queued: 0, title: 'Timeline', detail: '',
     accountPubkey: 'a'.repeat(64), choices: [], applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
 }
 
@@ -597,7 +600,7 @@ it('resets the empty-page budget when a new compatible app arrives and keeps res
 });
 
 it('does not offer Discover for an unavailable explicit instance', () => {
-  mockPrompt = { requestId: 'empty', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+  mockPrompt = { requestId: 'empty', queued: 0, title: 'Timeline', detail: '',
     choices: [], applicationSelection: { requester: 'Timeline', content: 'content', unavailable: 'instance' } };
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.handler_closed')).toBe(true);
@@ -605,7 +608,7 @@ it('does not offer Discover for an unavailable explicit instance', () => {
 });
 
 it('keeps the requester question when compatible applications can be selected', () => {
-  mockPrompt = { requestId: 'choices', expiresAt: Date.now() + 60000, queued: 0, title: 'Timeline', detail: '',
+  mockPrompt = { requestId: 'choices', queued: 0, title: 'Timeline', detail: '',
     choices: [{ key: 'target', title: 'Target' }], applicationSelection: { requester: 'Timeline', content: 'content' } };
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findByType(BottomSheet).props.fixedSubheader).toBeDefined();
@@ -629,7 +632,7 @@ it('uses the standard allow and reject duration controls for an application HTTP
   act(() => { renderer = create(<SigningApproval prompt={auth} />); });
   expect(renderer.root.findAllByType(AppButton).filter(node => node.props.label === 'applications.signing_duration_once')).toHaveLength(1);
   selectDuration('allow-always');
-  act(() => { button('applications.signing_reject_countdown').props.onPress(); });
+  act(() => { button('applications.signing_reject').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('request-A', 'deny-always');
 });
 
@@ -641,4 +644,30 @@ it.each([24242, 27235, 22242])('renders kind %s publication as an ordinary signa
   expect(text).toContain('applications.signing_kind');
   expect(text).not.toContain('applications.signing_http_auth');
   expect(text).not.toContain('applications.signing_upload');
+});
+
+
+it.each(['light', 'dark'] as const)('offers opt-in default selection without carrying it into another request in %s mode', mode => {
+  mockScheme = mode;
+  mockPrompt = { requestId: 'remember-A', queued: 0, title: 'Timeline', detail: '',
+    accountPubkey: 'account', choices: [{ key: 'source:target', title: 'Target' }],
+    applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name: 'edit', auxiliary: false } } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  const row = () => renderer.root.findByType(BottomSheet).props.listProps.renderItem({ item: mockPrompt!.choices![0], index: 0 }).props.children[1];
+  expect(row().props.remember).toBe(false);
+  const first = renderer.root.findByType(BottomSheet).props.listProps.renderItem({ item: mockPrompt!.choices![0], index: 0 });
+  expect(first.props.children[0].props.children).toBe('applications.available_apps');
+  const card = () => renderer.root.findAllByType(ListRow).find(node => node.props.accessibilityRole === 'switch')!;
+  expect(card().props.accessibilityState).toEqual({ checked: false });
+  act(() => { card().props.onPress(); });
+  expect(row().props.remember).toBe(true);
+  expect(card().props.accessibilityState).toEqual({ checked: true });
+  expect(card().props.trailing.props.pointerEvents).toBe('none');
+  act(() => { card().props.onPress(); });
+  expect(row().props.remember).toBe(false);
+  act(() => { card().props.onPress(); });
+  mockPrompt = { ...mockPrompt, requestId: 'remember-B' };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(row().props.remember).toBe(false);
+  expect(renderer.root.findByType(Toggle).props.value).toBe(false);
 });

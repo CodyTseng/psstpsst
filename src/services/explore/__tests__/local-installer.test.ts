@@ -58,6 +58,27 @@ async function stage(metadata: Record<string, unknown> = { id: 'hello', requires
   return transfer.id;
 }
 
+it('keeps installation review open beyond the transfer deadline', async () => {
+  jest.useFakeTimers();
+  let approve!: (answer: string) => void;
+  let reviewSignal: AbortSignal | undefined;
+  confirm.mockImplementation((_prompt, signal) => {
+    reviewSignal = signal;
+    return new Promise<string>(resolve => { approve = resolve; });
+  });
+  try {
+    const id = await stage();
+    const finishing = installer.handle('finish', [id]);
+    await jest.advanceTimersByTimeAsync(20);
+    expect(reviewSignal).toBeDefined();
+    await jest.advanceTimersByTimeAsync(10 * 60000);
+    expect(reviewSignal!.aborted).toBe(false);
+    approve('allow');
+    await jest.advanceTimersByTimeAsync(1);
+    await expect(finishing).resolves.toEqual({ nappId: 'local~hello' });
+  } finally { life.abort(); jest.useRealTimers(); }
+});
+
 it.each(['../a', '/a/../b', 'a/./b', '//a', 'a\\b', 'C:/file', '%2e%2e/x', 'a//b', 'a/', '\u0000bad', '__policy__', '/__psst__/x'])('rejects unsafe path %j', value => {
   expect(() => localInstallPath(value)).toThrow();
 });

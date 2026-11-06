@@ -34,7 +34,8 @@ const TRAVEL = TRACK_W - THUMB - PAD * 2;
  * stays vertically centered in any row and every color comes from a theme token
  * (track `accent` when on / `surfaceMuted` when off, thumb `accentForeground`).
  * Use it as a {@link ListRow} `trailing` accessory for a boolean setting row
- * (the row is non-tappable — the switch is the target). Don't hand-roll a switch
+ * (normally the switch is the target). A tappable switch row owns accessibility
+ * and pointer input, with this accessory hidden from both. Don't hand-roll a switch
  * elsewhere; route every toggle through this so they read identically.
  */
 export function Toggle({ value, onValueChange, disabled, accessibilityLabel }: Props) {

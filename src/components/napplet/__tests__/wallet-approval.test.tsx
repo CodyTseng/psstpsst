@@ -27,7 +27,7 @@ const review = { operation: 'payment', wallets: [
   { id: 'second', name: 'Second', customName: null, isDefault: true },
 ], amountMsat: 1234, description: 'Purchase' } satisfies WalletApprovalRequest;
 const prompt: QueuedPrompt = { requestId: 'payment', title: 'wallet.confirm_payment', detail: 'Access information', queued: 0,
-  expiresAt: Date.now() + 60000, accountPubkey: 'account', requester: { title: 'Site', origin: 'https://site.example' }, wallet: review };
+  accountPubkey: 'account', requester: { title: 'Site', origin: 'https://site.example' }, wallet: review };
 let renderer: ReactTestRenderer;
 let closed: jest.Mock;
 beforeEach(() => { closed = jest.fn(); });
@@ -69,6 +69,14 @@ it('rejects cancellation without returning any payment authorization', () => {
 it('does not approve a request after its host session closes', () => {
   render(prompt, false); confirm();
   expect(nappletService.answer).not.toHaveBeenCalled();
+});
+it('accepts confirmation after a long review while the host session remains open', () => {
+  render();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 60 * 60000);
+  try {
+    confirm();
+    expect(nappletService.answer).toHaveBeenCalledWith('payment', JSON.stringify({ walletId: 'second' }));
+  } finally { clock.mockRestore(); }
 });
 it('constrains editable invoice amounts and uses the chosen receiving wallet', () => {
   render({ ...prompt, wallet: { ...review, operation: 'invoice', amountMsat: 1000, amountRange: { min: 1, max: 5 } } });

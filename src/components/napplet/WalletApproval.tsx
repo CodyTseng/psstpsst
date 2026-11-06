@@ -22,7 +22,7 @@ export function WalletApproval({ prompt, visible, onClosed }: Props) {
   const numeric = Number(amount);
   const validAmount = !wallet.amountRange || /^\d+$/.test(amount) && Number.isSafeInteger(numeric) && numeric >= wallet.amountRange.min && numeric <= wallet.amountRange.max;
   function approve() {
-    if (!visible || !selectedWalletId || !validAmount || Date.now() >= prompt.expiresAt) return;
+    if (!visible || !selectedWalletId || !validAmount) return;
     nappletService.answer(prompt.requestId, JSON.stringify({ walletId: selectedWalletId, ...(wallet?.amountRange ? { amountSats: numeric } : {}) }));
   }
   return <WalletPaymentConfirmSheet visible={visible} title={prompt.title}

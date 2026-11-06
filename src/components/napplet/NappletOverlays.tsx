@@ -2,8 +2,11 @@ import { Compass } from '@solar-icons/react-native/category/map/Linear/Compass';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { SectionLabel } from '@/components/common/SectionLabel';
+import { View } from 'react-native';
+import { handlerTypeLabel } from './handler-type-label';
+import { ListRow } from '@/components/common/ListRow';
+import { Toggle } from '@/components/common/Toggle';
+import { ApplicationChoiceSectionHeader } from './application-choice-section-header';
 import { useApplicationChoices } from '@/hooks/use-application-choices';
 import { useTranslation } from 'react-i18next';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
@@ -30,6 +33,7 @@ import { CapabilityActions, CapabilityApproval } from './CapabilityApproval';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import type { RuntimePromptChoice } from '@/services/napplet/runtime';
 import { WalletApproval } from './WalletApproval';
+import { applicationChoiceFooter } from './application-choice-footer';
 import { ApplicationChoiceRow } from './ApplicationChoiceRow';
 import { useOwnsApplicationTaskOverlays } from './ApplicationTaskContext';
 
@@ -55,6 +59,8 @@ function NappletOverlayContent() {
   const walletPrompt = currentWalletPrompt ?? (approvalClosing ? lastWalletPrompt : null);
   const { t } = useTranslation();
   const [choice, setChoice] = useState<{ id: string; value: string }>();
+  const [rememberChoice, setRememberChoice] = useState<{ id: string; value: boolean }>();
+  const remember = rememberChoice?.id === prompt?.requestId && rememberChoice?.value === true;
   const [menu, setMenu] = useState<{ id: string; anchor: ContextMenuAnchor }>();
   const menuOpen = !!prompt && menu?.id === prompt.requestId;
   const duration = choice?.id === prompt?.requestId ? choice?.value ?? 'allow' : 'allow';
@@ -91,9 +97,21 @@ function NappletOverlayContent() {
       title={selectingApplication ? t('applications.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt' : 'applications.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('applications.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'applications.permissions' : `applications.browser_${prompt.browser.action}`) : accessPrompt ? t('applications.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('applications.details') : showingPanel?.page === 'settings' ? t('applications.permissions_manage') : t('applications.settings'))}
       headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
-      fixedSubheader={selectingApplication && !!applicationChoices.choices.length ? <AppText>
-        {t(selectingApplication.content === 'profile' ? 'applications.open_with_profile' : 'applications.open_with_content', { app: selectingApplication.requester })}
-      </AppText> : undefined}
+      fixedSubheader={selectingApplication && !!applicationChoices.choices.length ? <View style={{ gap: spacing.sm }}>
+        <AppText variant="caption" tone="muted">
+          {t(selectingApplication.content === 'profile' ? 'applications.open_with_profile' : 'applications.open_with_content', { app: selectingApplication.requester })}
+        </AppText>
+        {prompt && (selectingApplication.discovery || selectingApplication.intent) ?
+          <ListRow variant="card" verticalPadding="sm" title={handlerTypeLabel(selectingApplication.discovery
+            ? { kind: 'action', ...selectingApplication.discovery } : { kind: 'intent', name: selectingApplication.intent! }, t)}
+            subtitle={t('applications.always_open_type')} subtitleMultiline
+            onPress={() => setRememberChoice({ id: prompt.requestId, value: !remember })}
+            accessibilityRole="switch" accessibilityState={{ checked: remember }}
+            accessibilityLabel={t('applications.always_open_type')}
+            trailing={<View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Toggle value={remember} onValueChange={value => setRememberChoice({ id: prompt.requestId, value })} />
+            </View>} /> : null}
+      </View> : undefined}
       listProps={selectingApplication && prompt ? {
         data: applicationChoices.choices, keyExtractor: choice => choice.key,
         initialNumToRender: 8,
@@ -108,24 +126,14 @@ function NappletOverlayContent() {
         </View>,
         onEndReached: applicationChoices.more,
         onEndReachedThreshold: 0.3,
-        ListFooterComponent: selectingApplication.discovery && prompt.accountPubkey ?
-          <View style={applicationChoices.canDiscover || applicationChoices.error || applicationChoices.manualLoading
-            ? { padding: spacing.lg }
-            : { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg, minHeight: spacing.xl + spacing.sm + spacing.lg, justifyContent: 'center' }}>
-            {applicationChoices.canDiscover || applicationChoices.error || applicationChoices.manualLoading ?
-              <AppButton variant="secondary" loading={applicationChoices.loading}
-                label={t(applicationChoices.footerAction === 'retry' ? 'common.retry' : 'applications.view_other_apps')}
-                onPress={applicationChoices[applicationChoices.footerAction]} />
-              : applicationChoices.loading ? <ActivityIndicator size="small" color={colors.textMuted} />
-                : !applicationChoices.hasMore && applicationChoices.choices.length > 0 ?
-                  <AppText variant="caption" tone="muted" align="center">{t('applications.no_more_apps')}</AppText> : null}
-          </View> : null,
+        ListFooterComponent: selectingApplication.discovery && prompt.accountPubkey
+          ? applicationChoiceFooter(applicationChoices, t, colors.textMuted) : null,
         renderItem: ({ item, index }) => <>
           {selectingApplication.discovery && (index === 0 || index === applicationChoices.savedCount) ?
-            <SectionLabel style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }}>
-              {t(index < applicationChoices.savedCount ? 'applications.my_apps' : 'applications.other_apps')}
-            </SectionLabel> : null}
-          <ApplicationChoiceRow choice={item} requestId={prompt.requestId}/>
+            <ApplicationChoiceSectionHeader>
+              {t(index < applicationChoices.savedCount ? 'applications.available_apps' : 'applications.other_apps')}
+            </ApplicationChoiceSectionHeader> : null}
+          <ApplicationChoiceRow choice={item} requestId={prompt.requestId} remember={remember}/>
         </>,
       } : undefined}
       scrollResetKey={prompt?.requestId ?? (configuration ? 'configuration' : panel?.page ?? 'closed')}

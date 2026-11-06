@@ -12,6 +12,11 @@ import { applicationMessaging } from './messaging';
 import { matchesAction, supportsApplicationAction } from './action-matching';
 import { applicationListEntry, type ExploreEntry } from './model';
 import { getDiscoveryStore } from './discovery';
+import { applicationEntryFromAddress, resolveApplicationReference } from './application-reference';
+import { readDefaultActionHandler, setDefaultHandler } from './default-handlers';
+
+/** Restores the requesting host after a launched handler fails to become ready. */
+export type ActionStartupCleanup = () => Promise<void>;
 
 type Options = {
   signal: AbortSignal;
@@ -20,7 +25,7 @@ type Options = {
   configure(schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal): void;
   /** Current account's added applications, including metadata beyond visible list pages. */
   applications(): Promise<ExploreEntry[]>;
-  launch(entry: ExploreEntry): Promise<void>;
+  launch(entry: ExploreEntry): Promise<void | ActionStartupCleanup>;
   beforeConnect?(): Promise<void>;
   warn?(message: string, details: object): void;
 };
@@ -106,21 +111,41 @@ export class NappCapabilities {
       } catch (error) { if (name !== 'view') throw error; }
       this.check();
     }
+    return this.dispatchAction(name as string, payload, options);
+  }
+  private async dispatchAction(name: string, payload: unknown, options: { instance?: string; auxiliary?: boolean }, skipDefault = false): Promise<unknown> {
     const endpoints: ApplicationEndpoint[] = await this.request({ type: 'list' });
     const self = options.instance === this.instance ? endpoints.find(endpoint => endpoint.instance === this.instance &&
       endpoint.accountPubkey === this.account && endpoint.sourceId === this.entry.key) : undefined;
     // An explicit self-target stays inside the already-open document's authority.
     if (self && !!self.auxiliary === !!options.auxiliary && self.actions.some(pattern => matchesAction(pattern, name as string)))
       return this.request({ type: 'invoke', target: self.instance, name, payload });
+    const action = { name: name as string, auxiliary: !!options.auxiliary };
     const known = new Map((await this.options.applications()).map(app => [app.key, app]));
-    const available = endpoints.filter(e => known.has(e.sourceId) && (!options.instance || e.instance === options.instance) &&
-      !!e.auxiliary === !!options.auxiliary && e.actions.some(p => matchesAction(p, name as string)));
+    const compatibleEndpoint = (endpoint: ApplicationEndpoint) => endpoint.accountPubkey === this.account &&
+      (!options.instance || endpoint.instance === options.instance) && !!endpoint.auxiliary === action.auxiliary &&
+      endpoint.actions.some(pattern => matchesAction(pattern, action.name));
+    const registered = endpoints.filter(compatibleEndpoint);
+    const liveApplications = new Map<string, ExploreEntry>();
+    // The broker bounds live instances; resolve each non-library source only once.
+    await Promise.all([...new Set(registered.map(endpoint => endpoint.sourceId))].filter(sourceId => !known.has(sourceId)).map(async sourceId => {
+      const cached = getDiscoveryStore('napps').getState().entries.find(app => app.key === sourceId);
+      const reference = cached ?? applicationEntryFromAddress(sourceId);
+      const app = cached ?? (reference ? await resolveApplicationReference(this.account, reference, this.options.signal) : null);
+      if (app?.key === sourceId) liveApplications.set(sourceId, app);
+    }));
+    this.check();
+    const declaredApplication = (sourceId: string) => known.get(sourceId) ?? liveApplications.get(sourceId);
+    const available = registered.filter(endpoint => {
+      const app = declaredApplication(endpoint.sourceId);
+      return app && supportsApplicationAction(app, action);
+    });
     const runningSources = new Set(available.map(endpoint => endpoint.sourceId));
     const applications = options.instance ? [] : [...known.values()].filter(app => !runningSources.has(app.key) &&
       supportsApplicationAction(app, { name: name as string, auxiliary: !!options.auxiliary }));
     this.check();
     const choices = [...available.map(endpoint => {
-      const app = known.get(endpoint.sourceId);
+      const app = declaredApplication(endpoint.sourceId);
       let publisher: string | undefined;
       try { publisher = publicEventAddress(endpoint.sourceId).author; } catch { /* Metadata may be unavailable for a live endpoint. */ }
       return { key: `instance:${endpoint.instance}`, title: endpoint.title,
@@ -129,7 +154,7 @@ export class NappCapabilities {
     if (!choices.length && options.instance) {
       const requested = endpoints.find(endpoint => endpoint.instance === options.instance);
       const reason = !requested ? 'instance-not-running'
-        : requested !== self && !known.has(requested.sourceId) ? 'app-not-added'
+        : requested !== self && (!declaredApplication(requested.sourceId) || !supportsApplicationAction(declaredApplication(requested.sourceId)!, action)) ? 'action-not-declared'
           : !!requested.auxiliary !== !!options.auxiliary ? 'mode-mismatch' : 'action-not-registered';
       this.warn('Action handler unavailable', { requester: this.entry.title, action: name,
         requesterInstance: this.instance, targetInstance: options.instance ?? null, auxiliary: !!options.auxiliary,
@@ -140,31 +165,77 @@ export class NappCapabilities {
       this.check();
       throw new Error('permission-denied');
     }
-    const selected = await this.options.confirm({ title: this.entry.title, detail: '', choices,
+    const saved = !options.instance && !skipDefault ? await readDefaultActionHandler(this.account, action) : null;
+    this.check();
+    let preferred = saved ? declaredApplication(saved.sourceId) : undefined;
+    if (saved && !preferred && saved.address) {
+      const reference = applicationEntryFromAddress(saved.address);
+      if (reference) preferred = await resolveApplicationReference(this.account, reference, this.options.signal) ?? undefined;
+      this.check();
+    }
+    if (preferred && (preferred.key !== saved?.sourceId || !supportsApplicationAction(preferred, action))) preferred = undefined;
+    const preferredEndpoint = preferred && available.find(endpoint => endpoint.sourceId === preferred.key);
+    const answer = preferred ? preferredEndpoint ? `instance:${preferredEndpoint.instance}`
+      : known.has(preferred.key) ? `source:${preferred.key}` : `discovery:${preferred.key}`
+      : await this.options.confirm({ title: this.entry.title, detail: '', choices,
       accountPubkey: this.account,
       applicationSelection: { requester: this.entry.title, content: name === 'profile' || name === 'view:0' ? 'profile' : 'content',
         ...(!options.instance ? { discovery: { name: name as string, auxiliary: !!options.auxiliary } } : {}) } }, this.options.signal);
     this.check();
-    const discovered = !options.instance && typeof selected === 'string' && selected.startsWith('discovery:')
+    const remember = !options.instance && typeof answer === 'string' && answer.startsWith('default:');
+    const selected = remember ? (answer as string).slice('default:'.length) : answer;
+    const discovered = preferred && !known.has(preferred.key) ? preferred : !options.instance && typeof selected === 'string' && selected.startsWith('discovery:')
       ? getDiscoveryStore('napps').getState().entries.find(app => `discovery:${app.key}` === selected &&
         supportsApplicationAction(app, { name: name as string, auxiliary: !!options.auxiliary })) : undefined;
     if (!selected || (!discovered && !choices.some(choice => choice.key === selected))) throw new Error('permission-denied');
     const selectedSource = available.find(e => `instance:${e.instance}` === selected)?.sourceId ??
       applications.find(app => `source:${app.key}` === selected)?.key;
-    const current = discovered ?? (await this.options.applications()).find(app => app.key === selectedSource);
-    this.check();
-    if (!current) throw new Error('handler-unavailable');
     let target = available.find(e => `instance:${e.instance}` === selected)?.instance;
-    if (!target) {
-      if (!current.local?.actions.some(pattern => matchesAction(pattern, name as string)) && !current.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string))) throw new Error('handler-unavailable');
-      await this.options.launch(current); this.check();
-      target = await this.request({ type: 'wait', sourceId: current.key, name });
-      if (!discovered) {
-        const favorites = await this.options.applications();
+    const current = discovered ?? (await this.options.applications()).find(app => app.key === selectedSource)
+      ?? (target && selectedSource ? declaredApplication(selectedSource) : undefined);
+    this.check();
+    let restore: ActionStartupCleanup | undefined;
+    try {
+      if (!current || !supportsApplicationAction(current, action)) throw new Error('handler-unavailable');
+      if (target) {
+        const currentEndpoints: ApplicationEndpoint[] = await this.request({ type: 'list' });
         this.check();
-        if (!favorites.some(app => app.key === selectedSource)) throw new Error('handler-unavailable');
+        if (!currentEndpoints.some(endpoint => endpoint.instance === target && endpoint.sourceId === current.key && compatibleEndpoint(endpoint)))
+          throw new Error('handler-unavailable');
       }
+      if (!target) {
+        if (!current.local?.actions.some(pattern => matchesAction(pattern, name as string)) && !current.manifest?.tags.some(t => t[0] === 'action' && matchesAction(t[1], name as string))) throw new Error('handler-unavailable');
+        const cleanup = await this.options.launch(current);
+        if (typeof cleanup === 'function') restore = cleanup;
+        this.check();
+        target = await this.request({ type: 'wait', sourceId: current.key, name });
+        if (!discovered) {
+          const favorites = await this.options.applications();
+          this.check();
+          if (!favorites.some(app => app.key === selectedSource)) {
+            const currentEndpoints: ApplicationEndpoint[] = await this.request({ type: 'list' });
+            this.check();
+            if (!currentEndpoints.some(endpoint => endpoint.instance === target && endpoint.sourceId === current.key && compatibleEndpoint(endpoint)))
+              throw new Error('handler-unavailable');
+          }
+        }
+      }
+    } catch (error) {
+      this.check();
+      const cancelled = error instanceof Error && (error.name === 'AbortError' ||
+        ['permission-denied', 'session-closed', 'endpoint-closed', 'account-unavailable', 'application-not-active'].includes(error.message));
+      if (preferred && !cancelled) {
+        await restore?.();
+        this.check();
+        return this.dispatchAction(name, payload, options, true);
+      }
+      throw error;
     }
+    if (remember && current) {
+      await setDefaultHandler(this.account, { kind: 'action', ...action }, current);
+      this.check();
+    }
+    // Once invocation starts, failures must not redispatch a potentially completed action.
     return this.request({ type: 'invoke', target, name, payload });
   }
   private async loadSchema() {

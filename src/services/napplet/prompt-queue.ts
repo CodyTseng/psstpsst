@@ -1,14 +1,14 @@
 import type { RuntimePrompt } from './runtime';
 
-export type QueuedPrompt = RuntimePrompt & { requestId: string; expiresAt: number; queued: number };
+export type QueuedPrompt = RuntimePrompt & { requestId: string; queued: number };
 type Entry = {
   prompt: QueuedPrompt;
   finish: (value: string | false) => void;
   cleanup: () => void;
-  timer?: ReturnType<typeof setTimeout>;
+  presented: boolean;
 };
 
-/** One visible request; each approval gets its review budget when it becomes visible. */
+/** One visible request; decisions wait for the user or requester cancellation. */
 export class PromptQueue {
   private entries: Entry[] = [];
   private serial = 0;
@@ -24,10 +24,10 @@ export class PromptQueue {
       const id = `approval:${++this.serial}`;
       const abort = () => this.remove(id, false);
       const entry: Entry = {
-        prompt: { ...value, requestId: id, expiresAt: 0, queued: 0 },
+        prompt: { ...value, requestId: id, queued: 0 },
         finish: resolve,
+        presented: false,
         cleanup: () => {
-          if (entry.timer !== undefined) clearTimeout(entry.timer);
           signal?.removeEventListener('abort', abort);
         },
       };
@@ -39,8 +39,8 @@ export class PromptQueue {
 
   answer(id: string, value: string | false): void {
     const first = this.entries[0];
-    if (!this.dismissing && first?.prompt.requestId === id && first.prompt.expiresAt > 0) {
-      this.remove(id, Date.now() < first.prompt.expiresAt ? value : false);
+    if (!this.dismissing && first?.prompt.requestId === id && first.presented) {
+      this.remove(id, value);
     }
   }
 
@@ -79,7 +79,7 @@ export class PromptQueue {
     if (index < 0) return;
     const [entry] = this.entries.splice(index, 1);
     entry.cleanup();
-    if (index === 0 && entry.prompt.expiresAt > 0) this.dismissing = { entry, value };
+    if (index === 0 && entry.presented) this.dismissing = { entry, value };
     else entry.finish(value);
     this.emit();
   }
@@ -87,10 +87,7 @@ export class PromptQueue {
   private emit() {
     if (this.paused || this.dismissing) { this.changed(null, !!this.dismissing); return; }
     const first = this.entries[0];
-    if (first && first.timer === undefined) {
-      first.prompt.expiresAt = Date.now() + 60000;
-      first.timer = setTimeout(() => this.remove(first.prompt.requestId, false), 60000);
-    }
+    if (first) first.presented = true;
     this.changed(first ? { ...first.prompt, queued: this.entries.length - 1 } : null, false);
   }
 }

@@ -6,13 +6,15 @@ import { applicationListEntry } from '@/services/explore/model';
 import { useErrorToast } from '@/hooks/use-error-toast';
 import { useDiscovery } from '@/stores/explore-discovery.store';
 
+export type ApplicationChoiceRequest = Pick<QueuedPrompt, 'requestId' | 'accountPubkey' | 'choices' | 'applicationSelection'>;
+
 type CatalogueAction = 'discover' | 'retry';
 const CHOICE_PAGE_SIZE = 20;
 const MAX_EMPTY_QUERY_PAGES = 3;
 type Scan = { key: object; queryPages: number; matches: readonly { key: string }[]; keys: Set<string>; emptyPages: number };
 
-/** Keep saved handlers first while browsing the verified catalogue in the same picker. */
-export function useApplicationChoices(prompt: QueuedPrompt | null) {
+/** Keep available handlers first while browsing the verified catalogue in the same picker. */
+export function useApplicationChoices(prompt: ApplicationChoiceRequest | null) {
   const state = useDiscovery('napps');
   const filter = prompt?.applicationSelection?.discovery;
   const account = prompt?.accountPubkey;

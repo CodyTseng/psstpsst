@@ -21,7 +21,7 @@ import type { ExploreEntry } from './model';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
 import { localRelay } from '@/services/local-relay';
 import { ExploreStreams } from './streams';
-import { NappCapabilities } from './capabilities';
+import { NappCapabilities, type ActionStartupCleanup } from './capabilities';
 import type { ConfigSchema } from '@/services/napplet/config';
 import { NappData } from './data';
 import { NappSync } from './sync';
@@ -75,7 +75,7 @@ export class ExploreRuntime {
     navigated?: (url: string) => void;
     configure?: (schema: ConfigSchema, values: Record<string, unknown>, save: (values: Record<string, unknown>) => Promise<void>, signal: AbortSignal) => void;
     applications?: () => Promise<ExploreEntry[]>;
-    launch?: (entry: ExploreEntry) => Promise<void>;
+    launch?: (entry: ExploreEntry) => Promise<void | ActionStartupCleanup>;
     installed?: (entry: ExploreEntry) => void;
     replaced?: (entry?: ExploreEntry) => void;
   }) { this.network = new ApplicationNetwork(account); this.streams = new ExploreStreams(this.network); }

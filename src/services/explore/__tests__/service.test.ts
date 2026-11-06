@@ -888,3 +888,46 @@ it('cancels queued hydration on account replacement and ignores delayed old resu
 });
 
 });
+
+it('restores the inline requester before choosing an alternative to an unready handler', async () => {
+  const tasks = platform.napplet.tasks;
+  platform.napplet.tasks = undefined;
+  try {
+    const caller = entry('napp');
+    const runId = exploreService.prepare(caller, 'account');
+    await exploreService.start(runId);
+    const instance = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+    instance.containerId = 'caller-container';
+    const callbacks = jest.mocked(ExploreRuntime).mock.calls.at(-1)![2];
+    const failed = { ...caller, key: 'failed', address: 'failed' };
+    const restore = await callbacks.launch!(failed);
+    const child = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+    expect(exploreStore.getState().entry?.key).toBe('failed');
+    expect(typeof restore).toBe('function');
+    if (!restore) throw new Error('missing startup cleanup');
+    await restore();
+    expect(child.stop).toHaveBeenCalled();
+    expect(exploreStore.getState().entry?.key).toBe(caller.key);
+    await expect(callbacks.confirm({ title: 'Choose an app', detail: '' }, new AbortController().signal)).resolves.toBe('allow');
+    await callbacks.launch!({ ...caller, key: 'replacement', address: 'replacement' });
+    expect(exploreStore.getState().entry?.key).toBe('replacement');
+  } finally { platform.napplet.tasks = tasks; }
+});
+
+it('does not close a newer inline child when an old startup cleanup runs', async () => {
+  const tasks = platform.napplet.tasks;
+  platform.napplet.tasks = undefined;
+  try {
+    const caller = entry('napp');
+    const runId = exploreService.prepare(caller, 'account');
+    await exploreService.start(runId);
+    jest.mocked(ExploreRuntime).mock.instances.at(-1)!.containerId = 'caller-container';
+    const callbacks = jest.mocked(ExploreRuntime).mock.calls.at(-1)![2];
+    const restore = await callbacks.launch!({ ...caller, key: 'failed', address: 'failed' });
+    if (!restore) throw new Error('missing startup cleanup');
+    exploreService.close(runId);
+    await callbacks.launch!({ ...caller, key: 'newer', address: 'newer' });
+    await expect(restore()).rejects.toThrow('application-not-active');
+    expect(exploreStore.getState().entry?.key).toBe('newer');
+  } finally { platform.napplet.tasks = tasks; }
+});

@@ -75,7 +75,7 @@ export function PermissionActions({ prompt, duration, menuOpen, onMenuChange, re
           }} /></View>
       </View>
     </> : <AppText tone="muted">{t('applications.signing_unknown_notice')}</AppText>}
-    <SigningDecisions key={`${prompt.requestId}:${prompt.expiresAt}`} expiresAt={prompt.expiresAt}
+    <SigningDecisions key={prompt.requestId}
       onApprove={() => nappletService.answer(prompt.requestId, decision)}
       onReject={() => nappletService.answer(prompt.requestId, reject)} />
   </View>;

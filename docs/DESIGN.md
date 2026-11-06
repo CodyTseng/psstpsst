@@ -717,7 +717,7 @@ release, even after reaching the top. Only a fresh downward gesture begun at the
 top can drag the sheet; fixed chrome remains directly draggable.
 
 A closing sheet retains its last presented content and geometry until its exit
-transition completes, including automatic timeout dismissal.
+transition completes.
 
 Only one native modal may be presented at a time. Close the current modal and
 start the next action from `onClosed`. Do not coordinate modal sequencing with
@@ -1199,13 +1199,37 @@ actions or a separate permissions entry. Permission controls live in the managem
 view reached from the app menu. Protocol hashes stay out of ordinary app information
 surfaces.
 
-Action handoffs explicitly ask which app should open the requested content
+Explore settings manages account-specific default applications by content type
+and operation. Default rows pair the application name with a compact application
+icon on its leading side. Handoff choosers offer an opt-in to use the selected application
+for future requests of that exact type. This opt-in sits below the requester
+explanation and above the application choices in a surfaced settings card. The
+whole card toggles the choice and owns its switch accessibility; its visual
+switch accessory is passive. Keep the requester explanation brief; the title already identifies the selection task. Application choosers have
+no automatic expiry and remain open until selection, dismissal, or requester
+cancellation. Preferences can be replaced or reset to
+Ask every time; unavailable defaults return to the chooser. Changing an action
+default reuses the handoff chooser’s saved-first catalogue browsing and pagination,
+without adding the chosen application to My apps. Default editing uses ordinary application rows with a trailing checkmark for
+the current choice and no persistent selection fill. Ask every time is a tappable settings card below the content-type explanation,
+matching the handoff sheet’s remember-choice card. Default editing names its
+persistent purpose and current default, explains per-request selection, and labels
+the candidate list as available applications; only the checked entry is active. Both pickers share compact, evenly padded section headers, application-row
+spacing, and the same catalogue-browsing footer. Explicit live-instance
+requests never use or create defaults. Remembering a choice does not add a shortcut
+or grant application access.
+
+Action handoffs without a usable default explicitly ask which app should open the requested content
 and name the requesting app. Candidate rows reuse the discovery list's app icon,
-name, description and publisher attribution. Choosing a row opens that app;
+name, description and publisher attribution, with denser row spacing than
+browsing lists. The requester explanation uses muted supporting text. Choosing
+a row opens that app;
 The sheet's Close action dismisses only this handoff, without a duplicate Cancel
 footer. These choosers omit access-review language,
-signing-account labels and raw protocol action names. My apps candidates appear
-first. With compatible My apps, catalogue browsing starts only after the user
+signing-account labels and raw protocol action names. Available apps combine
+compatible My apps with running applications whose declarations and live handlers
+match the request. Available candidates appear first. With available candidates,
+catalogue browsing starts only after the user
 chooses to view other apps; without them, it starts automatically. Background catalogue
 updates never expand a picker that has not opted into discovery. Compatible
 catalogue candidates follow saved choices in the same sheet. Selecting a
@@ -1213,7 +1237,7 @@ discovered app retains normal access review without adding it to My apps. Catalo
 loading and retry stay inline; scrolling to the end reveals the next matching
 window and automatically advances past incompatible catalogue pages. Stop the
 current lookup after three consecutive remote pages add no compatible apps;
-buffered pagination does not consume that budget. Saved
+buffered pagination does not consume that budget. Available
 choices remain selectable while discovery loads. Loading preserves footer
 geometry. Automatic loading and completion share a compact footer slot with no
 button-height reservation or duplicate list-bottom padding. Pagination uses a
@@ -1364,9 +1388,9 @@ authentication and upload-authorization events. Kind alone never changes a
 publication into a host action. Profiles, follow lists and app settings retain
 ordinary signer scopes.
 No valid event kind is categorically blocked from user-approved signing.
-Signing approvals show the remaining seconds in the Reject button, based on
-a fresh review deadline when each request becomes visible. Adding queued requests
-never restarts the active countdown.
+Application request sheets never expire automatically or show a review countdown.
+They remain available until the user decides or dismisses them, or the requesting
+session cancels. Permission validity periods remain independent of review time.
 Each decision closes its approval sheet completely before another review opens.
 Queued permissions recheck the latest saved decision and skip review when it applies.
 Approval sheets ignore backdrop taps to prevent accidental rejection. Closing

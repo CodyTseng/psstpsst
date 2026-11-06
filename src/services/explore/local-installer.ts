@@ -138,11 +138,15 @@ export class LocalInstaller {
       }
       const linked = linkAbort([this.signal, transfer.life.signal]);
       let answer: string | false;
+      clearTimeout(transfer.timer);
       try {
         answer = await this.confirm({ title: entry.title, detail: '', accountPubkey: this.account,
           application: applicationPresentation(this.caller), installation: { target: applicationPresentation(entry), id: key,
             replacing: !!previous, otherInstaller: !!previous && previous.local?.installer !== this.caller.key } }, linked.signal);
-      } finally { linked.dispose(); }
+      } finally {
+        linked.dispose();
+        transfer.timer = setTimeout(() => { if (this.transfer === transfer) void this.discard(transfer); }, 120000);
+      }
       current();
       if (answer !== 'allow') return null;
       await this.checkAccess(); current();

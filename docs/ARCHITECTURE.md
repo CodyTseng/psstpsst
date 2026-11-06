@@ -907,12 +907,32 @@ it never imports application discovery, installation or visit orchestration.
 Application membership controls query the committed plaintext list or local
 application row through async live queries, independently of Explore navigation
 and metadata hydration. An unresolved membership is distinct from non-membership.
-Saved cross-application action and intent handlers derive membership only from
-the current account's My apps library; dispatch rechecks saved membership after
-selection. Napp action choosers may also explicitly select verified catalogue
-entries matching the requested action and mode, without granting membership.
-These launches retain ordinary access review and account-bound endpoint checks.
-Installations, history and live endpoints never grant membership.
+Saved cross-application intent handlers derive membership only from the current
+account's My apps library; dispatch rechecks membership after selection. Napp
+action candidates combine declared-compatible My apps entries with live instances
+in the same account whose verified declarations, mode and registered action match.
+A live instance does not require My apps membership; dispatch rechecks its endpoint
+before delivery. Registration alone never grants undeclared cross-application actions.
+Napp action choosers may also explicitly select verified catalogue entries matching
+the requested action and mode, without granting membership.
+Explicitly remembered action choices are account-scoped by exact action and mode,
+not by requesting application. Dispatch reads the current preference, revalidates
+handler compatibility, and resolves verified metadata for remembered catalogue
+references without granting membership. Explicit live-instance dispatch ignores
+preferences. Unavailable defaults, including startup failures and missing handler
+registration, fall back to fresh selection once per request. Request cancellation
+and explicit access refusal propagate; invocation failures never redispatch an
+action that may already have run. Inline fallback restores the requesting container
+before selection and leaves unrelated newer containers intact. Intent defaults retain
+their convention scope and saved-membership checks. These launches retain ordinary
+access review and account-bound endpoint checks.
+Installations, history and live endpoints never grant My apps membership.
+Default-handler editing includes the current compatible preference independently
+of My apps membership, resolving its saved reference when catalogue memory is cold.
+Listing it never grants membership.
+Application selections and approvals share serialized prompt presentation and
+dismissal without review deadlines. Decisions close before dispatch; requester
+cancellation rejects active and queued requests.
 An explicit action to the caller’s exact live document instance is internal
 dispatch: it checks account, source, registered action and mode without requiring
 My apps membership or prompting for another application.

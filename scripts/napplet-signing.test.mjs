@@ -273,18 +273,16 @@ test(
         await page.goto(`${address}/?theme=${theme}&surface=${surface}`);
         const screenshot = `${theme}-${surface}`;
         const allow = page.getByRole('button', { name: 'Allow', exact: true });
-        const reject = page.getByRole('button', { name: /^Reject\(\d+\)$/ });
+        const reject = page.getByRole('button', { name: 'Reject', exact: true });
         await allow.waitFor({ timeout: 10000 }).catch(async (error) => {
           if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/failed.png` });
           throw new Error(`${error.message}\nBrowser errors: ${errors.join('\n')}\nBody: ${await page.locator('body').innerText()}`);
         });
         await page.getByText('Kind 30078', { exact: true }).waitFor();
         await page.getByText('d: "game-progress"', { exact: true }).waitFor();
-        const countdown = reject;
-        await countdown.waitFor();
+        await reject.waitFor();
         assert.equal(await page.getByText(/Request cancels in \d+s/).count(), 0);
-        const initialCountdown = await countdown.innerText();
-        await page.waitForFunction((initial) => !document.body.innerText.includes(initial), initialCountdown);
+        assert.equal(await page.getByRole('button', { name: /^Reject\(\d+\)$/ }).count(), 0);
         const signer = page.getByRole('img', { name: 'Signing account: Alice', exact: true });
         await signer.waitFor();
         const signerBox = await signer.boundingBox();

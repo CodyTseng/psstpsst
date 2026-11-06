@@ -61,7 +61,7 @@ const answerApproval = nappletService.answer;
 nappletService.answer = (id, value) => { document.title = JSON.stringify({ id, value }); };
 nappletStore.setState({
   prompt: {
-    title: 'Arcade', requestId: 'fixture', expiresAt: Date.now() + 60000, queued: 2, detail: '',
+    title: 'Arcade', requestId: 'fixture', queued: 2, detail: '',
     accountPubkey: 'a'.repeat(64),
     app: { title: 'Arcade', hash: 'c'.repeat(64), event: { pubkey: 'b'.repeat(64) } } as NappletRelease,
     signing: {
@@ -189,7 +189,7 @@ if (params.get('scenario') === 'application-consent') {
 }
 if (params.get('scenario') === 'application-choice') {
   nappletStore.setState({ prompt: {
-    title: 'Notifications', requestId: 'fixture', expiresAt: Date.now() + 60000, queued: 0, detail: '',
+    title: 'Notifications', requestId: 'fixture', queued: 0, detail: '',
     applicationSelection: { requester: 'Notifications', content: 'profile' },
     choices: ['Notifications', 'Suggested Follows', 'Profile Feed'].map((title, index) => ({
       key: `app:${index}`, title, application: { title, kind: 'napp' as const, servers: [], publisher: 'b'.repeat(64) },

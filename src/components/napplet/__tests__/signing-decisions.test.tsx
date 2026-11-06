@@ -13,29 +13,23 @@ beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(100000); });
 afterEach(() => { act(() => renderer?.unmount()); jest.useRealTimers(); });
 const label = () => renderer.root.findByType(ActionRow);
 
-it('uses the displayed review deadline and corrects elapsed time after suspension', () => {
-  act(() => { renderer = create(<SigningDecisions onApprove={jest.fn()} onReject={jest.fn()} expiresAt={108000} />); });
-  expect(label().props.dismiss.label).toBe('Reject(8)');
-  act(() => { jest.setSystemTime(102000); jest.advanceTimersByTime(1000); });
-  expect(label().props.dismiss.label).toBe('Reject(5)');
-  act(() => { jest.advanceTimersByTime(5000); });
-  expect(label().props.dismiss.label).toBe('Reject(0)');
+it('keeps decisions available without a countdown or timers after a long review', () => {
+  const approve = jest.fn(), reject = jest.fn();
+  act(() => { renderer = create(<SigningDecisions onApprove={approve} onReject={reject} />); });
+  expect(label().props.dismiss.label).toBe('applications.signing_reject');
+  act(() => { jest.advanceTimersByTime(60 * 60000); });
+  expect(label().props.dismiss.label).toBe('applications.signing_reject');
   expect(jest.getTimerCount()).toBe(0);
+  act(() => { label().props.confirm.onPress(); });
+  expect(approve).toHaveBeenCalledTimes(1);
+  expect(reject).not.toHaveBeenCalled();
 });
 
-it('starts from the next request deadline and clears the previous timer', () => {
-  act(() => { renderer = create(<SigningDecisions key="first" onApprove={jest.fn()} onReject={jest.fn()} expiresAt={160000} />); });
-  act(() => { jest.advanceTimersByTime(2000); });
-  expect(label().props.dismiss.label).toBe('Reject(58)');
-  act(() => { renderer.update(<SigningDecisions key="next" onApprove={jest.fn()} onReject={jest.fn()} expiresAt={106000} />); });
-  expect(label().props.dismiss.label).toBe('Reject(4)');
-  expect(jest.getTimerCount()).toBe(1);
-  act(() => { renderer.unmount(); });
-  expect(jest.getTimerCount()).toBe(0);
-});
-
-it('clamps already expired requests without starting a timer', () => {
-  act(() => { renderer = create(<SigningDecisions onApprove={jest.fn()} onReject={jest.fn()} expiresAt={99000} />); });
-  expect(label().props.dismiss.label).toBe('Reject(0)');
-  expect(jest.getTimerCount()).toBe(0);
+it('routes rejection to the currently displayed request after it changes', () => {
+  const obsolete = jest.fn(), current = jest.fn();
+  act(() => { renderer = create(<SigningDecisions key="first" onApprove={jest.fn()} onReject={obsolete} />); });
+  act(() => { renderer.update(<SigningDecisions key="next" onApprove={jest.fn()} onReject={current} />); });
+  act(() => { label().props.dismiss.onPress(); });
+  expect(current).toHaveBeenCalledTimes(1);
+  expect(obsolete).not.toHaveBeenCalled();
 });

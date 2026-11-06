@@ -60,6 +60,28 @@ function submit(value: ReturnType<typeof harness>, bytes: Uint8Array, request: o
   value.uploads.transfer({ type: 'upload.transfer.end', id, seq });
   return value.messages.find((m) => m.type === 'upload.upload.result' && m.id === id)?.result.uploadId as string;
 }
+
+it('excludes time spent awaiting user approval from the upload timeout', async () => {
+  jest.useFakeTimers();
+  const value = harness();
+  let approve!: () => void;
+  let reviewSignal: AbortSignal | undefined;
+  value.authorize.mockImplementationOnce(async (template, _metadata, _servers, signal) => {
+    reviewSignal = signal;
+    await new Promise<void>(resolve => { approve = resolve; });
+    return { event: finalizeEvent(template, secret), check: () => { if (signal.aborted) throw new Error('cancelled'); } };
+  });
+  try {
+    const id = submit(value, new Uint8Array([1, 2, 3]));
+    await jest.advanceTimersByTimeAsync(1);
+    expect(reviewSignal).toBeDefined();
+    await jest.advanceTimersByTimeAsync(10 * 60000);
+    expect(reviewSignal!.aborted).toBe(false);
+    approve();
+    await jest.advanceTimersByTimeAsync(1);
+    expect(value.uploads.status(id).status).toBe('complete');
+  } finally { value.abort.abort(); value.uploads.close(); jest.useRealTimers(); }
+});
 async function terminal(value: ReturnType<typeof harness>, id: string) {
   for (let i = 0; i < 200; i++) {
     const status = value.uploads.status(id);

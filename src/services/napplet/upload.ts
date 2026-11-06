@@ -133,7 +133,7 @@ export class NappletUploads {
   private async run(job: Job, bytes: Uint8Array, meta: Metadata): Promise<void> {
     const linked = linkAbort([this.options.signal, job.controller.signal]);
     const signal = linked.signal;
-    const timer = setTimeout(() => job.controller.abort(), 120000);
+    let timer = setTimeout(() => job.controller.abort(), 120000);
     let path: string | undefined;
     try {
       assertNotAborted(signal);
@@ -146,8 +146,10 @@ export class NappletUploads {
       const template = { kind: 24242, created_at: now, content: 'Upload public file', tags: [
         ['t', 'upload'], ['x', hash], ['size', String(bytes.length)], ['expiration', String(now + 300)],
       ] };
+      clearTimeout(timer);
       const approval = await this.options.authorize(template, { ...meta, size: bytes.length, sha256: hash }, servers, signal);
       approval.check();
+      timer = setTimeout(() => job.controller.abort(), 120000);
       job.authorizationVersion = this.options.version();
       const root = await platform.fileSystem.cacheDirectoryUri();
       approval.check();

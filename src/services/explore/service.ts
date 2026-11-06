@@ -549,6 +549,14 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
         if (runtime === child) exploreService.close(runId);
         throw error;
       }
+      return async () => {
+        check(account, generation);
+        if (runtime === child && parents.at(-1)?.runtime === instance) {
+          exploreService.close(runId);
+          await child.stop();
+        }
+        current();
+      };
     },
     installed: app => {
       if (epoch !== generation) return;

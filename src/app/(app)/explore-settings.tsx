@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Widget } from '@solar-icons/react-native/category/settings/Linear/Widget';
 import RotateCcwClock from 'lucide-react-native/icons/rotate-ccw-clock';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
@@ -31,6 +32,12 @@ export default function ExploreSettingsScreen() {
             icon={<RotateCcwClock size={22} strokeWidth={iconStrokeWidth.default} color={c.text} />}
             trailing={<DirectionalChevron size={18} color={c.textMuted} />}
             onPress={() => router.push('/explore-recent')}
+          />
+          <ListRow
+            title={t('applications.default_apps')}
+            icon={<Widget size={22} color={c.text} />}
+            trailing={<DirectionalChevron size={18} color={c.textMuted} />}
+            onPress={() => router.push('/explore-default-apps')}
           />
         </ListGroup>
       </ScrollView>

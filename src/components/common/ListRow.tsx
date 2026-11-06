@@ -44,7 +44,7 @@ type ValuePlacement = 'trailing' | 'below';
 type PreserveColumn = 'title' | 'value';
 type SelectionMode = 'single';
 
-type Props = Pick<PressableProps, 'onLongPress' | 'accessibilityActions' | 'onAccessibilityAction'> & {
+type Props = Pick<PressableProps, 'onLongPress' | 'accessibilityActions' | 'onAccessibilityAction' | 'accessibilityLabel' | 'accessibilityRole' | 'accessibilityState'> & {
   /** An icon node — rendered as-is in a fixed-width slot (no background).
    * Caller sets its size (≈22) and color (match `titleTone`). */
   icon?: React.ReactNode;
@@ -143,6 +143,9 @@ export function ListRow({
   onLongPress,
   accessibilityActions,
   onAccessibilityAction,
+  accessibilityLabel,
+  accessibilityRole,
+  accessibilityState,
   loading,
   disabled,
   active = false,
@@ -208,7 +211,8 @@ export function ListRow({
       onAccessibilityAction={onAccessibilityAction}
       hitSlop={compactInline ? { top: spacing.md, bottom: spacing.md } : undefined}
       accessible={onPress != null}
-      accessibilityRole={selectionMode === 'single' ? 'radio' : undefined}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={selectionMode === 'single' ? 'radio' : accessibilityRole}
       hoverFeedback={onPress && trailingOnHover == null ? undefined : false}
       onHoverIn={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(true)}
       onHoverOut={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(false)}
@@ -216,7 +220,7 @@ export function ListRow({
       fallbackHoverOpacity={false}
       disabled={disabled || (!onPress && trailingOnHover == null && trailing == null)}
       accessibilityState={
-        selectionMode === 'single' ? { checked: active } : { selected: active }
+        selectionMode === 'single' ? { checked: active } : accessibilityState ?? { selected: active }
       }
       style={{
         flexDirection: 'row',

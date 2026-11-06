@@ -9,6 +9,49 @@ function setup() {
   return { queue, current: () => visible };
 }
 const prompt = { title: 'App', detail: 'Publish a post' };
+const chooser = { title: 'App', detail: '', choices: [{ key: 'target', title: 'Target' }],
+  applicationSelection: { requester: 'App', content: 'content' as const } };
+
+test.each([prompt, chooser])('keeps $title requests open until a decision and dismissal', async request => {
+  const { queue, current } = setup();
+  const pending = queue.ask(request);
+  const settled = jest.fn();
+  void pending.then(settled);
+  const id = current()!.requestId;
+  await jest.advanceTimersByTimeAsync(10 * 60000);
+  expect(current()!.requestId).toBe(id);
+  expect(settled).not.toHaveBeenCalled();
+  queue.answer(id, 'target');
+  expect(current()).toBeNull();
+  await Promise.resolve();
+  expect(settled).not.toHaveBeenCalled();
+  queue.dismissed();
+  await expect(pending).resolves.toBe('target');
+});
+
+test('keeps the next approval available after a long wait behind a chooser', async () => {
+  const { queue, current } = setup();
+  const selection = queue.ask(chooser);
+  const approval = queue.ask(prompt);
+  await jest.advanceTimersByTimeAsync(2 * 60000);
+  queue.answer(current()!.requestId, false);
+  queue.dismissed();
+  await expect(selection).resolves.toBe(false);
+  expect(current()!.title).toBe(prompt.title);
+  queue.answer(current()!.requestId, 'allow');
+  queue.dismissed();
+  await expect(approval).resolves.toBe('allow');
+});
+
+test('requester cancellation still closes an untimed chooser', async () => {
+  const { queue, current } = setup();
+  const abort = new AbortController();
+  const pending = queue.ask(chooser, abort.signal);
+  abort.abort();
+  expect(current()).toBeNull();
+  queue.dismissed();
+  await expect(pending).resolves.toBe(false);
+});
 
 test('closes the sheet before settling its decision or presenting another request', async () => {
   const { queue, current } = setup();
@@ -54,35 +97,19 @@ test('serializes requests and ignores answers from an obsolete dialog', async ()
   expect(current()).toBeNull();
 });
 
-test('each request receives 60 seconds only when it reaches the front', async () => {
+test('active and queued approvals remain answerable after long waits and suspension', async () => {
   const { queue, current } = setup();
   const first = queue.ask(prompt);
-  const firstDeadline = current()!.expiresAt;
-  jest.advanceTimersByTime(10000);
+  const firstId = current()!.requestId;
   const second = queue.ask(prompt);
-  expect(current()!.expiresAt).toBe(firstDeadline);
+  await jest.advanceTimersByTimeAsync(60 * 60000);
+  expect(current()!.requestId).toBe(firstId);
   expect(current()!.queued).toBe(1);
-  jest.advanceTimersByTime(50000);
+  expect(jest.getTimerCount()).toBe(0);
+  queue.answer(firstId, 'allow-always');
   queue.dismissed();
-  await expect(first).resolves.toBe(false);
-  expect(current()!.expiresAt).toBe(Date.now() + 60000);
-  expect(current()!.queued).toBe(0);
-  jest.advanceTimersByTime(59999);
-  expect(current()).not.toBeNull();
-  queue.answer(current()!.requestId, 'allow');
-  queue.dismissed();
-  await expect(second).resolves.toBe('allow');
-});
-
-test('a queued request that becomes visible after a long wait still has its full review time', async () => {
-  const { queue, current } = setup();
-  const first = queue.ask(prompt);
-  const second = queue.ask(prompt);
-  jest.setSystemTime(Date.now() + 60000);
-  queue.answer(current()!.requestId, 'allow-always');
-  queue.dismissed();
-  await expect(first).resolves.toBe(false);
-  expect(current()!.expiresAt).toBe(Date.now() + 60000);
+  await expect(first).resolves.toBe('allow-always');
+  jest.setSystemTime(Date.now() + 24 * 60 * 60000);
   queue.answer(current()!.requestId, 'allow');
   queue.dismissed();
   await expect(second).resolves.toBe('allow');
@@ -123,7 +150,7 @@ test('reject-all pauses a noisy app until the cooldown or execution session ends
   await expect(next).resolves.toBe(false);
 });
 
-test('sharing defers background approval presentation and starts a fresh review on return', async () => {
+test('sharing defers background approval presentation without imposing a deadline on return', async () => {
   const { queue, current } = setup();
   queue.setPaused(true);
   const pending = queue.ask(prompt);
@@ -131,7 +158,7 @@ test('sharing defers background approval presentation and starts a fresh review 
   await jest.advanceTimersByTimeAsync(60000);
   expect(current()).toBeNull(); expect(settled).not.toHaveBeenCalled();
   queue.setPaused(false);
-  expect(current()!.expiresAt).toBe(Date.now() + 60000);
+  expect(current()!.title).toBe(prompt.title);
   queue.answer(current()!.requestId, 'allow');
   queue.dismissed();
   await expect(pending).resolves.toBe('allow');

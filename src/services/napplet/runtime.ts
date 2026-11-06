@@ -6,7 +6,6 @@ import { NappDevice } from '@/services/explore/device';
 import { BrowserActions } from '@/services/explore/browser-actions';
 import { encodeNappletBytes } from '@/platform/napplet-bytes';
 import { assertNotAborted, linkAbort } from '@/platform/abort';
-import i18n from '@/i18n/core';
 import { base64 } from '@scure/base';
 import { matchFilters, type Event, type EventTemplate } from 'nostr-tools';
 import { incBroker } from './inc';
@@ -45,7 +44,7 @@ export type RuntimePrompt = {
   application?: ApplicationInfo;
   requester?: { title: string; origin: string };
   choices?: RuntimePromptChoice[];
-  applicationSelection?: { requester: string; content: 'profile' | 'content'; discovery?: { name: string; auxiliary: boolean }; unavailable?: 'instance' };
+  applicationSelection?: { requester: string; content: 'profile' | 'content'; discovery?: { name: string; auxiliary: boolean }; unavailable?: 'instance'; intent?: string };
   app?: NappletRelease;
   accountPubkey?: string;
   signing?: SigningRequest;
@@ -56,7 +55,6 @@ export type RuntimePrompt = {
   browser?: { action: 'window' | 'external' | 'permission' | 'download'; resources?: string[]; url?: string; filename?: string };
   capabilities?: { required: string[]; optional: string[]; requested?: string };
   wallet?: WalletApprovalRequest;
-  expiresAt?: number;
 };
 export type RuntimeTheme = {
   colors: { background: string; text: string; primary: string };
@@ -177,7 +175,10 @@ export class NappletRuntime {
         undefined, signal, (request, life) => options.confirm({ title: options.release.title, detail: '', app: options.release,
           accountPubkey: options.accountPubkey, upload: { ...metadata, servers: request.relays }, signing: request }, life));
         check();
-        const event = await this.network.sign(template);
+        // The short-lived upload token starts after review, not while the user is deciding.
+        const createdAt = Math.floor(Date.now() / 1000);
+        const event = await this.network.sign({ ...template, created_at: createdAt,
+          tags: template.tags.map(tag => tag[0] === 'expiration' ? ['expiration', String(createdAt + 300)] : tag) });
         check();
         return { event, check };
       },
@@ -1101,11 +1102,11 @@ export class NappletRuntime {
         title: this.options.release.title,
         app: this.options.release,
         accountPubkey: this.options.accountPubkey,
-        detail: convention,
-        choices: candidates.slice(0, 16).flatMap((h) => [
-          { key: h.id, title: h.release.title },
-          { key: `default:${h.id}`, title: `${h.release.title} (${i18n.t('applications.always')})` },
-        ]),
+        detail: '',
+        applicationSelection: { requester: this.options.release.title, content: 'content', intent: convention },
+        choices: candidates.map(h => ({ key: h.id, title: h.release.title,
+          application: { key: h.id, title: h.release.title, kind: 'napplet' as const, servers: h.release.servers,
+            icon: h.release.icon, description: h.release.description, publisher: h.release.event.pubkey } })),
       }, this.signal));
     this.check();
     const target = candidates.find(
