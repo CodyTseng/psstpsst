@@ -8,9 +8,9 @@ const app = (actions: string[], auxiliary = false): ExploreEntry => ({
     tags: [...actions.map(name => ['action', name]), ...(auxiliary ? [['mode', 'auxiliary']] : [])] },
 });
 
-it('offers specific and generic declarations for a specific event kind', () => {
+it('requires an exact declaration for a specific event kind', () => {
   const request = { name: 'view:30023', auxiliary: false };
-  expect(supportsApplicationAction(app(['view']), request)).toBe(true);
+  expect(supportsApplicationAction(app(['view']), request)).toBe(false);
   expect(supportsApplicationAction(app(['view:1']), request)).toBe(false);
   expect(supportsApplicationAction(app(['view:30023']), request)).toBe(true);
   expect(supportsApplicationAction(app(['view', 'view:30023']), request)).toBe(true);
@@ -23,9 +23,9 @@ it('keeps unresolved generic views separate from specific declarations', () => {
   expect(matchesAction('view:30023', 'view:1')).toBe(false);
 });
 
-it('includes local generic viewers and preserves mode filtering', () => {
+it('requires exact local declarations and preserves mode filtering', () => {
   const local = { ...app([]), local: { version: 'v1', installer: 'builder', actions: ['view'] } };
-  expect(supportsApplicationAction(local, { name: 'view:30023', auxiliary: false })).toBe(true);
+  expect(supportsApplicationAction(local, { name: 'view:30023', auxiliary: false })).toBe(false);
   expect(supportsApplicationAction({ ...local, local: { ...local.local, actions: ['view:30023'] } },
     { name: 'view:30023', auxiliary: false })).toBe(true);
   expect(supportsApplicationAction(app(['view:30023'], true), { name: 'view:30023', auxiliary: false })).toBe(false);

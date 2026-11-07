@@ -1143,8 +1143,7 @@
   },
   "applications": {
     "open_with_title": "فتح باستخدام",
-    "other_apps": "تطبيقات أخرى",
-    "view_other_apps": "عرض تطبيقات أخرى",
+    "view_more_apps": "عرض المزيد من التطبيقات",
     "no_more_apps": "لم يتم العثور على تطبيقات أخرى",
     "no_compatible_apps": "لا توجد تطبيقات متوافقة متاحة",
     "open_with_empty": "لا يوجد تطبيق متوافق متاح لـ «{{app}}». ابحث عن تطبيق في قسم الاستكشاف وأضفه إلى تطبيقاتي، ثم عُد وحاول مجددًا.",
@@ -1380,8 +1379,7 @@
     "ask_every_time": "السؤال في كل مرة",
     "default_app_title": "التطبيق الافتراضي",
     "default_app_current": "يُفتح تلقائيًا حاليًا باستخدام {{app}}.",
-    "ask_every_time_notice": "اختر تطبيقًا لكل طلب.",
-    "available_apps": "التطبيقات المتاحة"
+    "ask_every_time_notice": "اختر تطبيقًا لكل طلب."
   },
   "comments": {
     "title": "التقييمات",

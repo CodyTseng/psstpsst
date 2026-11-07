@@ -1123,8 +1123,7 @@
   },
   "applications": {
     "open_with_title": "Open with",
-    "other_apps": "Other apps",
-    "view_other_apps": "View other apps",
+    "view_more_apps": "View more apps",
     "no_more_apps": "No more apps found",
     "no_compatible_apps": "No compatible apps available",
     "open_with_empty": "No compatible app is available for “{{app}}”. Find an app in Discover, add it to My apps, then return and try again.",
@@ -1360,8 +1359,7 @@
     "ask_every_time": "Ask every time",
     "default_app_title": "Default app",
     "default_app_current": "Currently opens automatically with {{app}}.",
-    "ask_every_time_notice": "Choose an app for each request.",
-    "available_apps": "Available apps"
+    "ask_every_time_notice": "Choose an app for each request."
   },
   "comments": {
     "title": "Reviews",

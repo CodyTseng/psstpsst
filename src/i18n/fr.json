@@ -1128,8 +1128,7 @@
   },
   "applications": {
     "open_with_title": "Ouvrir avec",
-    "other_apps": "Autres applications",
-    "view_other_apps": "Voir les autres applications",
+    "view_more_apps": "Voir plus d’applications",
     "no_more_apps": "Aucune autre application trouvée",
     "no_compatible_apps": "Aucune application compatible disponible",
     "open_with_empty": "Aucune application compatible n’est disponible pour « {{app}} ». Trouvez-en une dans Découvrir, ajoutez-la à Mes applications, puis réessayez.",
@@ -1365,8 +1364,7 @@
     "ask_every_time": "Toujours demander",
     "default_app_title": "App par défaut",
     "default_app_current": "S’ouvre actuellement automatiquement avec {{app}}.",
-    "ask_every_time_notice": "Choisir une app pour chaque demande.",
-    "available_apps": "Apps disponibles"
+    "ask_every_time_notice": "Choisir une app pour chaque demande."
   },
   "comments": {
     "title": "Avis",

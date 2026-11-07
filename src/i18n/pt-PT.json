@@ -1128,8 +1128,7 @@
   },
   "applications": {
     "open_with_title": "Abrir com",
-    "other_apps": "Outras aplicações",
-    "view_other_apps": "Ver outras aplicações",
+    "view_more_apps": "Ver mais aplicações",
     "no_more_apps": "Não foram encontradas mais aplicações",
     "no_compatible_apps": "Nenhuma aplicação compatível disponível",
     "open_with_empty": "Nenhuma aplicação compatível está disponível para «{{app}}». Encontre uma em Descobrir, adicione-a a As minhas aplicações e volte a tentar.",
@@ -1365,8 +1364,7 @@
     "ask_every_time": "Perguntar sempre",
     "default_app_title": "Aplicação predefinida",
     "default_app_current": "Atualmente abre automaticamente com {{app}}.",
-    "ask_every_time_notice": "Escolher uma aplicação para cada pedido.",
-    "available_apps": "Aplicações disponíveis"
+    "ask_every_time_notice": "Escolher uma aplicação para cada pedido."
   },
   "comments": {
     "title": "Avaliações",

@@ -13,7 +13,7 @@ export function applicationChoiceFooter(choices: ReturnType<typeof useApplicatio
     {choices.canDiscover || choices.error || choices.manualLoading ?
       <AppButton variant="secondary"
         loading={choices.loading} disabled={disabled}
-        label={t(choices.footerAction === 'retry' ? 'common.retry' : 'applications.view_other_apps')}
+        label={t(choices.footerAction === 'retry' ? 'common.retry' : 'applications.view_more_apps')}
         onPress={choices[choices.footerAction]} />
       : choices.loading ? <ActivityIndicator size="small" color={color} />
         : !choices.hasMore && choices.choices.length > 0 ?

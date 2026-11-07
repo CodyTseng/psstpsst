@@ -343,7 +343,7 @@ it.each(['light', 'dark'] as const)('finds compatible apps beyond the visible pa
   mockState.entries = [wrong, generic, match, app('auxiliary', 'view:1', true)];
   mockState.hasMore = false;
   await act(async () => { renderer.update(screen()); });
-  expect(renderer.root.findByType(FlatList).props.data).toEqual([generic, match]);
+  expect(renderer.root.findByType(FlatList).props.data).toEqual([match]);
   const filter = renderer.root.findAllByType(AppButton).find(node => node.props.label === 'applications.action_filter: view:1')!;
   expect(filter).toBeDefined();
   await act(async () => { filter.props.onPress(); });

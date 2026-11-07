@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { ListRow } from '@/components/common/ListRow';
 import { Toggle } from '@/components/common/Toggle';
-import { ApplicationChoiceSectionHeader } from './application-choice-section-header';
 import { useApplicationChoices } from '@/hooks/use-application-choices';
 import { useTranslation } from 'react-i18next';
 import { useForwardDraftStore } from '@/stores/forward-draft.store';
@@ -122,13 +121,7 @@ function NappletOverlayContent() {
         onEndReachedThreshold: 0.3,
         ListFooterComponent: selectingApplication.discovery && prompt.accountPubkey
           ? applicationChoiceFooter(applicationChoices, t, colors.textMuted) : null,
-        renderItem: ({ item, index }) => <>
-          {selectingApplication.discovery && (index === 0 || index === applicationChoices.savedCount) ?
-            <ApplicationChoiceSectionHeader>
-              {t(index < applicationChoices.savedCount ? 'applications.available_apps' : 'applications.other_apps')}
-            </ApplicationChoiceSectionHeader> : null}
-          <ApplicationChoiceRow choice={item} requestId={prompt.requestId} remember={remember}/>
-        </>,
+        renderItem: ({ item }) => <ApplicationChoiceRow choice={item} requestId={prompt.requestId} remember={remember}/>,
       } : undefined}
       scrollResetKey={prompt?.requestId ?? (configuration ? 'configuration' : panel?.page ?? 'closed')}
       onClosed={() => { nappletService.overlayClosed(); const work = pending.current; pending.current = null; work?.(); }}

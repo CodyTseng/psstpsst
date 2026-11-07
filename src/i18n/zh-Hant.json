@@ -1123,8 +1123,7 @@
   },
   "applications": {
     "open_with_title": "要用哪個應用開啟？",
-    "other_apps": "其他應用程式",
-    "view_other_apps": "查看其他應用程式",
+    "view_more_apps": "查看更多應用程式",
     "no_more_apps": "找不到更多應用程式了",
     "no_compatible_apps": "暫無可用的應用程式",
     "open_with_empty": "暫無可供「{{app}}」使用的相容應用程式。前往探索尋找支援此內容的應用程式，加入「我的應用程式」後返回重試。",
@@ -1360,8 +1359,7 @@
     "ask_every_time": "每次詢問",
     "default_app_title": "預設開啟方式",
     "default_app_current": "目前使用「{{app}}」自動開啟。",
-    "ask_every_time_notice": "每次開啟時重新選擇應用程式。",
-    "available_apps": "可用應用程式"
+    "ask_every_time_notice": "每次開啟時重新選擇應用程式。"
   },
   "comments": {
     "title": "評價",

@@ -22,7 +22,6 @@ import { useScrolled } from '@/hooks/use-scrolled';
 import { applicationListEntry } from '@/services/explore/model';
 import type { RuntimePromptChoice } from '@/services/napplet/runtime';
 import { useApplicationChoices, type ApplicationChoiceRequest } from '@/hooks/use-application-choices';
-import { ApplicationChoiceSectionHeader } from './application-choice-section-header';
 import { applicationChoiceFooter } from './application-choice-footer';
 import { spacing, useThemeColors } from '@/theme';
 import { ApplicationListRow } from './ApplicationListRow';
@@ -89,12 +88,7 @@ export function DefaultApplicationsPage({ account }: { account: string }) {
             <AppButton label={t('common.retry')} onPress={defaults.retry} /> : !defaults.saving && !choices.error && !choices.hasMore ?
               <AppText tone="muted">{t('applications.no_compatible_apps')}</AppText> : null}
         </View>,
-        renderItem: ({ item, index }) => <>
-          {canBrowse && (index === 0 || index === choices.savedCount) ?
-            <ApplicationChoiceSectionHeader>
-              {t(index === 0 ? 'applications.available_apps' : 'applications.other_apps')}
-            </ApplicationChoiceSectionHeader> : null}
-          <ApplicationListRow application={item.application ?? { title: item.title, kind: 'napp', servers: [] }}
+        renderItem: ({ item }) => <ApplicationListRow application={item.application ?? { title: item.title, kind: 'napp', servers: [] }}
             accessibilityRole="radio" accessibilityState={{ checked: item.application?.key === defaults.selected?.sourceId }}
             trailing={<View style={{ width: spacing.xl, height: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
               {item.application?.key === defaults.selected?.sourceId ?
@@ -103,8 +97,7 @@ export function DefaultApplicationsPage({ account }: { account: string }) {
             disabled={defaults.saving} onPress={() => {
               if (item.application?.key === defaults.selected?.sourceId) defaults.select(null);
               else if (item.application?.key) void defaults.save({ key: item.application.key }, item.key.startsWith('discovery:'));
-            }} />
-        </>,
+            }} />,
       }} />
   </AppScreen>;
 }

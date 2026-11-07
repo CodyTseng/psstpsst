@@ -1,3 +1,4 @@
+import { ApplicationChoiceRow } from '../ApplicationChoiceRow';
 import { router } from 'expo-router';
 import { discoverApplications, loadMoreApplications } from '@/services/explore/discovery';
 import type { ExploreEntry } from '@/services/explore/model';
@@ -439,11 +440,11 @@ it('prioritizes saved apps, deduplicates discovered apps and filters action and 
   const sheet = () => renderer.root.findByType(BottomSheet);
   expect(sheet().props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved']);
   expect(discoverApplications).not.toHaveBeenCalled();
-  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_other_apps');
+  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_more_apps');
   mockDiscovery = { ...mockDiscovery, loading: true, loadingMore: true, error: true };
   act(() => { renderer.update(<NappletOverlays />); });
   expect(sheet().props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved']);
-  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_other_apps');
+  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_more_apps');
   expect(discoverApplications).not.toHaveBeenCalled();
   mockDiscovery = { ...mockDiscovery, loading: false, loadingMore: false, error: false };
   await act(async () => { sheet().props.listProps.ListFooterComponent.props.children.props.onPress(); });
@@ -453,7 +454,7 @@ it('prioritizes saved apps, deduplicates discovered apps and filters action and 
   mockPrompt = { ...mockPrompt!, requestId: 'next-choice' };
   act(() => { renderer.update(<NappletOverlays />); });
   expect(sheet().props.listProps.data.map((item: { key: string }) => item.key)).toEqual(['source:saved']);
-  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_other_apps');
+  expect(sheet().props.listProps.ListFooterComponent.props.children.props.label).toBe('applications.view_more_apps');
   expect(discoverApplications).not.toHaveBeenCalled();
 });
 
@@ -604,7 +605,7 @@ it('does not offer Discover for an unavailable explicit instance', () => {
     choices: [], applicationSelection: { requester: 'Timeline', content: 'content', unavailable: 'instance' } };
   act(() => { renderer = create(<NappletOverlays />); });
   expect(renderer.root.findAllByType(AppText).some(node => node.props.children === 'applications.handler_closed')).toBe(true);
-  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'applications.view_other_apps')).toBe(false);
+  expect(renderer.root.findAllByType(AppButton).some(node => node.props.label === 'applications.view_more_apps')).toBe(false);
 });
 
 it('omits redundant requester text when compatible applications can be selected', () => {
@@ -653,10 +654,10 @@ it.each([['light', 'profile'], ['dark', 'view:0']] as const)('offers opt-in defa
     accountPubkey: 'account', choices: [{ key: 'source:target', title: 'Target' }],
     applicationSelection: { requester: 'Timeline', content: 'content', discovery: { name, auxiliary: false } } };
   act(() => { renderer = create(<NappletOverlays />); });
-  const row = () => renderer.root.findByType(BottomSheet).props.listProps.renderItem({ item: mockPrompt!.choices![0], index: 0 }).props.children[1];
+  const row = () => renderer.root.findByType(BottomSheet).props.listProps.renderItem({ item: mockPrompt!.choices![0], index: 0 });
   expect(row().props.remember).toBe(false);
   const first = renderer.root.findByType(BottomSheet).props.listProps.renderItem({ item: mockPrompt!.choices![0], index: 0 });
-  expect(first.props.children[0].props.children).toBe('applications.available_apps');
+  expect(first.type).toBe(ApplicationChoiceRow);
   const card = () => renderer.root.findAllByType(ListRow).find(node => node.props.accessibilityRole === 'switch')!;
   expect(card().props.title).toBe('applications.always_open_type');
   expect(card().props.subtitle).toBe(name);

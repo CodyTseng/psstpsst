@@ -1217,9 +1217,10 @@ default reuses the handoff chooser’s saved-first catalogue browsing and pagina
 without adding the chosen application to My apps. Default editing uses ordinary application rows with a trailing checkmark for
 the current choice and no persistent selection fill. Ask every time is a tappable settings card below the content-type explanation,
 matching the handoff sheet’s remember-choice card. Default editing names its
-persistent purpose and current default, explains per-request selection, and labels
-the candidate list as available applications; only the checked entry is active. Both pickers share compact, evenly padded section headers, application-row
-spacing, and the same catalogue-browsing footer. Explicit live-instance
+persistent purpose and current default and explains per-request selection; only
+the checked entry is active. Both pickers show one continuous application list
+without source-based section headers, sharing application-row spacing and the
+same catalogue-browsing footer. Explicit live-instance
 requests never use or create defaults. Remembering a choice does not add a shortcut
 or grant application access.
 
@@ -1235,7 +1236,7 @@ sheets identify auxiliary mode separately from the exact action name. Available 
 compatible My apps with running applications whose declarations and live handlers
 match the request. Available candidates appear first. With available candidates,
 catalogue browsing starts only after the user
-chooses to view other apps; without them, it starts automatically. Background catalogue
+chooses to view more apps; without them, it starts automatically. Background catalogue
 updates never expand a picker that has not opted into discovery. Compatible
 catalogue candidates follow saved choices in the same sheet. Selecting a
 discovered app retains normal access review without adding it to My apps. Catalogue

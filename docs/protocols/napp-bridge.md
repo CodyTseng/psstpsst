@@ -182,12 +182,15 @@ action name, instance identifiers and routing rejection reason, never payloads. 
 as `permission-denied`, like cancelling a populated chooser. The sheet's Close action dismisses only this handoff. Android launches
 selected applications in independent document tasks and focuses an existing task
 when delivering an action to its live handler. Options may identify one live
-`instance` or request an `auxiliary` application. Exact patterns match; `view`
-also matches `view:<kind>` in both declarations and live registrations. Resolved
-generic views use the concrete kind for routing, offering both specific and
-generic viewers. Generic handlers receive the action named `view`. Specific view
-actions require a verified event of that kind. Generic view actions retain an
-unresolved reference when resolution
+`instance` or request an `auxiliary` application. Published and local action
+declarations must match the requested name exactly: declaring only `view` does
+not qualify an application for `view:<kind>`. Generic `view` requests that resolve
+to an event also select candidates by the concrete kind. This host intentionally
+narrows upstream generic-view candidate discovery to avoid offering applications
+that do not explicitly declare the requested event kind. An application declaring
+a specific kind may still register a generic `view` callback, which receives the
+action named `view`. Specific view actions require a verified event of that kind.
+Generic view actions retain an unresolved reference when resolution
 fails. `napp.instance` identifies the container synchronously; awaiting
 `napp.ready` ensures its host endpoint has connected.
 

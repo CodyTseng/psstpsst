@@ -1133,8 +1133,7 @@
   },
   "applications": {
     "open_with_title": "Otwórz za pomocą",
-    "other_apps": "Inne aplikacje",
-    "view_other_apps": "Zobacz inne aplikacje",
+    "view_more_apps": "Zobacz więcej aplikacji",
     "no_more_apps": "Nie znaleziono więcej aplikacji",
     "no_compatible_apps": "Brak zgodnych aplikacji",
     "open_with_empty": "Brak dostępnych aplikacji zgodnych z „{{app}}”. Znajdź aplikację w sekcji Odkrywaj, dodaj ją do Moich aplikacji, a następnie spróbuj ponownie.",
@@ -1370,8 +1369,7 @@
     "ask_every_time": "Pytaj za każdym razem",
     "default_app_title": "Aplikacja domyślna",
     "default_app_current": "Obecnie otwiera się automatycznie w {{app}}.",
-    "ask_every_time_notice": "Wybieraj aplikację dla każdego żądania.",
-    "available_apps": "Dostępne aplikacje"
+    "ask_every_time_notice": "Wybieraj aplikację dla każdego żądania."
   },
   "comments": {
     "title": "Opinie",

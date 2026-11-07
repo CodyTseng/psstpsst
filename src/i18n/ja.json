@@ -1123,8 +1123,7 @@
   },
   "applications": {
     "open_with_title": "アプリを選択",
-    "other_apps": "その他のアプリ",
-    "view_other_apps": "その他のアプリを表示",
+    "view_more_apps": "アプリをさらに表示",
     "no_more_apps": "これ以上のアプリは見つかりませんでした",
     "no_compatible_apps": "対応するアプリがありません",
     "open_with_empty": "「{{app}}」に対応するアプリがありません。「見つける」で対応アプリを探してマイアプリに追加し、戻ってもう一度お試しください。",
@@ -1360,8 +1359,7 @@
     "ask_every_time": "毎回確認する",
     "default_app_title": "既定のアプリ",
     "default_app_current": "現在は {{app}} で自動的に開きます。",
-    "ask_every_time_notice": "リクエストごとにアプリを選びます。",
-    "available_apps": "選択できるアプリ"
+    "ask_every_time_notice": "リクエストごとにアプリを選びます。"
   },
   "comments": {
     "title": "レビュー",

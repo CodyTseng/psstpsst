@@ -69,7 +69,6 @@ export function useApplicationChoices(prompt: ApplicationChoiceRequest | null) {
   useErrorToast(enabled && state.error ? 'applications.request_failed' : undefined);
   return {
     choices,
-    savedCount: saved?.length ?? 0,
     canDiscover,
     footerAction: loading ? pending?.action ?? 'discover' : enabled && state.error ? 'retry' : 'discover',
     discover: () => {

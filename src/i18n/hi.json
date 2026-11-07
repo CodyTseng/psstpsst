@@ -1123,8 +1123,7 @@
   },
   "applications": {
     "open_with_title": "इससे खोलें",
-    "other_apps": "अन्य ऐप्स",
-    "view_other_apps": "अन्य ऐप्स देखें",
+    "view_more_apps": "और ऐप्स देखें",
     "no_more_apps": "और कोई ऐप नहीं मिला",
     "no_compatible_apps": "कोई संगत ऐप उपलब्ध नहीं है",
     "open_with_empty": "“{{app}}” के लिए कोई संगत ऐप उपलब्ध नहीं है। खोजें में ऐप ढूँढें, उसे मेरे ऐप में जोड़ें, फिर लौटकर दोबारा कोशिश करें।",
@@ -1360,8 +1359,7 @@
     "ask_every_time": "हर बार पूछें",
     "default_app_title": "डिफ़ॉल्ट ऐप",
     "default_app_current": "अभी {{app}} से अपने आप खुलता है।",
-    "ask_every_time_notice": "हर अनुरोध के लिए ऐप चुनें।",
-    "available_apps": "उपलब्ध ऐप"
+    "ask_every_time_notice": "हर अनुरोध के लिए ऐप चुनें।"
   },
   "comments": {
     "title": "समीक्षाएँ",

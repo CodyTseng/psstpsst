@@ -1128,8 +1128,7 @@
   },
   "applications": {
     "open_with_title": "Abrir con",
-    "other_apps": "Otras aplicaciones",
-    "view_other_apps": "Ver otras aplicaciones",
+    "view_more_apps": "Ver más aplicaciones",
     "no_more_apps": "No se encontraron más aplicaciones",
     "no_compatible_apps": "No hay aplicaciones compatibles",
     "open_with_empty": "No hay aplicaciones compatibles disponibles para «{{app}}». Busca una en Descubrir, añádela a Mis aplicaciones y vuelve a intentarlo.",
@@ -1365,8 +1364,7 @@
     "ask_every_time": "Preguntar siempre",
     "default_app_title": "App predeterminada",
     "default_app_current": "Actualmente se abre automáticamente con {{app}}.",
-    "ask_every_time_notice": "Elegir una app para cada solicitud.",
-    "available_apps": "Apps disponibles"
+    "ask_every_time_notice": "Elegir una app para cada solicitud."
   },
   "comments": {
     "title": "Reseñas",

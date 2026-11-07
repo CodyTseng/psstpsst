@@ -1123,8 +1123,7 @@
   },
   "applications": {
     "open_with_title": "Birlikte aç",
-    "other_apps": "Diğer uygulamalar",
-    "view_other_apps": "Diğer uygulamaları görüntüle",
+    "view_more_apps": "Daha fazla uygulama görüntüle",
     "no_more_apps": "Başka uygulama bulunamadı",
     "no_compatible_apps": "Uyumlu uygulama yok",
     "open_with_empty": "“{{app}}” için uyumlu bir uygulama yok. Keşfet bölümünde bir uygulama bulun, Uygulamalarım bölümüne ekleyin ve geri dönüp yeniden deneyin.",
@@ -1360,8 +1359,7 @@
     "ask_every_time": "Her seferinde sor",
     "default_app_title": "Varsayılan uygulama",
     "default_app_current": "Şu anda {{app}} ile otomatik açılır.",
-    "ask_every_time_notice": "Her istek için bir uygulama seçin.",
-    "available_apps": "Kullanılabilir uygulamalar"
+    "ask_every_time_notice": "Her istek için bir uygulama seçin."
   },
   "comments": {
     "title": "Değerlendirmeler",

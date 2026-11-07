@@ -41,7 +41,7 @@ it.each(['profile', 'view:0', 'view:30023'].flatMap(name => [false, true].map(au
   });
   jest.mocked(useApplicationChoices).mockReturnValue({
     choices: [{ key: 'source:reader', title: 'Reader', application: saved }, { key: 'discovery:other', title: 'Other reader', application: { key: 'other', title: 'Other reader', kind: 'napp', servers: [] } }],
-    savedCount: 1, canDiscover: true, footerAction: 'discover', loading: false, manualLoading: false,
+    canDiscover: true, footerAction: 'discover', loading: false, manualLoading: false,
     error: false, hasMore: true, discover, more, retry: jest.fn(),
   });
   act(() => { renderer = create(<DefaultApplicationsPage account="account" />); });
@@ -63,12 +63,12 @@ it.each(['profile', 'view:0', 'view:30023'].flatMap(name => [false, true].map(au
   expect(sheet.props.title).toBe('applications.default_app_title');
   act(() => { sheet.props.listProps.ListFooterComponent.props.children.props.onPress(); });
   expect(discover).toHaveBeenCalled();
-  const current = sheet.props.listProps.renderItem({ item: sheet.props.listProps.data[0], index: 0 }).props.children[1];
+  const current = sheet.props.listProps.renderItem({ item: sheet.props.listProps.data[0], index: 0 });
   expect(current.props.active).toBeUndefined();
   expect(current.props.accessibilityState).toEqual({ checked: true });
   expect(current.props.trailing.props.children).not.toBeNull();
   const item = sheet.props.listProps.data[1];
-  const row = sheet.props.listProps.renderItem({ item, index: 1 }).props.children[1];
+  const row = sheet.props.listProps.renderItem({ item, index: 1 });
   act(() => { row.props.onPress(); });
   expect(save).toHaveBeenCalledWith({ key: 'other' }, true);
   expect(sheet.props.listProps.onEndReached).toBe(more);

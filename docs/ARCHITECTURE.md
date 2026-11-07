@@ -913,6 +913,8 @@ action candidates combine declared-compatible My apps entries with live instance
 in the same account whose verified declarations, mode and registered action match.
 A live instance does not require My apps membership; dispatch rechecks its endpoint
 before delivery. Registration alone never grants undeclared cross-application actions.
+Candidate declarations match the requested action exactly, including event kinds;
+runtime callbacks may use generic `view` for an explicitly declared kind.
 Napp action choosers may also explicitly select verified catalogue entries matching
 the requested action and mode, without granting membership.
 Explicitly remembered action choices are account-scoped by exact action and mode,
