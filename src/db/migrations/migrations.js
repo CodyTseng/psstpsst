@@ -1,3 +1,4 @@
+import m0082 from './0082_signing-authorization-scope.sql';
 import m0081 from './0081_website-visit-suggestions.sql';
 import m0080 from './0080_explore-search-history.sql';
 import m0079 from './0079_notification-events.sql';
@@ -169,6 +170,7 @@ m0077,
 m0078,
 m0079,
 m0080,
-m0081
+m0081,
+m0082
     }
   }

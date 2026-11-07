@@ -136,6 +136,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     sqlite.exec(readFileSync('src/db/migrations/0076_local-applications.sql', 'utf8'));
     sqlite.exec(readFileSync('src/db/migrations/0077_event-keys.sql', 'utf8'));
     await fixture.migrateEventKeys(globalThis.__signingDatabaseTest);
+    sqlite.exec(readFileSync('src/db/migrations/0082_signing-authorization-scope.sql', 'utf8'));
     sqlite.exec('COMMIT');
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name IN ('explore_shortcuts','legacy_explore_shortcuts')").get().n, 0);
     const explore=fixture.exploreRepository();
@@ -208,8 +209,6 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
       assert.equal(accessRule.duration, 'always');
       assert.equal(accessRule.scope.kind, undefined);
       assert.deepEqual(accessRule.scope, { operation, relays: [] });
-      assert.equal(sqlite.prepare('SELECT recipient FROM signing_authorizations WHERE account_pubkey=? AND source_id=? AND operation=?')
-        .get(scope.accountPubkey, scope.sourceId, operation).recipient, '');
       const reloaded = new SigningPermissions(scope, async () => { throw new Error('unexpected-prompt'); }, controller.signal, () => {});
       await reloaded.authorizeAccess(operation);
       assert.equal(prompts, before + 1, 'durable access grants survive a new permission controller');
@@ -235,7 +234,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     const authRule = (await reloadedAuth.snapshot()).rules.find(entry => entry.scope.operation === 'relay-auth');
     assert.deepEqual(authRule.scope, { operation: 'relay-auth', kind: 22242, relays: [] });
     const authRow = sqlite.prepare("SELECT * FROM signing_authorizations WHERE source_id=? AND operation='relay-auth'").get(sourceId);
-    assert.equal(authRow.destinations, '[]'); assert.equal(authRow.scope_key, '');
+    assert.equal(authRow.scope_key, '');
     await reloadedAuth.edit(authRule, { decision: 'deny', duration: 'always' });
     await assert.rejects(reloadedAuth.authorize({ ...authRequest, relays: ['wss://third.example/'] }), /permission-denied/);
     await reloadedAuth.edit(authRule, { decision: 'ask', duration: 'always' });
@@ -311,6 +310,42 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
   }
 });
 
+
+test('removing obsolete scope columns preserves current grants without broadening legacy grants', () => {
+  const sqlite = new DatabaseSync(':memory:');
+  try {
+    sqlite.exec("PRAGMA foreign_keys=ON; CREATE TABLE accounts(pubkey TEXT PRIMARY KEY); INSERT INTO accounts VALUES('A');");
+    const statements = readFileSync('src/db/migrations/0066_signer-access-kind.sql', 'utf8').split('--> statement-breakpoint');
+    sqlite.exec(statements[0].replaceAll('signing_authorizations_new', 'signing_authorizations'));
+    sqlite.exec(statements.at(-1));
+    sqlite.exec(readFileSync('src/db/migrations/0068_signing-scope-key.sql', 'utf8'));
+    const insert = sqlite.prepare(`INSERT INTO signing_authorizations
+      (account_pubkey,source_id,operation,kind,scope_key,recipient,destinations,decision,expires_at,created_at,updated_at)
+      VALUES('A','app',?,?,?,?,?,?,?,?,?)`);
+    insert.run('publish', 30078, 'progress', '', '[]', 'allow', null, 10, 20);
+    insert.run('publish', 30078, 'score', '', '[]', 'deny', 9999999999999, 30, 40);
+    insert.run('nip44-decrypt', -1, '', '', '[]', 'allow', null, 50, 60);
+    insert.run('relay-auth', 22242, '', '', '[]', 'deny', null, 70, 80);
+    const retained = sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all()
+      .map(({ recipient, destinations, ...row }) => row);
+    // A legacy grant may collide with a current scope after dropping its qualifiers.
+    insert.run('publish', 30078, 'progress', 'peer', '[]', 'deny', null, 90, 100);
+    insert.run('upload', 24242, '', '', '["https://storage.example/"]', 'allow', null, 110, 120);
+    sqlite.exec('BEGIN');
+    sqlite.exec(readFileSync('src/db/migrations/0082_signing-authorization-scope.sql', 'utf8'));
+    sqlite.exec('COMMIT');
+    assert.deepEqual(sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all().map(row => ({ ...row })), retained);
+    const columns = sqlite.prepare('PRAGMA table_info(signing_authorizations)').all().map(row => row.name);
+    assert(!columns.includes('recipient'));
+    assert(!columns.includes('destinations'));
+    assert.throws(() => sqlite.exec(`INSERT INTO signing_authorizations
+      (account_pubkey,source_id,operation,kind,scope_key,decision,created_at,updated_at)
+      VALUES('A','app','publish',30078,'progress','allow',1,1)`), /UNIQUE constraint/);
+    assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+    sqlite.exec("DELETE FROM accounts WHERE pubkey='A'");
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM signing_authorizations').get().n, 0);
+  } finally { sqlite.close(); }
+});
 
 test('relay AUTH migration merges active decisions and generalizes d tags without changing other grants', () => {
   const sqlite = new DatabaseSync(':memory:');

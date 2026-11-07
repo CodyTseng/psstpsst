@@ -575,6 +575,13 @@
       "when": 1794009600000,
       "tag": "0081_website-visit-suggestions",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "6",
+      "when": 1794096000000,
+      "tag": "0082_signing-authorization-scope",
+      "breakpoints": true
     }
   ]
 }
