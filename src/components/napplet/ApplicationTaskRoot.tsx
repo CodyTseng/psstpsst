@@ -50,7 +50,8 @@ function ApplicationTaskContent({ id }: { id: string }) {
   return <View style={{ flex: 1, direction }}>
     <ApplicationRuntimePage containerId={state?.containerId} active={foreground} title={state?.entry.title} application={state ? applicationPresentation(state.entry) : undefined}
       update={state ? { entry: state.entry, account: state.account, blocked: obscured, restart: entry => applicationTasks.restart(id, entry) } : undefined}
-      download={state?.download} loading={state?.loading} error={state?.error} menuEnabled={false}
+      download={state?.download} loading={state?.loading} error={state?.error} menuEnabled={false} showMenu={false}
+      onBack={() => applicationTasks.back(id, { closeAtRoot: false })} onForward={() => applicationTasks.forward(id)} navigationBlocked={obscured}
       onClose={() => { void applicationTasks.close(id); }} onMore={() => {}}
       onRetry={() => { void applicationTasks.retry(id); }}>
       {state?.containerId ? <NappletSurface id={state.containerId} visible={foreground} obscured={obscured} /> : null}

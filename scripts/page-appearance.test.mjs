@@ -64,6 +64,19 @@ test('mobile document appearance follows metadata, media and background changes 
       await document.evaluate(() => { for (let i = 0; i < 100; i++) document.body.append(document.createElement('div')); });
       await new Promise(resolve => setTimeout(resolve, 100));
       assert.equal(colors.length, count, `${format}: content updates do not emit appearance updates`);
+      if (format !== 'napplet') {
+        await page.evaluate(() => { window.__exploreNativeDocumentToken = 'resumed'; window.__exploreCommit(); });
+        for (let i = 0; i < 100 && colors.length === count; i++) await new Promise(resolve => setTimeout(resolve, 20));
+        assert.equal(colors.length, count + 1, `${format}: unchanged appearance must be reported for a resumed identity`);
+        assert.equal(colors.at(-1), null);
+        // CSSOM edits do not trigger the metadata/root mutation observer.
+        await page.evaluate(() => {
+          document.styleSheets[0].insertRule('body { background: #335577 !important }', document.styleSheets[0].cssRules.length);
+          window.__exploreNativeDocumentToken = 'resumed-again'; window.__exploreCommit();
+        });
+        await expectColor('#335577');
+      }
+
       await page.close();
     }
   } finally { await browser?.close(); await rm(directory, { recursive: true, force: true }); }

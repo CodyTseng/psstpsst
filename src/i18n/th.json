@@ -1166,6 +1166,7 @@
     "permissions_save": "บันทึกและโหลดใหม่",
     "new_window": "หน้าต่างใหม่",
     "open_window": "เปิดในหน้าต่างใหม่",
+    "runtime_forward": "ไปข้างหน้า",
     "runtime_more": "เมนูแอป",
     "runtime_reload": "โหลดใหม่",
     "update_available": "มีอัปเดต",

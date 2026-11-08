@@ -44,6 +44,8 @@ export default function NappletRunScreen() {
   return <ApplicationRuntimePage containerId={ownsRun ? running?.containerId : undefined} active={focused} title={release?.title} application={release}
     update={ownsRun && updateRelease?.event && accountPubkey ? { entry: fromNapplet(updateRelease), account: accountPubkey,
       blocked: sharing || !!prompt || !!configuration || !!panel || overlayActive, restart: entry => entry.release ? nappletService.restartOpen(ownerRunId, entry.release) : undefined } : undefined}
+    onBack={() => nappletService.goBack({ closeAtRoot: false })} onForward={() => nappletService.goForward()}
+    navigationBlocked={!!prompt || !!configuration || !!panel || overlayActive || sharing}
     hidden={sharing} menuEnabled={!!running} onClose={close} onMore={()=>nappletService.openPanel('about')}
     loading={ownsRun&&launch?.showLoading&&!launch.error} error={ownsRun?launch?.error:undefined}
     download={ownsRun ? launch?.download : undefined}

@@ -44,6 +44,26 @@ export function registerNappletHandlers(
       permissions: Map<string, number>;
     }
   >();
+  const navigationState = (id: string) => {
+    const entry = views.get(id);
+    if (!entry || entry.view.webContents.isDestroyed()) return { canGoBack: false, canGoForward: false };
+    const history = entry.view.webContents.navigationHistory;
+    const index = history.getActiveIndex();
+    return { canGoBack: index > 0, canGoForward: index >= 0 && index + 1 < history.length() };
+  };
+  const watchNavigation = (id: string, view: WebContentsView, owner: BrowserWindow) => {
+    let previous = '';
+    const update = () => {
+      if (owner.isDestroyed() || !views.has(id)) return;
+      const state = navigationState(id), key = `${state.canGoBack}:${state.canGoForward}`;
+      if (key === previous) return;
+      previous = key;
+      owner.webContents.send(IPC.nappletNavigation, id, state);
+    };
+    view.webContents.on('did-navigate', update);
+    view.webContents.on('did-navigate-in-page', update);
+    view.webContents.on('did-stop-loading', update);
+  };
   const requests = new Map<string, { abort: AbortController; owner: BrowserWindow }>();
   const configuredProfiles = new Set<Session>();
   const downloads = new Set<Session>();
@@ -198,6 +218,7 @@ export function registerNappletHandlers(
     const ownerClosed = () => close(id);
     view.setBackgroundColor('transparent');
     views.set(id, { view, owner, url, ready: false, painted: false, visible: false, inputBlocked: true, queued: [], ownerClosed, browser: new Map(), permissions: new Map() });
+    watchNavigation(id, view, owner);
     owner.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -298,7 +319,7 @@ export function registerNappletHandlers(
       additionalArguments:[page.bootstrap ? `--psst-explore-bootstrap=${Buffer.from(JSON.stringify(page.bootstrap)).toString('base64')}` : `--psst-explore=${Buffer.from(page.script).toString('base64')}`],sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:false} });
     const ownerClosed=()=>close(id);
     const entry={view,owner,url,ready:true,painted:true,visible:false,inputBlocked:true,queued:[] as string[],ownerClosed,page,files:page.files ? new Map(page.files.map(file => [file.path, file])) : undefined,document:randomUUID(),navigating:true,committed:undefined as {document:string;url:string}|undefined,browser:new Map<string,{action?:string;resolve(allowed:boolean, expiresAt?:number|null):void;timer:ReturnType<typeof setTimeout>}>(),fullscreen:false,permissions:new Map<string, number>()};
-    views.set(id,entry);owner.contentView.addChildView(view);view.setVisible(false);owner.once('closed',ownerClosed);
+    views.set(id,entry);watchNavigation(id, view, owner);owner.contentView.addChildView(view);view.setVisible(false);owner.once('closed',ownerClosed);
     view.webContents.setWindowOpenHandler(details=>{ browserRequest(entry, 'window', { url: details.url }); return {action:'deny'}; });
     view.webContents.on('will-attach-webview',(event)=>event.preventDefault());
     view.webContents.on('will-navigate',(event,target)=>{ const u=new URL(target); if(!['http:','https:'].includes(u.protocol) || (!page.url && u.origin!==origin)) {
@@ -336,10 +357,15 @@ export function registerNappletHandlers(
     const found=[...views.entries()].find(([,entry])=>entry.page && event.sender===entry.view.webContents && event.senderFrame===entry.view.webContents.mainFrame);
     if(!found || found[1].navigating || typeof raw!=='string') return;
     const [id,entry]=found;
-    try { if (JSON.parse(raw).documentToken !== entry.document) return; } catch { return; }
+    let message;
+    try { message = JSON.parse(raw); if (message.documentToken !== entry.document) return; } catch { return; }
     const url=event.senderFrame!.url;
     let origin:string;try{origin=new URL(url).origin;}catch{return;}
     if(!['http:','https:'].includes(new URL(url).protocol)) return;
+    if (message.type === 'psst.appearance') {
+      entry.owner.webContents.send(IPC.nappletMessage, id, JSON.stringify({ type: 'psst.appearance', color: message.color, document: entry.document }));
+      return;
+    }
     entry.owner.webContents.send(IPC.nappletMessage,id,JSON.stringify({type:'explore.request',origin,document:entry.document,url,raw}));
   });
   handle(IPC.nappletClose, (_owner: BrowserWindow, id: string) => close(id));
@@ -368,6 +394,14 @@ export function registerNappletHandlers(
     if (index <= 0) return false;
     // Go to the immediate app entry, including entries created without user activation.
     history.goToIndex(index - 1);
+    return true;
+  });
+  handle(IPC.nappletNavigationState, (_owner: BrowserWindow, id: string) => navigationState(id));
+  handle(IPC.nappletGoForward, (_owner: BrowserWindow, id: string) => {
+    const entry = views.get(id);
+    if (!entry || !navigationState(id).canGoForward) return false;
+    const history = entry.view.webContents.navigationHistory;
+    history.goToIndex(history.getActiveIndex() + 1);
     return true;
   });
   handle(IPC.nappletBounds, (_owner: BrowserWindow, id: string, bounds: NappletBounds, visible: boolean, interactive = true) => {

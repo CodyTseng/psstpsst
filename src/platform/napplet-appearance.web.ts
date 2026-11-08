@@ -1,6 +1,6 @@
-import type { PageAppearance } from '@/lib/page-appearance';
+import { useSyncExternalStore } from 'react';
+import { electronPageAppearance } from './electron/napplet-appearance';
 
-/** Desktop application windows retain their native title-bar presentation. */
-export function useNappletAppearance(_id?: string | null): PageAppearance | undefined {
-  return undefined;
+export function useNappletAppearance(id?: string | null) {
+  return useSyncExternalStore(electronPageAppearance.subscribe, () => id ? electronPageAppearance.get(id) : undefined);
 }

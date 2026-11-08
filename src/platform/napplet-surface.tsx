@@ -1,6 +1,7 @@
 import { requireNativeViewManager } from 'expo-modules-core';
 import { useSyncExternalStore } from 'react';
 import { type ViewProps } from 'react-native';
+import type { ApplicationNavigationState } from './ports/napplet';
 import { nativeSurface } from './expo/napplet';
 import { useThemeColors } from '@/theme';
 import { useHasPresentedOverlay } from '@/hooks/use-overlay-presentation';
@@ -9,6 +10,7 @@ type NativeProps = ViewProps & {
   html: string;
   page: string;
   surfaceId: string;
+  onNavigationState: (event: { nativeEvent: ApplicationNavigationState }) => void;
   onMessage: (event: { nativeEvent: { message?: string; ack?: number } }) => void;
 };
 let NativeView: React.ComponentType<NativeProps> | undefined;
@@ -27,6 +29,7 @@ export function NappletSurface({ id, visible, obscured: localObscured = false }:
       surfaceId={id}
       html={surface.html}
       page={surface.page ?? ''}
+      onNavigationState={(event) => nativeSurface.navigation(id, event.nativeEvent)}
       onMessage={(event) => {
         if (event.nativeEvent.message) nativeSurface.message(id, event.nativeEvent.message);
       }}

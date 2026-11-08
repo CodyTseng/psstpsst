@@ -25,10 +25,13 @@ gradients, emoji in navigation, and bouncy motion.
 
 All colours come from `useThemeColors()` in `src/theme/index.ts`. Components
 must never contain raw hex or rgba values.
-Embedded application safe-area canvases may use validated document colours:
-prefer the current HTML theme colour, then an opaque page background, then the
-host theme. Follow live document and light/dark changes. Status text retains
-contrast; host title bars and approval controls keep their own theme palette.
+Embedded application safe-area canvases and runtime title bars use validated
+document colours: prefer the current HTML theme colour, then an opaque page
+background, then the host theme. Follow live document and light/dark changes.
+Runtime titles, navigation icons, status text and native window glyphs choose
+contrasting light or dark foregrounds from that background. Loading and error
+surfaces use the host theme. Approval controls and host overlays retain their own
+theme palette.
 
 | Token family | Role |
 | --- | --- |
@@ -1163,7 +1166,7 @@ the recent-use list, not application details. Runtime menu sheets include Add ap
 action rail. Every app membership change confirms success with a bottom toast;
 failures show error feedback. Removing an app is labelled Remove app throughout Explore. Removing recent usage preserves the
 desktop shortcut and application state. Cancelling a drag leaves the desktop intact.
-There is no pin state or browser-style forward/back toolbar. The address entry accepts both Nostr addresses and website URLs. Pointer menus and accessibility actions
+There is no pin state. The address entry accepts both Nostr addresses and website URLs. Pointer menus and accessibility actions
 provide equivalent add, move and remove operations. Removing a shortcut preserves
 recent usage, app data, permissions and default task-handler choices. When the
 desktop is empty, omit its entire section, including the heading and guidance.
@@ -1259,8 +1262,14 @@ Reload actions. Copy omits the `nostr:` prefix; sharing includes it. Both retain
 relay hints and use a coordinate for replaceable applications or an event pointer
 for immutable applications. Copy keeps the sheet open with brief in-place
 confirmation after the clipboard accepts the write.
+Runtime headers for websites, nsites, napps and napplets expose Close, Back and
+Forward. Back and Forward traverse container history and are disabled without a
+previous or next entry respectively. Close always exits immediately. System Back
+still closes the current page, window or task at its history root.
+Titles remain at the true header center, with symmetric clearance for the wider
+control group and single-line truncation before controls can be crowded.
 On iOS, runtime swipe gestures navigate embedded page history without dismissing
-the host route; leaving the runtime uses its explicit Close action.
+the host route; the header Close action exits explicitly.
 On Electron and Android, napps and napplets always open in an independent
 window or task. Nsites and ordinary websites default to the current host;
 their account-scoped opening preference appears on the details page and below
@@ -1288,8 +1297,8 @@ Independent windows merge application
 identity and menu actions into their native title bar, reserve the system caption
 controls, and omit duplicate page headers. Android opens applications as independent
 system tasks with their own app-named Recents cards. Independent application
-and website content has no host title bar, Close button or floating More control.
-Pages in the main host retain the shared Close and More header. System Back
+and website tasks retain the shared Close, Back and Forward header without a
+floating More control. Pages in the main host also retain the More header action. System Back
 traverses the app's history, then closes its task; switching tasks preserves each running app.
 System back gestures cancel pending webpage touches when the gesture starts,
 so navigation never also triggers a page long press.
@@ -1456,8 +1465,9 @@ These isolated surfaces use platform controls rather than host React primitives.
 ## 12. Hard Rules
 
 Pinned compatibility UI kits may retain their upstream visual tokens inside an
-embedded application document. They never style host chrome or trusted approval
-surfaces; their exposed surface and text colors follow the effective host theme.
+embedded application document. Only validated document appearance hints may color
+runtime chrome as defined in §2; trusted approval surfaces retain the host theme.
+Their exposed surface and text colors follow the effective host theme.
 
 Breaking a rule requires explicit approval and a reason in the PR or commit
 message.
@@ -1472,7 +1482,8 @@ message.
    `@expo/ui` for native controls, `lucide-react-native` for foundational
    functional icons, and `@solar-icons/react-native` for descriptive and domain
    icons.
-6. **No page-specific theme.** Read the effective app theme.
+6. **No arbitrary page-specific theme.** Read the effective app theme; runtime
+   chrome may follow validated document appearance as defined in §2.
 7. **Verify light and dark mode.** New UI must support both.
 8. **Empty states are complete.** Use icon, title, and optional guidance/action.
 9. **Only one primary action per screen**, except the independent launch and

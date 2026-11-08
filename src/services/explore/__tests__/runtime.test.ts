@@ -18,7 +18,7 @@ jest.mock('@/services/signing/repository', () => jest.requireActual('../../signi
 jest.mock('@/services/local-relay', () => ({ localRelay: { add: jest.fn(async () => true), query: jest.fn(async () => [{id:'event'}]), count: jest.fn(async () => 1), event: jest.fn(async()=>undefined), replaceable: jest.fn(async()=>undefined), subscribe: jest.fn(()=>()=>{}), remove: jest.fn(async()=>[]) } }));
 jest.mock('@/services/napplet/repository',()=>({getData:jest.fn(async()=>null),setData:jest.fn(async()=>{})}));
 jest.mock('@/services/napplet/artifacts', () => ({ fetchBlob: jest.fn(), loadSiteBlob: jest.fn(), recordArtifactVersion: jest.fn(async () => {}) }));
-jest.mock('@/platform', () => ({ platform: { napplet: { openPage: jest.fn(async () => 'container'), close: jest.fn(async () => { }), send: jest.fn(async () => { }), addMessageListener: jest.fn(() => () => { }) } } }));
+jest.mock('@/platform', () => ({ platform: { napplet: { goForward: jest.fn(async () => false), openPage: jest.fn(async () => 'container'), close: jest.fn(async () => { }), send: jest.fn(async () => { }), addMessageListener: jest.fn(() => () => { }) } } }));
 jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn().mockImplementation(() => ({ destroy: jest.fn(), sign: jest.fn(async (event) => ({ ...event, pubkey: 'account' })) })) }));
 const entry: ExploreEntry = { key: 'https://site.example/path', address: 'https://site.example/path', title: 'Site', kind: 'website', description: '', servers: [], required: [], desktopPosition: null, lastUsedAt: null };
 let receive: (id: string, raw: string) => void;
@@ -547,4 +547,13 @@ it('retains local database access and subscription cleanup for napps', async () 
   expect((await request('streamClose', ['stream'])).result).toBe(true);
   expect(cleanup).toHaveBeenCalledTimes(1);
   expect(confirm).not.toHaveBeenCalled();
+});
+
+
+it('keeps the container alive without forward history and rejects navigation after stopping', async () => {
+  expect(await runtime.goForward()).toBe(false);
+  expect(platform.napplet.goForward).toHaveBeenCalledWith('container');
+  expect(platform.napplet.close).not.toHaveBeenCalled();
+  await runtime.stop();
+  await expect(runtime.goForward()).rejects.toThrow();
 });

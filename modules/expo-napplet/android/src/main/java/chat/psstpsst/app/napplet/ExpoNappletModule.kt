@@ -218,8 +218,10 @@ class ExpoNappletModule : Module() {
     AsyncFunction("sendAsync") { id: String, message: String -> views[id]?.get()?.reply(message); Unit }.runOnQueue(Queues.MAIN)
     AsyncFunction("closeAsync") { id: String -> views.remove(id)?.get()?.dispose(); Unit }.runOnQueue(Queues.MAIN)
     AsyncFunction("goBackAsync") { id: String -> views[id]?.get()?.navigateBack() ?: false }.runOnQueue(Queues.MAIN)
+    AsyncFunction("goForwardAsync") { id: String -> views[id]?.get()?.navigateForward() ?: false }.runOnQueue(Queues.MAIN)
+    AsyncFunction("getNavigationStateAsync") { id: String -> views[id]?.get()?.navigationState() ?: mapOf("canGoBack" to false, "canGoForward" to false) }.runOnQueue(Queues.MAIN)
     View(NappletView::class) {
-      Events("onMessage")
+      Events("onMessage", "onNavigationState")
       Prop("page") { view: NappletView, page: String -> if (page.isNotEmpty()) view.loadPage(page) }
       Prop("html") { view: NappletView, html: String -> view.load(html) }
       Prop("surfaceId") { view: NappletView, id: String -> views[id] = WeakReference(view) }
@@ -231,12 +233,15 @@ class ExpoNappletModule : Module() {
 
 class NappletView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
   val onMessage by EventDispatcher()
-  private val web = NappletWebView(context) { raw -> onMessage(mapOf("message" to raw)) }
+  val onNavigationState by EventDispatcher()
+  private val web = NappletWebView(context, { state -> onNavigationState(state) }) { raw -> onMessage(mapOf("message" to raw)) }
   init { addView(web, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
   fun loadPage(value: String) = web.loadPage(value)
   fun usesStorageId(value: String) = web.usesStorageId(value)
   fun load(value: String) = web.loadDocument(value)
   fun reply(value: String) = web.reply(value)
   fun navigateBack() = web.navigateBack()
+  fun navigateForward() = web.navigateForward()
+  fun navigationState() = web.navigationState()
   fun dispose() { removeView(web); web.dispose() }
 }

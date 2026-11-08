@@ -2,7 +2,7 @@ import type { ExplorePage } from '../ports/explore';
 import { assertNotAborted } from '@/platform/abort';
 import { decodeNappletBytes } from '../napplet-bytes';
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort, type ResourceProgress } from '../ports/napplet';
+import { NAPPLET_FRAME_READY_MESSAGE, type NappletPort, type ApplicationNavigationState, type ResourceProgress } from '../ports/napplet';
 import { exploreBridge } from '@/lib/napp/bridge';
 import { applicationTasksAdapter } from './application-tasks';
 import { pageAppearance, type PageAppearance } from '@/lib/page-appearance';
@@ -20,14 +20,20 @@ type NativeModule = {
   sendAsync(id: string, message: string): Promise<void>;
   closeAsync(id: string): Promise<void>;
   goBackAsync(id: string): Promise<boolean>;
+  goForwardAsync(id: string): Promise<boolean>;
+  getNavigationStateAsync(id: string): Promise<ApplicationNavigationState>;
 };
 export type NativeSurface = { html: string; page?: string; ready: boolean; appearance?: PageAppearance; document?: string };
 const surfaces = new Map<string, NativeSurface>();
 const updates = new Set<() => void>();
+const navigationListeners = new Set<(id: string, state: ApplicationNavigationState) => void>();
 const messages = new Set<(id: string, raw: string) => void>();
 let serial = 0;
 export const nativeSurface = {
   get: (id: string) => surfaces.get(id),
+  navigation: (id: string, state: ApplicationNavigationState) => {
+    if (surfaces.has(id)) for (const listener of navigationListeners) listener(id, state);
+  },
   subscribe: (listener: () => void) => {
     updates.add(listener);
     return () => {
@@ -139,6 +145,22 @@ export const nappletAdapter: NappletPort = {
     const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
     if (!native?.goBackAsync) throw new Error('applications.rebuild_required');
     return native.goBackAsync(id);
+  },
+  async goForward(id) {
+    if (!surfaces.has(id)) return false;
+    const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
+    if (!native?.goForwardAsync) throw new Error('applications.rebuild_required');
+    return native.goForwardAsync(id);
+  },
+  async getNavigationState(id) {
+    if (!surfaces.has(id)) return { canGoBack: false, canGoForward: false };
+    const native = requireOptionalNativeModule<NativeModule>('ExpoNapplet');
+    if (!native?.getNavigationStateAsync) throw new Error('applications.rebuild_required');
+    return native.getNavigationStateAsync(id);
+  },
+  addNavigationListener(listener) {
+    navigationListeners.add(listener);
+    return () => { navigationListeners.delete(listener); };
   },
   async setBounds() {},
   async capture() { return null; },

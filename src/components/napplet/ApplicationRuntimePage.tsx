@@ -1,5 +1,5 @@
 import { useApplicationUpdates, type ApplicationUpdateTarget } from '@/hooks/use-application-updates';
-import { useContext, type ReactNode } from 'react';
+import { useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator,ScrollView,StyleSheet,View } from 'react-native';
 import X from 'lucide-react-native/icons/x';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
@@ -17,45 +17,66 @@ import type { ArtifactProgress } from '@/services/napplet/artifacts';
 import { APPLICATION_ICON_SIZE, ApplicationIcon } from './ApplicationIcon';
 import type { ApplicationInfo } from '@/services/explore/model';
 import { iconStrokeWidth } from '@/theme/icons';
-import { contentWidth,spacing,uiDensity,useThemeColors } from '@/theme';
-import { IS_ANDROID } from '@/lib/platform';
+import { contentWidth,spacing,uiDensity,useThemeColors,ThemeColorsContext } from '@/theme';
+import { useApplicationNavigation } from '@/hooks/use-application-navigation';
 import { platform } from '@/platform';
 import { useNappletAppearance } from '@/platform/napplet-appearance';
+import { ApplicationNavigation, APPLICATION_NAVIGATION_WIDTH } from './ApplicationNavigation';
+import { showToast } from '@/stores/toast.store';
 import { ApplicationTaskContext } from './ApplicationTaskContext';
+import { applicationChromeColors } from '@/theme/application-chrome';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
-export function ApplicationRuntimePage({title,application,containerId,active=true,loading,download,error,hidden=false,windowed=false,menuEnabled,openingWindow=false,onOpenWindow,onClose,onMore,onRetry,children,overlay,update}:{
+export function ApplicationRuntimePage({title,application,containerId,active=true,loading,download,error,hidden=false,windowed=false,menuEnabled,showMenu=true,openingWindow=false,onOpenWindow,onClose,onBack,onForward,navigationBlocked=false,onMore,onRetry,children,overlay,update}:{
   update?:ApplicationUpdateTarget;
   containerId?:string|null;active?:boolean;
-  title?:string;application?:ApplicationInfo;loading?:boolean;download?:ArtifactProgress;error?:string|null;hidden?:boolean;windowed?:boolean;menuEnabled:boolean;
+  title?:string;application?:ApplicationInfo;loading?:boolean;download?:ArtifactProgress;error?:string|null;hidden?:boolean;windowed?:boolean;menuEnabled:boolean;showMenu?:boolean;
   openingWindow?:boolean;onOpenWindow?():void;
+  navigationBlocked?:boolean;onBack?():void|Promise<void>;onForward?():void|Promise<void>;
   onClose():void;onMore():void;onRetry():void;children?:ReactNode;overlay?:ReactNode;
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
   useApplicationUpdates(update, active && !loading && !error && !hidden);
+  const history = useApplicationNavigation(containerId);
   const taskId = useContext(ApplicationTaskContext);
-  const immersive = IS_ANDROID && taskId !== null;
-  const appearance = useNappletAppearance(containerId);
+  const navigating = useRef(false);
+  const [navigationPending, setNavigationPending] = useState(false);
+  const navigationEnabled = !!onBack && !!onForward && !!containerId && active && !loading && !error && !hidden && !openingWindow && !navigationBlocked && !navigationPending;
+  const navigate = async (action?: () => void | Promise<void>) => {
+    if (!navigationEnabled || navigating.current || !action) return;
+    navigating.current = true; setNavigationPending(true);
+    try { await action(); }
+    catch { showToast(t('applications.request_failed'), { variant: 'error' }); }
+    finally { navigating.current = false; setNavigationPending(false); }
+  };
+  const navigation = <ApplicationNavigation enabled={navigationEnabled} canGoBack={history.canGoBack} canGoForward={history.canGoForward}
+    onBack={() => { if (history.canGoBack) void navigate(onBack); }} onForward={() => { if (history.canGoForward) void navigate(onForward); }} />;
+  const documentAppearance = useNappletAppearance(containerId);
+  const appearance = !loading && !error && !hidden ? documentAppearance : undefined;
+  const chromeColors = useMemo(() => applicationChromeColors(c, appearance), [c, appearance]);
   const nativeWindow = windowed || !!platform.napplet.windows?.isHost;
-  const contentTop = nativeWindow || immersive ? 0 : clearance;
+  const contentTop = nativeWindow ? 0 : clearance;
   const more = <IconButton size={uiDensity.headerActionSize}
-    icon={<Ellipsis strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>}
+    icon={<Ellipsis strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={chromeColors.text}/>}
     accessibilityLabel={t('applications.runtime_more')} onPress={onMore} disabled={!menuEnabled || openingWindow}/>;
-  const actions = onOpenWindow ? <View style={{flexDirection:'row',alignItems:'center',gap:spacing.xs}}>
+  const actions = onOpenWindow && !nativeWindow && taskId === null ? <View style={{flexDirection:'row',alignItems:'center',gap:spacing.xs}}>
     <IconButton size={uiDensity.headerActionSize}
-      icon={<SquareTopDown size={uiDensity.headerActionIconSize} color={c.text}/>}
+      icon={<SquareTopDown size={uiDensity.headerActionIconSize} color={chromeColors.text}/>}
       accessibilityLabel={t('applications.open_in_new_window')} onPress={onOpenWindow} disabled={!menuEnabled || openingWindow}/>
-    {more}
-  </View> : more;
-  useDesktopWindowTitlebar(nativeWindow && active ? { title, actions: more } : null);
-  return <AppScreen edges={immersive ? ['top', 'bottom'] : ['bottom']}
-    appearance={!loading && !error && !hidden ? appearance : undefined}
-    statusBarActive={active} statusBarFollowsAppearance={immersive}>
+    {showMenu ? more : null}
+  </View> : showMenu ? more : undefined;
+  useDesktopWindowTitlebar(nativeWindow && active ? { title, actions: showMenu ? more : undefined, navigation, navigationWidth: APPLICATION_NAVIGATION_WIDTH, colors: chromeColors } : null);
+  return <AppScreen edges={['bottom']}
+    appearance={appearance}
+    statusBarActive={active}>
     <View style={{flex:1,display:hidden?'none':'flex'}}>
-      {nativeWindow || immersive ? null : <ScreenHeader title={title} back={false}
-        left={<IconButton size={uiDensity.headerActionSize} icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text}/>} accessibilityLabel={t('common.close')} onPress={onClose}/>}
-        titleSideInset={onOpenWindow ? uiDensity.headerActionSize * 2 + spacing.xs + spacing.lg : undefined}
-        right={actions}/>}
+      {nativeWindow ? null : <ThemeColorsContext.Provider value={chromeColors}><ScreenHeader title={title} back={false}
+        left={<View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <IconButton size={uiDensity.headerActionSize} icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={chromeColors.text}/>} accessibilityLabel={t('common.close')} onPress={onClose}/>
+          {navigation}
+        </View>}
+        titleSideInset={uiDensity.headerActionSize + spacing.xs + APPLICATION_NAVIGATION_WIDTH + spacing.lg}
+        right={actions}/></ThemeColorsContext.Provider>}
 
       <View style={{flex:1,marginTop:contentTop,overflow:'hidden'}}>
         {children}

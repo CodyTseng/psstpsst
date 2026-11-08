@@ -1,7 +1,7 @@
 import type { KeyVaultPort } from '../ports/key-vault';
 import type { ApplicationWindowsPort } from '../ports/application-window';
 import type { ExplorePage } from '../ports/explore';
-import type { NappletBounds } from '../ports/napplet';
+import type { ApplicationNavigationState, NappletBounds } from '../ports/napplet';
 import type { SqlBindValue, SqliteQueryMethod } from '../ports/database';
 import type { AppUpdateStatus } from '../ports/app-update';
 import type { LocalRelayEventsPort } from '../ports/local-relay-events';
@@ -34,6 +34,9 @@ export type ElectronBridge = {
     windows: ApplicationWindowsPort;
     capture(id: string): Promise<string | null>;
     goBack(id: string): Promise<boolean>;
+    goForward(id: string): Promise<boolean>;
+    getNavigationState(id: string): Promise<ApplicationNavigationState>;
+    onNavigation(listener: (id: string, state: ApplicationNavigationState) => void): () => void;
     clearPageData(storageId: string): Promise<void>;
     openPage(page: ExplorePage): Promise<string>;
     open(html: string): Promise<string>; close(id: string): Promise<void>;

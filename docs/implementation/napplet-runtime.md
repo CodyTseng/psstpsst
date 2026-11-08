@@ -86,7 +86,15 @@ container, and never persisted or exposed through application APIs.
 System Back first traverses the container's browser history, delivering the usual
 `popstate` navigation to the app. Only a container at its history root closes.
 Host overlays retain Back priority, and the leading Close action always exits.
+Runtime headers and independent window title bars also provide Back and Forward,
+disabled without a previous or next entry respectively. Header Back never closes
+a container, including when history changes before its availability update arrives.
+Native container history changes publish only navigation availability; consumers
+subscribe per displayed container instead of polling or copying history entries.
+A snapshot read initializes the controls without overwriting newer notifications.
 This uses browser navigation rather than introducing a NAP protocol extension.
+Retained-document recovery re-reads current theme metadata and computed backgrounds,
+then republishes appearance under the resumed document identity even if unchanged.
 
 The manifest identity includes publisher and kind. Named manifests additionally
 include the opaque `d`; snapshots use their signed event ID. Application KV,

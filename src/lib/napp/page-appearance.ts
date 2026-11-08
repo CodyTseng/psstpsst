@@ -1,7 +1,9 @@
-/** Runs in the displayed document, including opaque napplet frames. */
+/** Runs in the displayed document, including opaque napplet frames.
+ * The returned refresh re-reads current styles and republishes unchanged colors. */
 export function observePageAppearance(report: (color: string | null) => void) {
   let previous: string | null | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let forceReport = false;
   let context: CanvasRenderingContext2D | null | undefined;
   const opaqueColor = (value: string): string | null => {
     if (!CSS.supports('color', value)) return null;
@@ -27,7 +29,10 @@ export function observePageAppearance(report: (color: string | null) => void) {
     }
     if (!color && document.body) color = opaqueColor(getComputedStyle(document.body).backgroundColor);
     if (!color) color = opaqueColor(getComputedStyle(document.documentElement).backgroundColor);
-    if (color !== previous) { previous = color; report(color); }
+    const changed = color !== previous;
+    previous = color;
+    const forced = forceReport; forceReport = false;
+    if (forced || changed) report(color);
   };
   const schedule = () => { timer ??= setTimeout(read, 50); };
   const start = () => {
@@ -45,4 +50,6 @@ export function observePageAppearance(report: (color: string | null) => void) {
   };
   if (document.readyState === 'loading') addEventListener('DOMContentLoaded', start, { once: true });
   else start();
+  // A retained document gets a new host identity even when its color is unchanged.
+  return () => { forceReport = true; schedule(); };
 }

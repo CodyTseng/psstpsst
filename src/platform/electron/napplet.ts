@@ -2,6 +2,7 @@ import { assertNotAborted } from '@/platform/abort';
 import { decodeNappletBytes } from '../napplet-bytes';
 import type { NappletPort } from '../ports/napplet';
 import { getElectronBridge } from './bridge';
+import { electronPageAppearance } from './napplet-appearance';
 
 export const electronNappletAdapter: NappletPort = {
   async fetchResourceResponse(url, maxBytes, signal, validators) {
@@ -56,13 +57,21 @@ export const electronNappletAdapter: NappletPort = {
     return bridge.openPage(page);
   },
   open: (html) => getElectronBridge().napplet.open(html),
-  close: (id) => getElectronBridge().napplet.close(id),
+  close: (id) => {
+    electronPageAppearance.close(id);
+    return getElectronBridge().napplet.close(id);
+  },
   async capture(id) {
     const bridge = getElectronBridge().napplet;
     return typeof bridge.capture === 'function' ? bridge.capture(id) : null;
   },
   goBack: (id) => getElectronBridge().napplet.goBack(id),
+  goForward: (id) => getElectronBridge().napplet.goForward(id),
+  getNavigationState: (id) => getElectronBridge().napplet.getNavigationState(id),
+  addNavigationListener: (listener) => getElectronBridge().napplet.onNavigation(listener),
   send: (id, message) => getElectronBridge().napplet.send(id, message),
   setBounds: (id, bounds, visible, interactive) => getElectronBridge().napplet.setBounds(id, bounds, visible, interactive),
-  addMessageListener: (listener) => getElectronBridge().napplet.onMessage(listener),
+  addMessageListener: (listener) => getElectronBridge().napplet.onMessage((id, raw) => {
+    if (!electronPageAppearance.message(id, raw)) listener(id, raw);
+  }),
 };

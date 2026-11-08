@@ -1166,6 +1166,7 @@
     "permissions_save": "Save and reload",
     "new_window": "New window",
     "open_window": "Open in new window",
+    "runtime_forward": "Forward",
     "runtime_more": "App menu",
     "runtime_reload": "Reload",
     "update_available": "Update available",

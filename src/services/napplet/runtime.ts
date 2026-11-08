@@ -244,6 +244,13 @@ export class NappletRuntime {
     if (!this.signal.aborted && this.container)
       void platform.napplet.send(this.container, JSON.stringify(message)).catch(() => {});
   }
+  async goForward(): Promise<boolean> {
+    this.check();
+    if (!this.container) return false;
+    const handled = await platform.napplet.goForward(this.container);
+    this.check();
+    return handled;
+  }
   async goBack(): Promise<boolean> {
     this.check();
     if (!this.container) return true;

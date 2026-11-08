@@ -110,7 +110,20 @@ class NappletWebViewTest {
       assertEquals("History index=$historyIndex, console=$console", 1, firstBack)
       instrumentation.runOnMainSync { assertTrue(web.navigateBack()) }
       assertEquals(0, navigation.poll(5, TimeUnit.SECONDS))
-      instrumentation.runOnMainSync { assertFalse(web.navigateBack()) }
+      instrumentation.runOnMainSync {
+        assertFalse(web.navigateBack())
+        assertEquals(mapOf("canGoBack" to false, "canGoForward" to true), web.navigationState())
+        assertTrue(web.navigateForward())
+      }
+      assertEquals(1, navigation.poll(5, TimeUnit.SECONDS))
+      instrumentation.runOnMainSync {
+        assertTrue(web.navigateForward())
+      }
+      assertEquals(2, navigation.poll(5, TimeUnit.SECONDS))
+      instrumentation.runOnMainSync {
+        assertEquals(mapOf("canGoBack" to true, "canGoForward" to false), web.navigationState())
+        assertFalse(web.navigateForward())
+      }
     } finally {
       instrumentation.runOnMainSync { web.dispose(); activity.finish() }
     }

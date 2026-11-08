@@ -55,6 +55,8 @@ export default function ExploreRunScreen() {
       restart: entry => exploreService.restart(id, entry) } : undefined}
     application={state.entry?applicationPresentation(state.entry):undefined}
     onOpenWindow={canOpenWindow ? openInWindow : undefined} openingWindow={windowPending}
+    onBack={() => exploreService.goBack(id, { closeAtRoot: false })} onForward={() => exploreService.goForward(id)}
+    navigationBlocked={!!panel || !!prompt || !!configuration || overlayActive}
     menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.close(id)} onMore={()=>setPanel('about')}
     download={owns ? state.download : undefined} loading={owns&&state.loading} error={owns?state.error:undefined} onRetry={()=>exploreService.retry(id)}
     overlay={owns&&state.entry&&state.account?<ExploreApplicationSheet key={`${id}:${state.entry.key}`} entry={state.entry} account={state.account} runId={id} page={panel} onPageChange={setPanel}/>:null}>

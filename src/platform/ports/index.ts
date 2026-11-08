@@ -35,7 +35,7 @@ import type { WindowChromePort } from './window-chrome';
 import type { VideoThumbnailPort } from './video-thumbnail';
 import type { ZipArchivePort } from './zip-archive';
 export type { KeyVaultPort, VaultKey, MessagingKey, VaultCommand, VaultConsent } from './key-vault';
-export type { NappletPort, NappletBounds } from './napplet';
+export type { NappletPort, NappletBounds, ApplicationNavigationState } from './napplet';
 
 export type { ScreenOrientationPort } from './screen-orientation';
 export type { ClipboardPort } from './clipboard';

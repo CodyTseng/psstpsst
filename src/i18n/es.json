@@ -1171,6 +1171,7 @@
     "permissions_save": "Guardar y recargar",
     "new_window": "Nueva ventana",
     "open_window": "Abrir en una ventana nueva",
+    "runtime_forward": "Adelante",
     "runtime_more": "Menú de la app",
     "runtime_reload": "Recargar",
     "update_available": "Actualización disponible",

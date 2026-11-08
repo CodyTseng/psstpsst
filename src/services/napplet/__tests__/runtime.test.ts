@@ -41,6 +41,7 @@ jest.mock('@/platform', () => ({
       open: jest.fn(async () => 'container'),
       close: jest.fn(async () => {}),
       goBack: jest.fn(async () => true),
+      goForward: jest.fn(async () => false),
       send: jest.fn(async () => {}),
       fetchResource: jest.fn(async (url: string) => {
         if (url.includes('bad.example')) throw new Error('network-error');
@@ -1183,4 +1184,15 @@ test.each(['required', 'optional'] as const)('declared %s common access bypasses
     expect(config.confirm).not.toHaveBeenCalled();
     expect(messages().at(-1)).toMatchObject({ id: 'encode', ok: true, nip19Type: 'npub' });
   } finally { await runtime.close(); jest.mocked(getData).mockImplementation(async () => null); }
+});
+
+
+test('does not close or navigate backward when Forward has no destination', async () => {
+  const runtime = new NappletRuntime(options());
+  await runtime.open();
+  expect(await runtime.goForward()).toBe(false);
+  expect(platform.napplet.goForward).toHaveBeenCalledWith('container');
+  await runtime.close();
+  await expect(runtime.goForward()).rejects.toThrow();
+  expect(platform.napplet.goForward).toHaveBeenCalledTimes(1);
 });

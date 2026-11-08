@@ -24,12 +24,15 @@ export default function ApplicationWindowScreen() {
     if (!app && !napplet.launching && !napplet.panel) void platform.napplet.windows?.close();
   }, [app, napplet.launching, napplet.panel]);
   const close = () => { exploreService.stop(); nappletService.stop(); void platform.napplet.windows?.close(); };
-  return <ApplicationRuntimePage windowed active={focused} title={app?.title} application={app ? applicationPresentation(app) : undefined}
+  return <ApplicationRuntimePage containerId={containerId} windowed active={focused} title={app?.title} application={app ? applicationPresentation(app) : undefined}
     update={app && explore.account ? { entry: release ? fromNapplet(release) : explore.entry!, account: explore.account,
       blocked: !!panel || !!napplet.prompt || !!napplet.configuration || !!napplet.panel || napplet.overlayActive,
       restart: entry => entry.release ? nappletService.restartOpen(napplet.runId, entry.release) : exploreService.restart(explore.runId, entry) } : undefined}
     loading={release ? napplet.launch?.showLoading : explore.loading} error={release ? napplet.launch?.error : explore.error}
     download={release ? napplet.launch?.download : explore.download}
+    onBack={() => release ? nappletService.goBack({ closeAtRoot: false }) : exploreService.goBack(explore.runId, { closeAtRoot: false })}
+    onForward={() => release ? nappletService.goForward() : exploreService.goForward(explore.runId)}
+    navigationBlocked={!!panel || !!napplet.prompt || !!napplet.configuration || !!napplet.panel || napplet.overlayActive}
     menuEnabled={!!containerId} onClose={close}
     onMore={() => { if (release) nappletService.openPanel('about'); else setPanel('about'); }}
     onRetry={() => { if (release) nappletService.retryOpen(napplet.runId); else exploreService.retry(explore.runId); }}

@@ -1166,6 +1166,7 @@
     "permissions_save": "保存并重新加载",
     "new_window": "新窗口",
     "open_window": "在新窗口打开",
+    "runtime_forward": "前进",
     "runtime_more": "应用菜单",
     "runtime_reload": "重新加载",
     "update_available": "发现新版本",

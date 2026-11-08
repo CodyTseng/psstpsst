@@ -423,8 +423,14 @@ public class ExpoNappletModule: Module {
     AsyncFunction("closeAsync") { (id: String) in
       self.views.object(forKey: id as NSString)?.dispose(); self.views.removeObject(forKey: id as NSString)
     }.runOnQueue(.main)
+    AsyncFunction("goForwardAsync") { (id: String) -> Bool in
+      self.views.object(forKey: id as NSString)?.navigateForward() ?? false
+    }.runOnQueue(.main)
+    AsyncFunction("getNavigationStateAsync") { (id: String) -> [String: Bool] in
+      self.views.object(forKey: id as NSString)?.navigationState() ?? ["canGoBack": false, "canGoForward": false]
+    }.runOnQueue(.main)
     View(NappletView.self) {
-      Events("onMessage")
+      Events("onMessage", "onNavigationState")
       Prop("page") { (view: NappletView, page: String) in if !page.isEmpty { view.loadPage(page) } }
       Prop("html") { (view: NappletView, html: String) in view.load(html) }
       Prop("surfaceId") { (view: NappletView, id: String) in self.views.setObject(view, forKey: id as NSString) }
@@ -476,6 +482,23 @@ private func isInternalBrowserSubframe(_ url: URL?, mainFrame: Bool) -> Bool {
 
 final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, UIDocumentPickerDelegate {
   let onMessage = EventDispatcher()
+  let onNavigationState = EventDispatcher()
+  private var historyObservers: [NSKeyValueObservation] = []
+  private var lastNavigationState: [String: Bool]?
+  func navigationState() -> [String: Bool] {
+    ["canGoBack": web?.backForwardList.backItem != nil, "canGoForward": web?.backForwardList.forwardItem != nil]
+  }
+  private func observeNavigation() {
+    historyObservers.removeAll()
+    lastNavigationState = nil
+    let update: (WKWebView, NSKeyValueObservedChange<Bool>) -> Void = { [weak self] _, _ in
+      guard let self else { return }
+      let state = self.navigationState()
+      if state != self.lastNavigationState { self.lastNavigationState = state; self.onNavigationState(state) }
+    }
+    historyObservers = [web.observe(\.canGoBack, options: [.initial, .new], changeHandler: update),
+                        web.observe(\.canGoForward, options: [.initial, .new], changeHandler: update)]
+  }
   private let proxy = MessageProxy()
   private var web: WKWebView!
   private var html = ""
@@ -636,7 +659,9 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
     configuration.setURLSchemeHandler(pageFiles, forURLScheme: "psst-explore")
     configuration.userContentController.add(proxy, name: "nappletHost")
+    historyObservers.removeAll()
     web = WKWebView(frame: bounds, configuration: configuration)
+    observeNavigation()
     web.allowsBackForwardNavigationGestures = true
     web.isOpaque = false; web.backgroundColor = .clear; web.scrollView.backgroundColor = .clear
     web.navigationDelegate = self; web.uiDelegate = self; addSubview(web)
@@ -658,6 +683,7 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
     proxy.owner = self
     configuration.userContentController.add(proxy, name: "nappletHost")
     web = WKWebView(frame: .zero, configuration: configuration)
+    observeNavigation()
     web.allowsBackForwardNavigationGestures = true
     web.isOpaque = false
     web.backgroundColor = .clear
@@ -688,6 +714,11 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
     }
   }
 
+  func navigateForward() -> Bool {
+    guard let web, let next = web.backForwardList.forwardItem else { return false }
+    web.go(to: next)
+    return true
+  }
   func navigateBack() -> Bool {
     guard let web, let previous = web.backForwardList.backItem else { return false }
     web.go(to: previous)
@@ -770,6 +801,7 @@ final class NappletView: ExpoView, WKNavigationDelegate, WKUIDelegate, WKDownloa
     for (_, (download, file)) in downloads { download.cancel { _ in }; try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }; downloads.removeAll()
     view.isHidden = true
     view.stopLoading(); view.configuration.userContentController.removeScriptMessageHandler(forName: "nappletHost")
+    historyObservers.removeAll()
     view.removeFromSuperview(); web = nil
   }
   deinit { web?.configuration.userContentController.removeScriptMessageHandler(forName: "nappletHost") }

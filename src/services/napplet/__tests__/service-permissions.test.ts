@@ -30,6 +30,7 @@ jest.mock('../runtime', () => ({ NappletRuntime: jest.fn((options) => ({
   scope: { accountPubkey: options.accountPubkey, appKey: options.release.eventKey },
   open: jest.fn(async () => 'container'), close: jest.fn(async () => {}),
   goBack: jest.fn(async () => true),
+  goForward: jest.fn(async () => false),
   signingPermissions: { revoke: jest.fn(async () => {}), edit: jest.fn(async () => {}), settled: jest.fn(async () => {}), snapshot: jest.fn(async () => ({ rules: [], activity: [] })) },
 })) }));
 
@@ -786,4 +787,37 @@ it.each([true, false])('aborts pending downloads on close without reviving the l
   await settleLaunch();
   expect(nappletStore.getState()).toMatchObject({ launching: false, launch: null, running: null });
   expect(NappletRuntime).not.toHaveBeenCalled();
+});
+
+
+it('keeps the app open without forward history and shares the pending traversal guard with Back', async () => {
+  stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
+  await nappletService.open(app);
+  const active = jest.mocked(NappletRuntime).mock.results.at(-1)!.value;
+  await nappletService.goForward();
+  expect(active.close).not.toHaveBeenCalled();
+  let resolve!: (handled: boolean) => void;
+  active.goForward.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  const pending = nappletService.goForward();
+  await nappletService.goBack();
+  expect(active.goBack).not.toHaveBeenCalled();
+  resolve(false);
+  await pending;
+  nappletService.openPanel('about');
+  await nappletService.goForward();
+  expect(active.goForward).toHaveBeenCalledTimes(2);
+  expect(active.close).not.toHaveBeenCalled();
+});
+
+
+it('never closes from header Back when the native history has already reached its root', async () => {
+  stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
+  await nappletService.open(app);
+  const active = jest.mocked(NappletRuntime).mock.results.at(-1)!.value;
+  active.goBack.mockResolvedValue(false);
+  await nappletService.goBack({ closeAtRoot: false });
+  expect(active.close).not.toHaveBeenCalled();
+  expect(nappletStore.getState().running).not.toBe(null);
+  await nappletService.goBack();
+  expect(active.close).toHaveBeenCalledTimes(1);
 });

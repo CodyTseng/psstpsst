@@ -1166,6 +1166,7 @@
     "permissions_save": "저장 후 새로고침",
     "new_window": "새 창",
     "open_window": "새 창에서 열기",
+    "runtime_forward": "앞으로",
     "runtime_more": "앱 메뉴",
     "runtime_reload": "새로고침",
     "update_available": "업데이트 있음",

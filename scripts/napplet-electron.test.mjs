@@ -23,7 +23,7 @@ test(
       });
       await writeFile(
         path.join(dir, 'owner-preload.js'),
-        `const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('testHost',{invoke:(...args)=>ipcRenderer.invoke(...args)});window.addEventListener('DOMContentLoaded',()=>{});`,
+        `const {contextBridge,ipcRenderer}=require('electron');const states=[];ipcRenderer.on('napplet:navigation',(_event,id,state)=>states.push({id,...state}));contextBridge.exposeInMainWorld('testHost',{invoke:(...args)=>ipcRenderer.invoke(...args),navigationStates:()=>states});window.addEventListener('DOMContentLoaded',()=>{});`,
       );
       const entry = `
       import { app, BrowserWindow, webContents, ipcMain } from 'electron';
@@ -113,17 +113,31 @@ test(
         const uploaded=await frame.executeJavaScript("napplet.upload.upload({data:new Blob([new Uint8Array([1,2,3])]),filename:'desktop.bin'})");
         assert.equal(uploaded.status,'complete');assert.deepEqual([...Buffer.concat(chunks)],[1,2,3]);
         ipcMain.removeListener(IPC.nappletMessage,receiveUpload);
+        assert.deepEqual(await invoke(IPC.nappletNavigationState,id),{canGoBack:false,canGoForward:false});
+        assert.equal(await invoke(IPC.nappletGoForward,id),false);
         assert.equal(await invoke(IPC.nappletGoBack,id),false);
         await frame.executeJavaScript("history.pushState({page:1},'');history.pushState({page:2},'');window.pops=0;addEventListener('popstate',()=>pops++);");
         for(let i=0;i<100&&guest.navigationHistory.getActiveIndex()<2;i++)await wait(10);
         assert.equal(await invoke(IPC.nappletGoBack,id),true);
         for(let i=0;i<100&&await frame.executeJavaScript('window.pops')<1;i++)await wait(10);
         assert.deepEqual(await frame.executeJavaScript('history.state'),{page:1});
+        assert.deepEqual(await invoke(IPC.nappletNavigationState,id),{canGoBack:true,canGoForward:true});
         assert.equal(await invoke(IPC.nappletGoBack,id),true);
         for(let i=0;i<100&&await frame.executeJavaScript('window.pops')<2;i++)await wait(10);
         assert.equal(await frame.executeJavaScript('history.state'),null);
         assert.equal(await invoke(IPC.nappletGoBack,id),false);
         assert.equal(guest.isDestroyed(),false);
+        assert.deepEqual(await invoke(IPC.nappletNavigationState,id),{canGoBack:false,canGoForward:true});
+        const hasRootForwardEvent=()=>owner.webContents.executeJavaScript('window.testHost.navigationStates().some(s=>s.id==='+JSON.stringify(id)+'&&!s.canGoBack&&s.canGoForward)');
+        for(let i=0;i<100&&!await hasRootForwardEvent();i++)await wait(10);
+        assert(await hasRootForwardEvent(),'iframe history changes must notify the owning header');
+        assert.equal(await invoke(IPC.nappletGoForward,id),true);
+        for(let i=0;i<100&&await frame.executeJavaScript('window.pops')<3;i++)await wait(10);
+        assert.deepEqual(await frame.executeJavaScript('history.state'),{page:1});
+        await frame.executeJavaScript("history.replaceState({page:3},'');history.pushState({page:4},'');");
+        for(let i=0;i<100&&guest.navigationHistory.getActiveIndex()<2;i++)await wait(10);
+        assert.deepEqual(await invoke(IPC.nappletNavigationState,id),{canGoBack:true,canGoForward:false});
+        assert.equal(await invoke(IPC.nappletGoForward,id),false);
         await assert.rejects(fetchNappletResource('https://127.0.0.1/',1024));
         await invoke(IPC.nappletClose,id);assert(guest.isDestroyed());
         // Real frame callbacks must complete for module apps; mocked RAF hid a startup deadlock.

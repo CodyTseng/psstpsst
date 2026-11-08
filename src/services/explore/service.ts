@@ -28,7 +28,7 @@ let epoch = 0, serial = 0, desktopRevision = 0;
 let pendingDesktopRevision: number | undefined;
 let activation: { account: string; promise: Promise<void> } | undefined;
 let runtime: ExploreRuntime | undefined;
-let navigatingBack: ExploreRuntime | undefined;
+let navigatingHistory: ExploreRuntime | undefined;
 const parents: { runtime: ExploreRuntime; entry: ExploreEntry; containerId: string }[] = [];
 let launchLife = new AbortController();
 let reviewedAccess: {runId:number;required:readonly string[]}|undefined;
@@ -388,17 +388,24 @@ export const exploreService = {
     void runtime?.stop(); runtime = parent.runtime;
     exploreStore.setState({ entry: parent.entry, containerId: parent.containerId, surfaces: [...parents.map(frame => frame.containerId), parent.containerId], loading: false, download: undefined, error: null });
   },
-  async goBack(runId: number) {
+  async goForward(runId: number) {
+    const active = runtime, state = nappletStore.getState();
+    if (exploreStore.getState().runId !== runId || !active || navigatingHistory === active || state.prompt || state.configuration || state.overlayActive) return;
+    navigatingHistory = active;
+    try { await active.goForward(); }
+    finally { if (navigatingHistory === active) navigatingHistory = undefined; }
+  },
+  async goBack(runId: number, { closeAtRoot = true }: { closeAtRoot?: boolean } = {}) {
     const active = runtime;
     const overlay = () => { const state = nappletStore.getState(); return state.prompt || state.configuration || state.overlayActive; };
     if (exploreStore.getState().runId !== runId || overlay()) return;
-    if (!active) { this.close(runId); return; }
-    if (navigatingBack === active) return;
-    navigatingBack = active;
+    if (!active) { if (closeAtRoot) this.close(runId); return; }
+    if (navigatingHistory === active) return;
+    navigatingHistory = active;
     try {
       const handled = await active.goBack();
-      if (runtime === active && !handled && !overlay()) this.close(runId);
-    } finally { if (navigatingBack === active) navigatingBack = undefined; }
+      if (closeAtRoot && runtime === active && !handled && !overlay()) this.close(runId);
+    } finally { if (navigatingHistory === active) navigatingHistory = undefined; }
   },
   stop(runId?: number) {
     if (runId !== undefined && runId !== exploreStore.getState().runId)

@@ -80,12 +80,14 @@ export function install(options: {
     }
     transmit(raw);
   };
+  let refreshAppearance: (() => void) | undefined;
   (window as any).__exploreCommit = () => {
     if (!(window as any).__exploreDocumentCommitted) return;
     for (const raw of queued.splice(0)) transmit(raw);
+    refreshAppearance?.();
   };
-  if (!(window as any).__psstExplore)
-    observePageAppearance(color => post(JSON.stringify({ type: 'psst.appearance', color })));
+  if (typeof MutationObserver !== 'undefined')
+    refreshAppearance = observePageAppearance(color => post(JSON.stringify({ type: 'psst.appearance', color })));
   const receive = (raw: unknown) => {
     try {
       const value = typeof raw === 'string' ? JSON.parse(raw) : raw;

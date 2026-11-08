@@ -13,6 +13,8 @@ export type ResourceOptions = { accept?: 'application/json' | 'application/nostr
 export type ResourceValidators = { etag?: string; lastModified?: string };
 export type ResourceResponse = ResourceValidators & { status: 200 | 304; bytes: Uint8Array };
 
+export type ApplicationNavigationState = { canGoBack: boolean; canGoForward: boolean };
+
 /** Privileged transport only. No account credentials or application APIs cross this seam. */
 export interface NappletPort {
   windows?: ApplicationWindowsPort;
@@ -27,6 +29,9 @@ export interface NappletPort {
   capture(id: string): Promise<string | null>;
   /** Traverse the container's own history; false means it is already at its root. */
   goBack(id: string): Promise<boolean>;
+  goForward(id: string): Promise<boolean>;
+  getNavigationState(id: string): Promise<ApplicationNavigationState>;
+  addNavigationListener(listener: (id: string, state: ApplicationNavigationState) => void): () => void;
   send(id: string, message: string): Promise<void>;
   setBounds(id: string, bounds: NappletBounds, visible: boolean, interactive?: boolean): Promise<void>;
   addMessageListener(listener: (id: string, message: string) => void): () => void;

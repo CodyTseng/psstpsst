@@ -43,6 +43,15 @@ test('Explore serves verified bundles and binds NIP-07 and WebLN requests and re
     const envelope=request.message;assert.equal(envelope.origin,new URL(guest.getURL()).origin);
     await invoke(IPC.nappletSend,id,JSON.stringify({document:envelope.document,reply:{id:'1',nonce:JSON.parse(envelope.raw).nonce,result:'key'}}));
     assert.equal(await guest.executeJavaScript('window.result'),'key');
+    await guest.executeJavaScript("(()=>{const meta=document.createElement('meta');meta.name='theme-color';meta.content='#154c79';document.head.append(meta);})()");
+    const colorHint=async color=>(await events()).map(e=>({...e,message:JSON.parse(e.raw)}))
+      .find(e=>e.id===id&&e.message.type==='psst.appearance'&&e.message.color===color);
+    for(let i=0;i<100&&!await colorHint('#154c79');i++)await wait(20);
+    assert.equal((await colorHint('#154c79'))?.message.document,envelope.document,'document color must reach the owning header with its host document identity');
+    await guest.executeJavaScript("document.querySelector('meta[name=theme-color]').remove();document.body.style.backgroundColor='#facc15'");
+    for(let i=0;i<100&&!await colorHint('#facc15');i++)await wait(20);
+    assert(await colorHint('#facc15'),'desktop chrome must receive live background changes after metadata removal');
+
     let walletRequest;
     for(let i=0;i<100;i++){walletRequest=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===id&&e.message.raw?.includes('webln.getInfo'));if(walletRequest)break;await wait(20);}
     assert(walletRequest,'document-start WebLN request must be delivered');
@@ -107,8 +116,17 @@ test('Explore serves verified bundles and binds NIP-07 and WebLN requests and re
     await invoke(IPC.nappletSend,website,JSON.stringify({document:first.message.document,reply:{id:'1',nonce:JSON.parse(first.message.raw).nonce,result:'stale'}}));
     assert.equal(await guest.executeJavaScript('Promise.race([window.result,new Promise(r=>setTimeout(()=>r("pending"),50))])'),'pending');
     // Cancelling a provisional navigation must retain the DOM but rotate its native authority.
+    await guest.executeJavaScript("(()=>{const meta=document.createElement('meta');meta.name='theme-color';meta.content='#154c79';document.head.append(meta);})()");
+    const appearanceFor=async(document,color)=>(await events()).map(e=>JSON.parse(e.raw))
+      .find(e=>e.type==='psst.appearance'&&e.document===document&&e.color===color);
     const beforeCancel=await guest.executeJavaScript('window.__exploreNativeDocumentToken');
-    await guest.executeJavaScript('location.href="/next"');await wait(50);guest.stop();
+    for(let i=0;i<100&&!await appearanceFor(beforeCancel,'#154c79');i++)await wait(20);
+    assert(await appearanceFor(beforeCancel,'#154c79'));
+    // Update the retained DOM from its own timer: executeJavaScript during loading
+    // can wait for the destination instead of evaluating in the retained page.
+    await guest.executeJavaScript("setTimeout(()=>{document.querySelector('meta[name=theme-color]').content='#facc15'},20);location.href='/next';void 0");
+    // Let the observer see the new color while navigation authority is suspended.
+    await wait(140);guest.stop();
     let resumed;
     for(let i=0;i<100;i++){
       resumed=(await events()).map(e=>JSON.parse(e.raw)).find(e=>e.phase==='resume'&&e.previousDocument===beforeCancel);
@@ -126,6 +144,9 @@ test('Explore serves verified bundles and binds NIP-07 and WebLN requests and re
     const recoveredRaw=JSON.parse(recovered.raw);
     await invoke(IPC.nappletSend,website,JSON.stringify({document:resumed.document,reply:{id:recoveredRaw.id,nonce:recoveredRaw.nonce,result:'resumed-key'}}));
     assert.equal(await guest.executeJavaScript('window.afterCancel'),'resumed-key');
+    for(let i=0;i<100&&!await appearanceFor(resumed.document,'#facc15');i++)await wait(20);
+    assert(await appearanceFor(resumed.document,'#facc15'),'resuming must read the retained DOM color rather than restore its old cached hint');
+
     // Chromium may restore the DOM before or after announcing a response download; its policy must remain routable.
     const beforeDownload=await guest.executeJavaScript('window.__exploreNativeDocumentToken');
     await guest.executeJavaScript('location.href="/attachment"');
@@ -155,6 +176,9 @@ test('Explore serves verified bundles and binds NIP-07 and WebLN requests and re
     const afterDownloadRaw=JSON.parse(afterDownloadRequest.raw);
     await invoke(IPC.nappletSend,website,JSON.stringify({document:afterDownloadRequest.document,reply:{id:afterDownloadRaw.id,nonce:afterDownloadRaw.nonce,result:'download-cancelled'}}));
     assert.equal(await guest.executeJavaScript('window.afterDownload'),'download-cancelled');
+    for(let i=0;i<100&&!await appearanceFor(downloadResume.document,'#facc15');i++)await wait(20);
+    assert(await appearanceFor(downloadResume.document,'#facc15'),'download recovery must republish the unchanged current color for the new document identity');
+
     const frame=guest.mainFrame.frames[0];if(frame) { assert.equal(await frame.executeJavaScript('typeof window.nostr'),'undefined'); assert.equal(await frame.executeJavaScript('typeof window.webln'),'undefined'); assert.equal(await frame.executeJavaScript('typeof top.nostr.getPublicKey'),'function','same-origin frames share the origin authority'); }
     await guest.executeJavaScript('localStorage.setItem("account-secret","A")');
     const openWebsite=async account=>{

@@ -36,7 +36,7 @@ export type { FontWeight, TextVariant } from './typography';
 export { ACCENTS, ACCENT_KEYS };
 export type { AccentKey, AccentSelection };
 
-/** Transient subtree palette; draft appearance never changes persisted preferences. */
+/** Transient palette for draft appearance and validated runtime chrome; never persisted. */
 export const ThemeColorsContext = createContext<ThemeColors | null>(null);
 
 export function useThemeColors(): ThemeColors {

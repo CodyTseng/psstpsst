@@ -53,6 +53,8 @@ const theme = (): RuntimeTheme => {
   return value;
 };
 
+const navigatingHistory = new WeakSet<ExploreRuntime | NappletRuntime>();
+
 /** All task runtimes share the trusted process; each owns its WebView and cancellation scope. */
 export const applicationTasks = {
   async open(entry: ExploreEntry, account: string, reviewed?: readonly string[], delivery?: Record<string, unknown>): Promise<void> {
@@ -227,10 +229,30 @@ export const applicationTasks = {
     }).finally(() => { session.starting = undefined; });
     await session.starting;
   },
-  async back(id: string) {
+  async back(id: string, { closeAtRoot = true }: { closeAtRoot?: boolean } = {}) {
+    const blocked = () => {
+      const state = nappletStore.getState();
+      return state.prompt || state.configuration || state.panel || state.overlayActive || state.sharing;
+    };
+    if (blocked()) return;
     const runtime = sessions.get(id)?.runtime;
-    if (runtime && applicationTaskStore.getState().sessions.get(id)?.containerId && await runtime.goBack()) return;
-    await this.close(id);
+    if (runtime && applicationTaskStore.getState().sessions.get(id)?.containerId) {
+      if (navigatingHistory.has(runtime)) return;
+      navigatingHistory.add(runtime);
+      try {
+        if (await runtime.goBack() || sessions.get(id)?.runtime !== runtime || blocked()) return;
+      } finally { navigatingHistory.delete(runtime); }
+    }
+    if (closeAtRoot) await this.close(id);
+  },
+  async forward(id: string) {
+    const state = nappletStore.getState();
+    if (state.prompt || state.configuration || state.panel || state.overlayActive || state.sharing) return;
+    const runtime = sessions.get(id)?.runtime;
+    if (!runtime || !applicationTaskStore.getState().sessions.get(id)?.containerId || navigatingHistory.has(runtime)) return;
+    navigatingHistory.add(runtime);
+    try { await runtime.goForward(); }
+    finally { navigatingHistory.delete(runtime); }
   },
   async restart(id: string, entry: ExploreEntry) {
     const old = sessions.get(id), previous = applicationTaskStore.getState().sessions.get(id);

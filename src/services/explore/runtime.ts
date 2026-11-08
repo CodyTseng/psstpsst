@@ -546,6 +546,11 @@ export class ExploreRuntime {
     if (!this.document || !this.nonce) throw new Error('application-not-ready');
     await this.dispatch('nap', [{ type: 'config.openSettings' }], () => assertNotAborted(this.documentLife.signal), this.documentLife.signal, this.nonce);
   }
+  async goForward(): Promise<boolean> {
+    assertNotAborted(this.lifetime.signal);
+    if (!this.containerId) return false;
+    return platform.napplet.goForward(this.containerId);
+  }
   async goBack(): Promise<boolean> {
     assertNotAborted(this.lifetime.signal);
     if (!this.containerId) return false;

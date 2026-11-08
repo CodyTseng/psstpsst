@@ -16,7 +16,7 @@ import org.json.JSONObject
 
 private const val ORIGIN = "https://napplet.psstpsst.invalid"
 
-internal class NappletWebView(context: Context, private val onMessage: (String) -> Unit) : WebView(context) {
+internal class NappletWebView(context: Context, private val onNavigationState: (Map<String, Boolean>) -> Unit = {}, private val onMessage: (String) -> Unit) : WebView(context) {
   private val web get() = this
   @Volatile private var html = ""
   private val documentUrl = "$ORIGIN/${java.util.UUID.randomUUID()}"
@@ -137,7 +137,11 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       override fun onPageStarted(view: WebView, value: String, favicon: android.graphics.Bitmap?) {
         if(page != null) { documentNavigating=true;cancelBrowser();chrome.navigation();document=java.util.UUID.randomUUID().toString();onMessage(JSONObject(envelope("explore.navigation")).put("phase","start").toString()) }
       }
+      override fun doUpdateVisitedHistory(view: WebView, value: String?, isReload: Boolean) {
+        publishNavigationState()
+      }
       override fun onPageFinished(view: WebView, value: String) {
+        publishNavigationState()
         if (page != null && documentNavigating) restoreCommittedDocument()
       }
       override fun onPageCommitVisible(view: WebView, value: String) {
@@ -246,8 +250,23 @@ internal class NappletWebView(context: Context, private val onMessage: (String) 
       if (!disposed) web.evaluateJavascript("window.__hostReceive && window.__hostReceive(JSON.parse(${JSONObject.quote(message)}))", null)
     }
   }
+  private var lastNavigationState: Map<String, Boolean>? = null
+  fun navigationState(): Map<String, Boolean> {
+    if (disposed) return mapOf("canGoBack" to false, "canGoForward" to false)
+    // Check adjacent offsets without copying the full back/forward list.
+    return mapOf("canGoBack" to canGoBackOrForward(-1), "canGoForward" to canGoBackOrForward(1))
+  }
+  private fun publishNavigationState() {
+    val state = navigationState()
+    if (state != lastNavigationState) { lastNavigationState = state; onNavigationState(state) }
+  }
+  fun navigateForward(): Boolean {
+    if (!navigationState().getValue("canGoForward")) return false
+    evaluateJavascript("history.forward()", null)
+    return true
+  }
   fun navigateBack(): Boolean {
-    if (disposed || copyBackForwardList().currentIndex <= 0) return false
+    if (disposed || !canGoBackOrForward(-1)) return false
     // Programmatic History traversal retains entries without user activation.
     evaluateJavascript("history.back()", null)
     return true

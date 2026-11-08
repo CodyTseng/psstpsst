@@ -1102,3 +1102,30 @@ it.each([false, true])('keeps nested level-derived access out of saved grants (f
     jest.mocked(readAppAuthorizationLevel).mockResolvedValue('manual');
   }
 });
+
+it('keeps a root page open for header Back while system Back still closes it', async () => {
+  const id = exploreService.prepare(website, 'account');
+  await exploreService.start(id);
+  const runtime = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+  runtime.goBack = jest.fn(async () => false);
+  await exploreService.goBack(id, { closeAtRoot: false });
+  expect(runtime.stop).not.toHaveBeenCalled();
+  expect(exploreStore.getState().entry).not.toBe(null);
+  await exploreService.goBack(id);
+  expect(runtime.stop).toHaveBeenCalledTimes(1);
+  expect(exploreStore.getState().entry).toBe(null);
+});
+
+it('keeps a root task open for header Back while system Back still closes it', async () => {
+  await applicationTasks.open(website, 'account');
+  const id = [...applicationTaskStore.getState().sessions.keys()].at(-1)!;
+  await applicationTasks.start(id);
+  const runtime = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+  runtime.goBack = jest.fn(async () => false);
+  await applicationTasks.back(id, { closeAtRoot: false });
+  expect(platform.napplet.tasks!.close).not.toHaveBeenCalled();
+  expect(applicationTaskStore.getState().sessions.has(id)).toBe(true);
+  await applicationTasks.back(id);
+  expect(platform.napplet.tasks!.close).toHaveBeenCalledWith(id);
+  expect(applicationTaskStore.getState().sessions.has(id)).toBe(false);
+});

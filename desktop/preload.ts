@@ -140,6 +140,13 @@ const bridge: ElectronBridge = {
     openPage: (page) => invoke(IPC.exploreOpen, page),
     capture: (id) => invoke(IPC.nappletCapture, id),
     goBack: (id) => invoke(IPC.nappletGoBack, id),
+    goForward: (id) => invoke(IPC.nappletGoForward, id),
+    getNavigationState: (id) => invoke(IPC.nappletNavigationState, id),
+    onNavigation: listener => {
+      const handler = (_event: unknown, id: string, state: import('../src/platform/ports/napplet').ApplicationNavigationState) => listener(id, state);
+      ipcRenderer.on(IPC.nappletNavigation, handler);
+      return () => { ipcRenderer.removeListener(IPC.nappletNavigation, handler); };
+    },
     open: (html) => invoke(IPC.nappletOpen, html), close: (id) => invoke(IPC.nappletClose, id),
     send: (id, message) => invoke(IPC.nappletSend, id, message),
     setBounds: (id, bounds, visible, interactive) => invoke(IPC.nappletBounds, id, bounds, visible, interactive),

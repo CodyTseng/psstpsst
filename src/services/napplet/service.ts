@@ -85,7 +85,7 @@ const approvals = new PromptQueue((prompt, approvalClosing) => nappletStore.setS
 let theme: RuntimeTheme | null = null;
 let opening = 0;
 let launchDownload: AbortController | null = null;
-let navigatingBack: NappletRuntime | null = null;
+let navigatingHistory: NappletRuntime | null = null;
 let runSerial = 0;
 
 function check(account: string, epoch: number) {
@@ -384,17 +384,24 @@ export const nappletService = {
       throw error;
     }
   },
-  async goBack() {
+  async goForward() {
+    const active = runtime, state = nappletStore.getState();
+    if (!active || navigatingHistory === active || state.sharing || state.overlayActive || state.prompt || state.panel || state.configuration) return;
+    navigatingHistory = active;
+    try { await active.goForward(); }
+    finally { if (navigatingHistory === active) navigatingHistory = null; }
+  },
+  async goBack({ closeAtRoot = true }: { closeAtRoot?: boolean } = {}) {
     const active = runtime;
     const state = nappletStore.getState();
-    if (!active || navigatingBack === active || state.sharing || state.overlayActive || state.prompt || state.panel || state.configuration) return;
-    navigatingBack = active;
+    if (!active || navigatingHistory === active || state.sharing || state.overlayActive || state.prompt || state.panel || state.configuration) return;
+    navigatingHistory = active;
     try {
       const handled = await active.goBack();
       const latest = nappletStore.getState();
-      if (runtime === active && !handled && !latest.sharing && !latest.overlayActive && !latest.prompt && !latest.panel && !latest.configuration) this.stop();
+      if (closeAtRoot && runtime === active && !handled && !latest.sharing && !latest.overlayActive && !latest.prompt && !latest.panel && !latest.configuration) this.stop();
     } finally {
-      if (navigatingBack === active) navigatingBack = null;
+      if (navigatingHistory === active) navigatingHistory = null;
     }
   },
   stop(expectedRunId?: number) {

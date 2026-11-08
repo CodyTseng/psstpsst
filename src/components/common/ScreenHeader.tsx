@@ -11,6 +11,7 @@ import { AppButton } from './AppButton';
 import { AppText } from './AppText';
 import { ChromeBackdrop } from './ChromeBackdrop';
 import { ChromeDivider } from './ChromeDivider';
+import { CenteredHeaderTitle } from './CenteredHeaderTitle';
 
 type Props = {
   /** Centered title. Omit for a bare back bar (e.g. over a large-title body). */
@@ -104,19 +105,7 @@ export function ScreenHeader({
         }]}
       >
         {titleControl || title ? (
-          <View
-            style={[titleControl ? styles.passThrough : styles.nonInteractive, {
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              alignItems: 'center',
-              justifyContent: 'center',
-              // Keep the centered title clear of the side accessories.
-              paddingHorizontal: titleSideInset,
-            }]}
-          >
+          <CenteredHeaderTitle sideInset={titleSideInset} interactive={!!titleControl}>
             {titleControl ? (
               // `AppButton fullWidth={false}` hugs its content with
               // `alignSelf: flex-start`; this shrink-wrapping parent is what
@@ -127,12 +116,14 @@ export function ScreenHeader({
                 variant="subtitle"
                 weight="semibold"
                 numberOfLines={1}
-                style={{ color: overMedia ? c.onOverlay : c.text, userSelect: 'none' }}
+                align="center"
+                ellipsizeMode="tail"
+                style={{ color: overMedia ? c.onOverlay : c.text, userSelect: 'none', maxWidth: '100%', flexShrink: 1 }}
               >
                 {title}
               </AppText>
             )}
-          </View>
+          </CenteredHeaderTitle>
         ) : null}
 
         <View
@@ -211,5 +202,4 @@ export function ScreenHeader({
 // registered styles; an inline box-none value leaves the overlay hit-testable.
 const styles = StyleSheet.create({
   passThrough: { pointerEvents: 'box-none' },
-  nonInteractive: { pointerEvents: 'none' },
 });

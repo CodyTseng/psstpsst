@@ -12,21 +12,22 @@ import {
 import { View } from 'react-native';
 
 import { AppText } from '@/components/common/AppText';
+import { CenteredHeaderTitle } from './CenteredHeaderTitle';
 import { DESKTOP_OS, IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { useThemeStore } from '@/stores/theme.store';
 import { serializeAccent } from '@/theme/accents';
-import { desktopChrome, spacing, uiDensity, useThemeColors } from '@/theme';
+import { desktopChrome, spacing, uiDensity, useThemeColors, ThemeColorsContext, type ThemeColors } from '@/theme';
 
 const TITLEBAR_HEIGHT = desktopChrome.titlebarHeight;
-type WindowTitlebar = { title?: string; actions?: ReactNode };
+type WindowTitlebar = { title?: string; actions?: ReactNode; navigation?: ReactNode; navigationWidth?: number; colors?: ThemeColors };
 const WindowTitlebarContext = createContext<(value: WindowTitlebar | null) => void>(() => {});
 
 /** Application hosts place their existing actions in the window's single title bar. */
 export function useDesktopWindowTitlebar(value: WindowTitlebar | null) {
   const setTitlebar = useContext(WindowTitlebarContext);
-  const title = value?.title, actions = value?.actions, enabled = value !== null;
-  useLayoutEffect(() => { if (IS_ELECTRON && enabled) setTitlebar({ title, actions }); }, [setTitlebar, title, actions, enabled]);
+  const title = value?.title, actions = value?.actions, navigation = value?.navigation, navigationWidth = value?.navigationWidth, colors = value?.colors, enabled = value !== null;
+  useLayoutEffect(() => { if (IS_ELECTRON && enabled) setTitlebar({ title, actions, navigation, navigationWidth, colors }); }, [setTitlebar, title, actions, navigation, navigationWidth, colors, enabled]);
   useLayoutEffect(() => () => { if (IS_ELECTRON && enabled) setTitlebar(null); }, [setTitlebar, enabled]);
 }
 
@@ -83,12 +84,19 @@ export function useImmersiveDesktopTitlebarWhileMounted(enabled: boolean) {
  * overlay so artwork continues beneath the OS caption buttons.
  */
 function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: { immersive: boolean; application: WindowTitlebar | null; defaultTitle?: string }) {
-  const c = useThemeColors();
+  const hostColors = useThemeColors();
+  const c = application?.colors ?? hostColors;
   const preference = useThemeStore(state => state.preference);
   const accent = useThemeStore(state => serializeAccent(state.accent));
   const appearanceLoaded = useThemeStore(state => state.loaded);
   const dragRef = useDesktopWindowDragRegion();
   const actionRef = useDesktopWindowDragRegion(false);
+  const navigationRef = useDesktopWindowDragRegion(false);
+  const navigationWidth = application?.navigationWidth ?? 0;
+  const titleSideInset = application
+    ? Math.max((DESKTOP_OS === 'darwin' ? desktopChrome.nativeControlsWidth : 0) + navigationWidth,
+      (DESKTOP_OS === 'darwin' ? 0 : desktopChrome.nativeControlsWidth) + (application.actions ? uiDensity.headerActionSize : 0)) + spacing.sm + spacing.lg
+    : desktopChrome.nativeControlsWidth;
   const height = application ? desktopChrome.applicationTitlebarHeight : TITLEBAR_HEIGHT;
   const title = application?.title ?? defaultTitle;
   useLayoutEffect(() => {
@@ -99,8 +107,8 @@ function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: 
   }, [actionRef]);
   useEffect(() => { void platform.windowChrome.setTitle(title).catch(() => {}); }, [title]);
 
-  // Keep the OS-painted frame parts (window background, Windows/Linux caption
-  // overlay) on the effective theme, including Settings → Appearance overrides.
+  // Match the OS-painted frame parts to the active title-bar palette without
+  // changing the host's persisted appearance preference.
   useEffect(() => {
     void platform.windowChrome.setTheme({
       ...(appearanceLoaded ? { appearance: { preference, accent } } : {}),
@@ -113,7 +121,7 @@ function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: 
   }, [c.background, c.surfaceMuted, c.text, immersive, height, appearanceLoaded, preference, accent]);
 
   return (
-    <View
+    <ThemeColorsContext.Provider value={c}><View
       ref={dragRef}
       testID="desktop-window-titlebar"
       style={{
@@ -133,18 +141,23 @@ function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: 
       }}
     >
       {immersive ? null : (
-        <AppText variant="caption" numberOfLines={1} align="center" style={{ userSelect: 'none', maxWidth: '100%',
-          marginHorizontal: application ? desktopChrome.nativeControlsWidth + uiDensity.headerActionSize + spacing.lg : desktopChrome.nativeControlsWidth }}>
-          {title}
-        </AppText>
+        <CenteredHeaderTitle sideInset={titleSideInset}>
+          <AppText variant="caption" numberOfLines={1} ellipsizeMode="tail" align="center" style={{ userSelect: 'none', maxWidth: '100%' }}>
+            {title}
+          </AppText>
+        </CenteredHeaderTitle>
       )}
+      <View ref={navigationRef} testID="desktop-window-navigation" style={{ position: 'absolute', top: 0, bottom: 0,
+        // Navigation follows the physical system caption controls on macOS.
+        left: DESKTOP_OS === 'darwin' ? desktopChrome.nativeControlsWidth + spacing.sm : spacing.sm,
+        justifyContent: 'center' }}>{application?.navigation}</View>
       <View ref={actionRef} style={{ position: 'absolute', top: 0, bottom: 0,
         // Native caption controls retain their physical OS position in RTL layouts.
         right: DESKTOP_OS === 'darwin' ? spacing.sm : desktopChrome.nativeControlsWidth,
         justifyContent: 'center' }}>
         {application?.actions}
       </View>
-    </View>
+    </View></ThemeColorsContext.Provider>
   );
 }
 

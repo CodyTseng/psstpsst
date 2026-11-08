@@ -33,6 +33,8 @@ jest.mock('expo-router', () => ({ router: { back: jest.fn() }, useFocusEffect: j
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused, usePreventRemove: jest.fn() }));
 jest.mock('@/components/common/use-focused-overlay-dismiss', () => ({ useFocusedOverlayDismiss: jest.fn() }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('lucide-react-native/icons/chevron-left', () => () => null);
+jest.mock('lucide-react-native/icons/chevron-right', () => () => null);
 jest.mock('lucide-react-native/icons/x', () => () => null);
 jest.mock('lucide-react-native/icons/ellipsis', () => () => null);
 jest.mock('@solar-icons/react-native/category/arrows-action/Linear/SquareTopDown', () => ({ SquareTopDown: () => null }), { virtual: true });
@@ -44,11 +46,12 @@ jest.mock('@/components/common/AppText', () => ({ AppText: ({ children }: { chil
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('@/components/napplet/ApplicationIcon', () => ({ APPLICATION_ICON_SIZE: 64, ApplicationIcon: () => null }));
 jest.mock('@/platform/napplet-surface', () => ({ NappletSurface: () => null }));
+jest.mock('@/hooks/use-application-navigation', () => ({ useApplicationNavigation: () => ({ canGoBack: false, canGoForward: false }) }));
 jest.mock('@/platform/napplet-appearance', () => ({ useNappletAppearance: (id?: string) => id === 'test'
   ? { background: '#121212', dark: true } : undefined }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: { stop: jest.fn(), goBack: jest.fn(async () => {}), openPanel: jest.fn(), startPreparedOpen: jest.fn(), retryOpen: jest.fn() } }));
 jest.mock('@/stores/napplet.store', () => ({ useNapplets: () => ({ running: mockRunning, launching: mockLaunching, launch: mockLaunch, runId: mockRunId, panel: mockPanel, overlayActive: mockOverlayActive, sharing: mockSharing }) }));
-jest.mock('@/theme', () => ({ contentWidth: { sheet: 480 }, radius: { full: 9999 }, spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { iconButtonSize: 32, headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text', accent: 'accent' }) }));
+jest.mock('@/theme', () => ({ ThemeColorsContext: jest.requireActual('react').createContext(null), contentWidth: { sheet: 480 }, radius: { full: 9999 }, spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { iconButtonSize: 32, headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text', accent: 'accent' }) }));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -170,7 +173,7 @@ it('places explicit close at the start and sends system back to the app', async 
   let renderer!: ReactTestRenderer;
   act(() => { renderer = create(<NappletRunScreen />); });
   const header = renderer.root.findByType(ScreenHeader);
-  expect(header.props.left.props.accessibilityLabel).toBe('common.close');
+  expect(header.props.left.props.children[0].props.accessibilityLabel).toBe('common.close');
   expect(header.props.right.props.accessibilityLabel).toBe('applications.runtime_more');
   const [active, back] = jest.mocked(useFocusedOverlayDismiss).mock.calls.at(-1)!;
   expect(active).toBe(true);
@@ -182,7 +185,7 @@ it('places explicit close at the start and sends system back to the app', async 
   await act(async () => { preventedBack({ data: { action: { type: 'GO_BACK' } } }); });
   expect(nappletService.goBack).toHaveBeenCalledTimes(2);
   expect(mockDispatch).not.toHaveBeenCalled();
-  act(() => { header.props.left.props.onPress(); });
+  act(() => { header.props.left.props.children[0].props.onPress(); });
   expect(nappletService.stop).toHaveBeenCalledTimes(1);
   act(() => renderer.unmount());
 });
