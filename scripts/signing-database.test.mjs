@@ -63,6 +63,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
       export function browserPermissions() { return require(${JSON.stringify(path.resolve('src/services/explore/browser-permission-store.ts'))}); }
       export function exploreRepository() { return require(${JSON.stringify(path.resolve('src/services/explore/repository.ts'))}); }
       export function appRepository() { return require(${JSON.stringify(path.resolve('src/services/napplet/repository.ts'))}); }
+      export function domainPermissions() { return { ...require(${JSON.stringify(path.resolve('src/services/napplet/domain-permissions.ts'))}), ...require(${JSON.stringify(path.resolve('src/services/napplet/domain-permission-writes.ts'))}) }; }
       export function permissions() { return require(${JSON.stringify(path.resolve('src/services/signing/permissions.ts'))}); }
     `, loader: 'ts', resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', outfile: output,
       plugins: [{ name: 'db', setup(builder) {
@@ -84,6 +85,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
       } }],
     });
     const { default: fixture } = await import(pathToFileURL(output).href);
+    let transactionTail = Promise.resolve();
     const executor = {
       async execute(query, params, method) {
         const statement = sqlite.prepare(query);
@@ -91,10 +93,14 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
         statement.setReturnArrays(true);
         return { rows: method === 'get' ? statement.get(...params) : statement.all(...params) };
       },
-      async transaction(task) {
-        sqlite.exec('BEGIN');
-        try { const result = await task(executor); sqlite.exec('COMMIT'); return result; }
-        catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+      transaction(task) {
+        const run = transactionTail.then(async () => {
+          sqlite.exec('BEGIN');
+          try { const result = await task(executor); sqlite.exec('COMMIT'); return result; }
+          catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+        });
+        transactionTail = run.catch(() => {});
+        return run;
       },
     };
     globalThis.__signingDatabaseTest = fixture.createAsyncDatabase(executor, fixture.schema);
@@ -137,6 +143,14 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     sqlite.exec(readFileSync('src/db/migrations/0077_event-keys.sql', 'utf8'));
     await fixture.migrateEventKeys(globalThis.__signingDatabaseTest);
     sqlite.exec(readFileSync('src/db/migrations/0082_signing-authorization-scope.sql', 'utf8'));
+    const beforeLevels = sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all();
+    sqlite.exec(readFileSync('src/db/migrations/0083_signing-levels.sql', 'utf8'));
+    assert.deepEqual(sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all(), beforeLevels);
+    sqlite.prepare('INSERT INTO signing_preferences (account_pubkey,source_id,level) VALUES (?,?,?)').run('A', 'https://migration.example', 'routine');
+    sqlite.exec(readFileSync('src/db/migrations/0084_app-authorization.sql', 'utf8'));
+    assert.equal(sqlite.prepare('SELECT level FROM app_authorization_preferences WHERE account_pubkey=? AND source_id=?').get('A', 'https://migration.example').level, 'routine', 'renaming preserves existing authorization levels');
+    assert.deepEqual(sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all(), beforeLevels, 'renaming preserves single-operation rules');
+
     sqlite.exec('COMMIT');
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name IN ('explore_shortcuts','legacy_explore_shortcuts')").get().n, 0);
     const explore=fixture.exploreRepository();
@@ -198,6 +212,40 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
       accountPubkey: scope.accountPubkey, content: '', createdAt: 1,
       tags: [['d', `record-${index}-${'x'.repeat(5000)}`]] });
 
+    const levelScope = { accountPubkey: 'A', sourceId: 'https://level.example' };
+    for (const level of ['manual', 'routine', 'trusted']) {
+      await repository.saveAppAuthorizationLevel(levelScope, level);
+      assert.equal((await repository.readSigningSnapshot(levelScope)).level, level);
+    }
+    assert.equal((await repository.readSigningSnapshot({ ...levelScope, accountPubkey: 'B' })).level, undefined);
+    assert.equal((await repository.readSigningSnapshot({ ...levelScope, sourceId: 'https://other.example' })).level, undefined);
+    await assert.rejects(repository.saveAppAuthorizationLevel(levelScope, 'invalid'), /invalid-app-authorization-level/);
+    await assert.rejects(repository.saveAppAuthorizationLevel(levelScope, 'manual', () => { throw new Error('revoked'); }), /revoked/);
+    assert.equal((await repository.readSigningSnapshot(levelScope)).level, 'trusted');
+    await repository.clearSigningPermissions(levelScope);
+    assert.equal((await repository.readSigningSnapshot(levelScope)).level, undefined);
+    await repository.saveAppAuthorizationLevel(levelScope, 'routine');
+    const accessScope = { accountPubkey: 'A', appKey: levelScope.sourceId };
+    const domains = fixture.domainPermissions();
+    await appRepository.setData(accessScope, 'permissions', 'domains', '["theme"]');
+    await appRepository.setData(accessScope, 'permissions', 'denied-domains', '["storage"]');
+    await domains.saveDomainPermissionChanges(accessScope, [{ domain: 'inc', enabled: true }], () => {});
+    assert.equal(await appRepository.getData(accessScope, 'permissions', 'denied-domains'), '["storage"]');
+    assert.equal((await repository.readSigningSnapshot(levelScope)).level, 'routine');
+    await repository.saveAppAuthorizationLevel(levelScope, 'manual');
+    const accessManifest = { required: [], optional: ['theme', 'storage', 'inc', 'resource'] };
+    assert(!(await domains.readDomainPermissions(accessScope, accessManifest)).domains.includes('storage'));
+    await Promise.all([
+      domains.saveDomainPermissionChanges(accessScope, [{ domain: 'resource', enabled: true }], () => {}),
+      domains.saveDomainPermissionChanges(accessScope, [{ domain: 'inc', enabled: false }], () => {}),
+    ]);
+    assert.deepEqual(JSON.parse(await appRepository.getData(accessScope, 'permissions', 'domains')), ['theme', 'resource']);
+    assert.deepEqual(JSON.parse(await appRepository.getData(accessScope, 'permissions', 'denied-domains')), ['storage', 'inc']);
+    let guards = 0;
+    await assert.rejects(domains.saveDomainPermissionChanges(accessScope, [{ domain: 'storage', enabled: true }], () => {
+      if (++guards === 2) throw new Error('cancelled');
+    }), /cancelled/);
+    assert.deepEqual(JSON.parse(await appRepository.getData(accessScope, 'permissions', 'denied-domains')), ['storage', 'inc']);
     let prompts = 0;
     const permissions = new SigningPermissions(scope, async () => { prompts++; return 'allow-always'; }, controller.signal, () => {});
     // Exercise the real repository: memory repositories cannot catch SQL CHECK failures.
@@ -215,7 +263,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
       await reloaded.edit(accessRule, { decision: 'deny', duration: 'always' });
       await assert.rejects(reloaded.authorizeAccess(operation), /permission-denied/);
       await reloaded.edit(accessRule, { decision: 'ask', duration: 'always' });
-      assert(!(await repository.readSigningSnapshot(scope)).rules.some(entry => entry.scope.operation === operation));
+      assert.equal((await repository.readSigningSnapshot(scope)).rules.find(entry => entry.scope.operation === operation)?.decision, 'ask');
       const expiresAt = Date.now() + 600000;
       await reloaded.edit(accessRule, { decision: 'allow', duration: 'timed', expiresAt });
       const timedRule = (await repository.readSigningSnapshot(scope)).rules.find(entry => entry.scope.operation === operation);
@@ -273,8 +321,8 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     await permissions.edit(rule, { decision: 'deny', duration: 'always' });
     await assert.rejects(permissions.authorize(request), /permission-denied/);
     await permissions.edit(rule, { decision: 'ask', duration: 'always' });
-    assert(!(await repository.readSigningSnapshot(scope)).rules.some((entry) => entry.scope.kind === 1));
-    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM signing_authorizations WHERE source_id=? AND kind=1').get(sourceId).n, 0);
+    assert.equal((await repository.readSigningSnapshot(scope)).rules.find(entry => entry.scope.kind === 1)?.decision, 'ask');
+    assert.equal(sqlite.prepare('SELECT decision FROM signing_authorizations WHERE source_id=? AND kind=1').get(sourceId).decision, 'ask');
     for (let i = 0; i < 40; i++) await repository.recordSigningActivity(scope, { scope: { operation: 'publish', kind: i }, at: i, decision: 'allowed' });
     assert.equal((await repository.readSigningSnapshot(scope)).activity.length, 32);
     assert(!JSON.stringify(sqlite.prepare('SELECT * FROM signing_activity').all()).includes(request.content));
@@ -300,7 +348,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     await browser.saveBrowserPermissions(scope, ['clipboard-read'], 'allow', null);
     controller.abort();
     sqlite.prepare('DELETE FROM accounts WHERE pubkey=?').run('A');
-    for (const table of ['napplet_data', 'napplet_usage', 'napplet_data_legacy', 'signing_authorizations', 'signing_activity', 'browser_authorizations'])
+    for (const table of ['napplet_data', 'napplet_usage', 'napplet_data_legacy', 'signing_authorizations', 'app_authorization_preferences', 'signing_activity', 'browser_authorizations'])
       assert.equal(sqlite.prepare(`SELECT count(*) AS n FROM ${table} WHERE account_pubkey=?`).get('A').n, 0);
     assert.equal(sqlite.prepare('SELECT value FROM napplet_data WHERE account_pubkey=?').get('B').value, 'other-account');
     await assert.rejects(repository.saveSigningRule(scope, saved.rules[0]), /account-unavailable/);

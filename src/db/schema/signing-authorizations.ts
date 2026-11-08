@@ -10,7 +10,7 @@ export const signingAuthorizations = sqliteTable('signing_authorizations', {
   kind: integer('kind').notNull(),
   /** Operation-specific permission qualifier; addressable events use their d-tag value. */
   scopeKey: text('scope_key').notNull().default(''),
-  decision: text('decision', { enum: ['allow', 'deny'] }).notNull(),
+  decision: text('decision', { enum: ['allow', 'deny', 'ask'] }).notNull(),
   expiresAt: integer('expires_at'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),

@@ -1379,7 +1379,18 @@
     "ask_every_time": "السؤال في كل مرة",
     "default_app_title": "التطبيق الافتراضي",
     "default_app_current": "يُفتح تلقائيًا حاليًا باستخدام {{app}}.",
-    "ask_every_time_notice": "اختر تطبيقًا لكل طلب."
+    "ask_every_time_notice": "اختر تطبيقًا لكل طلب.",
+    "app_authorization_level_title": "معالجة الطلبات",
+    "app_authorization_level_intro": "اختر كيفية معالجة طلبات هذا التطبيق.",
+    "app_authorization_level_manual": "الموافقة بشكل منفصل",
+    "app_authorization_level_manual_description": "السؤال إذا لم يوجد قرار محفوظ.",
+    "app_authorization_level_routine": "الاستخدام اليومي (موصى به)",
+    "app_authorization_level_routine_description": "السماح بالوصول الأساسي والتوقيع والتشفير المعتادين، والسؤال عن الباقي.",
+    "app_authorization_level_trusted": "الوثوق بهذا التطبيق",
+    "app_authorization_level_trusted_description": "السماح بالوصول الأساسي وجميع عمليات التوقيع والتشفير وفك التشفير.",
+    "app_authorization_level_boundaries": "تحتاج مدفوعات المحفظة والوصول إلى الجهاز إلى موافقة منفصلة.",
+    "app_authorization_level_unset": "لم يتم الاختيار",
+    "app_authorization_level_continue": "متابعة"
   },
   "comments": {
     "title": "التقييمات",
@@ -1396,6 +1407,8 @@
     "public_as": "النشر علنًا باسم {{name}}"
   },
   "webln": {
+    "access_title": "الوصول إلى المحفظة",
+    "access_notice": "السماح بالوصول إلى المحفظة؟ لا تزال المدفوعات تتطلب التأكيد.",
     "invoice_title": "إنشاء طلب دفع"
   },
   "wallpaper": {

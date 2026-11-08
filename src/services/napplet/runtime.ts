@@ -1,3 +1,4 @@
+import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
 import type { WalletApprovalRequest } from '@/lib/wallet/approval';
 import { isEventTemplate } from '@/lib/nostr/event-validation';
 import { normalizeSigningSource } from '@/services/signing/source';
@@ -48,6 +49,8 @@ export type RuntimePrompt = {
   app?: NappletRelease;
   accountPubkey?: string;
   signing?: SigningRequest;
+  appAuthorizationLevel?: boolean;
+  walletAccess?: boolean;
   upload?: { filename: string; mimeType: string; size: number; sha256: string; servers: string[] };
   crypto?: { operation: 'encrypt' | 'decrypt'; algorithm: 'nip04' | 'nip44' };
   device?: { operation: 'save-file' | 'copy-text' };
@@ -303,7 +306,7 @@ export class NappletRuntime {
     let pending = this.domainRequests.get(domain);
     if (!pending) {
       pending = queueAuthorization(appSigningScope(this.scope), [this.signal], async () => {
-        const { domains: granted, denied } = await readDomainPermissions(this.scope, this.options.release, this.options.domains);
+        const { domains: granted, denied, granted: remembered, level } = await readDomainPermissions(this.scope, this.options.release, this.options.domains);
         this.check();
         if (!granted.includes(domain)) {
           if (denied.includes(domain)) {
@@ -322,7 +325,7 @@ export class NappletRuntime {
           }
           if (answer !== 'allow') throw new Error('permission-denied');
           granted.push(domain);
-          await setData(this.scope, 'permissions', 'domains', JSON.stringify(granted));
+          await setData(this.scope, 'permissions', 'domains', JSON.stringify(granted.filter(domain=>remembered.includes(domain)||!automaticallyAllowsAccess(level,domain))));
           this.check();
           this.options.permissionsChanged?.();
         }

@@ -1,3 +1,6 @@
+import { ensureAppAuthorizationLevel } from '@/services/app-authorization/level';
+import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
+import { normalizeSigningSource } from '@/services/signing/source';
 import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { resolveFavoriteMetadata } from './favorite-metadata';
 import { createStore } from 'zustand/vanilla';
@@ -140,11 +143,17 @@ export const applicationTasks = {
       const optional = (entry.release ? nappletAccessDomains(entry.release.optional) : []).filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain));
       const sourceId = entry.release?.eventKey ?? applicationSigningSource(entry);
       const scope = { accountPubkey: account, appKey: sourceId };
+      const level = entry.kind === 'website' ? undefined : await ensureAppAuthorizationLevel({ accountPubkey: account, sourceId: normalizeSigningSource(sourceId),
+        ...(entry.local ? { localVersion: entry.local.version } : {}) }, requestSignal => confirm({ title: entry.title,
+          detail: '', accountPubkey: account, appAuthorizationLevel: true,
+          ...(entry.release ? { app: entry.release } : { application: applicationPresentation(entry) }) }, requestSignal), signal, current);
       const access = entry.release ? await readDomainPermissions(scope, entry.release) : undefined;
-      const stored = access ? null : await getData(scope, 'permissions', 'domains'); current();
+      const stored = access || entry.kind === 'website' ? null : await getData(scope, 'permissions', 'domains'); current();
       const saved: unknown = stored ? JSON.parse(stored) : [];
       let domains = Array.isArray(saved) ? saved.filter((domain): domain is string => typeof domain === 'string' && (required.includes(domain) || optional.includes(domain))) : [];
+      const remembered = access?.granted ?? [...domains];
       if (access) domains = access.domains;
+      else domains = [...new Set([...domains, ...required.filter(domain => automaticallyAllowsAccess(level, domain))])];
       if (required.some(domain => !domains.includes(domain))) {
         const reviewed = session.reviewed?.length === required.length && required.every(domain => session.reviewed!.includes(domain));
         const answer = reviewed ? 'allow' : await confirm({ title: entry.title, detail: '', accountPubkey: account,
@@ -153,8 +162,8 @@ export const applicationTasks = {
         if (!answer || (!entry.release && answer !== 'allow') || (entry.release && answer !== 'allow' && !answer.startsWith('domains:'))) throw new Error('permission-denied');
         const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
         domains = [...required, ...optional.filter(domain => Array.isArray(selected) && selected.includes(domain))];
-        if (entry.release && access) domains = resolveDomainPermissions(entry.release, domains, access.denied);
-        await setData(scope, 'permissions', 'domains', JSON.stringify(domains)); current();
+        if (entry.release && access) domains = resolveDomainPermissions(entry.release, domains, access.denied, level);
+        await setData(scope, 'permissions', 'domains', JSON.stringify(domains.filter(domain=>remembered.includes(domain)||!automaticallyAllowsAccess(level,domain)))); current();
       }
       const presented = () => { if (isCurrent()) patch(id, { loading: false }); };
       if (entry.release) {

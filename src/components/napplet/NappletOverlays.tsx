@@ -1,3 +1,4 @@
+import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
 import { Compass } from '@solar-icons/react-native/category/map/Linear/Compass';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
@@ -30,6 +31,8 @@ import { UploadApproval } from './UploadApproval';
 import { CapabilityActions, CapabilityApproval } from './CapabilityApproval';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import type { RuntimePromptChoice } from '@/services/napplet/runtime';
+import { AppAuthorizationLevelChoices } from './app-authorization-level-choices';
+
 import { WalletApproval } from './WalletApproval';
 import { applicationChoiceFooter } from './application-choice-footer';
 import { ApplicationChoiceRow } from './ApplicationChoiceRow';
@@ -56,6 +59,8 @@ function NappletOverlayContent() {
   if (currentWalletPrompt !== lastWalletPrompt && (currentWalletPrompt || !approvalClosing)) setLastWalletPrompt(currentWalletPrompt);
   const walletPrompt = currentWalletPrompt ?? (approvalClosing ? lastWalletPrompt : null);
   const { t } = useTranslation();
+  const [levelChoice, setLevelChoice] = useState<{ id: string; value: AppAuthorizationLevel }>();
+  const selectedLevel = levelChoice && levelChoice.id === prompt?.requestId ? levelChoice.value : 'routine';
   const [choice, setChoice] = useState<{ id: string; value: string }>();
   const [rememberChoice, setRememberChoice] = useState<{ id: string; value: boolean }>();
   const remember = rememberChoice?.id === prompt?.requestId && rememberChoice?.value === true;
@@ -65,8 +70,8 @@ function NappletOverlayContent() {
   const showingPanel = prompt || configuration ? null : panel;
   const selectingApplication = prompt?.applicationSelection;
   const applicationChoices = useApplicationChoices(selectingApplication ? prompt : null);
-  const accessPrompt = !!prompt && !prompt.signing && !prompt.upload && !selectingApplication
-    && !!(prompt.capabilities || prompt.application || prompt.browser || prompt.device || prompt.crypto);
+  const accessPrompt = !!prompt && !prompt.appAuthorizationLevel && !prompt.signing && !prompt.upload && !selectingApplication
+    && !!(prompt.walletAccess || prompt.capabilities || prompt.application || prompt.browser || prompt.device || prompt.crypto);
   const requestAccount = prompt?.signing?.accountPubkey ?? prompt?.accountPubkey;
   function panelAction(action: NappletPanelAction | 'settings') {
     if (!panel || !accountPubkey) return;
@@ -92,7 +97,7 @@ function NappletOverlayContent() {
     <BottomSheet<RuntimePromptChoice>
       visible={!approvalClosing && (!!prompt || !!configuration || !!panel)}
       dismissOnBackdropPress={!prompt || !!selectingApplication}
-      title={selectingApplication ? t('applications.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt' : 'applications.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('applications.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'applications.permissions' : `applications.browser_${prompt.browser.action}`) : accessPrompt ? t('applications.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('applications.details') : showingPanel?.page === 'settings' ? t('applications.permissions_manage') : t('applications.settings'))}
+      title={prompt?.walletAccess ? t('webln.access_title') : prompt?.appAuthorizationLevel ? t('applications.app_authorization_level_title') : selectingApplication ? t('applications.open_with_title') : prompt?.device ? t(prompt.device.operation === 'save-file' ? 'common.save' : 'common.copy') : prompt?.crypto ? t(prompt.crypto.operation === 'encrypt' ? 'applications.crypto_encrypt' : 'applications.crypto_decrypt') : prompt?.signing ? signingRequestTitle(prompt.signing, t) : prompt?.upload ? t('applications.signing_upload') : prompt?.browser ? t(prompt.browser.action === 'permission' ? 'applications.permissions' : `applications.browser_${prompt.browser.action}`) : accessPrompt ? t('applications.permissions') : prompt?.title ?? (showingPanel?.page === 'about' ? t('applications.details') : showingPanel?.page === 'settings' ? t('applications.permissions_manage') : t('applications.settings'))}
       headerAction={requestAccount && !selectingApplication ? <SigningAccountAvatar pubkey={requestAccount} /> : showingPanel?.page === 'settings' && accountPubkey ? <SigningAccountAvatar pubkey={accountPubkey} /> : undefined}
       maxWidth={contentWidth.focused}
       fixedSubheader={selectingApplication && !!applicationChoices.choices.length && prompt &&
@@ -133,7 +138,8 @@ function NappletOverlayContent() {
       }}
       modalOverlay={prompt && menuOpen && menu ? <SigningDurationMenu anchor={menu.anchor} duration={duration}
         onChange={(value) => setChoice({ id: prompt.requestId, value })} onClose={() => setMenu(undefined)} /> : undefined}
-      fixedFooter={prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
+      fixedFooter={prompt?.appAuthorizationLevel ? <AppButton label={t('applications.app_authorization_level_continue')}
+        onPress={() => nappletService.answer(prompt.requestId, selectedLevel)} /> : prompt?.signing || accessPrompt ? <View style={{ gap: spacing.sm }}>
         {prompt?.signing ? <SigningActions prompt={prompt} duration={duration} menuOpen={menuOpen}
           onMenuChange={(anchor) => setMenu(anchor ? { id: prompt.requestId, anchor } : undefined)} />
           : prompt ? <CapabilityActions prompt={prompt} duration={duration} menuOpen={menuOpen}
@@ -146,7 +152,8 @@ function NappletOverlayContent() {
           <ApprovalText variant="caption" tone="muted">{prompt.requester.origin}</ApprovalText>
         </View> : null}
         {prompt.app || prompt.application ? <SigningRequester app={prompt.app} application={prompt.application} /> : null}
-        {prompt.upload ? <UploadApproval prompt={prompt} hideActions={!!prompt.signing} /> : prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
+        {prompt.appAuthorizationLevel ? <AppAuthorizationLevelChoices value={selectedLevel}
+          onChange={value => setLevelChoice({ id: prompt.requestId, value })} /> : prompt.upload ? <UploadApproval prompt={prompt} hideActions={!!prompt.signing} /> : prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
           onChange={(value) => setChoice({ id: prompt.requestId, value })} hideActions />
           : accessPrompt ? <CapabilityApproval key={prompt.requestId} prompt={prompt} hideActions /> : <>
             <ApprovalText>{prompt.detail}</ApprovalText>

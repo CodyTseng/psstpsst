@@ -80,6 +80,7 @@ export function applicationListEntry(entry: ExploreEntry): ApplicationListEntry 
   return { key: entry.key, title: entry.title, description: entry.description, kind: entry.kind, servers: entry.servers, icon: entry.icon, localIcon: entry.localIcon, files: entry.files, manifest: entry.manifest, publisher: entry.manifest?.pubkey ?? entry.release?.event.pubkey };
 }
 export function applicationRequirements(kind: ExploreKind, declared: readonly string[]): string[] {
+  if (kind === 'website') return [];
   return [...new Set([...(kind === 'napp' ? ['network'] : []), ...(kind === 'napplet' ? nappletAccessDomains(declared) : declared)])];
 }
 export function applicationPresentation(entry: ExploreEntry | NappletRelease): ApplicationInfo {

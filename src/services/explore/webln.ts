@@ -43,6 +43,9 @@ export class WebLn {
         if (this.enabled) return;
         const wallets = await getWallets(this.account); this.check();
         if (!wallets.length) throw new Error('wallet-not-connected');
+        const answer = await this.review(i18n.t('webln.access_title'), i18n.t('webln.access_notice'), { walletAccess: true });
+        this.check(revision);
+        if (answer !== 'allow') throw new Error('permission-denied');
         this.enabled = true;
         return;
       }

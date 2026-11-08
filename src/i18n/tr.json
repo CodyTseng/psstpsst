@@ -1359,7 +1359,18 @@
     "ask_every_time": "Her seferinde sor",
     "default_app_title": "Varsayılan uygulama",
     "default_app_current": "Şu anda {{app}} ile otomatik açılır.",
-    "ask_every_time_notice": "Her istek için bir uygulama seçin."
+    "ask_every_time_notice": "Her istek için bir uygulama seçin.",
+    "app_authorization_level_title": "İstek yönetimi",
+    "app_authorization_level_intro": "Bu uygulamanın isteklerinin nasıl ele alınacağını seçin.",
+    "app_authorization_level_manual": "Tek tek onayla",
+    "app_authorization_level_manual_description": "Kayıtlı karar yoksa sor.",
+    "app_authorization_level_routine": "Günlük kullanım (önerilen)",
+    "app_authorization_level_routine_description": "Temel erişime, yaygın imzalama ve şifrelemeye izin ver. Diğerleri için sor.",
+    "app_authorization_level_trusted": "Bu uygulamaya güven",
+    "app_authorization_level_trusted_description": "Temel erişime, tüm imzalama, şifreleme ve şifre çözmeye izin ver.",
+    "app_authorization_level_boundaries": "Cüzdan ödemeleri ve cihaz erişimi ayrı onay gerektirir.",
+    "app_authorization_level_unset": "Seçilmedi",
+    "app_authorization_level_continue": "Devam et"
   },
   "comments": {
     "title": "Değerlendirmeler",
@@ -1376,6 +1387,8 @@
     "public_as": "{{name}} olarak herkese açık paylaşım"
   },
   "webln": {
+    "access_title": "Cüzdan erişimi",
+    "access_notice": "Cüzdan erişimine izin verilsin mi? Ödemeler yine de onay gerektirir.",
     "invoice_title": "Ödeme isteği oluştur"
   },
   "wallpaper": {

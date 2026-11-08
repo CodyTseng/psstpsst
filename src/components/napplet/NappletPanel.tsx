@@ -1,3 +1,6 @@
+import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
+import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
+
 import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { useEffect, useState } from 'react';
 import { Global } from '@solar-icons/react-native/category/map/Linear/Global';
@@ -38,7 +41,7 @@ export function NappletPanel({ release, page, accountPubkey, onAction }: {
 
 export function NappletSettings({ release, accountPubkey }: { release: NappletRelease; accountPubkey: string }) {
   return <ApplicationSettings accountPubkey={accountPubkey} release={release}
-    access={nappletAccessDomains([...release.required,...release.optional]).some(domain=>domain!=='shell')?<DomainPermissions release={release} accountPubkey={accountPubkey}/>:undefined}
+    access={nappletAccessDomains([...release.required,...release.optional]).some(domain=>domain!=='shell')?level=><DomainPermissions release={release} accountPubkey={accountPubkey} level={level}/>:undefined}
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
@@ -80,7 +83,7 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
   </HorizontalScrollView>;
 }
 
-function DomainPermissions({ release, accountPubkey }: { release: NappletRelease; accountPubkey: string }) {
+function DomainPermissions({ release, accountPubkey, level }: { release: NappletRelease; accountPubkey: string; level?: AppAuthorizationLevel }) {
   const [saved, setSaved] = useState<string[]>();
   const [selected, setSelected] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
@@ -96,18 +99,22 @@ function DomainPermissions({ release, accountPubkey }: { release: NappletRelease
       }
     }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [release, accountPubkey]);
+  }, [release, accountPubkey, level]);
   const changed = saved && (saved.length !== selected.length || saved.some((domain) => !selected.includes(domain)));
   async function save() {
     setBusy(true); setFailed(false);
     try {
-      await nappletService.setDomainPermissions(release, selected, accountPubkey);
+      const changes = optional.filter(domain => !automaticallyAllowsAccess(level, domain)
+        && selected.includes(domain) !== saved?.includes(domain))
+        .map(domain => ({ domain, enabled: selected.includes(domain) }));
+      await nappletService.updateDomainPermissions(release, changes, accountPubkey);
       setSaved(selected);
     } catch { setFailed(true); }
     finally { setBusy(false); }
   }
   return <ApplicationAccessControls required={required} optional={optional} selected={saved?selected:undefined}
     failed={failed} busy={busy} changed={!!changed}
+    automatic={optional.filter(domain=>automaticallyAllowsAccess(level,domain))}
     onToggle={(domain,enabled)=>setSelected(current=>enabled?[...current,domain]:current.filter(entry=>entry!==domain))}
     onSave={()=>{void save();}}/>;
 }

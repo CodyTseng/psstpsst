@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, count, getTableColumns, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { localApplications, exploreEntries, exploreHistory, nappletData, nappletUsage, signingAuthorizations, browserAuthorizations } from '@/db/schema';
+import { localApplications, exploreEntries, exploreHistory, nappletData, nappletUsage, signingAuthorizations, appAuthorizationPreferences, browserAuthorizations } from '@/db/schema';
 import { platform } from '@/platform';
 import { assertNotAborted } from '@/platform/abort';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
@@ -59,6 +59,7 @@ export async function commitLocalApplication(account: string, entry: ExploreEntr
       throw new Error('installation-quota-exceeded');
     if (previous) {
       await tx.delete(signingAuthorizations).where(and(eq(signingAuthorizations.accountPubkey, account), eq(signingAuthorizations.sourceId, entry.key)));
+      await tx.delete(appAuthorizationPreferences).where(and(eq(appAuthorizationPreferences.accountPubkey, account), eq(appAuthorizationPreferences.sourceId, entry.key)));
       await tx.delete(browserAuthorizations).where(and(eq(browserAuthorizations.accountPubkey, account), eq(browserAuthorizations.sourceId, entry.key)));
     }
     await tx.insert(localApplications).values({ accountPubkey: account, appId: entry.key, version: entry.local!.version,

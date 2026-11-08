@@ -15,7 +15,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   life = new AbortController();
   detach = subscribeSigning(scope, () => {});
-  confirm = jest.fn(async prompt => JSON.stringify({ walletId: 'wallet', ...(prompt.wallet?.amountRange ? { amountSats: 1 } : {}) }));
+  confirm = jest.fn(async prompt => prompt.walletAccess ? 'allow' : JSON.stringify({ walletId: 'wallet', ...(prompt.wallet?.amountRange ? { amountSats: 1 } : {}) }));
   bridge = new WebLn(scope.accountPubkey, scope.sourceId, 'Site', life.signal, confirm);
   jest.mocked(getWallets).mockResolvedValue([wallet]);
   jest.mocked(payInvoice).mockImplementation(async (_wallet, _invoice, _copy, _metadata, guard) => {
@@ -23,13 +23,27 @@ beforeEach(() => {
   });
 });
 afterEach(() => { life.abort(); detach(); });
-async function enable() { await bridge.handle('enable', []); }
-it('initializes without consent and exposes no NWC credentials or Nostr identity', async () => {
+async function enable() { await bridge.handle('enable', []); confirm.mockClear(); }
+it('asks for origin-bound wallet access once per document without exposing credentials or Nostr identity', async () => {
   await expect(bridge.handle('getInfo', [])).rejects.toThrow('webln-not-enabled');
-  await enable();
-  await enable();
-  expect(confirm).not.toHaveBeenCalled();
+  await bridge.handle('enable', []);
+  await bridge.handle('enable', []);
+  expect(confirm).toHaveBeenCalledTimes(1);
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ walletAccess: true,
+    requester: { title: 'Site', origin: scope.sourceId } }), life.signal);
   expect(await bridge.handle('getInfo', [])).toEqual({ node: { alias: 'Wallet', pubkey: '' }, methods: ['getInfo', 'sendPayment', 'makeInvoice'] });
+});
+it('keeps wallet access disabled after denial and permits a later explicit retry', async () => {
+  confirm.mockResolvedValueOnce(false);
+  await expect(bridge.handle('enable', [])).rejects.toThrow('permission-denied');
+  await expect(bridge.handle('isEnabled', [])).resolves.toBe(false);
+  await bridge.handle('enable', []);
+  expect(confirm).toHaveBeenCalledTimes(2);
+});
+it('withholds wallet access when its origin is revoked during consent', async () => {
+  confirm.mockImplementationOnce(async () => { invalidateSigning(scope); return 'allow'; });
+  await expect(bridge.handle('enable', [])).rejects.toThrow('permission-revoked');
+  await expect(bridge.handle('isEnabled', [])).resolves.toBe(false);
 });
 it('does not accept a remembered allow decision as payment consent', async () => {
   await enable(); confirm.mockResolvedValueOnce('allow-always');

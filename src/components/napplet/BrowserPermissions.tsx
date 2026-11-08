@@ -23,7 +23,7 @@ export function BrowserPermissions({ accountPubkey, sourceId }: { accountPubkey:
   const [editor, setEditor] = useState<{ rule: BrowserPermissionRule; visible: boolean }>();
   if (data && !data.error && !data.rules?.length && !editor) return null;
   return <View style={{ gap: spacing.md }}>
-    <AppText variant="subtitle">{t('applications.browser_permission')}{data?.rules ? ` · ${data.rules.length}` : ''}</AppText>
+    <AppText variant="caption" tone="muted">{t('applications.browser_permission')}</AppText>
     {!data ? <ActivityIndicator color={c.accent} /> : data.error ? null
       : !data.rules?.length ? null : <ListGroup>{data.rules.map(rule =>
         <ListRow key={rule.resource} title={browserPermissionLabel(rule.resource, t)}

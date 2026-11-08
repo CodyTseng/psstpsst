@@ -1359,7 +1359,18 @@
     "ask_every_time": "Ask every time",
     "default_app_title": "Default app",
     "default_app_current": "Currently opens automatically with {{app}}.",
-    "ask_every_time_notice": "Choose an app for each request."
+    "ask_every_time_notice": "Choose an app for each request.",
+    "app_authorization_level_title": "Request handling",
+    "app_authorization_level_intro": "Choose how to handle this app's requests.",
+    "app_authorization_level_manual": "Approve individually",
+    "app_authorization_level_manual_description": "Ask unless a decision is saved.",
+    "app_authorization_level_routine": "Everyday use (recommended)",
+    "app_authorization_level_routine_description": "Allow basic access, common signing and encryption. Ask for the rest.",
+    "app_authorization_level_trusted": "Trust this app",
+    "app_authorization_level_trusted_description": "Allow basic access, all signing, encryption and decryption.",
+    "app_authorization_level_boundaries": "Wallet payments and device access need separate approval.",
+    "app_authorization_level_unset": "Not selected",
+    "app_authorization_level_continue": "Continue"
   },
   "comments": {
     "title": "Reviews",
@@ -1376,6 +1387,8 @@
     "public_as": "Posting publicly as {{name}}"
   },
   "webln": {
+    "access_title": "Wallet access",
+    "access_notice": "Allow wallet access? Payments still need confirmation.",
     "invoice_title": "Create payment request"
   },
   "wallpaper": {

@@ -1359,7 +1359,18 @@
     "ask_every_time": "Jedes Mal fragen",
     "default_app_title": "Standard-App",
     "default_app_current": "Wird derzeit automatisch mit {{app}} geöffnet.",
-    "ask_every_time_notice": "Für jede Anfrage eine App auswählen."
+    "ask_every_time_notice": "Für jede Anfrage eine App auswählen.",
+    "app_authorization_level_title": "Anfragen behandeln",
+    "app_authorization_level_intro": "Wähle, wie Anfragen dieser App behandelt werden.",
+    "app_authorization_level_manual": "Einzeln genehmigen",
+    "app_authorization_level_manual_description": "Fragen, sofern keine Entscheidung gespeichert ist.",
+    "app_authorization_level_routine": "Alltägliche Nutzung (empfohlen)",
+    "app_authorization_level_routine_description": "Grundlegenden Zugriff, übliche Signaturen und Verschlüsselung erlauben. Beim Rest fragen.",
+    "app_authorization_level_trusted": "Dieser App vertrauen",
+    "app_authorization_level_trusted_description": "Grundlegenden Zugriff, alle Signaturen, Verschlüsselung und Entschlüsselung erlauben.",
+    "app_authorization_level_boundaries": "Wallet-Zahlungen und Gerätezugriffe separat bestätigen.",
+    "app_authorization_level_unset": "Nicht ausgewählt",
+    "app_authorization_level_continue": "Weiter"
   },
   "comments": {
     "title": "Bewertungen",
@@ -1376,6 +1387,8 @@
     "public_as": "Öffentlich posten als {{name}}"
   },
   "webln": {
+    "access_title": "Wallet-Zugriff",
+    "access_notice": "Wallet-Zugriff erlauben? Zahlungen müssen weiterhin bestätigt werden.",
     "invoice_title": "Zahlungsanforderung erstellen"
   },
   "wallpaper": {

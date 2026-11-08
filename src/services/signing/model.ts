@@ -1,3 +1,4 @@
+import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
 export type SignerAccessOperation = 'get-public-key' | 'nip04-encrypt' | 'nip04-decrypt' | 'nip44-encrypt' | 'nip44-decrypt';
 export type SignerAccessScope = {
   operation: SignerAccessOperation;
@@ -25,13 +26,13 @@ export type SigningRequest = SigningScope & {
 export type SigningRule = {
   key: string;
   scope: SigningScope;
-  decision: 'allow' | 'deny';
+  decision: 'allow' | 'deny' | 'ask';
   duration: 'session' | 'always' | 'timed';
   createdAt: number;
   expiresAt?: number;
 };
 export type SigningActivity = { scope: Pick<SigningScope, 'operation' | 'kind'>; at: number; decision: 'allowed' | 'automatic' | 'denied' };
-export type SigningSnapshot = { rules: SigningRule[]; activity: SigningActivity[] };
+export type SigningSnapshot = { rules: SigningRule[]; activity: SigningActivity[]; level?: AppAuthorizationLevel };
 export type SigningRuleChange = {
   decision: 'allow' | 'deny' | 'ask';
   duration: SigningRule['duration'];
@@ -74,11 +75,10 @@ export function replaceSigningRule(rules: SigningRule[], source: SigningRuleTarg
   const key = signingRuleKey(scope);
   if (source.key !== key || !['allow', 'deny', 'ask'].includes(change.decision)) throw new Error('invalid-signing-permissions');
   const next = rules.filter((rule) => rule.key !== key && isSigningRuleActive(rule));
-  if (change.decision === 'ask') return next;
   if (!canRememberSigning(scope) || !['always', 'timed', 'session'].includes(change.duration) ||
     (change.duration === 'timed' && (!Number.isSafeInteger(change.expiresAt) || change.expiresAt! <= Date.now())))
     throw new Error('invalid-signing-permissions');
-  next.push({ key, scope, decision: change.decision, duration: change.duration, createdAt: Date.now(),
-    ...(change.duration === 'timed' ? { expiresAt: change.expiresAt } : {}) });
+  next.push({ key, scope, decision: change.decision, duration: change.decision === 'ask' ? 'always' : change.duration, createdAt: Date.now(),
+    ...(change.decision !== 'ask' && change.duration === 'timed' ? { expiresAt: change.expiresAt } : {}) });
   return next;
 }

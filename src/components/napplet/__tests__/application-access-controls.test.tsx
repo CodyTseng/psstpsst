@@ -25,7 +25,7 @@ it('shows required access immediately and distinguishes enabled and disabled opt
   expect(rows.map(row => row.props.title)).toEqual([
     'applications.capability_common', 'applications.capability_relay', 'applications.capability_resource', 'applications.capability_appearance',
   ]);
-  expect(rows[0].props.value).toBe('applications.capabilities_required');
+  expect(rows[0].props.value).toBeUndefined();
   expect(rows[2].props.subtitle).toBe('applications.permissions_enabled');
   expect(rows[3].props.subtitle).toBe('applications.permissions_disabled');
   const toggle = rows[3].props.trailing;
@@ -51,4 +51,12 @@ it('keeps draft state visible and requires saving before reloading', () => {
   expect(save.props.label).toBe('applications.permissions_save');
   act(() => { save.props.onPress(); });
   expect(onSave).toHaveBeenCalledTimes(1);
+});
+
+it('does not expose an individual toggle for level-covered optional access', () => {
+  act(() => { renderer = create(<ApplicationAccessControls required={[]} optional={['storage']}
+    selected={['storage']} automatic={['storage']} />); });
+  const row = renderer.root.findByType(ListRow);
+  expect(row.props.trailing.type).toBe(AppText);
+  expect(row.props.trailing.props.children).toBe('applications.permissions_allow');
 });

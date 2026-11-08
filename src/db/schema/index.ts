@@ -46,3 +46,4 @@ export * from './webln-payments';
 export * from './local-applications';
 
 export * from './notification-events';
+export * from './app-authorization-preferences';

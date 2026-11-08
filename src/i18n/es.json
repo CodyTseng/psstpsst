@@ -1364,7 +1364,18 @@
     "ask_every_time": "Preguntar siempre",
     "default_app_title": "App predeterminada",
     "default_app_current": "Actualmente se abre automáticamente con {{app}}.",
-    "ask_every_time_notice": "Elegir una app para cada solicitud."
+    "ask_every_time_notice": "Elegir una app para cada solicitud.",
+    "app_authorization_level_title": "Gestión de solicitudes",
+    "app_authorization_level_intro": "Elige cómo gestionar las solicitudes de esta app.",
+    "app_authorization_level_manual": "Aprobar por separado",
+    "app_authorization_level_manual_description": "Preguntar si no hay una decisión guardada.",
+    "app_authorization_level_routine": "Uso cotidiano (recomendado)",
+    "app_authorization_level_routine_description": "Permitir acceso básico, firmas y cifrado comunes. Preguntar para lo demás.",
+    "app_authorization_level_trusted": "Confiar en esta app",
+    "app_authorization_level_trusted_description": "Permitir acceso básico, todas las firmas, el cifrado y el descifrado.",
+    "app_authorization_level_boundaries": "Los pagos de la cartera y el acceso al dispositivo requieren aprobación aparte.",
+    "app_authorization_level_unset": "Sin seleccionar",
+    "app_authorization_level_continue": "Continuar"
   },
   "comments": {
     "title": "Reseñas",
@@ -1381,6 +1392,8 @@
     "public_as": "Publicando como {{name}} de forma pública"
   },
   "webln": {
+    "access_title": "Acceso a la cartera",
+    "access_notice": "¿Permitir acceso a la cartera? Los pagos seguirán requiriendo confirmación.",
     "invoice_title": "Crear solicitud de pago"
   },
   "wallpaper": {

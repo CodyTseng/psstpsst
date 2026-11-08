@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { readPermissions } from '@/services/signing/management';
+import { normalizeSigningSource } from '@/services/signing/source';
 import { subscribeSigning } from '@/services/signing/changes';
 import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
@@ -13,10 +14,11 @@ export function useNappletPermissions(accountPubkey: string, release: NappletRel
   const [expiryTick, setExpiryTick] = useState(0);
   const [value, setValue] = useState<{ key: string; data?: SigningSnapshot; error?: boolean }>();
   const key = JSON.stringify([accountPubkey, release?.eventKey, release?.hash, sourceId, permissionsRevision, focused, enabled, expiryTick]);
+  const signingSource = sourceId ?? (release ? normalizeSigningSource(release.eventKey) : undefined);
   useEffect(() => {
-    if(!sourceId||!accountPubkey) return;
-    return subscribeSigning({accountPubkey,sourceId},()=>setExpiryTick(tick=>tick+1));
-  },[accountPubkey,sourceId]);
+    if (!signingSource || !accountPubkey) return;
+    return subscribeSigning({ accountPubkey, sourceId: signingSource }, () => setExpiryTick(tick => tick + 1));
+  }, [accountPubkey, signingSource]);
   useEffect(() => {
     let active = true;
     if (accountPubkey && focused && enabled) void (sourceId?readPermissions({accountPubkey,sourceId}):nappletService.signingPermissions(release!, accountPubkey))

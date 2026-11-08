@@ -1,3 +1,6 @@
+import { saveDomainPermissionChanges, type DomainPermissionChange } from './domain-permission-writes';
+import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
+import { ensureAppAuthorizationLevel } from '@/services/app-authorization/level';
 import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { resolveApplicationMetadata } from '@/services/explore/application-metadata';
 import { fromNapplet } from '@/services/explore/model';
@@ -95,12 +98,14 @@ function prompt(value: RuntimePrompt, signal?: AbortSignal): Promise<string | fa
 function permissionsChanged() {
   nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
 }
-async function authorizeRelease(release: NappletRelease, account: string, current: () => void, reviewedRequired?: readonly string[]) {
+async function authorizeRelease(release: NappletRelease, account: string, current: () => void, signal: AbortSignal, reviewedRequired?: readonly string[]) {
   const scope = { accountPubkey: account, appKey: release.eventKey };
   const required = [...new Set(['shell', ...nappletAccessDomains(release.required)])];
   const optional = [...new Set(nappletAccessDomains(release.optional).filter((domain) =>
     (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
-  const { denied, domains } = await readDomainPermissions(scope, release);
+  const level = await ensureAppAuthorizationLevel(appSigningScope(scope), signal => prompt({ title: release.title,
+    detail: '', app: release, accountPubkey: account, appAuthorizationLevel: true }, signal), signal, current);
+  const { denied, domains, granted } = await readDomainPermissions(scope, release);
   current();
   let declared = domains;
   if (required.some((domain) => !declared.includes(domain))) {
@@ -116,8 +121,8 @@ async function authorizeRelease(release: NappletRelease, account: string, curren
     current();
     const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
     if (!Array.isArray(selected)) throw new Error('permission-denied');
-    declared = resolveDomainPermissions(release, [...required, ...optional.filter((domain) => selected.includes(domain))], denied);
-    await setData(scope, 'permissions', 'domains', JSON.stringify(declared));
+    declared = resolveDomainPermissions(release, [...required, ...optional.filter((domain) => selected.includes(domain))], denied, level);
+    await setData(scope, 'permissions', 'domains', JSON.stringify(declared.filter(domain=>granted.includes(domain)||!automaticallyAllowsAccess(level,domain))));
     current();
     permissionsChanged();
   }
@@ -327,7 +332,7 @@ export const nappletService = {
     };
     if (!installed || installed.hash !== release.hash) await this.install(release, account, downloading, { signal: download.signal, onProgress: progress });
     current();
-    const declared = await authorizeRelease(release, account, current, reviewedRequired);
+    const declared = await authorizeRelease(release, account, current, download.signal, reviewedRequired);
     const html = await loadArtifact(release, download.signal, downloading, progress);
     current();
     const instance = new NappletRuntime({
@@ -498,24 +503,22 @@ export const nappletService = {
     check(expectedAccount, epoch);
     return domains;
   },
-  async setDomainPermissions(release: NappletRelease, domains: string[], expectedAccount: string) {
+  async updateDomainPermissions(release: NappletRelease, changes: readonly DomainPermissionChange[], expectedAccount: string) {
     const epoch = generation;
     check(expectedAccount, epoch);
-    const allowed = new Set([...nappletAccessDomains(release.required), ...nappletAccessDomains(release.optional), 'shell']);
-    if (domains.some((domain) => !allowed.has(domain))) throw new Error('invalid-permissions');
-    const required = ['shell', ...nappletAccessDomains(release.required)];
-    if (required.some((domain) => !domains.includes(domain))) throw new Error('required-permission');
+    const required = new Set(['shell', ...nappletAccessDomains(release.required)]);
+    const optional = new Set(nappletAccessDomains(release.optional).filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain)));
+    const edits = changes.map(change => ({ ...change }));
+    for (const { domain, enabled } of edits) {
+      if (required.has(domain)) throw new Error('required-permission');
+      if (!optional.has(domain) || typeof enabled !== 'boolean') throw new Error('invalid-permissions');
+    }
+    if (!edits.length) return;
     const scope = { accountPubkey: expectedAccount, appKey: release.eventKey };
-    const { domains: previous, denied } = await readDomainPermissions(scope, release);
-    check(expectedAccount, epoch);
-    const nextDenied = [...new Set([...denied, ...nappletAccessDomains(release.optional).filter(domain => previous.includes(domain) && !domains.includes(domain))])]
-      .filter(domain => !domains.includes(domain));
-    invalidateNappletSource(expectedAccount, release.eventKey);
-    await setData(scope, 'permissions', 'denied-domains', JSON.stringify(nextDenied));
-    check(expectedAccount, epoch);
-    await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set(domains)]));
+    await saveDomainPermissionChanges(scope, edits, () => check(expectedAccount, epoch));
     check(expectedAccount, epoch);
     permissionsChanged();
+    invalidateNappletSource(expectedAccount, release.eventKey);
     const state = nappletStore.getState();
     if (state.running?.release.eventKey === release.eventKey) {
       const work = this.open(state.running.release);
@@ -570,9 +573,7 @@ export const nappletService = {
     const account = nappletStore.getState().accountPubkey;
     const epoch = generation;
     if (!account || (expectedAccount !== undefined && account !== expectedAccount)) return;
-    invalidateNappletSource(account, release.eventKey);
     const active = runtime?.scope.appKey === release.eventKey ? runtime : null;
-    if (active) this.stop();
     await active?.signingPermissions.settled();
     check(account, epoch);
     const scope = { accountPubkey: account, appKey: release.eventKey };
@@ -584,6 +585,9 @@ export const nappletService = {
     await clearBrowserPermissions(appSigningScope(scope));
     check(account, epoch);
     permissionsChanged();
+    // Source invalidation may close the task that owns this reset; do it only after persistence.
+    invalidateNappletSource(account, release.eventKey);
+    if (runtime?.scope.accountPubkey === account && runtime.scope.appKey === release.eventKey) this.stop();
   },
   async saveConfiguration(values: Record<string, unknown>) {
     if (externalConfiguration) {

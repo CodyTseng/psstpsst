@@ -1187,15 +1187,15 @@ required access. The primary action stays fixed above the bottom safe area while
 scrolls. It always reads Open, regardless of installation or access approval state. Explicit consent on this page replaces the duplicate launch prompt;
 viewing app details alone never grants access. Details and runtime information share the app identity, publisher, description
 and required access. Approval sheets show a compact requester identity and the
-exact requested access, omitting publisher rows and marketing descriptions. Applications with no effective required access open without
-launch consent. Internal shell access is implicit and never triggers consent.
+exact requested access, omitting publisher rows and marketing descriptions. Applications with no effective required access omit a separate access review;
+first-open level selection still applies to napplets, napps and nsites. Internal shell access is implicit and never triggers consent.
 Access reviews omit routine explanations about separate signing reviews.
 First-use consent uses the same sheet across Explore formats,
 identifies the current account with the shared header avatar when account-bound.
 Access confirmation fixes one horizontal action row below the scrolling content,
 with Cancel at the start and Allow at the end. Optional
-access is omitted from app details and launch consent sheets; it stays off until
-enabled in permission management.
+access is omitted from app details and launch consent sheets; it follows saved
+access, existing defaults and the selected level.
 Details have the same layout regardless of format or installation state, without maintenance
 actions or a separate permissions entry. Permission controls live in the management
 view reached from the app menu. Protocol hashes stay out of ordinary app information
@@ -1305,23 +1305,27 @@ Application action rails extend through the sheet gutter; their first and last v
 align with the body gutter at the corresponding scroll boundary. Host permissions expose
 app access and remembered signing decisions. Each rule is one editing target,
 with Ask every time, Automatically allow and Automatically reject choices and
-an independent duration. Saved changes take effect immediately. Choosing Ask
-deletes the persisted decision but keeps its row visible for the current visit;
-the next visit omits it. Status follows the title with semantic colour; long
+an independent duration. Saved changes take effect immediately. Ask every time is an explicit saved
+rule and remains visible across visits. Level-covered signing rules are omitted from the rule list; their stored
+decisions reappear and become editable when the level no longer covers them. Status follows the title with semantic colour; long
 titles yield space to it, and Kind/duration shares the title's start edge. Disclosures align
 with section headings. Permission management omits account chrome; protocol hashes
-and history stay out of its default view. Required and optional access remain
+and history stay out of its default view. Permission settings use consistent grouped surfaces with muted caption section
+headings; group labels are not repeated as row values. Long selected policies sit
+below their setting label. Required and optional access remain
 visible in separate sections; optional controls pair switches with explicit
 enabled/disabled text. Saved account and website decisions show their scope,
 decision and duration. Permission sections with no related access, saved
-decisions or activity are hidden once loading resolves. Signing history remains
-accessible through its disclosure even when no rules are saved.
-First use of an undecided optional capability opens an Allow/Reject review for
-that capability. Explicit rejection is remembered; cancellation is not rejection.
+decisions or activity are hidden once loading resolves. Account permissions retain their section heading when only signing history
+exists; its disclosure remains accessible even when no rules are saved.
+First use of an undecided optional capability outside level coverage opens an
+Allow/Reject review for that capability. Covered optional access shows its
+automatic allowance without a switch; saved denials remain available after a
+level downgrade. Explicit rejection is remembered; cancellation is not rejection.
 Declared optional appearance, app storage and app settings start enabled while
-retaining their permission switches. Explicitly disabled access stays disabled.
-Permission reset uses the shared danger
-button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
+retaining their permission switches. Explicitly disabled access stays disabled outside level coverage.
+Permission history uses a full-row disclosure within its grouped surface.
+Permission reset uses the shared full-width danger button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
 confirmation or cancellation.
 
 Webpage new-window links, external-app links, downloads and device permissions
@@ -1331,6 +1335,19 @@ the originating site visible. Permission reviews name each concrete requested
 resource, preserving unknown resource names rather than hiding them behind
 generic access wording. Targets and filenames stay separate from permission names. Text and image copying do not show host confirmation;
 clipboard reads require it. Permission queries describe these same decisions.
+
+On first open, napplets, napps and nsites ask for Manual, Routine or Trusted
+handling with Routine initially selected and an explicit Continue action. The
+choice precedes launch-access reviews and execution, identifies the account and
+verified source, describes basic access and general encryption
+and decryption authority, and keeps wallet/device boundaries visible. Dismissal
+saves nothing. Ordinary websites open without this sheet; the first NIP-07 call
+selects a level for the current verified origin. WebLN requests wallet access on
+first enable and retains separate payment/invoice reviews. Permission management places the level choice directly below app
+identity, before required/optional access and individual decisions, and preserves
+explicit exceptions when it changes. Sensitive requests outside the chosen policy
+retain their ordinary review after the level sheet closes. The complete matrix
+lives in [app authorization](protocols/app-authorization.md).
 
 All approval sheets lead with the operation and a compact requester identity.
 Application publication uses the ordinary signing review; there is no separate

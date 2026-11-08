@@ -16,6 +16,7 @@ export function readSigningSnapshot(scope: AppScope) { return readSharedSnapshot
 export class SigningPermissions extends SharedSigningPermissions {
   constructor(scope: AppScope, release: NappletRelease, confirm: (prompt: RuntimePrompt, signal?: AbortSignal) => Promise<string | false>, signal: AbortSignal, changed: () => void) {
     super(appSigningScope(scope), (request, signal) => confirm({ title: release.title, detail: '', app: release,
-      accountPubkey: scope.accountPubkey, signing: request }, signal), signal, changed);
+      accountPubkey: scope.accountPubkey, signing: request }, signal), signal, changed, (signal) => confirm({ title: release.title, detail: '', app: release,
+      accountPubkey: scope.accountPubkey, appAuthorizationLevel: true }, signal));
   }
 }

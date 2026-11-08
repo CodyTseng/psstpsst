@@ -44,6 +44,7 @@ const { nappletStore, nappletService } = require('../../src/services/napplet/ser
 const { useThemeStore } = require('../../src/stores/theme.store') as typeof import('../../src/stores/theme.store');
 require('../../src/i18n');
 const params = new URLSearchParams(location.search);
+if (params.has('lang')) void require('../../src/i18n/core').default.changeLanguage(params.get('lang'));
 const membershipHooks = require('../../src/hooks/use-application-membership') as typeof import('../../src/hooks/use-application-membership');
 membershipHooks.useApplicationMembership = (account, entry) => {
   const state = (require('../../src/stores/explore.store') as typeof import('../../src/stores/explore.store')).useExplore();
@@ -72,6 +73,12 @@ nappletStore.setState({
     },
   },
 });
+if (params.get('scenario') === 'app-authorization-level') {
+  nappletStore.setState({ prompt: { title: 'Arcade', requestId: 'level-fixture', queued: 0, detail: '', appAuthorizationLevel: true,
+    accountPubkey: 'a'.repeat(64),
+    application: { title: 'Arcade', description: '', servers: [], required: [], origin: 'https://arcade.example' },
+  } });
+}
 if (params.get('scenario') === 'wallet') {
   nappletService.answer = answerApproval;
   nappletStore.setState({ accountPubkey: 'a'.repeat(64), prompt: null, overlayActive: false });
@@ -274,7 +281,7 @@ if(['explore-detail','explore-permissions','explore-menu'].includes(params.get('
 if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
   const release: NappletRelease = { title: 'Composer', eventKey: `35129:${'b'.repeat(64)}:composer`, hash: 'c'.repeat(64),
     description: params.get('empty') ? '' : 'Compose and publish posts with your Nostr account.'.repeat(params.get('long') ? 30 : 1),
-    required: ['identity', 'outbox', 'relay', 'resource', 'theme', 'inc', 'intent', 'link', 'storage'],
+    required: params.has('permission-layout') ? ['resource'] : ['identity', 'outbox', 'relay', 'resource', 'theme', 'inc', 'intent', 'link', 'storage'],
     optional: ['upload'], servers: [], intents: [],
     event: { id: 'd'.repeat(64), pubkey: 'b'.repeat(64), kind: 35129, tags: [['d', 'composer']] } as NappletRelease['event'],
   };
@@ -306,7 +313,8 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
     (window as unknown as { savedRuleChange: unknown }).savedRuleChange = change;
     nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
   };
-  nappletService.signingPermissions = async () => ({ rules, activity: [
+  nappletService.signingPermissions = async () => ({ rules: params.has('permission-layout') ? [] : rules,
+    level: params.has('permission-layout') ? 'routine' : undefined, activity: [
     { scope: { operation: 'publish', kind: 1 }, decision: 'allowed', at: 100000 },
   ] });
   nappletService.revokeSigningRule = async (_release, key) => {
@@ -317,8 +325,8 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
     (window as unknown as { reviewedRequired: readonly string[] | undefined }).reviewedRequired = reviewedRequired;
     return 1;
   };
-  nappletService.setDomainPermissions = async (_release, domains) => {
-    (window as unknown as { savedDomains: string[] }).savedDomains = domains;
+  nappletService.updateDomainPermissions = async (_release, changes) => {
+    (window as unknown as { savedDomains: string[] }).savedDomains = changes.filter(change => change.enabled).map(change => change.domain);
   };
   nappletService.revoke = async () => {
     rules = []; sessionStorage.setItem(storageKey, '[]');
@@ -333,6 +341,17 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
   RuntimeScreen = params.get('scenario') === 'detail'
     ? require('../../src/app/(app)/napplet/[id]').default
     : require('../../src/app/(app)/napplet-permissions/[id]').default;
+  if (params.has('permission-layout')) {
+    const { ApplicationPermissionsPage } = require('../../src/components/napplet/ApplicationPermissionsPage');
+    const { NappletSettings } = require('../../src/components/napplet/NappletPanel');
+    const { applicationPresentation } = require('../../src/services/explore/model');
+    RuntimeScreen = function PermissionLayoutFixture() {
+      return <ApplicationPermissionsPage application={applicationPresentation(release)}>
+        <NappletSettings release={release} accountPubkey={'a'.repeat(64)} />
+      </ApplicationPermissionsPage>;
+    };
+  }
+
 }
 if (menu) {
   const release: NappletRelease = { ...nappletStore.getState().prompt!.app!, eventKey: '35129:publisher:arcade',
@@ -351,14 +370,15 @@ if (menu) {
     key: 'post', decision: 'allow', duration: 'always', createdAt: 100,
     scope: { operation: 'publish', kind: 1, relays: ['wss://relay.example/'] },
   }];
-  nappletService.signingPermissions = async () => ({ rules, activity: [] });
+  nappletService.signingPermissions = async () => ({ rules: params.has('permission-layout') ? [] : rules,
+    level: params.has('permission-layout') ? 'routine' : undefined, activity: [] });
   nappletService.revokeSigningRule = async (_release, key) => {
     rules = rules.filter((rule) => rule.key !== key);
     nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
   };
   nappletService.domainPermissions = async () => ['shell', 'storage'];
-  nappletService.setDomainPermissions = async (_release, domains) => {
-    (window as unknown as { savedDomains: string[] }).savedDomains = domains;
+  nappletService.updateDomainPermissions = async (_release, changes) => {
+    (window as unknown as { savedDomains: string[] }).savedDomains = changes.filter(change => change.enabled).map(change => change.domain);
   };
   nappletService.reload = async () => { document.title = 'reloaded'; };
   const { router } = require('expo-router') as typeof import('expo-router');

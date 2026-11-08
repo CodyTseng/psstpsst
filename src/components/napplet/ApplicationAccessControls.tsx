@@ -9,8 +9,8 @@ import { Toggle } from '@/components/common/Toggle';
 import { spacing,useThemeColors } from '@/theme';
 
 /** Capability data varies by protocol; presentation and interaction remain shared. */
-export function ApplicationAccessControls({required,optional=[],selected,failed=false,busy=false,changed=false,onToggle,onSave}:{
-  required:string[];optional?:string[];selected?:string[];failed?:boolean;busy?:boolean;changed?:boolean;
+export function ApplicationAccessControls({required,optional=[],automatic=[],selected,failed=false,busy=false,changed=false,onToggle,onSave}:{
+  required:string[];optional?:string[];automatic?:string[];selected?:string[];failed?:boolean;busy?:boolean;changed?:boolean;
   onToggle?(domain:string,enabled:boolean):void;onSave?():void;
 }) {
   const {t}=useTranslation(),c=useThemeColors();
@@ -20,12 +20,11 @@ export function ApplicationAccessControls({required,optional=[],selected,failed=
   if(!visibleRequired.length&&!optional.length)return null;
   return <View style={{gap:spacing.xl}}>
     {visibleRequired.length?<View style={{gap:spacing.md}}>
-      <AppText variant="subtitle">{t('applications.capabilities_required')} · {visibleRequired.length}</AppText>
-      <ListGroup>{visibleRequired.map(domain=><ListRow key={domain} title={label(domain)}
-        value={t('applications.capabilities_required')} valueTone="muted"/>)}</ListGroup>
+      <AppText variant="caption" tone="muted">{t('applications.capabilities_required')}</AppText>
+      <ListGroup>{visibleRequired.map(domain=><ListRow key={domain} title={label(domain)}/>)}</ListGroup>
     </View>:null}
     {optional.length?<View style={{gap:spacing.md}}>
-      <AppText variant="subtitle">{t('applications.capabilities_optional')} · {optional.length}</AppText>
+      <AppText variant="caption" tone="muted">{t('applications.capabilities_optional')}</AppText>
       {!selected&&!failed?<ActivityIndicator color={c.accent}/>:null}
       {selected?<>
         <ListGroup>{optional.map(domain=>{
@@ -33,7 +32,7 @@ export function ApplicationAccessControls({required,optional=[],selected,failed=
           return <ListRow key={domain} title={label(domain)}
             subtitle={t(enabled?'applications.permissions_enabled':'applications.permissions_disabled')}
             subtitleTone={enabled?'success':'muted'}
-            trailing={<Toggle value={enabled} disabled={busy||!onToggle} accessibilityLabel={label(domain)}
+            trailing={automatic.includes(domain)?<AppText variant="caption" tone="success">{t('applications.permissions_allow')}</AppText>:<Toggle value={enabled} disabled={busy||!onToggle} accessibilityLabel={label(domain)}
               onValueChange={value=>onToggle?.(domain,value)}/>}/>;
         })}</ListGroup>
         {changed&&onSave?<AppButton label={t('applications.permissions_save')} loading={busy} onPress={onSave}/>:null}

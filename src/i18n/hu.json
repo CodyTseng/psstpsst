@@ -1359,7 +1359,18 @@
     "ask_every_time": "Mindig kérdezzen rá",
     "default_app_title": "Alapértelmezett alkalmazás",
     "default_app_current": "Jelenleg automatikusan ezzel nyílik meg: {{app}}.",
-    "ask_every_time_notice": "Minden kéréshez válassz alkalmazást."
+    "ask_every_time_notice": "Minden kéréshez válassz alkalmazást.",
+    "app_authorization_level_title": "Kérések kezelése",
+    "app_authorization_level_intro": "Válaszd ki az app kéréseinek kezelését.",
+    "app_authorization_level_manual": "Egyenkénti jóváhagyás",
+    "app_authorization_level_manual_description": "Kérdezzen, ha nincs mentett döntés.",
+    "app_authorization_level_routine": "Mindennapi használat (ajánlott)",
+    "app_authorization_level_routine_description": "Alapvető hozzáférés, szokásos aláírás és titkosítás engedélyezése. A többinél kérdezzen.",
+    "app_authorization_level_trusted": "Megbízom az appban",
+    "app_authorization_level_trusted_description": "Alapvető hozzáférés, minden aláírás, titkosítás és visszafejtés engedélyezése.",
+    "app_authorization_level_boundaries": "A tárcás fizetésekhez és az eszközhozzáféréshez külön jóváhagyás kell.",
+    "app_authorization_level_unset": "Nincs kiválasztva",
+    "app_authorization_level_continue": "Folytatás"
   },
   "comments": {
     "title": "Vélemények",
@@ -1376,6 +1387,8 @@
     "public_as": "Nyilvános közzététel {{name}} néven"
   },
   "webln": {
+    "access_title": "Tárca hozzáférése",
+    "access_notice": "Engedélyezi a tárca elérését? A fizetések továbbra is megerősítést igényelnek.",
     "invoice_title": "Fizetési kérelem létrehozása"
   },
   "wallpaper": {

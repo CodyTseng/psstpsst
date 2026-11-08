@@ -1359,7 +1359,18 @@
     "ask_every_time": "ถามทุกครั้ง",
     "default_app_title": "แอปเริ่มต้น",
     "default_app_current": "ขณะนี้เปิดด้วย {{app}} โดยอัตโนมัติ",
-    "ask_every_time_notice": "เลือกแอปสำหรับแต่ละคำขอ"
+    "ask_every_time_notice": "เลือกแอปสำหรับแต่ละคำขอ",
+    "app_authorization_level_title": "การจัดการคำขอ",
+    "app_authorization_level_intro": "เลือกวิธีจัดการคำขอของแอปนี้",
+    "app_authorization_level_manual": "อนุมัติทีละรายการ",
+    "app_authorization_level_manual_description": "ถามหากยังไม่ได้บันทึกการตัดสินใจ",
+    "app_authorization_level_routine": "ใช้งานประจำวัน (แนะนำ)",
+    "app_authorization_level_routine_description": "อนุญาตการเข้าถึงพื้นฐาน การลงนามและการเข้ารหัสทั่วไป ถามสำหรับส่วนที่เหลือ",
+    "app_authorization_level_trusted": "เชื่อถือแอปนี้",
+    "app_authorization_level_trusted_description": "อนุญาตการเข้าถึงพื้นฐาน การลงนาม การเข้ารหัส และการถอดรหัสทั้งหมด",
+    "app_authorization_level_boundaries": "การชำระเงินผ่านกระเป๋าเงินและการเข้าถึงอุปกรณ์ต้องอนุมัติแยกกัน",
+    "app_authorization_level_unset": "ยังไม่ได้เลือก",
+    "app_authorization_level_continue": "ดำเนินการต่อ"
   },
   "comments": {
     "title": "รีวิว",
@@ -1376,6 +1387,8 @@
     "public_as": "โพสต์แบบสาธารณะในชื่อ {{name}}"
   },
   "webln": {
+    "access_title": "การเข้าถึงกระเป๋าเงิน",
+    "access_notice": "อนุญาตให้เข้าถึงกระเป๋าเงินหรือไม่? การชำระเงินยังคงต้องได้รับการยืนยัน",
     "invoice_title": "สร้างคำขอชำระเงิน"
   },
   "wallpaper": {

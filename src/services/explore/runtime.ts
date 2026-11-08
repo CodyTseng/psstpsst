@@ -274,7 +274,9 @@ export class ExploreRuntime {
     const application = this.entry.kind === 'website' ? { title:new URL(this.origin).host,description:'',servers:[],required:[],origin:this.origin } : applicationPresentation(this.entry);
     this.permissions = new SigningPermissions({ accountPubkey: this.account, sourceId,
       ...(this.entry.local ? { localVersion: this.entry.local.version } : {}) }, (signing, signal) => this.options.confirm({ title: application.title, detail: '', signing, application,
-      requester: { title: application.title, origin: sourceId } }, signal ?? this.documentLife.signal), this.documentLife.signal, () => { });
+      requester: { title: application.title, origin: sourceId } }, signal ?? this.documentLife.signal), this.documentLife.signal, () => { },
+      signal => this.options.confirm({ title: application.title, detail: '', appAuthorizationLevel: true, application,
+        accountPubkey: this.account, requester: { title: application.title, origin: sourceId } }, signal));
   }
   private async request(message: ExploreMessage) {
     const document = message.document, signal = this.documentLife.signal;
@@ -388,6 +390,7 @@ export class ExploreRuntime {
       this.device ??= new NappDevice(application, this.account, signal, this.options.confirm);
       return this.device.handle('copyText', args);
     }
+    if (!napp) throw new Error('unsupported-method');
     if (method === 'storeSubscribe') {
       const document = this.document;
       await this.streams.open(method, args, signal,
@@ -403,8 +406,6 @@ export class ExploreRuntime {
     if (method === 'query' || method === 'count') {
       return method === 'count' ? localRelay.count(args[0]) : localRelay.query(args[0]);
     }
-    if (!napp)
-      throw new Error('unsupported-method');
     if (method.startsWith('dev.installLocal.')) {
       if (!this.entry.required.includes('dev')) throw new Error('permission-denied');
       const { LocalInstaller } = await import('./local-installer'); current();

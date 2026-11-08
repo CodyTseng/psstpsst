@@ -1364,7 +1364,18 @@
     "ask_every_time": "Perguntar sempre",
     "default_app_title": "Aplicação predefinida",
     "default_app_current": "Atualmente abre automaticamente com {{app}}.",
-    "ask_every_time_notice": "Escolher uma aplicação para cada pedido."
+    "ask_every_time_notice": "Escolher uma aplicação para cada pedido.",
+    "app_authorization_level_title": "Tratamento de pedidos",
+    "app_authorization_level_intro": "Escolha como tratar os pedidos desta aplicação.",
+    "app_authorization_level_manual": "Aprovar individualmente",
+    "app_authorization_level_manual_description": "Perguntar se não houver decisão guardada.",
+    "app_authorization_level_routine": "Uso diário (recomendado)",
+    "app_authorization_level_routine_description": "Permitir acesso básico, assinaturas e cifragem comuns. Perguntar para o resto.",
+    "app_authorization_level_trusted": "Confiar nesta aplicação",
+    "app_authorization_level_trusted_description": "Permitir acesso básico, todas as assinaturas, cifragem e decifragem.",
+    "app_authorization_level_boundaries": "Pagamentos da carteira e acesso ao dispositivo exigem aprovação separada.",
+    "app_authorization_level_unset": "Não selecionado",
+    "app_authorization_level_continue": "Continuar"
   },
   "comments": {
     "title": "Avaliações",
@@ -1381,6 +1392,8 @@
     "public_as": "A publicar publicamente como {{name}}"
   },
   "webln": {
+    "access_title": "Acesso à carteira",
+    "access_notice": "Permitir acesso à carteira? Os pagamentos continuarão a exigir confirmação.",
     "invoice_title": "Criar pedido de pagamento"
   },
   "wallpaper": {

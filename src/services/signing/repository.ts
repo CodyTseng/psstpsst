@@ -1,7 +1,8 @@
+import { isAppAuthorizationLevel, type AppAuthorizationLevel } from '@/services/app-authorization/model';
 import { isApplicationAction } from './action-request';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, type Database } from '@/db/client';
-import { signingAuthorizations, signingActivity, localApplications } from '@/db/schema';
+import { signingAuthorizations, signingActivity, appAuthorizationPreferences, localApplications } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { canRememberSigning, isSignerAccess, signingRuleKey, signingScope, type SigningActivity, type SigningRule, type SigningScope, type SigningSnapshot } from './model';
 import { invalidateSigning, invalidateSigningAccount } from './changes';
@@ -29,11 +30,13 @@ const whereRule = (scope: SigningAccountScope, rule: SigningScope) => {
 
 export async function readSigningSnapshot(scope: SigningAccountScope): Promise<SigningSnapshot> {
   await assertCurrentSigningSource(scope);
-  const [rules, activity] = await Promise.all([
+  const [rules, activity, preference] = await Promise.all([
     db.select().from(signingAuthorizations).where(whereSource(scope)),
     db.select().from(signingActivity).where(and(eq(signingActivity.accountPubkey, scope.accountPubkey), eq(signingActivity.sourceId, scope.sourceId))).orderBy(desc(signingActivity.id)).limit(32),
+    db.select().from(appAuthorizationPreferences).where(preferenceSource(scope)).get(),
   ]);
   return {
+    level: isAppAuthorizationLevel(preference?.level) ? preference.level : undefined,
     rules: rules.filter((row) => row.expiresAt === null || row.expiresAt > Date.now()).flatMap((row) => {
       const operation = row.operation as SigningScope['operation'];
       let canonical: SigningScope;
@@ -87,7 +90,10 @@ export async function deleteSigningRule(scope: SigningAccountScope, key: string)
 }
 export async function clearSigningPermissions(scope: SigningAccountScope): Promise<void> {
   invalidateSigning(scope);
-  await db.delete(signingAuthorizations).where(whereSource(scope));
+  await db.transaction(async tx => {
+    await tx.delete(signingAuthorizations).where(whereSource(scope));
+    await tx.delete(appAuthorizationPreferences).where(preferenceSource(scope));
+  });
   invalidateSigning(scope);
 }
 export async function recordSigningActivity(scope: SigningAccountScope, entry: SigningActivity): Promise<void> {
@@ -101,6 +107,33 @@ export async function recordSigningActivity(scope: SigningAccountScope, entry: S
 }
 export async function clearAccountSigningPermissions(accountPubkey: string): Promise<void> {
   invalidateSigningAccount(accountPubkey);
-  await db.delete(signingAuthorizations).where(eq(signingAuthorizations.accountPubkey, accountPubkey));
+  await db.transaction(async tx => {
+    await tx.delete(signingAuthorizations).where(eq(signingAuthorizations.accountPubkey, accountPubkey));
+    await tx.delete(appAuthorizationPreferences).where(eq(appAuthorizationPreferences.accountPubkey, accountPubkey));
+  });
   invalidateSigningAccount(accountPubkey);
+}
+
+const preferenceSource = (scope: SigningAccountScope) => and(eq(appAuthorizationPreferences.accountPubkey, scope.accountPubkey), eq(appAuthorizationPreferences.sourceId, scope.sourceId));
+
+/** Guard consent against concurrent edits; notify every host only after the write commits. */
+export async function saveAppAuthorizationLevel(scope: SigningAccountScope, level: AppAuthorizationLevel, guard?: () => void): Promise<number> {
+  if (!isAppAuthorizationLevel(level)) throw new Error('invalid-app-authorization-level');
+  await db.transaction(async tx => {
+    guard?.();
+    await assertCurrentSigningSource(scope, tx);
+    if (!await canReceiveForAccount(scope.accountPubkey, tx)) throw new Error('account-unavailable');
+    await tx.insert(appAuthorizationPreferences).values({ accountPubkey: scope.accountPubkey, sourceId: scope.sourceId, level })
+      .onConflictDoUpdate({ target: [appAuthorizationPreferences.accountPubkey, appAuthorizationPreferences.sourceId], set: { level } });
+    guard?.();
+  });
+  // A named invalidation preserves explicit session exceptions while changing policy.
+  return invalidateSigning(scope, 'level');
+}
+
+/** Launch checks need only the indexed policy row, not signer history or exceptions. */
+export async function readAppAuthorizationLevel(scope: SigningAccountScope): Promise<AppAuthorizationLevel | undefined> {
+  await assertCurrentSigningSource(scope);
+  const preference = await db.select().from(appAuthorizationPreferences).where(preferenceSource(scope)).get();
+  return isAppAuthorizationLevel(preference?.level) ? preference.level : undefined;
 }

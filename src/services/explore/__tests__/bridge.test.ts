@@ -18,7 +18,8 @@ it.each([true, false])('injects NIP-07 before page scripts (napp: %s)', async (n
   await expect(result).resolves.toBe('account');
 });
 
-it.each([true, false])('exposes the complete local database API and preserves add results (napp: %s)', async napp => {
+it('exposes the complete local database API and preserves add results for napps', async () => {
+  const napp = true;
   const post = jest.fn();
   const page: any = { __exploreDocumentCommitted: true, __exploreDocumentToken: 'document', __psstExplore: { post } };page.top = page;
   new Function('window','addEventListener','requestAnimationFrame','document','navigator',exploreBridge(napp))(page,jest.fn(),jest.fn(),documentBeforeReady,{});
@@ -125,4 +126,15 @@ it('holds document-start calls until native commit and attaches the native docum
   expect(request.documentToken).toBe('native-committed-document');
   page.__exploreReceive({ id: request.id, nonce: request.nonce, result: 'account' });
   await expect(pending).resolves.toBe('account');
+});
+
+it('exposes only the NIP-07 and WebLN application providers to ordinary webpages', () => {
+  const page: any = { __exploreDocumentCommitted: true, __exploreDocumentToken: 'document', __psstExplore: { post: jest.fn() } };
+  page.top = page;
+  new Function('window', 'addEventListener', 'requestAnimationFrame', 'document', 'navigator', exploreBridge(false))(
+    page, jest.fn(), jest.fn(), documentBeforeReady, {});
+  expect(page.nostr.getPublicKey).toBeInstanceOf(Function);
+  expect(page.webln.enable).toBeInstanceOf(Function);
+  expect(page.nostrdb).toBeUndefined();
+  expect(page.napp).toBeUndefined();
 });

@@ -77,24 +77,25 @@ test('Explore serves verified bundles and binds NIP-07 and WebLN requests and re
       await wait(20);
     }
     assert((await events()).some(e=>e.id===streaming&&JSON.parse(e.raw).raw?.includes('streamClose')));
+    await guest.executeJavaScript('window.largeAdd=nostrdb.add({id:"large",content:"x".repeat(2*1024*1024+1024)});void 0');
+    let addRequest;
+    for(let i=0;i<100;i++){
+      addRequest=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===streaming&&e.message.raw?.includes('storeAdd'));
+      if(addRequest)break;await wait(20);
+    }
+    assert(addRequest,'large add requests must pass the document transport');
+    const addRaw=JSON.parse(addRequest.message.raw);
+    assert.equal(addRaw.args[0].content.length,largeContent.length);
+    await invoke(IPC.nappletSend,streaming,JSON.stringify({document:addRequest.message.document,reply:{id:addRaw.id,nonce:addRaw.nonce,result:false}}));
+    assert.equal(await guest.executeJavaScript('window.largeAdd'),false,'database add keeps its boolean result across the full transport');
     const website=await invoke(IPC.exploreOpen,{url:'http://127.0.0.1:'+port+'/',sourceId:'account:site',storageId:'A',network:true,script:'',bootstrap:{napp:false,domains:[],instance:'fixture'}});
     guest=webContents.getAllWebContents().find(w=>w.getURL().startsWith('http://127.0.0.1:'+port));assert(guest);
     let first;
     for(let i=0;i<100;i++){first=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===website&&e.message.raw?.includes('getPublicKey'));if(first)break;await wait(20);}
     assert(first);assert.equal(first.message.origin,'http://127.0.0.1:'+port);
     const oldRequest=JSON.parse(first.message.raw);
-    assert.equal(await guest.executeJavaScript('typeof window.nostrdb.add'),'function','ordinary websites receive the local database API');
-    await guest.executeJavaScript('window.largeAdd=nostrdb.add({id:"large",content:"x".repeat(2*1024*1024+1024)});void 0');
-    let addRequest;
-    for(let i=0;i<100;i++){
-      addRequest=(await events()).map(e=>({...e,message:JSON.parse(e.raw)})).find(e=>e.id===website&&e.message.raw?.includes('storeAdd'));
-      if(addRequest)break;await wait(20);
-    }
-    assert(addRequest,'large add requests must pass the document transport');
-    const addRaw=JSON.parse(addRequest.message.raw);
-    assert.equal(addRaw.args[0].content.length,largeContent.length);
-    await invoke(IPC.nappletSend,website,JSON.stringify({document:addRequest.message.document,reply:{id:addRaw.id,nonce:addRaw.nonce,result:false}}));
-    assert.equal(await guest.executeJavaScript('window.largeAdd'),false,'database add keeps its boolean result across the full transport');
+    assert.equal(await guest.executeJavaScript('typeof window.nostrdb'),'undefined','ordinary websites have no local database API');
+    assert.equal(await guest.executeJavaScript('typeof window.napp'),'undefined');
     await guest.executeJavaScript('location.href="/next"');await wait(50);
     await guest.executeJavaScript('window.__psstExplore.post('+JSON.stringify(JSON.stringify({...oldRequest,id:'transition-probe'}))+')');
     await wait(50);

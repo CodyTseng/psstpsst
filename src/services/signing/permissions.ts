@@ -1,20 +1,19 @@
+import { isAppAuthorizationLevel, type AppAuthorizationLevel } from '@/services/app-authorization/model';
 import { applicationActionRequest, isApplicationAction } from './action-request';
 import { assertNotAborted, linkAbort } from '@/platform/abort';
-import { assertCurrentSigningSource, readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
+import { saveAppAuthorizationLevel, assertCurrentSigningSource, readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
 import { normalizeSigningSource } from './source';
 import { invalidateSigning, signingRevision, subscribeSigning } from './changes';
 import { queueAuthorization } from './authorization-queue';
-
-import { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, SIGNING_PERIODS,
-  isSigningRuleActive as activeRule, isSignerAccess, type SignerAccessOperation,
-  type SigningScope, type SigningRequest, type SigningRule, type SigningActivity, type SigningSnapshot, type SigningRuleChange, type SigningRuleTarget,
-} from './model';
+import { automaticallyAllowsSigning } from '../app-authorization/policy';
+import { signingScope, signingRuleKey, canRememberSigning, replaceSigningRule, SIGNING_PERIODS, isSigningRuleActive as activeRule, isSignerAccess, type SignerAccessOperation, type SigningScope, type SigningRequest, type SigningRule, type SigningActivity, type SigningSnapshot, type SigningRuleChange, type SigningRuleTarget } from './model';
 export { readSigningSnapshot } from './repository';
 export * from './model';
 
 /** Session grants stay in memory; durable rules are shared by account and verified source. */
 export class SigningPermissions {
   private loaded?: Promise<void>;
+  private level?: AppAuthorizationLevel;
   private revoked = new Set<string>();
   private rules: SigningRule[] = [];
   private activity: SigningActivity[] = [];
@@ -24,6 +23,7 @@ export class SigningPermissions {
     private confirm: (request: SigningRequest, signal?: AbortSignal) => Promise<string | false>,
     private signal: AbortSignal,
     private changed: () => void,
+    private chooseLevel?: (signal: AbortSignal) => Promise<string | false>,
   ) {
     this.scope = { ...scope, sourceId: normalizeSigningSource(scope.sourceId) };
     const unsubscribe = subscribeSigning(this.scope, ({ key }) => {
@@ -37,14 +37,17 @@ export class SigningPermissions {
   private load() {
     return this.loaded ??= readSigningSnapshot(this.scope).then((value) => {
       assertNotAborted(this.signal);
-      this.rules = [...value.rules, ...this.rules.filter((rule) => rule.duration === 'session')];
+      const merged = new Map(value.rules.map(rule => [rule.key, rule]));
+      for (const rule of this.rules) if (rule.duration === 'session' && activeRule(rule)) merged.set(rule.key, rule);
+      this.rules = [...merged.values()];
       this.activity = value.activity;
+      this.level = value.level;
     });
   }
   async snapshot(): Promise<SigningSnapshot> {
     await this.load();
     assertNotAborted(this.signal);
-    return { rules: this.rules.filter(activeRule), activity: [...this.activity].reverse() };
+    return { rules: this.rules.filter(activeRule), activity: [...this.activity].reverse(), level: this.level };
   }
   get version(): number { return signingRevision(this.scope); }
   async settled(): Promise<void> { await this.writes.catch(() => {}); }
@@ -124,11 +127,38 @@ export class SigningPermissions {
     assertNotAborted(this.signal);
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
     current();
+    if (!this.level && this.chooseLevel) {
+      const linked = linkAbort(requestSignal ? [this.signal, requestSignal] : [this.signal]);
+      let selected: string | false;
+      try { selected = await this.chooseLevel(linked.signal); }
+      finally { linked.dispose(); }
+      current();
+      if (!isAppAuthorizationLevel(selected)) throw new Error('permission-denied');
+      if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
+      const level = selected;
+      const update = this.writes.catch(() => {}).then(async () => {
+        current();
+        revision = await saveAppAuthorizationLevel(this.scope, level, current);
+        current();
+        this.level = level;
+        // Reload after the broadcast, retaining explicit decisions and session exceptions.
+        await this.load();
+        current();
+        this.changed();
+      });
+      this.writes = update;
+      await update;
+    }
+    if (automaticallyAllowsSigning(this.level, request)) {
+      await this.record(request, 'automatic');
+      current();
+      return revision;
+    }
     const scope = signingScope(request);
     const key = signingRuleKey(scope);
     let rule = this.rules.find((entry) => entry.key === key && !this.revoked.has(key) && activeRule(entry));
     if (rule?.decision === 'allow' && !canRememberSigning(scope)) rule = undefined;
-    if (rule) {
+    if (rule && rule.decision !== 'ask') {
       await this.record(request, rule.decision === 'allow' ? 'automatic' : 'denied');
       current();
       if (rule.decision === 'deny') throw new Error('permission-denied');

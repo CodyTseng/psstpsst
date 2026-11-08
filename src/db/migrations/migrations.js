@@ -1,3 +1,5 @@
+import m0084 from './0084_app-authorization.sql';
+import m0083 from './0083_signing-levels.sql';
 import m0082 from './0082_signing-authorization-scope.sql';
 import m0081 from './0081_website-visit-suggestions.sql';
 import m0080 from './0080_explore-search-history.sql';
@@ -171,6 +173,8 @@ m0078,
 m0079,
 m0080,
 m0081,
-m0082
+m0082,
+m0083,
+m0084
     }
   }

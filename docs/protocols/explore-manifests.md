@@ -10,7 +10,7 @@ formats remain defined in [napplet manifests](napplet-manifests.md).
 Napps are ordinary web applications with direct network access. Their effective
 host launch requirements include `network` even when the signed `requires` tags
 omit it. This derived requirement is shown in access review and checked against
-persisted grants; older grants need consent before gaining it. The original
+persisted grants; older grants need consent or a level that covers network access before gaining it. The original
 signed manifest is never rewritten. Sealed napplets retain their mediated-only
 resource policy.
 
@@ -49,6 +49,11 @@ methods, regardless of an `identity` requirement declaration. Injection does not
 grant account access or signing authority. Signing returns
 a signed event; it does not publish it. Public-key access uses the shared signer
 authorization service on every request, independently of launch permissions.
+[App authorization levels and exceptions](app-authorization.md) define when review is required.
+Ordinary websites open without application-access or level-selection reviews;
+their first NIP-07 call selects a level for the current verified HTTPS origin.
+They receive only NIP-07 and WebLN providers, with no local-database or napp API.
+WebLN requests wallet access on first enable and reviews payments separately.
 Ordinary event signing uses account/source/kind/d-tag rules. Relay AUTH, HTTP
 authentication and Blossom uploads use independent account/source/action rules
 without destination or HTTP-method qualifiers. Targets remain visible in each

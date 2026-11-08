@@ -1359,7 +1359,18 @@
     "ask_every_time": "毎回確認する",
     "default_app_title": "既定のアプリ",
     "default_app_current": "現在は {{app}} で自動的に開きます。",
-    "ask_every_time_notice": "リクエストごとにアプリを選びます。"
+    "ask_every_time_notice": "リクエストごとにアプリを選びます。",
+    "app_authorization_level_title": "リクエストの処理",
+    "app_authorization_level_intro": "このアプリのリクエストの処理方法を選びます。",
+    "app_authorization_level_manual": "個別に承認",
+    "app_authorization_level_manual_description": "保存済みの判断がなければ確認します。",
+    "app_authorization_level_routine": "日常利用（推奨）",
+    "app_authorization_level_routine_description": "基本アクセス、一般的な署名と暗号化を許可し、それ以外は確認します。",
+    "app_authorization_level_trusted": "このアプリを信頼",
+    "app_authorization_level_trusted_description": "基本アクセス、すべての署名、暗号化、復号を許可します。",
+    "app_authorization_level_boundaries": "ウォレットの支払いと端末へのアクセスは別途確認します。",
+    "app_authorization_level_unset": "未選択",
+    "app_authorization_level_continue": "続ける"
   },
   "comments": {
     "title": "レビュー",
@@ -1376,6 +1387,8 @@
     "public_as": "{{name}} として公開投稿"
   },
   "webln": {
+    "access_title": "ウォレットへのアクセス",
+    "access_notice": "ウォレットへのアクセスを許可しますか？支払いには引き続き確認が必要です。",
     "invoice_title": "支払いリクエストを作成"
   },
   "wallpaper": {

@@ -213,6 +213,8 @@ export function ListRow({
       accessible={onPress != null}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={selectionMode === 'single' ? 'radio' : accessibilityRole}
+      aria-checked={selectionMode === 'single' ? active : undefined}
+      aria-expanded={accessibilityState?.expanded}
       hoverFeedback={onPress && trailingOnHover == null ? undefined : false}
       onHoverIn={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(true)}
       onHoverOut={trailingOnHover == null ? undefined : () => setHoverAccessoryVisible(false)}

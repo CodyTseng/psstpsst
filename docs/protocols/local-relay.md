@@ -5,7 +5,8 @@ The browser-facing API follows [NIP-DB](https://github.com/hzrd149/nips/blob/win
 The local relay is an application API over one device-wide SQLite cache, not a
 WebSocket endpoint. It has no account key. It never reads private chat tables or
 imports the existing account-specific metadata caches.
-`window.nostrdb` is available in hosted websites and Napps. `add` returns whether
+`window.nostrdb` is available in Napps. Ordinary websites and nsites receive
+only NIP-07 and WebLN providers and cannot access this local-database API. `add` returns whether
 the event was accepted; `remove` returns the IDs actually deleted, with internal
 batching rather than a caller-visible ID-count cap.
 

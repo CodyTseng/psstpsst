@@ -91,6 +91,46 @@ test(
         }
       };
       const address = `http://127.0.0.1:${server.address().port}`;
+      if (process.env.NAPPLET_SIGNING_SCENARIO === 'permission-layout') {
+        for (const theme of ['light', 'dark']) for (const width of [390, 950]) {
+          await page.setViewportSize({ width, height: 840 });
+          await page.goto(`${address}/?scenario=permissions&permission-layout=1&surface=touch&theme=${theme}`);
+          const history = page.getByRole('button', { name: 'Recent permission decisions', exact: true });
+          await history.waitFor();
+          await page.getByText('Everyday use (recommended)', { exact: true }).waitFor();
+          const reset = page.getByRole('button', { name: 'Reset permissions', exact: true });
+          assert.equal(Math.round((await reset.boundingBox()).width), Math.round((await history.boundingBox()).width));
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+          if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${width}-permissions.png` });
+          await history.click();
+          assert.equal(await history.getAttribute('aria-expanded'), 'true');
+          await history.click();
+        }
+        assert.deepEqual(errors, []);
+        return;
+      }
+      if (process.env.NAPPLET_SIGNING_SCENARIO === 'levels') {
+        for (const theme of ['light', 'dark']) for (const surface of ['desktop', 'touch']) for (const lang of ['en', 'zh']) {
+          await page.setViewportSize({ width: 390, height: 840 });
+          await page.goto(`${address}/?scenario=app-authorization-level&theme=${theme}&surface=${surface}&lang=${lang}`);
+          const dialog = page.getByRole('dialog');
+          const next = dialog.getByRole('button', { name: lang === 'zh' ? '继续' : 'Continue', exact: true });
+          await next.waitFor();
+          const radios = dialog.getByRole('radio');
+          assert.equal(await radios.count(), 3);
+          assert.equal(await radios.nth(1).isChecked(), true);
+          assert.equal(await dialog.getByRole('button', { name: 'Allow', exact: true }).count(), 0);
+          await radios.nth(2).click();
+          assert.equal(await radios.nth(2).isChecked(), true);
+          if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${surface}-${lang}-levels.png` });
+          // A fixed footer must remain reachable while the choices scroll on short windows.
+          await page.setViewportSize({ width: 320, height: 480 });
+          await next.click();
+          await page.waitForFunction(() => document.title.includes('trusted'));
+        }
+        assert.deepEqual(errors, []);
+        return;
+      }
       if (process.env.NAPPLET_SIGNING_SCENARIO === 'request-layout') {
         const scenarios = ['upload-review', 'public-key', 'encrypt', 'decrypt', 'browser-permission',
           'browser-download', 'save-file', 'installation', 'auth', 'http-auth', 'capabilities', 'raw'];

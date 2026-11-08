@@ -10,6 +10,7 @@ import { SigningApproval, SigningActions } from '../SigningApproval';
 import { NappletOverlays } from '../NappletOverlays';
 import { UploadApproval } from '../UploadApproval';
 import { CapabilityActions, CapabilityApproval } from '../CapabilityApproval';
+import { AppAuthorizationLevelChoices } from '../app-authorization-level-choices';
 import { AppButton } from '@/components/common/AppButton';
 import { ListRow } from '@/components/common/ListRow';
 import { Toggle } from '@/components/common/Toggle';
@@ -89,6 +90,20 @@ function selectDuration(value: string) {
   expect(renderer.root.findAllByType(ActionMenuPanel)).toHaveLength(0);
 }
 const button = (label: string) => renderer.root.findAllByType(AppButton).find((node) => node.props.label === label)!;
+
+it('first-use level selection defaults to Routine and sends only the explicit selection', () => {
+  mockPrompt = { ...prompt, signing: undefined, appAuthorizationLevel: true, accountPubkey: 'a'.repeat(64) };
+  act(() => { renderer = create(<NappletOverlays />); });
+  expect(renderer.root.findByType(AppAuthorizationLevelChoices).props.value).toBe('routine');
+  expect(nappletService.answer).not.toHaveBeenCalled();
+  expect(renderer.root.findAllByType(SigningActions)).toHaveLength(0);
+  act(() => { renderer.root.findByType(AppAuthorizationLevelChoices).props.onChange('trusted'); });
+  act(() => { button('applications.app_authorization_level_continue').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith(prompt.requestId, 'trusted');
+  mockPrompt = { ...mockPrompt, requestId: 'different-source' };
+  act(() => { renderer.update(<NappletOverlays />); });
+  expect(renderer.root.findByType(AppAuthorizationLevelChoices).props.value).toBe('routine');
+});
 
 it.each(['light', 'dark'] as const)('reviews files as app consent without signing controls in %s mode', (scheme) => {
   mockScheme = scheme;
@@ -674,4 +689,18 @@ it.each([['light', 'profile'], ['dark', 'view:0']] as const)('offers opt-in defa
   act(() => { renderer.update(<NappletOverlays />); });
   expect(row().props.remember).toBe(false);
   expect(renderer.root.findByType(Toggle).props.value).toBe(false);
+});
+
+it('reviews wallet access independently of application capabilities or app authorization levels', () => {
+  mockPrompt = { requestId: 'wallet-access', queued: 0, title: 'Wallet access', detail: 'Payments still need confirmation.',
+    walletAccess: true, accountPubkey: 'a'.repeat(64), requester: { title: 'Site', origin: 'https://site.example' } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  const texts = renderer.root.findAllByType(AppText).map(node => node.props.children);
+  const sheet = renderer.root.findByType(jest.requireMock('@/components/common/BottomSheet').BottomSheet);
+  expect(sheet.props.title).toBe('webln.access_title');
+  expect(texts).toContain(mockPrompt.detail);
+  expect(button('applications.app_authorization_level_continue')).toBeUndefined();
+  act(() => { button('applications.allow').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith('wallet-access', 'allow');
+  mockPrompt = null;
 });

@@ -7,9 +7,12 @@ host-owned, using the same lifecycle boundary as the existing NIP-07 bridge.
 
 ## Supported interface
 
-- `enable()` initializes wallet access without a prompt or wallet selection,
-  after checking that a connected wallet exists. Initialization belongs to the
-  current document and is independent of signer permission changes.
+- `enable()` asks for wallet access after checking that a connected wallet
+  exists. The review identifies the verified source and explains that payments
+  still need confirmation; it does not select a payer. Repeated calls in the same
+  document reuse consent. Initialization belongs to the current document and
+  origin; navigation or document replacement requires fresh consent. A pending
+  review is invalidated by source revocation. Opening a website does not prompt.
 - `isEnabled()` reports that document's initialization. Each operation checks wallet
   availability; each payment and invoice review offers only eligible wallets.
 - `getInfo()` returns the default wallet's display name and the union of methods

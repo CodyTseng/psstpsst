@@ -1364,7 +1364,18 @@
     "ask_every_time": "Chiedi ogni volta",
     "default_app_title": "App predefinita",
     "default_app_current": "Attualmente si apre automaticamente con {{app}}.",
-    "ask_every_time_notice": "Scegli un’app per ogni richiesta."
+    "ask_every_time_notice": "Scegli un’app per ogni richiesta.",
+    "app_authorization_level_title": "Gestione richieste",
+    "app_authorization_level_intro": "Scegli come gestire le richieste di questa app.",
+    "app_authorization_level_manual": "Approva singolarmente",
+    "app_authorization_level_manual_description": "Chiedi se non c’è una decisione salvata.",
+    "app_authorization_level_routine": "Uso quotidiano (consigliato)",
+    "app_authorization_level_routine_description": "Consenti accesso di base, firme e crittografia comuni. Chiedi per il resto.",
+    "app_authorization_level_trusted": "Considera attendibile questa app",
+    "app_authorization_level_trusted_description": "Consenti accesso di base, tutte le firme, la crittografia e la decrittografia.",
+    "app_authorization_level_boundaries": "Pagamenti del portafoglio e accesso al dispositivo richiedono conferme separate.",
+    "app_authorization_level_unset": "Non selezionato",
+    "app_authorization_level_continue": "Continua"
   },
   "comments": {
     "title": "Recensioni",
@@ -1381,6 +1392,8 @@
     "public_as": "Pubblicazione pubblica come {{name}}"
   },
   "webln": {
+    "access_title": "Accesso al portafoglio",
+    "access_notice": "Consentire l’accesso al portafoglio? I pagamenti richiederanno comunque conferma.",
     "invoice_title": "Crea richiesta di pagamento"
   },
   "wallpaper": {

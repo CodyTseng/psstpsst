@@ -2,7 +2,7 @@ import { WebLn } from '../webln';
 import { ExploreRuntime } from '../runtime';
 import { platform } from '@/platform';
 import { ApplicationNetwork } from '@/services/applications/network';
-import { memoryRepository, rules } from '@/services/signing/testing/memory-repository';
+import { memoryRepository, rules, levels } from '@/services/signing/testing/memory-repository';
 import { invalidateSigning } from '@/services/signing/changes';
 import type { ExploreEntry } from '../model';
 import { loadSiteBlob } from '@/services/napplet/artifacts';
@@ -62,7 +62,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   debugLog = jest.spyOn(console, 'debug').mockImplementation(() => {});
   warningLog = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  rules.clear();
+  rules.clear(); levels.clear();
   jest.mocked(getData).mockResolvedValue(null);
   (platform.napplet.addMessageListener as jest.Mock).mockImplementation(fn => { receive = fn; return () => { }; });
   confirm = jest.fn(async () => 'allow-always');
@@ -85,42 +85,14 @@ it('waits for native container cleanup and shares repeated stop calls', async ()
   closed(); await stopping;
 });
 
-it('serves the local database API to ordinary websites and preserves add results', async () => {
-  for (const [id, method, args, expected] of [
-    ['read-db', 'query', [{kinds:[1]}], [{id:'event'}]],
-    ['add-db', 'storeAdd', [{id:'event'}], true],
-  ] as const) {
-    receive('container',JSON.stringify({type:'explore.request',origin:'https://site.example',document:'one',
-      raw:JSON.stringify({id,nonce:'test-document',method,args})}));
+it.each(['query', 'count', 'storeAdd', 'storeSubscribe', 'storeRemove', 'storeEvent', 'storeReplaceable'])(
+  'rejects forged website database requests: %s', async method => {
+    message('https://site.example', 'one', method);
     await flush();
-    const reply=JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply;
-    expect(reply.error).toBeUndefined();expect(reply.result).toEqual(expected);
-  }
-  jest.mocked(localRelay.add).mockResolvedValueOnce(false);
-  receive('container',JSON.stringify({type:'explore.request',origin:'https://site.example',document:'one',
-    raw:JSON.stringify({id:'duplicate-db',nonce:'test-document',method:'storeAdd',args:[{id:'event'}]})}));
-  await flush();expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.result).toBe(false);
-  expect(confirm).not.toHaveBeenCalled();
-});
-
-it('releases website local-store listeners when their iterator closes', async () => {
-  let deliver!: (event: any) => void;
-  const cleanup = jest.fn();
-  jest.mocked(localRelay.subscribe).mockImplementationOnce((_filters, listener) => { deliver=listener;return cleanup; });
-  const request = async (id: string, method: string, args: unknown[]) => {
-    receive('container',JSON.stringify({type:'explore.request',origin:'https://site.example',document:'one',
-      raw:JSON.stringify({id,nonce:'test-document',method,args})}));
-    await flush();
-    return JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply;
-  };
-  expect((await request('subscribe-db','storeSubscribe',['website-stream',{kinds:[1]}])).result).toBe(true);
-  deliver({id:'before-close'});await flush();
-  expect((await request('close-db','streamClose',['website-stream'])).result).toBe(true);
-  expect(cleanup).toHaveBeenCalledTimes(1);
-  const sends = jest.mocked(platform.napplet.send).mock.calls.length;
-  deliver({id:'after-close'});await flush();
-  expect(platform.napplet.send).toHaveBeenCalledTimes(sends);
-});
+    expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.error).toBe('unsupported-method');
+    for (const call of Object.values(localRelay)) expect(call).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+  });
 
 it('waits for a container still opening to be closed before cleanup completes', async () => {
   await runtime.stop();
@@ -274,13 +246,14 @@ it('still denies account access for a napp when consent is refused', async () =>
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(JSON.parse((platform.napplet.send as jest.Mock).mock.calls.at(-1)![1]).reply.error).toBe('permission-denied');
 });
-it('clears live remembered authority through the shared repository', async () => {
+it('reset asks for a level again and clears live remembered authority', async () => {
+  confirm.mockImplementation(async prompt => prompt.appAuthorizationLevel ? 'manual' : 'allow-always');
   message('https://site.example', 'one');
   await flush();
   await memoryRepository.clearSigningPermissions({ accountPubkey: 'account', sourceId: 'https://site.example' });
   message('https://site.example', 'one', 'signEvent', '2');
   await flush();
-  expect(confirm).toHaveBeenCalledTimes(2);
+  expect(confirm).toHaveBeenCalledTimes(3);
 });
 
 it('reviews a well-formed relay AUTH event for its destination',async()=>{
@@ -526,4 +499,52 @@ it('ignores late multi-file progress and aborts every worker when the container 
   await cancelled;
   expect(signals.every(signal => signal.aborted)).toBe(true);
   expect(progress).toHaveBeenCalledTimes(updates);
+});
+
+it('defers website level selection until a NIP-07 call and scopes it to the committed origin', async () => {
+  const site = { accountPubkey: 'account', sourceId: 'https://site.example' };
+  const other = { accountPubkey: 'account', sourceId: 'https://other.example' };
+  levels.set(JSON.stringify(site), undefined);
+  levels.set(JSON.stringify(other), undefined);
+  expect(confirm).not.toHaveBeenCalled();
+  confirm.mockResolvedValue('routine');
+  message(site.sourceId, 'one');
+  await flush();
+  expect(confirm).toHaveBeenCalledTimes(1);
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ appAuthorizationLevel: true,
+    requester: { title: 'site.example', origin: site.sourceId } }), expect.any(AbortSignal));
+  expect(levels.get(JSON.stringify(site))).toBe('routine');
+  message(site.sourceId, 'two');
+  await flush();
+  expect(confirm).toHaveBeenCalledTimes(1);
+  receive('container', JSON.stringify({ type: 'explore.navigation', phase: 'commit', origin: other.sourceId, document: 'three' }));
+  expect(confirm).toHaveBeenCalledTimes(1);
+  message(other.sourceId, 'three');
+  await flush();
+  expect(confirm).toHaveBeenCalledTimes(2);
+  expect(confirm).toHaveBeenLastCalledWith(expect.objectContaining({ appAuthorizationLevel: true,
+    requester: { title: 'other.example', origin: other.sourceId } }), expect.any(AbortSignal));
+});
+it('retains local database access and subscription cleanup for napps', async () => {
+  await runtime.stop();
+  runtime = new ExploreRuntime('account', { ...entry, kind: 'napp', key: 'naddr-test', files: [], required: [] },
+    { confirm, close: () => {}, link: () => {} });
+  await runtime.start();
+  const origin = 'https://app.explore.psstpsst.invalid';
+  receive('container', JSON.stringify({ type: 'explore.navigation', phase: 'commit', origin, document: 'napp' }));
+  const request = async (method: string, args: unknown[]) => {
+    receive('container', JSON.stringify({ type: 'explore.request', origin, document: 'napp',
+      raw: JSON.stringify({ id: method, nonce: 'test-document', method, args }) }));
+    await flush();
+    return JSON.parse(jest.mocked(platform.napplet.send).mock.calls.at(-1)![1]).reply;
+  };
+  expect((await request('query', [{ kinds: [1] }])).result).toEqual([{ id: 'event' }]);
+  jest.mocked(localRelay.add).mockResolvedValueOnce(false);
+  expect((await request('storeAdd', [{ id: 'duplicate' }])).result).toBe(false);
+  const cleanup = jest.fn();
+  jest.mocked(localRelay.subscribe).mockReturnValueOnce(cleanup);
+  expect((await request('storeSubscribe', ['stream', { kinds: [1] }])).result).toBe(true);
+  expect((await request('streamClose', ['stream'])).result).toBe(true);
+  expect(cleanup).toHaveBeenCalledTimes(1);
+  expect(confirm).not.toHaveBeenCalled();
 });

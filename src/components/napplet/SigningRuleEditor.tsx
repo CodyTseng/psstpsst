@@ -19,19 +19,19 @@ import { signingAction, SigningScopeDetails } from './SigningRequestDetails';
 
 export type EditableSigningRule = Omit<SigningRule, 'decision'> & { decision: SigningRuleChange['decision'] };
 
-export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed }: {
-  rule: EditableSigningRule; visible: boolean;
+export function SigningRuleEditor({ rule, visible, onSave, onClose, onClosed, isNew = false }: {
+  rule: EditableSigningRule; visible: boolean; isNew?: boolean;
   onSave(change: SigningRuleChange): Promise<void>; onClose(): void; onClosed(): void;
 }) {
   const { t } = useTranslation();
-  return <PermissionRuleEditor rule={rule} title={signingAction(rule.scope, t)} visible={visible} onSave={onSave} onClose={onClose} onClosed={onClosed}>
+  return <PermissionRuleEditor initiallyChanged={isNew} rule={rule} title={signingAction(rule.scope, t)} visible={visible} onSave={onSave} onClose={onClose} onClosed={onClosed}>
     {rule.scope.kind !== undefined && !isApplicationAction(rule.scope) ? <AppText variant="caption" tone="muted">{t('chat.event_reference.kind', { kind: rule.scope.kind })}</AppText> : null}
     {!isApplicationAction(rule.scope) && (rule.scope.scopeKey !== undefined || rule.scope.recipient || rule.scope.relays.length) ? <SigningScopeDetails scope={rule.scope} /> : null}
   </PermissionRuleEditor>;
 }
 
-export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, onClosed, children }: {
-  rule: Pick<EditableSigningRule, 'decision' | 'duration' | 'expiresAt'>; title: string; visible: boolean; children?: ReactNode;
+export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, onClosed, children, initiallyChanged = false }: {
+  rule: Pick<EditableSigningRule, 'decision' | 'duration' | 'expiresAt'>; title: string; visible: boolean; children?: ReactNode; initiallyChanged?: boolean;
   onSave(change: SigningRuleChange): Promise<void>; onClose(): void; onClosed(): void;
 }) {
   const { t } = useTranslation();
@@ -52,7 +52,7 @@ export function PermissionRuleEditor({ rule, title, visible, onSave, onClose, on
     { key: 'always' as const, title: t('applications.signing_duration_always') },
   ];
   const selected = period === 'keep' && (rule.duration === 'always' || rule.decision === 'ask') ? 'always' : period;
-  const changed = decision !== rule.decision || period !== 'keep';
+  const changed = initiallyChanged || decision !== rule.decision || period !== 'keep';
   async function save() {
     if (busy) return;
     setBusy(true); setError(false);

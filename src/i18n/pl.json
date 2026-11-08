@@ -1369,7 +1369,18 @@
     "ask_every_time": "Pytaj za każdym razem",
     "default_app_title": "Aplikacja domyślna",
     "default_app_current": "Obecnie otwiera się automatycznie w {{app}}.",
-    "ask_every_time_notice": "Wybieraj aplikację dla każdego żądania."
+    "ask_every_time_notice": "Wybieraj aplikację dla każdego żądania.",
+    "app_authorization_level_title": "Obsługa żądań",
+    "app_authorization_level_intro": "Wybierz sposób obsługi żądań aplikacji.",
+    "app_authorization_level_manual": "Zatwierdzaj osobno",
+    "app_authorization_level_manual_description": "Pytaj, jeśli nie zapisano decyzji.",
+    "app_authorization_level_routine": "Codzienne użycie (zalecane)",
+    "app_authorization_level_routine_description": "Zezwalaj na podstawowy dostęp, zwykłe podpisy i szyfrowanie. Pytaj o resztę.",
+    "app_authorization_level_trusted": "Ufaj tej aplikacji",
+    "app_authorization_level_trusted_description": "Zezwalaj na podstawowy dostęp, wszystkie podpisy, szyfrowanie i odszyfrowywanie.",
+    "app_authorization_level_boundaries": "Płatności portfela i dostęp do urządzenia wymagają osobnej zgody.",
+    "app_authorization_level_unset": "Nie wybrano",
+    "app_authorization_level_continue": "Dalej"
   },
   "comments": {
     "title": "Opinie",
@@ -1386,6 +1397,8 @@
     "public_as": "Publikowanie publicznie jako {{name}}"
   },
   "webln": {
+    "access_title": "Dostęp do portfela",
+    "access_notice": "Zezwolić na dostęp do portfela? Płatności nadal będą wymagać potwierdzenia.",
     "invoice_title": "Utwórz prośbę o płatność"
   },
   "wallpaper": {

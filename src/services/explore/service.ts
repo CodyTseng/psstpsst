@@ -1,3 +1,5 @@
+import { ensureAppAuthorizationLevel } from '@/services/app-authorization/level';
+import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
 import { resolveApplicationMetadata, subscribeApplicationMetadata } from './application-metadata';
 import { invalidateReplaceableEvents } from '@/services/relay/replaceable-events.service';
 import { platform } from '@/platform';
@@ -9,7 +11,7 @@ import { nappletService, nappletStore } from '@/services/napplet/service';
 import { registerNappletLifecycle, registerNappletVisit, registerNappletTheme, invalidateNappletSource } from '@/services/napplet/lifecycle';
 import { moveDesktopApp } from '@/services/napplet/desktop-order';
 import { clearBrowserPermissions } from './browser-permission-store';
-import { clearSigningPermissions } from '@/services/signing/repository';
+import { readAppAuthorizationLevel, clearSigningPermissions } from '@/services/signing/repository';
 import { getData, setData } from '@/services/napplet/repository';
 import { readFavoriteEntries, readFavoriteReferences, readFavoriteMetadata, reorder, visit, forget } from './repository';
 import { FAVORITES_PAGE_SIZE, fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, type ExploreEntry } from './model';
@@ -318,11 +320,14 @@ export const exploreService = {
   async access(app: ExploreEntry, account: string) {
     const generation=epoch;
     check(account,generation);
+    if (app.kind === 'website') return true;
     const stored=await getData({accountPubkey:account,appKey:this.signingSource(app)},'permissions','domains');
     check(account,generation);
     const domains:unknown=stored?JSON.parse(stored):[];
     if(!Array.isArray(domains)||domains.some(domain=>typeof domain!=='string'))throw new Error('invalid-permissions');
-    return applicationRequirements(app.kind, app.required).every(domain=>domains.includes(domain));
+    const level = await readAppAuthorizationLevel({ accountPubkey: account, sourceId: this.signingSource(app) });
+    check(account, generation);
+    return applicationRequirements(app.kind, app.required).every(domain=>automaticallyAllowsAccess(level,domain)||domains.includes(domain));
   },
   prepare(app: ExploreEntry, account: string, reviewedRequired?:readonly string[]) {
     check(account, epoch);
@@ -417,10 +422,6 @@ export const exploreService = {
     const generation = epoch;
     check(account, generation);
     const sourceId = this.signingSource(app);
-    invalidateNappletSource(account, sourceId);
-    const current = exploreStore.getState().entry;
-    if (current && this.signingSource(current) === sourceId || parents.some(parent => this.signingSource(parent.entry) === sourceId))
-      this.stop();
     await clearSigningPermissions({ accountPubkey: account, sourceId });
     await clearBrowserPermissions({ accountPubkey: account, sourceId });
     check(account, generation);
@@ -428,6 +429,11 @@ export const exploreService = {
     check(account, generation);
     await setData({ accountPubkey: account, appKey: sourceId }, 'permissions', 'denied-domains', null);
     check(account,generation);exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));
+    // Closing an independent host can destroy this JS context, so persist every reset first.
+    invalidateNappletSource(account, sourceId);
+    const current = exploreStore.getState().entry;
+    if (current && this.signingSource(current) === sourceId || parents.some(parent => this.signingSource(parent.entry) === sourceId))
+      this.stop();
   },
   signingSource: applicationSigningSource,
 };
@@ -462,16 +468,20 @@ async function launchRuntime(runId: number, cleanup?: Promise<void>) {
         throw new Error('applications.unsupported');
     }
     const scope = { accountPubkey: account, appKey: exploreService.signingSource(entry) };
-    const stored = await getData(scope, 'permissions', 'domains');
+    const level = entry.kind === 'website' ? undefined : await ensureAppAuthorizationLevel({ accountPubkey: account, sourceId: scope.appKey,
+      ...(entry.local ? { localVersion: entry.local.version } : {}) }, requestSignal => nappletService.requestApproval({
+        title: entry!.title, detail: '', accountPubkey: account, application: applicationPresentation(entry!), appAuthorizationLevel: true,
+      }, requestSignal), signal, current);
+    const stored = entry.kind === 'website' ? null : await getData(scope, 'permissions', 'domains');
     current();
     const grants: string[] = stored ? JSON.parse(stored) : [];
-    if (entry.required.some(d => !grants.includes(d))) {
+    if (entry.required.some(d => !automaticallyAllowsAccess(level,d) && !grants.includes(d))) {
       const reviewed=reviewedAccess?.runId===runId && reviewedAccess.required.length===entry.required.length && entry.required.every(domain=>reviewedAccess!.required.includes(domain));
-      const answer = reviewed?'allow':await nappletService.requestApproval({ title: entry.title, detail: '', accountPubkey: account, application: applicationPresentation(entry) }, signal);
+      const answer = reviewed?'allow':await nappletService.requestApproval({ title: entry.title, detail: '', accountPubkey: account, application: { ...applicationPresentation(entry), required: entry.required.filter(domain => !automaticallyAllowsAccess(level, domain)) } }, signal);
       current();
       if (runId !== exploreStore.getState().runId || answer !== 'allow')
         throw new Error('permission-denied');
-      await setData(scope, 'permissions', 'domains', JSON.stringify(entry.required));
+      await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set([...grants, ...entry.required.filter(domain=>!automaticallyAllowsAccess(level,domain))])]));
       current();exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));
     }
     current();
@@ -525,11 +535,22 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
       app = { ...app, required: applicationRequirements(app.kind, app.required) };
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
       if (app.required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('applications.unsupported');
-      if (!await exploreService.access(app, account)) {
-        const answer = await nappletService.requestApproval({ title: app.title, detail: '', accountPubkey: account, application: applicationPresentation(app) }, launchLife.signal);
-        check(account, generation);
+      const scope = { accountPubkey: account, appKey: exploreService.signingSource(app) };
+      const level = app.kind === 'website' ? undefined : await ensureAppAuthorizationLevel({ accountPubkey: account, sourceId: scope.appKey,
+        ...(app.local ? { localVersion: app.local.version } : {}) }, signal => nappletService.requestApproval({
+          title: app.title, detail: '', accountPubkey: account, application: applicationPresentation(app), appAuthorizationLevel: true,
+        }, signal), launchLife.signal, current);
+      const stored = app.kind === 'website' ? null : await getData(scope, 'permissions', 'domains');
+      current();
+      const grants: unknown = stored ? JSON.parse(stored) : [];
+      if (!Array.isArray(grants) || grants.some(domain => typeof domain !== 'string')) throw new Error('invalid-permissions');
+      const required = app.required.filter(domain => !automaticallyAllowsAccess(level, domain));
+      if (required.some(domain => !grants.includes(domain))) {
+        const answer = await nappletService.requestApproval({ title: app.title, detail: '', accountPubkey: account,
+          application: { ...applicationPresentation(app), required } }, launchLife.signal);
+        current();
         if (answer !== 'allow') throw new Error('permission-denied');
-        await setData({ accountPubkey: account, appKey: exploreService.signingSource(app) }, 'permissions', 'domains', JSON.stringify(app.required));
+        await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set([...grants, ...required])]));
       }
       check(account, generation);
       if (runtime !== instance || !instance.containerId) throw new Error('session-closed');

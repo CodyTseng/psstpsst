@@ -1369,7 +1369,18 @@
     "ask_every_time": "Спрашивать каждый раз",
     "default_app_title": "Приложение по умолчанию",
     "default_app_current": "Сейчас открывается автоматически в {{app}}.",
-    "ask_every_time_notice": "Выбирать приложение для каждого запроса."
+    "ask_every_time_notice": "Выбирать приложение для каждого запроса.",
+    "app_authorization_level_title": "Обработка запросов",
+    "app_authorization_level_intro": "Выберите, как обрабатывать запросы приложения.",
+    "app_authorization_level_manual": "Одобрять отдельно",
+    "app_authorization_level_manual_description": "Спрашивать, если решение не сохранено.",
+    "app_authorization_level_routine": "Повседневное использование (рекомендуется)",
+    "app_authorization_level_routine_description": "Разрешать базовый доступ, обычные подписи и шифрование. Об остальном спрашивать.",
+    "app_authorization_level_trusted": "Доверять приложению",
+    "app_authorization_level_trusted_description": "Разрешать базовый доступ, все подписи, шифрование и расшифровку.",
+    "app_authorization_level_boundaries": "Платежи кошелька и доступ к устройству требуют отдельного согласия.",
+    "app_authorization_level_unset": "Не выбрано",
+    "app_authorization_level_continue": "Продолжить"
   },
   "comments": {
     "title": "Отзывы",
@@ -1386,6 +1397,8 @@
     "public_as": "Публичная публикация от имени {{name}}"
   },
   "webln": {
+    "access_title": "Доступ к кошельку",
+    "access_notice": "Разрешить доступ к кошельку? Платежи по-прежнему требуют подтверждения.",
     "invoice_title": "Создать запрос на оплату"
   },
   "wallpaper": {

@@ -34,7 +34,7 @@ export function CapabilityApproval({ prompt, hideActions = false }: { prompt: Qu
   const browser = prompt.browser;
   const required = prompt.capabilities?.required ?? prompt.application?.required ?? prompt.app?.required ?? [];
   return <View style={{ gap: spacing.lg }}>
-    {prompt.installation ? <>
+    {prompt.walletAccess ? <ApprovalText>{prompt.detail}</ApprovalText> : prompt.installation ? <>
       <ApprovalText>{t(prompt.installation.replacing ? 'applications.local_replace_notice' : 'applications.local_install_notice')}</ApprovalText>
       <ApprovalDetails>
         <ApprovalText>{prompt.installation.target.title}</ApprovalText>

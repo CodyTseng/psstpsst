@@ -15,8 +15,9 @@ export async function getData(
   scope: AppScope,
   bucket: string,
   key: string,
+  transaction: Database = db,
 ): Promise<string | null> {
-  const row = await db
+  const row = await transaction
     .select({ value: nappletData.value })
     .from(nappletData)
     .where(and(scopeWhere(scope, bucket), eq(nappletData.key, key)))

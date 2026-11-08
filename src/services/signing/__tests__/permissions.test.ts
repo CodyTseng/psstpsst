@@ -3,7 +3,7 @@ import type { Signer } from '@/services/signer/signer.interface';
 import { connectSigningWindows } from '../changes';
 import { SigningPermissions, signingRuleKey, type SigningRequest } from '../permissions';
 import { saveSigningRule } from '../repository';
-import { rules as stored, activity } from '../testing/memory-repository';
+import { rules as stored, activity, levels } from '../testing/memory-repository';
 import { PromptQueue, type QueuedPrompt } from '@/services/napplet/prompt-queue';
 
 jest.mock('../repository', () => jest.requireActual('../testing/memory-repository').memoryRepository);
@@ -19,7 +19,7 @@ function create(confirm: jest.Mock = jest.fn(async () => 'allow-always' as strin
   );
   return { permissions, confirm, abort };
 }
-beforeEach(() => { stored.clear(); activity.clear(); jest.clearAllMocks(); });
+beforeEach(() => { stored.clear(); activity.clear(); levels.clear(); jest.clearAllMocks(); });
 afterEach(() => { controllers.splice(0).forEach((value) => value.abort()); });
 
 test('remembers and edits more than 64 rules with long record identifiers', async () => {
@@ -90,7 +90,7 @@ test('editing a saved rule changes its decision immediately and asking removes a
   await expect(value.permissions.authorize(request)).rejects.toThrow('permission-denied');
   expect(value.confirm).toHaveBeenCalledTimes(1);
   await value.permissions.edit(rule, { decision: 'ask', duration: 'always' });
-  expect((await value.permissions.snapshot()).rules).toHaveLength(0);
+  expect((await value.permissions.snapshot()).rules[0].decision).toBe('ask');
   await value.permissions.authorize(request);
   expect(value.confirm).toHaveBeenCalledTimes(2);
 });

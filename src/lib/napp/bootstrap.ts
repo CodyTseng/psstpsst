@@ -189,7 +189,7 @@ export function install(options: {
       throw(error: Error) { finish(error);return Promise.reject(error); },
     };
   };
-  (window as any).nostrdb = { query: (filters: unknown) => call('query', [filters]), event: (id: string) => call('storeEvent', [id]).then(event=>event??undefined),
+  if (options.napp) (window as any).nostrdb = { query: (filters: unknown) => call('query', [filters]), event: (id: string) => call('storeEvent', [id]).then(event=>event??undefined),
     count: (filters: unknown) => call('count', [filters]), add:(event:unknown)=>call('storeAdd',[event]),
     remove:(ids:string[])=>call('storeRemove',[ids]),
     replaceable:(kind:number,author:string,identifier?:string)=>call('storeReplaceable',[kind,author,identifier]).then(event=>event??undefined),
