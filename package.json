@@ -170,6 +170,9 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "transform": {
+      "\\.mjs$": "babel-jest"
+    },
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1",
       "^#alloc$": "<rootDir>/node_modules/uint8arrays/dist/src/alloc.js",
@@ -183,7 +186,7 @@
       "^uint8arrays/(.*)$": "<rootDir>/node_modules/uint8arrays/dist/src/$1.js"
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@libp2p/noise|@noble/.*|@scure/.*|nostr-tools|react-navigation|@react-navigation/.*|react-native-svg|uint8arraylist|uint8arrays))"
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@libp2p/noise|@noble/.*|@scure/.*|nostr-tools|react-navigation|@react-navigation/.*|react-native-svg|lucide-react-native|uint8arraylist|uint8arrays))"
     ]
   },
   "private": true
