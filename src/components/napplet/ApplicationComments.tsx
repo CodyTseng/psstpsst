@@ -8,10 +8,12 @@ import { AppText } from '@/components/common/AppText';
 import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
 import { Avatar } from '@/components/common/Avatar';
+import { InteractivePressable } from '@/components/common/InteractivePressable';
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { useDisplayName } from '@/hooks/use-display-name';
 import { useApplicationComments } from '@/hooks/use-application-comments';
 import { formatListTime } from '@/lib/time';
+import { pushOnce } from '@/lib/navigation';
 import type { ExploreEntry } from '@/services/explore/model';
 import type { ApplicationCommentsSession } from '@/services/explore/comments';
 import { applicationCommentTarget, MAX_COMMENT_LENGTH, type ApplicationComment, type CommentTarget } from '@/services/explore/comments-protocol';
@@ -84,6 +86,7 @@ const CommentItem = memo(function CommentItem({ row, account, session, replying,
 }) {
   const input = useRef<TextInput>(null);
   const { event } = row.comment;
+  const openProfile = () => pushOnce(`/profile/${encodeURIComponent(event.pubkey)}`);
   const { name, profile } = useDisplayName(event.pubkey);
   const colors = useThemeColors();
   const { t } = useTranslation();
@@ -107,10 +110,16 @@ const CommentItem = memo(function CommentItem({ row, account, session, replying,
     </View>
     <View style={{ paddingStart: spacing.lg + row.depth * replyIndent, paddingEnd: spacing.lg,
       paddingVertical: spacing.sm, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
-      <Avatar pubkey={event.pubkey} picture={profile?.picture} size={avatarSize} />
+      <InteractivePressable onPress={openProfile} accessibilityRole="link" accessibilityLabel={`${t('chat.view_profile')}: ${name}`}
+        hitSlop={spacing.xs} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+        <Avatar pubkey={event.pubkey} picture={profile?.picture} size={avatarSize} />
+      </InteractivePressable>
       <View style={{ flex: 1, gap: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
-          <AppText variant="caption" tone="muted" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>{name}</AppText>
+          <InteractivePressable onPress={openProfile} accessibilityRole="link" accessibilityLabel={`${t('chat.view_profile')}: ${name}`}
+            hitSlop={spacing.xs} style={({ pressed }) => ({ flexShrink: 1, opacity: pressed ? 0.7 : 1 })}>
+            <AppText variant="caption" tone="muted" weight="bold" numberOfLines={1}>{name}</AppText>
+          </InteractivePressable>
           <AppText variant="caption" tone="muted">{formatListTime(event.created_at, undefined, dateTimeFormatPreferences)}</AppText>
         </View>
         <AppText {...userDirection} style={userTextStyle} selectable>{event.content}</AppText>

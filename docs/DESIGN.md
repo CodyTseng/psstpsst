@@ -455,6 +455,8 @@ below the selected review while preserving the top-level draft. All review
 composers omit posting-identity captions. Reply composers appear only on demand, omit redundant
 quotes and pair equal-height Cancel and Post
 buttons in one action row.
+Review author avatars and names open the author's profile with opacity-only
+hover and press feedback.
 Review rows keep metadata, body, and reply actions closely grouped. Composers
 keep their action row close to the input. Separate threads use compact
 whitespace rather than horizontal rules; reply guides carry the hierarchy.

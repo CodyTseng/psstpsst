@@ -4,6 +4,8 @@ import { FlatList, ScrollView, type TextInput } from 'react-native';
 import { AppText } from '@/components/common/AppText';
 import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
+import { InteractivePressable } from '@/components/common/InteractivePressable';
+import { pushOnce } from '@/lib/navigation';
 import { ApplicationComments, CommentComposer } from '../ApplicationComments';
 import { ApplicationDetailsPage } from '../ApplicationDetailsPage';
 import type { ExploreEntry } from '@/services/explore/model';
@@ -20,6 +22,7 @@ const mockState = { rows: [] as CommentRow[], loading: false, loaded: true, erro
 jest.mock('@/hooks/use-application-comments', () => ({ useApplicationComments: () => mockState }));
 jest.mock('@/hooks/use-display-name', () => ({ useDisplayName: (pubkey: string) => ({ name: pubkey === 'account' ? 'Alice' : 'Bob', profile: null }) }));
 jest.mock('@/lib/time', () => ({ formatListTime: () => 'now' }));
+jest.mock('@/lib/navigation', () => ({ pushOnce: jest.fn() }));
 jest.mock('@/stores/theme.store', () => ({ useThemeStore: (select: (state: object) => unknown) => select({ accent: 'blue', preference: mockScheme }) }));
 jest.mock('@/theme', () => ({ ...jest.requireActual('@/theme'), useThemeColors: () => jest.requireActual('@/theme')[mockScheme === 'light' ? 'lightPalette' : 'darkPalette'] }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: { name: string }) => options?.name ? `${key}: ${options.name}` : key }) }));
@@ -43,6 +46,25 @@ let renderer: ReactTestRenderer;
 beforeEach(() => { jest.clearAllMocks(); mockPost.mockReset(); mockState.rows = []; mockState.loading = false; mockState.loaded = true; mockState.error = false; });
 afterEach(() => { act(() => renderer?.unmount()); });
 const input = createRef<TextInput>();
+
+it.each(['light', 'dark'] as const)('opens the author profile from review and reply avatars and names in %s mode', async scheme => {
+  mockScheme = scheme;
+  mockState.rows = ['bob', 'carol'].map((pubkey, depth) => ({
+    comment: { event: { id: pubkey, pubkey, content: 'Review', created_at: 1 } } as ApplicationComment,
+    depth, hasReplies: depth === 0, guideDepths: [], continuesParent: false,
+  }));
+  const entry = { kind: 'website', address: 'https://site.example' } as ExploreEntry;
+  await act(async () => { renderer = create(<ApplicationComments entry={entry} account="account" header={null} />); });
+  const links = renderer.root.findAllByType(InteractivePressable).filter(node => node.props.accessibilityRole === 'link');
+  expect(links).toHaveLength(4);
+  for (const [index, link] of links.entries()) {
+    act(() => { link.props.onPress(); });
+    expect(pushOnce).toHaveBeenLastCalledWith(`/profile/${index < 2 ? 'bob' : 'carol'}`);
+    expect(link.props.accessibilityLabel).toBe('chat.view_profile: Bob');
+    expect(link.props.style({ pressed: true }).opacity).toBeLessThan(1);
+  }
+  expect(renderer.root.findAllByType(CommentComposer)).toHaveLength(1);
+});
 
 it.each(['light', 'dark'] as const)('keeps a top-level composer above the themed thread in %s mode', async scheme => {
   mockScheme = scheme;
