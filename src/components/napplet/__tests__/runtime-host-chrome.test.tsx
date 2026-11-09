@@ -7,6 +7,8 @@ import { ApplicationTaskContext } from '../ApplicationTaskContext';
 import { IconButton } from '@/components/common/IconButton';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import type { ExploreKind } from '@/services/explore/model';
+import { AppScreen } from '@/components/common/AppScreen';
+import { View } from 'react-native';
 
 jest.mock('@/lib/platform', () => ({ IS_ANDROID: true }));
 jest.mock('lucide-react-native/icons/chevron-left', () => () => null);
@@ -29,7 +31,7 @@ jest.mock('@/theme', () => ({ ThemeColorsContext: jest.requireActual('react').cr
 
 beforeEach(() => { jest.mocked(useApplicationNavigation).mockReturnValue({ canGoBack: false, canGoForward: false }); });
 
-it.each<[string | null, ExploreKind, boolean]>([[null, 'website', true], [null, 'napp', true], ['task', 'website', true], ['task', 'nsite', true], ['task', 'napp', true]])(
+it.each<[string | null, ExploreKind, boolean]>([[null, 'website', true], [null, 'napp', true], ['task', 'website', false], ['task', 'nsite', false], ['task', 'napp', false], ['task', 'napplet', false]])(
   'shows navigation/menu chrome for host=%s, kind=%s: %s', (task, kind, header) => {
     let renderer!: ReactTestRenderer;
     act(() => { renderer = create(<ApplicationTaskContext.Provider value={task}>
@@ -37,6 +39,8 @@ it.each<[string | null, ExploreKind, boolean]>([[null, 'website', true], [null, 
         menuEnabled onClose={() => {}} onMore={() => {}} onRetry={() => {}} />
     </ApplicationTaskContext.Provider>); });
     expect(renderer.root.findAllByType(ScreenHeader)).toHaveLength(header ? 1 : 0);
+    expect(renderer.root.findByType(AppScreen).props.edges).toEqual(task ? ['top', 'bottom'] : ['bottom']);
+    expect(renderer.root.findAllByType(View).some(view => view.props.style?.marginTop === (header ? 56 : 0))).toBe(true);
     act(() => renderer.unmount());
   },
 );
@@ -63,12 +67,8 @@ it.each([false, true])('keeps expand out of the independent host controls: windo
     <ApplicationRuntimePage title="Website" windowed={windowed} menuEnabled onOpenWindow={() => {}}
       onClose={() => {}} onMore={() => {}} onRetry={() => {}} />
   </ApplicationTaskContext.Provider>); });
-  if (windowed) expect(renderer.root.findAllByType(IconButton)).toHaveLength(0);
-  else {
-    const header = renderer.root.findByType(ScreenHeader);
-    expect(header.props.left.props.children[1].type).toBe(ApplicationNavigation);
-    expect(header.props.right.props.accessibilityLabel).toBe('applications.runtime_more');
-  }
+  expect(renderer.root.findAllByType(IconButton)).toHaveLength(0);
+  expect(renderer.root.findAllByType(ScreenHeader)).toHaveLength(0);
   act(() => renderer.unmount());
 });
 

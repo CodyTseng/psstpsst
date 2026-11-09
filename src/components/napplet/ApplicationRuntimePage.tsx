@@ -25,6 +25,7 @@ import { ApplicationNavigation, APPLICATION_NAVIGATION_WIDTH } from './Applicati
 import { showToast } from '@/stores/toast.store';
 import { ApplicationTaskContext } from './ApplicationTaskContext';
 import { applicationChromeColors } from '@/theme/application-chrome';
+import { IS_ANDROID } from '@/lib/platform';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
 export function ApplicationRuntimePage({title,application,containerId,active=true,loading,download,error,hidden=false,windowed=false,menuEnabled,showMenu=true,openingWindow=false,onOpenWindow,onClose,onBack,onForward,canReturnToParent=false,navigationBlocked=false,onMore,onRetry,children,overlay,update}:{
@@ -56,7 +57,9 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
   const appearance = !loading && !error && !hidden ? documentAppearance : undefined;
   const chromeColors = useMemo(() => applicationChromeColors(c, appearance), [c, appearance]);
   const nativeWindow = windowed || !!platform.napplet.windows?.isHost;
-  const contentTop = nativeWindow ? 0 : clearance;
+  const androidTask = IS_ANDROID && taskId !== null;
+  const showHeader = !nativeWindow && !androidTask;
+  const contentTop = showHeader ? clearance : 0;
   const more = <IconButton size={uiDensity.headerActionSize}
     icon={<Ellipsis strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={chromeColors.text}/>}
     accessibilityLabel={t('applications.runtime_more')} onPress={onMore} disabled={!menuEnabled || openingWindow}/>;
@@ -67,17 +70,17 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
     {showMenu ? more : null}
   </View> : showMenu ? more : undefined;
   useDesktopWindowTitlebar(nativeWindow && active ? { title, actions: showMenu ? more : undefined, navigation, navigationWidth: APPLICATION_NAVIGATION_WIDTH, colors: chromeColors } : null);
-  return <AppScreen edges={['bottom']}
+  return <AppScreen edges={androidTask ? ['top', 'bottom'] : ['bottom']}
     appearance={appearance}
     statusBarActive={active}>
     <View style={{flex:1,display:hidden?'none':'flex'}}>
-      {nativeWindow ? null : <ThemeColorsContext.Provider value={chromeColors}><ScreenHeader title={title} back={false}
+      {showHeader ? <ThemeColorsContext.Provider value={chromeColors}><ScreenHeader title={title} back={false}
         left={<View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
           <IconButton size={uiDensity.headerActionSize} icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={chromeColors.text}/>} accessibilityLabel={t('common.close')} onPress={onClose}/>
           {navigation}
         </View>}
         titleSideInset={uiDensity.headerActionSize + spacing.xs + APPLICATION_NAVIGATION_WIDTH + spacing.lg}
-        right={actions}/></ThemeColorsContext.Provider>}
+        right={actions}/></ThemeColorsContext.Provider> : null}
 
       <View style={{flex:1,marginTop:contentTop,overflow:'hidden'}}>
         {children}

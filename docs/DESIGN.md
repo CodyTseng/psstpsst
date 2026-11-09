@@ -1322,8 +1322,9 @@ Independent windows merge application
 identity and menu actions into their native title bar, reserve the system caption
 controls, and omit duplicate page headers. Android opens applications as independent
 system tasks with their own app-named Recents cards. Independent application
-and website tasks retain the shared Close, Back and Forward header without a
-floating More control. Pages in the main host also retain the More header action. System Back
+and website tasks omit the host title bar and its reserved space, while retaining
+system safe-area clearance. Pages in the main host retain the shared Close, Back,
+Forward and More header actions. System Back
 traverses the app's history, then closes its task; switching tasks preserves each running app.
 System back gestures cancel pending webpage touches when the gesture starts,
 so navigation never also triggers a page long press.
