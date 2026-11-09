@@ -86,3 +86,11 @@ it('does not turn relay failures or timeouts into EOSE notifications',async()=>{
  options.onEnd([{url:'wss://relay.example/',status:'eose',received:0,reason:'query timed out'}]);
  await flush();expect(send).not.toHaveBeenCalled();streams.clear();
 });
+
+it.each([undefined, 42000])('delegates the stream deadline unless explicitly overridden (%s)',async timeout=>{
+ const subscribe=jest.fn((_options:any)=>()=>{}),streams=new ExploreStreams({subscribe} as unknown as ApplicationNetwork);
+ try {
+  await streams.open('relaySubscribe',['deadline',['wss://relay.example/'],filters,{maxEoseTimeout:timeout}],new AbortController().signal,jest.fn(async()=>{}),jest.fn());
+  expect(subscribe.mock.calls[0][0].timeoutMs).toBe(timeout);
+ } finally { streams.clear(); }
+});

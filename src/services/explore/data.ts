@@ -57,7 +57,7 @@ export class NappData {
     }).finally(() => this.inflight.delete(key));
     this.inflight.set(key, job); return job;
   }
-  async query(relays: string[], filters: Filter[], timeout = 10000, onEvent?: (event: Event) => void) {
+  async query(relays: string[], filters: Filter[], timeout?: number, onEvent?: (event: Event) => void) {
     this.check();
     const response = await (onEvent
       ? this.network.query(relays, filters, this.signal, undefined, timeout, onEvent)

@@ -1,5 +1,6 @@
 import type { Event } from 'nostr-tools';
 import type { ManagedSubscribeOptions, QueryRelayResult } from '@/services/relay/managed-relay-pool';
+import { DEFAULT_EOSE_TIMEOUT_MS } from '@/services/relay/relay-read';
 import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
 import { ApplicationNetwork, relayUrls } from '@/services/applications/network';
 
@@ -68,10 +69,10 @@ it('fetches relay metadata for every outbox author before producing grouped rout
 
 it.each([
   [{ url: relay, status: 'eose', received: 0 }, false, undefined],
-  [{ url: relay, status: 'eose', received: 0, reason: 'auth-required: sign in' }, true, 'network-error'],
-  [{ url: relay, status: 'eose', received: 0, reason: 'query timed out' }, true, 'network-error'],
+  [{ url: relay, status: 'eose', received: 0, reason: 'auth-required: sign in' }, true, undefined],
+  [{ url: relay, status: 'eose', received: 0, reason: 'query timed out' }, true, undefined],
   [{ url: relay, status: 'connection-failed', received: 0, reason: 'TLS failed' }, true, 'network-error'],
-] as [QueryRelayResult, boolean, string | undefined][])('distinguishes an actual EOSE from a rejected or timed-out read', async (result, incomplete, error) => {
+] as [QueryRelayResult, boolean, string | undefined][])('shares transport completion while preserving strict read completeness', async (result, incomplete, error) => {
   const network = new ApplicationNetwork('account');
   let subscription!: ManagedSubscribeOptions;
   const close = jest.fn();
@@ -101,20 +102,43 @@ it.each(['eose', 'connection-failed'] as const)('preserves events from a hinted 
   } finally { network.destroy(); }
 });
 
-it('preserves a successful empty response when another relay exceeds the read budget', async () => {
+it.each([undefined, 1200])('delegates the EOSE deadline to the managed query (%s)', async timeout => {
+  jest.useFakeTimers();
   const network = new ApplicationNetwork('account');
-  const subscriptions = new Map<string, ManagedSubscribeOptions>();
+  let finish!: (result: Awaited<ReturnType<typeof network.pool.query>>) => void;
+  const query = jest.spyOn(network.pool, 'query').mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  try {
+    const expectedTimeout = timeout ?? DEFAULT_EOSE_TIMEOUT_MS;
+    const settled = jest.fn();
+    const pending = network.query([relay], [{ kinds: [1] }], undefined, undefined, timeout);
+    void pending.then(settled);
+    expect(query.mock.calls[0][0].timeoutMs).toBe(expectedTimeout);
+    // Queueing, connection setup and AUTH must not consume the physical REQ deadline.
+    await jest.advanceTimersByTimeAsync(expectedTimeout + 5000);
+    expect(settled).not.toHaveBeenCalled();
+    expect(query.mock.calls[0][0].abort?.aborted).toBe(false);
+    finish({ events: [], status: 'complete', relays: [{ url: relay, status: 'eose', received: 0, reason: 'query timed out' }] });
+    await expect(pending).resolves.toMatchObject({ events: [], incomplete: true, error: undefined });
+  } finally { network.destroy(); jest.useRealTimers(); }
+});
+
+it('cancels active queries with the caller without closing shared pools', async () => {
+  const network = new ApplicationNetwork('account');
+  const caller = new AbortController();
+  let subscription!: ManagedSubscribeOptions;
+  const close = jest.fn();
   jest.spyOn(network.pool, 'subscribe').mockImplementation(options => {
-    const url = options.relays[0];
-    subscriptions.set(url, options);
-    const aborted = () => options.onEnd?.([{ url, status: 'closed', received: 0, reason: 'query aborted' }]);
-    options.abort?.addEventListener('abort', aborted, { once: true });
-    return () => options.abort?.removeEventListener('abort', aborted);
+    subscription = options;
+    options.abort?.addEventListener('abort', () => options.onEnd?.([{ url: relay, status: 'closed', received: 0, reason: 'query aborted' }]), { once: true });
+    return close;
   });
   try {
-    const pending = network.query([relay, 'wss://slow.example/'], [{ kinds: [1111] }], undefined, undefined, 100);
-    subscriptions.get(relay)!.onEnd?.([{ url: relay, status: 'eose', received: 0 }]);
-    await expect(pending).resolves.toMatchObject({ events: [], incomplete: true, error: undefined });
+    const pending = network.query([relay], [{ kinds: [1] }], caller.signal);
+    const rejected = expect(pending).rejects.toThrow();
+    caller.abort();
+    await rejected;
+    expect(subscription.abort?.aborted).toBe(true);
+    expect(close).toHaveBeenCalled();
   } finally { network.destroy(); }
 });
 

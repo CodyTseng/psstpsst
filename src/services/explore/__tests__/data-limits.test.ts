@@ -29,3 +29,12 @@ it('preserves long identifiers and all relay hints in event pointers', () => {
   const result = publicEventAddress({ type: 'naddr', data: { kind: 30023, pubkey: 'a'.repeat(64), identifier, relays } });
   expect(result.relays).toEqual(relays);expect(result.filters[0]['#d']).toEqual([identifier]);
 });
+
+it.each([undefined, 4000])('delegates data query deadlines to the application transport (%s)', async timeout => {
+  const query = jest.fn(async () => ({ events: [], incomplete: false }));
+  const life = new AbortController(), data = new NappData('account', { query } as unknown as ApplicationNetwork, life.signal);
+  try {
+    await data.query(['wss://relay.example/'], [{ kinds: [1] }], timeout);
+    expect(query).toHaveBeenCalledWith(['wss://relay.example/'], [{ kinds: [1] }], life.signal, undefined, timeout);
+  } finally { life.abort(); }
+});

@@ -1196,3 +1196,32 @@ test('does not close or navigate backward when Forward has no destination', asyn
   await expect(runtime.goForward()).rejects.toThrow();
   expect(platform.napplet.goForward).toHaveBeenCalledTimes(1);
 });
+
+it.each([undefined, 42000])('delegates napplet query deadlines without an outer timer (%s)', async timeoutMs => {
+  jest.useFakeTimers();
+  const runtime = new NappletRuntime(options());
+  let finish!: (result: { events: Event[]; incomplete: boolean }) => void;
+  runtime.network.query = jest.fn(() => new Promise(resolve => { finish = resolve; }));
+  await runtime.open();
+  try {
+    const pending = runtime.receive(JSON.stringify({ type: 'relay.query', id: 'deadline', filters: { kinds: [1] }, options: { timeoutMs } }));
+    await jest.advanceTimersByTimeAsync(50000);
+    const query = jest.mocked(runtime.network.query);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][4]).toBe(timeoutMs);
+    expect(query.mock.calls[0][2]?.aborted).toBe(false);
+    finish({ events: [], incomplete: false });
+    await pending;
+    expect(messages().at(-1)).toMatchObject({ type: 'relay.query.result', events: [], incomplete: false });
+  } finally { await runtime.close(); jest.useRealTimers(); }
+});
+
+it.each([undefined, 42000])('delegates napplet subscription deadlines (%s)', async timeoutMs => {
+  const runtime = new NappletRuntime(options());
+  runtime.network.subscribe = jest.fn(() => () => {});
+  await runtime.open();
+  try {
+    await runtime.receive(JSON.stringify({ type: 'relay.subscribe', id: 'deadline', subId: 'deadline', filters: { kinds: [1] }, options: { timeoutMs } }));
+    expect(jest.mocked(runtime.network.subscribe).mock.calls[0][0].timeoutMs).toBe(timeoutMs);
+  } finally { await runtime.close(); }
+});

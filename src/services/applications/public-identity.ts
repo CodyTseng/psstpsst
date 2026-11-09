@@ -132,7 +132,7 @@ export class PublicIdentityData {
         while (offset < jobs.length) {
           const job = jobs[offset++];
           try {
-            const result = await this.network.query([job.relay], job.filters, this.signal, undefined, 10000);
+            const result = await this.network.query([job.relay], job.filters, this.signal);
             this.check();
             for (const event of result.events) merge(event);
             for (const read of job.affected) {

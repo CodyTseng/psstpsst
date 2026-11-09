@@ -70,7 +70,7 @@ export class ExploreStreams {
         let received = 0, delivered = 0;
         const cleanup = this.network.subscribe({ relays: [url], filters: routed, abort: signal,
           label: typeof options?.label === 'string' ? options.label : undefined,
-          timeoutMs: Number.isFinite(options?.maxEoseTimeout) && options.maxEoseTimeout > 0 ? options.maxEoseTimeout : 20000,
+          timeoutMs: Number.isFinite(options?.maxEoseTimeout) && options.maxEoseTimeout > 0 ? options.maxEoseTimeout : undefined,
           onEvent: event => {
             if (closed || seen.has(event.id)) return;
             if (++received === 1) this.diagnostic('received', { streamId: id, relay: url, kind: event.kind });

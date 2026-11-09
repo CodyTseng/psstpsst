@@ -9,6 +9,7 @@ import {
   type Filter,
 } from 'nostr-tools';
 import { verifyEventNativeFirst } from '@/services/relay/relay-pool';
+import { DEFAULT_EOSE_TIMEOUT_MS } from '@/services/relay/relay-read';
 import { buildSigner } from '@/services/account/account-access';
 import {
   ManagedRelayPool,
@@ -119,43 +120,37 @@ export class ApplicationNetwork {
     filters: Filter[],
     signal?: AbortSignal,
     auth?: (event: EventTemplate) => Promise<Event>,
-    timeoutMs = 10000,
+    timeoutMs = DEFAULT_EOSE_TIMEOUT_MS,
     onEvent?: (event: Event) => void,
   ): Promise<NetworkRead> {
     assertNotAborted(this.lifetime.signal); assertNotAborted(signal);
     const linked = linkAbort(signal ? [this.lifetime.signal, signal] : [this.lifetime.signal]);
-    const deadline = Date.now() + timeoutMs;
-    const execute = (release: () => void) => {
-      if (linked.signal.aborted) { release(); linked.dispose(); return Promise.reject(new Error('session-closed')); }
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) { release(); linked.dispose(); return Promise.resolve({ events: [] as Event[], incomplete: true, error: 'network-error' }); }
-      return this.readQuery(relays, filters, linked.signal, auth, remaining, onEvent).finally(() => { linked.dispose(); release(); });
-    };
-    try { return execute(this.destinations.retain(relays)); }
-    catch (error) { linked.dispose(); throw error; }
+    let release: (() => void) | undefined;
+    try {
+      release = this.destinations.retain(relays);
+      return this.readQuery(relays, filters, linked.signal, auth, timeoutMs, onEvent)
+        .finally(() => { linked.dispose(); release?.(); });
+    } catch (error) { linked.dispose(); release?.(); throw error; }
   }
   private async readQuery(relays: string[], filters: Filter[], abort: AbortSignal,
     auth: ((event: EventTemplate) => Promise<Event>) | undefined, timeoutMs: number,
     onEvent?: (event: Event) => void): Promise<NetworkRead> {
-    const budget = new AbortController(), linked = linkAbort([abort, budget.signal]);
-    const timer = setTimeout(() => budget.abort(), timeoutMs);
     const events = new Map<string, Event>();
     const eventRelays = new Map<string, string[]>();
-    try {
-      const result = await (auth ? this.authPool : this.pool).query({
-        relays, filters, abort: linked.signal, signAuth: auth, timeoutMs: Math.max(1, timeoutMs - 50),
-        onEventSource: (event, relayUrl) => { if (events.has(event.id)) eventRelays.set(event.id, [relayUrl]); },
-        onEvent: event => {
-          if (events.has(event.id) || !matchFilters(filters, event)) return;
-          events.set(event.id, event);
-          onEvent?.(event);
-        },
-      });
-      assertNotAborted(abort);
-      return { events: [...events.values()], eventRelays,
-        incomplete: budget.signal.aborted || !result.relays.length || result.relays.some(relay => relay.status !== 'eose' || relay.reason !== undefined),
-        error: !events.size && !result.relays.some(relay => relay.status === 'eose' && relay.reason === undefined) ? 'network-error' : undefined };
-    } finally { clearTimeout(timer); linked.dispose(); }
+    const result = await (auth ? this.authPool : this.pool).query({
+      relays, filters, abort, signAuth: auth, timeoutMs,
+      onEventSource: (event, relayUrl) => { if (events.has(event.id)) eventRelays.set(event.id, [relayUrl]); },
+      onEvent: event => {
+        if (events.has(event.id) || !matchFilters(filters, event)) return;
+        events.set(event.id, event);
+        onEvent?.(event);
+      },
+    });
+    assertNotAborted(abort);
+    return { events: [...events.values()], eventRelays,
+      // Strict consumers still need to distinguish wire EOSE from a deadline or rejection.
+      incomplete: !result.relays.length || result.relays.some(relay => relay.status !== 'eose' || relay.reason !== undefined),
+      error: !events.size && result.status === 'failed' ? 'network-error' : undefined };
   }
   async replaceable(pubkey: string, kind: number, signal?: AbortSignal): Promise<Event | null> {
     assertNotAborted(signal); assertNotAborted(this.lifetime.signal);

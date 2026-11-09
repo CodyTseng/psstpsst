@@ -322,6 +322,9 @@ a timeout EOSE with its reason retained for diagnostics. Live subscriptions stay
 open afterward; late wire EOSE does not complete the same subscription twice.
 EOSE does not remove a subscription; receiving and reconnecting continue only
 while its owner keeps it registered. REQ and AUTH handling are shared.
+Application and Explore reads use the same managed query primitive and default
+EOSE wait, without an additional wall-clock query timer. Adapters may report incomplete reads for stricter cache or mutation
+checks, but transport completion and failure come from the managed query result.
 
 Replaceable metadata is cached newest-wins. Fetches are batched and deduplicated
 so many rows asking for the same profile, relay list, or key announcement do not

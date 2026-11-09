@@ -804,20 +804,7 @@ export class NappletRuntime {
     }
   }
   private async events(m: Message, domain: string, op: string) {
-    if (['close', 'publish', 'publishEncrypted'].includes(op))
-      return this.eventRequest(m, domain, op, this.signal);
-    const timeout = new AbortController();
-    const budget = Number.isFinite(m.options?.timeoutMs) && m.options.timeoutMs > 0 ? m.options.timeoutMs : 10000;
-    const timer = setTimeout(() => timeout.abort(), budget);
-    const linked = linkAbort([this.signal, timeout.signal]);
-    try {
-      await this.eventRequest(m, domain, op, linked.signal);
-    } finally {
-      clearTimeout(timer);
-      linked.dispose();
-    }
-  }
-  private async eventRequest(m: Message, domain: string, op: string, signal: AbortSignal) {
+    const signal = this.signal;
     if (op === 'close') {
       this.streams.get(m.subId)?.();
       this.streams.delete(m.subId);
@@ -829,6 +816,7 @@ export class NappletRuntime {
       return;
     }
     const options = m.options ?? {};
+    const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : undefined;
     if (op === 'resolveRelays') {
       const target = m.target ?? {};
       const authors = target.authors ?? [target.pubkey ?? this.options.accountPubkey];
@@ -890,7 +878,7 @@ export class NappletRuntime {
           {
             relays: currentRoutes,
             filters,
-            timeoutMs: 8000,
+            timeoutMs,
             abort: this.signal,
             onEvent: (event) => {
               if (stopped || seen.has(event.id) || !matchFilters(filters, event)) return;
@@ -965,7 +953,7 @@ export class NappletRuntime {
         assertNotAborted(signal);
         return signed;
       },
-      Math.min(20000, Math.max(100, Number(options.timeoutMs) || 10000)),
+      timeoutMs,
     );
     this.result(
       m,

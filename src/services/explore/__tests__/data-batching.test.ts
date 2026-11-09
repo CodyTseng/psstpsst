@@ -17,7 +17,7 @@ it('merges authors only on the relays to which they were routed', async () => {
     await expect(first).resolves.toMatchObject({ items: [target] });
     await expect(second).resolves.toMatchObject({ items: [target] });
     expect(query).toHaveBeenCalledTimes(2);
-    expect(query).toHaveBeenCalledWith(['wss://shared.example/'], [{ kinds: [3], authors: [a, b], limit: 2 }], life.signal, undefined, 10000);
-    expect(query).toHaveBeenCalledWith(['wss://only-a.example/'], [{ kinds: [3], authors: [a], limit: 1 }], life.signal, undefined, 10000);
+    expect(query).toHaveBeenCalledWith(['wss://shared.example/'], [{ kinds: [3], authors: [a, b], limit: 2 }], life.signal);
+    expect(query).toHaveBeenCalledWith(['wss://only-a.example/'], [{ kinds: [3], authors: [a], limit: 1 }], life.signal);
   } finally { life.abort(); jest.useRealTimers(); }
 });
