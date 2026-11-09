@@ -43,13 +43,9 @@ function observePools() {
     })
     .catch(() => {});
 }
-/** Application relay pools never cross account or AUTH boundaries. */
+/** Each application network owns its connections and AUTH state within one account. */
 export class ApplicationNetwork {
   readonly pool = new ManagedRelayPool({
-    observeLifecycle: false,
-    verifyEvent: (e, relay) => Number.isFinite(eventWeight(e)) && verifyEventNativeFirst(e, relay),
-  });
-  private authPool = new ManagedRelayPool({
     observeLifecycle: false,
     verifyEvent: (e, relay) => Number.isFinite(eventWeight(e)) && verifyEventNativeFirst(e, relay),
   });
@@ -61,10 +57,10 @@ export class ApplicationNetwork {
   private metadataQueue = new Set<PendingMetadata>();
   private metadataTimer?: ReturnType<typeof setTimeout>;
   private destinations = new RelayBudget(relays => {
-    this.pool.forgetIdleRelays(relays); this.authPool.forgetIdleRelays(relays);
+    this.pool.forgetIdleRelays(relays);
   });
   constructor(readonly accountPubkey: string) {
-    [this.pool, this.authPool].forEach((pool) => livePools.add(pool));
+    livePools.add(this.pool);
     observePools();
   }
   async getSigner(): Promise<Signer> {
@@ -110,7 +106,7 @@ export class ApplicationNetwork {
     linked.signal.addEventListener('abort', finish, { once: true });
     try {
       if (linked.signal.aborted) { finish(); return finish; }
-      close = (auth ? this.authPool : this.pool).subscribe({ ...options, abort: linked.signal, signAuth: auth });
+      close = this.pool.subscribe({ ...options, abort: linked.signal, signAuth: auth });
       if (closed) close();
       return finish;
     } catch (error) { finish(); throw error; }
@@ -137,7 +133,7 @@ export class ApplicationNetwork {
     onEvent?: (event: Event) => void): Promise<NetworkRead> {
     const events = new Map<string, Event>();
     const eventRelays = new Map<string, string[]>();
-    const result = await (auth ? this.authPool : this.pool).query({
+    const result = await this.pool.query({
       relays, filters, abort, signAuth: auth, timeoutMs,
       onEventSource: (event, relayUrl) => { if (events.has(event.id)) eventRelays.set(event.id, [relayUrl]); },
       onEvent: event => {
@@ -315,7 +311,7 @@ export class ApplicationNetwork {
             [
               url,
               (
-                await (auth ? this.authPool : this.pool).publishToRelay({
+                await this.pool.publishToRelay({
                   url,
                   event,
                   signAuth: auth,
@@ -331,12 +327,11 @@ export class ApplicationNetwork {
     } finally { release(); }
   }
   destroy(): void {
-    [this.pool, this.authPool].forEach((pool) => livePools.delete(pool));
+    livePools.delete(this.pool);
     this.lifetime.abort();
     this.destinations.close();
     clearTimeout(this.metadataTimer); this.metadataQueue.clear(); this.pendingMetadata.clear();
     this.pool.destroy();
-    this.authPool.destroy();
     this.metadata.clear();
     void this.signer?.then((s) => s.destroy?.()).catch(() => {});
   }

@@ -233,9 +233,10 @@ Each address lookup owns a bounded, disposable relay reader, so browsing differe
 publishers does not exhaust a long-lived app's destination budget. Account changes
 cancel these readers before any result can reach the next account.
 
-Runtime relay clients reuse ManagedRelayPool behavior, with independent public,
-authenticated and NIP-46 transport pools. They never borrow the chat pool's AUTH
-state. Reads are bounded and signed events are verified. OUTBOX resolves author
+Runtime relay clients reuse ManagedRelayPool behavior. Each ApplicationNetwork owns
+one pool shared by ordinary and AUTH-capable requests, including any established
+AUTH state. It stays separate from other application networks, chat and NIP-46
+transport pools. Reads are bounded and signed events are verified. OUTBOX resolves author
 write relays; publication combines own write relays, explicitly requested relays
 and required recipient read relays. Missing required recipient routing fails.
 Live OUTBOX subscriptions refresh routing and retain bounded deduplication state.

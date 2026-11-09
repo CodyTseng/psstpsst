@@ -1048,7 +1048,10 @@ grants; newly required capabilities need fresh consent. Declared optional capabi
 authorization, but their first use waits for host consent. Allows and explicit
 denials are account/application-scoped; cancellation is not a saved denial.
 Concurrent requests share authorization, and no operation runs before consent.
-Artifact hashes identify code and cache entries. Runtime relay AUTH connections never borrow the chat session. Identity-signing
+Artifact hashes identify code and cache entries. Each application network shares one relay pool
+for ordinary and AUTH-capable requests; authenticated connections may serve later requests
+within that network. Connections never cross application/account boundaries or borrow
+the chat or NIP-46 transport sessions. Identity-signing
 leases share the account-owned implementation independently of application relay pools. Only hash-verified immutable
 artifacts are shared across accounts. Artifact storage groups files by canonical
 application coordinate under `documents/app-artifacts/`, with content hashes

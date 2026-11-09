@@ -122,7 +122,7 @@ it.each([undefined, 1200])('delegates the EOSE deadline to the managed query (%s
   } finally { network.destroy(); jest.useRealTimers(); }
 });
 
-it('cancels active queries with the caller without closing shared pools', async () => {
+it.each([false, true])('cancels active queries without closing the shared pool (AUTH-capable: %s)', async authCapable => {
   const network = new ApplicationNetwork('account');
   const caller = new AbortController();
   let subscription!: ManagedSubscribeOptions;
@@ -133,7 +133,9 @@ it('cancels active queries with the caller without closing shared pools', async 
     return close;
   });
   try {
-    const pending = network.query([relay], [{ kinds: [1] }], caller.signal);
+    const auth = authCapable ? jest.fn(async () => ({} as Event)) : undefined;
+    const pending = network.query([relay], [{ kinds: [1] }], caller.signal, auth);
+    expect(subscription.signAuth).toBe(auth);
     const rejected = expect(pending).rejects.toThrow();
     caller.abort();
     await rejected;
