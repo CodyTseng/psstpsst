@@ -5,15 +5,19 @@ import { LocalKeyVault } from '@/platform/vault/local-vault';
 import type { VaultCommand } from '@/platform/ports/key-vault';
 import { loginWithBunker, startNostrConnect } from '../nip46-connect.service';
 import { NIP46_PAIRING_TIMEOUT_MS } from '../nip46-timeout';
+import { createVaultRemoteSigner } from '../vault-remote-signer';
+import { nip46RelayPool } from '../nip46-relay-pool';
 jest.mock('@/platform/vault-access', () => ({ vaultAccess: jest.requireMock('@/platform').platform.keyVault }));
 
 const mockState: {
   vault: LocalKeyVault; bunker: Uint8Array; account: string;
   listener?: (event: Event) => void; stalled: boolean; rejected: boolean;
   requests: string[]; commands: VaultCommand[];
+  listeners: Map<string, (event: Event) => void>;
 } = {} as never;
 
 jest.mock('@/platform', () => ({ platform: {
+  deviceCrypto: { randomUUID: jest.fn(async () => String(Math.random())) },
   urlOpener: { openExternalUrl: jest.fn(async () => {}) },
   keyVault: { execute: jest.fn((command: VaultCommand) => {
     mockState.commands.push(command);
@@ -24,10 +28,13 @@ jest.mock('../../account/account.service', () => ({ addRemoteAccount: async (ses
   const paired = await mockState.vault.execute({ method: 'commitBunkerPairing', session }) as { pubkey: string };
   return { pubkey: paired.pubkey };
 } }));
+jest.mock('@/i18n/core', () => ({ __esModule: true, default: { language: 'en' } }));
 jest.mock('../../relay/managed-relay-pool', () => ({ ManagedRelayPool: jest.fn(() => ({
-  subscribe: (options: { onEvent(event: Event): void }) => {
+  subscribe: (options: { filter: { '#p': string[] }; onEvent(event: Event): void }) => {
+    const recipient = options.filter['#p'][0];
+    mockState.listeners.set(recipient, options.onEvent);
     mockState.listener = options.onEvent;
-    return () => { mockState.listener = undefined; };
+    return () => { mockState.listeners.delete(recipient); mockState.listener = undefined; };
   },
   underlyingPool: { publish: (_relays: string[], event: Event) => {
     const tools = jest.requireActual('nostr-tools') as typeof import('nostr-tools');
@@ -41,10 +48,11 @@ jest.mock('../../relay/managed-relay-pool', () => ({ ManagedRelayPool: jest.fn((
         content: tools.nip44.v2.encrypt(JSON.stringify(mockState.rejected
           ? { id: request.id, error: 'denied' } : { id: request.id, result }), conversation),
       }, mockState.bunker);
-      void Promise.resolve().then(() => mockState.listener?.(response));
+      void Promise.resolve().then(() => mockState.listeners.get(event.pubkey)?.(response));
     }
     return [Promise.resolve('ok')];
   } },
+  forgetIdleRelays: jest.fn(),
   destroy: jest.fn(),
 })) }));
 
@@ -57,7 +65,8 @@ beforeEach(() => {
   });
   mockState.bunker = generateSecretKey(); mockState.account = getPublicKey(generateSecretKey());
   mockState.listener = undefined; mockState.stalled = false; mockState.rejected = false;
-  mockState.requests = []; mockState.commands = [];
+  mockState.requests = []; mockState.commands = []; mockState.listeners = new Map();
+  jest.clearAllMocks();
 });
 afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 
@@ -110,4 +119,39 @@ test('an unanswered reverse invitation times out and releases its session', asyn
   await rejected;
   expect(mockState.listener).toBeUndefined();
   expect(mockState.commands.some(command => command.method === 'cancelBunkerPairing')).toBe(true);
+});
+
+
+test('closing pairing or a signer preserves other sessions on the shared transport', async () => {
+  const relays = ['wss://relay.example/'];
+  const peer = getPublicKey(mockState.bunker);
+  await loginWithBunker(`bunker://${peer}?relay=${encodeURIComponent(relays[0])}`);
+  const remote = createVaultRemoteSigner(mockState.account, { pubkey: peer, relays, secret: null });
+  let invitation: Awaited<ReturnType<typeof startNostrConnect>> | undefined;
+  try {
+    expect(await remote.getPublicKey()).toBe(mockState.account);
+    invitation = await startNostrConnect({ relays });
+    expect(mockState.listeners.size).toBe(2);
+    invitation.cancel();
+    await expect(invitation.waitForConnection()).rejects.toThrow('session ended');
+    expect(mockState.listeners.size).toBe(1);
+    expect(await remote.getPublicKey()).toBe(mockState.account);
+
+    invitation = await startNostrConnect({ relays });
+    await remote.destroy?.();
+    expect(mockState.listeners.size).toBe(1);
+    expect(nip46RelayPool.destroy).not.toHaveBeenCalled();
+    const uri = new URL(invitation.uri);
+    const discovery = finalizeEvent({ kind: 24133, created_at: 1, tags: [['p', uri.hostname]],
+      content: nip44.v2.encrypt(JSON.stringify({ id: 'discovery', result: uri.searchParams.get('secret') }),
+        nip44.v2.utils.getConversationKey(mockState.bunker, uri.hostname)),
+    }, mockState.bunker);
+    mockState.listeners.get(uri.hostname)!(discovery);
+    await expect(invitation.waitForConnection()).resolves.toEqual({ pubkey: mockState.account });
+    expect(mockState.listeners.size).toBe(0);
+    expect(nip46RelayPool.destroy).not.toHaveBeenCalled();
+  } finally {
+    invitation?.cancel();
+    await remote.destroy?.();
+  }
 });

@@ -2,14 +2,13 @@ import { vaultAccess } from '@/platform/vault-access';
 import { type Event, type EventTemplate, verifyEvent } from 'nostr-tools';
 import type { BunkerPointer } from 'nostr-tools/nip46';
 import { platform } from '@/platform';
-import { ManagedRelayPool } from '../relay/managed-relay-pool';
+import { nip46RelayPool as pool } from './nip46-relay-pool';
 import { createVaultSigner } from './vault-signer';
 import type { Signer } from './signer.interface';
 import { withNip46Timeout } from './nip46-timeout';
 
 /** Bunker transport uses the vault's client key without reading that credential. */
 export function createVaultRemoteSigner(account: string, pointer: BunkerPointer): Signer {
-  const pool = new ManagedRelayPool({ verifyEvent: event => verifyEvent(event) });
   const client = createVaultSigner({ account, role: 'nip46-client' });
   const pending = new Map<string, { resolve(value: string): void; reject(error: Error): void; authOpened: boolean }>();
   let closed = false;
@@ -20,6 +19,7 @@ export function createVaultRemoteSigner(account: string, pointer: BunkerPointer)
   const disconnect = () => {
     generation++;
     unsubscribe?.(); unsubscribe = null;
+    pool.forgetIdleRelays(pointer.relays);
     connection = null;
     for (const request of pending.values()) request.reject(new Error('Bunker connection ended'));
     pending.clear();
@@ -109,7 +109,7 @@ export function createVaultRemoteSigner(account: string, pointer: BunkerPointer)
     destroy: async () => {
       if (closed) return;
       closed = true; disconnect();
-      await client.destroy?.(); pool.destroy();
+      await client.destroy?.();
     },
   } satisfies Signer);
 }

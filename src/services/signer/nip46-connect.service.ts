@@ -1,19 +1,18 @@
 import { vaultAccess } from '@/platform/vault-access';
-import { verifyEvent, type Event } from 'nostr-tools';
+import type { Event } from 'nostr-tools';
 import { BUNKER_REGEX, parseBunkerInput } from 'nostr-tools/nip46';
 
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { platform } from '@/platform';
 import type { BunkerPairing, PairingResponse } from '@/platform/ports/key-vault';
 import { addRemoteAccount } from '../account/account.service';
-import { ManagedRelayPool } from '../relay/managed-relay-pool';
+import { nip46RelayPool } from './nip46-relay-pool';
 import { NIP46_PAIRING_TIMEOUT_MS, withNip46Timeout } from './nip46-timeout';
 
 export const NIP46_DEFAULT_RELAYS = ['wss://relay.damus.io/', 'wss://nos.lol/'];
 
 /** Relay transport sees only public metadata and encrypted, native-signed messages. */
 class PairingTransport {
-  private pool = new ManagedRelayPool({ verifyEvent: event => verifyEvent(event) });
   private closed = false;
   private stop?: () => void;
   private pending?: { resolve(): void; reject(error: Error): void };
@@ -27,7 +26,7 @@ class PairingTransport {
       this.resolvePeer = resolve; this.rejectPeer = reject;
     });
     void this.peerReady.catch(() => {});
-    this.stop = this.pool.subscribe({ label: 'bunker-pairing', relays,
+    this.stop = nip46RelayPool.subscribe({ label: 'bunker-pairing', relays,
       filter: { kinds: [24133], ...(peer ? { authors: [peer] } : {}), '#p': [pairing.clientPubkey], limit: 0 },
       onEvent: event => {
         // Keep discovery and handshake replies in wire order across native round trips.
@@ -61,7 +60,7 @@ class PairingTransport {
     this.current();
     const response = new Promise<void>((resolve, reject) => { this.pending = { resolve, reject }; });
     void response.catch(() => {});
-    const work = Promise.any(this.pool.underlyingPool.publish(this.relays, event, { maxWait: 60_000 })).then(() => response);
+    const work = Promise.any(nip46RelayPool.underlyingPool.publish(this.relays, event, { maxWait: 60_000 })).then(() => response);
     try { await withNip46Timeout(work, operation, undefined, () => this.close()); }
     finally { this.pending = undefined; }
     this.current();
@@ -82,7 +81,7 @@ class PairingTransport {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    this.stop?.(); this.pool.destroy();
+    this.stop?.(); nip46RelayPool.forgetIdleRelays(this.relays);
     const error = new Error('Pairing session ended');
     this.pending?.reject(error); this.rejectPeer?.(error);
     void vaultAccess.execute({ method: 'cancelBunkerPairing', session: this.pairing.session }).catch(() => {});

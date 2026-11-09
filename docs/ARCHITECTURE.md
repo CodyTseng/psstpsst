@@ -216,7 +216,10 @@ connection credential set. Legacy DB-secret migration fills only an empty slot.
 Saved bunker credentials bind their recipient public key. Startup migration trusts
 existing SQLite routing metadata to establish missing legacy bindings; existing
 bindings cannot be replaced. Subsequent unbound connections require trusted confirmation. Bunker timeouts
-discard the connection and permit a later reconnect.
+discard the signer session connection and permit a later reconnect. Pairing and
+account signers share one dedicated NIP-46 relay pool, separate from chat and
+application pools. Each session releases only its own subscriptions; idle relay
+records are removed without interrupting other sessions.
 
 Stored account identity keys, relay messaging keys, nearby signing/Noise identities and NIP-46 credentials are accessible only
 inside the key vault: an Electron worker or mobile native module. Generic storage

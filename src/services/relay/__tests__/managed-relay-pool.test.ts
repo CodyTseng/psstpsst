@@ -43,6 +43,28 @@ describe('ManagedRelayPool', () => {
     jest.useRealTimers();
   });
 
+  test('idle cleanup preserves another session on the same connection', async () => {
+    const { pool, relays } = createHarness();
+    const onEvent = jest.fn();
+    const stopPairing = pool.subscribe({ relays: [RELAY_A], filter: { kinds: [24133] }, onEvent: () => {} });
+    const stopSigner = pool.subscribe({ relays: [RELAY_A], filter: { kinds: [24133] }, onEvent });
+    try {
+      await flushPromises();
+      expect(relays).toHaveLength(1);
+      stopPairing();
+      pool.forgetIdleRelays([RELAY_A]);
+      expect(relays[0].connected).toBe(true);
+      const event = eventAt('signer-response', 100);
+      relays[0].emitEvent(event);
+      expect(onEvent).toHaveBeenCalledWith(event, RELAY_A);
+
+      stopSigner();
+      pool.forgetIdleRelays([RELAY_A]);
+      expect(relays[0].connected).toBe(false);
+      expect(pool.listConnectionStatus().size).toBe(0);
+    } finally { pool.destroy(); }
+  });
+
   test('reports the delivering relay without treating empty queried relays as event sources', async () => {
     const harness = createHarness(), onEventSource = jest.fn();
     const pending = harness.pool.query({ relays: [RELAY_A, RELAY_B], filter: { kinds: [1] }, timeoutMs: 1_000, onEventSource });

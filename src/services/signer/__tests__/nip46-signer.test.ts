@@ -18,8 +18,8 @@ jest.mock('@/platform', () => ({
   },
 }));
 
-jest.mock('@/services/relay/relay-pool', () => ({
-  relayPool: { underlyingPool: {} },
+jest.mock('../nip46-relay-pool', () => ({
+  nip46RelayPool: { underlyingPool: {} },
 }));
 
 const TEMPLATE: EventTemplate = { kind: 1, content: '', tags: [], created_at: 1 };

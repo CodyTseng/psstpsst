@@ -55,6 +55,7 @@ jest.mock('../../relay/managed-relay-pool', () => ({ ManagedRelayPool: jest.fn((
     }
     return [Promise.resolve('ok')];
   } },
+  forgetIdleRelays: jest.fn(),
   destroy: jest.fn(),
 })) }));
 

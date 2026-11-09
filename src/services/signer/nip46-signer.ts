@@ -5,7 +5,7 @@ import type { AbstractSimplePool } from 'nostr-tools/abstract-pool';
 import { platform } from '@/platform';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 
-import { relayPool } from '../relay/relay-pool';
+import { nip46RelayPool } from './nip46-relay-pool';
 import type { Signer } from './signer.interface';
 import { Nip46TimeoutError, withNip46Timeout } from './nip46-timeout';
 
@@ -115,7 +115,7 @@ export class Nip46Signer implements Signer {
   constructor(
     clientSecretKey: Uint8Array,
     pointer: BunkerPointer,
-    transport: AbstractSimplePool = relayPool.underlyingPool,
+    transport: AbstractSimplePool = nip46RelayPool.underlyingPool,
   ) {
     states.set(this, {
       destroyed: false,
