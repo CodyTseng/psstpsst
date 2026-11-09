@@ -39,7 +39,7 @@ export default function DateTimeSettings() {
             {TIMES.map(value => (
               <ListRow
                 key={value}
-                title={t(`date_time.${value}`)}
+                title={t(`date_time.${value === 'system' ? 'auto' : value}`)}
                 value={value === 'system' ? undefined : EXAMPLES[value]}
                 selectionMode="single"
                 active={timeFormat === value}
@@ -55,7 +55,7 @@ export default function DateTimeSettings() {
             {DATES.map(value => (
               <ListRow
                 key={value}
-                title={t(`date_time.${value}`)}
+                title={t(`date_time.${value === 'system' ? 'auto' : value}`)}
                 value={value === 'system' ? undefined : EXAMPLES[value]}
                 selectionMode="single"
                 active={dateFormat === value}

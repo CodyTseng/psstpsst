@@ -1413,7 +1413,7 @@
     "title": "Fecha y hora",
     "time_format": "Formato de hora",
     "date_format": "Formato de fecha",
-    "system": "Seguir el sistema",
+    "auto": "Automático",
     "12h": "12 horas",
     "24h": "24 horas",
     "ymd": "YYYY-MM-DD",

@@ -1408,7 +1408,7 @@
     "title": "日付と時刻",
     "time_format": "時刻形式",
     "date_format": "日付形式",
-    "system": "システムに従う",
+    "auto": "自動",
     "12h": "12時間表示",
     "24h": "24時間表示",
     "ymd": "YYYY-MM-DD",

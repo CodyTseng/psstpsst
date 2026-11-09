@@ -888,7 +888,9 @@ Conversation lists display and sort by the conversation's updated time; lists
 supporting pins keep pinned rows first. This time is the latest previewed
 message's authored time, or creation time when there are no messages. Arrival
 time, reactions, and draft edits never independently change it.
-Time and date preferences are device-wide. Automatic dates use one complete locale:
+Time and date preferences are device-wide. Their automatic options are labelled
+Auto because formatting combines app language and device preferences.
+Automatic dates use one complete locale:
 the app language supplies wording and date structure, with the system region filling
 in when the selected language has no explicit region. System clock overrides remain
 authoritative unless the user selects a clock format. Explicit numeric date formats

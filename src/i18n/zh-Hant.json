@@ -1408,7 +1408,7 @@
     "title": "日期與時間",
     "time_format": "時間格式",
     "date_format": "日期格式",
-    "system": "跟隨系統",
+    "auto": "自動",
     "12h": "12 小時制",
     "24h": "24 小時制",
     "ymd": "YYYY-MM-DD",

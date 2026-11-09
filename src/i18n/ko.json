@@ -1408,7 +1408,7 @@
     "title": "날짜 및 시간",
     "time_format": "시간 형식",
     "date_format": "날짜 형식",
-    "system": "시스템 설정 따르기",
+    "auto": "자동",
     "12h": "12시간제",
     "24h": "24시간제",
     "ymd": "YYYY-MM-DD",

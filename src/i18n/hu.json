@@ -1408,7 +1408,7 @@
     "title": "Dátum és idő",
     "time_format": "Időformátum",
     "date_format": "Dátumformátum",
-    "system": "Rendszer követése",
+    "auto": "Automatikus",
     "12h": "12 órás",
     "24h": "24 órás",
     "ymd": "YYYY-MM-DD",

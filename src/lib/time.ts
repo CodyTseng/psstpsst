@@ -13,7 +13,9 @@ function dateFormatter(locale: string, options: Intl.DateTimeFormatOptions, time
   const key = `${locale}:${timeZone}:${JSON.stringify(options)}`;
   let formatter = dateTimeFormatters.get(key);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone });
+    // Android's best-fit matcher can resolve en-CN to Chinese. Lookup retains
+    // the requested language by dropping unsupported regional subtags instead.
+    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone, localeMatcher: 'lookup' });
     if (dateTimeFormatters.size >= 64) dateTimeFormatters.clear();
     dateTimeFormatters.set(key, formatter);
   }

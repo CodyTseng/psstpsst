@@ -1408,7 +1408,7 @@
     "title": "Tarih ve saat",
     "time_format": "Saat biçimi",
     "date_format": "Tarih biçimi",
-    "system": "Sistemi izle",
+    "auto": "Otomatik",
     "12h": "12 saat",
     "24h": "24 saat",
     "ymd": "YYYY-MM-DD",
