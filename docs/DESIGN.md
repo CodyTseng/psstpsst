@@ -426,6 +426,11 @@ are reserved for body actions.
 
 Human avatars are circular. Application icons are rounded squares at every size,
 including compact identity rows and loading or fallback artwork.
+Application and website icons use the first character of their name, uppercased
+where applicable, while artwork is loading, missing, or unavailable. Unnamed
+identities retain the generic application or website glyph.
+Fallback initials use prominent, primary-colour text on an elevated surface with
+a subtle outline so the rounded-square silhouette remains visible in both themes.
 Signed-site icons use declared artwork or one conventional icon from the signed
 file list; missing or unavailable artwork uses the shared fallback without
 fetching page metadata.
