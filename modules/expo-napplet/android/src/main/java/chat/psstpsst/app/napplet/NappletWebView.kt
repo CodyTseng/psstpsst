@@ -104,6 +104,7 @@ internal class NappletWebView(context: Context, private val onNavigationState: (
 
   init {
     setBackgroundColor(Color.TRANSPARENT)
+    overScrollMode = OVER_SCROLL_NEVER
     ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
       // AppScreen already keeps this WebView inside the system safe area.
       // Forward zeroes to reset CSS safe-area values, while retaining IME insets.

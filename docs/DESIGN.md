@@ -1328,6 +1328,8 @@ Forward and More header actions. System Back
 traverses the app's history, then closes its task; switching tasks preserves each running app.
 System back gestures cancel pending webpage touches when the gesture starts,
 so navigation never also triggers a page long press.
+Android embedded websites, napps, napplets and nsites disable native edge
+overscroll effects in both inline and independent hosts.
 Application management remains available from the host's app list. All formats
 reuse the shared application sheets. Action-rail captions
 use concise labels; accessible action names may retain the full wording.
