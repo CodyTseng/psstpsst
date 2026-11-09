@@ -730,8 +730,12 @@ delays guessed at call sites.
 
 Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
-Application chrome places Close at the start and More at the end. System Back
-traverses the embedded application's history before closing it at its root.
+Application chrome places Close at the start and More at the end. In an inline
+application container, Close dismisses the entire application stack and returns
+to the host. Header and system Back traverse the current application's history
+first, then close it at its root to restore the calling application. Header Back
+remains available at a child application's root and is disabled at the outermost
+root.
 Message web links and public-note cards open in the same built-in application
 container as websites, following the account's website opening preference.
 Custom app protocols in note-link preferences retain their external handoff.

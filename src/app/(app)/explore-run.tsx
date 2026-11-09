@@ -55,9 +55,10 @@ export default function ExploreRunScreen() {
       restart: entry => exploreService.restart(id, entry) } : undefined}
     application={state.entry?applicationPresentation(state.entry):undefined}
     onOpenWindow={canOpenWindow ? openInWindow : undefined} openingWindow={windowPending}
-    onBack={() => exploreService.goBack(id, { closeAtRoot: false })} onForward={() => exploreService.goForward(id)}
+    canReturnToParent={owns && state.surfaces.length > 1}
+    onBack={() => exploreService.goBack(id)} onForward={() => exploreService.goForward(id)}
     navigationBlocked={!!panel || !!prompt || !!configuration || overlayActive}
-    menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.close(id)} onMore={()=>setPanel('about')}
+    menuEnabled={!!state.containerId&&owns} onClose={()=>exploreService.stop(id)} onMore={()=>setPanel('about')}
     download={owns ? state.download : undefined} loading={owns&&state.loading} error={owns?state.error:undefined} onRetry={()=>exploreService.retry(id)}
     overlay={owns&&state.entry&&state.account?<ExploreApplicationSheet key={`${id}:${state.entry.key}`} entry={state.entry} account={state.account} runId={id} page={panel} onPageChange={setPanel}/>:null}>
     {owns ? state.surfaces.map(surfaceId => <View key={surfaceId} style={[StyleSheet.absoluteFill, { opacity: surfaceId === state.containerId ? 1 : 0 }, { pointerEvents: surfaceId === state.containerId ? 'auto' : 'none' }]}>

@@ -27,12 +27,12 @@ import { ApplicationTaskContext } from './ApplicationTaskContext';
 import { applicationChromeColors } from '@/theme/application-chrome';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
-export function ApplicationRuntimePage({title,application,containerId,active=true,loading,download,error,hidden=false,windowed=false,menuEnabled,showMenu=true,openingWindow=false,onOpenWindow,onClose,onBack,onForward,navigationBlocked=false,onMore,onRetry,children,overlay,update}:{
+export function ApplicationRuntimePage({title,application,containerId,active=true,loading,download,error,hidden=false,windowed=false,menuEnabled,showMenu=true,openingWindow=false,onOpenWindow,onClose,onBack,onForward,canReturnToParent=false,navigationBlocked=false,onMore,onRetry,children,overlay,update}:{
   update?:ApplicationUpdateTarget;
   containerId?:string|null;active?:boolean;
   title?:string;application?:ApplicationInfo;loading?:boolean;download?:ArtifactProgress;error?:string|null;hidden?:boolean;windowed?:boolean;menuEnabled:boolean;showMenu?:boolean;
   openingWindow?:boolean;onOpenWindow?():void;
-  navigationBlocked?:boolean;onBack?():void|Promise<void>;onForward?():void|Promise<void>;
+  canReturnToParent?:boolean;navigationBlocked?:boolean;onBack?():void|Promise<void>;onForward?():void|Promise<void>;
   onClose():void;onMore():void;onRetry():void;children?:ReactNode;overlay?:ReactNode;
 }) {
   const {t}=useTranslation(),c=useThemeColors(),clearance=useScreenHeaderClearance();
@@ -49,8 +49,9 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
     catch { showToast(t('applications.request_failed'), { variant: 'error' }); }
     finally { navigating.current = false; setNavigationPending(false); }
   };
-  const navigation = <ApplicationNavigation enabled={navigationEnabled} canGoBack={history.canGoBack} canGoForward={history.canGoForward}
-    onBack={() => { if (history.canGoBack) void navigate(onBack); }} onForward={() => { if (history.canGoForward) void navigate(onForward); }} />;
+  const canGoBack = history.canGoBack || canReturnToParent;
+  const navigation = <ApplicationNavigation enabled={navigationEnabled} canGoBack={canGoBack} canGoForward={history.canGoForward}
+    onBack={() => { if (canGoBack) void navigate(onBack); }} onForward={() => { if (history.canGoForward) void navigate(onForward); }} />;
   const documentAppearance = useNappletAppearance(containerId);
   const appearance = !loading && !error && !hidden ? documentAppearance : undefined;
   const chromeColors = useMemo(() => applicationChromeColors(c, appearance), [c, appearance]);

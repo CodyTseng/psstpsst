@@ -1103,7 +1103,38 @@ it.each([false, true])('keeps nested level-derived access out of saved grants (f
   }
 });
 
-it('keeps a root page open for header Back while system Back still closes it', async () => {
+it('traverses child history before restoring its caller and stops the full stack on dismissal', async () => {
+  const tasks = platform.napplet.tasks;
+  platform.napplet.tasks = undefined;
+  try {
+    const id = exploreService.prepare(website, 'account');
+    await exploreService.start(id);
+    const parent = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+    parent.containerId = 'parent-container';
+    const callbacks = jest.mocked(ExploreRuntime).mock.calls.at(-1)![2];
+    const childEntry = { ...website, key: 'https://child.example/', address: 'https://child.example/' };
+    await callbacks.launch!(childEntry);
+    const child = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+    child.goBack = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await exploreService.goBack(id);
+    expect(exploreStore.getState().entry?.key).toBe(childEntry.key);
+    expect(child.stop).not.toHaveBeenCalled();
+    expect(parent.stop).not.toHaveBeenCalled();
+    await exploreService.goBack(id);
+    expect(child.stop).toHaveBeenCalledTimes(1);
+    expect(parent.stop).not.toHaveBeenCalled();
+    expect(exploreStore.getState()).toMatchObject({ entry: website, containerId: 'parent-container', surfaces: ['parent-container'] });
+
+    await callbacks.launch!(childEntry);
+    const nextChild = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;
+    exploreService.stop(id);
+    expect(parent.stop).toHaveBeenCalledTimes(1);
+    expect(nextChild.stop).toHaveBeenCalledTimes(1);
+    expect(exploreStore.getState()).toMatchObject({ entry: null, containerId: null, surfaces: [] });
+  } finally { platform.napplet.tasks = tasks; }
+});
+
+it('can keep a root page open when the host disables closing at the root', async () => {
   const id = exploreService.prepare(website, 'account');
   await exploreService.start(id);
   const runtime = jest.mocked(ExploreRuntime).mock.instances.at(-1)!;

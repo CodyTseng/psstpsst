@@ -100,6 +100,24 @@ it('disables root Back, enables it for history and reserves symmetric title spac
   act(() => renderer.unmount());
 });
 
+it('allows Back at a child root and blocks it while a host overlay is open', async () => {
+  let renderer!: ReactTestRenderer;
+  const onBack = jest.fn(async () => {});
+  const render = (navigationBlocked = false) => <ApplicationRuntimePage containerId="child" menuEnabled canReturnToParent
+    navigationBlocked={navigationBlocked} onBack={onBack} onForward={() => {}}
+    onClose={() => {}} onMore={() => {}} onRetry={() => {}} />;
+  await act(async () => { renderer = create(render()); });
+  const navigation = () => renderer.root.findByType(ScreenHeader).props.left.props.children[1];
+  expect(navigation().props.canGoBack).toBe(true);
+  await act(async () => { navigation().props.onBack(); });
+  expect(onBack).toHaveBeenCalledTimes(1);
+  await act(async () => { renderer.update(render(true)); });
+  expect(navigation().props.enabled).toBe(false);
+  await act(async () => { navigation().props.onBack(); });
+  expect(onBack).toHaveBeenCalledTimes(1);
+  act(() => renderer.unmount());
+});
+
 it('publishes window navigation with its measured width to the single native titlebar', () => {
   let renderer!: ReactTestRenderer;
   act(() => { renderer = create(<ApplicationRuntimePage windowed containerId="page" title="Long window title" menuEnabled
