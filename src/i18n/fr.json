@@ -1371,10 +1371,10 @@
     "app_authorization_level_manual": "Approuver séparément",
     "app_authorization_level_manual_description": "Demander si aucune décision n’est enregistrée.",
     "app_authorization_level_routine": "Usage quotidien (recommandé)",
-    "app_authorization_level_routine_description": "Autoriser l’accès de base, les signatures et le chiffrement courants. Demander pour le reste.",
+    "app_authorization_level_routine_description": "Autoriser l’accès de base, les informations du portefeuille, les signatures et le chiffrement courants. Demander pour le reste.",
     "app_authorization_level_trusted": "Faire confiance à cette app",
-    "app_authorization_level_trusted_description": "Autoriser l’accès de base, toutes les signatures, le chiffrement et le déchiffrement.",
-    "app_authorization_level_boundaries": "Les paiements du portefeuille et l’accès à l’appareil nécessitent un accord séparé.",
+    "app_authorization_level_trusted_description": "Autoriser l’accès de base, les informations du portefeuille, toutes les signatures, le chiffrement et le déchiffrement.",
+    "app_authorization_level_boundaries": "Les paiements du portefeuille, la création de factures et l’accès à l’appareil nécessitent un accord séparé.",
     "app_authorization_level_unset": "Non sélectionné",
     "app_authorization_level_continue": "Continuer"
   },
@@ -1393,8 +1393,8 @@
     "public_as": "Publication publique en tant que {{name}}"
   },
   "webln": {
-    "access_title": "Accès au portefeuille",
-    "access_notice": "Autoriser l’accès au portefeuille ? Les paiements nécessitent toujours une confirmation.",
+    "access_title": "Informations du portefeuille",
+    "access_notice": "Autoriser la lecture du nom du portefeuille et des opérations disponibles ? Les paiements et la création de factures nécessitent toujours une confirmation.",
     "invoice_title": "Créer une demande de paiement"
   },
   "wallpaper": {

@@ -8,6 +8,7 @@ import { cacheLocalInvoiceTransaction, getWallets, makeInvoice, payInvoice, wall
 import { claimWebLnPayment } from '@/services/wallet/webln-payments';
 import { webLnInvoice } from '@/services/wallet/webln-invoice';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
+import { authorizeWalletInfo } from './wallet-info-permission';
 
 const methods = ['enable', 'isEnabled', 'getInfo', 'sendPayment', 'makeInvoice'];
 const supported = (wallet: WalletRow) => ['getInfo', ...(walletSupportsMethod(wallet, 'pay_invoice') ? ['sendPayment'] : []),
@@ -18,8 +19,9 @@ export class WebLn {
   private enabled = false;
   private busy = false;
   constructor(private account: string, private sourceId: string, private title: string, private signal: AbortSignal,
-    private confirm: (prompt: RuntimePrompt, signal: AbortSignal) => Promise<string | false>) {}
-  private scope() { return { accountPubkey: this.account, sourceId: this.sourceId }; }
+    private confirm: (prompt: RuntimePrompt, signal: AbortSignal) => Promise<string | false>, private localVersion?: string) {}
+  private scope() { return { accountPubkey: this.account, sourceId: this.sourceId,
+    ...(this.localVersion !== undefined ? { localVersion: this.localVersion } : {}) }; }
   private check(revision?: number) {
     assertNotAborted(this.signal);
     if (revision !== undefined && signingRevision(this.scope()) !== revision) throw new Error('permission-revoked');
@@ -41,19 +43,20 @@ export class WebLn {
       const revision = signingRevision(this.scope());
       if (method === 'enable') {
         if (this.enabled) return;
-        const wallets = await getWallets(this.account); this.check();
+        const wallets = await getWallets(this.account); this.check(revision);
         if (!wallets.length) throw new Error('wallet-not-connected');
-        const answer = await this.review(i18n.t('webln.access_title'), i18n.t('webln.access_notice'), { walletAccess: true });
-        this.check(revision);
-        if (answer !== 'allow') throw new Error('permission-denied');
         this.enabled = true;
         return;
       }
       if (!this.enabled) throw new Error('webln-not-enabled');
-      const wallets = await getWallets(this.account);
+      let wallets = await getWallets(this.account);
       this.check(revision);
       if (!wallets.length) { this.enabled = false; throw new Error('wallet-not-connected'); }
       if (method === 'getInfo') {
+        const checkInfo = await authorizeWalletInfo(this.scope(), this.title, this.signal, this.confirm);
+        wallets = await getWallets(this.account);
+        checkInfo();
+        if (!wallets.length) { this.enabled = false; throw new Error('wallet-not-connected'); }
         const wallet = wallets.find(row => row.isDefault) ?? wallets[0];
         return { node: { alias: wallet.customName || wallet.name, pubkey: '' },
           methods: [...new Set(wallets.flatMap(supported))] };

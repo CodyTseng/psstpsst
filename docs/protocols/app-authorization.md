@@ -2,14 +2,15 @@
 
 This policy applies to napplets, napps, nsites and HTTPS websites through the
 shared account/source policy. It covers declared basic application access and
-signer methods while preserving browser, device and wallet reviews. The
+signer methods and wallet metadata while preserving browser, device, payment and
+invoice reviews. The
 implementation is `src/services/app-authorization/policy.ts`.
 
 ## App Authorization Level
 
 The shared policy is called **App Authorization Level** (`AppAuthorizationLevel`
-in code). It controls application access and NIP-07 account authority; WebLN and
-device consent remain independent. Its values are `manual`, `routine` and `trusted`.
+in code). It controls application access, NIP-07 account authority and WebLN wallet
+information reads; payment, invoice and device consent remain independent. Its values are `manual`, `routine` and `trusted`.
 
 On the first open of a napplet, napp or nsite for an account and verified source,
 the host asks for a level before launch-access reviews or execution, even if the
@@ -22,11 +23,15 @@ open; their explicit rules are preserved without an automatic upgrade.
 
 Ordinary websites open without level selection or application-access review. The
 host injects only NIP-07 and WebLN providers, without `napp` or `nostrdb` access.
-The first NIP-07 call obtains a level if needed for the account and current
-host-verified HTTPS main-frame origin; navigation to another origin does not
-inherit it. WebLN first asks for wallet access through `enable()`, independently
-of app authorization levels. Wallet initialization belongs to the current document and
-origin; payment and invoice requests still require their own reviews.
+The first NIP-07 call or WebLN `getInfo()` obtains a level if needed for the account
+and current host-verified HTTPS main-frame origin; navigation to another origin
+does not inherit it. WebLN `enable()` initializes the document without prompting.
+Routine and Trusted automatically allow wallet display names and supported-operation
+metadata; balances and transaction history are not exposed. In Manual, `getInfo()`
+uses account/source-scoped single-request, timed or permanent Allow/Reject decisions,
+editable and revocable in application permissions. Level coverage precedes these
+rules without deleting them; returning to Manual restores their effect. Payments
+and invoice creation always require their own reviews without information consent.
 
 | Operation | Manual | Routine | Trusted |
 | --- | --- | --- | --- |
@@ -35,6 +40,7 @@ origin; payment and invoice requests still require their own reviews.
 | Declared public-upload capability | Ask | Ask | Allow |
 | Other declared capabilities, including app-to-app messaging and development access | Ask | Ask | Ask |
 | Disclose the current account's public key | Ask | Allow | Allow |
+| Read wallet display name and supported operations | Ask | Allow | Allow |
 | Host-mediated relay authentication | Ask | Allow | Allow |
 | Host-mediated HTTP authentication | Ask | Ask | Allow |
 | Sign notes/replies (`1`), reposts (`6`, `16`), reactions (`7`) | Ask | Allow | Allow |
@@ -51,7 +57,7 @@ Ask supports one-request, timed and permanent Allow/Reject decisions. Levels do
 not expire; timed exceptions fall back to the selected level when they expire.
 Session exceptions last only for the current controller. Switching levels retains
 explicit decisions, including session exceptions. Reset removes the level and
-signer exceptions; the next application open, or the next NIP-07 call from a
+signer exceptions; the next application open, or the next NIP-07 call or WebLN `getInfo()` from a
 website, asks for a level again.
 
 Routine has a fixed kind allowlist: `1, 4, 6, 7, 13, 16, 1059`. It does not infer
@@ -133,7 +139,7 @@ Launch access belongs to the running document/session. Changing a level updates
 signer decisions immediately and changes derived access on the next launch; it
 cannot retract network data already received by a running webpage. Reset closes
 the source after removing persistence. Applications reselect a level and check
-access on reopening; ordinary websites defer selection until their next NIP-07 call. Native browser/OS reviews remain independent at every level.
+access on reopening; ordinary websites defer selection until their next NIP-07 call or WebLN `getInfo()`. Native browser/OS reviews remain independent at every level.
 
 ## Independent boundaries
 
@@ -145,7 +151,7 @@ access on reopening; ordinary websites defer selection until their next NIP-07 c
 | Camera, microphone, location, notifications, clipboard reads | Separate browser/device and OS authorization |
 | Screen capture and unknown browser capabilities | Fresh review under existing browser rules |
 | New windows, external applications, downloads and file saves | Existing host reviews and destination pickers |
-| WebLN wallet access and invoice creation | Document-local wallet-access consent on `enable()`; separate invoice review |
+| WebLN invoice creation | Separate review for every request |
 | Host wallet payments | Per-payment confirmation and authentication; never remembered |
 | Account-key export and outgoing message-key transfer | Dedicated trusted host confirmation |
 

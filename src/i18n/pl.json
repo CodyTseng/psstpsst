@@ -1376,10 +1376,10 @@
     "app_authorization_level_manual": "Zatwierdzaj osobno",
     "app_authorization_level_manual_description": "Pytaj, jeśli nie zapisano decyzji.",
     "app_authorization_level_routine": "Codzienne użycie (zalecane)",
-    "app_authorization_level_routine_description": "Zezwalaj na podstawowy dostęp, zwykłe podpisy i szyfrowanie. Pytaj o resztę.",
+    "app_authorization_level_routine_description": "Zezwalaj na podstawowy dostęp, informacje o portfelu, zwykłe podpisy i szyfrowanie. Pytaj o resztę.",
     "app_authorization_level_trusted": "Ufaj tej aplikacji",
-    "app_authorization_level_trusted_description": "Zezwalaj na podstawowy dostęp, wszystkie podpisy, szyfrowanie i odszyfrowywanie.",
-    "app_authorization_level_boundaries": "Płatności portfela i dostęp do urządzenia wymagają osobnej zgody.",
+    "app_authorization_level_trusted_description": "Zezwalaj na podstawowy dostęp, informacje o portfelu, wszystkie podpisy, szyfrowanie i odszyfrowywanie.",
+    "app_authorization_level_boundaries": "Płatności portfela, tworzenie faktur i dostęp do urządzenia wymagają osobnej zgody.",
     "app_authorization_level_unset": "Nie wybrano",
     "app_authorization_level_continue": "Dalej"
   },
@@ -1398,8 +1398,8 @@
     "public_as": "Publikowanie publicznie jako {{name}}"
   },
   "webln": {
-    "access_title": "Dostęp do portfela",
-    "access_notice": "Zezwolić na dostęp do portfela? Płatności nadal będą wymagać potwierdzenia.",
+    "access_title": "Informacje o portfelu",
+    "access_notice": "Zezwolić na odczyt nazwy portfela i obsługiwanych operacji? Płatności i tworzenie faktur nadal będą wymagać potwierdzenia.",
     "invoice_title": "Utwórz prośbę o płatność"
   },
   "wallpaper": {

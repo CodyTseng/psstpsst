@@ -1,6 +1,11 @@
 import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
 import { isSignerAccess, type SigningScope } from '../signing/model';
 
+/** Wallet metadata excludes balances, history and payment authority. */
+export function automaticallyAllowsWalletInfo(level: AppAuthorizationLevel | undefined): boolean {
+  return level === 'routine' || level === 'trusted';
+}
+
 // Routine uses explicit kinds; new host operations require a policy entry at every level.
 const ROUTINE_KINDS = new Set([1, 4, 6, 7, 13, 16, 1059]);
 

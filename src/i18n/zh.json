@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "逐项授权",
     "app_authorization_level_manual_description": "未记住的操作逐项询问。",
     "app_authorization_level_routine": "日常使用（推荐）",
-    "app_authorization_level_routine_description": "自动允许基础访问、常用签名和加密，其余询问。",
+    "app_authorization_level_routine_description": "自动允许基础访问、钱包信息读取、常用签名和加密，其余询问。",
     "app_authorization_level_trusted": "信任此应用",
-    "app_authorization_level_trusted_description": "自动允许基础访问、所有签名、加密和解密。",
-    "app_authorization_level_boundaries": "钱包付款和设备访问仍需单独确认。",
+    "app_authorization_level_trusted_description": "自动允许基础访问、钱包信息读取、所有签名、加密和解密。",
+    "app_authorization_level_boundaries": "钱包付款、创建发票和设备访问仍需单独确认。",
     "app_authorization_level_unset": "尚未选择",
     "app_authorization_level_continue": "继续"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "以 {{name}} 的身份公开评论"
   },
   "webln": {
-    "access_title": "钱包访问",
-    "access_notice": "允许访问钱包？付款仍需单独确认。",
+    "access_title": "钱包信息",
+    "access_notice": "允许读取钱包显示名称和支持的操作？付款和创建发票仍需单独确认。",
     "invoice_title": "创建收款请求"
   },
   "wallpaper": {

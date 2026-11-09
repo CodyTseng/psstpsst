@@ -51,9 +51,12 @@ a signed event; it does not publish it. Public-key access uses the shared signer
 authorization service on every request, independently of launch permissions.
 [App authorization levels and exceptions](app-authorization.md) define when review is required.
 Ordinary websites open without application-access or level-selection reviews;
-their first NIP-07 call selects a level for the current verified HTTPS origin.
+their first NIP-07 call or WebLN `getInfo()` selects a level for the current
+verified HTTPS origin.
 They receive only NIP-07 and WebLN providers, with no local-database or napp API.
-WebLN requests wallet access on first enable and reviews payments separately.
+WebLN initializes without prompting. Wallet information reads follow the app
+authorization level, with separate information consent in Manual; payments and
+invoices retain their own reviews at every level.
 Ordinary event signing uses account/source/kind/d-tag rules. Relay AUTH, HTTP
 authentication and Blossom uploads use independent account/source/action rules
 without destination or HTTP-method qualifiers. Targets remain visible in each

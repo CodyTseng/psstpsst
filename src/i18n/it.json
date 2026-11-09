@@ -1371,10 +1371,10 @@
     "app_authorization_level_manual": "Approva singolarmente",
     "app_authorization_level_manual_description": "Chiedi se non c’è una decisione salvata.",
     "app_authorization_level_routine": "Uso quotidiano (consigliato)",
-    "app_authorization_level_routine_description": "Consenti accesso di base, firme e crittografia comuni. Chiedi per il resto.",
+    "app_authorization_level_routine_description": "Consenti accesso di base, informazioni sul portafoglio, firme e crittografia comuni. Chiedi per il resto.",
     "app_authorization_level_trusted": "Considera attendibile questa app",
-    "app_authorization_level_trusted_description": "Consenti accesso di base, tutte le firme, la crittografia e la decrittografia.",
-    "app_authorization_level_boundaries": "Pagamenti del portafoglio e accesso al dispositivo richiedono conferme separate.",
+    "app_authorization_level_trusted_description": "Consenti accesso di base, informazioni sul portafoglio, tutte le firme, la crittografia e la decrittografia.",
+    "app_authorization_level_boundaries": "Pagamenti del portafoglio, creazione di fatture e accesso al dispositivo richiedono conferme separate.",
     "app_authorization_level_unset": "Non selezionato",
     "app_authorization_level_continue": "Continua"
   },
@@ -1393,8 +1393,8 @@
     "public_as": "Pubblicazione pubblica come {{name}}"
   },
   "webln": {
-    "access_title": "Accesso al portafoglio",
-    "access_notice": "Consentire l’accesso al portafoglio? I pagamenti richiederanno comunque conferma.",
+    "access_title": "Informazioni sul portafoglio",
+    "access_notice": "Consentire la lettura del nome del portafoglio e delle operazioni disponibili? I pagamenti e la creazione di fatture richiederanno comunque conferma.",
     "invoice_title": "Crea richiesta di pagamento"
   },
   "wallpaper": {

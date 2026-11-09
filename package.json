@@ -150,7 +150,7 @@
     "test": "jest --runInBand",
     "test:app-update-ui": "npm run electron:build && node --test scripts/electron-app-update.test.mjs",
     "test:webln-ui": "node --test scripts/webln-approvals.test.mjs",
-    "test:webln-database": "node --test scripts/webln-payments.test.mjs",
+    "test:webln-database": "node --test scripts/webln-payments.test.mjs scripts/webln-permissions.test.mjs",
     "test:dependencies": "node --test scripts/dependency-security.test.mjs",
     "postinstall": "patch-package --error-on-fail && node scripts/generate-vault-consent.mjs && node scripts/generate-napplet-prelude.mjs && node scripts/generate-napp-helpers.mjs",
     "licenses:generate": "node scripts/generate-licenses.mjs",

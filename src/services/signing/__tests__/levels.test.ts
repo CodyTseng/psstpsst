@@ -1,6 +1,6 @@
 import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
 import { SigningPermissions, signingRuleKey, type SigningRequest } from '../permissions';
-import { automaticallyAllowsSigning, automaticallyAllowsAccess } from '@/services/app-authorization/policy';
+import { automaticallyAllowsSigning, automaticallyAllowsAccess, automaticallyAllowsWalletInfo } from '@/services/app-authorization/policy';
 import { memoryRepository, levels, rules, activity } from '../testing/memory-repository';
 import { saveAppAuthorizationLevel } from '../repository';
 import { ApplicationSigner } from '../application-signer';
@@ -254,4 +254,8 @@ test('only declared basic capabilities gain automatic access, and a downgrade re
     expect(automaticallyAllowsAccess(level, 'dev')).toBe(false);
     expect(automaticallyAllowsAccess(level, 'unknown')).toBe(false);
   }
+});
+
+test.each([undefined, 'manual', 'routine', 'trusted'] as const)('classifies wallet information explicitly at level %s', level => {
+  expect(automaticallyAllowsWalletInfo(level)).toBe(level === 'routine' || level === 'trusted');
 });

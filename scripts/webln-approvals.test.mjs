@@ -85,6 +85,24 @@ test('wallet requests reuse payment sheets, choose wallets at confirmation witho
       assert.equal(bounds.x, (width - bounds.width) / 2, 'sheet content remains centered');
       if (screenshots) await page.screenshot({ path: path.join(screenshots, `${theme}-${surface}-${width}x${height}-${operation}.png`) });
     }
+    await page.setViewportSize({ width: 390, height: 840 });
+    for (const theme of ['light', 'dark']) for (const surface of ['desktop', 'touch']) {
+      for (const [duration, decision, expected] of [['Always', 'Allow', 'allow-always'], ['1 hour', 'Reject', 'deny-1h']]) {
+        await page.goto(`${address}/?scenario=wallet-info&theme=${theme}&surface=${surface}`);
+        await page.getByText('Wallet information', { exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Only once', exact: true }).click();
+        await page.getByRole('button', { name: duration, exact: true }).click();
+        const button = page.getByRole('button', { name: decision, exact: true });
+        await button.click({ trial: true });
+        const bounds = await button.boundingBox();
+        assert.ok(bounds && bounds.y >= 0 && bounds.y + bounds.height <= 840, 'information decisions stay visible');
+        if (screenshots) await page.screenshot({ path: path.join(screenshots, `${theme}-${surface}-information-${expected}.png`) });
+        await button.click();
+        await page.waitForFunction(() => window.walletFixture.result !== undefined);
+        assert.equal(await page.evaluate(() => window.walletFixture.result), expected);
+        assert.equal(await page.getByRole('dialog').count(), 0);
+      }
+    }
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); }
 });

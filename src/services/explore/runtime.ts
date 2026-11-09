@@ -349,7 +349,7 @@ export class ExploreRuntime {
           signal, (prompt, reviewSignal) => this.options.confirm({ ...prompt,
             application: this.entry.kind === 'website'
               ? { title: new URL(this.origin).host, description: '', servers: [], required: [], origin: this.origin }
-              : applicationPresentation(this.entry) }, reviewSignal));
+              : applicationPresentation(this.entry) }, reviewSignal), this.entry.local?.version);
       }
       return this.webLn.handle(method.slice(6), args);
     }

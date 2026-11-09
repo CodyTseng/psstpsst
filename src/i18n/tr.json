@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "Tek tek onayla",
     "app_authorization_level_manual_description": "Kayıtlı karar yoksa sor.",
     "app_authorization_level_routine": "Günlük kullanım (önerilen)",
-    "app_authorization_level_routine_description": "Temel erişime, yaygın imzalama ve şifrelemeye izin ver. Diğerleri için sor.",
+    "app_authorization_level_routine_description": "Temel erişime, cüzdan bilgilerine, yaygın imzalama ve şifrelemeye izin ver. Diğerleri için sor.",
     "app_authorization_level_trusted": "Bu uygulamaya güven",
-    "app_authorization_level_trusted_description": "Temel erişime, tüm imzalama, şifreleme ve şifre çözmeye izin ver.",
-    "app_authorization_level_boundaries": "Cüzdan ödemeleri ve cihaz erişimi ayrı onay gerektirir.",
+    "app_authorization_level_trusted_description": "Temel erişime, cüzdan bilgilerine, tüm imzalama, şifreleme ve şifre çözmeye izin ver.",
+    "app_authorization_level_boundaries": "Cüzdan ödemeleri, fatura oluşturma ve cihaz erişimi ayrı onay gerektirir.",
     "app_authorization_level_unset": "Seçilmedi",
     "app_authorization_level_continue": "Devam et"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "{{name}} olarak herkese açık paylaşım"
   },
   "webln": {
-    "access_title": "Cüzdan erişimi",
-    "access_notice": "Cüzdan erişimine izin verilsin mi? Ödemeler yine de onay gerektirir.",
+    "access_title": "Cüzdan bilgileri",
+    "access_notice": "Cüzdanın görünen adının ve desteklenen işlemlerin okunmasına izin verilsin mi? Ödemeler ve fatura oluşturma yine de onay gerektirir.",
     "invoice_title": "Ödeme isteği oluştur"
   },
   "wallpaper": {

@@ -1371,10 +1371,10 @@
     "app_authorization_level_manual": "Aprovar individualmente",
     "app_authorization_level_manual_description": "Perguntar se não houver decisão salva.",
     "app_authorization_level_routine": "Uso diário (recomendado)",
-    "app_authorization_level_routine_description": "Permitir acesso básico, assinaturas e criptografia comuns. Perguntar para o restante.",
+    "app_authorization_level_routine_description": "Permitir acesso básico, informações da carteira, assinaturas e criptografia comuns. Perguntar para o restante.",
     "app_authorization_level_trusted": "Confiar neste app",
-    "app_authorization_level_trusted_description": "Permitir acesso básico, todas as assinaturas, criptografia e descriptografia.",
-    "app_authorization_level_boundaries": "Pagamentos da carteira e acesso ao dispositivo exigem aprovação separada.",
+    "app_authorization_level_trusted_description": "Permitir acesso básico, informações da carteira, todas as assinaturas, criptografia e descriptografia.",
+    "app_authorization_level_boundaries": "Pagamentos da carteira, criação de faturas e acesso ao dispositivo exigem aprovação separada.",
     "app_authorization_level_unset": "Não selecionado",
     "app_authorization_level_continue": "Continuar"
   },
@@ -1393,8 +1393,8 @@
     "public_as": "Publicando como {{name}} de forma pública"
   },
   "webln": {
-    "access_title": "Acesso à carteira",
-    "access_notice": "Permitir acesso à carteira? Os pagamentos ainda exigirão confirmação.",
+    "access_title": "Informações da carteira",
+    "access_notice": "Permitir a leitura do nome da carteira e das operações disponíveis? Os pagamentos e a criação de faturas ainda exigirão confirmação.",
     "invoice_title": "Criar solicitação de pagamento"
   },
   "wallpaper": {

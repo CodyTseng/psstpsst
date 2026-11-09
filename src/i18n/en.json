@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "Approve individually",
     "app_authorization_level_manual_description": "Ask unless a decision is saved.",
     "app_authorization_level_routine": "Everyday use (recommended)",
-    "app_authorization_level_routine_description": "Allow basic access, common signing and encryption. Ask for the rest.",
+    "app_authorization_level_routine_description": "Allow basic access, wallet information, common signing and encryption. Ask for the rest.",
     "app_authorization_level_trusted": "Trust this app",
-    "app_authorization_level_trusted_description": "Allow basic access, all signing, encryption and decryption.",
-    "app_authorization_level_boundaries": "Wallet payments and device access need separate approval.",
+    "app_authorization_level_trusted_description": "Allow basic access, wallet information, all signing, encryption and decryption.",
+    "app_authorization_level_boundaries": "Wallet payments, invoice creation and device access need separate approval.",
     "app_authorization_level_unset": "Not selected",
     "app_authorization_level_continue": "Continue"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "Posting publicly as {{name}}"
   },
   "webln": {
-    "access_title": "Wallet access",
-    "access_notice": "Allow wallet access? Payments still need confirmation.",
+    "access_title": "Wallet information",
+    "access_notice": "Allow access to your wallet display name and supported operations? Payments and invoice creation still need confirmation.",
     "invoice_title": "Create payment request"
   },
   "wallpaper": {

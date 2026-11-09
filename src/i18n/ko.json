@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "개별 승인",
     "app_authorization_level_manual_description": "저장된 결정이 없으면 확인합니다.",
     "app_authorization_level_routine": "일상 사용 (권장)",
-    "app_authorization_level_routine_description": "기본 접근, 일반적인 서명과 암호화를 허용하고 나머지는 확인합니다.",
+    "app_authorization_level_routine_description": "기본 접근, 지갑 정보, 일반적인 서명과 암호화를 허용하고 나머지는 확인합니다.",
     "app_authorization_level_trusted": "이 앱 신뢰",
-    "app_authorization_level_trusted_description": "기본 접근, 모든 서명, 암호화 및 복호화를 허용합니다.",
-    "app_authorization_level_boundaries": "지갑 결제와 기기 접근은 별도로 확인합니다.",
+    "app_authorization_level_trusted_description": "기본 접근, 지갑 정보, 모든 서명, 암호화 및 복호화를 허용합니다.",
+    "app_authorization_level_boundaries": "지갑 결제, 청구서 생성과 기기 접근은 별도로 확인합니다.",
     "app_authorization_level_unset": "선택 안 됨",
     "app_authorization_level_continue": "계속"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "{{name}} 이름으로 공개 게시"
   },
   "webln": {
-    "access_title": "지갑 접근",
-    "access_notice": "지갑 접근을 허용할까요? 결제는 여전히 별도 확인이 필요합니다.",
+    "access_title": "지갑 정보",
+    "access_notice": "지갑 표시 이름과 지원하는 작업을 읽도록 허용할까요? 결제와 청구서 생성은 여전히 별도 확인이 필요합니다.",
     "invoice_title": "결제 요청 만들기"
   },
   "wallpaper": {

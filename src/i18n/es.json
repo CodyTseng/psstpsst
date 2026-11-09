@@ -1371,10 +1371,10 @@
     "app_authorization_level_manual": "Aprobar por separado",
     "app_authorization_level_manual_description": "Preguntar si no hay una decisión guardada.",
     "app_authorization_level_routine": "Uso cotidiano (recomendado)",
-    "app_authorization_level_routine_description": "Permitir acceso básico, firmas y cifrado comunes. Preguntar para lo demás.",
+    "app_authorization_level_routine_description": "Permitir acceso básico, información de la cartera, firmas y cifrado comunes. Preguntar para lo demás.",
     "app_authorization_level_trusted": "Confiar en esta app",
-    "app_authorization_level_trusted_description": "Permitir acceso básico, todas las firmas, el cifrado y el descifrado.",
-    "app_authorization_level_boundaries": "Los pagos de la cartera y el acceso al dispositivo requieren aprobación aparte.",
+    "app_authorization_level_trusted_description": "Permitir acceso básico, información de la cartera, todas las firmas, el cifrado y el descifrado.",
+    "app_authorization_level_boundaries": "Los pagos de la cartera, la creación de facturas y el acceso al dispositivo requieren aprobación aparte.",
     "app_authorization_level_unset": "Sin seleccionar",
     "app_authorization_level_continue": "Continuar"
   },
@@ -1393,8 +1393,8 @@
     "public_as": "Publicando como {{name}} de forma pública"
   },
   "webln": {
-    "access_title": "Acceso a la cartera",
-    "access_notice": "¿Permitir acceso a la cartera? Los pagos seguirán requiriendo confirmación.",
+    "access_title": "Información de la cartera",
+    "access_notice": "¿Permitir leer el nombre de la cartera y las operaciones disponibles? Los pagos y la creación de facturas seguirán requiriendo confirmación.",
     "invoice_title": "Crear solicitud de pago"
   },
   "wallpaper": {

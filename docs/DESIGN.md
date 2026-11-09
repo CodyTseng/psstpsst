@@ -1353,10 +1353,12 @@ choice precedes launch-access reviews and execution, identifies the account and
 verified source, describes basic access and general encryption
 and decryption authority, and keeps wallet/device boundaries visible. Dismissal
 saves nothing. Ordinary websites open without this sheet; the first NIP-07 call
-selects a level for the current verified origin. WebLN requests wallet access on
-first enable and retains separate payment/invoice reviews. Permission management places the level choice directly below app
-identity, before required/optional access and individual decisions, and preserves
-explicit exceptions when it changes. Sensitive requests outside the chosen policy
+or wallet information read selects a level for the current verified origin.
+WebLN initialization does not prompt. Routine and Trusted allow wallet information
+reads; Manual uses single-request, timed or permanent consent. Payment/invoice
+reviews remain separate at every level. Permission management places the level
+choice directly below app identity, before required/optional access and individual
+decisions, and preserves explicit exceptions when it changes. Sensitive requests outside the chosen policy
 retain their ordinary review after the level sheet closes. The complete matrix
 lives in [app authorization](protocols/app-authorization.md).
 
@@ -1442,8 +1444,12 @@ sheet. Sensitive capabilities expose one-visit, timed, and permanent decisions;
 screen capture and unknown capabilities require a fresh decision. Saved website
 capabilities can be changed or reset in application permissions.
 
-Wallet access consent identifies the host-verified source without selecting a
-wallet. Payment and invoice reviews reuse the existing wallet confirmation and
+Manual wallet information consent identifies the host-verified source and explains
+access to the wallet display name and supported operations without selecting a
+wallet. Information consent uses the shared duration selector and Allow/Reject
+actions; saved decisions remain editable in application permissions outside level
+coverage, and are preserved when a level covers them. Payment and
+invoice reviews reuse the existing wallet confirmation and
 wallet picker sheets, adding the requesting source. Each website payment shows
 the exact signed amount in sats, lets the user choose an eligible wallet, and
 requires confirmation plus system authentication or the account's wallet PIN.

@@ -8,11 +8,12 @@ import { rememberBrowserPermission } from './browser-permissions';
 
 export type BrowserPermissionRule = { resource: string; decision: 'allow' | 'deny'; expiresAt: number | null; updatedAt: number };
 const source = (scope: SigningAccountScope) => and(eq(browserAuthorizations.accountPubkey, scope.accountPubkey), eq(browserAuthorizations.sourceId, scope.sourceId));
-export async function readBrowserPermissions(scope: SigningAccountScope): Promise<BrowserPermissionRule[]> {
+export async function readBrowserPermissions(scope: SigningAccountScope, resource?: string): Promise<BrowserPermissionRule[]> {
   if (scope.localVersion !== undefined) await assertCurrentSigningSource(scope);
   return db.select({ resource: browserAuthorizations.resource, decision: browserAuthorizations.decision,
     expiresAt: browserAuthorizations.expiresAt, updatedAt: browserAuthorizations.updatedAt })
-    .from(browserAuthorizations).where(and(source(scope), or(isNull(browserAuthorizations.expiresAt), gt(browserAuthorizations.expiresAt, Date.now())))).limit(32);
+    .from(browserAuthorizations).where(and(source(scope), resource === undefined ? undefined : eq(browserAuthorizations.resource, resource),
+      or(isNull(browserAuthorizations.expiresAt), gt(browserAuthorizations.expiresAt, Date.now())))).limit(resource === undefined ? 32 : 1);
 }
 export async function saveBrowserPermissions(scope: SigningAccountScope, resources: string[], decision: 'allow' | 'deny', expiresAt: number | null, guard: () => void = () => {}) {
   if (!rememberBrowserPermission(resources) || !['allow', 'deny'].includes(decision) ||

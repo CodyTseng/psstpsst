@@ -700,7 +700,21 @@ it('reviews wallet access independently of application capabilities or app autho
   expect(sheet.props.title).toBe('webln.access_title');
   expect(texts).toContain(mockPrompt.detail);
   expect(button('applications.app_authorization_level_continue')).toBeUndefined();
-  act(() => { button('applications.allow').props.onPress(); });
+  act(() => { button('applications.signing_approve').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith('wallet-access', 'allow');
+  mockPrompt = null;
+});
+
+it.each(['allow-always', 'allow-1h', 'deny-always', 'deny-10m'])('offers wallet information duration and sends %s', answer => {
+  mockPrompt = { requestId: 'wallet-info', queued: 0, title: '', detail: 'Wallet information', walletAccess: true,
+    accountPubkey: 'a'.repeat(64), requester: { title: 'Site', origin: 'https://site.example' } };
+  act(() => { renderer = create(<NappletOverlays />); });
+  expect(button('applications.signing_duration_once')).toBeDefined();
+  act(() => { renderer.root.findByType(CapabilityActions).props.onMenuChange({ x: 180, y: 700 }); });
+  const menu = renderer.root.findByType(ActionMenuPanel);
+  const choice = answer.replace(/^deny-/, 'allow-');
+  act(() => { menu.props.onSelect(menu.props.items.find((item: { key: string }) => item.key === choice)); });
+  act(() => { button(answer.startsWith('allow') ? 'applications.signing_approve' : 'applications.signing_reject').props.onPress(); });
+  expect(nappletService.answer).toHaveBeenLastCalledWith('wallet-info', answer);
   mockPrompt = null;
 });

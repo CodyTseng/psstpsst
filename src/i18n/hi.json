@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "अलग-अलग स्वीकृति",
     "app_authorization_level_manual_description": "निर्णय सहेजा न हो तो पूछें।",
     "app_authorization_level_routine": "रोज़मर्रा का उपयोग (सुझाया गया)",
-    "app_authorization_level_routine_description": "बुनियादी पहुँच, सामान्य हस्ताक्षर और एन्क्रिप्शन की अनुमति दें। बाकी के लिए पूछें।",
+    "app_authorization_level_routine_description": "बुनियादी पहुँच, वॉलेट की जानकारी, सामान्य हस्ताक्षर और एन्क्रिप्शन की अनुमति दें। बाकी के लिए पूछें।",
     "app_authorization_level_trusted": "इस ऐप पर भरोसा करें",
-    "app_authorization_level_trusted_description": "बुनियादी पहुँच, सभी हस्ताक्षर, एन्क्रिप्शन और डिक्रिप्शन की अनुमति दें।",
-    "app_authorization_level_boundaries": "वॉलेट भुगतान और डिवाइस की पहुँच के लिए अलग अनुमति चाहिए।",
+    "app_authorization_level_trusted_description": "बुनियादी पहुँच, वॉलेट की जानकारी, सभी हस्ताक्षर, एन्क्रिप्शन और डिक्रिप्शन की अनुमति दें।",
+    "app_authorization_level_boundaries": "वॉलेट भुगतान, इनवॉइस बनाने और डिवाइस की पहुँच के लिए अलग अनुमति चाहिए।",
     "app_authorization_level_unset": "चुना नहीं गया",
     "app_authorization_level_continue": "जारी रखें"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "{{name}} के रूप में सार्वजनिक पोस्ट"
   },
   "webln": {
-    "access_title": "वॉलेट का ऐक्सेस",
-    "access_notice": "वॉलेट का ऐक्सेस दें? भुगतान के लिए फिर भी पुष्टि ज़रूरी होगी।",
+    "access_title": "वॉलेट की जानकारी",
+    "access_notice": "वॉलेट का नाम और उपलब्ध कार्रवाइयाँ पढ़ने की अनुमति दें? भुगतान और इनवॉइस बनाने के लिए फिर भी पुष्टि ज़रूरी होगी।",
     "invoice_title": "भुगतान अनुरोध बनाएँ"
   },
   "wallpaper": {

@@ -1376,10 +1376,10 @@
     "app_authorization_level_manual": "Одобрять отдельно",
     "app_authorization_level_manual_description": "Спрашивать, если решение не сохранено.",
     "app_authorization_level_routine": "Повседневное использование (рекомендуется)",
-    "app_authorization_level_routine_description": "Разрешать базовый доступ, обычные подписи и шифрование. Об остальном спрашивать.",
+    "app_authorization_level_routine_description": "Разрешать базовый доступ, информацию о кошельке, обычные подписи и шифрование. Об остальном спрашивать.",
     "app_authorization_level_trusted": "Доверять приложению",
-    "app_authorization_level_trusted_description": "Разрешать базовый доступ, все подписи, шифрование и расшифровку.",
-    "app_authorization_level_boundaries": "Платежи кошелька и доступ к устройству требуют отдельного согласия.",
+    "app_authorization_level_trusted_description": "Разрешать базовый доступ, информацию о кошельке, все подписи, шифрование и расшифровку.",
+    "app_authorization_level_boundaries": "Платежи кошелька, создание счетов и доступ к устройству требуют отдельного согласия.",
     "app_authorization_level_unset": "Не выбрано",
     "app_authorization_level_continue": "Продолжить"
   },
@@ -1398,8 +1398,8 @@
     "public_as": "Публичная публикация от имени {{name}}"
   },
   "webln": {
-    "access_title": "Доступ к кошельку",
-    "access_notice": "Разрешить доступ к кошельку? Платежи по-прежнему требуют подтверждения.",
+    "access_title": "Информация о кошельке",
+    "access_notice": "Разрешить чтение отображаемого имени кошелька и поддерживаемых операций? Платежи и создание счетов по-прежнему требуют подтверждения.",
     "invoice_title": "Создать запрос на оплату"
   },
   "wallpaper": {

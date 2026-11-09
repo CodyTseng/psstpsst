@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "تأیید جداگانه",
     "app_authorization_level_manual_description": "اگر تصمیمی ذخیره نشده، بپرسد.",
     "app_authorization_level_routine": "استفاده روزمره (پیشنهادی)",
-    "app_authorization_level_routine_description": "دسترسی پایه، امضا و رمزگذاری معمول را مجاز کند و برای بقیه بپرسد.",
+    "app_authorization_level_routine_description": "دسترسی پایه، اطلاعات کیف پول، امضا و رمزگذاری معمول را مجاز کند و برای بقیه بپرسد.",
     "app_authorization_level_trusted": "اعتماد به این برنامه",
-    "app_authorization_level_trusted_description": "دسترسی پایه، همه امضاها، رمزگذاری و رمزگشایی را مجاز کند.",
-    "app_authorization_level_boundaries": "پرداخت‌های کیف پول و دسترسی به دستگاه تأیید جداگانه می‌خواهند.",
+    "app_authorization_level_trusted_description": "دسترسی پایه، اطلاعات کیف پول، همه امضاها، رمزگذاری و رمزگشایی را مجاز کند.",
+    "app_authorization_level_boundaries": "پرداخت‌های کیف پول، ایجاد فاکتور و دسترسی به دستگاه تأیید جداگانه می‌خواهند.",
     "app_authorization_level_unset": "انتخاب نشده",
     "app_authorization_level_continue": "ادامه"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "انتشار عمومی با نام {{name}}"
   },
   "webln": {
-    "access_title": "دسترسی به کیف پول",
-    "access_notice": "دسترسی به کیف پول مجاز باشد؟ پرداخت‌ها همچنان به تأیید نیاز دارند.",
+    "access_title": "اطلاعات کیف پول",
+    "access_notice": "اجازهٔ خواندن نام نمایشی کیف پول و عملیات پشتیبانی‌شده را می‌دهید؟ پرداخت‌ها و ایجاد فاکتور همچنان به تأیید نیاز دارند.",
     "invoice_title": "ایجاد درخواست پرداخت"
   },
   "wallpaper": {

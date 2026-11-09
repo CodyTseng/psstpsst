@@ -5,7 +5,7 @@ import { signingRevision, subscribeSigning } from '../signing/changes';
 import { readAppAuthorizationLevel, saveAppAuthorizationLevel, type SigningAccountScope } from '../signing/repository';
 import { normalizeSigningSource } from '../signing/source';
 
-/** Select once before launch, including apps which never request account methods. */
+/** Resolve the shared level before launch or the first provider request. */
 export async function ensureAppAuthorizationLevel(scope: SigningAccountScope,
   choose: (signal: AbortSignal) => Promise<string | false>, signal: AbortSignal,
   current: () => void = () => {}) : Promise<AppAuthorizationLevel> {

@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "逐項授權",
     "app_authorization_level_manual_description": "未記住的操作逐項詢問。",
     "app_authorization_level_routine": "日常使用（建議）",
-    "app_authorization_level_routine_description": "自動允許基本存取、常用簽章和加密，其餘詢問。",
+    "app_authorization_level_routine_description": "自動允許基本存取、錢包資訊讀取、常用簽章和加密，其餘詢問。",
     "app_authorization_level_trusted": "信任此應用程式",
-    "app_authorization_level_trusted_description": "自動允許基本存取、所有簽章、加密和解密。",
-    "app_authorization_level_boundaries": "錢包付款和裝置存取仍需個別確認。",
+    "app_authorization_level_trusted_description": "自動允許基本存取、錢包資訊讀取、所有簽章、加密和解密。",
+    "app_authorization_level_boundaries": "錢包付款、建立發票和裝置存取仍需個別確認。",
     "app_authorization_level_unset": "尚未選擇",
     "app_authorization_level_continue": "繼續"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "以 {{name}} 的身分公開留言"
   },
   "webln": {
-    "access_title": "錢包存取",
-    "access_notice": "允許存取錢包？付款仍需單獨確認。",
+    "access_title": "錢包資訊",
+    "access_notice": "允許讀取錢包顯示名稱和支援的操作？付款和建立發票仍需單獨確認。",
     "invoice_title": "建立收款請求"
   },
   "wallpaper": {

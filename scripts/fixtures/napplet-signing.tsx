@@ -53,6 +53,8 @@ membershipHooks.useApplicationMembership = (account, entry) => {
 
 const browserPermissionRepository = require('../../src/services/explore/browser-permission-store') as typeof import('../../src/services/explore/browser-permission-store');
 browserPermissionRepository.readBrowserPermissions = async () => [];
+const authorizationRepository = require('../../src/services/signing/repository') as typeof import('../../src/services/signing/repository');
+authorizationRepository.readAppAuthorizationLevel = async () => params.has('permission-layout') ? 'routine' : 'manual';
 
 useThemeStore.setState({ preference: params.get('theme') === 'dark' ? 'dark' : 'light' });
 const auth = params.get('scenario') === 'auth';
@@ -79,7 +81,8 @@ if (params.get('scenario') === 'app-authorization-level') {
     application: { title: 'Arcade', description: '', servers: [], required: [], origin: 'https://arcade.example' },
   } });
 }
-if (params.get('scenario') === 'wallet') {
+if (params.get('scenario') === 'wallet' || params.get('scenario') === 'wallet-info') {
+  const information = params.get('scenario') === 'wallet-info';
   nappletService.answer = answerApproval;
   nappletStore.setState({ accountPubkey: 'a'.repeat(64), prompt: null, overlayActive: false });
   const life = new AbortController();
@@ -87,14 +90,14 @@ if (params.get('scenario') === 'wallet') {
   Object.assign(window, { walletFixture: state });
   const i18n = require('../../src/i18n/core').default as typeof import('../../src/i18n/core').default;
   void nappletService.requestApproval({
-    title: i18n.t('wallet.confirm_payment'),
-    detail: '', accountPubkey: 'a'.repeat(64),
+    title: i18n.t(information ? 'webln.access_title' : 'wallet.confirm_payment'),
+    detail: information ? i18n.t('webln.access_notice') : '', accountPubkey: 'a'.repeat(64),
     requester: { title: 'jumble.social', origin: 'https://jumble.social' },
-    wallet: {
-      operation: 'payment', amountMsat: 1250000, description: 'Coffee and a sandwich',
+    ...(information ? { walletAccess: true } : { wallet: {
+      operation: 'payment' as const, amountMsat: 1250000, description: 'Coffee and a sandwich',
       wallets: [{ id: 'coinos', name: 'ln.coinos.io', customName: null, isDefault: true },
         { id: 'second', name: 'Second wallet', customName: null, isDefault: false }],
-    },
+    } }),
   }, life.signal).then(result => { state.result = result; });
 }
 if (params.get('scenario') === 'queued-approvals') {

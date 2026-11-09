@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next';
 
+export const WALLET_INFO_PERMISSION = 'webln-info';
+
 const labels: Record<string, string> = {
   media: 'browser_camera_microphone', video: 'browser_camera', audio: 'browser_microphone',
   geolocation: 'browser_location', notifications: 'browser_notifications', fullscreen: 'browser_fullscreen',
@@ -10,6 +12,7 @@ const labels: Record<string, string> = {
 
 /** Preserve unrecognized resource names so an approval never hides the requested scope. */
 export function browserPermissionLabel(resource: string, t: TFunction): string {
+  if (resource === WALLET_INFO_PERMISSION) return t('webln.access_title');
   return Object.hasOwn(labels, resource) ? t(`applications.${labels[resource]}`) : `${t('applications.browser_permission')}: ${resource}`;
 }
 
@@ -19,5 +22,5 @@ export function automaticBrowserPermission(resource: string): boolean {
 }
 /** Capture selectors and unknown capabilities always require a fresh decision. */
 export function rememberBrowserPermission(resources: readonly string[]): boolean {
-  return resources.length > 0 && resources.every(resource => Object.hasOwn(labels, resource) && resource !== 'display-capture');
+  return resources.length > 0 && resources.every(resource => resource === WALLET_INFO_PERMISSION || Object.hasOwn(labels, resource) && resource !== 'display-capture');
 }

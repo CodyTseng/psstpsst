@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useNappletPermissions } from '../use-napplet-permissions';
 import { useBrowserPermissions } from '../use-browser-permissions';
+import { subscribeSigning } from '@/services/signing/changes';
+import { readAppAuthorizationLevel } from '@/services/signing/repository';
 import { readPermissions } from '@/services/signing/management';
 import { readBrowserPermissions } from '@/services/explore/browser-permission-store';
 import type { SigningSnapshot } from '@/services/signing/model';
@@ -10,6 +12,7 @@ jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => true }));
 // Opening Explore permissions must not require an activated Napplet runtime.
 jest.mock('@/stores/napplet.store', () => ({ useNappletPermissionRevision: () => 0 }));
 jest.mock('@/services/napplet/service', () => ({ nappletService: {} }));
+jest.mock('@/services/signing/repository', () => ({ readAppAuthorizationLevel: jest.fn(async () => 'manual') }));
 jest.mock('@/services/signing/management', () => ({ readPermissions: jest.fn() }));
 jest.mock('@/services/explore/browser-permission-store', () => ({ readBrowserPermissions: jest.fn() }));
 jest.mock('@/services/signing/changes', () => ({ subscribeSigning: jest.fn(() => () => {}) }));
@@ -25,6 +28,7 @@ function Probe({ account, sourceId = 'https://site.example' }: { account: string
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(readAppAuthorizationLevel).mockResolvedValue('manual');
   jest.mocked(readPermissions).mockResolvedValue({ rules: [], activity: [] });
   jest.mocked(readBrowserPermissions).mockResolvedValue([]);
 });
@@ -35,6 +39,8 @@ it('resolves both local permission sections using the page account without a run
   const scope = { accountPubkey: 'accountA', sourceId: 'https://site.example' };
   expect(readPermissions).toHaveBeenCalledWith(scope);
   expect(readBrowserPermissions).toHaveBeenCalledWith(scope);
+  expect(readAppAuthorizationLevel).toHaveBeenCalledWith(scope);
+  expect(browser?.level).toBe('manual');
   expect(signing.data).toEqual({ rules: [], activity: [] });
   expect(browser?.rules).toEqual([]);
 });
@@ -58,4 +64,13 @@ it('settles failed local reads as errors', async () => {
   await act(async () => { renderer = create(<Probe account="accountA" />); });
   expect(signing.error).toBe(true);
   expect(browser?.error).toBe(true);
+});
+
+it('reloads wallet permission coverage when the application level changes', async () => {
+  await act(async () => { renderer = create(<Probe account="accountA" />); });
+  expect(browser?.level).toBe('manual');
+  jest.mocked(readAppAuthorizationLevel).mockResolvedValue('routine');
+  const notify = jest.mocked(subscribeSigning).mock.calls.at(-1)![1];
+  await act(async () => { notify({ key: 'level', revision: 1 }); });
+  expect(browser?.level).toBe('routine');
 });

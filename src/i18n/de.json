@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "Einzeln genehmigen",
     "app_authorization_level_manual_description": "Fragen, sofern keine Entscheidung gespeichert ist.",
     "app_authorization_level_routine": "Alltägliche Nutzung (empfohlen)",
-    "app_authorization_level_routine_description": "Grundlegenden Zugriff, übliche Signaturen und Verschlüsselung erlauben. Beim Rest fragen.",
+    "app_authorization_level_routine_description": "Grundlegenden Zugriff, Wallet-Informationen, übliche Signaturen und Verschlüsselung erlauben. Beim Rest fragen.",
     "app_authorization_level_trusted": "Dieser App vertrauen",
-    "app_authorization_level_trusted_description": "Grundlegenden Zugriff, alle Signaturen, Verschlüsselung und Entschlüsselung erlauben.",
-    "app_authorization_level_boundaries": "Wallet-Zahlungen und Gerätezugriffe separat bestätigen.",
+    "app_authorization_level_trusted_description": "Grundlegenden Zugriff, Wallet-Informationen, alle Signaturen, Verschlüsselung und Entschlüsselung erlauben.",
+    "app_authorization_level_boundaries": "Wallet-Zahlungen, das Erstellen von Rechnungen und Gerätezugriffe separat bestätigen.",
     "app_authorization_level_unset": "Nicht ausgewählt",
     "app_authorization_level_continue": "Weiter"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "Öffentlich posten als {{name}}"
   },
   "webln": {
-    "access_title": "Wallet-Zugriff",
-    "access_notice": "Wallet-Zugriff erlauben? Zahlungen müssen weiterhin bestätigt werden.",
+    "access_title": "Wallet-Informationen",
+    "access_notice": "Zugriff auf den Anzeigenamen der Wallet und die unterstützten Vorgänge erlauben? Zahlungen und das Erstellen von Rechnungen erfordern weiterhin eine Bestätigung.",
     "invoice_title": "Zahlungsanforderung erstellen"
   },
   "wallpaper": {

@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "個別に承認",
     "app_authorization_level_manual_description": "保存済みの判断がなければ確認します。",
     "app_authorization_level_routine": "日常利用（推奨）",
-    "app_authorization_level_routine_description": "基本アクセス、一般的な署名と暗号化を許可し、それ以外は確認します。",
+    "app_authorization_level_routine_description": "基本アクセス、ウォレット情報、一般的な署名と暗号化を許可し、それ以外は確認します。",
     "app_authorization_level_trusted": "このアプリを信頼",
-    "app_authorization_level_trusted_description": "基本アクセス、すべての署名、暗号化、復号を許可します。",
-    "app_authorization_level_boundaries": "ウォレットの支払いと端末へのアクセスは別途確認します。",
+    "app_authorization_level_trusted_description": "基本アクセス、ウォレット情報、すべての署名、暗号化、復号を許可します。",
+    "app_authorization_level_boundaries": "ウォレットの支払い、請求書の作成と端末へのアクセスは別途確認します。",
     "app_authorization_level_unset": "未選択",
     "app_authorization_level_continue": "続ける"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "{{name}} として公開投稿"
   },
   "webln": {
-    "access_title": "ウォレットへのアクセス",
-    "access_notice": "ウォレットへのアクセスを許可しますか？支払いには引き続き確認が必要です。",
+    "access_title": "ウォレット情報",
+    "access_notice": "ウォレットの表示名と対応する操作の読み取りを許可しますか？支払いと請求書の作成には引き続き確認が必要です。",
     "invoice_title": "支払いリクエストを作成"
   },
   "wallpaper": {

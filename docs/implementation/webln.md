@@ -7,16 +7,32 @@ host-owned, using the same lifecycle boundary as the existing NIP-07 bridge.
 
 ## Supported interface
 
-- `enable()` asks for wallet access after checking that a connected wallet
-  exists. The review identifies the verified source and explains that payments
-  still need confirmation; it does not select a payer. Repeated calls in the same
-  document reuse consent. Initialization belongs to the current document and
-  origin; navigation or document replacement requires fresh consent. A pending
-  review is invalidated by source revocation. Opening a website does not prompt.
-- `isEnabled()` reports that document's initialization. Each operation checks wallet
-  availability; each payment and invoice review offers only eligible wallets.
+- `enable()` initializes the current document after checking that a connected
+  wallet exists, without asking for consent. Repeated calls reuse initialization.
+  Opening a website does not prompt.
+- `isEnabled()` reports that document's initialization, independently of wallet
+  information consent. Each operation checks wallet availability; each payment
+  and invoice review offers only eligible wallets.
 - `getInfo()` returns the default wallet's display name and the union of methods
-  supported by the account's connected wallets. This does not select a payer.
+  supported by the account's connected wallets; it does not expose balances or
+  transaction history. The first call obtains an App Authorization Level if the
+  account and verified source have none. Routine and Trusted allow these reads
+  automatically, before consulting individual rules. Manual uses a wallet
+  information review that identifies the verified source and describes
+  the disclosed information; it does not select a payer. The shared duration
+  selector offers one request, 10 minutes, 1 hour, 24 hours or permanent access,
+  equally for Allow and Reject. One-request decisions apply only to the current
+  call. Timed and permanent decisions persist by account and verified website
+  origin or application ID, survive navigation and restart, and remain editable
+  or revocable in application permissions. Each call rechecks the indexed
+  level, and in Manual the `webln-info` rule in the shared capability-permission
+  store. Covered rules are preserved for later downgrades; no document-local
+  allow cache can outlive a saved change. Expired rules prompt again. Source
+  authorization queues recheck committed decisions before reviewing another call.
+  Local application versions remain read/write preconditions rather than grant
+  identities. Denial does not disable initialization or prevent separately
+  reviewed payments and invoices. Wallet availability, document lifetime,
+  permission revision and grant expiry are rechecked before returning information.
   `node.pubkey` is empty: an NWC service public key is not a Lightning node key.
   The provider does not support node-identity authentication.
 - `sendPayment(bolt11)` accepts a checksum- and signature-verified BOLT11 invoice

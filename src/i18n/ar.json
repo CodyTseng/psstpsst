@@ -1386,10 +1386,10 @@
     "app_authorization_level_manual": "الموافقة بشكل منفصل",
     "app_authorization_level_manual_description": "السؤال إذا لم يوجد قرار محفوظ.",
     "app_authorization_level_routine": "الاستخدام اليومي (موصى به)",
-    "app_authorization_level_routine_description": "السماح بالوصول الأساسي والتوقيع والتشفير المعتادين، والسؤال عن الباقي.",
+    "app_authorization_level_routine_description": "السماح بالوصول الأساسي ومعلومات المحفظة والتوقيع والتشفير المعتادين، والسؤال عن الباقي.",
     "app_authorization_level_trusted": "الوثوق بهذا التطبيق",
-    "app_authorization_level_trusted_description": "السماح بالوصول الأساسي وجميع عمليات التوقيع والتشفير وفك التشفير.",
-    "app_authorization_level_boundaries": "تحتاج مدفوعات المحفظة والوصول إلى الجهاز إلى موافقة منفصلة.",
+    "app_authorization_level_trusted_description": "السماح بالوصول الأساسي ومعلومات المحفظة وجميع عمليات التوقيع والتشفير وفك التشفير.",
+    "app_authorization_level_boundaries": "تحتاج مدفوعات المحفظة وإنشاء الفواتير والوصول إلى الجهاز إلى موافقة منفصلة.",
     "app_authorization_level_unset": "لم يتم الاختيار",
     "app_authorization_level_continue": "متابعة"
   },
@@ -1408,8 +1408,8 @@
     "public_as": "النشر علنًا باسم {{name}}"
   },
   "webln": {
-    "access_title": "الوصول إلى المحفظة",
-    "access_notice": "السماح بالوصول إلى المحفظة؟ لا تزال المدفوعات تتطلب التأكيد.",
+    "access_title": "معلومات المحفظة",
+    "access_notice": "هل تسمح بقراءة اسم المحفظة والعمليات المدعومة؟ تظل المدفوعات وإنشاء الفواتير بحاجة إلى تأكيد.",
     "invoice_title": "إنشاء طلب دفع"
   },
   "wallpaper": {

@@ -18,7 +18,7 @@ export function CapabilityActions({ prompt, duration = 'allow', menuOpen = false
   if (prompt.capabilities?.requested) return <ActionRow layout="horizontal"
     confirm={{ label: t('applications.allow'), onPress: () => nappletService.answer(prompt.requestId, 'allow') }}
     dismiss={{ label: t('applications.signing_reject'), onPress: () => nappletService.answer(prompt.requestId, 'deny') }} />;
-  if (prompt.browser?.action === 'permission' && rememberBrowserPermission(prompt.browser.resources ?? []))
+  if (prompt.walletAccess || prompt.browser?.action === 'permission' && rememberBrowserPermission(prompt.browser.resources ?? []))
     return <PermissionActions prompt={prompt} duration={duration} menuOpen={menuOpen} onMenuChange={onMenuChange}
       remember label={t('applications.signing_remember')} />;
   return <ActionRow layout="horizontal"

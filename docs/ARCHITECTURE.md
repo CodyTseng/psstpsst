@@ -1076,9 +1076,11 @@ decisions from effective access; running
 documents retain their launch access until replaced. First-open selection
 precedes execution and launch-access review for napplets, napps and nsites,
 including nested launches. Ordinary websites inject only NIP-07 and WebLN
-providers and open without application consent; the first NIP-07 call selects a
-level for the current host-verified main-frame origin, while WebLN asks for
-document-local wallet access on `enable()`. Preference changes invalidate
+providers and open without application consent; the first NIP-07 call or WebLN
+wallet-information read selects a level for the current host-verified main-frame
+origin. Routine and Trusted cover wallet display names and supported operations;
+Manual consults account/source-scoped single-request, timed or permanent decisions.
+Payment and invoice authority remain separate. Preference changes invalidate
 in-flight authority across hosts while retaining exceptions. Policy details and independent wallet
 and device boundaries live in [app authorization](protocols/app-authorization.md). Event rules bind an account, a host-verified source, operation, event kind and
 an optional `scope_key` qualifier. Addressable events derive that qualifier from

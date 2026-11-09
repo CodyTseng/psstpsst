@@ -1366,10 +1366,10 @@
     "app_authorization_level_manual": "อนุมัติทีละรายการ",
     "app_authorization_level_manual_description": "ถามหากยังไม่ได้บันทึกการตัดสินใจ",
     "app_authorization_level_routine": "ใช้งานประจำวัน (แนะนำ)",
-    "app_authorization_level_routine_description": "อนุญาตการเข้าถึงพื้นฐาน การลงนามและการเข้ารหัสทั่วไป ถามสำหรับส่วนที่เหลือ",
+    "app_authorization_level_routine_description": "อนุญาตการเข้าถึงพื้นฐาน ข้อมูลกระเป๋าเงิน การลงนามและการเข้ารหัสทั่วไป ถามสำหรับส่วนที่เหลือ",
     "app_authorization_level_trusted": "เชื่อถือแอปนี้",
-    "app_authorization_level_trusted_description": "อนุญาตการเข้าถึงพื้นฐาน การลงนาม การเข้ารหัส และการถอดรหัสทั้งหมด",
-    "app_authorization_level_boundaries": "การชำระเงินผ่านกระเป๋าเงินและการเข้าถึงอุปกรณ์ต้องอนุมัติแยกกัน",
+    "app_authorization_level_trusted_description": "อนุญาตการเข้าถึงพื้นฐาน ข้อมูลกระเป๋าเงิน การลงนาม การเข้ารหัส และการถอดรหัสทั้งหมด",
+    "app_authorization_level_boundaries": "การชำระเงินผ่านกระเป๋าเงิน การสร้างใบแจ้งหนี้ และการเข้าถึงอุปกรณ์ต้องอนุมัติแยกกัน",
     "app_authorization_level_unset": "ยังไม่ได้เลือก",
     "app_authorization_level_continue": "ดำเนินการต่อ"
   },
@@ -1388,8 +1388,8 @@
     "public_as": "โพสต์แบบสาธารณะในชื่อ {{name}}"
   },
   "webln": {
-    "access_title": "การเข้าถึงกระเป๋าเงิน",
-    "access_notice": "อนุญาตให้เข้าถึงกระเป๋าเงินหรือไม่? การชำระเงินยังคงต้องได้รับการยืนยัน",
+    "access_title": "ข้อมูลกระเป๋าเงิน",
+    "access_notice": "อนุญาตให้อ่านชื่อกระเป๋าเงินและการดำเนินการที่รองรับหรือไม่? การชำระเงินและการสร้างใบแจ้งหนี้ยังคงต้องได้รับการยืนยัน",
     "invoice_title": "สร้างคำขอชำระเงิน"
   },
   "wallpaper": {
