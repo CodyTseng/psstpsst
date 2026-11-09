@@ -328,7 +328,8 @@ material: underlying content supplies a faint wash without competing with text.
 `shadow.float` is reserved for content that physically floats over another
 surface, such as a menu. Transient arrival notices use `surfaceFloating` and
 `shadow.notice` for quiet separation from changing page content.
-`shadow.mediaText` is only for text over unpredictable media.
+`shadow.mediaText` is only for text over unpredictable media. Artwork brand
+lockups use the shared soft artwork shadows for both the mark and title.
 
 ## 6. Motion and feedback
 
@@ -561,10 +562,15 @@ onboarding artwork acts as a window drag region on Electron. On wide
 onboarding screens the artwork uses a shared bounded visual rail rather than an
 equal-width split; narrow pushed forms stay content-only. The boot screen uses
 no onboarding artwork at any width so account initialization remains focused.
+Onboarding artwork follows the effective theme: sunlit scenery in light mode
+and dusk scenery in dark mode, with a soft transition into the page canvas.
+Brand lockups over this artwork use a shared white artwork foreground in both
+themes, independent of the selected accent, positioned over clear sky for contrast.
 About may reuse a
 restrained, tappable crop when the brand lockup and version are integrated into
 the image rather than repeated beside it. The full artwork may be viewed and
-saved from the shared media viewer; the artwork is not general page decoration.
+saved from the shared media viewer; its crop, full image and saved image follow
+the same effective-theme variant. The artwork is not general page decoration.
 Do not choose density from window width; choose it from the runtime.
 Embedded media previews fit the available message width and keep artwork
 bounded on wide conversation panes.

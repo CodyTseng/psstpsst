@@ -47,12 +47,37 @@ it('materializes an Android drawable resource before copying it to the shared ca
   mockCopy.mockResolvedValue(undefined);
 
   await expect(prepareBrandArtworkUri()).resolves.toBe(
-    'file:///app-cache/brand-artwork-artwork-hash.png',
+    'file:///app-cache/brand-artwork-sunset-artwork-hash.png',
   );
   expect(mockBundledDownload).not.toHaveBeenCalled();
   expect(mockFromUri).toHaveBeenCalledWith('cats_at_sunset');
   expect(mockCopy).toHaveBeenCalledWith(
     'file:///expo-cache/ExponentAsset-artwork.png',
-    'file:///app-cache/brand-artwork-artwork-hash.png',
+    'file:///app-cache/brand-artwork-sunset-artwork-hash.png',
   );
+});
+
+it('prepares and caches daylight independently of the sunset image', async () => {
+  mockFromModule.mockClear();
+  const downloadAsync = jest.fn().mockResolvedValue({
+    localUri: 'file:///bundle/daylight.png',
+    uri: 'file:///bundle/daylight.png',
+  });
+  mockFromModule.mockReturnValue({
+    hash: null,
+    localUri: 'file:///bundle/daylight.png',
+    downloadAsync,
+  });
+
+  const daylight = prepareBrandArtworkUri('daylight');
+  expect(prepareBrandArtworkUri('daylight')).toBe(daylight);
+  await expect(daylight).resolves.toBe('file:///app-cache/brand-artwork-daylight-v2.png');
+  expect(mockFromModule).toHaveBeenCalledWith(
+    require('../../../../assets/images/brand/cats-at-summer-noon.png'),
+  );
+  expect(downloadAsync).toHaveBeenCalledTimes(1);
+  await expect(prepareBrandArtworkUri('sunset')).resolves.toBe(
+    'file:///app-cache/brand-artwork-sunset-artwork-hash.png',
+  );
+  expect(mockFromModule).toHaveBeenCalledTimes(1);
 });

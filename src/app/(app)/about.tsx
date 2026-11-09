@@ -27,7 +27,7 @@ import { abbreviateNpub } from '@/lib/nostr/format';
 import { npubToPubkey } from '@/lib/nostr/keys';
 import { platform } from '@/platform';
 import { mediaViewer } from '@/stores/media-viewer.store';
-import { radius, spacing, useThemeColors } from '@/theme';
+import { radius, spacing, useEffectiveColorScheme, useThemeColors } from '@/theme';
 
 const SOURCE_CODE_URL = 'https://github.com/codytseng/psstpsst';
 // The author's public identity, so users can open a direct message from About.
@@ -49,6 +49,8 @@ function openUrl(url: string) {
 export default function AboutSettings() {
   const { t } = useTranslation();
   const c = useThemeColors();
+  const scheme = useEffectiveColorScheme();
+  const artworkVariant = scheme === 'light' ? 'daylight' : 'sunset';
   const directionalIconStyle = useDirectionalIconStyle();
   const titleClearance = useScreenHeaderClearance();
   const { scrolled, scrollProps } = useScrolled();
@@ -64,7 +66,7 @@ export default function AboutSettings() {
     if (openingArtwork) return;
     setOpeningArtwork(true);
     try {
-      mediaViewer.open(await prepareBrandArtworkUri());
+      mediaViewer.open(await prepareBrandArtworkUri(artworkVariant));
     } catch {
       await platform.confirmationDialog.notify({
         title: t('about.artwork_open_failed'),
@@ -108,6 +110,7 @@ export default function AboutSettings() {
             })}
           >
             <BrandArtworkImage
+              variant={artworkVariant}
               contentPosition={{ top: '80%' }}
               style={{ width: '100%', height: '100%' }}
             />

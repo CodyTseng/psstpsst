@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { BrandArtworkImage } from '@/components/common/BrandArtworkImage';
 import { useDesktopWindowDragRegion } from '@/components/common/DesktopWindowFrame';
 import { EdgeFade } from '@/components/common/EdgeFade';
-import { spacing, wideLayout } from '@/theme';
+import { spacing, useEffectiveColorScheme, wideLayout } from '@/theme';
 
 type Props = {
   wide: boolean;
@@ -16,6 +16,7 @@ type Props = {
  */
 export function OnboardingArtwork({ wide, fadeColor }: Props) {
   const dragRef = useDesktopWindowDragRegion();
+  const scheme = useEffectiveColorScheme();
 
   return (
     <View
@@ -32,6 +33,7 @@ export function OnboardingArtwork({ wide, fadeColor }: Props) {
       ]}
     >
       <BrandArtworkImage
+        variant={scheme === 'light' ? 'daylight' : 'sunset'}
         contentPosition={wide ? 'center' : 'bottom'}
         style={{ width: '100%', height: '100%' }}
       />

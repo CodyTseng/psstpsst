@@ -3,16 +3,24 @@ import { Image, type ImageProps } from 'expo-image';
 
 import { platform } from '@/platform';
 
-type Props = Pick<ImageProps, 'contentPosition' | 'style'>;
+export type BrandArtworkVariant = 'sunset' | 'daylight';
 
-const BRAND_ARTWORK_SOURCE = require('../../../assets/images/brand/cats-at-sunset.png');
-let preparedArtworkUri: Promise<string> | null = null;
+type Props = Pick<ImageProps, 'contentPosition' | 'style'> & {
+  variant?: BrandArtworkVariant;
+};
+
+const ARTWORK_SOURCES = {
+  sunset: require('../../../assets/images/brand/cats-at-sunset.png'),
+  daylight: require('../../../assets/images/brand/cats-at-summer-noon.png'),
+};
+const preparedArtworkUris: Partial<Record<BrandArtworkVariant, Promise<string>>> = {};
 
 /** Stage the bundled artwork in the shared cache so the lightbox can also save it. */
-export function prepareBrandArtworkUri(): Promise<string> {
-  if (preparedArtworkUri) return preparedArtworkUri;
-  preparedArtworkUri = (async () => {
-    const bundledAsset = Asset.fromModule(BRAND_ARTWORK_SOURCE);
+export function prepareBrandArtworkUri(variant: BrandArtworkVariant = 'sunset'): Promise<string> {
+  const prepared = preparedArtworkUris[variant];
+  if (prepared) return prepared;
+  const pending = (async () => {
+    const bundledAsset = Asset.fromModule(ARTWORK_SOURCES[variant]);
     const bundledUri = bundledAsset.localUri ?? bundledAsset.uri;
     // Standalone Android builds resolve bundled images to a drawable resource
     // name and mark them as downloaded even though there is no readable file.
@@ -25,24 +33,25 @@ export function prepareBrandArtworkUri(): Promise<string> {
     const cacheDirectory = await platform.fileSystem.cacheDirectoryUri();
     if (!cacheDirectory) return sourceUri;
 
-    const revision = bundledAsset.hash ?? 'cats-at-sunset-v2';
-    const destination = `${cacheDirectory}brand-artwork-${revision}.png`;
+    const revision = bundledAsset.hash ?? 'v2';
+    const destination = `${cacheDirectory}brand-artwork-${variant}-${revision}.png`;
     if (!(await platform.fileSystem.stat(destination)).exists) {
       await platform.fileSystem.copy(sourceUri, destination);
     }
     return destination;
   })().catch((error) => {
-    preparedArtworkUri = null;
+    delete preparedArtworkUris[variant];
     throw error;
   });
-  return preparedArtworkUri;
+  preparedArtworkUris[variant] = pending;
+  return pending;
 }
 
 /** The shared PsstPsst atmosphere artwork, rendered as non-semantic decoration. */
-export function BrandArtworkImage({ contentPosition = 'center', style }: Props) {
+export function BrandArtworkImage({ contentPosition = 'center', style, variant = 'sunset' }: Props) {
   return (
     <Image
-      source={BRAND_ARTWORK_SOURCE}
+      source={ARTWORK_SOURCES[variant]}
       accessible={false}
       cachePolicy="memory-disk"
       contentFit="cover"

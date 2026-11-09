@@ -1,6 +1,7 @@
-import Svg, { Path } from 'react-native-svg';
+import { useId } from 'react';
+import Svg, { Defs, FeDropShadow, Filter, Path } from 'react-native-svg';
 
-import { useThemeColors } from '@/theme';
+import { shadow, useThemeColors } from '@/theme';
 
 type Props = {
   /** Mark edge length. Defaults to the 72px hero size used on the welcome
@@ -8,8 +9,8 @@ type Props = {
    * mark. */
   size?: number;
   /** `muted` is reserved for the inactive wide-detail placeholder; `overlay`
-   * places the mark over media. */
-  tone?: 'accent' | 'muted' | 'overlay';
+   * places the mark over media; `artwork` follows the onboarding scenery. */
+  tone?: 'accent' | 'muted' | 'overlay' | 'artwork';
 };
 
 const PSSTPSST_MARK_PATH =
@@ -22,10 +23,29 @@ const PSSTPSST_MARK_PATH =
  */
 export function AppBrandMark({ size = 72, tone = 'accent' }: Props) {
   const c = useThemeColors();
-  const color = tone === 'muted' ? c.textMuted : tone === 'overlay' ? c.onOverlay : c.accent;
+  const shadowId = useId();
+  const shadowScale = 1024 / size;
+  const color = tone === 'artwork' ? c.brandArtworkForeground : tone === 'muted' ? c.textMuted : tone === 'overlay' ? c.onOverlay : c.accent;
   return (
     <Svg width={size} height={size} viewBox="0 0 1024 1024">
-      <Path d={PSSTPSST_MARK_PATH} fill={color} />
+      {tone === 'artwork' ? (
+        <Defs>
+          <Filter id={shadowId} x="-50%" y="-50%" width="200%" height="200%">
+            <FeDropShadow
+              dx={0}
+              dy={shadow.artworkMark.offset * shadowScale}
+              stdDeviation={shadow.artworkMark.radius * shadowScale}
+              floodColor={shadow.artworkMark.color}
+              floodOpacity={shadow.artworkMark.opacity}
+            />
+          </Filter>
+        </Defs>
+      ) : null}
+      <Path
+        d={PSSTPSST_MARK_PATH}
+        fill={color}
+        filter={tone === 'artwork' ? `url(#${shadowId})` : undefined}
+      />
     </Svg>
   );
 }

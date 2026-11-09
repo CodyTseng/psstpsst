@@ -15,6 +15,8 @@ export type ThemeColors = {
   border: string;
   text: string;
   textMuted: string;
+  /** Brand lockup foreground over the theme's onboarding artwork. */
+  brandArtworkForeground: string;
   accent: string;
   accentSoft: string;
   accentForeground: string;
@@ -76,6 +78,7 @@ export const lightPalette: ThemeColors = {
   border: '#E2E2E7',
   text: '#0F0F10',
   textMuted: '#6B6B73',
+  brandArtworkForeground: ON_OVERLAY,
   ...presetAccentTones('blue', 'light'),
   danger: '#D6342E',
   dangerSoft: '#FCE9E8',
@@ -106,6 +109,7 @@ export const darkPalette: ThemeColors = {
   border: '#26262A',
   text: '#F5F5F7',
   textMuted: '#A1A1A8',
+  brandArtworkForeground: ON_OVERLAY,
   ...presetAccentTones('blue', 'dark'),
   // A saturated red, not the pale red-400 it used to be — on the near-black dark
   // surfaces a light pink read as washed-out (delete button, unread badge).

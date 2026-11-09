@@ -107,6 +107,15 @@ export const shadow = {
     boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.18)',
     elevation: 10,
   },
+  /** Subtle definition for the white brand lockup over painted scenery. */
+  artworkMark: { color: '#000000', opacity: 0.25, offset: 1, radius: 2 },
+  artworkText: (Platform.OS === 'web'
+    ? ({ textShadow: '0px 1px 2px rgba(0,0,0,0.25)' } as TextStyle)
+    : {
+        textShadowColor: 'rgba(0,0,0,0.25)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+      }),
   /** Keeps light text legible when it is painted over user-controlled media
    * whose luminance is unknown. This is a text shadow, not surface elevation.
    * RN Web deprecates the `textShadow*` longhands in favour of the CSS

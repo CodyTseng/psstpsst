@@ -32,6 +32,7 @@ import { useActiveAccount } from '@/stores/active-account.store';
 import { iconStrokeWidth } from '@/theme/icons';
 import {
   desktopChrome,
+  shadow,
   spacing,
   uiDensity,
   useThemeColors,
@@ -317,9 +318,12 @@ export default function Welcome() {
             >
               {/* Account for the SVG's built-in whitespace below the visible mark. */}
               <View style={{ marginBottom: -spacing.xs }}>
-                <AppBrandMark size={WELCOME_ARTWORK_BRAND_MARK_SIZE} tone="overlay" />
+                <AppBrandMark
+                  size={WELCOME_ARTWORK_BRAND_MARK_SIZE}
+                  tone="artwork"
+                />
               </View>
-              <AppText variant="title" weight="semibold" align="center" style={{ color: c.onOverlay }}>
+              <AppText variant="title" weight="semibold" align="center" style={[shadow.artworkText, { color: c.brandArtworkForeground }]}>
                 {t('welcome.title')}
               </AppText>
             </View>
