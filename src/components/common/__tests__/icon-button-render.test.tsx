@@ -42,6 +42,15 @@ describe('Button feedback', () => {
     );
   });
 
+  it('fills the complete rectangular utility handle without circular clipping', () => {
+    act(() => { renderer = create(<IconButton width={24} height={56} shape="rectangle" icon={<View />} />); });
+    const pressable = renderer!.root.findByType(InteractivePressable);
+    expect(StyleSheet.flatten(pressable.props.style({ pressed: true }))).toMatchObject({
+      width: 24, height: 56, borderRadius: 0,
+    });
+    expect(pressable.props.children({ pressed: true }).props.children[0].type).toBe(InteractionOverlay);
+  });
+
   it('uses a solid danger fill for destructive icon actions', () => {
     act(() => {
       renderer = create(

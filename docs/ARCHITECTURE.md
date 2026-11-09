@@ -67,6 +67,9 @@ React surfaces on one trusted ReactHost. Each application owns its runtime,
 WebView and cancellation scope; account services and the serialized approval
 queue remain process-owned. Only the foreground Activity presents that queue.
 Account lifecycle changes and source access revocation close the affected tasks.
+Task-window chrome owns handle gestures, placement and feedback on the native UI
+thread; completed drawer state and placement cross the task port to React so
+renderer hit testing matches native geometry.
 Website opening preferences are host-owned account/site data, separate from
 capability grants. Website keys retain their full shortcut URL; signed site keys
 omit relay hints. Launchers read the saved website choice before selecting a host;

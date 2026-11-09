@@ -268,6 +268,11 @@ export const applicationTasks = {
       throw new Error(state.error);
     }
   },
+  async configure(id: string) {
+    const runtime = sessions.get(id)?.runtime;
+    if (!(runtime instanceof ExploreRuntime)) throw new Error('session-closed');
+    await runtime.openConfiguration();
+  },
   async retry(id: string) {
     const session = sessions.get(id);
     if (!session) return;

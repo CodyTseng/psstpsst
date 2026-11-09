@@ -17,6 +17,7 @@ import { AppText } from '@/components/common/AppText';
 import { showToast } from '@/stores/toast.store';
 
 jest.mock('@/stores/toast.store', () => ({ showToast: jest.fn() }));
+jest.mock('../ApplicationTaskControls', () => ({ ApplicationTaskControls: () => null }));
 jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));
 jest.mock('lucide-react-native/icons/external-link', () => () => null);
 

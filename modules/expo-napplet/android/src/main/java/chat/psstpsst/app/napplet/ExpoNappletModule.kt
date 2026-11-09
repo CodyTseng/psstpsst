@@ -131,7 +131,7 @@ class ExpoNappletModule : Module() {
         temporary.delete()
       }
     }
-    Events("onTaskActive", "onTaskClosed", "onLocalRelayEvent", "onResourceProgress")
+    Events("onTaskActive", "onTaskClosed", "onTaskDrawerChange", "onLocalRelayEvent", "onResourceProgress")
     AsyncFunction("broadcastLocalRelayEventAsync") { message: String -> LocalRelayEvents.publish(message) }
     OnActivityResult { _, result -> BrowserPickers.result(result.requestCode, result.resultCode, result.data) }
     OnCreate {
@@ -180,6 +180,12 @@ class ExpoNappletModule : Module() {
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("openTaskAsync") { id: String, title: String ->
       ApplicationTasks.open(appContext.reactContext ?: error("context-unavailable"), id, title)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("configureTaskDrawerAsync") { id: String, options: ApplicationTaskDrawerOptions ->
+      ApplicationTasks.activities[id]?.get()?.configureDrawer(options)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("releaseTaskDrawerAsync") { id: String, viewTag: Int ->
+      ApplicationTasks.activities[id]?.get()?.releaseDrawer(viewTag)
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("focusTaskAsync") { id: String ->
       val context = appContext.reactContext ?: error("context-unavailable")

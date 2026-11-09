@@ -1,6 +1,6 @@
 import 'react-native-get-random-values';
 import '@/i18n';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BackHandler, View } from 'react-native';
 import { useStore } from 'zustand';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,6 +15,7 @@ import { useLanguageDirection } from '@/i18n/direction';
 import { ApplicationRuntimePage } from './ApplicationRuntimePage';
 import { ApplicationTaskContext, useOwnsApplicationTaskOverlays } from './ApplicationTaskContext';
 import { NappletOverlays } from './NappletOverlays';
+import { ExploreApplicationSheet } from './ExploreApplicationSheet';
 
 /** A leaf React surface shares the host's account services without mounting another router. */
 export function ApplicationTaskRoot({ taskId }: { taskId: string }) {
@@ -28,7 +29,9 @@ function ApplicationTaskContent({ id }: { id: string }) {
   const state = useStore(applicationTaskStore, value => value.sessions.get(id));
   const foreground = useOwnsApplicationTaskOverlays();
   const { prompt, configuration, panel, overlayActive } = useNapplets();
-  const obscured = !!prompt || !!configuration || !!panel || overlayActive;
+  const [page, setPage] = useState<'about' | 'settings' | null>(null);
+  const [sheetActive, setSheetActive] = useState(false);
+  const obscured = !!prompt || !!configuration || !!panel || overlayActive || sheetActive;
   const direction = useLanguageDirection();
   const backPending = useRef(false);
   useEffect(() => {
@@ -50,12 +53,16 @@ function ApplicationTaskContent({ id }: { id: string }) {
   return <View style={{ flex: 1, direction }}>
     <ApplicationRuntimePage containerId={state?.containerId} active={foreground} title={state?.entry.title} application={state ? applicationPresentation(state.entry) : undefined}
       update={state ? { entry: state.entry, account: state.account, blocked: obscured, restart: entry => applicationTasks.restart(id, entry) } : undefined}
-      download={state?.download} loading={state?.loading} error={state?.error} menuEnabled={false} showMenu={false}
+      download={state?.download} loading={state?.loading} error={state?.error} menuEnabled={!!state?.containerId}
       onBack={() => applicationTasks.back(id, { closeAtRoot: false })} onForward={() => applicationTasks.forward(id)} navigationBlocked={obscured}
-      onClose={() => { void applicationTasks.close(id); }} onMore={() => {}}
-      onRetry={() => { void applicationTasks.retry(id); }}>
+      onClose={() => { void applicationTasks.close(id); }} onMore={() => { setSheetActive(true); setPage('about'); }}
+      onRetry={() => { void applicationTasks.retry(id); }}
+      overlay={state ? <ExploreApplicationSheet entry={state.entry} account={state.account}
+        runtime={{ isCurrent: () => applicationTaskStore.getState().sessions.get(id) === state,
+          reload: () => applicationTasks.restart(id, state.entry), configure: () => applicationTasks.configure(id) }}
+        page={page} onPageChange={setPage} onClosed={() => setSheetActive(false)} /> : undefined}>
       {state?.containerId ? <NappletSurface id={state.containerId} visible={foreground} obscured={obscured} /> : null}
     </ApplicationRuntimePage>
-    <NappletOverlays />
+    {!sheetActive ? <NappletOverlays /> : null}
   </View>;
 }

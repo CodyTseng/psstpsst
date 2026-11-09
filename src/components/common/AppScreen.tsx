@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext } from 'react';
-import { StatusBar, View } from 'react-native';
+import { StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useEffectiveColorScheme, useThemeColors } from '@/theme';
@@ -7,6 +7,8 @@ import type { PageAppearance } from '@/lib/page-appearance';
 
 type Props = {
   children: ReactNode;
+  /** Window-edge chrome bypasses horizontal padding while retaining vertical safe areas. */
+  windowOverlay?: ReactNode;
   /** Vertical safe-area edges. Horizontal safe areas are always applied so
    * ordinary screens stay clear of landscape notches and rounded corners. */
   edges?: readonly ('top' | 'bottom')[];
@@ -42,6 +44,7 @@ export function AppScreenHorizontalSafeArea({
 /** Screen-level container that paints the themed background edge-to-edge. */
 export function AppScreen({
   children,
+  windowOverlay,
   edges = ['top', 'bottom'],
   appearance,
   statusBarActive = true,
@@ -59,6 +62,9 @@ export function AppScreen({
       <SafeAreaView style={{ flex: 1 }} edges={[...horizontalEdges, ...edges]}>
         {children}
       </SafeAreaView>
+      {windowOverlay ? <SafeAreaView edges={edges} style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}>
+        <View style={{ flex: 1, pointerEvents: 'box-none' }}>{windowOverlay}</View>
+      </SafeAreaView> : null}
     </View>
   );
 }

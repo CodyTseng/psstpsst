@@ -11,7 +11,7 @@ import { radius, uiDensity, useThemeColors } from '@/theme';
 import { InteractionOverlay } from './InteractionOverlay';
 
 type Variant = 'plain' | 'surface' | 'secondary' | 'accent' | 'danger' | 'dangerSoft' | 'warningSoft' | 'overlay';
-type Shape = 'circle' | 'square';
+type Shape = 'circle' | 'square' | 'rectangle';
 
 type Props = {
   /** An icon element. The caller sets its size and color (DESIGN §7) —
@@ -23,9 +23,11 @@ type Props = {
   onLongPress?: (e: GestureResponderEvent) => void;
   /** Container size (width = height). Defaults to the platform density token. */
   size?: number;
+  /** Rectangular utility handles may retain independent width and height. */
+  width?: number;
+  height?: number;
   variant?: Variant;
-  /** `circle` (default) for free-floating buttons; `square` (rounded) when
-   * paired beside an input/field so the corners match. */
+  /** Circle for free-floating actions, square for framed controls, rectangle for utility handles. */
   shape?: Shape;
   disabled?: boolean;
   /** Specialist opt-out for clickable authored content that must not gain chrome on hover. */
@@ -37,8 +39,7 @@ type Props = {
 };
 
 /**
- * The single round icon-button primitive (DESIGN §8). Every circular,
- * icon-only tap target goes through this — never a hand-rolled Pressable.
+ * The shared icon-button primitive (DESIGN §8), including rectangular utility handles.
  *
  * - `plain`     transparent, press → interactionOverlay. Title-bar and light actions.
  * - `surface`   sits on a surface chip. Composer attach and the like.
@@ -62,6 +63,8 @@ export function IconButton({
   onPress,
   onLongPress,
   size = uiDensity.iconButtonSize,
+  width = size,
+  height = size,
   variant = 'plain',
   shape = 'circle',
   disabled,
@@ -114,9 +117,9 @@ export function IconButton({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         {
-          width: size,
-          height: size,
-          borderRadius: shape === 'square' ? radius.lg : size / 2,
+          width,
+          height,
+          borderRadius: shape === 'rectangle' ? 0 : shape === 'square' ? radius.lg : size / 2,
           borderWidth: bordered ? 1 : 0,
           borderColor: bordered ? c.border : undefined,
           overflow: 'hidden',

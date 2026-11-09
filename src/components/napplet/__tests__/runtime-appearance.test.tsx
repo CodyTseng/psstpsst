@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { ApplicationRuntimePage } from '../ApplicationRuntimePage';
+import { ApplicationTaskControls } from '../ApplicationTaskControls';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { ChromeBackdrop } from '@/components/common/ChromeBackdrop';
 import { IconButton } from '@/components/common/IconButton';
@@ -20,6 +21,7 @@ jest.mock('@/theme', () => {
   return {
     ThemeColorsContext, contentWidth, uiDensity: density.mobile, headerHeight: density.mobile.headerHeight,
     spacing: jest.requireActual('@/theme/spacing').spacing,
+    radius: { lg: 16 }, shadow: { float: {} },
     ...jest.requireActual('@/theme/typography'),
     useEffectiveColorScheme: () => mockScheme,
     useThemeColors: () => React.useContext(ThemeColorsContext) ?? (mockScheme === 'dark' ? palettes.darkPalette : palettes.lightPalette),
@@ -98,4 +100,14 @@ it('passes the same document palette to the independent desktop titlebar', () =>
   expect(useDesktopWindowTitlebar).toHaveBeenLastCalledWith(expect.objectContaining({ colors: expect.objectContaining({
     background: '#facc15', surfaceMuted: '#facc15', text: '#000000',
   }) }));
+});
+
+it.each(['light', 'dark'] as const)('keeps task controls on the %s host palette over a contrasting document', scheme => {
+  mockScheme = scheme; mockAppearance = pageAppearance(scheme === 'light' ? '#121212' : '#ffffff');
+  const palette = scheme === 'dark' ? darkPalette : lightPalette;
+  act(() => { renderer = create(<ApplicationTaskControls enabled canGoBack canGoForward menuEnabled
+    onBack={() => {}} onForward={() => {}} onMore={() => {}} />); });
+  act(() => { renderer.root.findAllByType(IconButton)[0].props.onPress(); });
+  expect(renderer.root.findAllByType(View).some(view => StyleSheet.flatten(view.props.style)?.backgroundColor === palette.surfaceElevated)).toBe(true);
+  for (const button of renderer.root.findAllByType(IconButton)) expect(button.props.icon.props.color).toBe(palette.text);
 });

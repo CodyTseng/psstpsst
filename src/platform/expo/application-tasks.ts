@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { IS_ANDROID } from '@/lib/platform';
-import type { ApplicationTasksPort } from '../ports/application-tasks';
+import type { ApplicationTasksPort, ApplicationTaskDrawerOptions } from '../ports/application-tasks';
 
 type NativeTasks = {
   supportsApplicationTasks?(): boolean;
@@ -9,6 +9,9 @@ type NativeTasks = {
   focusTaskAsync(id: string): Promise<void>;
   closeTaskAsync(id: string): Promise<void>;
   showTaskHostAsync(): Promise<void>;
+  configureTaskDrawerAsync?(id: string, options: ApplicationTaskDrawerOptions): Promise<void>;
+  releaseTaskDrawerAsync?(id: string, viewTag: number): Promise<void>;
+  addListener(event: 'onTaskDrawerChange', listener: (value: { id: string; expanded: boolean; offsetY: number }) => void): { remove(): void };
   addListener(event: string, listener: (value: { id: string | null }) => void): { remove(): void };
 };
 const native = IS_ANDROID ? requireOptionalNativeModule<NativeTasks>('ExpoNapplet') : null;
@@ -23,6 +26,10 @@ export const applicationTasksAdapter: ApplicationTasksPort | undefined = native?
   focus: id => native.focusTaskAsync(id),
   close: id => native.closeTaskAsync(id),
   showHost: () => native.showTaskHostAsync(),
+  configureDrawer: (id, options) => native.configureTaskDrawerAsync?.(id, options)
+    ?? Promise.reject(new Error('applications.rebuild_required')),
+  releaseDrawer: (id, viewTag) => native.releaseTaskDrawerAsync?.(id, viewTag) ?? Promise.resolve(),
+  onDrawerChange(listener) { const subscription = native.addListener('onTaskDrawerChange', ({ id, expanded, offsetY }) => listener(id, expanded, offsetY)); return () => subscription.remove(); },
   active: () => active,
   onActive(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   onClosed(listener) { const subscription = native.addListener('onTaskClosed', ({ id }) => { if (id) listener(id); }); return () => subscription.remove(); },

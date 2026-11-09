@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { AppButton } from '@/components/common/AppButton';
 import { showToast } from '@/stores/toast.store';
-import { NappletPanelActions } from './NappletPanel';
+import { NappletPanel, NappletPanelActions } from './NappletPanel';
 import { SigningAccountAvatar } from './SigningRequestDetails';
 import { exploreService } from '@/services/explore/service';
 import { applicationPresentation,type ExploreEntry } from '@/services/explore/model';
@@ -17,19 +17,24 @@ import { ApplicationAccessControls } from './ApplicationAccessControls';
 import { useExploreShare } from '@/hooks/use-explore-share';
 import { contentWidth, spacing } from '@/theme';
 
-export function ExploreApplicationSheet({ entry, account, runId, page, onPageChange }: {
-  entry: ExploreEntry; account: string; runId: number; page: 'about'|'settings'|null;
+export function ExploreApplicationSheet({ entry, account, runId, runtime, page, onPageChange, onClosed }: {
+  entry: ExploreEntry; account: string; page: 'about'|'settings'|null;
   onPageChange(page: 'about'|'settings'|null): void;
-}) {
+  onClosed?(): void;
+} & ({ runId: number; runtime?: never } | { runId?: never; runtime: {
+  isCurrent(): boolean; reload(): Promise<void>; configure(): Promise<void>;
+} })) {
   const {t}=useTranslation();
   const openPublisher=useOpenPublisher();
   const share=useExploreShare(account);
   const pending=useRef<(()=>void)|null>(null);
   const close=()=>onPageChange(null);
-  const schedule=(action:()=>void)=>{pending.current=()=>{if(exploreService.isCurrentRun(account,runId))action();};close();};
+  const schedule=(action:()=>void)=>{pending.current=()=>{
+    if(runtime ? runtime.isCurrent() : exploreService.isCurrentRun(account,runId!))action();
+  };close();};
   const sourceId=exploreService.signingSource(entry);
   return <BottomSheet visible={page!==null} onClose={close}
-    onClosed={()=>{const action=pending.current;pending.current=null;action?.();}}
+    onClosed={()=>{const action=pending.current;pending.current=null;onClosed?.();action?.();}}
     title={t(page==='settings'?'applications.permissions_manage':'applications.details')}
     headerAction={page==='settings'?<SigningAccountAvatar pubkey={account}/>:undefined}
     scrollResetKey={page??'closed'} maxWidth={contentWidth.focused}
@@ -42,16 +47,20 @@ export function ExploreApplicationSheet({ entry, account, runId, page, onPageCha
       onAction={action=>{
       if(action==='settings')onPageChange('settings');
       else if(action==='share')schedule(()=>share(entry));
-      else schedule(()=>exploreService.reload(runId));
+      else schedule(()=>{
+        if (runtime) void runtime.reload().catch(() => showToast(t('applications.request_failed'), { variant: 'error' }));
+        else if (runId !== undefined) exploreService.reload(runId);
+      });
     }}/>:undefined}>
-    <ApplicationPanel application={applicationPresentation(entry)} page={page??'about'}
+    {entry.release ? <NappletPanel release={entry.release} page={page??'about'} accountPubkey={account}
+      onAction={() => schedule(() => openPublisher(entry.release!.event.pubkey))} /> : <ApplicationPanel application={applicationPresentation(entry)} page={page??'about'}
       settings={<ApplicationSettings accountPubkey={account} access={entry.required.length ? <View style={{ gap: spacing.lg }}>
         <ApplicationAccessControls required={entry.required} selected={entry.required}/>
         {entry.kind === 'napp' && entry.required.includes('config') ? <AppButton variant="secondary" label={t('applications.settings')}
-          onPress={() => schedule(() => { void exploreService.configure(runId).catch(() => showToast(t('applications.request_failed'), { variant: 'error' })); })}/> : null}
+          onPress={() => schedule(() => { void (runtime ? runtime.configure() : exploreService.configure(runId!)).catch(() => showToast(t('applications.request_failed'), { variant: 'error' })); })}/> : null}
       </View> : undefined} sourceId={sourceId} onReset={async()=>{await exploreService.reset(entry,account);close();}}
         onUninstall={entry.local ? async()=>{await exploreService.uninstallLocal(entry,account);close();} : undefined}/>}
-      onPublisher={()=>{if(entry.manifest)schedule(()=>openPublisher(entry.manifest!.pubkey));}}/>
+      onPublisher={()=>{if(entry.manifest)schedule(()=>openPublisher(entry.manifest!.pubkey));}}/>}
     {page === 'about' ? <ApplicationOpenSetting entry={entry} account={account} /> : null}
   </BottomSheet>;
 }

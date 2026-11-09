@@ -26,6 +26,7 @@ import { showToast } from '@/stores/toast.store';
 import { ApplicationTaskContext } from './ApplicationTaskContext';
 import { applicationChromeColors } from '@/theme/application-chrome';
 import { IS_ANDROID } from '@/lib/platform';
+import { ApplicationTaskControls } from './ApplicationTaskControls';
 
 /** Shared runtime chrome and status presentation; protocol lifetimes stay in route adapters. */
 export function ApplicationRuntimePage({title,application,containerId,active=true,loading,download,error,hidden=false,windowed=false,menuEnabled,showMenu=true,openingWindow=false,onOpenWindow,onClose,onBack,onForward,canReturnToParent=false,navigationBlocked=false,onMore,onRetry,children,overlay,update}:{
@@ -70,8 +71,14 @@ export function ApplicationRuntimePage({title,application,containerId,active=tru
     {showMenu ? more : null}
   </View> : showMenu ? more : undefined;
   useDesktopWindowTitlebar(nativeWindow && active ? { title, actions: showMenu ? more : undefined, navigation, navigationWidth: APPLICATION_NAVIGATION_WIDTH, colors: chromeColors } : null);
+  const taskControls = androidTask ? <ApplicationTaskControls taskId={taskId} active={active && !hidden && !navigationBlocked}
+    enabled={navigationEnabled} canGoBack={canGoBack} canGoForward={history.canGoForward}
+    onBack={() => { if (canGoBack) void navigate(onBack); }}
+    onForward={() => { if (history.canGoForward) void navigate(onForward); }}
+    menuEnabled={showMenu && menuEnabled && !openingWindow} onMore={onMore} /> : undefined;
   return <AppScreen edges={androidTask ? ['top', 'bottom'] : ['bottom']}
     appearance={appearance}
+    windowOverlay={taskControls}
     statusBarActive={active}>
     <View style={{flex:1,display:hidden?'none':'flex'}}>
       {showHeader ? <ThemeColorsContext.Provider value={chromeColors}><ScreenHeader title={title} back={false}

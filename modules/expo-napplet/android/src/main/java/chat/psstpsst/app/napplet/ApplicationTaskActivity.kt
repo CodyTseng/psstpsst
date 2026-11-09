@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
+import android.view.MotionEvent
 import com.facebook.react.ReactActivity
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
@@ -43,6 +45,27 @@ internal object ApplicationTasks {
 
 /** Each application owns a Recents card and a React surface on the shared ReactHost. */
 class ApplicationTaskActivity : ReactActivity() {
+  private var drawer: ApplicationTaskDrawer? = null
+  internal fun configureDrawer(options: ApplicationTaskDrawerOptions) {
+    val view = window.decorView.findViewById<View>(options.viewTag) ?: error("task-drawer-unavailable")
+    val handle = window.decorView.findViewById<View>(options.handleTag) ?: error("task-handle-unavailable")
+    if (drawer?.view !== view) {
+      drawer?.dispose()
+      drawer = ApplicationTaskDrawer(view, handle) { expanded, offsetY ->
+        ApplicationTasks.emit?.invoke("onTaskDrawerChange", mapOf("id" to applicationTaskId, "expanded" to expanded, "offsetY" to offsetY))
+      }
+    }
+    drawer?.configure(options)
+  }
+  internal fun releaseDrawer(viewTag: Int) {
+    if (drawer?.view?.id != viewTag) return
+    drawer?.dispose(); drawer = null
+  }
+  override fun dispatchTouchEvent(event: MotionEvent): Boolean = if (drawer?.touch(event) == true) true else super.dispatchTouchEvent(event)
+  override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+    if (event.actionMasked in listOf(MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE, MotionEvent.ACTION_HOVER_EXIT)) drawer?.hover(event)
+    return super.dispatchGenericMotionEvent(event)
+  }
   val applicationTaskId: String get() = intent.getStringExtra("taskId") ?: ""
   override fun getMainComponentName() = "PsstApplicationTask"
   override fun createReactActivityDelegate() = object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
@@ -66,6 +89,7 @@ class ApplicationTaskActivity : ReactActivity() {
   }
   override fun invokeDefaultOnBackPressed() { finishAndRemoveTask() }
   override fun onDestroy() {
+    drawer?.dispose(); drawer = null
     if (isFinishing) {
       ApplicationTasks.activities.remove(applicationTaskId)
       ApplicationTasks.admitted.remove(applicationTaskId)

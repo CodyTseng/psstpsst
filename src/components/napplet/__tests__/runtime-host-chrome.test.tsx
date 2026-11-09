@@ -8,7 +8,9 @@ import { IconButton } from '@/components/common/IconButton';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import type { ExploreKind } from '@/services/explore/model';
 import { AppScreen } from '@/components/common/AppScreen';
-import { View } from 'react-native';
+import { BackHandler, View } from 'react-native';
+import { ApplicationTaskControls } from '../ApplicationTaskControls';
+
 
 jest.mock('@/lib/platform', () => ({ IS_ANDROID: true }));
 jest.mock('lucide-react-native/icons/chevron-left', () => () => null);
@@ -20,14 +22,14 @@ jest.mock('@/hooks/use-application-navigation', () => ({ useApplicationNavigatio
 jest.mock('@/platform', () => ({ platform: { napplet: {} } }));
 jest.mock('@/platform/napplet-appearance', () => ({ useNappletAppearance: () => undefined }));
 jest.mock('@/components/common/DesktopWindowFrame', () => ({ useDesktopWindowTitlebar: jest.fn() }));
-jest.mock('@/components/common/AppScreen', () => ({ AppScreen: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('@/components/common/AppScreen', () => ({ AppScreen: ({ children, windowOverlay }: { children: React.ReactNode; windowOverlay?: React.ReactNode }) => <>{children}{windowOverlay}</> }));
 jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null, useScreenHeaderClearance: () => 56 }));
 jest.mock('@/components/common/IconButton', () => ({ IconButton: () => null }));
 jest.mock('@/components/common/AppText', () => ({ AppText: () => null }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('../ApplicationIcon', () => ({ APPLICATION_ICON_SIZE: 64, ApplicationIcon: () => null }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-jest.mock('@/theme', () => ({ ThemeColorsContext: jest.requireActual('react').createContext(null), spacing: { xs: 4, lg: 16, xl: 24 }, uiDensity: { headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text' }) }));
+jest.mock('@/theme', () => ({ ThemeColorsContext: jest.requireActual('react').createContext(null), radius: { lg: 16 }, shadow: { float: {} }, spacing: { xs: 4, sm: 8, lg: 16, xl: 24 }, uiDensity: { headerActionSize: 36, headerActionIconSize: 20 }, useThemeColors: () => ({ text: 'text' }) }));
 
 beforeEach(() => { jest.mocked(useApplicationNavigation).mockReturnValue({ canGoBack: false, canGoForward: false }); });
 
@@ -67,9 +69,56 @@ it.each([false, true])('keeps expand out of the independent host controls: windo
     <ApplicationRuntimePage title="Website" windowed={windowed} menuEnabled onOpenWindow={() => {}}
       onClose={() => {}} onMore={() => {}} onRetry={() => {}} />
   </ApplicationTaskContext.Provider>); });
-  expect(renderer.root.findAllByType(IconButton)).toHaveLength(0);
+  expect(renderer.root.findAllByType(IconButton)).toHaveLength(windowed ? 0 : 4);
+  expect(renderer.root.findAllByType(ApplicationTaskControls)).toHaveLength(windowed ? 0 : 1);
+  expect(renderer.root.findAllByType(IconButton).some(button => button.props.accessibilityLabel === 'applications.open_in_new_window')).toBe(false);
   expect(renderer.root.findAllByType(ScreenHeader)).toHaveLength(0);
   act(() => renderer.unmount());
+});
+
+it('expands Android task controls, navigates once, and collapses before opening More', async () => {
+  jest.mocked(useApplicationNavigation).mockReturnValue({ canGoBack: true, canGoForward: false });
+  const onBack = jest.fn(async () => {}), onMore = jest.fn();
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<ApplicationTaskContext.Provider value="task">
+    <ApplicationRuntimePage containerId="page" menuEnabled onBack={onBack} onForward={() => {}}
+      onClose={() => {}} onMore={onMore} onRetry={() => {}} />
+  </ApplicationTaskContext.Provider>); });
+  const controls = () => renderer.root.findByType(ApplicationTaskControls);
+  const open = () => { act(() => { controls().findAllByType(IconButton)[0].props.onPress(); }); };
+  open();
+  expect(controls().findAllByType(IconButton)).toHaveLength(4);
+  expect(controls().findByType(ApplicationNavigation).props.canGoForward).toBe(false);
+  await act(async () => { controls().findByType(ApplicationNavigation).props.onBack(); });
+  expect(onBack).toHaveBeenCalledTimes(1);
+  expect(controls().findByProps({ importantForAccessibility: 'no-hide-descendants' })).toBeTruthy();
+  open();
+  act(() => { controls().findAllByType(IconButton).at(-1)!.props.onPress(); });
+  expect(onMore).toHaveBeenCalledTimes(1);
+  expect(controls().findByProps({ importantForAccessibility: 'no-hide-descendants' })).toBeTruthy();
+  act(() => renderer.unmount());
+});
+
+it('consumes system Back while expanded and hides task controls behind host overlays', () => {
+  const remove = jest.fn();
+  const listener = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+  let renderer!: ReactTestRenderer;
+  const render = (navigationBlocked = false, active = true) => <ApplicationTaskContext.Provider value="task">
+    <ApplicationRuntimePage containerId="page" active={active} navigationBlocked={navigationBlocked} menuEnabled
+      onClose={() => {}} onMore={() => {}} onRetry={() => {}} />
+  </ApplicationTaskContext.Provider>;
+  act(() => { renderer = create(render()); });
+  act(() => { renderer.root.findAllByType(IconButton)[0].props.onPress(); });
+  const back = listener.mock.calls.at(-1)![1];
+  act(() => { expect(back({ type: 'hardwareBackPress', timeStamp: 0 })).toBe(true); });
+  expect(remove).toHaveBeenCalled();
+  expect(renderer.root.findByProps({ importantForAccessibility: 'no-hide-descendants' })).toBeTruthy();
+  act(() => renderer.update(render(true)));
+  expect(renderer.root.findByType(ApplicationTaskControls).props.active).toBe(false);
+  act(() => renderer.update(render(false, false)));
+  expect(renderer.root.findByType(ApplicationTaskControls).props.active).toBe(false);
+  act(() => renderer.unmount());
+  listener.mockRestore();
 });
 
 

@@ -1323,7 +1323,23 @@ identity and menu actions into their native title bar, reserve the system captio
 controls, and omit duplicate page headers. Android opens applications as independent
 system tasks with their own app-named Recents cards. Independent application
 and website tasks omit the host title bar and its reserved space, while retaining
-system safe-area clearance. Pages in the main host retain the shared Close, Back,
+system safe-area clearance. A narrow drawer handle stays on the physical right
+edge, moves vertically within the safe viewport, and pulls inward to reveal a
+horizontal Back, Forward and More row without resizing the document. Handle
+taps and outside dismissal use the same brief, responsive transition; direct
+drags retain their natural edge settling. Pushing outward, tapping outside, choosing
+an action or system Back closes it without a separate close button. Outside
+taps dismiss the drawer without activating the underlying document. Its vertical position
+survives host sheets and viewport changes. The thin handle uses the host surface
+and a six-dot grip, with a slightly wider touch region for reliable dragging.
+Handle hover and press feedback fill
+its entire rectangular region; only the drawer's outer contour clips that fill.
+Collapsed chrome passes document input through outside the handle.
+Android excludes only the drawer's
+visible bounds from system edge-back gestures. Host sheets hide the drawer and
+retain input ownership through dismissal. These overlays use the host theme in
+both modes.
+Pages in the main host retain the shared Close, Back,
 Forward and More header actions. System Back
 traverses the app's history, then closes its task; switching tasks preserves each running app.
 System back gestures cancel pending webpage touches when the gesture starts,
