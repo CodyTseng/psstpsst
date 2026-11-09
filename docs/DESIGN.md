@@ -136,6 +136,12 @@ Devices without a fresh signal follow the signal tiers.
 All text uses `AppText`. Semantic variants and platform-specific metrics live
 only in `src/theme/typography.ts`.
 
+Text is not selectable by default. Navigation, labels, and other interface chrome
+must not enter text selection. Opt in with `AppText`'s `selectable` prop for
+copyable content such as desktop messages, application descriptions in information
+views, notices, and technical values.
+Editable inputs retain native text selection.
+
 | Variant | Purpose |
 | --- | --- |
 | `amount` | Wallet amounts |

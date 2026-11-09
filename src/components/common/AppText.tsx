@@ -43,6 +43,7 @@ export function AppText({
   weight,
   align = 'start',
   language: contentLanguage,
+  selectable = false,
   style,
   ...rest
 }: Props) {
@@ -68,6 +69,7 @@ export function AppText({
     <Text
       {...rest}
       {...webLanguageProps}
+      selectable={selectable}
       style={[
         {
           fontSize: v.fontSize,

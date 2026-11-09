@@ -24,7 +24,7 @@ export function ApplicationInfo({release,onPublisher,notice,action,actionPlaceme
     {actionPlacement==='below'?(typeof action==='function'?action(false):action):null}
     {release.publisher?<PublisherRow pubkey={release.publisher} onPress={onPublisher}/>:null}
     {release.local ? <AppText variant="caption" tone="muted">{t('applications.local_unsigned_notice')}</AppText> : null}
-    {release.description.trim() ? <AppText>{release.description}</AppText> : null}
+    {release.description.trim() ? <AppText selectable>{release.description}</AppText> : null}
     {release.origin?<AppText variant="caption" tone="muted" selectable>{release.origin}</AppText>:null}
     {notice}
     <NappletRequiredAccess release={release} unsupported={unsupported} />
