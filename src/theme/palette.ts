@@ -4,6 +4,8 @@ export type ThemeColors = {
   background: string;
   surface: string;
   surfaceElevated: string;
+  /** Translucent host surface for utility handles over embedded content. */
+  surfaceHandle: string;
   /** Highest neutral surface for transient notices above page content. */
   surfaceFloating: string;
   surfaceMuted: string;
@@ -71,6 +73,7 @@ export const lightPalette: ThemeColors = {
   background: '#F2F2F7',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
+  surfaceHandle: 'rgba(255,255,255,0.85)',
   surfaceFloating: '#FFFFFF',
   surfaceMuted: '#E5E5EA',
   interactionOverlay: 'rgba(15,15,16,0.08)',
@@ -102,6 +105,7 @@ export const darkPalette: ThemeColors = {
   background: '#09090B',
   surface: '#141416',
   surfaceElevated: '#1A1A1D',
+  surfaceHandle: 'rgba(26,26,29,0.85)',
   surfaceFloating: '#232327',
   surfaceMuted: '#101013',
   interactionOverlay: 'rgba(255,255,255,0.08)',

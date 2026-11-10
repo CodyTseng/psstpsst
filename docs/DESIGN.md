@@ -1330,8 +1330,9 @@ taps and outside dismissal use the same brief, responsive transition; direct
 drags retain their natural edge settling. Pushing outward, tapping outside, choosing
 an action or system Back closes it without a separate close button. Outside
 taps dismiss the drawer without activating the underlying document. Its vertical position
-survives host sheets and viewport changes. The thin handle uses the host surface
-and a six-dot grip, with a slightly wider touch region for reliable dragging.
+survives host sheets and viewport changes. The thin handle uses a subtly
+translucent host surface and an opaque vertical ellipsis, with a slightly wider touch
+region for reliable dragging. Revealed navigation actions retain an opaque host surface.
 Handle hover and press feedback fill
 its entire rectangular region; only the drawer's outer contour clips that fill.
 Collapsed chrome passes document input through outside the handle.

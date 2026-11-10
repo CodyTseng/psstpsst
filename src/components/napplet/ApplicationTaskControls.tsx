@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, findNodeHandle, processColor, StyleSheet, View } from 'react-native';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
-import GripVertical from 'lucide-react-native/icons/grip-vertical';
+import EllipsisVertical from 'lucide-react-native/icons/ellipsis-vertical';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/common/IconButton';
 import { InteractivePressable } from '@/components/common/InteractivePressable';
@@ -67,12 +67,12 @@ export function ApplicationTaskControls({ taskId, active = true, enabled, canGoB
       // Keep Fabric's hit-test geometry consistent with completed native manipulation.
       transform: [{ translateX: expanded ? 0 : travel }, { translateY: offsetY }], opacity: active ? 1 : 0,
       flexDirection: 'row', alignItems: 'center', borderTopStartRadius: radius.lg, borderBottomStartRadius: radius.lg,
-      overflow: 'hidden', backgroundColor: c.surfaceElevated, borderColor: c.border, borderWidth: StyleSheet.hairlineWidth,
+      overflow: 'hidden', backgroundColor: c.surfaceHandle, borderColor: c.border, borderWidth: StyleSheet.hairlineWidth,
     }}>
       <View ref={handle} onLayout={layout} collapsable={false} style={{ width: handleWidth, height }}>
         <IconButton width={handleWidth} height={height} shape="rectangle" hoverFeedback={false}
           accessibilityLabel={t('applications.runtime_more')} onPress={() => setOpen(!expanded)}
-          icon={<GripVertical size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.text} />} />
+          icon={<EllipsisVertical size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.text} />} />
       </View>
       <View accessibilityElementsHidden={!expanded} importantForAccessibility={expanded ? 'auto' : 'no-hide-descendants'}
         style={{ height, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm,
