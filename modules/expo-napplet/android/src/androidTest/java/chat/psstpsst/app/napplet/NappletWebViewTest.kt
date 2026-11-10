@@ -20,6 +20,24 @@ class NappletTestActivity : Activity()
 
 class NappletWebViewTest {
   @Test
+  fun browserVideoFallbackIsTransparentAndReused() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    instrumentation.runOnMainSync {
+      val web = NappletWebView(instrumentation.targetContext) {}
+      try {
+        val chrome = web.webChromeClient!!
+        val poster = chrome.defaultVideoPoster!!
+        assertEquals(1, poster.width)
+        assertEquals(1, poster.height)
+        assertEquals(0, poster.getPixel(0, 0))
+        assertSame(poster, chrome.defaultVideoPoster)
+      } finally {
+        web.destroy()
+      }
+    }
+  }
+
+  @Test
   @SdkSuppress(minSdkVersion = 30)
   fun hostReservedSafeAreasAreClearedWithoutConsumingKeyboardInsets() {
     InstrumentationRegistry.getInstrumentation().runOnMainSync {

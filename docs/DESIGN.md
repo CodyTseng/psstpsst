@@ -577,6 +577,9 @@ bounded on wide conversation panes.
 Message image and video containers retain minimum width and height so controls
 and metadata remain visible. Media keeps its aspect ratio without cropping;
 unused space uses the theme's muted grey surface, including pending previews.
+Video surfaces retain an opaque themed cover with the available poster or
+ThumbHash until the first frame is displayed. Embedded websites retain their own
+video posters and backgrounds without a host-provided video glyph.
 Local video previews use cached frame images in chat and media lists. Players
 are mounted only for playback; unavailable posters retain the ThumbHash or neutral fallback.
 Local media sends resolve available preview dimensions before showing the pending

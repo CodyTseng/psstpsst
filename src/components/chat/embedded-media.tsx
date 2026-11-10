@@ -1,7 +1,7 @@
 import { useEvent } from 'expo';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Image } from 'expo-image';
-import { useVideoPlayer, VideoView, type VideoSource } from 'expo-video';
+import { useVideoPlayer, type VideoSource } from 'expo-video';
 import { Clapperboard as Film } from '@solar-icons/react-native/category/video/Linear/Clapperboard';
 import { GalleryRemove as ImageOff } from '@solar-icons/react-native/category/video/Linear/GalleryRemove';
 import { Pause } from '@solar-icons/react-native/category/video/Linear/Pause';
@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { VideoSurface } from '@/components/media/VideoSurface';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { AppText } from '@/components/common/AppText';
@@ -431,9 +432,12 @@ function EmbeddedContainerPlayer({
           </View>
         </Pressable>
       ) : (
-        <VideoView
+        <VideoSurface
+          sourceKey={sourceUrl}
+          thumbhash={media.thumbhash}
+          showLoading={status !== 'loading'}
           player={player}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
           contentFit="contain"
           nativeControls
           fullscreenOptions={{ enable: true }}

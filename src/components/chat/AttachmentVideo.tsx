@@ -2,7 +2,7 @@ import { useAttachmentDownloadUri } from '@/hooks/use-attachment-download-uri';
 import { useEvent } from 'expo';
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer } from 'expo-video';
 import { Clapperboard as Film } from '@solar-icons/react-native/category/video/Linear/Clapperboard';
 import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
 import Download from 'lucide-react-native/icons/download';
@@ -13,6 +13,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { AttachmentFrame } from '@/components/chat/AttachmentFrame';
+import { VideoSurface } from '@/components/media/VideoSurface';
 import { useVideoPoster } from '@/hooks/use-video-poster';
 import { AppText } from '@/components/common/AppText';
 import { isAbortError } from '@/lib/async/abort';
@@ -44,7 +45,7 @@ import {
 } from './attachment-layout';
 import { AttachmentTransferProgress } from './AttachmentTransferProgress';
 
-function PlayingVideo({ uri, onError }: { uri: string; onError: () => void }) {
+function PlayingVideo({ uri, posterUri, thumbhash, onError }: { uri: string; posterUri?: string; thumbhash?: string; onError: () => void }) {
   const player = useVideoPlayer(uri, (p) => {
     p.loop = false;
   });
@@ -58,7 +59,10 @@ function PlayingVideo({ uri, onError }: { uri: string; onError: () => void }) {
   }, [onError, status]);
 
   return (
-    <VideoView
+    <VideoSurface
+      sourceKey={uri}
+      posterUri={posterUri}
+      thumbhash={thumbhash}
       player={player}
       style={{ width: '100%', height: '100%' }}
       contentFit="contain"
@@ -116,7 +120,7 @@ export function AttachmentVideo({
   const localUri = ownLocalUri ?? sharedUri;
   // Inline playback starts only after a tap; list previews use cached images.
   const [started, setStarted] = useState(false);
-  const posterUri = useVideoPoster(started ? null : localUri);
+  const posterUri = useVideoPoster(localUri);
   const [loading, setLoading] = useState(false);
   const [paused, setPaused] = useState(false);
   const [failKind, setFailKind] = useState<AttachmentErrorKind | null>(null);
@@ -310,7 +314,7 @@ export function AttachmentVideo({
             )}
           </Pressable>
         ) : started && localUri ? (
-          <PlayingVideo uri={localUri} onError={() => setPlaybackFailed(true)} />
+          <PlayingVideo uri={localUri} posterUri={posterUri} thumbhash={meta.thumbhash} onError={() => setPlaybackFailed(true)} />
         ) : (
           <Pressable
             hoverFeedback={false}

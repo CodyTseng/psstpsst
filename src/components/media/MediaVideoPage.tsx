@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useEvent } from 'expo';
 import * as Sharing from 'expo-sharing';
-import { useVideoPlayer, VideoView, type VideoSource } from 'expo-video';
+import { useVideoPlayer, type VideoSource } from 'expo-video';
 import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,8 @@ import { copyForShare } from '@/services/files/file-attachment.service';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { spacing, useThemeColors } from '@/theme';
+import { useVideoPoster } from '@/hooks/use-video-poster';
+import { VideoSurface } from './VideoSurface';
 import { MediaPlaybackControls } from './MediaPlaybackControls';
 
 type Props = {
@@ -34,9 +36,9 @@ type Props = {
 export function MediaVideoPage({ item, active }: Props) {
   if (!active) return <VideoPlaceholder thumbhash={item.meta.thumbhash} />;
   return item.source === 'attachment' ? (
-    <AttachmentMediaVideoPage meta={item.meta} />
+    <AttachmentMediaVideoPage key={item.mediaKey} meta={item.meta} />
   ) : (
-    <RemoteMediaVideoPage media={item.meta} />
+    <RemoteMediaVideoPage key={item.mediaKey} media={item.meta} />
   );
 }
 
@@ -57,6 +59,7 @@ function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
   const c = useThemeColors();
   const attachment = useAttachment(meta, { autoLoad: true });
   const { state } = attachment;
+  const posterUri = useVideoPoster(state.status === 'ready' ? state.localUri : null);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const onPlaybackError = useCallback(() => setPlaybackFailed(true), []);
 
@@ -73,7 +76,7 @@ function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
   if (state.status === 'ready') {
     return playbackFailed
       ? <UnsupportedVideo uri={state.localUri} mime={meta.mime} name={meta.name} />
-      : <AutoplayVideo source={state.localUri} onError={onPlaybackError} />;
+      : <AutoplayVideo key={state.localUri} source={state.localUri} sourceKey={state.localUri} posterUri={posterUri} thumbhash={meta.thumbhash} onError={onPlaybackError} />;
   }
 
   return (
@@ -115,7 +118,7 @@ function RemoteMediaVideoPage({ media }: { media: EmbeddedMedia }) {
   const source = useMemo(() => ({ uri: media.url, useCaching: !media.streaming }), [media.url, media.streaming]);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const onPlaybackError = useCallback(() => setPlaybackFailed(true), []);
-  return playbackFailed ? <UnsupportedVideo /> : <AutoplayVideo source={source} onError={onPlaybackError} />;
+  return playbackFailed ? <UnsupportedVideo /> : <AutoplayVideo key={media.url} source={source} sourceKey={media.url} thumbhash={media.thumbhash} onError={onPlaybackError} />;
 }
 
 function UnsupportedVideo({ uri, mime, name }: { uri?: string; mime?: string; name?: string }) {
@@ -148,7 +151,7 @@ function UnsupportedVideo({ uri, mime, name }: { uri?: string; mime?: string; na
 }
 
 /** An inactive page unmounts this player, including when a download finishes late. */
-function AutoplayVideo({ source, onError }: { source: VideoSource; onError: () => void }) {
+function AutoplayVideo({ source, sourceKey, posterUri, thumbhash, onError }: { source: VideoSource; sourceKey: string; posterUri?: string; thumbhash?: string; onError: () => void }) {
   const player = useVideoPlayer(null, (instance) => {
     instance.loop = false;
     instance.timeUpdateEventInterval = IS_ELECTRON ? 0 : 0.5;
@@ -169,7 +172,11 @@ function AutoplayVideo({ source, onError }: { source: VideoSource; onError: () =
   }, [player, source, onError]);
   return (
     <>
-      <VideoView
+      <VideoSurface
+        sourceKey={sourceKey}
+        posterUri={posterUri}
+        thumbhash={thumbhash}
+        immersive
         player={player}
         // On web, VideoView is a replaced <video> element: insets alone do not
         // constrain its intrinsic dimensions. Explicit bounds make contain work.

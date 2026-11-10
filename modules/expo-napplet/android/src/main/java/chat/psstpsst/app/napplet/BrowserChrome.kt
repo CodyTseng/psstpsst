@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.view.View
 import android.view.ViewGroup
@@ -45,6 +46,10 @@ internal object BrowserPickers {
 
 /** Native browser surfaces retain their callbacks until the document is approved or disposed. */
 internal class BrowserChrome(private val host: NappletWebView, private val context: Context) : WebChromeClient(), DownloadListener {
+  // Let each document's poster or background show instead of WebView's stretched play icon.
+  private val videoPoster by lazy { Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888) }
+  override fun getDefaultVideoPoster(): Bitmap = videoPoster
+
   private val activity get() = (context as? ReactContext)?.currentActivity
   private val dialogs = mutableSetOf<AlertDialog>()
   private var fullscreen: View? = null

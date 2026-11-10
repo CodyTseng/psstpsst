@@ -6,7 +6,8 @@ import { MusicNote } from '@solar-icons/react-native/category/video/Linear/Music
 import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
 import { VideoFramePlayHorizontal } from '@solar-icons/react-native/category/video/Linear/VideoFramePlayHorizontal';
 import { Image } from 'expo-image';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer } from 'expo-video';
+import { VideoSurface } from '@/components/media/VideoSurface';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -156,11 +157,13 @@ function VideoPreview({ uri }: { uri: string }) {
     instance.muted = true;
   });
   return (
-    <VideoView
+    <VideoSurface
+      sourceKey={uri}
+      showLoading={false}
       player={player}
       nativeControls={false}
       contentFit="cover"
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 , pointerEvents: 'none' }}
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
     />
   );
 }
