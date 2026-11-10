@@ -1,3 +1,4 @@
+import { signerClientMetadata } from '../client-metadata';
 import { vaultAccess } from '@/platform/vault-access';
 import { finalizeEvent, generateSecretKey, getPublicKey, nip44, verifyEvent, type Event } from 'nostr-tools';
 // eslint-disable-next-line no-restricted-imports -- Integration tests run the trusted backend in place of the native bridge.
@@ -12,7 +13,7 @@ jest.mock('@/platform/vault-access', () => ({ vaultAccess: jest.requireMock('@/p
 const mockState: {
   vault: LocalKeyVault; bunker: Uint8Array; account: string;
   listener?: (event: Event) => void; stalled: boolean; rejected: boolean;
-  requests: string[]; commands: VaultCommand[];
+  requests: string[]; connectParams: string[]; commands: VaultCommand[];
   listeners: Map<string, (event: Event) => void>;
 } = {} as never;
 
@@ -42,6 +43,7 @@ jest.mock('../../relay/managed-relay-pool', () => ({ ManagedRelayPool: jest.fn((
     const conversation = tools.nip44.v2.utils.getConversationKey(mockState.bunker, event.pubkey);
     const request = JSON.parse(tools.nip44.v2.decrypt(event.content, conversation));
     mockState.requests.push(request.method);
+    if (request.method === 'connect') mockState.connectParams = request.params;
     if (!mockState.stalled) {
       const result = request.method === 'connect' ? 'ack' : mockState.account;
       const response = tools.finalizeEvent({ kind: 24133, created_at: 1, tags: [['p', event.pubkey]],
@@ -65,7 +67,7 @@ beforeEach(() => {
   });
   mockState.bunker = generateSecretKey(); mockState.account = getPublicKey(generateSecretKey());
   mockState.listener = undefined; mockState.stalled = false; mockState.rejected = false;
-  mockState.requests = []; mockState.commands = []; mockState.listeners = new Map();
+  mockState.requests = []; mockState.connectParams = []; mockState.commands = []; mockState.listeners = new Map();
   jest.clearAllMocks();
 });
 afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
@@ -75,14 +77,22 @@ test('bunker URI login completes the sealed handshake and retains the generated 
     .toEqual({ pubkey: mockState.account });
   expect(mockState.requests).toEqual(['connect', 'get_public_key']);
   expect(mockState.commands.some(command => command.method === 'cancelBunkerPairing')).toBe(true);
+  expect(mockState.connectParams.slice(0, 3)).toEqual([getPublicKey(mockState.bunker), 'credential', '']);
+  expect(JSON.parse(mockState.connectParams[3])).toEqual(signerClientMetadata());
   const client = await mockState.vault.execute({ method: 'publicKey', key: { account: mockState.account, role: 'nip46-client' } });
   expect(client).toMatch(/^[0-9a-f]{64}$/);
 });
 
 test('reverse pairing subscribes before exposing the invitation and verifies discovery before connecting', async () => {
-  const session = await startNostrConnect({ relays: ['wss://relay.example/'] });
+  const session = await startNostrConnect({ relays: ['wss://relay.example/'], clientName: '  My phone + 中文  ' });
   expect(mockState.listener).toBeDefined(); expect(mockState.requests).toEqual([]);
   const uri = new URL(session.uri);
+  const metadata = signerClientMetadata('My phone + 中文');
+  expect(session.uri).not.toContain('+');
+  const rawName = session.uri.split('?')[1].split('&').find(value => value.startsWith('name='))!.slice(5);
+  expect(decodeURIComponent(rawName)).toBe(metadata.name);
+  expect(uri.searchParams.has('url')).toBe(false);
+  for (const [key, value] of Object.entries(metadata)) expect(uri.searchParams.get(key)).toBe(value);
   const discovery = finalizeEvent({ kind: 24133, created_at: 1, tags: [['p', uri.hostname]],
     content: nip44.v2.encrypt(JSON.stringify({ id: 'discovery', result: uri.searchParams.get('secret') }),
       nip44.v2.utils.getConversationKey(mockState.bunker, uri.hostname)),
@@ -90,6 +100,8 @@ test('reverse pairing subscribes before exposing the invitation and verifies dis
   expect(verifyEvent(discovery)).toBe(true);
   mockState.listener!(discovery);
   expect(await session.waitForConnection()).toEqual({ pubkey: mockState.account });
+  expect(mockState.connectParams[2]).toBe('');
+  expect(JSON.parse(mockState.connectParams[3])).toEqual(metadata);
   expect(mockState.requests).toEqual(['connect', 'get_public_key']);
 });
 
@@ -154,4 +166,10 @@ test('closing pairing or a signer preserves other sessions on the shared transpo
     invitation?.cancel();
     await remote.destroy?.();
   }
+});
+
+test('bunker login sends a trimmed custom application name without changing the credential', async () => {
+  await loginWithBunker(`bunker://${getPublicKey(mockState.bunker)}?relay=wss%3A%2F%2Frelay.example%2F&secret=credential`, '  My laptop  ');
+  expect(mockState.connectParams[1]).toBe('credential');
+  expect(JSON.parse(mockState.connectParams[3])).toEqual(signerClientMetadata('My laptop'));
 });

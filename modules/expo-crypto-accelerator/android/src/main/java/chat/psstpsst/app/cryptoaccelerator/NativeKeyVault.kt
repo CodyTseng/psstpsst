@@ -50,7 +50,9 @@ internal class NativeKeyVault(
       val session = hex(randomBytes(32))
       pairings[session] = Pairing(key, pub, peer, secret, relays)
       val uri: Any = if (peer == null) android.net.Uri.Builder().scheme("nostrconnect").authority(pub).apply {
-        relays.forEach { appendQueryParameter("relay", it) }; appendQueryParameter("secret", secret); appendQueryParameter("name", "PsstPsst")
+        relays.forEach { appendQueryParameter("relay", it) }; appendQueryParameter("secret", secret)
+        val metadata = c.optJSONObject("metadata") ?: JSONObject().put("name", "PsstPsst")
+        metadata.keys().forEach { appendQueryParameter(it, metadata.getString(it)) }
       }.build().toString() else JSONObject.NULL
       return JSONObject().put("session", session).put("clientPubkey", pub).put("uri", uri)
     }
@@ -79,6 +81,7 @@ internal class NativeKeyVault(
       require(operation == "connect" || (operation == "get_public_key" && pair.connected))
       val id = hex(randomBytes(32)); pair.pending = id to operation
       val params = if (operation == "connect") JSONArray().put(peer).put(pair.secret ?: "") else JSONArray()
+      if (operation == "connect") c.optJSONObject("metadata")?.let { params.put("").put(encode(it)) }
       val text = encode(JSONObject().put("id", id).put("method", operation).put("params", params))
       return sign(pair.secretKey, JSONObject().put("kind", 24133).put("created_at", System.currentTimeMillis() / 1000)
         .put("tags", JSONArray().put(JSONArray().put("p").put(peer))).put("content", crypt(pair.secretKey, peer, text, "nip44", "encrypt", false)))

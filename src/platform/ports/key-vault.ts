@@ -21,12 +21,14 @@ export type WalletVaultCommand =
   | { method: 'walletRelayAuth'; account: string; walletId: string; template: EventTemplate }
   | { method: 'walletRemove'; account: string; walletId: string }
   | { method: 'walletRemovePin'; account: string };
+export type SignerClientMetadata = { name: string; image: string };
+
 export type VaultCommand = WalletVaultCommand
   | { method: 'migrateStorage'; accounts: string[]; bunkers?: { account: string; peer: string }[]; wallets: Omit<LegacyWalletBinding, 'method'>[] }
   | { method: 'ensureProximity' | 'removeProximity'; account: string }
   | { method: 'bindProximityNoise'; account: string; noisePubkey: string }
-  | { method: 'beginBunkerPairing'; peer: string | null; secret: string | null; relays: string[] }
-  | { method: 'bunkerPairingRequest'; session: string; operation: 'connect' | 'get_public_key' }
+  | { method: 'beginBunkerPairing'; peer: string | null; secret: string | null; relays: string[]; metadata?: SignerClientMetadata }
+  | { method: 'bunkerPairingRequest'; session: string; operation: 'connect' | 'get_public_key'; metadata?: SignerClientMetadata }
   | { method: 'bunkerPairingReceive'; session: string; event: Event }
   | { method: 'commitBunkerPairing' | 'cancelBunkerPairing'; session: string }
   | { method: 'generateEphemeral'; purpose: 'account' | 'key-sync' }

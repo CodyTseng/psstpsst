@@ -16,6 +16,8 @@
       "invalid": "私密金鑰無效"
     },
     "bunker": {
+      "client_name": "應用程式名稱",
+      "client_name_hint": "顯示在遠端簽署器中，用於識別此連線。",
       "title": "連線連結",
       "subtitle": "貼上簽章器提供的 bunker:// 連結。",
       "placeholder": "bunker://…",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
 import QRCodeStyled, { type RenderCustomPieceItem } from 'react-native-qrcode-styled';
-import { G, Rect } from 'react-native-svg';
+import { G, Path, Rect } from 'react-native-svg';
 import { captureRef } from 'react-native-view-shot';
 
 import { IS_ELECTRON } from '@/lib/platform';
@@ -9,8 +9,7 @@ import { useThemeColors } from '@/theme';
 
 // Session cache of rasterised QRs (`data|size|color|background` -> file uri).
 // The code is deterministic, so once drawn we reuse a cheap <Image> on later opens instead
-// of re-mounting ~600 SVG nodes — that mount is what stalls a sheet's slide-up,
-// so caching keeps reopens instant and smooth.
+// of regenerating the QR matrix and SVG; caching keeps reopens instant and smooth.
 const qrCache = new Map<string, string>();
 
 type Props = {
@@ -70,44 +69,43 @@ function QrCodeSurface({ data, size, color, backgroundColor, cacheKey: key }: {
   const [ready, setReady] = useState(false);
   const renderElectronPiece = useCallback<RenderCustomPieceItem>(
     ({ x, y, pieceSize, bitMatrix }) => {
-      const eyeOrigin = finderOrigin(x, y, bitMatrix.length);
-      if (eyeOrigin) {
-        const [originX, originY] = eyeOrigin;
-        if (x !== originX || y !== originY) return null;
-        return (
-          <G key={`eye:${originX}:${originY}`}>
-            <Rect
-              x={(originX + 0.5) * pieceSize}
-              y={(originY + 0.5) * pieceSize}
-              width={6 * pieceSize}
-              height={6 * pieceSize}
-              rx={1.5 * pieceSize}
-              fill="none"
-              stroke={color}
-              strokeWidth={pieceSize}
-            />
-            <Rect
-              x={(originX + 2) * pieceSize}
-              y={(originY + 2) * pieceSize}
-              width={3 * pieceSize}
-              height={3 * pieceSize}
-              rx={1.5 * pieceSize}
-              fill={color}
-            />
-          </G>
-        );
+      // The library visits every cell. Emit one group so a dense invitation
+      // creates a constant number of SVG nodes instead of thousands of them.
+      if (x !== 0 || y !== 0) return null;
+      const dots: string[] = [];
+      for (let row = 0; row < bitMatrix.length; row++) {
+        for (let column = 0; column < bitMatrix.length; column++) {
+          if (bitMatrix[row]?.[column] !== 1 || finderOrigin(column, row, bitMatrix.length)) continue;
+          dots.push(`M${column + 0.5} ${row}a.5.5 0 1 1 0 1a.5.5 0 1 1 0-1Z`);
+        }
       }
-      if (bitMatrix[y]?.[x] !== 1) return null;
+      const far = bitMatrix.length - 7;
       return (
-        <Rect
-          key={`piece:${x}:${y}`}
-          x={x * pieceSize}
-          y={y * pieceSize}
-          width={pieceSize}
-          height={pieceSize}
-          rx={pieceSize / 2}
-          fill={color}
-        />
+        <G key="pieces" scale={pieceSize}>
+          <Path d={dots.join('')} fill={color} />
+          {[[0, 0], [far, 0], [0, far]].map(([originX, originY]) => (
+            <G key={`eye:${originX}:${originY}`}>
+              <Rect
+                x={originX + 0.5}
+                y={originY + 0.5}
+                width={6}
+                height={6}
+                rx={1.5}
+                fill="none"
+                stroke={color}
+                strokeWidth={1}
+              />
+              <Rect
+                x={originX + 2}
+                y={originY + 2}
+                width={3}
+                height={3}
+                rx={1.5}
+                fill={color}
+              />
+            </G>
+          ))}
+        </G>
       );
     },
     [color],

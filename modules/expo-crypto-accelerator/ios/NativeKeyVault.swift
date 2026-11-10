@@ -229,7 +229,8 @@ final class NativeKeyVault {
       var uri: Any = NSNull()
       if peer == nil {
         let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-        let params = relays.map { ("relay", $0) } + [("secret", secret!), ("name", "PsstPsst")]
+        let metadata = c["metadata"] as? [String: String] ?? ["name": "PsstPsst"]
+        let params = relays.map { ("relay", $0) } + [("secret", secret!)] + metadata.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
         uri = "nostrconnect://" + pub + "?" + params.map { $0.0 + "=" + $0.1.addingPercentEncoding(withAllowedCharacters: allowed)! }.joined(separator: "&")
       }
       return ["session": session, "clientPubkey": pub, "uri": uri]
@@ -256,7 +257,10 @@ final class NativeKeyVault {
       let operation = try string(c["operation"])
       guard let peer = pair.peer, operation == "connect" || (operation == "get_public_key" && pair.connected) else { throw fail() }
       let id = try encoded(random(32)); pair.pending = (id, operation)
-      let params = operation == "connect" ? [peer, pair.secret ?? ""] : []
+      var params = operation == "connect" ? [peer, pair.secret ?? ""] : []
+      if operation == "connect", let metadata = c["metadata"] as? [String: String] {
+        params += ["", try json(metadata)]
+      }
       let content = try crypt(pair.secretKey, peer, json(["id": id, "method": operation, "params": params]), "nip44", "encrypt", cache: false)
       return try sign(pair.secretKey, ["kind": 24133, "created_at": Int(Date().timeIntervalSince1970), "tags": [["p", peer]], "content": content])
     }

@@ -7,9 +7,10 @@ export async function exerciseSealedPairing(call, reverse = false) {
   const bunkerKey = generateSecretKey(), accountKey = generateSecretKey();
   const peer = getPublicKey(bunkerKey), account = getPublicKey(accountKey);
   const relays = ['wss://relay.example/?x=a+b&lang=zh'];
+  const metadata = { name: 'My device + 中文', image: 'https://example.com/icon.png' };
   const credential = 'user-supplied-bunker-credential';
   const begin = async secret => {
-    const result = await call({ method: 'beginBunkerPairing', peer: reverse ? null : peer, secret: reverse ? null : secret, relays });
+    const result = await call({ method: 'beginBunkerPairing', peer: reverse ? null : peer, secret: reverse ? null : secret, relays, metadata });
     assert.equal(result.error, undefined);
     assert.deepEqual(Object.keys(result.value).sort(), ['clientPubkey', 'session', 'uri']);
     return result.value;
@@ -22,15 +23,24 @@ export async function exerciseSealedPairing(call, reverse = false) {
   const handshake = async pair => {
     if (reverse) {
       const uri = new URL(pair.uri);
+      assert.equal(pair.uri.includes('+'), false);
+      const rawName = pair.uri.split('?')[1].split('&').find(value => value.startsWith('name=')).slice(5);
+      assert.equal(decodeURIComponent(rawName), metadata.name);
+      assert.equal(uri.searchParams.has('url'), false);
+      for (const [key, value] of Object.entries(metadata)) assert.equal(uri.searchParams.get(key), value);
       assert.equal(uri.hostname, pair.clientPubkey); assert.deepEqual(uri.searchParams.getAll('relay'), relays);
       assert.equal((await deliver(pair, { id: 'discovery', result: 'wrong-secret' })).value.type, 'ignored');
       assert.equal((await deliver(pair, { id: 'discovery', result: uri.searchParams.get('secret') })).value.type, 'peer');
     }
     for (const operation of ['connect', 'get_public_key']) {
-      const prepared = await call({ method: 'bunkerPairingRequest', session: pair.session, operation });
+      const prepared = await call({ method: 'bunkerPairingRequest', session: pair.session, operation, ...(operation === 'connect' ? { metadata } : {}) });
       assert.equal(verifyEvent(prepared.value), true); assert.equal(prepared.value.pubkey, pair.clientPubkey);
       const request = JSON.parse(nip44.v2.decrypt(prepared.value.content, nip44.v2.utils.getConversationKey(bunkerKey, pair.clientPubkey)));
       assert.equal(request.method, operation);
+      if (operation === 'connect') {
+        assert.equal(request.params[2], '');
+        assert.deepEqual(JSON.parse(request.params[3]), metadata);
+      } else assert.deepEqual(request.params, []);
       assert.equal((await deliver(pair, { id: 'wrong-id', result: account })).value.type, 'ignored');
       const result = await deliver(pair, { id: request.id, result: operation === 'connect' ? 'ack' : account });
       assert.equal(result.value.type, operation === 'connect' ? 'connected' : 'account');

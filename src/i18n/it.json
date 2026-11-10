@@ -16,6 +16,8 @@
       "invalid": "Chiave privata non valida"
     },
     "bunker": {
+      "client_name": "Nome dell’applicazione",
+      "client_name_hint": "Mostrato nel firmatario remoto per identificare questa connessione.",
       "title": "Link di connessione",
       "subtitle": "Incolla un link bunker:// del tuo firmatario.",
       "placeholder": "bunker://…",

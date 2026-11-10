@@ -16,6 +16,8 @@
       "invalid": "Chave privada inválida"
     },
     "bunker": {
+      "client_name": "Nome do aplicativo",
+      "client_name_hint": "Exibido no assinador remoto para identificar esta conexão.",
       "title": "Link de conexão",
       "subtitle": "Cole um link bunker:// do seu assinador.",
       "placeholder": "bunker://…",

@@ -16,6 +16,8 @@
       "invalid": "Érvénytelen privát kulcs"
     },
     "bunker": {
+      "client_name": "Alkalmazás neve",
+      "client_name_hint": "A távoli aláíróban jelenik meg a kapcsolat azonosításához.",
       "title": "Kapcsolódási hivatkozás",
       "subtitle": "Illessz be egy bunker:// hivatkozást az aláíródtól.",
       "placeholder": "bunker://…",

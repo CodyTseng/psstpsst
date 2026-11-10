@@ -16,6 +16,8 @@
       "invalid": "私钥无效"
     },
     "bunker": {
+      "client_name": "应用名称",
+      "client_name_hint": "显示在远程签名器中，用于识别此连接。",
       "title": "连接链接",
       "subtitle": "粘贴签名器提供的 bunker:// 链接。",
       "placeholder": "bunker://…",

@@ -16,6 +16,8 @@
       "invalid": "Clave privada no válida"
     },
     "bunker": {
+      "client_name": "Nombre de la aplicación",
+      "client_name_hint": "Se muestra en tu firmante remoto para identificar esta conexión.",
       "title": "Enlace de conexión",
       "subtitle": "Pega un enlace bunker:// de tu firmante.",
       "placeholder": "bunker://…",

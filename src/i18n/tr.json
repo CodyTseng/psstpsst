@@ -16,6 +16,8 @@
       "invalid": "Geçersiz özel anahtar"
     },
     "bunker": {
+      "client_name": "Uygulama adı",
+      "client_name_hint": "Bu bağlantıyı tanımlamak için uzak imzalayıcınızda gösterilir.",
       "title": "Bağlantı linki",
       "subtitle": "İmzalayıcından aldığın bunker:// linkini yapıştır.",
       "placeholder": "bunker://…",

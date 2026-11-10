@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -14,13 +14,20 @@ import { QrScanButton } from '@/components/common/QrScanButton';
 import { OnboardingFormLayout } from '@/components/onboarding/OnboardingFormLayout';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { useFocusAfterTransition } from '@/hooks/use-focus-after-transition';
+import { DEFAULT_SIGNER_CLIENT_NAME } from '@/services/signer/client-metadata';
 import { loginWithBunker } from '@/services/signer/nip46-connect.service';
+import { useSignerClientNameStore } from '@/stores/signer-client-name.store';
 import { useActiveAccount } from '@/stores/active-account.store';
 import { spacing } from '@/theme';
 
 export default function LoginBunker() {
   const { scrolled, scrollProps } = useScrolled();
   const { t } = useTranslation();
+  const clientName = useSignerClientNameStore(s => s.name);
+  const setClientName = useSignerClientNameStore(s => s.setName);
+  const nameLoaded = useSignerClientNameStore(s => s.loaded);
+  const loadName = useSignerClientNameStore(s => s.load);
+  useEffect(() => { void loadName(); }, [loadName]);
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,7 +38,7 @@ export default function LoginBunker() {
     setError(null);
     setLoading(true);
     try {
-      const { pubkey } = await loginWithBunker(input.trim());
+      const { pubkey } = await loginWithBunker(input.trim(), clientName);
       await setActive(pubkey);
       router.replace('/');
     } catch {
@@ -71,13 +78,23 @@ export default function LoginBunker() {
               trailingAccessory={<QrScanButton onScanned={(data) => setInput(data.trim())} />}
             />
 
+            <AppInput
+              label={t('login.bunker.client_name')}
+              description={t('login.bunker.client_name_hint')}
+              value={clientName}
+              placeholder={DEFAULT_SIGNER_CLIENT_NAME}
+              onChangeText={setClientName}
+              autoCorrect={false}
+              editable={!loading && nameLoaded}
+            />
+
             <View style={{ gap: spacing.lg }}>
               <AppButton
                 label={t('login.bunker.submit')}
                 variant="primary"
                 size="lg"
                 loading={loading}
-                disabled={!input.trim()}
+                disabled={!input.trim() || !nameLoaded}
                 onPress={submit}
               />
 
@@ -87,7 +104,7 @@ export default function LoginBunker() {
                 label={t('login.bunker.use_nostr_connect')}
                 variant="secondary"
                 size="lg"
-                disabled={loading}
+                disabled={loading || !nameLoaded}
                 onPress={() => router.push('/login-nostr-connect')}
               />
             </View>

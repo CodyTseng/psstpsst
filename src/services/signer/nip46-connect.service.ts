@@ -4,8 +4,9 @@ import { BUNKER_REGEX, parseBunkerInput } from 'nostr-tools/nip46';
 
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { platform } from '@/platform';
-import type { BunkerPairing, PairingResponse } from '@/platform/ports/key-vault';
+import type { BunkerPairing, PairingResponse, SignerClientMetadata } from '@/platform/ports/key-vault';
 import { addRemoteAccount } from '../account/account.service';
+import { signerClientMetadata } from './client-metadata';
 import { nip46RelayPool } from './nip46-relay-pool';
 import { NIP46_PAIRING_TIMEOUT_MS, withNip46Timeout } from './nip46-timeout';
 
@@ -21,7 +22,7 @@ class PairingTransport {
   private rejectPeer?: (error: Error) => void;
   private receiving: Promise<void> = Promise.resolve();
 
-  constructor(readonly pairing: BunkerPairing, private relays: string[], peer: string | null) {
+  constructor(readonly pairing: BunkerPairing, private relays: string[], peer: string | null, private metadata: SignerClientMetadata) {
     this.peerReady = peer ? Promise.resolve() : new Promise((resolve, reject) => {
       this.resolvePeer = resolve; this.rejectPeer = reject;
     });
@@ -56,7 +57,8 @@ class PairingTransport {
 
   private async exchange(operation: 'connect' | 'get_public_key'): Promise<void> {
     this.current();
-    const event = await vaultAccess.execute({ method: 'bunkerPairingRequest', session: this.pairing.session, operation }) as Event;
+    const event = await vaultAccess.execute({ method: 'bunkerPairingRequest', session: this.pairing.session, operation,
+      ...(operation === 'connect' ? { metadata: this.metadata } : {}) }) as Event;
     this.current();
     const response = new Promise<void>((resolve, reject) => { this.pending = { resolve, reject }; });
     void response.catch(() => {});
@@ -88,15 +90,16 @@ class PairingTransport {
   }
 }
 
-export async function loginWithBunker(input: string): Promise<{ pubkey: string }> {
+export async function loginWithBunker(input: string, clientName?: string): Promise<{ pubkey: string }> {
+  const metadata = signerClientMetadata(clientName);
   const trimmed = input.trim();
   if (!BUNKER_REGEX.test(trimmed)) throw new Error('invalid');
   const pointer = await parseBunkerInput(trimmed);
   if (!pointer) throw new Error('invalid');
   const relays = Array.from(new Set(pointer.relays.map(normalizeRelayUrl)));
   const pairing = await vaultAccess.execute({ method: 'beginBunkerPairing', peer: pointer.pubkey,
-    secret: pointer.secret ?? null, relays }) as BunkerPairing;
-  const transport = new PairingTransport(pairing, relays, pointer.pubkey);
+    secret: pointer.secret ?? null, relays, metadata }) as BunkerPairing;
+  const transport = new PairingTransport(pairing, relays, pointer.pubkey, metadata);
   return withNip46Timeout(transport.connect(), 'connection', NIP46_PAIRING_TIMEOUT_MS, () => transport.close());
 }
 
@@ -107,14 +110,15 @@ export type NostrConnectSession = {
 };
 
 /** Client key generation, nonce verification and credential persistence stay in the vault. */
-export async function startNostrConnect(opts?: { relays?: string[] }): Promise<NostrConnectSession> {
+export async function startNostrConnect(opts?: { relays?: string[]; clientName?: string }): Promise<NostrConnectSession> {
+  const metadata = signerClientMetadata(opts?.clientName);
   const relays = Array.from(new Set((opts?.relays?.length ? opts.relays : NIP46_DEFAULT_RELAYS).map(normalizeRelayUrl)));
-  const pairing = await vaultAccess.execute({ method: 'beginBunkerPairing', peer: null, secret: null, relays }) as BunkerPairing;
+  const pairing = await vaultAccess.execute({ method: 'beginBunkerPairing', peer: null, secret: null, relays, metadata }) as BunkerPairing;
   if (!pairing.uri) {
     await vaultAccess.execute({ method: 'cancelBunkerPairing', session: pairing.session });
     throw new Error('Invalid pairing invitation');
   }
-  const transport = new PairingTransport(pairing, relays, null);
+  const transport = new PairingTransport(pairing, relays, null, metadata);
   const work = withNip46Timeout(transport.connect(), 'connection', NIP46_PAIRING_TIMEOUT_MS, () => transport.close());
   void work.catch(() => {});
   return { uri: pairing.uri, waitForConnection: () => work, cancel: () => transport.close() };

@@ -16,6 +16,8 @@
       "invalid": "秘密鍵が無効です"
     },
     "bunker": {
+      "client_name": "アプリ名",
+      "client_name_hint": "この接続を識別するためにリモート署名アプリに表示されます。",
       "title": "接続リンク",
       "subtitle": "署名ツールの bunker:// リンクを貼り付けてください。",
       "placeholder": "bunker://…",

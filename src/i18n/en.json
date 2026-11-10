@@ -16,6 +16,8 @@
       "invalid": "Invalid private key"
     },
     "bunker": {
+      "client_name": "Application name",
+      "client_name_hint": "Shown in your remote signer to identify this connection.",
       "title": "Connection link",
       "subtitle": "Paste a bunker:// link from your signer.",
       "placeholder": "bunker://…",

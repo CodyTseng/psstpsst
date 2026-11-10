@@ -225,7 +225,9 @@ export class LocalKeyVault {
       const pubkey = getPublicKey(bytes);
       const nonce = command.peer === null ? bytesToHex(generateSecretKey()) : command.secret;
       this.pairings.set(session, { bytes, pubkey, peer: command.peer, secret: nonce, relays: [...command.relays], connected: false });
-      const uri = command.peer === null ? createNostrConnectURI({ clientPubkey: pubkey, relays: command.relays, secret: nonce!, name: 'PsstPsst' }) : null;
+      // Some signers percent-decode queries without interpreting form-encoded spaces.
+      // Literal plus signs are already escaped as %2B by the URI builder.
+      const uri = command.peer === null ? createNostrConnectURI({ clientPubkey: pubkey, relays: command.relays, secret: nonce!, ...(command.metadata ?? { name: 'PsstPsst' }) }).replace(/\+/g, '%20') : null;
       return { session, clientPubkey: pubkey, uri };
     }
     const pair = this.pairings.get(command.session);
@@ -240,7 +242,7 @@ export class LocalKeyVault {
       pair.pending = { id, operation: command.operation };
       const conversation = nip44.v2.utils.getConversationKey(pair.bytes, pair.peer);
       try {
-        const params = command.operation === 'connect' ? [pair.peer, pair.secret ?? ''] : [];
+        const params = command.operation === 'connect' ? [pair.peer, pair.secret ?? '', ...(command.metadata ? ['', JSON.stringify(command.metadata)] : [])] : [];
         return finalizeEvent({ kind: 24133, created_at: Math.floor(Date.now() / 1000), tags: [['p', pair.peer]],
           content: nip44.v2.encrypt(JSON.stringify({ id, method: command.operation, params }), conversation) }, pair.bytes);
       } finally { conversation.fill(0); }

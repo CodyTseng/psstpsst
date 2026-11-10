@@ -16,6 +16,8 @@
       "invalid": "Ungültiger privater Schlüssel"
     },
     "bunker": {
+      "client_name": "Anwendungsname",
+      "client_name_hint": "Wird in deiner Remote-Signer-App angezeigt, um diese Verbindung zu erkennen.",
       "title": "Verbindungslink",
       "subtitle": "Füge einen bunker://-Link von deinem Signierer ein.",
       "placeholder": "bunker://…",

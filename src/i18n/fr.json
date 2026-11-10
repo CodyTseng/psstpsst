@@ -16,6 +16,8 @@
       "invalid": "Clé privée non valide"
     },
     "bunker": {
+      "client_name": "Nom de l’application",
+      "client_name_hint": "Affiché dans votre application de signature à distance pour identifier cette connexion.",
       "title": "Lien de connexion",
       "subtitle": "Collez un lien bunker:// fourni par votre signataire.",
       "placeholder": "bunker://…",

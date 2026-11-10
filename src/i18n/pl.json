@@ -16,6 +16,8 @@
       "invalid": "Nieprawidłowy klucz prywatny"
     },
     "bunker": {
+      "client_name": "Nazwa aplikacji",
+      "client_name_hint": "Wyświetlana w zdalnej aplikacji podpisującej, aby rozpoznać to połączenie.",
       "title": "Łącze połączenia",
       "subtitle": "Wklej łącze bunker:// od podpisującego.",
       "placeholder": "bunker://…",

@@ -1522,6 +1522,11 @@ Unlock passwords and wallet PINs belong to trusted platform surfaces: native con
 on mobile and a separate sandboxed Electron window without the host application runtime.
 These isolated surfaces use platform controls rather than host React primitives.
 
+Remote signer pairing identifies the app with its icon and a platform-specific
+default name. Users can edit the name before connecting; name edits automatically
+refresh pairing invitations after a short pause in typing. The chosen name is a
+device preference shared by both pairing flows and restored on future visits.
+
 ## 12. Hard Rules
 
 Pinned compatibility UI kits may retain their upstream visual tokens inside an
