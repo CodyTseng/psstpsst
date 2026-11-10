@@ -50,12 +50,14 @@ import { AttachmentTransferProgress } from './AttachmentTransferProgress';
  */
 export function AttachmentFile({
   meta,
+  maxWidth,
   isSelf,
   metaSlot,
   nearby,
   messageId,
 }: {
   meta: FileAttachmentMeta;
+  maxWidth?: number;
   isSelf?: boolean;
   nearby?: NearbyAttachmentFetchContext;
   messageId?: string;
@@ -205,7 +207,7 @@ export function AttachmentFile({
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.md,
-          width: ATTACHMENT_FILE_WIDTH,
+          width: Math.min(ATTACHMENT_FILE_WIDTH, maxWidth ?? ATTACHMENT_FILE_WIDTH),
           paddingTop: spacing.md,
           paddingHorizontal: spacing.md,
           paddingBottom: spacing.sm,

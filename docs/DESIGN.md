@@ -594,6 +594,10 @@ available conversation width.
 Message custom-emoji artwork retains its original corners without rounded clipping.
 Quoted replies preserve the message's incoming or outgoing alignment. A wider
 quote must not stretch emoji or attachment bodies or displace their metadata.
+Quoted previews share the ordinary message-bubble width cap and keep their
+incoming or outgoing alignment. Attachment frames retain room for their side
+actions outside that cap; only when the full row cannot fit them does the body
+shrink, preserving the action target. Lifted copies retain the original sizing.
 Standalone Unicode emoji keep the timestamp and delivery-status capsule below
 the artwork at the trailing edge, so it never obscures the expression. Keep this
 stack compact without an added metadata gap. Use natural system-font height on

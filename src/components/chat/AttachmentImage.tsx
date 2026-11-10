@@ -27,6 +27,8 @@ import { AttachmentTransferProgress } from './AttachmentTransferProgress';
 
 type Props = {
   meta: FileAttachmentMeta;
+  /** Space remaining after the frame's action slot. */
+  maxWidth?: number;
   isSelf?: boolean;
   overlay?: React.ReactNode;
   /** This message's conversation + id + time. When present, tapping opens the
@@ -57,6 +59,7 @@ function parseDim(dim?: string): { w: number; h: number } | null {
 
 export function AttachmentImage({
   meta,
+  maxWidth,
   isSelf,
   overlay,
   conversationKey,
@@ -84,7 +87,7 @@ export function AttachmentImage({
 
   const dim = parseDim(meta.dim);
   const aspect = dim ? dim.w / dim.h : ATTACHMENT_IMAGE_DEFAULT_ASPECT;
-  const box = fitAttachmentMediaBox(aspect);
+  const box = fitAttachmentMediaBox(aspect, maxWidth);
 
   // Prefer ThumbHash, then BlurHash, while downloading and decoding the image.
   // Hash aspect ratios are approximate. Render the preview in its own fill-fit

@@ -33,6 +33,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { MessageLayoutViewport } from './message-row-layout';
 import { iconStrokeWidth } from '@/theme/icons';
 import { radius, shadow, spacing, useThemeColors } from '@/theme';
 
@@ -1452,6 +1453,7 @@ export function MessageList({
                             onRetry={() => {}}
                             onCancel={() => {}}
                             replyTo={replyPreview}
+                            layout={rect.layout}
                             lifted
                           />
                         ),
@@ -1695,7 +1697,7 @@ export function MessageList({
     ],
   );
   return (
-    <View style={{ flex: 1 }}>
+    <MessageLayoutViewport>
       {!waitingForFocus ? (
         <FlatList
           key={listWindowKey}
@@ -1928,6 +1930,6 @@ export function MessageList({
           }}
         />
       ) : null}
-    </View>
+    </MessageLayoutViewport>
   );
 }

@@ -162,6 +162,7 @@ describe.each(['light', 'dark'] as const)('%s quoted message layout', (scheme) =
     const render = (quoted: boolean, hideMeta = false) => (
       <BubbleBody content="" isSelf={isSelf} createdAt={0} hideMeta={hideMeta}
         attachment={attachment} presentation={presentation as never}
+        layout={{ quoteMaxWidth: 200, attachmentMaxWidth: 180 }}
         replyTo={quoted ? {
           senderPubkey: 'sender', senderDisplayName: 'Cody',
           contentPreview: 'A long quoted message that is much wider than the reply artwork. '.repeat(8),
@@ -172,11 +173,18 @@ describe.each(['light', 'dark'] as const)('%s quoted message layout', (scheme) =
       for (const quoted of [false, true]) {
         act(() => renderer.update(render(quoted)));
         expect(renderer.root.findAllByType(QuotedReply)).toHaveLength(quoted ? 1 : 0);
+        if (quoted) {
+          expect(StyleSheet.flatten(renderer.root.findByType(QuotedReply).props.style)).toMatchObject({
+            maxWidth: 200,
+            alignSelf: isSelf ? 'flex-end' : 'flex-start',
+          });
+        }
         const content = attachmentComponent
           ? renderer.root.findByType(attachmentComponent)
           : kind === 'custom-emoji'
             ? renderer.root.findByType(CustomEmojiImage)
             : renderer.root.findAllByType(AppText).find(node => node.props.children === '😀')!;
+        if (attachmentComponent) expect(content.props.maxWidth).toBe(180);
         // Locate the content-sized anchor rather than the quote-sized outer stack.
         let anchor = content.parent;
         while (anchor && !(anchor.type === View &&

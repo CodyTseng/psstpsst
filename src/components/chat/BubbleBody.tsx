@@ -30,7 +30,7 @@ import { AttachmentAudio } from './AttachmentAudio';
 import { AttachmentFile } from './AttachmentFile';
 import { AttachmentImage } from './AttachmentImage';
 import { AttachmentVideo } from './AttachmentVideo';
-import { BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, MESSAGE_META_GAP } from './bubble-layout';
+import { BUBBLE_MAX_WIDTH, BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, MESSAGE_META_GAP } from './bubble-layout';
 import { DeferredRemoteContent } from './DeferredRemoteContent';
 import { EmbeddedMediaBlock } from './embedded-media';
 import { EventReferenceCard } from './EventReferenceCard';
@@ -40,6 +40,7 @@ import { MessageMetaOverlay } from './MessageMetaOverlay';
 import type { MessageBubbleReplyPreview } from './MessageBubble';
 import { MentionCard } from './MentionCard';
 import { MentionText } from './MentionText';
+import type { MessageBodyLayout } from './message-row-layout';
 import { QuotedReply } from './QuotedReply';
 import { openMessageUrl as openUrl } from './open-message-url';
 import {
@@ -62,6 +63,7 @@ type Props = {
   /** Persisted delivery (DB) — fallback when there's no live entry. */
   persistedDelivery?: MessageDelivery | null;
   replyTo?: MessageBubbleReplyPreview | null;
+  layout?: MessageBodyLayout;
   attachment?: FileAttachmentMeta | null;
   /** Hide the in-bubble timestamp + delivery glyph. Used by the long-press
    * `MessageActionMenu` for a **clipped** lifted copy — a truncated preview that
@@ -123,6 +125,7 @@ function BubbleBodyBase({
   rumorId,
   persistedDelivery,
   replyTo,
+  layout,
   attachment,
   hideMeta,
   squareTop,
@@ -482,6 +485,10 @@ function BubbleBodyBase({
             senderName={replyTo.senderDisplayName ?? 'Unknown'}
             contentPreview={replyTo.contentPreview}
             onPress={onPressReply}
+            style={{
+              maxWidth: layout?.quoteMaxWidth ?? (liftedCopy ? '100%' : BUBBLE_MAX_WIDTH),
+              alignSelf: isSelf ? 'flex-end' : 'flex-start',
+            }}
           />
         ) : null}
 
@@ -494,6 +501,7 @@ function BubbleBodyBase({
         >
           {attachment.mime?.startsWith('video/') ? (
             <AttachmentVideo
+              maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
               isSelf={isSelf}
               overlay={renderOverlayMeta()}
@@ -504,6 +512,7 @@ function BubbleBodyBase({
             />
           ) : attachment.mime?.startsWith('image/') ? (
             <AttachmentImage
+              maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
               isSelf={isSelf}
               overlay={renderOverlayMeta()}
@@ -516,6 +525,7 @@ function BubbleBodyBase({
             />
           ) : attachment.mime?.startsWith('audio/') ? (
             <AttachmentAudio
+              maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
               isSelf={isSelf}
               autoDownload={attachmentAutoDownload}
@@ -526,6 +536,7 @@ function BubbleBodyBase({
             />
           ) : (
             <AttachmentFile
+              maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
               isSelf={isSelf}
               metaSlot={hideMeta ? undefined : renderMeta(c.textMuted)}
@@ -546,6 +557,10 @@ function BubbleBodyBase({
             senderName={replyTo.senderDisplayName ?? 'Unknown'}
             contentPreview={replyTo.contentPreview}
             onPress={onPressReply}
+            style={{
+              maxWidth: layout?.quoteMaxWidth ?? (liftedCopy ? '100%' : BUBBLE_MAX_WIDTH),
+              alignSelf: isSelf ? 'flex-end' : 'flex-start',
+            }}
           />
         ) : null}
         <View
@@ -593,6 +608,10 @@ function BubbleBodyBase({
             senderName={replyTo.senderDisplayName ?? 'Unknown'}
             contentPreview={replyTo.contentPreview}
             onPress={onPressReply}
+            style={{
+              maxWidth: layout?.quoteMaxWidth ?? (liftedCopy ? '100%' : BUBBLE_MAX_WIDTH),
+              alignSelf: isSelf ? 'flex-end' : 'flex-start',
+            }}
           />
         ) : null}
         <View
@@ -804,6 +823,8 @@ function areBubbleBodyPropsEqual(a: Props, b: Props): boolean {
     a.proximity === b.proximity &&
     a.remoteContentMode === b.remoteContentMode &&
     a.liftedCopy === b.liftedCopy &&
+    a.layout?.quoteMaxWidth === b.layout?.quoteMaxWidth &&
+    a.layout?.attachmentMaxWidth === b.layout?.attachmentMaxWidth &&
     a.presentation === b.presentation &&
     aReply?.senderPubkey === bReply?.senderPubkey &&
     aReply?.senderDisplayName === bReply?.senderDisplayName &&

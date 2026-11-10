@@ -54,6 +54,7 @@ const FLAT_BARS = Array.from({ length: 24 }, () => 16);
  */
 export function AttachmentAudio({
   meta,
+  maxWidth,
   isSelf,
   metaSlot,
   autoDownload = true,
@@ -62,6 +63,7 @@ export function AttachmentAudio({
   messageId,
 }: {
   meta: FileAttachmentMeta;
+  maxWidth?: number;
   isSelf: boolean;
   /** Resolve session state immediately but defer a remote fetch until play. */
   autoDownload?: boolean;
@@ -255,7 +257,7 @@ export function AttachmentAudio({
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.sm,
-          width: ATTACHMENT_VOICE_WIDTH,
+          width: Math.min(ATTACHMENT_VOICE_WIDTH, maxWidth ?? ATTACHMENT_VOICE_WIDTH),
           paddingVertical: BUBBLE_PADDING_VERTICAL,
           paddingHorizontal: BUBBLE_PADDING_HORIZONTAL,
           borderRadius: radius.lg,

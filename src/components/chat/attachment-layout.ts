@@ -33,15 +33,18 @@ export const ATTACHMENT_VOICE_WAVEFORM_HEIGHT =
   ATTACHMENT_ACTION_SIZE + 2 * ATTACHMENT_VOICE_ACTION_INSET_VERTICAL
   - spacing.sm - typography.code.lineHeight;
 
-export function fitAttachmentMediaBox(aspect: number): { width: number; height: number } {
+export function fitAttachmentMediaBox(aspect: number, maxWidth = ATTACHMENT_MEDIA_MAX_WIDTH): { width: number; height: number } {
   let width = ATTACHMENT_MEDIA_MAX_WIDTH;
   let height = width / aspect;
   if (height > ATTACHMENT_MEDIA_MAX_HEIGHT) {
     height = ATTACHMENT_MEDIA_MAX_HEIGHT;
     width = height * aspect;
   }
+  const preferredWidth = Math.max(ATTACHMENT_MEDIA_MIN_WIDTH, width);
+  const preferredHeight = Math.max(ATTACHMENT_MEDIA_MIN_HEIGHT, height);
+  const fittedWidth = Math.min(preferredWidth, Math.max(0, maxWidth));
   return {
-    width: Math.max(ATTACHMENT_MEDIA_MIN_WIDTH, width),
-    height: Math.max(ATTACHMENT_MEDIA_MIN_HEIGHT, height),
+    width: fittedWidth,
+    height: Math.max(ATTACHMENT_MEDIA_MIN_HEIGHT, preferredHeight * fittedWidth / preferredWidth),
   };
 }

@@ -5,7 +5,7 @@ import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
 import { DangerTriangle as AlertTriangle } from '@solar-icons/react-native/category/ui/Linear/DangerTriangle';
 import X from 'lucide-react-native/icons/x';
 import Upload from 'lucide-react-native/icons/upload';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -58,6 +58,7 @@ import {
   BUBBLE_ROW_PADDING_HORIZONTAL,
 } from './bubble-layout';
 import type { BubbleRect, MessageBubbleReplyPreview } from './MessageBubble';
+import { messageBodyLayout, useMessageRowWidth, type MessageBodyLayout } from './message-row-layout';
 import { QuotedReply } from './QuotedReply';
 import { AudioClock } from './audio-clock';
 import { VoiceWaveform } from './VoiceWaveform';
@@ -75,6 +76,7 @@ type Props = {
   onLongPress?: (rect: BubbleRect) => void;
   /** Render only the measured bubble body inside the lifted context-menu copy. */
   lifted?: boolean;
+  layout?: MessageBodyLayout;
   /** Override the row canvas when reused in a non-chat preview. */
   rowBackground?: string;
 };
@@ -123,6 +125,7 @@ export function PendingAttachmentBubble({
   onLongPress,
   lifted = false,
   rowBackground,
+  layout: suppliedLayout,
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
@@ -132,6 +135,11 @@ export function PendingAttachmentBubble({
     pending.status === 'preparing' ||
     pending.status === 'encrypting' ||
     pending.status === 'uploading';
+  const row = useMessageRowWidth(lifted ? 0 : BUBBLE_ROW_PADDING_HORIZONTAL * 2);
+  const hasSideAction = !lifted && (pausable || paused || failed);
+  const layout = useMemo(() => suppliedLayout ?? (row.width === undefined ? undefined :
+    messageBodyLayout(row.width, ATTACHMENT_FAILURE_TARGET_SIZE,
+      hasSideAction ? ATTACHMENT_FAILURE_TARGET_SIZE : 0)), [suppliedLayout, row.width, hasSideAction]);
   const isAudio = pending.mime.startsWith('audio/');
   const isImage = pending.mime.startsWith('image/');
   const isVideo = pending.mime.startsWith('video/');
@@ -141,7 +149,7 @@ export function PendingAttachmentBubble({
       : isVideo
         ? ATTACHMENT_VIDEO_DEFAULT_ASPECT
         : ATTACHMENT_IMAGE_DEFAULT_ASPECT;
-  const box = fitAttachmentMediaBox(aspect);
+  const box = fitAttachmentMediaBox(aspect, layout?.attachmentMaxWidth);
   // Generic document (PDF, etc.): render the SAME compact card as the stored
   // AttachmentFile bubble so the in-flight → sent handoff has no visual jump —
   // just the trailing accessory tells the state (progress / alert / resume).
@@ -152,7 +160,7 @@ export function PendingAttachmentBubble({
     if (!node || !onLongPress) return;
     if (withImpact) impact('medium');
     node.measureInWindow((x, y, width, height) =>
-      onLongPress({ x, y, width, height, pointer }),
+      onLongPress({ x, y, width, height, pointer, layout }),
     );
   }
   function handleContextMenu(event: DesktopContextMenuEvent) {
@@ -213,6 +221,7 @@ export function PendingAttachmentBubble({
 
   return (
     <View
+      onLayout={row.onLayout}
       style={{
         width: lifted ? '100%' : undefined,
         paddingHorizontal: lifted ? 0 : BUBBLE_ROW_PADDING_HORIZONTAL,
@@ -257,7 +266,9 @@ export function PendingAttachmentBubble({
           style={{
             width: lifted ? '100%' : undefined,
             alignSelf: lifted ? 'stretch' : 'flex-end',
-            maxWidth: lifted ? undefined : BUBBLE_MAX_WIDTH,
+            maxWidth: '100%',
+            flexShrink: 1,
+            minWidth: 0,
           }}
         >
         <View style={{ gap: spacing.sm }}>
@@ -266,6 +277,7 @@ export function PendingAttachmentBubble({
               senderName={replyTo.senderDisplayName ?? 'Unknown'}
               contentPreview={replyTo.contentPreview}
               onPress={onPressReply}
+              style={{ maxWidth: layout?.quoteMaxWidth ?? (lifted ? '100%' : BUBBLE_MAX_WIDTH), alignSelf: 'flex-end' }}
             />
           ) : null}
 
@@ -282,7 +294,7 @@ export function PendingAttachmentBubble({
               flexDirection: 'row',
               alignItems: 'center',
               gap: spacing.sm,
-              width: ATTACHMENT_VOICE_WIDTH,
+              width: Math.min(ATTACHMENT_VOICE_WIDTH, layout?.attachmentMaxWidth ?? ATTACHMENT_VOICE_WIDTH),
               paddingVertical: BUBBLE_PADDING_VERTICAL,
               paddingHorizontal: BUBBLE_PADDING_HORIZONTAL,
               borderRadius: radius.lg,
@@ -358,7 +370,7 @@ export function PendingAttachmentBubble({
               flexDirection: 'row',
               alignItems: 'center',
               gap: spacing.md,
-              width: ATTACHMENT_FILE_WIDTH,
+              width: Math.min(ATTACHMENT_FILE_WIDTH, layout?.attachmentMaxWidth ?? ATTACHMENT_FILE_WIDTH),
               paddingTop: spacing.md,
               paddingHorizontal: spacing.md,
               paddingBottom: spacing.sm,

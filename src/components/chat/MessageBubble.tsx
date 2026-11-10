@@ -21,6 +21,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { messageBodyLayout, useMessageRowWidth, type MessageBodyLayout } from './message-row-layout';
 import { SelectionDot } from '@/components/common/SelectionDot';
 import { Avatar } from '@/components/common/Avatar';
 import { AppButton } from '@/components/common/AppButton';
@@ -94,6 +95,8 @@ export type BubbleRect = {
   };
   /** Electron context-menu point in viewport coordinates. Touch holds omit it. */
   pointer?: DesktopPointerPoint;
+  /** Preserve row-relative constraints in the lifted message copy. */
+  layout?: MessageBodyLayout;
 };
 
 type Props = {
@@ -203,6 +206,9 @@ function MessageBubbleBase({
   onToggleSelect,
 }: Props) {
   const isRTL = useIsRTL();
+  const row = useMessageRowWidth(BUBBLE_ROW_PADDING_HORIZONTAL * 2 +
+    (!isSelf && groupSenderPubkey ? GROUP_SENDER_COLUMN_WIDTH : 0));
+  const layout = useMemo(() => row.width === undefined ? undefined : messageBodyLayout(row.width), [row.width]);
 
   // Measure the complete visual cluster (bubble + reactions) and the bubble body
   // within it. Touch lifts that complete cluster; Electron retains the cluster
@@ -216,7 +222,7 @@ function MessageBubbleBase({
     if (withImpact) impact('medium');
     visualNode.measureInWindow((x, y, width, height) => {
       if (!bodyNode) {
-        onLongPress({ x, y, width, height, pointer });
+        onLongPress({ x, y, width, height, pointer, layout });
         return;
       }
       bodyNode.measureInWindow((bodyX, bodyY, bodyWidth, bodyHeight) =>
@@ -232,10 +238,11 @@ function MessageBubbleBase({
             height: bodyHeight,
           },
           pointer,
+          layout,
         }),
       );
     });
-  }, [onLongPress]);
+  }, [onLongPress, layout]);
 
   function handleContextMenu(event: DesktopContextMenuEvent) {
     event.preventDefault?.();
@@ -328,6 +335,7 @@ function MessageBubbleBase({
       rumorId={rumorId}
       persistedDelivery={persistedDelivery}
       replyTo={replyTo}
+      layout={layout}
       attachment={attachment}
       conversationKey={conversationKey}
       proximity={proximity}
@@ -358,6 +366,7 @@ function MessageBubbleBase({
   return (
     <GestureDetector gesture={gesture}>
       <DesktopView
+        onLayout={row.onLayout}
         onContextMenu={IS_ELECTRON ? handleContextMenu : undefined}
         style={{
           paddingStart:
@@ -378,9 +387,8 @@ function MessageBubbleBase({
           style={[
             {
               alignSelf: isSelf ? 'flex-end' : 'flex-start',
-              // Attachment bodies own their width and reserve an inward side
-              // action. Keep that action inside native hit-test bounds even
-              // when the conversation is too narrow for the text width cap.
+              // Only the quote is capped to the text width. Attachment actions
+              // remain inside a full-row hit-test envelope.
               maxWidth: attachment || isStandaloneEmoji ? '100%' : BUBBLE_MAX_WIDTH,
               minWidth: 0,
             },

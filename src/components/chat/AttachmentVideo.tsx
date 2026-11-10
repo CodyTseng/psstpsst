@@ -95,6 +95,7 @@ function parseDim(dim?: string): { w: number; h: number } | null {
  */
 export function AttachmentVideo({
   meta,
+  maxWidth,
   isSelf,
   overlay,
   messageId,
@@ -103,6 +104,8 @@ export function AttachmentVideo({
   nearby,
 }: {
   meta: FileAttachmentMeta;
+  /** Space remaining after the frame's action slot. */
+  maxWidth?: number;
   isSelf?: boolean;
   overlay?: React.ReactNode;
   messageId?: string;
@@ -246,6 +249,7 @@ export function AttachmentVideo({
   const dim = parseDim(meta.dim);
   const box = fitAttachmentMediaBox(
     dim ? dim.w / dim.h : ATTACHMENT_VIDEO_DEFAULT_ASPECT,
+    maxWidth,
   );
 
   return (

@@ -494,6 +494,7 @@ export function MessageActionMenu({
             rumorId={vBubble.rumorId}
             persistedDelivery={vBubble.persistedDelivery}
             replyTo={vBubble.replyTo}
+            layout={view.rect.layout}
             attachment={vBubble.attachment}
             remoteContentMode={vBubble.remoteContentMode}
             liftedCopy

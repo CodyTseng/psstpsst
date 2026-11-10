@@ -53,6 +53,7 @@ export function QuotedReply({
   const fillColor = onAccent ? c.accentForegroundSoft : c.insetFill;
   const contentColor = onAccent ? c.accentForegroundMuted : c.textMuted;
 
+  const bounds: ViewStyle = { minWidth: 0, maxWidth: '100%' };
   const card: ViewStyle = bare
     ? {
         flexDirection: 'row',
@@ -121,10 +122,10 @@ export function QuotedReply({
     </>
   );
   if (!onPress) {
-    return <View style={[card, style]}>{body}</View>;
+    return <View style={[card, bounds, style]}>{body}</View>;
   }
   return (
-    <Pressable onPress={onPress} fallbackHoverOpacity={false} style={[card, style]}>
+    <Pressable onPress={onPress} fallbackHoverOpacity={false} style={[card, bounds, style]}>
       {({ pressed }) => (
         <>
           {pressed ? <InteractionOverlay borderRadius={bare ? 0 : radius.sm} /> : null}

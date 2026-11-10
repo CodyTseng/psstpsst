@@ -1,4 +1,7 @@
+import { StyleSheet, View } from 'react-native';
+import { BUBBLE_MAX_WIDTH } from '../bubble-layout';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { BubbleBody } from '../BubbleBody';
 import { MessageBubble } from '../MessageBubble';
 import { impact } from '@/lib/haptics';
 import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -7,6 +10,7 @@ const mockBodyMount = jest.fn();
 const mockBodyUnmount = jest.fn();
 const mockPanHandlers: Record<string, (...args: any[]) => void> = {};
 const mockPanCreated = jest.fn();
+const mockLongPressHandlers: Record<string, (...args: any[]) => void> = {};
 
 jest.mock('../BubbleBody', () => ({ BubbleBody: () => {
   const React = jest.requireActual('react');
@@ -38,11 +42,12 @@ jest.mock('@/theme', () => ({
 }));
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: Function, ...args: unknown[]) => fn(...args) }));
 jest.mock('react-native-gesture-handler', () => {
-  function gesture(pan = false) {
+  function gesture(pan = false, longPress = false) {
     const g: Record<string, Function> = {};
     for (const name of ['enabled', 'hitSlop', 'activeOffsetX', 'failOffsetY', 'minDuration', 'onStart', 'onUpdate', 'onEnd', 'onFinalize']) {
       g[name] = (value: any) => {
         if (pan && name.startsWith('on')) mockPanHandlers[name] = value;
+        if (longPress && name.startsWith('on')) mockLongPressHandlers[name] = value;
         return g;
       };
     }
@@ -52,7 +57,7 @@ jest.mock('react-native-gesture-handler', () => {
     GestureDetector: ({ children }: any) => children,
     Gesture: {
       Pan: () => { mockPanCreated(); return gesture(true); },
-      LongPress: () => gesture(), Tap: () => gesture(), Simultaneous: (...args: any[]) => args,
+      LongPress: () => gesture(false, true), Tap: () => gesture(), Simultaneous: (...args: any[]) => args,
     },
   };
 });
@@ -154,4 +159,58 @@ it('lets standalone emoji messages use the full row width', () => {
   );
   expect(messageCluster).toBeDefined();
   act(() => renderer.unmount());
+});
+
+it.each(['text', 'emoji', 'custom-emoji', 'attachment'].flatMap(kind =>
+  [false, true].flatMap(isSelf => [false, true].map(group => ({ kind, isSelf, group }))),
+))('caps a quoted $kind without restricting action bounds (own: $isSelf, group: $group)', ({ kind, isSelf, group }) => {
+  const props = {
+    content: kind === 'text' ? 'Hello' : '😀', isSelf, createdAt: 0, orderAt: 0,
+    groupSenderPubkey: group && !isSelf ? 'sender' : undefined,
+    reactions: [], onTapReaction: jest.fn(),
+    replyTo: { senderPubkey: 'sender', senderDisplayName: 'Cody', contentPreview: 'A long quoted message. '.repeat(50) },
+    attachment: kind === 'attachment' ? { mime: 'image/png', url: 'https://example.com/image.png' } as never : undefined,
+    presentation: {
+      shortEmoji: kind === 'emoji' ? { emojis: ['😀'] } : null,
+      shortCustomEmojis: kind === 'custom-emoji' ? [{ shortcode: 'cat', url: 'https://example.com/cat.gif' }] : null,
+    } as never,
+  };
+  let renderer!: ReactTestRenderer;
+  try {
+    act(() => { renderer = create(<MessageBubble {...props} />); });
+    const cluster = renderer.root.findAllByType(View).find(node =>
+      Array.isArray(node.props.style) && node.props.collapsable === false &&
+      StyleSheet.flatten(node.props.style)?.alignSelf === (isSelf ? 'flex-end' : 'flex-start'),
+    );
+    expect(cluster).toBeDefined();
+    expect(StyleSheet.flatten(cluster!.props.style).maxWidth).toBe(kind === 'text' ? BUBBLE_MAX_WIDTH : '100%');
+    const row = renderer.root.findAllByType(View).find(node => !!node.props.onLayout)!;
+    act(() => { row.props.onLayout({ nativeEvent: { layout: { width: 360 } } }); });
+    const layout = renderer.root.findByType(BubbleBody).props.layout;
+    const rowWidth = 360 - 32 - (group && !isSelf ? 42 : 0);
+    expect(layout.quoteMaxWidth).toBeCloseTo(rowWidth * parseFloat(BUBBLE_MAX_WIDTH) / 100);
+    expect(layout.attachmentMaxWidth).toBe(rowWidth - 32);
+  } finally {
+    act(() => renderer?.unmount());
+  }
+});
+
+it('captures the original row constraints for a lifted attachment copy', () => {
+  const onLongPress = jest.fn();
+  let renderer!: ReactTestRenderer;
+  try {
+    act(() => { renderer = create(<MessageBubble content="" isSelf={false} createdAt={0} orderAt={0}
+      reactions={[]} onTapReaction={() => {}} onLongPress={onLongPress}
+      attachment={{ mime: 'image/png', url: 'https://example.com/image.png' } as never}
+      groupSenderPubkey="sender" />); });
+    const row = renderer.root.findAllByType(View).find(node => !!node.props.onLayout)!;
+    act(() => { row.props.onLayout({ nativeEvent: { layout: { width: 390 } } }); });
+    const sourceLayout = renderer.root.findByType(BubbleBody).props.layout;
+    for (const node of renderer.root.findAll(node => jest.isMockFunction(node.instance?.measureInWindow))) {
+      node.instance.measureInWindow.mockImplementation((callback: Function) => callback(0, 0, 284, 200));
+    }
+    act(() => { mockLongPressHandlers.onStart(); });
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+    expect(onLongPress.mock.calls[0][0].layout).toBe(sourceLayout);
+  } finally { act(() => renderer?.unmount()); }
 });

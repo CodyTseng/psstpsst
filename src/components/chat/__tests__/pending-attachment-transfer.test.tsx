@@ -6,10 +6,14 @@ import type { PendingAttachment } from '@/stores/pending-attachments.store';
 import { platform } from '@/platform';
 import { darkPalette, lightPalette } from '@/theme';
 
+import { InteractivePressable } from '@/components/common/InteractivePressable';
+import { QuotedReply } from '../QuotedReply';
 import { PendingAttachmentBubble } from '../PendingAttachmentBubble';
 import { Image } from 'expo-image';
 import { useVideoPlayer } from 'expo-video';
 import { useVideoPoster } from '@/hooks/use-video-poster';
+
+jest.mock('../VoiceWaveform', () => ({ VoiceWaveform: () => null }));
 
 jest.mock('@/hooks/use-video-poster', () => ({ useVideoPoster: jest.fn() }));
 
@@ -150,11 +154,12 @@ describe('pending attachment transfer controls', () => {
     jest.clearAllMocks();
   });
 
-  function render(pending: PendingAttachment) {
+  function render(pending: PendingAttachment, quoted = false) {
     act(() => {
       renderer = create(
         <PendingAttachmentBubble
           pending={pending}
+          replyTo={quoted ? { senderPubkey: 'sender', senderDisplayName: 'Cody', contentPreview: 'A long quote. '.repeat(40) } : undefined}
           onStop={onStop}
           onRetry={onRetry}
           onCancel={onCancel}
@@ -162,6 +167,30 @@ describe('pending attachment transfer controls', () => {
       );
     });
   }
+
+  it('retains the original card width when rendering a lifted pending copy', () => {
+    act(() => { renderer = create(<PendingAttachmentBubble
+      pending={{ ...BASE, mime: 'application/pdf', status: 'paused' }}
+      onStop={onStop} onRetry={onRetry} onCancel={onCancel} lifted
+      layout={{ quoteMaxWidth: 204, attachmentMaxWidth: 204 }}
+    />); });
+    const row = renderer!.root.findAllByType(View).find(node => !!node.props.onLayout)!;
+    act(() => { row.props.onLayout({ nativeEvent: { layout: { width: 204 } } }); });
+    const card = renderer!.root.findAllByType(InteractivePressable).find(node => node.props.accessibilityLabel === 'common.resume')!;
+    expect(StyleSheet.flatten(card.props.style).width).toBe(204);
+  });
+
+  it.each(['image/png', 'video/mp4', 'application/pdf', 'audio/mp4'])('reserves cancellation space for a quoted %s in a narrow pane', mime => {
+    render({ ...BASE, mime, status: 'paused' }, true);
+    const row = renderer!.root.findAllByType(View).find(node => !!node.props.onLayout)!;
+    act(() => { row.props.onLayout({ nativeEvent: { layout: { width: 280 } } }); });
+    const card = renderer!.root.findAllByType(InteractivePressable).find(node => node.props.accessibilityLabel === 'common.resume')!;
+    const width = StyleSheet.flatten(card.props.style).width;
+    expect(width).toBe(204);
+    expect(width + 44).toBe(280 - 32);
+    const quoteWidth = StyleSheet.flatten(renderer!.root.findByType(QuotedReply).props.style).maxWidth;
+    expect(quoteWidth).toBeLessThanOrEqual(280 - 32 - 44);
+  });
 
   it.each(['light', 'dark'] as const)('keeps pause and quiet discard separate in %s mode', (scheme) => {
     mockThemePreference = scheme;
