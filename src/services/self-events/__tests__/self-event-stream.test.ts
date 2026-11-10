@@ -2,6 +2,10 @@ import type { Event } from 'nostr-tools';
 
 import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
 
+jest.mock('../../notifications/push-registration.service', () => ({
+  pushRegistrationService: { reconcile: jest.fn(async () => {}) },
+}));
+
 jest.mock('../../profile/profile.service', () => ({ cacheProfileEvent: jest.fn(async () => {}) }));
 jest.mock('@/services/explore/favorites', () => ({ applyFavoritesEvent: jest.fn(async () => {}), queueFavoritesPublication: jest.fn() }));
 

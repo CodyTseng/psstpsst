@@ -21,11 +21,16 @@ const mockSigner = {
     ...template, pubkey: SELF, id: `event-${++serial}`, sig: 'sig',
   })),
 };
+jest.mock('../../notifications/push-registration.service', () => ({
+  pushRegistrationService: { reconcile: jest.fn(async () => {}) },
+}));
+
 jest.mock('@/platform', () => ({ platform: {
   appState: { currentState: () => mockAppState, addChangeListener: (fn: typeof mockApp) => { mockApp = fn; return () => {}; } },
   networkState: { addStateListener: (fn: typeof mockNetwork) => { mockNetwork = fn; } },
 } }));
 jest.mock('../../account/account.service', () => ({ buildSigner: async () => mockSigner }));
+jest.mock('../../account/account-access', () => ({ buildSigner: async () => mockSigner }));
 jest.mock('../relay-list.service', () => ({ ownMetaRelays: async () => mockTargets }));
 jest.mock('../relay-router', () => ({
   configurationPublishRelays: async () => mockTargets,

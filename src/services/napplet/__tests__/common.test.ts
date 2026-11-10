@@ -65,7 +65,7 @@ it('returns absent profiles and normalizes public follows from account write rel
   network.query.mockResolvedValue({ events: [{ kind: 3, pubkey: account, tags: [['p', first.toUpperCase()], ['p', first], ['p', 'bad'], ['t', 'topic']] } as Event], incomplete: false, error: undefined });
   expect(await actions.handle('follows', {}, current)).toEqual({ ok: true, pubkeys: [first] });
   expect(network.routes).toHaveBeenCalledWith([account], 'write', false, expect.anything());
-  expect(network.query).toHaveBeenCalledWith([relay], [{ kinds: [3], authors: [account], limit: 1 }], expect.anything(), undefined, 10000);
+  expect(network.query).toHaveBeenCalledWith([relay], [{ kinds: [3], authors: [account], limit: 1 }], expect.anything());
   expect(network.replaceable).not.toHaveBeenCalled();
   expect(publish).not.toHaveBeenCalled();
 });
