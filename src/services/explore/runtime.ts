@@ -29,7 +29,8 @@ import { NappDevice } from './device';
 import { LIST_KINDS, SET_KINDS } from './lists';
 import { relayHealth } from './relay-health';
 import type { LocalInstaller } from './local-installer';
-const isPermissionDenied = (error: unknown) => error instanceof Error && error.message === 'permission-denied';
+const isRequestCancellation = (error: unknown) => error instanceof Error &&
+  (['permission-denied', 'session-closed'].includes(error.message) || error.name === 'AbortError');
 export class ExploreRuntime {
   private lifetime = new AbortController();
   private documentLife = new AbortController();
@@ -214,7 +215,7 @@ export class ExploreRuntime {
             if (request.action === 'window' || request.action === 'external') {
               await actions.handle(request.action === 'window' ? 'open' : 'external', [request.url]); result = true;
             } else { const decision = await actions.authorize(request); result = decision.allowed; permissionExpiresAt = decision.expiresAt; }
-          } catch (error) { if (!isPermissionDenied(error)) this.log('warn', 'browser', { error: String(error) }); }
+          } catch (error) { if (!isRequestCancellation(error)) this.log('warn', 'browser', { error: String(error) }); }
           if (this.document === document && !signal.aborted) await this.reply(document, { type: 'browser.result', id: request.id, result, permissionExpiresAt });
         })().catch(() => {});
         return;
@@ -300,7 +301,7 @@ export class ExploreRuntime {
       await this.reply(document, { id, nonce, result });
     }
     catch (error) {
-      if (!method.startsWith('webln.') && !signal.aborted && !isPermissionDenied(error)) this.log('warn', method, { error: error instanceof Error ? error.message.slice(0, 240) : 'request-failed' });
+      if (!method.startsWith('webln.') && !signal.aborted && !isRequestCancellation(error)) this.log('warn', method, { error: error instanceof Error ? error.message.slice(0, 240) : 'request-failed' });
       if (id && !signal.aborted)
         await this.reply(document, { id, nonce, error: error instanceof Error ? error.message : 'request-failed' });
     }

@@ -681,7 +681,7 @@ it.each([['light', 'profile'], ['dark', 'view:0']] as const)('offers opt-in defa
   act(() => { card().props.onPress(); });
   expect(row().props.remember).toBe(true);
   expect(card().props.accessibilityState).toEqual({ checked: true });
-  expect(card().props.trailing.props.pointerEvents).toBe('none');
+  expect(card().props.trailing.props.style.pointerEvents).toBe('none');
   act(() => { card().props.onPress(); });
   expect(row().props.remember).toBe(false);
   act(() => { card().props.onPress(); });

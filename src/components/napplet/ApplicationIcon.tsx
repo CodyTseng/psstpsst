@@ -65,7 +65,7 @@ export const ApplicationIcon = memo(function ApplicationIcon({ release, size = A
           style={{ position: 'absolute', width: '100%', height: '100%' }}
         />
       ) : null}
-      {showFallback ? <View pointerEvents="none" style={{ ...StyleSheet.absoluteFill,
+      {showFallback ? <View style={{ ...StyleSheet.absoluteFill, pointerEvents: 'none',
         borderRadius: Math.min(radius.xl, size / 4), borderWidth: StyleSheet.hairlineWidth, borderColor: c.border }} /> : null}
     </View>
   );

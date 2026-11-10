@@ -121,6 +121,22 @@ test('Electron application hosts keep independent containers, owned IPC and shar
         assert((await events(parent)).some(e=>e.channel===IPC.applicationWindowAction&&e.args[0].type==='publisher'&&e.args[0].pubkey===publisher.pubkey));
         await assert.rejects(invoke(first,IPC.applicationWindowAction,{type:'publisher',pubkey:'invalid'}),/invalid-window-action/);
         await assert.rejects(invoke(first,IPC.applicationWindowCloseAll),/untrusted-window-owner/);
+        const senderEndpoint={instance:'closing-requester',accountPubkey:launch.accountPubkey,sourceId:'sender',title:'Sender',domains:[],actions:[]};
+        const targetEndpoint={...senderEndpoint,instance:'closing-target',sourceId:'target',title:'Target',actions:['edit']};
+        const bridgeCall=(owner,method,...args)=>owner.webContents.executeJavaScript('psstpsstDesktop.napplet.windows.messaging.'+method+'('+args.map(x=>JSON.stringify(x)).join(',')+')');
+        await bridgeCall(first,'connect',senderEndpoint);
+        await first.webContents.executeJavaScript('window.pendingAction=psstpsstDesktop.napplet.windows.messaging.request("closing-requester",{type:"wait",sourceId:"not-ready",name:"edit"}).then(()=>null,error=>error.message);true');
+        await bridgeCall(first,'disconnect','closing-requester');
+        assert.equal(await first.webContents.executeJavaScript('window.pendingAction'),'session-closed','requester closure retains its cancellation code across real IPC');
+        await bridgeCall(first,'connect',senderEndpoint);
+        await invoke(first,IPC.applicationWindowOpen,{...launch,address:'https://handler.example'});
+        const handlerHost=manager.windows().at(-1);
+        await bridgeCall(handlerHost,'connect',targetEndpoint);
+        await first.webContents.executeJavaScript('window.pendingAction=psstpsstDesktop.napplet.windows.messaging.request("closing-requester",{type:"invoke",target:"closing-target",name:"edit",payload:{}}).then(()=>null,error=>error.message);true');
+        await pause(40);
+        await bridgeCall(handlerHost,'disconnect','closing-target');
+        assert.equal(await first.webContents.executeJavaScript('window.pendingAction'),'endpoint-closed','target closure remains an action failure');
+        await bridgeCall(first,'disconnect','closing-requester');
         const firstOwner=first.webContents.id;
         await invoke(parent,IPC.applicationWindowCloseAll,launch.accountPubkey);await pause(50);
         assert(first.isDestroyed());assert(!second.isDestroyed());assert(cleaned.includes(firstOwner));assert.equal(views().length,0);
@@ -146,5 +162,6 @@ test('Electron application hosts keep independent containers, owned IPC and shar
     const timer = setTimeout(() => child.kill('SIGKILL'), 50000);
     const code = await new Promise(resolve => child.once('exit', resolve)); clearTimeout(timer);
     assert.equal(code, 0, output);
+    assert(!output.includes("Error occurred in handler for 'application-messaging:request'"), output);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

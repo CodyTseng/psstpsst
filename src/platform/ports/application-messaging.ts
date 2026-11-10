@@ -13,6 +13,7 @@ export type ApplicationEnvelope = Record<string, any>;
 export interface ApplicationMessagingPort {
   connect(endpoint: ApplicationEndpoint): Promise<void>;
   disconnect(instance: string): Promise<void>;
+  /** Requester teardown rejects with session-closed; target teardown during invocation uses endpoint-closed. */
   request(instance: string, message: ApplicationEnvelope): Promise<any>;
   onMessage(listener: (instance: string, message: ApplicationEnvelope) => void): () => void;
 }

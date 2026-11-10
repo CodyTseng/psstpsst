@@ -201,6 +201,14 @@ it.each(['getPublicKey', 'signEvent'])('returns a denied %s request without logg
   expect((ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value.sign).not.toHaveBeenCalled();
 });
 
+it('returns session cancellation without logging a warning', async () => {
+  (ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value.sign.mockRejectedValueOnce(new Error('session-closed'));
+  message('https://site.example', 'one');
+  await flush();
+  expect(JSON.parse(jest.mocked(platform.napplet.send).mock.calls.at(-1)![1]).reply.error).toBe('session-closed');
+  expect(warningLog).not.toHaveBeenCalled();
+});
+
 it('still warns when an approved signing operation fails', async () => {
   (ApplicationNetwork as jest.Mock).mock.results.at(-1)!.value.sign.mockRejectedValueOnce(new Error('signer-unavailable'));
   message('https://site.example', 'one');

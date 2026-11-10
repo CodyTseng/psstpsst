@@ -101,7 +101,7 @@ it.each(['selection', 'startup'])('rejects an endpoint closed during %s', async 
     confirm.mockResolvedValue('source:target');
     launch.mockImplementation(async () => { await connectTarget(); favorites = []; await messaging.disconnect('caller-instance'); });
   }
-  await expect(capabilities.handle('action', ['edit', {}])).rejects.toThrow(stage === 'startup' ? 'endpoint-closed' : 'handler-unavailable');
+  await expect(capabilities.handle('action', ['edit', {}])).rejects.toThrow(stage === 'startup' ? 'session-closed' : 'handler-unavailable');
 });
 
 it('does not expose another account live instance even when the same application is a favorite', async () => {
@@ -450,4 +450,33 @@ it.each(['view:30023', 'view'].flatMap(requested => ['view', 'view:30023'].map(r
     expect(received).toHaveBeenCalledWith('target-instance', expect.objectContaining({ name: registered, payload: event }));
     expect(launch).not.toHaveBeenCalled();
   } finally { detach(); await messaging.disconnect('generic-instance'); }
+});
+
+
+it('cancels a requester disconnected while waiting without warning or retrying selection', async () => {
+  jest.useFakeTimers();
+  preferBrokenDefault();
+  launch.mockResolvedValue(undefined);
+  try {
+    const pending = expect(capabilities.handle('action', ['edit', {}])).rejects.toThrow('session-closed');
+    await jest.advanceTimersByTimeAsync(0);
+    await messaging.disconnect('caller-instance');
+    await pending;
+    expect(confirm).not.toHaveBeenCalled();
+    expect(warning).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  } finally { jest.useRealTimers(); }
+});
+
+it('still reports a target closed during invocation without redispatching the action', async () => {
+  await connectTarget();
+  const detach = messaging.onMessage((instance, message) => {
+    if (instance === 'target-instance' && message.type === 'action') void messaging.disconnect(instance);
+  });
+  try {
+    await expect(capabilities.handle('action', ['edit', {}])).rejects.toThrow('endpoint-closed');
+    expect(warning).toHaveBeenCalledWith('[explore] Action failed', expect.objectContaining({ error: 'endpoint-closed' }));
+    expect(launch).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledTimes(1);
+  } finally { detach(); }
 });

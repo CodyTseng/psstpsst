@@ -76,7 +76,7 @@ export class NappCapabilities {
     if (method === 'action') {
       try { return await this.action(args[0], args[1], args[2]); }
       catch (error) {
-        if (!this.options.signal.aborted && error instanceof Error && error.message !== 'permission-denied')
+        if (!this.options.signal.aborted && error instanceof Error && !['permission-denied', 'session-closed'].includes(error.message) && error.name !== 'AbortError')
           this.warn('Action failed', { requester: this.entry.title,
             action: typeof args[0] === 'string' ? args[0].slice(0, 128) : null,
             targetInstance: typeof args[2]?.instance === 'string' ? args[2].instance.slice(0, 128) : null, error: error.message });

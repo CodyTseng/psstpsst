@@ -107,7 +107,7 @@ function NappletOverlayContent() {
             onPress={() => setRememberChoice({ id: prompt.requestId, value: !remember })}
             accessibilityRole="switch" accessibilityState={{ checked: remember }}
             accessibilityLabel={`${t('applications.always_open_type')}, ${selectingApplication.discovery?.name ?? selectingApplication.intent!}`}
-            trailing={<View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            trailing={<View style={{ pointerEvents: 'none' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               <Toggle value={remember} onValueChange={value => setRememberChoice({ id: prompt.requestId, value })} />
             </View>} /> : undefined}
       listProps={selectingApplication && prompt ? {

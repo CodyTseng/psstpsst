@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { ElectronBridge } from '../src/platform/electron/bridge';
 import type { AppUpdateStatus } from '../src/platform/ports/app-update';
 import type { LocalRelayEvent } from '../src/platform/ports/local-relay-events';
+import { unwrapApplicationMessagingReply, type ApplicationMessagingReply } from './application-messaging-reply';
 import { IPC } from './ipc-channels';
 import { unwrapVaultReply, type VaultReply } from './vault-failure';
 
@@ -92,7 +93,7 @@ const bridge: ElectronBridge = {
       messaging: {
         connect: endpoint => invoke(IPC.applicationMessagingConnect, endpoint),
         disconnect: instance => invoke(IPC.applicationMessagingDisconnect, instance),
-        request: (instance, message) => invoke(IPC.applicationMessagingRequest, instance, message),
+        request: async (instance, message) => unwrapApplicationMessagingReply(await invoke<ApplicationMessagingReply>(IPC.applicationMessagingRequest, instance, message)),
         onMessage: listener => {
           const handler = (_event: unknown, instance: string, message: Parameters<typeof listener>[1]) => listener(instance, message);
           ipcRenderer.on(IPC.applicationMessagingMessage, handler);

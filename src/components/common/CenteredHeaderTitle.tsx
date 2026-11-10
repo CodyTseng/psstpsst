@@ -7,11 +7,11 @@ export function CenteredHeaderTitle({ sideInset, interactive = false, children }
 }) {
   return <View style={[StyleSheet.absoluteFill, interactive ? styles.passThrough : styles.nonInteractive,
     { flexDirection: 'row', alignItems: 'center' }]}>
-    <View pointerEvents="none" style={{ width: sideInset, flexShrink: 1 }} />
+    <View style={{ pointerEvents: 'none', width: sideInset, flexShrink: 1 }} />
     <View style={[styles.passThrough, { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center' }]}>
       {children}
     </View>
-    <View pointerEvents="none" style={{ width: sideInset, flexShrink: 1 }} />
+    <View style={{ pointerEvents: 'none', width: sideInset, flexShrink: 1 }} />
   </View>;
 }
 

@@ -28,13 +28,13 @@ export class ApplicationMessagingBroker {
     const endpoint = this.endpoints.get(instance);
     this.endpoints.delete(instance);
     endpoint?.detach();
-    for (const entry of this.pending.values()) if (entry.sender === instance || entry.target === instance) entry.reject(new Error('endpoint-closed'));
+    for (const entry of this.pending.values()) if (entry.sender === instance || entry.target === instance) entry.reject(new Error(entry.sender === instance ? 'session-closed' : 'endpoint-closed'));
     this.notify();
   }
   private notify() { for (const waiter of this.waiters) waiter(); }
   async request(instance: string, message: ApplicationEnvelope): Promise<any> {
     const endpoint = this.endpoints.get(instance);
-    if (!endpoint) throw new Error('endpoint-closed');
+    if (!endpoint) throw new Error('session-closed');
     if (!message || typeof message.type !== 'string' || JSON.stringify(message).length > 256 * 1024) throw new Error('invalid-message');
     if (message.type === 'register') {
       if (typeof message.pattern !== 'string' || !message.pattern || message.pattern.length > 128) throw new Error('invalid-action');
@@ -53,7 +53,7 @@ export class ApplicationMessagingBroker {
       return new Promise((resolve, reject) => {
         const done = (error?: Error, target?: string) => { clearTimeout(timer); this.waiters.delete(check); if (error) reject(error); else resolve(target); };
         const check = () => {
-          if (!this.endpoints.has(instance)) return done(new Error('endpoint-closed'));
+          if (!this.endpoints.has(instance)) return done(new Error('session-closed'));
           const target = [...this.endpoints.values()].find(e => e.accountPubkey === endpoint.accountPubkey && e.sourceId === message.sourceId && e.actions.some(p => matchesAction(p, message.name)));
           if (target) done(undefined, target.instance);
         };

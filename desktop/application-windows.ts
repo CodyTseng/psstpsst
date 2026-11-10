@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import type { ApplicationWindowLaunch, ApplicationWindowAction, ApplicationSigningChange, RunningApplication } from '../src/platform/ports/application-window';
+import { applicationMessagingReply } from './application-messaging-reply';
 import { placeApplicationWindow } from './window-state';
 import { IPC } from './ipc-channels';
 import { ApplicationMessagingBroker } from '../src/services/explore/messaging-broker';
@@ -55,7 +56,7 @@ export class ApplicationWindows {
     });
     handle(IPC.applicationMessagingRequest, (event, instance: string, message: ApplicationEnvelope) => {
       if (this.endpoints.get(instance) !== event.sender) throw new Error('untrusted-endpoint');
-      return this.messaging.request(instance, message);
+      return applicationMessagingReply(() => this.messaging.request(instance, message));
     });
     handle(IPC.applicationWindowOpen, async (event, launch: ApplicationWindowLaunch) => {
       if (!launch || !/^[a-f0-9]{64}$/.test(launch.accountPubkey) || typeof launch.address !== 'string' || launch.address.length > 8192 ||

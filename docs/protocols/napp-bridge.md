@@ -8,6 +8,12 @@ The interface inventory follows nostrapps commit
 `cd4551778bf144f6977125d1ad4751ee8299be3f` and the public list/set projections in
 nostr-gadgets commit `f658343c02e8f94fac9391c643953045fa77a501`.
 
+Closing a requesting document cancels its pending action requests and handler
+waits with `session-closed`. Closing a target during invocation fails that action
+with `endpoint-closed`; it never redispatches an action that may have executed.
+Electron preserves these lifecycle codes across IPC without treating requester
+closure as an unexpected handler failure.
+
 ## Feature detection
 
 `nostrdb.supports()` returns `Promise<string[]>`. Its empty list means no optional

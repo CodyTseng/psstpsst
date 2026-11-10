@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
 
 import { useEmptySearchScroll } from '@/hooks/use-empty-search-scroll';
 
@@ -51,7 +51,7 @@ export function SearchTransition({
     const animation = Animated.timing(progress, {
       toValue: contentActive ? 1 : 0,
       duration: SEARCH_ACTIVATION_TRANSITION_MS,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     });
     animation.start(({ finished }) => {
       if (finished && !contentActive) setRetainedContent(null);

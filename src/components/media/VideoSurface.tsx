@@ -36,8 +36,8 @@ function CoveredVideoSurface({
       {!hasFrame ? (
         <View
           testID="video-first-frame-cover"
-          pointerEvents="none"
           style={[StyleSheet.absoluteFill, {
+            pointerEvents: 'none',
             backgroundColor: immersive ? c.lightboxBackdrop : c.surfaceMuted,
             alignItems: 'center', justifyContent: 'center',
           }]}

@@ -74,7 +74,9 @@ test(
       const page = await browser.newPage({ viewport: { width: 390, height: 840 } });
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
-      page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+      page.on('console', (message) => {
+        if (message.type() === 'error' || message.text().includes('props.pointerEvents is deprecated')) errors.push(message.text());
+      });
       const assertRuntimeHeader = async (surface='desktop') => {
         const size=surface==='touch'?40:36;
         const iconSize=surface==='touch'?24:20;
