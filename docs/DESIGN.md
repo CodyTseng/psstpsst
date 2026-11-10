@@ -1323,7 +1323,8 @@ permission review for the new release. Background metadata refresh never replace
 a running page without consent.
 Independent windows merge application
 identity and menu actions into their native title bar, reserve the system caption
-controls, and omit duplicate page headers. Android opens applications as independent
+controls, and omit duplicate page headers. Their title-bar height is fixed from
+window creation through loading, failure, content registration and teardown. Android opens applications as independent
 system tasks with their own app-named Recents cards. Independent application
 and website tasks omit the host title bar and its reserved space, while retaining
 system safe-area clearance. A narrow drawer handle stays on the physical right
@@ -1364,12 +1365,14 @@ app access and remembered signing decisions. Each rule is one editing target,
 with Ask every time, Automatically allow and Automatically reject choices and
 an independent duration. Saved changes take effect immediately. Ask every time is an explicit saved
 rule and remains visible across visits. Everyday use creates ordinary, visible, editable rules. Full trust keeps saved
-signing rules visible but disabled, with an explicit explanation that they are paused. Status follows the title with semantic colour; long
+signing rules visible but disabled. Explain the effect once at the Full trust
+control and its confirmation, without repeating it beneath permission headings. Status follows the title with semantic colour; long
 titles yield space to it, and Kind/duration shares the title's start edge. Disclosures align
 with section headings. Permission management omits account chrome; protocol hashes
 and history stay out of its default view. Permission settings use consistent grouped surfaces with muted caption section
 headings; group labels are not repeated as row values. Omit generic instructions
-that repeat an obvious row interaction. Group permissions by the capability users
+that repeat an obvious row interaction. Permission identity, trust controls and
+subsequent sections share the sheet body gap (`spacing.lg`, 16px). Group permissions by the capability users
 control; wallet information belongs under Wallet, independently of browser permissions. Long selected policies sit
 below their setting label. Required and optional access remain
 visible in separate sections; optional switches communicate their state without

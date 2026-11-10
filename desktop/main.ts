@@ -40,6 +40,7 @@ import {
 import { formatBadgeCount } from '../src/lib/badge-count';
 import { NOSTR_EVENT_URL_PREFERENCE_KEY } from '../src/lib/nostr/event-url';
 import type { WindowAppearance } from '../src/platform/ports/window-chrome';
+import { desktopChromeForPlatform } from '../src/theme/desktop-chrome';
 import { parseAccent, serializeAccent } from '../src/theme/accents';
 import { DesktopAppUpdater } from './app-updater';
 import { PreviewAppUpdater } from './app-update-preview';
@@ -164,8 +165,8 @@ const WINDOW_CHROME_COLORS = {
   light: { background: '#F2F2F7', titlebar: '#E5E5EA', text: '#0F0F10' },
   dark: { background: '#09090B', titlebar: '#101013', text: '#F5F5F7' },
 } as const;
-// Matches the renderer title-bar strip height (`desktopChrome.titlebarHeight`).
-const TITLEBAR_OVERLAY_HEIGHT = process.platform === 'darwin' ? 28 : 40;
+const WINDOW_CHROME = desktopChromeForPlatform(process.platform);
+const TITLEBAR_OVERLAY_HEIGHT = WINDOW_CHROME.titlebarHeight;
 // Vertically centres the 12px-diameter traffic lights in the 28px strip:
 // (28 - 12) / 2. The x offset keeps the `hiddenInset` default.
 const TRAFFIC_LIGHT_POSITION = { x: 12, y: 8 } as const;
@@ -510,7 +511,8 @@ function registerIpcHandlers(): void {
       throw new TypeError('Invalid transparent title bar flag');
     }
     if (value.titlebarHeight !== undefined && (!Number.isInteger(value.titlebarHeight) || Number(value.titlebarHeight) < 28 || Number(value.titlebarHeight) > 80)) throw new TypeError('Invalid title bar height');
-    const titlebarHeight = Number(value.titlebarHeight ?? TITLEBAR_OVERLAY_HEIGHT);
+    const titlebarHeight = applicationWindows.owns(event.sender)
+      ? WINDOW_CHROME.applicationTitlebarHeight : Number(value.titlebarHeight ?? TITLEBAR_OVERLAY_HEIGHT);
     const transparentTitlebar = value.transparentTitlebar === true;
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return;
@@ -1122,6 +1124,7 @@ async function registerProtocols(): Promise<void> {
 function createWindow(kind: 'main' | 'application' | 'update' = 'main'): BrowserWindow {
   const application = kind === 'application';
   const auxiliary = kind !== 'main';
+  const titlebarHeight = application ? WINDOW_CHROME.applicationTitlebarHeight : TITLEBAR_OVERLAY_HEIGHT;
   const update = kind === 'update';
   // The renderer may take a moment to report the effective theme; guess from
   // the OS scheme so the pre-paint frame and caption overlay start close.
@@ -1146,12 +1149,12 @@ function createWindow(kind: 'main' | 'application' | 'update' = 'main'): Browser
     // themed caption overlay.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     ...(process.platform === 'darwin'
-      ? { trafficLightPosition: TRAFFIC_LIGHT_POSITION }
+      ? { trafficLightPosition: { x: TRAFFIC_LIGHT_POSITION.x, y: TRAFFIC_LIGHT_POSITION.y + (titlebarHeight - TITLEBAR_OVERLAY_HEIGHT) / 2 } }
       : {
           titleBarOverlay: {
             color: initialChrome.titlebar,
             symbolColor: initialChrome.text,
-            height: TITLEBAR_OVERLAY_HEIGHT,
+            height: titlebarHeight,
           },
         }),
     webPreferences: {

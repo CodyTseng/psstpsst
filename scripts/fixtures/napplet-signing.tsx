@@ -13,7 +13,10 @@ import type { SigningRule } from '../../src/services/signing/model';
 
 // This fixture renders the shipped approval UI without user data or signer access.
 initPlatformAdapters({
-  windowChrome: { setTheme: async () => {}, setTitle: async (title: string) => { document.title = title; } },
+  windowChrome: { setTheme: async (theme: { titlebarHeight?: number }) => {
+    const state = window as unknown as { titlebarHeights?: number[] };
+    if (theme.titlebarHeight !== undefined) (state.titlebarHeights ??= []).push(theme.titlebarHeight);
+  }, setTitle: async (title: string) => { document.title = title; } },
   napplet: { windows: { isHost: new URLSearchParams(location.search).get('scenario') === 'window' }, capture: async () => null, setBounds: async (_id: string, _bounds: unknown, visible: boolean, interactive = true) => {
     (window as unknown as { nappletVisible: boolean }).nappletVisible = visible;
     (window as unknown as { nappletInputEnabled: boolean }).nappletInputEnabled = visible && interactive;
@@ -397,7 +400,13 @@ if (menu) {
     return <AppButton label="Finish sharing" onPress={onClose} />;
   };
   RuntimeScreen = standalone ? function WindowRuntime() {
+    const [ready, setReady] = React.useState(!params.has('delayed-titlebar'));
+    React.useEffect(() => {
+      Object.assign(window, { setApplicationReady: setReady });
+    }, []);
+    const { AppText } = require('../../src/components/common/AppText');
     const { ApplicationRuntimePage } = require('../../src/components/napplet/ApplicationRuntimePage');
+    if (!ready) return <AppText>Loading application</AppText>;
     return <ApplicationRuntimePage windowed title="Arcade" menuEnabled onClose={() => {}} onMore={() => nappletService.openPanel('about')} onRetry={() => {}} />;
   } : require('../../src/app/(app)/napplet-run').default;
   const { useForwardDraftStore } = require('../../src/stores/forward-draft.store') as typeof import('../../src/stores/forward-draft.store');
@@ -408,7 +417,7 @@ function Fixture() {
   return <SafeAreaProvider><NavigationContext.Provider value={{ isFocused: () => true, addListener: () => () => {} } as never}>
     <NavigationRouteContext.Provider value={{ key: 'fixture', name: 'fixture' }}>
     <PreventRemoveContext.Provider value={{ preventedRoutes: {}, setPreventRemove: () => {} }}>
-    <WindowFrame><GestureHandlerRootView style={{ flex: 1 }}>
+    <WindowFrame {...(standalone ? { applicationWindow: true } : {})}><GestureHandlerRootView style={{ flex: 1 }}>
       <LocalRouteParamsContext.Provider value={{ id: 'd'.repeat(64), ...(exploreFixtureKey?{key:exploreFixtureKey,runId:'1',permissions:params.get('scenario')==='explore-permissions'?'1':undefined}:{}) }}>
         {RuntimeScreen ? <RuntimeScreen /> : null}
         {params.has('detail-actions') ? React.createElement(require('../../src/components/common/Toast').Toast) : null}

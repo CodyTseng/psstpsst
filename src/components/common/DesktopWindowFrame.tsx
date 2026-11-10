@@ -83,7 +83,7 @@ export function useImmersiveDesktopTitlebarWhileMounted(enabled: boolean) {
  * the centred product name. An immersive route turns it into a transparent
  * overlay so artwork continues beneath the OS caption buttons.
  */
-function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: { immersive: boolean; application: WindowTitlebar | null; defaultTitle?: string }) {
+function DesktopTitlebar({ immersive, application, applicationWindow, defaultTitle = 'PsstPsst' }: { immersive: boolean; application: WindowTitlebar | null; applicationWindow: boolean; defaultTitle?: string }) {
   const hostColors = useThemeColors();
   const c = application?.colors ?? hostColors;
   const preference = useThemeStore(state => state.preference);
@@ -97,7 +97,7 @@ function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: 
     ? Math.max((DESKTOP_OS === 'darwin' ? desktopChrome.nativeControlsWidth : 0) + navigationWidth,
       (DESKTOP_OS === 'darwin' ? 0 : desktopChrome.nativeControlsWidth) + (application.actions ? uiDensity.headerActionSize : 0)) + spacing.sm + spacing.lg
     : desktopChrome.nativeControlsWidth;
-  const height = application ? desktopChrome.applicationTitlebarHeight : TITLEBAR_HEIGHT;
+  const height = applicationWindow || application ? desktopChrome.applicationTitlebarHeight : TITLEBAR_HEIGHT;
   const title = application?.title ?? defaultTitle;
   useLayoutEffect(() => {
     if (DESKTOP_OS === 'darwin') return;
@@ -166,7 +166,7 @@ function DesktopTitlebar({ immersive, application, defaultTitle = 'PsstPsst' }: 
  * app, or overlays it for a focused immersive route. Other runtimes render
  * children untouched.
  */
-export function DesktopWindowFrame({ children, title }: { children: ReactNode; title?: string }) {
+export function DesktopWindowFrame({ children, title, applicationWindow = false }: { children: ReactNode; title?: string; applicationWindow?: boolean }) {
   const c = useThemeColors();
   const [immersive, setImmersive] = useState(false);
   const [titlebar, setTitlebar] = useState<WindowTitlebar | null>(null);
@@ -175,7 +175,7 @@ export function DesktopWindowFrame({ children, title }: { children: ReactNode; t
     <ImmersiveTitlebarContext.Provider value={setImmersive}>
     <WindowTitlebarContext.Provider value={setTitlebar}>
       <View style={{ flex: 1, backgroundColor: c.background }}>
-        <DesktopTitlebar immersive={immersive} application={titlebar} defaultTitle={title} />
+        <DesktopTitlebar immersive={immersive} application={titlebar} applicationWindow={applicationWindow} defaultTitle={title} />
         <View style={{ flex: 1 }}>{children}</View>
       </View>
     </WindowTitlebarContext.Provider>

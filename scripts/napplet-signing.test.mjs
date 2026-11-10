@@ -121,7 +121,20 @@ test(
           const trust = page.getByRole('switch', { name: 'Fully trust', exact: true });
           await trust.waitFor();
           assert.equal(await trust.getAttribute('aria-checked'), 'true');
-          await page.getByText('Individual signing rules are paused while Fully trust is on. Turn it off to edit them.', { exact: true }).waitFor();
+          const identityBox = await page.getByTestId('application-identity').boundingBox();
+          const accessBox = await page.getByText('Required access', { exact: true }).boundingBox();
+          const trustBox = await page.getByText('Fully trust', { exact: true }).evaluate(label => {
+            let node = label.parentElement;
+            while (node && !(node.clientWidth > 200 && parseFloat(getComputedStyle(node).borderTopLeftRadius) > 0)) node = node.parentElement;
+            if (!node) throw new Error('Trust settings card not found');
+            const box = node.getBoundingClientRect();
+            return { top: box.top, bottom: box.bottom };
+          });
+          const above = trustBox.top - identityBox.y - identityBox.height;
+          const below = accessBox.y - trustBox.bottom;
+          assert(Math.abs(above - 16) < 1 && Math.abs(below - 16) < 1, 'full trust uses the sheet body gap of 16px above and below');
+
+          assert.equal(await page.getByText('Individual signing rules are paused while Fully trust is on. Turn it off to edit them.', { exact: true }).count(), 0);
           const post = page.getByText('Sign an event', { exact: true }).first();
           assert.equal(await post.evaluate(node => !!node.closest('[aria-disabled="true"]')), true);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -279,6 +292,26 @@ test(
           'a host configuration panel does not prevent the approval from dismissing');
       }
       if (process.env.NAPPLET_SIGNING_SCENARIO === 'queued-approvals') {
+        assert.deepEqual(errors, []);
+        return;
+      }
+      if (process.env.NAPPLET_SIGNING_SCENARIO === 'window-titlebar') {
+        for (const os of ['darwin', 'win32', 'linux']) for (const theme of ['light', 'dark']) {
+          await page.setViewportSize({ width: 900, height: 700 });
+          await page.goto(`${address}/?scenario=window&delayed-titlebar=1&os=${os}&theme=${theme}`);
+          await page.getByText('Loading application', { exact: true }).waitFor();
+          const bar = page.getByTestId('desktop-window-titlebar');
+          assert.equal((await bar.boundingBox()).height, 44, 'loading reserves the final application toolbar height');
+          await page.evaluate(() => window.setApplicationReady(true));
+          await page.getByRole('button', { name: 'App menu', exact: true }).waitFor();
+          assert.equal((await bar.boundingBox()).height, 44, 'registering application controls never grows the title bar');
+          if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${os}-${theme}-titlebar.png` });
+          await page.evaluate(() => window.setApplicationReady(false));
+          await page.getByText('Loading application', { exact: true }).waitFor();
+          assert.equal((await bar.boundingBox()).height, 44, 'removing application controls never shrinks the title bar');
+          const heights = await page.evaluate(() => window.titlebarHeights);
+          assert(heights.length > 0 && heights.every(height => height === 44), 'every native chrome update uses the same height');
+        }
         assert.deepEqual(errors, []);
         return;
       }

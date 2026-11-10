@@ -178,7 +178,8 @@ export default function RootLayout() {
   return (
     <SystemColorSchemeProvider>
       <View {...webDirectionProps} style={{ flex: 1, direction }}>
-        <DesktopWindowFrame title={IS_ELECTRON && platform.appUpdate.isHost ? t('app_update.window_title') : undefined}>
+        <DesktopWindowFrame applicationWindow={IS_ELECTRON && platform.napplet.windows?.isHost === true}
+          title={IS_ELECTRON && platform.appUpdate.isHost ? t('app_update.window_title') : undefined}>
           {/* Keep native event owners mounted while account gates replace screens.
               In particular, dismissing a focused onboarding input must not tear
               down the keyboard animation listeners during its final frames. */}

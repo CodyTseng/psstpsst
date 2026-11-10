@@ -1,4 +1,5 @@
 import { DESKTOP_OS } from '@/lib/platform';
+import { desktopChromeForPlatform } from './desktop-chrome';
 
 /** Responsive two-pane shell geometry. These are layout dimensions rather than
  * spacing values. Touch layouts retain a wider primary pane, while Electron
@@ -42,14 +43,8 @@ export const bottomChrome = {
   mobileFallbackInset: 12,
 } as const;
 
-/** Electron window chrome: the renderer-drawn title bar above the app. The
- * height is mirrored by `TITLEBAR_OVERLAY_HEIGHT` in `desktop/main.ts` — keep
- * the two in sync. */
-export const desktopChrome = {
-  titlebarHeight: DESKTOP_OS === 'darwin' ? 28 : 40,
-  applicationTitlebarHeight: 44,
-  nativeControlsWidth: DESKTOP_OS === 'darwin' ? 80 : 144,
-} as const;
+/** Electron geometry is shared with the main process for stable initial chrome. */
+export const desktopChrome = desktopChromeForPlatform(DESKTOP_OS);
 
 /** Mobile remains touch-roomy; Electron uses a tighter information density. */
 export const density = {

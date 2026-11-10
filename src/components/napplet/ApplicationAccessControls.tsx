@@ -18,7 +18,7 @@ export function ApplicationAccessControls({required,optional=[],automatic=[],sel
   const visibleRequired=required.filter(domain=>domain!=='shell');
   const label=(domain:string)=>t(`applications.capability_${({network:'resource'} as Record<string,string>)[domain]??domain}`,{defaultValue:domain});
   if(!visibleRequired.length&&!optional.length)return null;
-  return <View style={{gap:spacing.xl}}>
+  return <View style={{gap:spacing.lg}}>
     {visibleRequired.length?<View style={{gap:spacing.md}}>
       <AppText variant="caption" tone="muted">{t('applications.capabilities_required')}</AppText>
       <ListGroup>{visibleRequired.map(domain=><ListRow key={domain} title={label(domain)}/>)}</ListGroup>

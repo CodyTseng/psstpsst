@@ -55,7 +55,7 @@ it('pauses wallet exceptions under full trust while retaining independent permis
   expect(renderer.root.findAllByType(ListRow).map(row => row.props.title)).toEqual(['webln.access_title', 'applications.browser_clipboard_read']);
   expect(renderer.root.findAllByType(ListRow)[0].props.disabled).toBe(true);
   expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).toEqual([
-    'wallet.title', 'applications.fully_trust_wallet', 'applications.browser_permission',
+    'wallet.title', 'applications.browser_permission',
   ]);
   mockTrusted = false;
   act(() => { renderer.update(<BrowserPermissions accountPubkey="account" sourceId="https://site.example" />); });

@@ -12,7 +12,7 @@ jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
 jest.mock('@/components/common/ListRow', () => ({ ListRow: () => null }));
 jest.mock('@/components/common/ListGroup', () => ({ ListGroup: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/components/common/Toggle', () => ({ Toggle: () => null }));
-jest.mock('@/theme', () => ({ spacing: { md: 12, xl: 24 }, useThemeColors: () => ({ accent: 'accent' }) }));
+jest.mock('@/theme', () => ({ spacing: { md: 12, lg: 16, xl: 24 }, useThemeColors: () => ({ accent: 'accent' }) }));
 
 let renderer: ReactTestRenderer;
 afterEach(() => { act(() => renderer.unmount()); });

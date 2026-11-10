@@ -27,7 +27,7 @@ export function ApplicationSettings({accountPubkey,release,sourceId,access,onRes
       await onReset();setRevision(value=>value+1);
     } catch {setError(true);} finally {setBusy(false);}
   }
-  return <View style={{gap:spacing.xl}}>
+  return <View style={{gap:spacing.lg}}>
     <NappletPermissions accountPubkey={accountPubkey} key={`signing:${revision}`} release={release} sourceId={sourceId} initiallyExpanded
       access={typeof access === 'function' ? authorization => <Fragment key={`access:${revision}`}>{access(authorization)}</Fragment>
         : access ? <Fragment key={`access:${revision}`}>{access}</Fragment> : undefined}/>

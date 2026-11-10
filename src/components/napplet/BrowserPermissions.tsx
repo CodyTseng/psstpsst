@@ -31,11 +31,10 @@ export function BrowserPermissions({ accountPubkey, sourceId }: { accountPubkey:
   const editorCovered = editor?.rule.resource === WALLET_INFO_PERMISSION && walletInfoCovered;
   if (editorCovered) setEditor(undefined);
   if (data && !data.error && !rules?.length && (!editor || editorCovered)) return null;
-  return <View style={{ gap: spacing.xl }}>
+  return <View style={{ gap: spacing.lg }}>
     {!data ? <ActivityIndicator color={c.accent} /> : null}
     {sections.filter(section => section.rules.length > 0).map(section => <View key={section.key} style={{ gap: spacing.md }}>
       <AppText variant="caption" tone="muted">{section.title}</AppText>
-      {section.key === 'wallet' && walletInfoCovered ? <AppText variant="caption" tone="muted">{t('applications.fully_trust_wallet')}</AppText> : null}
       <ListGroup>{section.rules.map(rule =>
         <ListRow key={rule.resource} title={browserPermissionLabel(rule.resource, t)}
           subtitle={rule.expiresAt === null ? t('applications.signing_duration_always') : t('applications.signing_until', {

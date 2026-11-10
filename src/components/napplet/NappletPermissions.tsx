@@ -87,7 +87,7 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
     } catch { showToast(t('applications.request_failed'), { variant: 'error' }); }
     finally { setBusy(false); }
   }
-  return <View style={{ gap: spacing.xl }}>
+  return <View style={{ gap: spacing.lg }}>
     {expanded && shown?.authorization ? <ListGroup><ListRow title={t('applications.fully_trust')}
       subtitleMultiline subtitle={t(shown.authorization.fullyTrusted ? 'applications.fully_trust_on' : 'applications.fully_trust_off')}
       trailing={<Toggle value={shown.authorization.fullyTrusted} disabled={busy}
@@ -97,7 +97,6 @@ function PermissionRules({ accountPubkey, release, sourceId, initiallyExpanded =
       {initiallyExpanded ? (!data || rows.length || activity.length ? <AppText variant="caption" tone="muted">{t('applications.permissions_signing')}</AppText> : null) :
         <AppButton variant="secondary" label={t('applications.signing_manage')} onPress={() => setExpanded(!expanded)} />}
       {expanded ? <>
-        {shown?.authorization?.fullyTrusted ? <AppText variant="caption" tone="muted">{t('applications.fully_trust_paused')}</AppText> : null}
         {!data && !error && !rows.length ? <ActivityIndicator color={c.accent} /> : null}
         {rows.length ? <ListGroup>{rows.map((rule) => {
           const status = rule.duration === 'timed' && rule.expiresAt
