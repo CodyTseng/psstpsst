@@ -1,7 +1,7 @@
 import { dateTimePreferences } from '@/services/preferences/date-time-state';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/common/AppText';
 import { createThemePalettes, type ThemeColors } from '@/theme/palette';
 import { MessageDeliveryStatus } from '../MessageDeliveryStatus';
@@ -10,6 +10,13 @@ import { BubbleBody } from '../BubbleBody';
 import { DeferredRemoteContent } from '../DeferredRemoteContent';
 import { MentionCard } from '../MentionCard';
 import { EventReferenceCard } from '../EventReferenceCard';
+import { AttachmentAudio } from '../AttachmentAudio';
+import { AttachmentFile } from '../AttachmentFile';
+import { AttachmentImage } from '../AttachmentImage';
+import { AttachmentVideo } from '../AttachmentVideo';
+import { CustomEmojiImage } from '@/components/emoji/CustomEmojiImage';
+import { MessageMetaOverlay } from '../MessageMetaOverlay';
+import { QuotedReply } from '../QuotedReply';
 
 jest.mock('lucide-react-native/icons/check', () => ({ __esModule: true, default: () => null }));
 jest.mock('../AttachmentAudio', () => ({ AttachmentAudio: () => null }));
@@ -32,7 +39,11 @@ jest.mock('@/platform', () => ({ platform: { localization: { preferredLanguageTa
 
 beforeEach(() => { act(() => dateTimePreferences.setState({ timeFormat: '24h', systemLocale: 'en-US' })); });
 jest.mock('@/stores/delivery-status.store', () => ({ useDelivery: () => null }));
-jest.mock('@/i18n/direction', () => ({ useIsRTL: () => false }));
+let mockRTL = false;
+jest.mock('@/i18n/direction', () => ({ useIsRTL: () => mockRTL }));
+jest.mock('@/hooks/use-cached-images', () => ({
+  useCachedImages: () => [{ uri: null, checked: false, failed: false }],
+}));
 jest.mock('@/lib/chat/message-presentation', () => ({ prepareMessagePresentation: jest.fn() }));
 let mockColors: ThemeColors | undefined;
 jest.mock('@/theme', () => ({
@@ -121,4 +132,77 @@ it.each([
   act(() => dateTimePreferences.setState({ timeFormat: '24h' }));
   expect(spacers()[0].length).toBe(originalWidth);
   act(() => renderer.unmount());
+});
+
+describe.each(['light', 'dark'] as const)('%s quoted message layout', (scheme) => {
+  it.each([false, true].flatMap(isSelf => [false, true].flatMap(rtl =>
+    (['custom-emoji', 'unicode-emoji', 'image', 'video', 'audio', 'file'] as const).map(kind =>
+      ({ isSelf, rtl, kind }),
+    ),
+  )))('keeps $kind content and metadata together (own: $isSelf, RTL: $rtl)', ({ isSelf, rtl, kind }) => {
+    mockColors = createThemePalettes('blue')[scheme];
+    mockRTL = rtl;
+    const presentation = {
+      segments: [], customEmojiMap: new Map(), embeddedMedia: new Map(),
+      shortEmoji: kind === 'unicode-emoji' ? { emojis: ['😀'] } : null,
+      shortCustomEmojis: kind === 'custom-emoji'
+        ? [{ shortcode: 'cat', url: 'https://example.com/cat.gif' }] : null,
+    };
+    const attachmentComponent = {
+      'custom-emoji': null, 'unicode-emoji': null,
+      image: AttachmentImage, video: AttachmentVideo,
+      audio: AttachmentAudio, file: AttachmentFile,
+    }[kind];
+    const attachment = attachmentComponent ? {
+      url: 'https://example.com/file',
+      mime: kind === 'file' ? undefined : `${kind}/test`,
+      cipherSha256Hex: '', decryptionKeyHex: '', decryptionNonceHex: '',
+    } : undefined;
+    let renderer!: ReactTestRenderer;
+    const render = (quoted: boolean, hideMeta = false) => (
+      <BubbleBody content="" isSelf={isSelf} createdAt={0} hideMeta={hideMeta}
+        attachment={attachment} presentation={presentation as never}
+        replyTo={quoted ? {
+          senderPubkey: 'sender', senderDisplayName: 'Cody',
+          contentPreview: 'A long quoted message that is much wider than the reply artwork. '.repeat(8),
+        } : undefined} />
+    );
+    try {
+      act(() => { renderer = create(render(false)); });
+      for (const quoted of [false, true]) {
+        act(() => renderer.update(render(quoted)));
+        expect(renderer.root.findAllByType(QuotedReply)).toHaveLength(quoted ? 1 : 0);
+        const content = attachmentComponent
+          ? renderer.root.findByType(attachmentComponent)
+          : kind === 'custom-emoji'
+            ? renderer.root.findByType(CustomEmojiImage)
+            : renderer.root.findAllByType(AppText).find(node => node.props.children === '😀')!;
+        // Locate the content-sized anchor rather than the quote-sized outer stack.
+        let anchor = content.parent;
+        while (anchor && !(anchor.type === View &&
+          StyleSheet.flatten(anchor.props.style)?.alignSelf &&
+          (attachmentComponent || anchor.findAllByType(MessageMetaOverlay).length === 1))) {
+          anchor = anchor.parent;
+        }
+        expect(anchor).not.toBeNull();
+        expect(StyleSheet.flatten(anchor!.props.style).alignSelf)
+          .toBe(isSelf ? 'flex-end' : 'flex-start');
+        expect(anchor!.findAllByType(QuotedReply)).toHaveLength(0);
+        if (!attachmentComponent) {
+          const capsule = anchor!.findByType(MessageMetaOverlay);
+          expect(capsule.props.placement).toBe(kind === 'unicode-emoji' ? 'below' : 'overlay');
+        } else if (kind === 'image' || kind === 'video') {
+          expect(content.props.overlay.type).toBe(MessageMetaOverlay);
+        } else {
+          expect(content.props.metaSlot).toBeDefined();
+        }
+      }
+      act(() => renderer.update(render(true, true)));
+      expect(renderer.root.findAllByType(MessageMetaOverlay)).toHaveLength(0);
+    } finally {
+      act(() => renderer?.unmount());
+      mockColors = undefined;
+      mockRTL = false;
+    }
+  });
 });

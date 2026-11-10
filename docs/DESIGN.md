@@ -592,6 +592,8 @@ Standalone custom emoji use larger artwork than Unicode emoji, independently
 of inline custom-emoji sizes. Standalone custom-emoji runs wrap to fit the
 available conversation width.
 Message custom-emoji artwork retains its original corners without rounded clipping.
+Quoted replies preserve the message's incoming or outgoing alignment. A wider
+quote must not stretch emoji or attachment bodies or displace their metadata.
 Standalone Unicode emoji keep the timestamp and delivery-status capsule below
 the artwork at the trailing edge, so it never obscures the expression. Keep this
 stack compact without an added metadata gap. Use natural system-font height on

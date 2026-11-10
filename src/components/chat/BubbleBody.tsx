@@ -469,9 +469,6 @@ function BubbleBodyBase({
     );
   }
 
-  const isMedia =
-    !!attachment?.mime &&
-    (attachment.mime.startsWith('image/') || attachment.mime.startsWith('video/'));
   const nearbyAttachment: NearbyAttachmentFetchContext | undefined =
     proximity && !isSelf && conversationKey && rumorId && tags
       ? { peerPubkey: conversationKey, rumorId, tags }
@@ -491,8 +488,8 @@ function BubbleBodyBase({
         <View
           style={{
             position: 'relative',
-            // A wider quote must not stretch the media's metadata anchor.
-            alignSelf: isMedia ? (isSelf ? 'flex-end' : 'flex-start') : undefined,
+            // A wider quote must not stretch the attachment's metadata anchor.
+            alignSelf: isSelf ? 'flex-end' : 'flex-start',
           }}
         >
           {attachment.mime?.startsWith('video/') ? (
@@ -554,7 +551,7 @@ function BubbleBodyBase({
         <View
           style={{
             position: 'relative',
-            alignSelf: 'flex-end',
+            alignSelf: isSelf ? 'flex-end' : 'flex-start',
             flexDirection: 'row',
             flexWrap: 'wrap',
             maxWidth: '100%',
@@ -600,25 +597,29 @@ function BubbleBodyBase({
         ) : null}
         <View
           style={{
-            position: 'relative',
-            alignSelf: 'flex-end',
-            flexDirection: 'row',
-            alignItems: 'flex-end',
-            gap: spacing.xs,
+            alignSelf: isSelf ? 'flex-end' : 'flex-start',
           }}
         >
-          {shortEmoji.emojis.map((emoji, index) => (
-            <AppText
-              key={`${index}:${emoji}`}
-              selectable={IS_ELECTRON}
-              naturalLineHeight
-              style={emojiSize.message}
-            >
-              {emoji}
-            </AppText>
-          ))}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              gap: spacing.xs,
+            }}
+          >
+            {shortEmoji.emojis.map((emoji, index) => (
+              <AppText
+                key={`${index}:${emoji}`}
+                selectable={IS_ELECTRON}
+                naturalLineHeight
+                style={emojiSize.message}
+              >
+                {emoji}
+              </AppText>
+            ))}
+          </View>
+          {renderOverlayMeta('below')}
         </View>
-        {renderOverlayMeta('below')}
       </View>
     );
   }
