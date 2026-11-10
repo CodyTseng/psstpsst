@@ -2,7 +2,7 @@ import { WebLn } from '../webln';
 import { ExploreRuntime } from '../runtime';
 import { platform } from '@/platform';
 import { ApplicationNetwork } from '@/services/applications/network';
-import { memoryRepository, rules, levels } from '@/services/signing/testing/memory-repository';
+import { memoryRepository, rules, authorizations } from '@/services/signing/testing/memory-repository';
 import { invalidateSigning } from '@/services/signing/changes';
 import type { ExploreEntry } from '../model';
 import { loadSiteBlob } from '@/services/napplet/artifacts';
@@ -62,7 +62,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   debugLog = jest.spyOn(console, 'debug').mockImplementation(() => {});
   warningLog = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  rules.clear(); levels.clear();
+  rules.clear(); authorizations.clear();
   jest.mocked(getData).mockResolvedValue(null);
   (platform.napplet.addMessageListener as jest.Mock).mockImplementation(fn => { receive = fn; return () => { }; });
   confirm = jest.fn(async () => 'allow-always');
@@ -504,8 +504,8 @@ it('ignores late multi-file progress and aborts every worker when the container 
 it('defers website level selection until a NIP-07 call and scopes it to the committed origin', async () => {
   const site = { accountPubkey: 'account', sourceId: 'https://site.example' };
   const other = { accountPubkey: 'account', sourceId: 'https://other.example' };
-  levels.set(JSON.stringify(site), undefined);
-  levels.set(JSON.stringify(other), undefined);
+  authorizations.set(JSON.stringify(site), undefined);
+  authorizations.set(JSON.stringify(other), undefined);
   expect(confirm).not.toHaveBeenCalled();
   confirm.mockResolvedValue('routine');
   message(site.sourceId, 'one');
@@ -513,7 +513,7 @@ it('defers website level selection until a NIP-07 call and scopes it to the comm
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ appAuthorizationLevel: true,
     requester: { title: 'site.example', origin: site.sourceId } }), expect.any(AbortSignal));
-  expect(levels.get(JSON.stringify(site))).toBe('routine');
+  expect(authorizations.get(JSON.stringify(site))).toEqual({ fullyTrusted: false });
   message(site.sourceId, 'two');
   await flush();
   expect(confirm).toHaveBeenCalledTimes(1);

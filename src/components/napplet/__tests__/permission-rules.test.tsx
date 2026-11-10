@@ -1,8 +1,8 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { NappletPermissions } from '../NappletPermissions';
 import { SigningRuleEditor } from '../SigningRuleEditor';
-import { AppAuthorizationLevelEditor } from '../app-authorization-level-choices';
-import { updateAppAuthorizationLevel } from '@/services/signing/management';
+import { platform } from '@/platform';
+import { setFullyTrusted } from '@/services/signing/management';
 import { ListRow } from '@/components/common/ListRow';
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
@@ -10,8 +10,9 @@ import { nappletService } from '@/services/napplet/service';
 import type { NappletRelease } from '@/services/napplet/protocol';
 import type { SigningSnapshot } from '@/services/signing/model';
 jest.mock('@/i18n', () => ({ language: 'en', resolvedLanguage: 'en', t: (key: string) => key }));
-jest.mock('@/services/signing/management',()=>({updatePermissions:jest.fn(),updateAppAuthorizationLevel:jest.fn(async()=>{})}));
-jest.mock('../app-authorization-level-choices', () => ({ AppAuthorizationLevelEditor: () => null }));
+jest.mock('@/services/signing/management',()=>({updatePermissions:jest.fn(),setFullyTrusted:jest.fn(async()=>{})}));
+jest.mock('@/components/common/Toggle', () => ({ Toggle: () => null }));
+jest.mock('@/platform', () => ({ platform: { confirmationDialog: { confirm: jest.fn(async () => true) } } }));
 
 let mockFocused = true;
 let mockAccount = 'accountA';
@@ -37,9 +38,9 @@ jest.mock('@/theme', () => ({ spacing: { xs: 4, sm: 8, md: 12, lg: 16 }, useThem
 const release = { eventKey: 'app', hash: 'v1' } as NappletRelease;
 let renderer: ReactTestRenderer;
 const screen = () => <NappletPermissions accountPubkey={mockAccount} release={release} initiallyExpanded />;
-const rows = () => renderer.root.findAllByType(ListRow).filter(row => !['applications.app_authorization_level_title', 'applications.signing_activity'].includes(row.props.title));
+const rows = () => renderer.root.findAllByType(ListRow).filter(row => !['applications.fully_trust', 'applications.signing_activity'].includes(row.props.title));
 beforeEach(() => {
-  jest.clearAllMocks(); mockFocused = true; mockAccount = 'accountA'; mockData = { rules: [source], activity: [] };
+  jest.clearAllMocks(); mockFocused = true; mockAccount = 'accountA'; mockData = { authorization: { fullyTrusted: false }, rules: [source], activity: [] };
   jest.mocked(nappletService.updateSigningRule).mockImplementation(async (_release, _source, change) => {
     mockData = { ...mockData, rules: [{ ...source, decision: change.decision, duration: change.duration }] };
   });
@@ -51,6 +52,7 @@ it('persists asking as an exception across visits', async () => {
   act(() => { rows()[0].props.onPress(); });
   await act(async () => { await renderer.root.findByType(SigningRuleEditor).props.onSave({ decision: 'ask', duration: 'always' }); });
   expect(mockData.rules[0].decision).toBe('ask');
+  expect(renderer.root.findAllByType(AppText).map(node => node.props.children)).not.toContain('applications.permissions_hint');
   expect(rows()).toHaveLength(1);
   expect(rows()[0].props.titleTrailing.props.decision).toBe('ask');
   mockFocused = false; act(() => { renderer.update(screen()); });
@@ -92,26 +94,31 @@ it('keeps the account-permissions heading when only signing history is present',
   expect(rows()).toHaveLength(0);
 });
 
-it('keeps the level control available without rules or history', () => {
-  mockData = { rules: [], activity: [] };
+it('keeps the full trust control available without rules or history', () => {
+  mockData = { authorization: { fullyTrusted: false }, rules: [], activity: [] };
   act(() => { renderer.update(screen()); });
   expect(renderer.root.findAllByType(AppText)).toHaveLength(0);
   expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
   expect(rows()).toHaveLength(0);
-  expect(renderer.root.findAllByType(ListRow).some(row => row.props.title === 'applications.app_authorization_level_title')).toBe(true);
+  expect(renderer.root.findAllByType(ListRow).some(row => row.props.title === 'applications.fully_trust')).toBe(true);
 });
 
-it('edits the source level without modifying its explicit exceptions', async () => {
-  const levelRow = renderer.root.findAllByType(ListRow).find(row => row.props.title === 'applications.app_authorization_level_title')!;
-  act(() => { levelRow.props.onPress(); });
-  await act(async () => { await renderer.root.findByType(AppAuthorizationLevelEditor).props.onSave('trusted'); });
-  expect(updateAppAuthorizationLevel).toHaveBeenCalledWith({ accountPubkey: 'accountA', sourceId: 'https://app' }, 'trusted');
+it('confirms full trust without modifying saved rules', async () => {
+  await act(async () => { await renderer.root.findAllByType(ListRow).find(row => row.props.title === 'applications.fully_trust')!.props.trailing.props.onValueChange(true); });
+  expect(platform.confirmationDialog.confirm).toHaveBeenCalled();
+  expect(setFullyTrusted).toHaveBeenCalledWith({ accountPubkey: 'accountA', sourceId: 'https://app' }, true);
   expect(nappletService.updateSigningRule).not.toHaveBeenCalled();
   expect(mockData.rules).toEqual([source]);
 });
 
-it('creates individual rules only for recent operations outside the level', async () => {
-  mockData = { rules: [], level: 'routine', activity: [{ scope: { ...source.scope, kind: 5 }, decision: 'allowed', at: 100 }] };
+it('cancelling full trust leaves permissions unchanged', async () => {
+  jest.mocked(platform.confirmationDialog.confirm).mockResolvedValueOnce(false);
+  await act(async () => { await renderer.root.findAllByType(ListRow).find(row => row.props.title === 'applications.fully_trust')!.props.trailing.props.onValueChange(true); });
+  expect(setFullyTrusted).not.toHaveBeenCalled();
+});
+
+it('creates individual rules for recent operations without full trust', async () => {
+  mockData = { rules: [], authorization: { fullyTrusted: false }, activity: [{ scope: { ...source.scope, kind: 5 }, decision: 'allowed', at: 100 }] };
   act(() => { renderer.update(screen()); });
   act(() => { renderer.root.findAllByType(ListRow).find(row => row.props.title === 'applications.signing_activity')!.props.onPress(); });
   act(() => { rows()[0].props.onPress(); });
@@ -122,28 +129,29 @@ it('creates individual rules only for recent operations outside the level', asyn
   expect(mockData.rules[0].decision).toBe('ask');
 });
 
-it('hides level-covered saved rules and restores them after a downgrade', () => {
-  mockData = { rules: [{ ...source, decision: 'deny' }], level: 'routine', activity: [] };
+it('shows paused saved rules under full trust and enables editing when disabled', () => {
+  mockData = { rules: [{ ...source, decision: 'deny' }], authorization: { fullyTrusted: true }, activity: [] };
   act(() => { renderer.update(screen()); });
-  expect(rows()).toHaveLength(0);
+  expect(rows()).toHaveLength(1);
+  expect(rows()[0].props.disabled).toBe(true);
   expect(mockData.rules[0].decision).toBe('deny');
-  mockData = { ...mockData, level: 'manual' };
+  mockData = { ...mockData, authorization: { fullyTrusted: false } };
   act(() => { renderer.update(screen()); });
   expect(rows()[0].props.onPress).toBeDefined();
   expect(rows()[0].props.titleTrailing.props.decision).toBe('deny');
 });
 
-it('does not expose a single-operation editor from level-covered history', () => {
-  mockData = { rules: [], level: 'routine', activity: [{ scope: source.scope, decision: 'automatic', at: 100 }] };
+it('does not expose a single-operation editor from fully trusted history', () => {
+  mockData = { rules: [], authorization: { fullyTrusted: true }, activity: [{ scope: source.scope, decision: 'automatic', at: 100 }] };
   act(() => { renderer.update(screen()); });
   act(() => { renderer.root.findAllByType(ListRow).find(row => row.props.title === 'applications.signing_activity')!.props.onPress(); });
   expect(rows()[0].props.onPress).toBeUndefined();
   expect(rows()[0].props.trailing).toBeUndefined();
 });
 
-it('closes a single-operation editor if a level change covers its operation', async () => {
+it('closes a single-operation editor if full trust is enabled', async () => {
   act(() => { rows()[0].props.onPress(); });
-  mockData = { ...mockData, level: 'routine' };
+  mockData = { ...mockData, authorization: { fullyTrusted: true } };
   act(() => { renderer.update(screen()); });
   const editor = renderer.root.findByType(SigningRuleEditor);
   expect(editor.props.visible).toBe(false);

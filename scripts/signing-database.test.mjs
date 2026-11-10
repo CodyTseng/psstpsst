@@ -151,6 +151,29 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     assert.equal(sqlite.prepare('SELECT level FROM app_authorization_preferences WHERE account_pubkey=? AND source_id=?').get('A', 'https://migration.example').level, 'routine', 'renaming preserves existing authorization levels');
     assert.deepEqual(sqlite.prepare('SELECT * FROM signing_authorizations ORDER BY id').all(), beforeLevels, 'renaming preserves single-operation rules');
 
+    const migratedSource = 'https://migration.example';
+    sqlite.prepare("INSERT INTO signing_authorizations(account_pubkey,source_id,operation,kind,scope_key,decision,expires_at,created_at,updated_at) VALUES('A',?,'publish',1,'','deny',NULL,1,1)").run(migratedSource);
+    sqlite.prepare("INSERT INTO signing_authorizations(account_pubkey,source_id,operation,kind,scope_key,decision,expires_at,created_at,updated_at) VALUES('A',?,'publish',5,'','deny',NULL,1,1)").run(migratedSource);
+    sqlite.prepare("INSERT INTO browser_authorizations VALUES('A',?,'webln-info','deny',NULL,1)").run(migratedSource);
+    sqlite.prepare("INSERT INTO browser_authorizations VALUES('A',?,'audio','deny',NULL,1)").run(migratedSource);
+    sqlite.prepare("INSERT INTO napplet_data VALUES('A',?,'permissions','domains','[\"inc\"]',15)").run(migratedSource);
+    sqlite.prepare("INSERT INTO napplet_data VALUES('A',?,'permissions','denied-domains','[\"storage\",\"dev\"]',30)").run(migratedSource);
+    sqlite.prepare("INSERT INTO app_authorization_preferences VALUES('B','https://manual.example','manual'),('B','https://trusted.example','trusted')").run();
+    sqlite.exec(readFileSync('src/db/migrations/0085_authorization-presets.sql', 'utf8'));
+    assert.deepEqual(sqlite.prepare('SELECT fully_trusted FROM app_authorization_preferences WHERE account_pubkey=? AND source_id=?').get('A', migratedSource).fully_trusted, 0);
+    assert.equal(sqlite.prepare("SELECT decision FROM signing_authorizations WHERE source_id=? AND kind=1").get(migratedSource).decision, 'allow', 'materialized grant preserves old effective access');
+    assert.equal(sqlite.prepare("SELECT decision FROM signing_authorizations WHERE source_id=? AND kind=5").get(migratedSource).decision, 'deny', 'uncovered refusal is preserved');
+    assert.equal(sqlite.prepare("SELECT decision FROM browser_authorizations WHERE source_id=? AND resource='webln-info'").get(migratedSource).decision, 'allow');
+    assert.equal(sqlite.prepare("SELECT decision FROM browser_authorizations WHERE source_id=? AND resource='audio'").get(migratedSource).decision, 'deny', 'device decisions remain independent');
+    const migratedAccess = sqlite.prepare("SELECT key,value,bytes FROM napplet_data WHERE app_key=? AND bucket='permissions'").all(migratedSource);
+    assert.deepEqual(JSON.parse(migratedAccess.find(row => row.key === 'denied-domains').value), ['dev']);
+    assert(JSON.parse(migratedAccess.find(row => row.key === 'domains').value).includes('inc'));
+    assert(JSON.parse(migratedAccess.find(row => row.key === 'domains').value).includes('storage'));
+    assert.equal(sqlite.prepare("SELECT bytes FROM napplet_usage WHERE app_key=? AND bucket='permissions'").get(migratedSource).bytes, migratedAccess.reduce((sum, row) => sum + Buffer.byteLength(row.key + row.value), 0));
+    assert.equal(sqlite.prepare("SELECT fully_trusted FROM app_authorization_preferences WHERE source_id='https://trusted.example'").get().fully_trusted, 1);
+    assert.equal(sqlite.prepare("SELECT fully_trusted FROM app_authorization_preferences WHERE source_id='https://manual.example'").get().fully_trusted, 0);
+    assert.equal(sqlite.prepare("SELECT count(*) AS n FROM signing_authorizations WHERE account_pubkey='B'").get().n, 0);
+
     sqlite.exec('COMMIT');
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name IN ('explore_shortcuts','legacy_explore_shortcuts')").get().n, 0);
     const explore=fixture.exploreRepository();
@@ -212,27 +235,42 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
       accountPubkey: scope.accountPubkey, content: '', createdAt: 1,
       tags: [['d', `record-${index}-${'x'.repeat(5000)}`]] });
 
-    const levelScope = { accountPubkey: 'A', sourceId: 'https://level.example' };
-    for (const level of ['manual', 'routine', 'trusted']) {
-      await repository.saveAppAuthorizationLevel(levelScope, level);
-      assert.equal((await repository.readSigningSnapshot(levelScope)).level, level);
+    const rollbackScope = { accountPubkey: 'A', sourceId: 'https://rollback.example' };
+    let initializationGuards = 0;
+    await assert.rejects(repository.initializeAppAuthorization(rollbackScope, 'routine', () => {
+      if (++initializationGuards === 2) throw new Error('cancelled-after-grants');
+    }), /cancelled-after-grants/);
+    const rolledBack = await repository.readSigningSnapshot(rollbackScope);
+    assert.equal(rolledBack.authorization, undefined);
+    assert.deepEqual(rolledBack.rules, []);
+    assert.equal(await appRepository.getData({ accountPubkey: 'A', appKey: rollbackScope.sourceId }, 'permissions', 'domains'), null);
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM browser_authorizations WHERE source_id=?').get(rollbackScope.sourceId).n, 0);
+    const levelScope = { accountPubkey: 'A', sourceId: 'https://initialization.example' };
+    for (const preset of ['manual', 'routine', 'trusted']) {
+      await repository.clearSigningPermissions(levelScope);
+      await repository.initializeAppAuthorization(levelScope, preset);
+      const snapshot = await repository.readSigningSnapshot(levelScope);
+      assert.deepEqual(snapshot.authorization, { fullyTrusted: preset === 'trusted' });
+      assert.equal(snapshot.rules.length, preset === 'routine' ? 11 : 0);
+      await assert.rejects(repository.initializeAppAuthorization(levelScope, preset), /already-initialized/);
     }
-    assert.equal((await repository.readSigningSnapshot({ ...levelScope, accountPubkey: 'B' })).level, undefined);
-    assert.equal((await repository.readSigningSnapshot({ ...levelScope, sourceId: 'https://other.example' })).level, undefined);
-    await assert.rejects(repository.saveAppAuthorizationLevel(levelScope, 'invalid'), /invalid-app-authorization-level/);
-    await assert.rejects(repository.saveAppAuthorizationLevel(levelScope, 'manual', () => { throw new Error('revoked'); }), /revoked/);
-    assert.equal((await repository.readSigningSnapshot(levelScope)).level, 'trusted');
+    assert.equal((await repository.readSigningSnapshot({ ...levelScope, accountPubkey: 'B' })).authorization, undefined);
+    assert.equal((await repository.readSigningSnapshot({ ...levelScope, sourceId: 'https://other.example' })).authorization, undefined);
+    await assert.rejects(repository.initializeAppAuthorization(levelScope, 'invalid'), /invalid-app-authorization-preset/);
+    await assert.rejects(repository.initializeAppAuthorization(levelScope, 'manual', () => { throw new Error('revoked'); }), /revoked/);
+    assert.deepEqual((await repository.readSigningSnapshot(levelScope)).authorization, { fullyTrusted: true });
+    await repository.setFullyTrusted(levelScope, false);
+    assert.deepEqual((await repository.readSigningSnapshot(levelScope)).authorization, { fullyTrusted: false });
     await repository.clearSigningPermissions(levelScope);
-    assert.equal((await repository.readSigningSnapshot(levelScope)).level, undefined);
-    await repository.saveAppAuthorizationLevel(levelScope, 'routine');
+    assert.equal((await repository.readSigningSnapshot(levelScope)).authorization, undefined);
+    await repository.initializeAppAuthorization(levelScope, 'routine');
     const accessScope = { accountPubkey: 'A', appKey: levelScope.sourceId };
     const domains = fixture.domainPermissions();
     await appRepository.setData(accessScope, 'permissions', 'domains', '["theme"]');
     await appRepository.setData(accessScope, 'permissions', 'denied-domains', '["storage"]');
     await domains.saveDomainPermissionChanges(accessScope, [{ domain: 'inc', enabled: true }], () => {});
     assert.equal(await appRepository.getData(accessScope, 'permissions', 'denied-domains'), '["storage"]');
-    assert.equal((await repository.readSigningSnapshot(levelScope)).level, 'routine');
-    await repository.saveAppAuthorizationLevel(levelScope, 'manual');
+    assert.deepEqual((await repository.readSigningSnapshot(levelScope)).authorization, { fullyTrusted: false });
     const accessManifest = { required: [], optional: ['theme', 'storage', 'inc', 'resource'] };
     assert(!(await domains.readDomainPermissions(accessScope, accessManifest)).domains.includes('storage'));
     await Promise.all([
@@ -338,7 +376,7 @@ test('upgrades retain app data, operation-wide signer access, Favorites and acco
     assert.deepEqual(await browser.readBrowserPermissions({ ...scope, sourceId: 'https://other.example' }), []);
     await browser.saveBrowserPermissions(scope, ['audio'], 'deny', Date.now() + 60000);
     assert.equal((await browser.readBrowserPermissions(scope)).find(row => row.resource === 'audio').decision, 'deny');
-    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM browser_authorizations').get().n, 2);
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM browser_authorizations WHERE account_pubkey=? AND source_id=?').get(scope.accountPubkey, scope.sourceId).n, 2);
     sqlite.prepare("UPDATE browser_authorizations SET expires_at=1 WHERE resource='audio'").run();
     assert.deepEqual((await browser.readBrowserPermissions(scope)).map(row => row.resource), ['video']);
     await assert.rejects(browser.saveBrowserPermissions(scope, ['display-capture'], 'allow', null), /invalid-permissions/);

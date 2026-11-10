@@ -22,22 +22,30 @@ export function BrowserPermissions({ accountPubkey, sourceId }: { accountPubkey:
   const data = useBrowserPermissions(accountPubkey, sourceId);
   useErrorToast(data?.error && 'applications.request_failed');
   const [editor, setEditor] = useState<{ rule: BrowserPermissionRule; visible: boolean }>();
-  const walletInfoCovered = automaticallyAllowsWalletInfo(data?.level);
-  const rules = data?.rules?.filter(rule => rule.resource !== WALLET_INFO_PERMISSION || !walletInfoCovered);
+  const walletInfoCovered = automaticallyAllowsWalletInfo(data?.authorization);
+  const rules = data?.rules;
+  const sections = [
+    { key: 'wallet', title: t('wallet.title'), rules: rules?.filter(rule => rule.resource === WALLET_INFO_PERMISSION) ?? [] },
+    { key: 'browser', title: t('applications.browser_permission'), rules: rules?.filter(rule => rule.resource !== WALLET_INFO_PERMISSION) ?? [] },
+  ];
   const editorCovered = editor?.rule.resource === WALLET_INFO_PERMISSION && walletInfoCovered;
   if (editorCovered) setEditor(undefined);
   if (data && !data.error && !rules?.length && (!editor || editorCovered)) return null;
-  return <View style={{ gap: spacing.md }}>
-    <AppText variant="caption" tone="muted">{t('applications.browser_permission')}</AppText>
-    {!data ? <ActivityIndicator color={c.accent} /> : data.error ? null
-      : !rules?.length ? null : <ListGroup>{rules.map(rule =>
+  return <View style={{ gap: spacing.xl }}>
+    {!data ? <ActivityIndicator color={c.accent} /> : null}
+    {sections.filter(section => section.rules.length > 0).map(section => <View key={section.key} style={{ gap: spacing.md }}>
+      <AppText variant="caption" tone="muted">{section.title}</AppText>
+      {section.key === 'wallet' && walletInfoCovered ? <AppText variant="caption" tone="muted">{t('applications.fully_trust_wallet')}</AppText> : null}
+      <ListGroup>{section.rules.map(rule =>
         <ListRow key={rule.resource} title={browserPermissionLabel(rule.resource, t)}
           subtitle={rule.expiresAt === null ? t('applications.signing_duration_always') : t('applications.signing_until', {
             time: formatDateTime(rule.expiresAt / 1000, undefined, dateTimeFormatPreferences),
           })}
           titleTrailing={<AppText variant="caption" tone={rule.decision === 'allow' ? 'success' : 'danger'}>{t(rule.decision === 'allow' ? 'applications.allow' : 'applications.signing_reject')}</AppText>}
           trailing={<DirectionalChevron size={spacing.lg} color={c.textMuted} />}
-          onPress={() => setEditor({ rule, visible: true })} />)}</ListGroup>}
+          disabled={rule.resource === WALLET_INFO_PERMISSION && walletInfoCovered}
+          onPress={() => setEditor({ rule, visible: true })} />)}</ListGroup>
+    </View>)}
     {editor && !editorCovered ? <PermissionRuleEditor key={editor.rule.resource} title={browserPermissionLabel(editor.rule.resource, t)} visible={editor.visible}
       rule={{ decision: editor.rule.decision, duration: editor.rule.expiresAt === null ? 'always' : 'timed', expiresAt: editor.rule.expiresAt ?? undefined }}
       onSave={async change => {

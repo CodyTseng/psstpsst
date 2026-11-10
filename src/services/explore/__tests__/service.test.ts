@@ -18,7 +18,7 @@ import { platform } from '@/platform';
 import { refreshApplicationMetadata } from '../application-metadata';
 import { notifyApplicationChange } from '../application-changes';
 import { removeLocalApplication } from '../local-applications';
-import { readAppAuthorizationLevel, saveAppAuthorizationLevel, clearSigningPermissions } from '@/services/signing/repository';
+import { readAppAuthorization, initializeAppAuthorization, clearSigningPermissions } from '@/services/signing/repository';
 import { clearBrowserPermissions } from '../browser-permission-store';
 import { invalidateNappletSource } from '@/services/napplet/lifecycle';
 let mockDatabaseListener: (event: { tableName?: string; external?: boolean }) => void;
@@ -33,7 +33,7 @@ jest.mock('@/services/napplet/runtime',()=>({NappletRuntime:jest.fn()}));
 jest.mock('@/services/napplet/service',()=>({nappletStore:{getState:()=>({accountPubkey:'account'})},nappletService:{activate:jest.fn(async()=>{}),activateAccount:jest.fn(async()=>{}),install:jest.fn(async()=>{}),stop:jest.fn(),requestApproval:jest.fn(async()=> 'allow'),currentTheme:()=>undefined}}));
 jest.mock('@/services/applications/network',()=>({ApplicationNetwork:jest.fn()}));
 jest.mock('@/services/napplet/lifecycle',()=>({registerNappletLifecycle:jest.fn(),registerNappletVisit:jest.fn(),registerNappletTheme:jest.fn(),registerNappletSourceInvalidation:jest.fn(),invalidateNappletSource:jest.fn()}));
-jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{}),readAppAuthorizationLevel:jest.fn(async()=> 'manual'),saveAppAuthorizationLevel:jest.fn(async()=>0)}));
+jest.mock('@/services/signing/repository',()=>({clearSigningPermissions:jest.fn(async()=>{}),readAppAuthorization:jest.fn(async()=> ({ fullyTrusted: false })),initializeAppAuthorization:jest.fn(async(_scope,preset)=>{if(preset==='routine'){const get=jest.mocked(jest.requireMock('@/services/napplet/repository').getData);const saved=JSON.parse(await get()??'[]');if(!saved.includes('network'))get.mockResolvedValue(JSON.stringify([...saved,'network']));}return 0;})}));
 jest.mock('@/services/napplet/repository',()=>({getData:jest.fn(async()=>null),setData:jest.fn(async()=>{})}));
 jest.mock('../favorite-metadata', () => ({ needsFavoriteMetadata: jest.fn((entry: ExploreEntry) => entry.kind !== 'website' && !entry.manifest), resolveFavoriteMetadata: jest.fn(async (_account: string, entry: ExploreEntry) => entry) }));
 jest.mock('../repository',()=>({queueFavoritesPublication:jest.fn(),readEntries:jest.fn(async()=>[]),readFavoriteEntries:jest.fn(async()=>[]),readFavoriteReferences:jest.fn(async()=>[]),readFavoriteMetadata:jest.fn(async(_account:string,page:ExploreEntry[])=>page),visit:jest.fn(async()=>{}),fromNapplet:jest.fn(),reorder:jest.fn(),forget:jest.fn()}));
@@ -48,20 +48,20 @@ beforeEach(async()=>{jest.clearAllMocks();jest.mocked(needsFavoriteMetadata).moc
 afterEach(async()=>{exploreService.deactivate();for(const id of applicationTaskStore.getState().sessions.keys())await applicationTasks.close(id);});
 
 it.each(['nsite', 'napp'] as const)('selects a level before launching a fresh %s and skips covered network consent', async kind => {
-  jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce(undefined);
+  jest.mocked(readAppAuthorization).mockResolvedValueOnce(undefined);
   jest.mocked(nappletService.requestApproval).mockResolvedValueOnce('routine');
   const app = { ...entry(kind), required: ['network'] };
   const id = exploreService.prepare(app, 'account');
   await exploreService.start(id);
   expect(nappletService.requestApproval).toHaveBeenCalledTimes(1);
   expect(nappletService.requestApproval).toHaveBeenCalledWith(expect.objectContaining({ appAuthorizationLevel: true }), expect.any(AbortSignal));
-  expect(saveAppAuthorizationLevel).toHaveBeenCalledWith(expect.objectContaining({ accountPubkey: 'account' }), 'routine', expect.any(Function));
+  expect(initializeAppAuthorization).toHaveBeenCalledWith(expect.objectContaining({ accountPubkey: 'account' }), 'routine', expect.any(Function));
   expect(ExploreRuntime).toHaveBeenCalledTimes(1);
   expect(setData).not.toHaveBeenCalled();
 });
 
 it('selects a level on first open even without launch access or account requests', async () => {
-  jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce(undefined);
+  jest.mocked(readAppAuthorization).mockResolvedValueOnce(undefined);
   jest.mocked(nappletService.requestApproval).mockResolvedValueOnce('trusted');
   const id = exploreService.prepare(entry('nsite'), 'account');
   await exploreService.start(id);
@@ -70,7 +70,7 @@ it('selects a level on first open even without launch access or account requests
 });
 
 it('Manual asks for network access only after the level choice', async () => {
-  jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce(undefined);
+  jest.mocked(readAppAuthorization).mockResolvedValueOnce(undefined);
   jest.mocked(nappletService.requestApproval).mockResolvedValueOnce('manual').mockResolvedValueOnce('allow');
   const id = exploreService.prepare({ ...entry('nsite'), required: ['network'] }, 'account');
   await exploreService.start(id);
@@ -80,24 +80,25 @@ it('Manual asks for network access only after the level choice', async () => {
   expect(calls[1][0].application?.required).toEqual(['network']);
 });
 
-it('approving uncovered access does not remember level-derived network access', async () => {
-  jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce('routine');
+it('approving more access preserves initialized network grants', async () => {
+  jest.mocked(getData).mockResolvedValue('["network"]');
+  jest.mocked(readAppAuthorization).mockResolvedValueOnce({ fullyTrusted: false });
   const id = exploreService.prepare({ ...entry('napp'), required: ['network', 'inc'] }, 'account');
   await exploreService.start(id);
-  expect(setData).toHaveBeenCalledWith(expect.anything(), 'permissions', 'domains', '["inc"]');
+  expect(setData).toHaveBeenCalledWith(expect.anything(), 'permissions', 'domains', '["network","inc"]');
 });
 
 it('cancelling initial level selection never opens the application', async () => {
-  jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce(undefined);
+  jest.mocked(readAppAuthorization).mockResolvedValueOnce(undefined);
   jest.mocked(nappletService.requestApproval).mockResolvedValueOnce(false);
   const id = exploreService.prepare(entry('nsite'), 'account');
   await exploreService.start(id);
   expect(ExploreRuntime).not.toHaveBeenCalled();
-  expect(saveAppAuthorizationLevel).not.toHaveBeenCalled();
+  expect(initializeAppAuthorization).not.toHaveBeenCalled();
 });
 
 it.each(['napp'] as const)('an independent %s task selects its level before any access review', async kind => {
-  jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce(undefined);
+  jest.mocked(readAppAuthorization).mockResolvedValueOnce(undefined);
   jest.mocked(nappletService.requestApproval).mockResolvedValueOnce('routine');
   const app = entry(kind);
   await applicationTasks.open(app, 'account');
@@ -1033,16 +1034,16 @@ it('opens websites without reading levels or requesting launch access', async ()
   const app = { ...website, required: ['network'] };
   expect(await exploreService.access(app, 'account')).toBe(true);
   await exploreService.start(exploreService.prepare(app, 'account'));
-  expect(readAppAuthorizationLevel).not.toHaveBeenCalled();
+  expect(readAppAuthorization).not.toHaveBeenCalled();
   expect(nappletService.requestApproval).not.toHaveBeenCalled();
-  expect(saveAppAuthorizationLevel).not.toHaveBeenCalled();
+  expect(initializeAppAuthorization).not.toHaveBeenCalled();
   expect(ExploreRuntime).toHaveBeenCalledTimes(1);
 });
 it('opens independent website tasks without choosing a level', async () => {
   await applicationTasks.open(website, 'account');
   const id = [...applicationTaskStore.getState().sessions.keys()][0];
   await applicationTasks.start(id);
-  expect(readAppAuthorizationLevel).not.toHaveBeenCalled();
+  expect(readAppAuthorization).not.toHaveBeenCalled();
   expect(nappletService.requestApproval).not.toHaveBeenCalled();
   expect(applicationTaskStore.getState().sessions.get(id)?.containerId).toBe('container');
 });
@@ -1053,16 +1054,16 @@ it.each(['website', 'nsite'] as const)('applies the correct consent boundary to 
     await exploreService.start(exploreService.prepare(entry('napp'), 'account'));
     jest.mocked(ExploreRuntime).mock.instances.at(-1)!.containerId = 'parent-container';
     const callbacks = jest.mocked(ExploreRuntime).mock.calls.at(-1)![2];
-    jest.mocked(readAppAuthorizationLevel).mockClear();
+    jest.mocked(readAppAuthorization).mockClear();
     jest.mocked(nappletService.requestApproval).mockClear();
     if (kind !== 'website') {
-      jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce(undefined);
+      jest.mocked(readAppAuthorization).mockResolvedValueOnce(undefined);
       jest.mocked(nappletService.requestApproval).mockResolvedValueOnce('routine');
     }
     await callbacks.launch!(entry(kind));
     expect(ExploreRuntime).toHaveBeenCalledTimes(2);
     if (kind === 'website') {
-      expect(readAppAuthorizationLevel).not.toHaveBeenCalled();
+      expect(readAppAuthorization).not.toHaveBeenCalled();
       expect(nappletService.requestApproval).not.toHaveBeenCalled();
     } else {
       expect(nappletService.requestApproval).toHaveBeenCalledWith(expect.objectContaining({ appAuthorizationLevel: true }), expect.any(AbortSignal));
@@ -1071,7 +1072,7 @@ it.each(['website', 'nsite'] as const)('applies the correct consent boundary to 
   } finally { platform.napplet.tasks = tasks; }
 });
 
-it.each([false, true])('keeps nested level-derived access out of saved grants (fresh level: %s)', async fresh => {
+it.each([false, true])('preserves nested preset grants when approving additional access (fresh initialization: %s)', async fresh => {
   const tasks = platform.napplet.tasks;
   platform.napplet.tasks = undefined;
   try {
@@ -1079,27 +1080,27 @@ it.each([false, true])('keeps nested level-derived access out of saved grants (f
     jest.mocked(ExploreRuntime).mock.instances.at(-1)!.containerId = 'parent-container';
     const callbacks = jest.mocked(ExploreRuntime).mock.calls.at(-1)![2];
     const child = { ...entry('nsite'), required: ['network', 'inc'] };
-    let saved = '["relay"]';
+    let saved = '["relay","network"]';
     jest.mocked(getData).mockImplementation(async () => saved);
     jest.mocked(setData).mockImplementationOnce(async (_scope, _namespace, _key, value) => { saved = value!; });
-    jest.mocked(readAppAuthorizationLevel).mockResolvedValue('routine');
+    jest.mocked(readAppAuthorization).mockResolvedValue({ fullyTrusted: false });
     if (fresh) {
-      jest.mocked(readAppAuthorizationLevel).mockResolvedValueOnce(undefined);
+      jest.mocked(readAppAuthorization).mockResolvedValueOnce(undefined);
       jest.mocked(nappletService.requestApproval).mockResolvedValueOnce('routine');
     }
     await callbacks.launch!(child);
     expect(nappletService.requestApproval).toHaveBeenLastCalledWith(expect.objectContaining({
       application: expect.objectContaining({ required: ['inc'] }),
     }), expect.any(AbortSignal));
-    expect(JSON.parse(saved)).toEqual(['relay', 'inc']);
+    expect(JSON.parse(saved)).toEqual(['relay', 'network', 'inc']);
     expect(ExploreRuntime).toHaveBeenCalledTimes(2);
-    jest.mocked(readAppAuthorizationLevel).mockResolvedValue('manual');
-    await expect(exploreService.access(child, 'account')).resolves.toBe(false);
+    jest.mocked(readAppAuthorization).mockResolvedValue({ fullyTrusted: false });
+    await expect(exploreService.access(child, 'account')).resolves.toBe(true);
     await expect(exploreService.access({ ...child, required: ['inc'] }, 'account')).resolves.toBe(true);
     await expect(exploreService.access({ ...child, required: ['relay'] }, 'account')).resolves.toBe(true);
   } finally {
     platform.napplet.tasks = tasks;
-    jest.mocked(readAppAuthorizationLevel).mockResolvedValue('manual');
+    jest.mocked(readAppAuthorization).mockResolvedValue({ fullyTrusted: false });
   }
 });
 

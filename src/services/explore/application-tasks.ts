@@ -1,4 +1,4 @@
-import { ensureAppAuthorizationLevel } from '@/services/app-authorization/level';
+import { ensureAppAuthorization } from '@/services/app-authorization/initialize';
 import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
 import { normalizeSigningSource } from '@/services/signing/source';
 import { nappletAccessDomains } from '@/services/napplet/access-domains';
@@ -145,7 +145,7 @@ export const applicationTasks = {
       const optional = (entry.release ? nappletAccessDomains(entry.release.optional) : []).filter(domain => (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain));
       const sourceId = entry.release?.eventKey ?? applicationSigningSource(entry);
       const scope = { accountPubkey: account, appKey: sourceId };
-      const level = entry.kind === 'website' ? undefined : await ensureAppAuthorizationLevel({ accountPubkey: account, sourceId: normalizeSigningSource(sourceId),
+      const authorization = entry.kind === 'website' ? undefined : await ensureAppAuthorization({ accountPubkey: account, sourceId: normalizeSigningSource(sourceId),
         ...(entry.local ? { localVersion: entry.local.version } : {}) }, requestSignal => confirm({ title: entry.title,
           detail: '', accountPubkey: account, appAuthorizationLevel: true,
           ...(entry.release ? { app: entry.release } : { application: applicationPresentation(entry) }) }, requestSignal), signal, current);
@@ -153,19 +153,19 @@ export const applicationTasks = {
       const stored = access || entry.kind === 'website' ? null : await getData(scope, 'permissions', 'domains'); current();
       const saved: unknown = stored ? JSON.parse(stored) : [];
       let domains = Array.isArray(saved) ? saved.filter((domain): domain is string => typeof domain === 'string' && (required.includes(domain) || optional.includes(domain))) : [];
-      const remembered = access?.granted ?? [...domains];
+      const remembered = access?.granted ?? (Array.isArray(saved) ? saved.filter((domain): domain is string => typeof domain === 'string') : []);
       if (access) domains = access.domains;
-      else domains = [...new Set([...domains, ...required.filter(domain => automaticallyAllowsAccess(level, domain))])];
+      else domains = [...new Set([...domains, ...required.filter(domain => automaticallyAllowsAccess(authorization, domain))])];
       if (required.some(domain => !domains.includes(domain))) {
         const reviewed = session.reviewed?.length === required.length && required.every(domain => session.reviewed!.includes(domain));
         const answer = reviewed ? 'allow' : await confirm({ title: entry.title, detail: '', accountPubkey: account,
-          ...(entry.release ? { app: entry.release, capabilities: { required, optional } } : { application: applicationPresentation(entry) }) });
+          ...(entry.release ? { app: entry.release, capabilities: { required, optional } } : { application: { ...applicationPresentation(entry), required: required.filter(domain => !domains.includes(domain)) } }) });
         current();
         if (!answer || (!entry.release && answer !== 'allow') || (entry.release && answer !== 'allow' && !answer.startsWith('domains:'))) throw new Error('permission-denied');
         const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
         domains = [...required, ...optional.filter(domain => Array.isArray(selected) && selected.includes(domain))];
-        if (entry.release && access) domains = resolveDomainPermissions(entry.release, domains, access.denied, level);
-        await setData(scope, 'permissions', 'domains', JSON.stringify(domains.filter(domain=>remembered.includes(domain)||!automaticallyAllowsAccess(level,domain)))); current();
+        if (entry.release && access) domains = resolveDomainPermissions(entry.release, domains, access.denied, authorization);
+        await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set([...remembered, ...domains.filter(domain => !automaticallyAllowsAccess(authorization, domain))])])); current();
       }
       const presented = () => { if (isCurrent()) patch(id, { loading: false }); };
       if (entry.release) {

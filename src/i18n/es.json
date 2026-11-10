@@ -1376,7 +1376,14 @@
     "app_authorization_level_trusted_description": "Permitir acceso básico, información de la cartera, todas las firmas, el cifrado y el descifrado.",
     "app_authorization_level_boundaries": "Los pagos de la cartera, la creación de facturas y el acceso al dispositivo requieren aprobación aparte.",
     "app_authorization_level_unset": "Sin seleccionar",
-    "app_authorization_level_continue": "Continuar"
+    "app_authorization_level_continue": "Continuar",
+    "fully_trust": "Confiar plenamente",
+    "fully_trust_on": "Permitir automáticamente el acceso básico de la app y las operaciones de cuenta compatibles. Desactívalo para editar los permisos individuales.",
+    "fully_trust_off": "Usar permisos individuales. Las solicitudes sin una decisión guardada requieren aprobación.",
+    "fully_trust_enable_notice": "Las reglas guardadas de firma e información de la cartera, incluidos los rechazos, quedarán en pausa. El acceso al dispositivo y los pagos de la cartera seguirán requiriendo aprobación por separado. Las instancias de la app en ejecución se cerrarán para aplicar el cambio.",
+    "fully_trust_disable_notice": "Los permisos individuales guardados volverán a aplicarse. Las solicitudes sin una decisión guardada requerirán aprobación. Las instancias de la app en ejecución se cerrarán para aplicar el cambio.",
+    "fully_trust_paused": "Las reglas de firma individuales están en pausa mientras Confiar plenamente está activado. Desactívalo para editarlas.",
+    "fully_trust_wallet": "El acceso a la información de la cartera se permite automáticamente mientras Confiar plenamente está activado. Su regla individual está en pausa."
   },
   "comments": {
     "title": "Reseñas",

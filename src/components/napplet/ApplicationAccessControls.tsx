@@ -30,8 +30,6 @@ export function ApplicationAccessControls({required,optional=[],automatic=[],sel
         <ListGroup>{optional.map(domain=>{
           const enabled=selected.includes(domain);
           return <ListRow key={domain} title={label(domain)}
-            subtitle={t(enabled?'applications.permissions_enabled':'applications.permissions_disabled')}
-            subtitleTone={enabled?'success':'muted'}
             trailing={automatic.includes(domain)?<AppText variant="caption" tone="success">{t('applications.permissions_allow')}</AppText>:<Toggle value={enabled} disabled={busy||!onToggle} accessibilityLabel={label(domain)}
               onValueChange={value=>onToggle?.(domain,value)}/>}/>;
         })}</ListGroup>

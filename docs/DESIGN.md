@@ -1219,14 +1219,14 @@ scrolls. It always reads Open, regardless of installation or access approval sta
 viewing app details alone never grants access. Details and runtime information share the app identity, publisher, description
 and required access. Approval sheets show a compact requester identity and the
 exact requested access, omitting publisher rows and marketing descriptions. Applications with no effective required access omit a separate access review;
-first-open level selection still applies to napplets, napps and nsites. Internal shell access is implicit and never triggers consent.
+first-open permission initialization still applies to napplets, napps and nsites. Internal shell access is implicit and never triggers consent.
 Access reviews omit routine explanations about separate signing reviews.
 First-use consent uses the same sheet across Explore formats,
 identifies the current account with the shared header avatar when account-bound.
 Access confirmation fixes one horizontal action row below the scrolling content,
 with Cancel at the start and Allow at the end. Optional
 access is omitted from app details and launch consent sheets; it follows saved
-access, existing defaults and the selected level.
+access, existing defaults and saved permission rules.
 Details have the same layout regardless of format or installation state, without maintenance
 actions or a separate permissions entry. Permission controls live in the management
 view reached from the app menu. Protocol hashes stay out of ordinary app information
@@ -1363,24 +1363,26 @@ align with the body gutter at the corresponding scroll boundary. Host permission
 app access and remembered signing decisions. Each rule is one editing target,
 with Ask every time, Automatically allow and Automatically reject choices and
 an independent duration. Saved changes take effect immediately. Ask every time is an explicit saved
-rule and remains visible across visits. Level-covered signing rules are omitted from the rule list; their stored
-decisions reappear and become editable when the level no longer covers them. Status follows the title with semantic colour; long
+rule and remains visible across visits. Everyday use creates ordinary, visible, editable rules. Full trust keeps saved
+signing rules visible but disabled, with an explicit explanation that they are paused. Status follows the title with semantic colour; long
 titles yield space to it, and Kind/duration shares the title's start edge. Disclosures align
 with section headings. Permission management omits account chrome; protocol hashes
 and history stay out of its default view. Permission settings use consistent grouped surfaces with muted caption section
-headings; group labels are not repeated as row values. Long selected policies sit
+headings; group labels are not repeated as row values. Omit generic instructions
+that repeat an obvious row interaction. Group permissions by the capability users
+control; wallet information belongs under Wallet, independently of browser permissions. Long selected policies sit
 below their setting label. Required and optional access remain
-visible in separate sections; optional controls pair switches with explicit
-enabled/disabled text. Saved account and website decisions show their scope,
+visible in separate sections; optional switches communicate their state without
+repeating enabled/disabled text. Saved account and website decisions show their scope,
 decision and duration. Permission sections with no related access, saved
 decisions or activity are hidden once loading resolves. Account permissions retain their section heading when only signing history
 exists; its disclosure remains accessible even when no rules are saved.
-First use of an undecided optional capability outside level coverage opens an
-Allow/Reject review for that capability. Covered optional access shows its
-automatic allowance without a switch; saved denials remain available after a
-level downgrade. Explicit rejection is remembered; cancellation is not rejection.
+First use of an undecided optional capability opens an Allow/Reject review.
+Full trust may automatically allow supported declared capabilities; their controls
+remain read-only until trust is disabled. Explicit rejection is remembered;
+cancellation is not rejection.
 Declared optional appearance, app storage and app settings start enabled while
-retaining their permission switches. Explicitly disabled access stays disabled outside level coverage.
+retaining their permission switches. Explicitly disabled access stays disabled whenever full trust is off.
 Permission history uses a full-row disclosure within its grouped surface.
 Permission reset uses the shared full-width danger button and destructive confirmation. Sharing keeps the current app mounted and returns to it after
 confirmation or cancellation.
@@ -1393,20 +1395,19 @@ resource, preserving unknown resource names rather than hiding them behind
 generic access wording. Targets and filenames stay separate from permission names. Text and image copying do not show host confirmation;
 clipboard reads require it. Permission queries describe these same decisions.
 
-On first open, napplets, napps and nsites ask for Manual, Routine or Trusted
-handling with Routine initially selected and an explicit Continue action. The
-choice precedes launch-access reviews and execution, identifies the account and
-verified source, describes basic access and general encryption
-and decryption authority, and keeps wallet/device boundaries visible. Dismissal
-saves nothing. Ordinary websites open without this sheet; the first NIP-07 call
-or wallet information read selects a level for the current verified origin.
-WebLN initialization does not prompt. Routine and Trusted allow wallet information
-reads; Manual uses single-request, timed or permanent consent. Payment/invoice
-reviews remain separate at every level. Permission management places the level
-choice directly below app identity, before required/optional access and individual
-decisions, and preserves explicit exceptions when it changes. Sensitive requests outside the chosen policy
-retain their ordinary review after the level sheet closes. The complete matrix
-lives in [app authorization](protocols/app-authorization.md).
+On first open, napplets, napps and nsites ask for initial Manual, Everyday use or
+Fully trust permissions, with Everyday use initially selected and an explicit
+Continue action. The choice precedes access reviews and execution, identifies the
+account and verified source, and keeps device/payment boundaries visible.
+Dismissal saves nothing. Ordinary websites initialize on their first account or
+wallet-information request, not on opening or WebLN initialization.
+Everyday use creates editable rules rather than a lasting authorization level.
+Permission management places a Fully trust switch before individual permissions.
+Enabling it explains that saved rules, including refusals, are paused; disabling
+it restores those rules and asks for undecided operations. Both actions explain
+that running instances close to apply launch-bound changes. Reset clears initial
+consent, trust and saved decisions so the next authorization starts over.
+The complete policy lives in [app authorization](protocols/app-authorization.md).
 
 All approval sheets lead with the operation and a compact requester identity.
 Application publication uses the ordinary signing review; there is no separate
@@ -1493,8 +1494,8 @@ capabilities can be changed or reset in application permissions.
 Manual wallet information consent identifies the host-verified source and explains
 access to the wallet display name and supported operations without selecting a
 wallet. Information consent uses the shared duration selector and Allow/Reject
-actions; saved decisions remain editable in application permissions outside level
-coverage, and are preserved when a level covers them. Payment and
+actions; saved decisions remain visible in application permissions and are paused only
+while full trust is enabled. Payment and
 invoice reviews reuse the existing wallet confirmation and
 wallet picker sheets, adding the requesting source. Each website payment shows
 the exact signed amount in sats, lets the user choose an eligible wallet, and

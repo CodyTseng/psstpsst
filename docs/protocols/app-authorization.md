@@ -1,168 +1,140 @@
-# App authorization levels and permissions
+# Application authorization
 
-This policy applies to napplets, napps, nsites and HTTPS websites through the
-shared account/source policy. It covers declared basic application access and
-signer methods and wallet metadata while preserving browser, device, payment and
-invoice reviews. The
-implementation is `src/services/app-authorization/policy.ts`.
+Application permissions are account/source-scoped. First-use choices initialize
+ordinary rules or enable full trust; they are not persistent authorization levels.
+The policy is implemented in `src/services/app-authorization/`.
 
-## App Authorization Level
+## First-use initialization
 
-The shared policy is called **App Authorization Level** (`AppAuthorizationLevel`
-in code). It controls application access, NIP-07 account authority and WebLN wallet
-information reads; payment, invoice and device consent remain independent. Its values are `manual`, `routine` and `trusted`.
+The host obtains explicit consent before launching a napplet, napp or nsite,
+including nested launches. Ordinary websites open without application consent;
+the first NIP-07 operation or WebLN `getInfo()` initializes permissions for the
+host-verified main-frame origin. WebLN `enable()` does not request consent.
+Everyday use is initially selected, but nothing is saved until Continue.
+Closing the chooser cancels only the current request.
 
-On the first open of a napplet, napp or nsite for an account and verified source,
-the host asks for a level before launch-access reviews or execution, even if the
-app never requests account methods. This includes nested inline launches. Routine is initially selected, but no authority is granted until the
-user continues. Closing the sheet rejects only the current request and saves
-nothing. Selecting a level does not approve a request outside that level's automatic
-scope: the ordinary operation review follows after the level sheet closes.
-Existing applications without a level also receive this choice on their next
-open; their explicit rules are preserved without an automatic upgrade.
+| Initial choice | Saved configuration |
+| --- | --- |
+| Manual | Initialized, full trust off, no generated rules |
+| Everyday use | Initialized, full trust off, ordinary permanent allow rules below |
+| Fully trust | Initialized, full trust on, no generated rules |
 
-Ordinary websites open without level selection or application-access review. The
-host injects only NIP-07 and WebLN providers, without `napp` or `nostrdb` access.
-The first NIP-07 call or WebLN `getInfo()` obtains a level if needed for the account
-and current host-verified HTTPS main-frame origin; navigation to another origin
-does not inherit it. WebLN `enable()` initializes the document without prompting.
-Routine and Trusted automatically allow wallet display names and supported-operation
-metadata; balances and transaction history are not exposed. In Manual, `getInfo()`
-uses account/source-scoped single-request, timed or permanent Allow/Reject decisions,
-editable and revocable in application permissions. Level coverage precedes these
-rules without deleting them; returning to Manual restores their effect. Payments
-and invoice creation always require their own reviews without information consent.
+An authorization row's existence records completed initialization, including Manual
+with no rules. No selected preset is stored. Initialization commits consent and
+preset grants in one transaction, checks account/source lifetime, and never
+reinitializes an existing configuration. Reset is required to choose again.
+Existing explicit decisions are preserved when initializing an undecided source.
 
-| Operation | Manual | Routine | Trusted |
-| --- | --- | --- | --- |
-| Declared network/resource access, app-isolated storage, settings, appearance and UI | Ask | Allow | Allow |
-| Declared public-relay and outbox API access (mutations still use signer policy) | Ask | Allow | Allow |
-| Declared public-upload capability | Ask | Ask | Allow |
-| Other declared capabilities, including app-to-app messaging and development access | Ask | Ask | Ask |
-| Disclose the current account's public key | Ask | Allow | Allow |
-| Read wallet display name and supported operations | Ask | Allow | Allow |
-| Host-mediated relay authentication | Ask | Allow | Allow |
-| Host-mediated HTTP authentication | Ask | Ask | Allow |
-| Sign notes/replies (`1`), reposts (`6`, `16`), reactions (`7`) | Ask | Allow | Allow |
-| General NIP-04 / NIP-44 encryption | Ask | Allow | Allow |
-| General NIP-04 / NIP-44 decryption | Ask | Ask | Allow |
-| Sign encrypted messages (`4`), seals (`13`), gift wraps (`1059`) | Ask | Allow | Allow |
-| Sign profiles, follow lists, relay/inbox settings, private lists | Ask | Ask | Allow |
-| Sign deletion requests (`5`) | Ask | Ask | Allow |
-| Sign application data, addressable records and other known event kinds | Ask | Ask | Allow |
-| Sign unrecognized valid event kinds | Ask | Ask | Allow |
-| Host-mediated public-file upload | Ask | Ask | Allow |
+Everyday use creates these ordinary, editable grants once:
 
-Ask supports one-request, timed and permanent Allow/Reject decisions. Levels do
-not expire; timed exceptions fall back to the selected level when they expire.
-Session exceptions last only for the current controller. Switching levels retains
-explicit decisions, including session exceptions. Reset removes the level and
-signer exceptions; the next application open, or the next NIP-07 call or WebLN `getInfo()` from a
-website, asks for a level again.
+- Public-key disclosure and general NIP-04/NIP-44 encryption.
+- Event signing for kinds `1, 4, 6, 7, 13, 16, 1059`.
+- Host-mediated relay authentication.
+- Wallet display name and supported-operation metadata, excluding balances/history.
+- Basic application access: shell, network/resource, isolated storage, settings,
+  appearance, UI, identity, common, public relay and outbox APIs.
 
-Routine has a fixed kind allowlist: `1, 4, 6, 7, 13, 16, 1059`. It does not infer
-safety from kind ranges, application declarations, names, record prefixes or claimed
-user gestures. Other kinds require review. Trusted permits every valid event kind,
-including previously unknown ones, but new host methods need an explicit policy
-entry. Structural validation, account availability and source/lifetime checks apply
-at every level, including Trusted.
+Declaration checks still restrict application access. Granting a declaration does
+not authorize mutations: signing and host actions retain their own rules.
+Everyday use does not infer authority from names, gestures, kind ranges or record
+identifiers. It does not grant decryption, HTTP authentication, upload actions,
+profile/follow-list changes, deletion requests or other event kinds. Those requests
+use explicit rules or review. Future preset changes never rewrite existing grants.
+A generated grant edited to Ask or Reject immediately follows that decision.
+Removing or expiring a generated rule does not regenerate it.
 
-Encryption and decryption are general cryptographic capabilities, not private-message
-permissions. Their grants distinguish method and algorithm but apply across peers.
-The host cannot identify the purpose of arbitrary plaintext or ciphertext. Likewise,
-seals and gift wraps can contain arbitrary events; allowing them does not guarantee
-that the hidden contents are harmless chat messages. NIP-17 rumors are unsigned;
-Routine does not automatically sign plaintext rumor kinds `14` or `15`.
+## Full trust
 
-HTTP authentication authorizes a specific URL and method, potentially a mutation,
-not merely login. Routine therefore asks. Remembering that operation still grants
-all destinations and methods, as with existing app-action rules.
+Full trust is an independent, persistent boolean, editable in application
+permissions after initialization. It automatically allows the known signer
+methods, every valid event kind (including unknown kinds), host relay/HTTP
+authentication, host uploads, wallet information and supported basic declared
+access, including the upload capability. New host methods require an explicit
+policy entry. Unknown or undeclared application APIs are never granted.
 
-## Scope and precedence
+Saved signer and wallet-information decisions, including refusals, are paused
+while full trust is on. They remain visible and are read-only. Disabling trust
+restores them; operations without a saved decision ask. Disabling initially
+selected full trust therefore does not generate Everyday use grants.
+Independent browser/device permissions remain editable and effective.
 
-The verified source is a canonical application event key or the current HTTPS
-main-frame origin (scheme, host and effective port). An app name, caller-supplied
-origin, redirect or embedded subframe cannot choose it. Preferences and exceptions
-are isolated by account and source; ordinary signed-application updates retain them. Replacing an unsigned local
-application atomically resets its level and exceptions with the existing installer
-permission reset; old documents cannot write preferences for the new version.
+Enabling trust explicitly explains that individual refusals will be paused.
+Both toggle directions require confirmation explaining that affected running
+instances close to apply launch-bound access. The durable update commits before
+cross-host invalidation/closure. Failed persistence retains the prior state.
+Changing trust clears execution-local approvals but retains permanent and timed
+rules with their original expiry; turning trust off cannot revive a session grant.
 
-At application launch (excluding ordinary websites) and for every validated
-account request:
+## Request evaluation
 
-1. Obtain an explicit level if none has been saved. Account methods retain this
-   fallback for navigation to another verified origin.
-2. If the level automatically allows the operation, allow it without consulting single-operation rules.
-3. Otherwise apply an active exact-scope decision: session decisions take precedence
-   over persisted Allow, Reject or Ask every time rules.
-4. Without an applicable decision, or with Ask every time, show the ordinary review.
+1. Validate account, source, document lifetime, request structure and applicable
+   declarations. Full trust cannot bypass these checks.
+2. Use independent browser/device/payment/invoice reviews where applicable.
+3. Initialize permissions if no consent row exists.
+4. If full trust covers the operation, allow it.
+5. Otherwise consult the active exact-scope rule. Execution-local decisions precede
+   persisted decisions. Allow proceeds, Reject fails, and Ask opens review.
+6. Without a rule, request approval. Cancellation saves no rejection.
 
-Level-covered operations have no single-operation editing controls, including in
-recent activity. Existing rules remain stored but are ignored while covered; they
-become effective again after lowering the level, provided they are still valid.
-Management omits level-covered signing rules instead of repeating automatic
-allowances. Stored rules reappear when the level no longer covers them.
+One-request decisions do not change stored rules. Session decisions last for the
+current controller and are cleared on trust changes. Timed/permanent remembered
+decisions replace the existing exact-scope rule; expired rules are ignored even
+before cleanup. Expiry falls back to review, not to the initial preset.
+Permanent Ask is an explicit rule without a duration selector. Editing a matching
+rule invalidates its previous session decision; unrelated edits preserve it.
+Decisions commit before signer execution; signer latency does not expire them.
 
-For operations outside the level, Ask every time is persisted. A one-request
-decision leaves that rule intact; a session grant temporarily overrides it, and a
-remembered Allow or Reject replaces it. Unrelated changes preserve session grants.
-Permanent Ask rules have no duration selector.
+Every queued request checks current authority. Authority revisions guard prompts,
+persistence and result disclosure across windows. Reset or trust/rule changes
+invalidate obsolete approvals and withhold results still being computed. Completed
+side effects are never automatically retried. Shared account/source queues serialize
+reviews through dismissal and commit before processing the next request.
 
-Event exceptions use account + source + operation + kind + `scope_key`. Addressable
-events derive the exact qualifier from their actual d-tag; another record needs a
-separate decision. A record identifier does not prove application ownership.
-Public-key and crypto exceptions use their method scopes. Host authentication and
-upload exceptions use their action scopes without destination qualifiers. Publication never becomes a host action based on the event kind. Direct signer
-authentication requests retain their existing validated action classification.
+## Scope and access lifetime
 
-A level is one row in `app_authorization_preferences`, not a generated collection of grants.
-Policy checks are constant-time and independent of message-history size. Existing
-bounded metadata-only activity records include automatic level decisions; plaintext,
-ciphertext and signed payloads are not permission history. Level changes use the
-same cross-host invalidation and revision guards as exception changes. Queued
-requests recheck policy; results authorized under an obsolete revision are withheld.
+Sources are canonical application event keys or host-verified HTTP(S) main-frame
+origins (scheme, host, effective port), never caller-provided names or origins.
+Rules are isolated by account/source. Signed application updates retain them;
+unsigned local replacements atomically clear consent/trust and previous grants.
+Old documents cannot persist decisions for replacement versions.
 
-## Access lifetime
+Event rules use operation + kind + optional `scope_key`. Addressable events use
+the actual d-tag; another record needs its own decision. Public-key and crypto
+rules use separate method scopes, independently of the cryptographic peer.
+Host authentication/upload rules use action scopes, independently of destination
+URLs and methods. Publication remains ordinary signing even for authentication
+or upload-related kinds. General encryption/decryption and gift-wrap signatures
+cannot guarantee that encrypted contents represent harmless chat operations.
 
-Automatic access is derived from the current level and the verified application's
-supported declarations. It never becomes a generated persistent domain grant or
-expands a sealed application's network policy. Existing grants/denials remain
-stored for use outside level coverage; covered optional capabilities are read-only
-in management. Existing no-prompt optional defaults remain unchanged when not
-explicitly denied. Capability edits carry only explicit per-capability changes and atomically update
-those saved decisions. Effective access is never submitted as a replacement grant
-list. Unrelated stored grants/denials and the level remain untouched, including
-denials temporarily covered by a level. Unknown capabilities and undeclared APIs
-are never granted by a level. App storage means only the app's isolated namespace, not private host data.
+Declared access is restricted to the verified application's supported declarations.
+Existing optional storage/settings/appearance defaults apply only when not denied.
+Explicit capability edits update only their own grants/denials atomically; they
+never rewrite unrelated decisions from an effective-access snapshot. Running
+applications pin launch access. Capability edits restart affected containers;
+trust changes close them across hosts. Already received data cannot be recalled.
+Internal shell access is implicit and does not trigger consent.
 
-Launch access belongs to the running document/session. Changing a level updates
-signer decisions immediately and changes derived access on the next launch; it
-cannot retract network data already received by a running webpage. Reset closes
-the source after removing persistence. Applications reselect a level and check
-access on reopening; ordinary websites defer selection until their next NIP-07 call or WebLN `getInfo()`. Native browser/OS reviews remain independent at every level.
+Reset removes initialized consent, full trust, signer rules, capability grants and
+browser decisions before closing the source. The next application launch, or a
+website's next account/wallet-information request, initializes again. Reset does
+not claim to revoke operating-system permissions or undo completed operations.
 
 ## Independent boundaries
 
-| Capability | Behavior at every app authorization level |
-| --- | --- |
-| Public-event/metadata reads, existing no-prompt clipboard writes | Existing behavior; ordinary websites have no local-database API |
-| Level-covered declared application access | Automatically available in Routine/Trusted; stored grants apply in Manual |
-| Other declared application access | Existing launch and optional-capability reviews |
-| Camera, microphone, location, notifications, clipboard reads | Separate browser/device and OS authorization |
-| Screen capture and unknown browser capabilities | Fresh review under existing browser rules |
-| New windows, external applications, downloads and file saves | Existing host reviews and destination pickers |
-| WebLN invoice creation | Separate review for every request |
-| Host wallet payments | Per-payment confirmation and authentication; never remembered |
-| Account-key export and outgoing message-key transfer | Dedicated trusted host confirmation |
+At every configuration, camera/microphone/location/notifications/clipboard reads
+retain browser/device and OS reviews. Capture selectors and unknown resources
+require fresh review. Ordinary clipboard writes and public reads keep their
+existing behavior. Host wallet payments require per-payment confirmation and
+authentication; invoice creation requires its own review. Full trust never replaces
+these reviews or allows account-key export/message-key transfer.
+Signed or encrypted data can authorize actions at external services; per-payment
+guarantees describe the host wallet API rather than arbitrary external effects.
 
-Signing a public key, encrypted payload or event can also authorize actions at an
-external service. The host cannot guarantee that arbitrary signed/encrypted content
-will never trigger an external payment or deletion. Per-payment guarantees apply to
-the host wallet API. Trusted explicitly delegates broad account authority and is
-never the initially selected level.
+## Migration
 
-## Protocol references
-
-- [NIP-98 HTTP authentication](https://github.com/nostr-protocol/nips/blob/master/98.md)
-- [NIP-17 private messages](https://github.com/nostr-protocol/nips/blob/master/17.md)
-- [NIP-59 gift wrapping](https://github.com/nostr-protocol/nips/blob/master/59.md)
+Migration materializes legacy Everyday use allowances as ordinary editable rules
+and replaces its previously ignored covered decisions with those effective allows.
+Unrelated decisions remain unchanged. Legacy Manual becomes initialized with trust
+off; legacy Trusted becomes initialized with trust on, retaining paused rules.
+Declared-access values and usage counters migrate together. No legacy level is
+retained, and migration never grants a broader operation set than the old policy.

@@ -1,9 +1,10 @@
 import { ApplicationSigner } from '../application-signer';
 import type { Signer } from '@/services/signer/signer.interface';
+import { registerNappletSourceInvalidation } from '@/services/napplet/lifecycle';
 import { connectSigningWindows } from '../changes';
 import { SigningPermissions, signingRuleKey, type SigningRequest } from '../permissions';
 import { saveSigningRule } from '../repository';
-import { rules as stored, activity, levels } from '../testing/memory-repository';
+import { rules as stored, activity, authorizations } from '../testing/memory-repository';
 import { PromptQueue, type QueuedPrompt } from '@/services/napplet/prompt-queue';
 
 jest.mock('../repository', () => jest.requireActual('../testing/memory-repository').memoryRepository);
@@ -19,7 +20,7 @@ function create(confirm: jest.Mock = jest.fn(async () => 'allow-always' as strin
   );
   return { permissions, confirm, abort };
 }
-beforeEach(() => { stored.clear(); activity.clear(); levels.clear(); jest.clearAllMocks(); });
+beforeEach(() => { stored.clear(); activity.clear(); authorizations.clear(); jest.clearAllMocks(); });
 afterEach(() => { controllers.splice(0).forEach((value) => value.abort()); });
 
 test('remembers and edits more than 64 rules with long record identifiers', async () => {
@@ -555,4 +556,27 @@ test.each(['nip04', 'nip44'] as const)('%s delegates large encryption and decryp
   expect(encrypt).toHaveBeenCalledWith('b'.repeat(64), text);
   expect(decrypt).toHaveBeenCalledWith('b'.repeat(64), ciphertext);
   expect(confirm).toHaveBeenCalledTimes(2);
+});
+
+
+test('remote trust changes clear session decisions and invalidate launch access without rebroadcasting', async () => {
+  let receive!: (change: { accountPubkey: string; sourceId: string; key?: string }) => void;
+  const broadcastSigning = jest.fn(async () => {});
+  const closed = jest.fn();
+  const unsubscribe = registerNappletSourceInvalidation(closed);
+  connectSigningWindows({ broadcastSigning, onSigningChange: (listener: typeof receive) => { receive = listener; return () => {}; } } as unknown as import('@/platform/ports/application-window').ApplicationWindowsPort);
+  try {
+    const value = create(jest.fn(async () => 'allow-session'));
+    await value.permissions.authorize(request);
+    const scope = { accountPubkey: 'accountA', sourceId: 'https://app.example' };
+    authorizations.set(JSON.stringify(scope), { fullyTrusted: true });
+    broadcastSigning.mockClear();
+    receive({ ...scope, key: 'trust' });
+    expect((await value.permissions.snapshot()).rules).toEqual([]);
+    expect(closed).toHaveBeenCalledWith(scope.accountPubkey, scope.sourceId, 'trust');
+    authorizations.set(JSON.stringify(scope), { fullyTrusted: false });
+    receive({ ...scope, key: 'trust' });
+    await value.permissions.authorize(request);
+    expect(value.confirm).toHaveBeenCalledTimes(2);
+  } finally { connectSigningWindows(); unsubscribe(); }
 });

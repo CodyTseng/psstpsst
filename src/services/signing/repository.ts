@@ -1,8 +1,11 @@
-import { isAppAuthorizationLevel, type AppAuthorizationLevel } from '@/services/app-authorization/model';
+import { isAppAuthorizationPreset, type AppAuthorization, type AppAuthorizationPreset } from '@/services/app-authorization/model';
+import { EVERYDAY_ACCESS, EVERYDAY_SIGNING } from '../app-authorization/policy';
+import { getData, setData } from '../napplet/data-repository';
+import { WALLET_INFO_PERMISSION } from '../explore/browser-permissions';
 import { isApplicationAction } from './action-request';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, type Database } from '@/db/client';
-import { signingAuthorizations, signingActivity, appAuthorizationPreferences, localApplications } from '@/db/schema';
+import { signingAuthorizations, signingActivity, appAuthorizationPreferences, localApplications, browserAuthorizations } from '@/db/schema';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { canRememberSigning, isSignerAccess, signingRuleKey, signingScope, type SigningActivity, type SigningRule, type SigningScope, type SigningSnapshot } from './model';
 import { invalidateSigning, invalidateSigningAccount } from './changes';
@@ -36,7 +39,7 @@ export async function readSigningSnapshot(scope: SigningAccountScope): Promise<S
     db.select().from(appAuthorizationPreferences).where(preferenceSource(scope)).get(),
   ]);
   return {
-    level: isAppAuthorizationLevel(preference?.level) ? preference.level : undefined,
+    authorization: preference ? { fullyTrusted: preference.fullyTrusted } : undefined,
     rules: rules.filter((row) => row.expiresAt === null || row.expiresAt > Date.now()).flatMap((row) => {
       const operation = row.operation as SigningScope['operation'];
       let canonical: SigningScope;
@@ -116,24 +119,52 @@ export async function clearAccountSigningPermissions(accountPubkey: string): Pro
 
 const preferenceSource = (scope: SigningAccountScope) => and(eq(appAuthorizationPreferences.accountPubkey, scope.accountPubkey), eq(appAuthorizationPreferences.sourceId, scope.sourceId));
 
-/** Guard consent against concurrent edits; notify every host only after the write commits. */
-export async function saveAppAuthorizationLevel(scope: SigningAccountScope, level: AppAuthorizationLevel, guard?: () => void): Promise<number> {
-  if (!isAppAuthorizationLevel(level)) throw new Error('invalid-app-authorization-level');
+/** Initialize once, atomically with the preset's ordinary grants. Reset is required to choose again. */
+export async function initializeAppAuthorization(scope: SigningAccountScope, preset: AppAuthorizationPreset, guard?: () => void): Promise<number> {
+  if (!isAppAuthorizationPreset(preset)) throw new Error('invalid-app-authorization-preset');
   await db.transaction(async tx => {
     guard?.();
     await assertCurrentSigningSource(scope, tx);
     if (!await canReceiveForAccount(scope.accountPubkey, tx)) throw new Error('account-unavailable');
-    await tx.insert(appAuthorizationPreferences).values({ accountPubkey: scope.accountPubkey, sourceId: scope.sourceId, level })
-      .onConflictDoUpdate({ target: [appAuthorizationPreferences.accountPubkey, appAuthorizationPreferences.sourceId], set: { level } });
+    const existing = await tx.select().from(appAuthorizationPreferences).where(preferenceSource(scope)).get();
+    if (existing) throw new Error('authorization-already-initialized');
+    if (preset === 'routine') {
+      const now = Date.now();
+      await tx.insert(signingAuthorizations).values(EVERYDAY_SIGNING.map(rule => ({
+        accountPubkey: scope.accountPubkey, sourceId: scope.sourceId, ...storageScope(rule),
+        decision: 'allow' as const, expiresAt: null, createdAt: now, updatedAt: now,
+      }))).onConflictDoNothing();
+      await tx.insert(browserAuthorizations).values({ accountPubkey: scope.accountPubkey, sourceId: scope.sourceId,
+        resource: WALLET_INFO_PERMISSION, decision: 'allow', expiresAt: null, updatedAt: now }).onConflictDoNothing();
+      const appScope = { accountPubkey: scope.accountPubkey, appKey: scope.sourceId };
+      const granted: string[] = JSON.parse(await getData(appScope, 'permissions', 'domains', tx) ?? '[]');
+      const denied = new Set<string>(JSON.parse(await getData(appScope, 'permissions', 'denied-domains', tx) ?? '[]'));
+      await setData(appScope, 'permissions', 'domains', JSON.stringify([...new Set([...granted,
+        ...EVERYDAY_ACCESS.filter(domain => !denied.has(domain))])]), tx);
+    }
+    await tx.insert(appAuthorizationPreferences).values({ accountPubkey: scope.accountPubkey, sourceId: scope.sourceId,
+      fullyTrusted: preset === 'trusted' });
     guard?.();
   });
-  // A named invalidation preserves explicit session exceptions while changing policy.
-  return invalidateSigning(scope, 'level');
+  return invalidateSigning(scope);
 }
 
-/** Launch checks need only the indexed policy row, not signer history or exceptions. */
-export async function readAppAuthorizationLevel(scope: SigningAccountScope): Promise<AppAuthorizationLevel | undefined> {
+/** Changing trust preserves durable rules but clears execution-local approvals in every host. */
+export async function setFullyTrusted(scope: SigningAccountScope, fullyTrusted: boolean): Promise<void> {
+  if (typeof fullyTrusted !== 'boolean') throw new Error('invalid-permissions');
+  await db.transaction(async tx => {
+    await assertCurrentSigningSource(scope, tx);
+    if (!await canReceiveForAccount(scope.accountPubkey, tx)) throw new Error('account-unavailable');
+    const existing = await tx.select().from(appAuthorizationPreferences).where(preferenceSource(scope)).get();
+    if (!existing) throw new Error('authorization-not-initialized');
+    await tx.update(appAuthorizationPreferences).set({ fullyTrusted }).where(preferenceSource(scope));
+  });
+  invalidateSigning(scope, 'trust');
+}
+
+/** Indexed first-use/trust read, independent of signing history or rules. */
+export async function readAppAuthorization(scope: SigningAccountScope): Promise<AppAuthorization | undefined> {
   await assertCurrentSigningSource(scope);
   const preference = await db.select().from(appAuthorizationPreferences).where(preferenceSource(scope)).get();
-  return isAppAuthorizationLevel(preference?.level) ? preference.level : undefined;
+  return preference ? { fullyTrusted: preference.fullyTrusted } : undefined;
 }

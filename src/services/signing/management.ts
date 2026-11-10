@@ -16,4 +16,4 @@ export function updatePermissions(scope: SigningAccountScope, target: SigningRul
   return task;
 }
 
-export { saveAppAuthorizationLevel as updateAppAuthorizationLevel } from './repository';
+export { setFullyTrusted } from './repository';

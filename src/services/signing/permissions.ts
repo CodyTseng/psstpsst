@@ -1,7 +1,7 @@
-import { isAppAuthorizationLevel, type AppAuthorizationLevel } from '@/services/app-authorization/model';
+import { isAppAuthorizationPreset, type AppAuthorization } from '@/services/app-authorization/model';
 import { applicationActionRequest, isApplicationAction } from './action-request';
 import { assertNotAborted, linkAbort } from '@/platform/abort';
-import { saveAppAuthorizationLevel, assertCurrentSigningSource, readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
+import { initializeAppAuthorization, assertCurrentSigningSource, readSigningSnapshot, saveSigningRule, deleteSigningRule, recordSigningActivity, type SigningAccountScope } from './repository';
 import { normalizeSigningSource } from './source';
 import { invalidateSigning, signingRevision, subscribeSigning } from './changes';
 import { queueAuthorization } from './authorization-queue';
@@ -13,7 +13,7 @@ export * from './model';
 /** Session grants stay in memory; durable rules are shared by account and verified source. */
 export class SigningPermissions {
   private loaded?: Promise<void>;
-  private level?: AppAuthorizationLevel;
+  private authorization?: AppAuthorization;
   private revoked = new Set<string>();
   private rules: SigningRule[] = [];
   private activity: SigningActivity[] = [];
@@ -23,12 +23,12 @@ export class SigningPermissions {
     private confirm: (request: SigningRequest, signal?: AbortSignal) => Promise<string | false>,
     private signal: AbortSignal,
     private changed: () => void,
-    private chooseLevel?: (signal: AbortSignal) => Promise<string | false>,
+    private choosePreset?: (signal: AbortSignal) => Promise<string | false>,
   ) {
     this.scope = { ...scope, sourceId: normalizeSigningSource(scope.sourceId) };
     const unsubscribe = subscribeSigning(this.scope, ({ key }) => {
       this.loaded = undefined;
-      this.rules = this.rules.filter((rule) => rule.duration === 'session' && key !== undefined && rule.key !== key);
+      this.rules = this.rules.filter((rule) => rule.duration === 'session' && key !== undefined && key !== 'trust' && rule.key !== key);
     });
     if (signal.aborted) unsubscribe();
     else signal.addEventListener('abort', unsubscribe, { once: true });
@@ -41,13 +41,13 @@ export class SigningPermissions {
       for (const rule of this.rules) if (rule.duration === 'session' && activeRule(rule)) merged.set(rule.key, rule);
       this.rules = [...merged.values()];
       this.activity = value.activity;
-      this.level = value.level;
+      this.authorization = value.authorization;
     });
   }
   async snapshot(): Promise<SigningSnapshot> {
     await this.load();
     assertNotAborted(this.signal);
-    return { rules: this.rules.filter(activeRule), activity: [...this.activity].reverse(), level: this.level };
+    return { rules: this.rules.filter(activeRule), activity: [...this.activity].reverse(), authorization: this.authorization };
   }
   get version(): number { return signingRevision(this.scope); }
   async settled(): Promise<void> { await this.writes.catch(() => {}); }
@@ -127,21 +127,21 @@ export class SigningPermissions {
     assertNotAborted(this.signal);
     if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
     current();
-    if (!this.level && this.chooseLevel) {
+    if (!this.authorization && this.choosePreset) {
       const linked = linkAbort(requestSignal ? [this.signal, requestSignal] : [this.signal]);
       let selected: string | false;
-      try { selected = await this.chooseLevel(linked.signal); }
+      try { selected = await this.choosePreset(linked.signal); }
       finally { linked.dispose(); }
       current();
-      if (!isAppAuthorizationLevel(selected)) throw new Error('permission-denied');
+      if (!isAppAuthorizationPreset(selected)) throw new Error('permission-denied');
       if (expiresAt !== undefined && Date.now() >= expiresAt) throw new Error('timeout');
-      const level = selected;
+      const preset = selected;
       const update = this.writes.catch(() => {}).then(async () => {
         current();
-        revision = await saveAppAuthorizationLevel(this.scope, level, current);
+        revision = await initializeAppAuthorization(this.scope, preset, current);
         current();
-        this.level = level;
-        // Reload after the broadcast, retaining explicit decisions and session exceptions.
+        this.authorization = { fullyTrusted: preset === 'trusted' };
+        // Reload after the broadcast, with ordinary preset rules and cleared session decisions.
         await this.load();
         current();
         this.changed();
@@ -149,7 +149,7 @@ export class SigningPermissions {
       this.writes = update;
       await update;
     }
-    if (automaticallyAllowsSigning(this.level, request)) {
+    if (automaticallyAllowsSigning(this.authorization, request)) {
       await this.record(request, 'automatic');
       current();
       return revision;

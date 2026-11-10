@@ -4,10 +4,10 @@ const listeners = new Set<(account?: string) => void>();
 export function registerNappletLifecycle(listener: (account?: string) => void) {
   listeners.add(listener);
 }
-const sourceListeners = new Set<(account: string, sourceId: string) => void>();
-export function registerNappletSourceInvalidation(listener: (account: string, sourceId: string) => void) { sourceListeners.add(listener); }
-export function invalidateNappletSource(account: string, sourceId: string) {
-  for (const listener of sourceListeners) listener(account, sourceId);
+const sourceListeners = new Set<(account: string, sourceId: string, reason?: 'trust') => void>();
+export function registerNappletSourceInvalidation(listener: (account: string, sourceId: string, reason?: 'trust') => void) { sourceListeners.add(listener); return () => { sourceListeners.delete(listener); }; }
+export function invalidateNappletSource(account: string, sourceId: string, reason?: 'trust') {
+  for (const listener of sourceListeners) listener(account, sourceId, reason);
 }
 export const nappletLifecycle = {
   deactivate() {

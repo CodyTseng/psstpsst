@@ -1,4 +1,4 @@
-import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
+import type { AppAuthorizationPreset } from '@/services/app-authorization/model';
 import { Compass } from '@solar-icons/react-native/category/map/Linear/Compass';
 import { useOpenPublisher } from '@/hooks/use-open-publisher';
 import { platform } from '@/platform';
@@ -31,7 +31,7 @@ import { UploadApproval } from './UploadApproval';
 import { CapabilityActions, CapabilityApproval } from './CapabilityApproval';
 import type { QueuedPrompt } from '@/services/napplet/prompt-queue';
 import type { RuntimePromptChoice } from '@/services/napplet/runtime';
-import { AppAuthorizationLevelChoices } from './app-authorization-level-choices';
+import { AppAuthorizationPresetChoices } from './app-authorization-preset-choices';
 
 import { WalletApproval } from './WalletApproval';
 import { applicationChoiceFooter } from './application-choice-footer';
@@ -59,7 +59,7 @@ function NappletOverlayContent() {
   if (currentWalletPrompt !== lastWalletPrompt && (currentWalletPrompt || !approvalClosing)) setLastWalletPrompt(currentWalletPrompt);
   const walletPrompt = currentWalletPrompt ?? (approvalClosing ? lastWalletPrompt : null);
   const { t } = useTranslation();
-  const [levelChoice, setLevelChoice] = useState<{ id: string; value: AppAuthorizationLevel }>();
+  const [levelChoice, setLevelChoice] = useState<{ id: string; value: AppAuthorizationPreset }>();
   const selectedLevel = levelChoice && levelChoice.id === prompt?.requestId ? levelChoice.value : 'routine';
   const [choice, setChoice] = useState<{ id: string; value: string }>();
   const [rememberChoice, setRememberChoice] = useState<{ id: string; value: boolean }>();
@@ -152,7 +152,7 @@ function NappletOverlayContent() {
           <ApprovalText variant="caption" tone="muted">{prompt.requester.origin}</ApprovalText>
         </View> : null}
         {prompt.app || prompt.application ? <SigningRequester app={prompt.app} application={prompt.application} /> : null}
-        {prompt.appAuthorizationLevel ? <AppAuthorizationLevelChoices value={selectedLevel}
+        {prompt.appAuthorizationLevel ? <AppAuthorizationPresetChoices value={selectedLevel}
           onChange={value => setLevelChoice({ id: prompt.requestId, value })} /> : prompt.upload ? <UploadApproval prompt={prompt} hideActions={!!prompt.signing} /> : prompt.signing ? <SigningApproval key={prompt.requestId} prompt={prompt} value={duration}
           onChange={(value) => setChoice({ id: prompt.requestId, value })} hideActions />
           : accessPrompt ? <CapabilityApproval key={prompt.requestId} prompt={prompt} hideActions /> : <>

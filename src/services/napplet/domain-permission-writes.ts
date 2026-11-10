@@ -4,7 +4,7 @@ import { parseDomainPermissions } from './domain-permissions';
 
 export type DomainPermissionChange = { domain: string; enabled: boolean };
 
-/** Apply only explicit edits, atomically, without materializing a level's effective access. */
+/** Apply only explicit edits, atomically, without rewriting unrelated grants or full-trust access. */
 export async function saveDomainPermissionChanges(scope: AppScope, changes: readonly DomainPermissionChange[], current: () => void) {
   if (!changes.length) return;
   await db.transaction(async tx => {

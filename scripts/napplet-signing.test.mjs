@@ -97,7 +97,8 @@ test(
           await page.goto(`${address}/?scenario=permissions&permission-layout=1&surface=touch&theme=${theme}`);
           const history = page.getByRole('button', { name: 'Recent permission decisions', exact: true });
           await history.waitFor();
-          await page.getByText('Everyday use (recommended)', { exact: true }).waitFor();
+          await page.getByRole('switch', { name: 'Fully trust', exact: true }).waitFor();
+          assert.equal(await page.getByRole('switch', { name: 'Fully trust', exact: true }).getAttribute('aria-checked'), 'false');
           const reset = page.getByRole('button', { name: 'Reset permissions', exact: true });
           assert.equal(Math.round((await reset.boundingBox()).width), Math.round((await history.boundingBox()).width));
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -105,6 +106,26 @@ test(
           await history.click();
           assert.equal(await history.getAttribute('aria-expanded'), 'true');
           await history.click();
+          await page.goto(`${address}/?scenario=permissions&permission-layout=1&permission-groups=1&surface=touch&theme=${theme}`);
+          const walletSection = page.getByText('Wallet', { exact: true });
+          await walletSection.waitFor();
+          await page.getByText('Website permission', { exact: true }).waitFor();
+          assert.equal(await page.getByText('Applies to this account and app. Tap a rule to edit it.', { exact: true }).count(), 0);
+          assert.equal(await page.getByText('Wallet information', { exact: true }).count(), 1);
+          if (process.env.NAPPLET_SIGNING_SCREENSHOTS) {
+            await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${width}-account-rules.png` });
+            await walletSection.scrollIntoViewIfNeeded();
+            await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${width}-permission-groups.png` });
+          }
+          await page.goto(`${address}/?scenario=permissions&permission-layout=1&fully-trusted=1&surface=touch&theme=${theme}`);
+          const trust = page.getByRole('switch', { name: 'Fully trust', exact: true });
+          await trust.waitFor();
+          assert.equal(await trust.getAttribute('aria-checked'), 'true');
+          await page.getByText('Individual signing rules are paused while Fully trust is on. Turn it off to edit them.', { exact: true }).waitFor();
+          const post = page.getByText('Sign an event', { exact: true }).first();
+          assert.equal(await post.evaluate(node => !!node.closest('[aria-disabled="true"]')), true);
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+          if (process.env.NAPPLET_SIGNING_SCREENSHOTS) await page.screenshot({ path: `${process.env.NAPPLET_SIGNING_SCREENSHOTS}/${theme}-${width}-fully-trusted.png` });
         }
         assert.deepEqual(errors, []);
         return;

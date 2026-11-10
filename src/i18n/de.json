@@ -1371,7 +1371,14 @@
     "app_authorization_level_trusted_description": "Grundlegenden Zugriff, Wallet-Informationen, alle Signaturen, Verschlüsselung und Entschlüsselung erlauben.",
     "app_authorization_level_boundaries": "Wallet-Zahlungen, das Erstellen von Rechnungen und Gerätezugriffe separat bestätigen.",
     "app_authorization_level_unset": "Nicht ausgewählt",
-    "app_authorization_level_continue": "Weiter"
+    "app_authorization_level_continue": "Weiter",
+    "fully_trust": "Vollständig vertrauen",
+    "fully_trust_on": "Grundlegenden App-Zugriff und unterstützte Kontovorgänge automatisch erlauben. Zum Bearbeiten einzelner Berechtigungen ausschalten.",
+    "fully_trust_off": "Einzelne Berechtigungen verwenden. Anfragen ohne gespeicherte Entscheidung müssen bestätigt werden.",
+    "fully_trust_enable_notice": "Gespeicherte Regeln für Signaturen und Wallet-Informationen, einschließlich Ablehnungen, werden ausgesetzt. Gerätezugriff und Wallet-Zahlungen müssen weiterhin gesondert bestätigt werden. Laufende App-Instanzen werden geschlossen, damit die Änderung wirksam wird.",
+    "fully_trust_disable_notice": "Gespeicherte Einzelberechtigungen gelten wieder. Anfragen ohne gespeicherte Entscheidung müssen bestätigt werden. Laufende App-Instanzen werden geschlossen, damit die Änderung wirksam wird.",
+    "fully_trust_paused": "Einzelne Signaturregeln sind ausgesetzt, solange „Vollständig vertrauen“ aktiviert ist. Zum Bearbeiten ausschalten.",
+    "fully_trust_wallet": "Wallet-Informationen werden automatisch freigegeben, solange „Vollständig vertrauen“ aktiviert ist. Die zugehörige Einzelregel ist ausgesetzt."
   },
   "comments": {
     "title": "Bewertungen",

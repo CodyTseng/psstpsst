@@ -1376,7 +1376,14 @@
     "app_authorization_level_trusted_description": "Consenti accesso di base, informazioni sul portafoglio, tutte le firme, la crittografia e la decrittografia.",
     "app_authorization_level_boundaries": "Pagamenti del portafoglio, creazione di fatture e accesso al dispositivo richiedono conferme separate.",
     "app_authorization_level_unset": "Non selezionato",
-    "app_authorization_level_continue": "Continua"
+    "app_authorization_level_continue": "Continua",
+    "fully_trust": "Fiducia completa",
+    "fully_trust_on": "Consenti automaticamente l’accesso di base dell’app e le operazioni dell’account supportate. Disattiva per modificare i singoli permessi.",
+    "fully_trust_off": "Usa i singoli permessi. Le richieste senza una decisione salvata richiedono l’approvazione.",
+    "fully_trust_enable_notice": "Le regole salvate per le firme e le informazioni del portafoglio, inclusi i rifiuti, verranno sospese. L’accesso al dispositivo e i pagamenti del portafoglio richiederanno comunque un’approvazione separata. Le istanze dell’app in esecuzione verranno chiuse per applicare la modifica.",
+    "fully_trust_disable_notice": "I singoli permessi salvati torneranno ad applicarsi. Le richieste senza una decisione salvata richiederanno l’approvazione. Le istanze dell’app in esecuzione verranno chiuse per applicare la modifica.",
+    "fully_trust_paused": "Le singole regole di firma sono sospese quando Fiducia completa è attiva. Disattivala per modificarle.",
+    "fully_trust_wallet": "L’accesso alle informazioni del portafoglio è consentito automaticamente quando Fiducia completa è attiva. La relativa regola individuale è sospesa."
   },
   "comments": {
     "title": "Recensioni",

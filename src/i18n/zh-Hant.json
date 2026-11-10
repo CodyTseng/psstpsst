@@ -1371,7 +1371,14 @@
     "app_authorization_level_trusted_description": "自動允許基本存取、錢包資訊讀取、所有簽章、加密和解密。",
     "app_authorization_level_boundaries": "錢包付款、建立發票和裝置存取仍需個別確認。",
     "app_authorization_level_unset": "尚未選擇",
-    "app_authorization_level_continue": "繼續"
+    "app_authorization_level_continue": "繼續",
+    "fully_trust": "完全信任",
+    "fully_trust_on": "自動允許基本應用程式存取和支援的帳號操作。關閉後可逐項編輯權限。",
+    "fully_trust_off": "使用個別權限，未儲存決定的請求需要確認。",
+    "fully_trust_enable_notice": "已儲存的簽章和錢包資訊規則（包括拒絕）將暫停生效。裝置存取和錢包付款仍需個別確認。正在執行的應用程式實例將關閉，以使變更生效。",
+    "fully_trust_disable_notice": "恢復已儲存的個別權限，未儲存決定的請求將需要確認。正在執行的應用程式實例將關閉，以使變更生效。",
+    "fully_trust_paused": "開啟完全信任時，個別簽章規則暫停生效。關閉後可編輯。",
+    "fully_trust_wallet": "開啟完全信任時，自動允許讀取錢包資訊，個別規則暫停生效。"
   },
   "comments": {
     "title": "評價",

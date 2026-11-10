@@ -1,14 +1,14 @@
 import { WebLn } from '../webln';
 import { readBrowserPermissions, saveBrowserPermissions, type BrowserPermissionRule } from '../browser-permission-store';
-import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
-import { readAppAuthorizationLevel, saveAppAuthorizationLevel, assertCurrentSigningSource } from '@/services/signing/repository';
+import type { AppAuthorization } from '@/services/app-authorization/model';
+import { readAppAuthorization, initializeAppAuthorization, assertCurrentSigningSource } from '@/services/signing/repository';
 import { getWallets, payInvoice, makeInvoice, cacheLocalInvoiceTransaction, type WalletRow } from '@/services/wallet/wallet.service';
 import { claimWebLnPayment } from '@/services/wallet/webln-payments';
 import { invoiceFixture, preimage } from '@/services/wallet/testing/webln-invoice';
 import { invalidateSigning, subscribeSigning } from '@/services/signing/changes';
 
 jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(), saveBrowserPermissions: jest.fn() }));
-jest.mock('@/services/signing/repository', () => ({ assertCurrentSigningSource: jest.fn(async () => {}), readAppAuthorizationLevel: jest.fn(), saveAppAuthorizationLevel: jest.fn() }));
+jest.mock('@/services/signing/repository', () => ({ assertCurrentSigningSource: jest.fn(async () => {}), readAppAuthorization: jest.fn(), initializeAppAuthorization: jest.fn() }));
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('@/services/wallet/wallet.service', () => ({ getWallets: jest.fn(), payInvoice: jest.fn(), makeInvoice: jest.fn(),
   cacheLocalInvoiceTransaction: jest.fn(async () => ({})), walletSupportsMethod: (wallet: WalletRow, method: string) => !wallet.capabilitiesJson || JSON.parse(wallet.capabilitiesJson).includes(method) }));
@@ -17,17 +17,18 @@ const wallet = { id: 'wallet', accountPubkey: 'account', name: 'Wallet', capabil
 let life: AbortController, bridge: WebLn, confirm: jest.Mock, detach: () => void;
 const scope = { accountPubkey: 'account', sourceId: 'https://site.example' };
 const savedRules = new Map<string, BrowserPermissionRule>();
-const savedLevels = new Map<string, AppAuthorizationLevel | undefined>();
+const savedLevels = new Map<string, AppAuthorization | undefined>();
 const ruleKey = (scope: { accountPubkey: string; sourceId: string }) => JSON.stringify([scope.accountPubkey, scope.sourceId]);
 beforeEach(() => {
   jest.clearAllMocks();
   savedRules.clear(); savedLevels.clear();
-  jest.mocked(readAppAuthorizationLevel).mockImplementation(async scope => {
+  jest.mocked(readAppAuthorization).mockImplementation(async scope => {
     await assertCurrentSigningSource(scope);
-    return savedLevels.has(ruleKey(scope)) ? savedLevels.get(ruleKey(scope)) : 'manual';
+    return savedLevels.has(ruleKey(scope)) ? savedLevels.get(ruleKey(scope)) : { fullyTrusted: false };
   });
-  jest.mocked(saveAppAuthorizationLevel).mockImplementation(async (scope, level, guard) => {
-    guard?.(); savedLevels.set(ruleKey(scope), level);
+  jest.mocked(initializeAppAuthorization).mockImplementation(async (scope, level, guard) => {
+    guard?.(); savedLevels.set(ruleKey(scope), { fullyTrusted: level === 'trusted' });
+    if (level === 'routine') savedRules.set(ruleKey(scope), { resource: 'webln-info', decision: 'allow', expiresAt: null, updatedAt: 1 });
     return invalidateSigning(scope, 'level');
   });
   jest.mocked(readBrowserPermissions).mockImplementation(async scope => {
@@ -421,8 +422,8 @@ it('withholds approved information when another window revokes access during the
   expect(confirm).not.toHaveBeenCalled();
 });
 
-it.each(['routine', 'trusted'] as const)('allows wallet information under %s without reviewing or loading individual rules', async level => {
-  savedLevels.set(ruleKey(scope), level);
+it.each(['trusted'] as const)('allows wallet information under %s without reviewing or loading individual rules', async level => {
+  savedLevels.set(ruleKey(scope), { fullyTrusted: level === 'trusted' });
   savedRules.set(ruleKey(scope), { resource: 'webln-info', decision: 'deny', expiresAt: null, updatedAt: 1 });
   await enable();
   await expect(bridge.handle('getInfo', [])).resolves.toEqual({ node: { alias: 'Wallet', pubkey: '' }, methods: ['getInfo', 'sendPayment', 'makeInvoice'] });
@@ -434,18 +435,18 @@ it.each(['routine', 'trusted'] as const)('allows wallet information under %s wit
 it.each(['manual', 'routine', 'trusted'] as const)('selects %s on the first information read and then applies its policy', async level => {
   savedLevels.set(ruleKey(scope), undefined);
   await enable();
-  expect(readAppAuthorizationLevel).not.toHaveBeenCalled();
+  expect(readAppAuthorization).not.toHaveBeenCalled();
   confirm.mockResolvedValueOnce(level);
   await bridge.handle('getInfo', []);
   expect(confirm.mock.calls[0][0]).toMatchObject({ appAuthorizationLevel: true, accountPubkey: scope.accountPubkey,
     requester: { title: 'Site', origin: scope.sourceId } });
-  expect(saveAppAuthorizationLevel).toHaveBeenCalledWith(scope, level, expect.any(Function));
+  expect(initializeAppAuthorization).toHaveBeenCalledWith(scope, level, expect.any(Function));
   expect(confirm).toHaveBeenCalledTimes(level === 'manual' ? 2 : 1);
   if (level === 'manual') expect(confirm.mock.calls[1][0]).toMatchObject({ walletAccess: true });
   const next = new WebLn(scope.accountPubkey, scope.sourceId, 'Site', life.signal, confirm);
   await next.handle('enable', []);
   await next.handle('getInfo', []);
-  expect(saveAppAuthorizationLevel).toHaveBeenCalledTimes(1);
+  expect(initializeAppAuthorization).toHaveBeenCalledTimes(1);
   expect(confirm).toHaveBeenCalledTimes(level === 'manual' ? 3 : 1);
 });
 it.each([false, 'allow-always', 'invalid'] as const)('rejects a first information read when level selection returns %s', async answer => {
@@ -453,7 +454,7 @@ it.each([false, 'allow-always', 'invalid'] as const)('rejects a first informatio
   await enable();
   confirm.mockResolvedValueOnce(answer);
   await expect(bridge.handle('getInfo', [])).rejects.toThrow('permission-denied');
-  expect(saveAppAuthorizationLevel).not.toHaveBeenCalled();
+  expect(initializeAppAuthorization).not.toHaveBeenCalled();
   expect(readBrowserPermissions).not.toHaveBeenCalled();
   expect(saveBrowserPermissions).not.toHaveBeenCalled();
 });
@@ -461,7 +462,7 @@ it('withholds information when saving the selected level fails', async () => {
   savedLevels.set(ruleKey(scope), undefined);
   await enable();
   confirm.mockResolvedValueOnce('routine');
-  jest.mocked(saveAppAuthorizationLevel).mockRejectedValueOnce(new Error('disk-full'));
+  jest.mocked(initializeAppAuthorization).mockRejectedValueOnce(new Error('disk-full'));
   await expect(bridge.handle('getInfo', [])).rejects.toThrow('wallet-request-failed');
   expect(readBrowserPermissions).not.toHaveBeenCalled();
 });
@@ -474,30 +475,31 @@ it('selects a level once for concurrent documents', async () => {
   const results = await Promise.all([bridge.handle('getInfo', []), next.handle('getInfo', [])]);
   expect(results).toHaveLength(2);
   expect(confirm).toHaveBeenCalledTimes(1);
-  expect(saveAppAuthorizationLevel).toHaveBeenCalledTimes(1);
+  expect(initializeAppAuthorization).toHaveBeenCalledTimes(1);
 });
-it('restores saved Manual refusals after a downgrade from Routine', async () => {
+it('restores saved refusals after disabling full trust', async () => {
   savedRules.set(ruleKey(scope), { resource: 'webln-info', decision: 'deny', expiresAt: null, updatedAt: 1 });
-  savedLevels.set(ruleKey(scope), 'routine');
+  savedLevels.set(ruleKey(scope), { fullyTrusted: true });
   await enable();
   await bridge.handle('getInfo', []);
-  savedLevels.set(ruleKey(scope), 'manual');
+  savedLevels.set(ruleKey(scope), { fullyTrusted: false });
   invalidateSigning(scope, 'level');
   await expect(bridge.handle('getInfo', [])).rejects.toThrow('permission-denied');
   expect(confirm).not.toHaveBeenCalled();
 });
 it('reviews after a downgrade to Manual without a saved decision', async () => {
-  savedLevels.set(ruleKey(scope), 'trusted');
+  savedLevels.set(ruleKey(scope), { fullyTrusted: true });
   await enable();
   await bridge.handle('getInfo', []);
-  savedLevels.set(ruleKey(scope), 'manual');
+  savedLevels.set(ruleKey(scope), { fullyTrusted: false });
   invalidateSigning(scope, 'level');
   await bridge.handle('getInfo', []);
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(confirm.mock.calls[0][0]).toMatchObject({ walletAccess: true });
 });
 it.each(['routine', 'trusted'] as const)('still reviews every payment and invoice under %s', async level => {
-  savedLevels.set(ruleKey(scope), level);
+  savedLevels.set(ruleKey(scope), { fullyTrusted: level === 'trusted' });
+  if (level === 'routine') savedRules.set(ruleKey(scope), { resource: 'webln-info', decision: 'allow', expiresAt: null, updatedAt: 1 });
   await enable();
   await bridge.handle('getInfo', []);
   await bridge.handle('sendPayment', [invoiceFixture()]);
@@ -507,10 +509,10 @@ it.each(['routine', 'trusted'] as const)('still reviews every payment and invoic
   expect(confirm.mock.calls.map(call => call[0].wallet.operation)).toEqual(['payment', 'invoice']);
 });
 it('withholds automatically allowed information if the level is downgraded during the wallet query', async () => {
-  savedLevels.set(ruleKey(scope), 'routine');
+  savedLevels.set(ruleKey(scope), { fullyTrusted: false });
   await enable();
   jest.mocked(getWallets).mockResolvedValueOnce([wallet]).mockImplementationOnce(async () => {
-    savedLevels.set(ruleKey(scope), 'manual');
+    savedLevels.set(ruleKey(scope), { fullyTrusted: false });
     invalidateSigning(scope, 'level');
     return [wallet];
   });

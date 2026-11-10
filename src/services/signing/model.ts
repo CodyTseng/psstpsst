@@ -1,4 +1,4 @@
-import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
+import type { AppAuthorization } from '@/services/app-authorization/model';
 export type SignerAccessOperation = 'get-public-key' | 'nip04-encrypt' | 'nip04-decrypt' | 'nip44-encrypt' | 'nip44-decrypt';
 export type SignerAccessScope = {
   operation: SignerAccessOperation;
@@ -32,7 +32,7 @@ export type SigningRule = {
   expiresAt?: number;
 };
 export type SigningActivity = { scope: Pick<SigningScope, 'operation' | 'kind'>; at: number; decision: 'allowed' | 'automatic' | 'denied' };
-export type SigningSnapshot = { rules: SigningRule[]; activity: SigningActivity[]; level?: AppAuthorizationLevel };
+export type SigningSnapshot = { rules: SigningRule[]; activity: SigningActivity[]; authorization?: AppAuthorization };
 export type SigningRuleChange = {
   decision: 'allow' | 'deny' | 'ask';
   duration: SigningRule['duration'];

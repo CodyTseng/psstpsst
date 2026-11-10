@@ -1,27 +1,22 @@
-import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
+import type { AppAuthorization } from './model';
 import { isSignerAccess, type SigningScope } from '../signing/model';
 
-/** Wallet metadata excludes balances, history and payment authority. */
-export function automaticallyAllowsWalletInfo(level: AppAuthorizationLevel | undefined): boolean {
-  return level === 'routine' || level === 'trusted';
+export const EVERYDAY_ACCESS = ['shell', 'network', 'resource', 'storage', 'config', 'theme', 'ui', 'identity', 'common', 'relay', 'outbox'] as const;
+/** Ordinary editable rules, materialized once after explicit first-use consent. */
+export const EVERYDAY_SIGNING: readonly SigningScope[] = [
+  ...(['get-public-key', 'nip04-encrypt', 'nip44-encrypt'] as const).map(operation => ({ operation, relays: [] })),
+  { operation: 'relay-auth', kind: 22242, relays: [] },
+  ...[1, 4, 6, 7, 13, 16, 1059].map(kind => ({ operation: 'publish' as const, kind, relays: [] })),
+];
+
+/** Full trust only covers known host operations, never independent device/payment reviews. */
+export function automaticallyAllowsSigning(authorization: AppAuthorization | undefined, request: SigningScope): boolean {
+  if (!authorization?.fullyTrusted) return false;
+  return isSignerAccess(request) || ['relay-auth', 'http-auth', 'upload', 'sign', 'publish', 'encrypt-publish'].includes(request.operation);
 }
-
-// Routine uses explicit kinds; new host operations require a policy entry at every level.
-const ROUTINE_KINDS = new Set([1, 4, 6, 7, 13, 16, 1059]);
-
-/** This classifies authority, not an application's claimed intent or user gestures. */
-export function automaticallyAllowsSigning(level: AppAuthorizationLevel | undefined, request: SigningScope): boolean {
-  if (level === undefined || level === 'manual') return false;
-  if (isSignerAccess(request)) return level === 'trusted' ||
-    ['get-public-key', 'nip04-encrypt', 'nip44-encrypt'].includes(request.operation);
-  if (request.operation === 'relay-auth') return true;
-  if (request.operation === 'http-auth' || request.operation === 'upload') return level === 'trusted';
-  if (!['sign', 'publish', 'encrypt-publish'].includes(request.operation)) return false;
-  return level === 'trusted' || ROUTINE_KINDS.has(request.kind);
+export function automaticallyAllowsAccess(authorization: AppAuthorization | undefined, domain: string): boolean {
+  return !!authorization?.fullyTrusted && ((EVERYDAY_ACCESS as readonly string[]).includes(domain) || domain === 'upload');
 }
-
-// These expose app-isolated storage, public transport or separately reviewed operations.
-const ROUTINE_ACCESS = new Set(['shell', 'network', 'resource', 'storage', 'config', 'theme', 'ui', 'identity', 'common', 'relay', 'outbox']);
-export function automaticallyAllowsAccess(level: AppAuthorizationLevel | undefined, domain: string): boolean {
-  return (level === 'routine' || level === 'trusted') && (ROUTINE_ACCESS.has(domain) || level === 'trusted' && domain === 'upload');
+export function automaticallyAllowsWalletInfo(authorization: AppAuthorization | undefined): boolean {
+  return !!authorization?.fullyTrusted;
 }

@@ -1,4 +1,5 @@
 import type { ApplicationWindowsPort } from '@/platform/ports/application-window';
+import { invalidateNappletSource } from '../napplet/lifecycle';
 import type { SigningAccountScope } from './repository';
 
 type Change = { key?: string; revision: number };
@@ -26,9 +27,13 @@ export function invalidateSigning(scope: SigningAccountScope, key?: string): num
 }
 function invalidateLocal(scope: SigningAccountScope, key?: string): number {
   const channel = channels.get(identity(scope));
-  if (!channel) return 0;
+  if (!channel) {
+    if (key === 'trust') invalidateNappletSource(scope.accountPubkey, scope.sourceId, 'trust');
+    return 0;
+  }
   const revision = ++channel.revision;
   for (const listener of channel.listeners) listener({ key, revision });
+  if (key === 'trust') invalidateNappletSource(scope.accountPubkey, scope.sourceId, 'trust');
   return revision;
 }
 export function invalidateSigningAccount(accountPubkey: string): void {

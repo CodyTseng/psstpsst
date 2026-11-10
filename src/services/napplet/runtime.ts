@@ -313,7 +313,7 @@ export class NappletRuntime {
     let pending = this.domainRequests.get(domain);
     if (!pending) {
       pending = queueAuthorization(appSigningScope(this.scope), [this.signal], async () => {
-        const { domains: granted, denied, granted: remembered, level } = await readDomainPermissions(this.scope, this.options.release, this.options.domains);
+        const { domains: granted, denied, granted: remembered, authorization } = await readDomainPermissions(this.scope, this.options.release, this.options.domains);
         this.check();
         if (!granted.includes(domain)) {
           if (denied.includes(domain)) {
@@ -332,7 +332,7 @@ export class NappletRuntime {
           }
           if (answer !== 'allow') throw new Error('permission-denied');
           granted.push(domain);
-          await setData(this.scope, 'permissions', 'domains', JSON.stringify(granted.filter(domain=>remembered.includes(domain)||!automaticallyAllowsAccess(level,domain))));
+          await setData(this.scope, 'permissions', 'domains', JSON.stringify([...new Set([...remembered, ...granted.filter(domain => !automaticallyAllowsAccess(authorization, domain))])]));
           this.check();
           this.options.permissionsChanged?.();
         }

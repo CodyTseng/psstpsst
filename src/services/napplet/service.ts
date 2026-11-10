@@ -1,6 +1,7 @@
+import { normalizeSigningSource } from '@/services/signing/source';
 import { saveDomainPermissionChanges, type DomainPermissionChange } from './domain-permission-writes';
 import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
-import { ensureAppAuthorizationLevel } from '@/services/app-authorization/level';
+import { ensureAppAuthorization } from '@/services/app-authorization/initialize';
 import { nappletAccessDomains } from '@/services/napplet/access-domains';
 import { resolveApplicationMetadata } from '@/services/explore/application-metadata';
 import { fromNapplet } from '@/services/explore/model';
@@ -8,7 +9,7 @@ import { readApplicationHandlers } from '@/services/explore/application-handlers
 import { clearBrowserPermissions, clearAccountBrowserPermissions } from '@/services/explore/browser-permission-store';
 import { clearAccountSigningPermissions, clearSigningPermissions, deleteSigningRule, saveSigningRule } from '@/services/signing/repository';
 import { desktopApps, moveDesktopApp } from './desktop-order';
-import { registerNappletLifecycle, notifyNappletTheme, invalidateNappletSource } from './lifecycle';
+import { registerNappletSourceInvalidation, registerNappletLifecycle, notifyNappletTheme, invalidateNappletSource } from './lifecycle';
 import { createStore } from 'zustand/vanilla';
 import { getAccount } from '@/services/account/account-access';
 import { nappletInstallations, nappletData, nappletUsage, nappletDataLegacy, signingActivity } from '@/db/schema';
@@ -103,7 +104,7 @@ async function authorizeRelease(release: NappletRelease, account: string, curren
   const required = [...new Set(['shell', ...nappletAccessDomains(release.required)])];
   const optional = [...new Set(nappletAccessDomains(release.optional).filter((domain) =>
     (NAP_DOMAINS as readonly string[]).includes(domain) && !required.includes(domain)))];
-  const level = await ensureAppAuthorizationLevel(appSigningScope(scope), signal => prompt({ title: release.title,
+  const authorization = await ensureAppAuthorization(appSigningScope(scope), signal => prompt({ title: release.title,
     detail: '', app: release, accountPubkey: account, appAuthorizationLevel: true }, signal), signal, current);
   const { denied, domains, granted } = await readDomainPermissions(scope, release);
   current();
@@ -121,8 +122,8 @@ async function authorizeRelease(release: NappletRelease, account: string, curren
     current();
     const selected: unknown = answer.startsWith('domains:') ? JSON.parse(answer.slice(8)) : [];
     if (!Array.isArray(selected)) throw new Error('permission-denied');
-    declared = resolveDomainPermissions(release, [...required, ...optional.filter((domain) => selected.includes(domain))], denied, level);
-    await setData(scope, 'permissions', 'domains', JSON.stringify(declared.filter(domain=>granted.includes(domain)||!automaticallyAllowsAccess(level,domain))));
+    declared = resolveDomainPermissions(release, [...required, ...optional.filter((domain) => selected.includes(domain))], denied, authorization);
+    await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set([...granted, ...declared.filter(domain => !automaticallyAllowsAccess(authorization, domain))])]));
     current();
     permissionsChanged();
   }
@@ -629,4 +630,12 @@ export const nappletService = {
 
 registerNappletLifecycle((account) => {
   if (!account || nappletStore.getState().accountPubkey === account) nappletService.deactivate();
+});
+
+registerNappletSourceInvalidation((account, sourceId, reason) => {
+  if (reason !== 'trust') return;
+  const state = nappletStore.getState();
+  if (state.accountPubkey !== account) return;
+  const source = runtime?.scope.appKey ?? state.launch?.release.eventKey;
+  if (source && normalizeSigningSource(source) === sourceId) nappletService.stop();
 });

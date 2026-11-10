@@ -1,4 +1,4 @@
-import { ensureAppAuthorizationLevel } from '@/services/app-authorization/level';
+import { ensureAppAuthorization } from '@/services/app-authorization/initialize';
 import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
 import { resolveApplicationMetadata, subscribeApplicationMetadata } from './application-metadata';
 import { invalidateReplaceableEvents } from '@/services/relay/replaceable-events.service';
@@ -8,10 +8,10 @@ import { subscribeFavoritesChanged } from './favorites-events';
 import { readApplicationHandlers } from './application-handlers';
 import { createStore } from 'zustand/vanilla';
 import { nappletService, nappletStore } from '@/services/napplet/service';
-import { registerNappletLifecycle, registerNappletVisit, registerNappletTheme, invalidateNappletSource } from '@/services/napplet/lifecycle';
+import { registerNappletSourceInvalidation, registerNappletLifecycle, registerNappletVisit, registerNappletTheme, invalidateNappletSource } from '@/services/napplet/lifecycle';
 import { moveDesktopApp } from '@/services/napplet/desktop-order';
 import { clearBrowserPermissions } from './browser-permission-store';
-import { readAppAuthorizationLevel, clearSigningPermissions } from '@/services/signing/repository';
+import { readAppAuthorization, clearSigningPermissions } from '@/services/signing/repository';
 import { getData, setData } from '@/services/napplet/repository';
 import { readFavoriteEntries, readFavoriteReferences, readFavoriteMetadata, reorder, visit, forget } from './repository';
 import { FAVORITES_PAGE_SIZE, fromNapplet, mergeApplicationEntries, applicationPresentation, applicationRequirements, applicationSigningSource, SUPPORTED_NAPP_DOMAINS, websiteAddress, withVisit, type ExploreEntry } from './model';
@@ -325,9 +325,9 @@ export const exploreService = {
     check(account,generation);
     const domains:unknown=stored?JSON.parse(stored):[];
     if(!Array.isArray(domains)||domains.some(domain=>typeof domain!=='string'))throw new Error('invalid-permissions');
-    const level = await readAppAuthorizationLevel({ accountPubkey: account, sourceId: this.signingSource(app) });
+    const authorization = await readAppAuthorization({ accountPubkey: account, sourceId: this.signingSource(app) });
     check(account, generation);
-    return applicationRequirements(app.kind, app.required).every(domain=>automaticallyAllowsAccess(level,domain)||domains.includes(domain));
+    return applicationRequirements(app.kind, app.required).every(domain=>automaticallyAllowsAccess(authorization,domain)||domains.includes(domain));
   },
   prepare(app: ExploreEntry, account: string, reviewedRequired?:readonly string[]) {
     check(account, epoch);
@@ -475,20 +475,20 @@ async function launchRuntime(runId: number, cleanup?: Promise<void>) {
         throw new Error('applications.unsupported');
     }
     const scope = { accountPubkey: account, appKey: exploreService.signingSource(entry) };
-    const level = entry.kind === 'website' ? undefined : await ensureAppAuthorizationLevel({ accountPubkey: account, sourceId: scope.appKey,
+    const authorization = entry.kind === 'website' ? undefined : await ensureAppAuthorization({ accountPubkey: account, sourceId: scope.appKey,
       ...(entry.local ? { localVersion: entry.local.version } : {}) }, requestSignal => nappletService.requestApproval({
         title: entry!.title, detail: '', accountPubkey: account, application: applicationPresentation(entry!), appAuthorizationLevel: true,
       }, requestSignal), signal, current);
     const stored = entry.kind === 'website' ? null : await getData(scope, 'permissions', 'domains');
     current();
     const grants: string[] = stored ? JSON.parse(stored) : [];
-    if (entry.required.some(d => !automaticallyAllowsAccess(level,d) && !grants.includes(d))) {
+    if (entry.required.some(d => !automaticallyAllowsAccess(authorization,d) && !grants.includes(d))) {
       const reviewed=reviewedAccess?.runId===runId && reviewedAccess.required.length===entry.required.length && entry.required.every(domain=>reviewedAccess!.required.includes(domain));
-      const answer = reviewed?'allow':await nappletService.requestApproval({ title: entry.title, detail: '', accountPubkey: account, application: { ...applicationPresentation(entry), required: entry.required.filter(domain => !automaticallyAllowsAccess(level, domain)) } }, signal);
+      const answer = reviewed?'allow':await nappletService.requestApproval({ title: entry.title, detail: '', accountPubkey: account, application: { ...applicationPresentation(entry), required: entry.required.filter(domain => !automaticallyAllowsAccess(authorization, domain) && !grants.includes(domain)) } }, signal);
       current();
       if (runId !== exploreStore.getState().runId || answer !== 'allow')
         throw new Error('permission-denied');
-      await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set([...grants, ...entry.required.filter(domain=>!automaticallyAllowsAccess(level,domain))])]));
+      await setData(scope, 'permissions', 'domains', JSON.stringify([...new Set([...grants, ...entry.required.filter(domain=>!automaticallyAllowsAccess(authorization,domain))])]));
       current();exploreStore.setState(state=>({accessRevision:state.accessRevision+1}));
     }
     current();
@@ -543,7 +543,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
       if (runtime !== instance || parents.length >= 7) throw new Error('application-not-active');
       if (app.required.some(domain => !SUPPORTED_NAPP_DOMAINS.includes(domain))) throw new Error('applications.unsupported');
       const scope = { accountPubkey: account, appKey: exploreService.signingSource(app) };
-      const level = app.kind === 'website' ? undefined : await ensureAppAuthorizationLevel({ accountPubkey: account, sourceId: scope.appKey,
+      const authorization = app.kind === 'website' ? undefined : await ensureAppAuthorization({ accountPubkey: account, sourceId: scope.appKey,
         ...(app.local ? { localVersion: app.local.version } : {}) }, signal => nappletService.requestApproval({
           title: app.title, detail: '', accountPubkey: account, application: applicationPresentation(app), appAuthorizationLevel: true,
         }, signal), launchLife.signal, current);
@@ -551,7 +551,7 @@ function createRuntime(account: string, entry: ExploreEntry, generation: number,
       current();
       const grants: unknown = stored ? JSON.parse(stored) : [];
       if (!Array.isArray(grants) || grants.some(domain => typeof domain !== 'string')) throw new Error('invalid-permissions');
-      const required = app.required.filter(domain => !automaticallyAllowsAccess(level, domain));
+      const required = app.required.filter(domain => !automaticallyAllowsAccess(authorization, domain) && !grants.includes(domain));
       if (required.some(domain => !grants.includes(domain))) {
         const answer = await nappletService.requestApproval({ title: app.title, detail: '', accountPubkey: account,
           application: { ...applicationPresentation(app), required } }, launchLife.signal);
@@ -646,4 +646,11 @@ subscribeApplicationMetadata(app => {
   const state = exploreStore.getState();
   return state.entries.find(entry => entry.key === key &&
     (entry.desktopPosition !== null && entry.desktopPosition < state.favoriteVisibleCount || metadataLoaded.has(key)));
+});
+
+registerNappletSourceInvalidation((account, sourceId, reason) => {
+  if (reason !== 'trust') return;
+  const entry = exploreStore.getState().entry;
+  if (exploreStore.getState().account === account && (entry && exploreService.signingSource(entry) === sourceId
+    || parents.some(parent => exploreService.signingSource(parent.entry) === sourceId))) exploreService.stop();
 });

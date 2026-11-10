@@ -1371,7 +1371,14 @@
     "app_authorization_level_trusted_description": "Temel erişime, cüzdan bilgilerine, tüm imzalama, şifreleme ve şifre çözmeye izin ver.",
     "app_authorization_level_boundaries": "Cüzdan ödemeleri, fatura oluşturma ve cihaz erişimi ayrı onay gerektirir.",
     "app_authorization_level_unset": "Seçilmedi",
-    "app_authorization_level_continue": "Devam et"
+    "app_authorization_level_continue": "Devam et",
+    "fully_trust": "Tam güven",
+    "fully_trust_on": "Temel uygulama erişimine ve desteklenen hesap işlemlerine otomatik olarak izin ver. Tek tek izinleri düzenlemek için kapatın.",
+    "fully_trust_off": "Tek tek izinleri kullan. Kayıtlı kararı olmayan istekler onay gerektirir.",
+    "fully_trust_enable_notice": "Ret kararları da dahil olmak üzere kayıtlı imzalama ve cüzdan bilgisi kuralları askıya alınacaktır. Cihaz erişimi ve cüzdan ödemeleri yine ayrı onay gerektirir. Değişikliğin uygulanması için çalışan uygulama örnekleri kapatılacaktır.",
+    "fully_trust_disable_notice": "Kayıtlı tekil izinler yeniden uygulanacaktır. Kayıtlı kararı olmayan istekler onay gerektirecektir. Değişikliğin uygulanması için çalışan uygulama örnekleri kapatılacaktır.",
+    "fully_trust_paused": "Tam güven açıkken tekil imzalama kuralları askıya alınır. Düzenlemek için kapatın.",
+    "fully_trust_wallet": "Tam güven açıkken cüzdan bilgilerine erişime otomatik olarak izin verilir. Tekil kural askıya alınır."
   },
   "comments": {
     "title": "Değerlendirmeler",

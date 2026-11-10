@@ -1376,7 +1376,14 @@
     "app_authorization_level_trusted_description": "Autoriser l’accès de base, les informations du portefeuille, toutes les signatures, le chiffrement et le déchiffrement.",
     "app_authorization_level_boundaries": "Les paiements du portefeuille, la création de factures et l’accès à l’appareil nécessitent un accord séparé.",
     "app_authorization_level_unset": "Non sélectionné",
-    "app_authorization_level_continue": "Continuer"
+    "app_authorization_level_continue": "Continuer",
+    "fully_trust": "Faire entièrement confiance",
+    "fully_trust_on": "Autoriser automatiquement l’accès de base de l’app et les opérations de compte prises en charge. Désactivez cette option pour modifier les autorisations individuelles.",
+    "fully_trust_off": "Utiliser les autorisations individuelles. Les demandes sans décision enregistrée nécessitent une approbation.",
+    "fully_trust_enable_notice": "Les règles enregistrées pour les signatures et les informations du portefeuille, y compris les refus, seront suspendues. L’accès à l’appareil et les paiements du portefeuille nécessiteront toujours une approbation distincte. Les instances de l’app en cours d’exécution seront fermées pour appliquer la modification.",
+    "fully_trust_disable_notice": "Les autorisations individuelles enregistrées s’appliqueront de nouveau. Les demandes sans décision enregistrée nécessiteront une approbation. Les instances de l’app en cours d’exécution seront fermées pour appliquer la modification.",
+    "fully_trust_paused": "Les règles de signature individuelles sont suspendues lorsque « Faire entièrement confiance » est activé. Désactivez cette option pour les modifier.",
+    "fully_trust_wallet": "L’accès aux informations du portefeuille est automatiquement autorisé lorsque « Faire entièrement confiance » est activé. La règle individuelle correspondante est suspendue."
   },
   "comments": {
     "title": "Avis",

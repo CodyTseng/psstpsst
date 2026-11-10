@@ -1376,7 +1376,14 @@
     "app_authorization_level_trusted_description": "Permitir acesso básico, informações da carteira, todas as assinaturas, cifragem e decifragem.",
     "app_authorization_level_boundaries": "Pagamentos da carteira, criação de faturas e acesso ao dispositivo exigem aprovação separada.",
     "app_authorization_level_unset": "Não selecionado",
-    "app_authorization_level_continue": "Continuar"
+    "app_authorization_level_continue": "Continuar",
+    "fully_trust": "Confiar totalmente",
+    "fully_trust_on": "Permitir automaticamente o acesso básico da aplicação e as operações de conta suportadas. Desative para editar as permissões individuais.",
+    "fully_trust_off": "Usar permissões individuais. Os pedidos sem uma decisão guardada requerem aprovação.",
+    "fully_trust_enable_notice": "As regras guardadas de assinatura e informações da carteira, incluindo recusas, serão suspensas. O acesso ao dispositivo e os pagamentos da carteira continuarão a requerer aprovação separada. As instâncias da aplicação em execução serão fechadas para aplicar a alteração.",
+    "fully_trust_disable_notice": "As permissões individuais guardadas voltarão a aplicar-se. Os pedidos sem uma decisão guardada requererão aprovação. As instâncias da aplicação em execução serão fechadas para aplicar a alteração.",
+    "fully_trust_paused": "As regras individuais de assinatura ficam suspensas enquanto Confiar totalmente está ativado. Desative para as editar.",
+    "fully_trust_wallet": "O acesso às informações da carteira é permitido automaticamente enquanto Confiar totalmente está ativado. A regra individual fica suspensa."
   },
   "comments": {
     "title": "Avaliações",

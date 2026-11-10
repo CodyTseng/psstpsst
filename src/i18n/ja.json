@@ -1371,7 +1371,14 @@
     "app_authorization_level_trusted_description": "基本アクセス、ウォレット情報、すべての署名、暗号化、復号を許可します。",
     "app_authorization_level_boundaries": "ウォレットの支払い、請求書の作成と端末へのアクセスは別途確認します。",
     "app_authorization_level_unset": "未選択",
-    "app_authorization_level_continue": "続ける"
+    "app_authorization_level_continue": "続ける",
+    "fully_trust": "完全に信頼",
+    "fully_trust_on": "アプリの基本アクセスと対応するアカウント操作を自動的に許可します。個別の権限を編集するにはオフにしてください。",
+    "fully_trust_off": "個別の権限を使用します。判断が保存されていないリクエストには承認が必要です。",
+    "fully_trust_enable_notice": "拒否を含む、保存済みの署名とウォレット情報のルールは一時停止されます。端末へのアクセスとウォレットの支払いには、引き続き個別の承認が必要です。変更を適用するため、実行中のアプリは閉じられます。",
+    "fully_trust_disable_notice": "保存済みの個別の権限が再び適用されます。判断が保存されていないリクエストには承認が必要です。変更を適用するため、実行中のアプリは閉じられます。",
+    "fully_trust_paused": "「完全に信頼」がオンの間、個別の署名ルールは一時停止されます。編集するにはオフにしてください。",
+    "fully_trust_wallet": "「完全に信頼」がオンの間、ウォレット情報へのアクセスは自動的に許可され、個別のルールは一時停止されます。"
   },
   "comments": {
     "title": "レビュー",

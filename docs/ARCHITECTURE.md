@@ -1074,24 +1074,17 @@ independent of launch recency. Desktop edits commit atomically and never change
 app data or grants. The recent preview shows one row; full recent history derives from the bounded
 installation library.
 Signing authorization belongs to the shared signing service, independently of app
-storage. Account/source preferences select an App Authorization Level (Manual, Routine
-or Trusted);
-levels automatically allow covered operations before consulting single-operation
-rules. Outside level coverage, session decisions precede persisted Allow/Reject/Ask
-rules. Covered rules remain stored for later level changes. Declared basic access is
-derived from the same policy without persisting generated grants; capability
-edits apply explicit deltas atomically and never rewrite other single-operation
-decisions from effective access; running
-documents retain their launch access until replaced. First-open selection
-precedes execution and launch-access review for napplets, napps and nsites,
-including nested launches. Ordinary websites inject only NIP-07 and WebLN
-providers and open without application consent; the first NIP-07 call or WebLN
-wallet-information read selects a level for the current host-verified main-frame
-origin. Routine and Trusted cover wallet display names and supported operations;
-Manual consults account/source-scoped single-request, timed or permanent decisions.
-Payment and invoice authority remain separate. Preference changes invalidate
-in-flight authority across hosts while retaining exceptions. Policy details and independent wallet
-and device boundaries live in [app authorization](protocols/app-authorization.md). Event rules bind an account, a host-verified source, operation, event kind and
+storage. Account/source initialization creates ordinary editable rules for Everyday use,
+no automatic rules for Manual, or a full-trust flag. The initial preset is never
+persisted. An authorization row records completed consent even with no rules.
+Full trust precedes signer, wallet-information and supported declared-access
+rules without deleting them; disabling it restores those rules. Trust changes
+invalidate pending authority and execution-local approvals across hosts and close
+affected containers to retract launch-bound capabilities. First-use selection
+precedes application execution; ordinary websites defer it until the first account
+or wallet-information request. Device and wallet-payment boundaries remain
+independent. Reset removes consent, trust and grants before stopping the source.
+Policy details live in [app authorization](protocols/app-authorization.md). Event rules bind an account, a host-verified source, operation, event kind and
 an optional `scope_key` qualifier. Addressable events derive that qualifier from
 the actual d tag; other operations may use their own trusted scope identifier.
 Public-key access and NIP-04/NIP-44 encryption/decryption use the same authority
@@ -1146,7 +1139,7 @@ entry; canceling the active caller does not release its processing slot until
 the active work finishes.
 Signing revocation invalidates cached approvals and in-flight signatures, then
 serializes persistent removal without stopping unrelated executions. App access
-changes restart the affected container. Permission reset persists all grant, level
+changes restart the affected container. Permission reset persists all grant, consent/trust
 and access removals before stopping its source or invalidating native tasks, since
 closing the owning host may terminate the reset caller. Failed persistence keeps
 the host available for error feedback and retry. Host overlays block app input through

@@ -1,4 +1,6 @@
-/** Application access, wallet metadata and account authority; payments and device consent remain separate. */
-export type AppAuthorizationLevel = 'manual' | 'routine' | 'trusted';
-export const APP_AUTHORIZATION_LEVELS: readonly AppAuthorizationLevel[] = ['manual', 'routine', 'trusted'];
-export function isAppAuthorizationLevel(value: unknown): value is AppAuthorizationLevel { return APP_AUTHORIZATION_LEVELS.includes(value as AppAuthorizationLevel); }
+/** First-use choices initialize ordinary rules; the selected preset is never persisted. */
+export type AppAuthorizationPreset = 'manual' | 'routine' | 'trusted';
+export const APP_AUTHORIZATION_PRESETS: readonly AppAuthorizationPreset[] = ['manual', 'routine', 'trusted'];
+export function isAppAuthorizationPreset(value: unknown): value is AppAuthorizationPreset { return APP_AUTHORIZATION_PRESETS.includes(value as AppAuthorizationPreset); }
+/** Presence means first-use consent completed, including Manual with no rules. */
+export type AppAuthorization = { fullyTrusted: boolean };

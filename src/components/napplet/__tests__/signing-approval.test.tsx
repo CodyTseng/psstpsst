@@ -10,7 +10,7 @@ import { SigningApproval, SigningActions } from '../SigningApproval';
 import { NappletOverlays } from '../NappletOverlays';
 import { UploadApproval } from '../UploadApproval';
 import { CapabilityActions, CapabilityApproval } from '../CapabilityApproval';
-import { AppAuthorizationLevelChoices } from '../app-authorization-level-choices';
+import { AppAuthorizationPresetChoices } from '../app-authorization-preset-choices';
 import { AppButton } from '@/components/common/AppButton';
 import { ListRow } from '@/components/common/ListRow';
 import { Toggle } from '@/components/common/Toggle';
@@ -94,15 +94,15 @@ const button = (label: string) => renderer.root.findAllByType(AppButton).find((n
 it('first-use level selection defaults to Routine and sends only the explicit selection', () => {
   mockPrompt = { ...prompt, signing: undefined, appAuthorizationLevel: true, accountPubkey: 'a'.repeat(64) };
   act(() => { renderer = create(<NappletOverlays />); });
-  expect(renderer.root.findByType(AppAuthorizationLevelChoices).props.value).toBe('routine');
+  expect(renderer.root.findByType(AppAuthorizationPresetChoices).props.value).toBe('routine');
   expect(nappletService.answer).not.toHaveBeenCalled();
   expect(renderer.root.findAllByType(SigningActions)).toHaveLength(0);
-  act(() => { renderer.root.findByType(AppAuthorizationLevelChoices).props.onChange('trusted'); });
+  act(() => { renderer.root.findByType(AppAuthorizationPresetChoices).props.onChange('trusted'); });
   act(() => { button('applications.app_authorization_level_continue').props.onPress(); });
   expect(nappletService.answer).toHaveBeenLastCalledWith(prompt.requestId, 'trusted');
   mockPrompt = { ...mockPrompt, requestId: 'different-source' };
   act(() => { renderer.update(<NappletOverlays />); });
-  expect(renderer.root.findByType(AppAuthorizationLevelChoices).props.value).toBe('routine');
+  expect(renderer.root.findByType(AppAuthorizationPresetChoices).props.value).toBe('routine');
 });
 
 it.each(['light', 'dark'] as const)('reviews files as app consent without signing controls in %s mode', (scheme) => {

@@ -1371,7 +1371,14 @@
     "app_authorization_level_trusted_description": "Alapvető hozzáférés, tárcainformációk, minden aláírás, titkosítás és visszafejtés engedélyezése.",
     "app_authorization_level_boundaries": "A tárcás fizetésekhez, a számlák létrehozásához és az eszközhozzáféréshez külön jóváhagyás kell.",
     "app_authorization_level_unset": "Nincs kiválasztva",
-    "app_authorization_level_continue": "Folytatás"
+    "app_authorization_level_continue": "Folytatás",
+    "fully_trust": "Teljes bizalom",
+    "fully_trust_on": "Az alkalmazás alapvető hozzáférésének és a támogatott fiókműveleteknek az automatikus engedélyezése. Az egyéni engedélyek szerkesztéséhez kapcsold ki.",
+    "fully_trust_off": "Egyéni engedélyek használata. A mentett döntés nélküli kérések jóváhagyást igényelnek.",
+    "fully_trust_enable_notice": "A mentett aláírási és tárcainformációs szabályok, az elutasításokat is beleértve, szünetelni fognak. Az eszközhozzáférés és a tárcás fizetések továbbra is külön jóváhagyást igényelnek. A módosítás érvényesítéséhez az alkalmazás futó példányai bezárulnak.",
+    "fully_trust_disable_notice": "A mentett egyéni engedélyek ismét érvénybe lépnek. A mentett döntés nélküli kérések jóváhagyást igényelnek. A módosítás érvényesítéséhez az alkalmazás futó példányai bezárulnak.",
+    "fully_trust_paused": "A Teljes bizalom bekapcsolásakor az egyéni aláírási szabályok szünetelnek. A szerkesztésükhöz kapcsold ki.",
+    "fully_trust_wallet": "A Teljes bizalom bekapcsolásakor a tárcainformációk olvasása automatikusan engedélyezett. Az egyéni szabály szünetel."
   },
   "comments": {
     "title": "Vélemények",

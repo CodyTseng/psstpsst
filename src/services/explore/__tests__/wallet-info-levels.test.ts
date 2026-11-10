@@ -1,15 +1,18 @@
 import type { RuntimePrompt } from '@/services/napplet/runtime';
 import { authorizeWalletInfo } from '../wallet-info-permission';
 import { SigningPermissions } from '@/services/signing/permissions';
-import { levels, rules } from '@/services/signing/testing/memory-repository';
+import { authorizations, rules, walletRules } from '@/services/signing/testing/memory-repository';
 import { readBrowserPermissions } from '../browser-permission-store';
 
 jest.mock('@/i18n/core', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('@/services/signing/repository', () => jest.requireActual('../../signing/testing/memory-repository').memoryRepository);
-jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async () => []), saveBrowserPermissions: jest.fn() }));
+jest.mock('../browser-permission-store', () => ({ readBrowserPermissions: jest.fn(async scope => {
+  const rule = jest.requireActual('../../signing/testing/memory-repository').walletRules.get(JSON.stringify(scope));
+  return rule ? [rule] : [];
+}), saveBrowserPermissions: jest.fn() }));
 const scope = { accountPubkey: 'account', sourceId: 'https://site.example' };
 let life: AbortController;
-beforeEach(() => { jest.clearAllMocks(); levels.clear(); rules.clear(); levels.set(JSON.stringify(scope), undefined); life = new AbortController(); });
+beforeEach(() => { jest.clearAllMocks(); authorizations.clear(); rules.clear(); walletRules.clear(); authorizations.set(JSON.stringify(scope), undefined); life = new AbortController(); });
 afterEach(() => life.abort());
 
 it('shares the level selected by a wallet information read with the next NIP-07 call', async () => {

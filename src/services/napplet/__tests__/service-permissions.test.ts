@@ -1,6 +1,7 @@
 import { clearApplicationTestCache } from '@/services/explore/testing/memory-cache';
+import { invalidateNappletSource } from '../lifecycle';
 import { clearBrowserPermissions } from '@/services/explore/browser-permission-store';
-import { rules as signingRules, activity as signingActivity, levels as appAuthorizationLevels } from '@/services/signing/testing/memory-repository';
+import { rules as signingRules, activity as signingActivity, memoryRepository, authorizations as appAuthorizations } from '@/services/signing/testing/memory-repository';
 import { signingRuleKey } from '../signing-permissions';
 import { NappletRuntime } from '../runtime';
 import { loadArtifact } from '../artifacts';
@@ -40,7 +41,7 @@ const app = { eventKey: 'app', hash: 'v1', title: 'App', required: ['storage'], 
 const scope = { accountPubkey: 'accountA', appKey: app.eventKey };
 
 beforeEach(async () => {
-  nappletService.deactivate(); clearApplicationTestCache(); stored.clear(); signingRules.clear(); signingActivity.clear(); appAuthorizationLevels.clear(); jest.clearAllMocks();
+  nappletService.deactivate(); clearApplicationTestCache(); stored.clear(); signingRules.clear(); signingActivity.clear(); appAuthorizations.clear(); jest.clearAllMocks();
   jest.mocked(getData).mockImplementation(async (s, bucket, name) => stored.get(key(s, bucket, name)) ?? null);
   jest.mocked(setData).mockImplementation(async (s, bucket, name, value) => {
     if (value == null) stored.delete(key(s, bucket, name)); else stored.set(key(s, bucket, name), value);
@@ -464,13 +465,13 @@ it('clears the level and all access before stopping the host that owns a reset',
   stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
   stored.set(key(scope, 'permissions', 'denied-domains'), '["identity"]');
   const sourceKey = JSON.stringify({ accountPubkey: 'accountA', sourceId: 'app.example' });
-  appAuthorizationLevels.set(sourceKey, 'trusted');
+  appAuthorizations.set(sourceKey, { fullyTrusted: true });
   await nappletService.open(app);
   const active = jest.mocked(NappletRuntime).mock.results.at(-1)!.value;
   active.close.mockImplementationOnce(() => {
     expect(stored.has(key(scope, 'permissions', 'domains'))).toBe(false);
     expect(stored.has(key(scope, 'permissions', 'denied-domains'))).toBe(false);
-    expect(appAuthorizationLevels.get(sourceKey)).toBeUndefined();
+    expect(appAuthorizations.get(sourceKey)).toBeUndefined();
     expect(clearBrowserPermissions).toHaveBeenCalledWith({ accountPubkey: 'accountA', sourceId: 'app.example' });
     nappletService.deactivate();
     return Promise.resolve();
@@ -480,8 +481,14 @@ it('clears the level and all access before stopping the host that owns a reset',
 });
 
 it('selects a level before first napplet launch and derives network access without saving a grant', async () => {
-  appAuthorizationLevels.set(JSON.stringify({ accountPubkey: 'accountA', sourceId: 'app.example' }), undefined);
+  appAuthorizations.set(JSON.stringify({ accountPubkey: 'accountA', sourceId: 'app.example' }), undefined);
   const release = { ...app, required: ['resource'], optional: [] };
+  memoryRepository.initializeAppAuthorization.mockImplementationOnce(async (scope, preset, guard) => {
+    guard?.();
+    appAuthorizations.set(JSON.stringify(scope), { fullyTrusted: false });
+    stored.set(key({ accountPubkey: scope.accountPubkey, appKey: 'app' }, 'permissions', 'domains'), '["resource"]');
+    return 0;
+  });
   const opening = nappletService.open(release);
   while (!nappletStore.getState().prompt) await new Promise(resolve => setTimeout(resolve, 0));
   expect(nappletStore.getState().prompt?.appAuthorizationLevel).toBe(true);
@@ -490,11 +497,11 @@ it('selects a level before first napplet launch and derives network access witho
   await opening;
   expect(nappletStore.getState().prompt).toBeNull();
   expect(jest.mocked(NappletRuntime).mock.calls.at(-1)![0].domains).toContain('resource');
-  expect(stored.has(key(scope, 'permissions', 'domains'))).toBe(false);
+  expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toContain('resource');
 });
 
 it('saving another capability does not turn automatic access into remembered grants', async () => {
-  appAuthorizationLevels.set(JSON.stringify({ accountPubkey: 'accountA', sourceId: 'app.example' }), 'routine');
+  appAuthorizations.set(JSON.stringify({ accountPubkey: 'accountA', sourceId: 'app.example' }), { fullyTrusted: false });
   const release = { ...app, required: ['resource'], optional: ['storage', 'inc'] };
   await nappletService.updateDomainPermissions(release, [{ domain: 'inc', enabled: true }], 'accountA');
   const saved = JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!);
@@ -506,13 +513,13 @@ it('preserves unrelated grants and covered denials while editing one capability'
   const release = { ...app, required: [], optional: ['storage', 'inc', 'resource'] };
   stored.set(key(scope, 'permissions', 'domains'), '["resource"]');
   stored.set(key(scope, 'permissions', 'denied-domains'), '["storage"]');
-  appAuthorizationLevels.set(sourceKey, 'routine');
-  expect(await nappletService.domainPermissions(release, 'accountA')).toContain('storage');
+  appAuthorizations.set(sourceKey, { fullyTrusted: false });
+  expect(await nappletService.domainPermissions(release, 'accountA')).not.toContain('storage');
   await nappletService.updateDomainPermissions(release, [{ domain: 'inc', enabled: true }], 'accountA');
   expect(JSON.parse(stored.get(key(scope, 'permissions', 'domains'))!)).toEqual(['resource', 'inc']);
   expect(JSON.parse(stored.get(key(scope, 'permissions', 'denied-domains'))!)).toEqual(['storage']);
-  expect(appAuthorizationLevels.get(sourceKey)).toBe('routine');
-  appAuthorizationLevels.set(sourceKey, 'manual');
+  expect(appAuthorizations.get(sourceKey)).toEqual({ fullyTrusted: false });
+  appAuthorizations.set(sourceKey, { fullyTrusted: false });
   expect(await nappletService.domainPermissions(release, 'accountA')).not.toContain('storage');
   expect(await nappletService.domainPermissions(release, 'accountA')).toContain('inc');
   await nappletService.updateDomainPermissions(release, [{ domain: 'inc', enabled: false }], 'accountA');
@@ -820,4 +827,22 @@ it('never closes from header Back when the native history has already reached it
   expect(nappletStore.getState().running).not.toBe(null);
   await nappletService.goBack();
   expect(active.close).toHaveBeenCalledTimes(1);
+});
+
+
+it('closes a running source when full trust changes', async () => {
+  stored.set(key(scope, 'permissions', 'domains'), '["shell","storage"]');
+  await nappletService.open(app);
+  const active = jest.mocked(NappletRuntime).mock.results.at(-1)!.value;
+  invalidateNappletSource('accountA', 'app.example', 'trust');
+  expect(nappletStore.getState().running).toBeNull();
+  expect(active.close).toHaveBeenCalledTimes(1);
+});
+
+it('cancels a prepared source when full trust changes before execution', () => {
+  nappletService.prepareOpen(app, 'accountA');
+  expect(nappletStore.getState().launch).not.toBeNull();
+  invalidateNappletSource('accountA', 'app.example', 'trust');
+  expect(nappletStore.getState().launch).toBeNull();
+  expect(NappletRuntime).not.toHaveBeenCalled();
 });

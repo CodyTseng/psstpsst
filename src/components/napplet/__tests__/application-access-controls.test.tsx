@@ -26,8 +26,10 @@ it('shows required access immediately and distinguishes enabled and disabled opt
     'applications.capability_common', 'applications.capability_relay', 'applications.capability_resource', 'applications.capability_appearance',
   ]);
   expect(rows[0].props.value).toBeUndefined();
-  expect(rows[2].props.subtitle).toBe('applications.permissions_enabled');
-  expect(rows[3].props.subtitle).toBe('applications.permissions_disabled');
+  expect(rows[2].props.subtitle).toBeUndefined();
+  expect(rows[2].props.trailing.props.value).toBe(true);
+  expect(rows[3].props.subtitle).toBeUndefined();
+  expect(rows[3].props.trailing.props.value).toBe(false);
   const toggle = rows[3].props.trailing;
   expect(toggle.type).toBe(Toggle);
   expect(toggle.props.accessibilityLabel).toBe('applications.capability_appearance');

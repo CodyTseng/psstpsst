@@ -1381,7 +1381,14 @@
     "app_authorization_level_trusted_description": "Zezwalaj na podstawowy dostęp, informacje o portfelu, wszystkie podpisy, szyfrowanie i odszyfrowywanie.",
     "app_authorization_level_boundaries": "Płatności portfela, tworzenie faktur i dostęp do urządzenia wymagają osobnej zgody.",
     "app_authorization_level_unset": "Nie wybrano",
-    "app_authorization_level_continue": "Dalej"
+    "app_authorization_level_continue": "Dalej",
+    "fully_trust": "Pełne zaufanie",
+    "fully_trust_on": "Automatycznie zezwalaj na podstawowy dostęp aplikacji i obsługiwane operacje na koncie. Wyłącz, aby edytować poszczególne uprawnienia.",
+    "fully_trust_off": "Używaj indywidualnych uprawnień. Żądania bez zapisanej decyzji wymagają zatwierdzenia.",
+    "fully_trust_enable_notice": "Zapisane reguły podpisywania i dostępu do informacji o portfelu, w tym odmowy, zostaną wstrzymane. Dostęp do urządzenia i płatności z portfela nadal będą wymagać osobnego zatwierdzenia. Uruchomione instancje aplikacji zostaną zamknięte, aby zastosować zmianę.",
+    "fully_trust_disable_notice": "Zapisane indywidualne uprawnienia znów będą obowiązywać. Żądania bez zapisanej decyzji będą wymagać zatwierdzenia. Uruchomione instancje aplikacji zostaną zamknięte, aby zastosować zmianę.",
+    "fully_trust_paused": "Indywidualne reguły podpisywania są wstrzymane, gdy Pełne zaufanie jest włączone. Wyłącz je, aby edytować reguły.",
+    "fully_trust_wallet": "Dostęp do informacji o portfelu jest automatycznie dozwolony, gdy Pełne zaufanie jest włączone. Indywidualna reguła jest wstrzymana."
   },
   "comments": {
     "title": "Opinie",

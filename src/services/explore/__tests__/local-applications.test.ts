@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { saveAppAuthorizationLevel, saveSigningRule } from '@/services/signing/repository';
+import { initializeAppAuthorization, saveSigningRule } from '@/services/signing/repository';
 import { signingRuleKey, type SigningRule } from '@/services/signing/model';
 import { saveBrowserPermissions } from '../browser-permission-store';
 import { signingRevision, subscribeSigning } from '@/services/signing/changes';
@@ -31,7 +31,7 @@ const entry = (version = 'a'.repeat(64)): ExploreEntry => ({ key: 'local~hello',
   local: { version, installer: 'https://developer.example', actions: ['profile'] }, files: [{ path: '/index.html', mime: 'text/html', hash: 'b'.repeat(64) }] });
 beforeEach(() => {
   mockDatabase = jest.requireActual('../testing/database').applicationTestDatabase(); mockChanged = undefined;
-  for (const migration of ['0064_signer-access', '0065_authorization-destinations', '0066_signer-access-kind', '0067_application-relay-auth', '0068_signing-scope-key', '0069_browser-authorizations', '0073_crypto-operation-permissions', '0082_signing-authorization-scope', '0083_signing-levels', '0084_app-authorization'])
+  for (const migration of ['0064_signer-access', '0065_authorization-destinations', '0066_signer-access-kind', '0067_application-relay-auth', '0068_signing-scope-key', '0069_browser-authorizations', '0073_crypto-operation-permissions', '0082_signing-authorization-scope', '0083_signing-levels', '0084_app-authorization', '0085_authorization-presets'])
     mockDatabase.sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/${migration}.sql`, 'utf8'));
 });
 afterEach(() => mockDatabase.sqlite.close());
@@ -159,8 +159,8 @@ it('clears decisions written during staging atomically before releasing old docu
   await local.commitLocalApplication('other', old, undefined, () => {});
   const scope = { accountPubkey: 'account', sourceId: old.key, localVersion: old.local!.version };
   await saveSigningRule(scope, grant);
-  await saveAppAuthorizationLevel(scope, 'trusted');
-  await saveAppAuthorizationLevel({ ...scope, accountPubkey: 'other' }, 'routine');
+  await initializeAppAuthorization(scope, 'trusted');
+  await initializeAppAuthorization({ ...scope, accountPubkey: 'other' }, 'routine');
   await saveBrowserPermissions(scope, ['video'], 'allow', null);
   await saveBrowserPermissions({ ...scope, accountPubkey: 'other' }, ['video'], 'allow', null);
   expect(authorizationCounts()).toEqual([1, 1, 1]);
@@ -169,15 +169,15 @@ it('clears decisions written during staging atomically before releasing old docu
   await local.commitLocalApplication('account', next, old.local!.version, () => {});
   expect(released).toHaveBeenCalledTimes(1);
   expect(authorizationCounts()).toEqual([0, 0, 0]);
-  expect(authorizationCounts('other')).toEqual([0, 1, 1]);
+  expect(authorizationCounts('other')).toEqual([11, 2, 1]);
   // This models another host whose old document has not received its DB notification yet.
   await expect(saveSigningRule(scope, grant)).rejects.toThrow('permission-revoked');
-  await expect(saveAppAuthorizationLevel(scope, 'trusted')).rejects.toThrow('permission-revoked');
+  await expect(initializeAppAuthorization(scope, 'trusted')).rejects.toThrow('permission-revoked');
   await expect(saveBrowserPermissions(scope, ['video'], 'allow', null)).rejects.toThrow('permission-revoked');
   expect(authorizationCounts()).toEqual([0, 0, 0]);
   const current = { ...scope, localVersion: next.local!.version };
   await saveSigningRule(current, grant);
-  await saveAppAuthorizationLevel(current, 'manual');
+  await initializeAppAuthorization(current, 'manual');
   await saveBrowserPermissions(current, ['video'], 'allow', null);
   expect(authorizationCounts()).toEqual([1, 1, 1]); stop();
 });
@@ -187,7 +187,7 @@ it('preserves decisions and active documents on a stale or rolled-back transitio
   await local.commitLocalApplication('account', old, undefined, () => {});
   const scope = { accountPubkey: 'account', sourceId: old.key, localVersion: old.local!.version };
   const detach = subscribeSigning(scope, () => {});
-  await saveSigningRule(scope, grant); await saveAppAuthorizationLevel(scope, 'trusted'); await saveBrowserPermissions(scope, ['video'], 'allow', null);
+  await saveSigningRule(scope, grant); await initializeAppAuthorization(scope, 'trusted'); await saveBrowserPermissions(scope, ['video'], 'allow', null);
   const revision = signingRevision(scope), released = jest.fn(), stop = local.watchLocalApplication('account', old, released);
   await expect(local.commitLocalApplication('account', next, 'wrong-version', () => {})).rejects.toThrow('installation-changed');
   let checks = 0;

@@ -1,20 +1,20 @@
 import i18n from '@/i18n/core';
 import { assertNotAborted } from '@/platform/abort';
 import type { RuntimePrompt } from '@/services/napplet/runtime';
-import { ensureAppAuthorizationLevel } from '@/services/app-authorization/level';
+import { ensureAppAuthorization } from '@/services/app-authorization/initialize';
 import { automaticallyAllowsWalletInfo } from '@/services/app-authorization/policy';
 import { queueAuthorization } from '@/services/signing/authorization-queue';
 import { signingRevision } from '@/services/signing/changes';
 import { SIGNING_PERIODS } from '@/services/signing/model';
-import { readAppAuthorizationLevel, type SigningAccountScope } from '@/services/signing/repository';
+import { readAppAuthorization, type SigningAccountScope } from '@/services/signing/repository';
 import { readBrowserPermissions, saveBrowserPermissions } from './browser-permission-store';
 import { WALLET_INFO_PERMISSION } from './browser-permissions';
 
-/** Indexed policy reads observe level and rule changes from other windows. */
+/** Indexed policy reads observe authorization and rule changes from other windows. */
 export async function authorizeWalletInfo(scope: SigningAccountScope, title: string, signal: AbortSignal,
   confirm: (prompt: RuntimePrompt, signal: AbortSignal) => Promise<string | false>): Promise<() => void> {
   // Choose outside the information queue: both flows serialize on the same source.
-  await ensureAppAuthorizationLevel(scope, reviewSignal => confirm({ title: i18n.t('applications.app_authorization_level_title'),
+  await ensureAppAuthorization(scope, reviewSignal => confirm({ title: i18n.t('applications.app_authorization_level_title'),
     detail: '', accountPubkey: scope.accountPubkey, requester: { title, origin: scope.sourceId }, appAuthorizationLevel: true }, reviewSignal), signal);
   return queueAuthorization(scope, [signal], async () => {
     let revision = signingRevision(scope);
@@ -23,11 +23,11 @@ export async function authorizeWalletInfo(scope: SigningAccountScope, title: str
       assertNotAborted(signal);
       if (signingRevision(scope) !== revision || expiresAt !== null && expiresAt <= Date.now()) throw new Error('permission-revoked');
     };
-    // Recheck after queueing so a concurrent level change cannot leave stale authority.
-    const level = await readAppAuthorizationLevel(scope);
+    // Recheck after queueing so a concurrent authorization change cannot leave stale authority.
+    const authorization = await readAppAuthorization(scope);
     check();
-    if (!level) throw new Error('permission-revoked');
-    if (automaticallyAllowsWalletInfo(level)) return check;
+    if (!authorization) throw new Error('permission-revoked');
+    if (automaticallyAllowsWalletInfo(authorization)) return check;
     const saved = (await readBrowserPermissions(scope, WALLET_INFO_PERMISSION))[0];
     check();
     if (saved && (saved.expiresAt === null || saved.expiresAt > Date.now())) {

@@ -52,9 +52,12 @@ membershipHooks.useApplicationMembership = (account, entry) => {
 };
 
 const browserPermissionRepository = require('../../src/services/explore/browser-permission-store') as typeof import('../../src/services/explore/browser-permission-store');
-browserPermissionRepository.readBrowserPermissions = async () => [];
+browserPermissionRepository.readBrowserPermissions = async () => params.has('permission-groups') ? [
+  { resource: 'webln-info', decision: 'allow', expiresAt: null, updatedAt: 1 },
+  { resource: 'clipboard-read', decision: 'allow', expiresAt: null, updatedAt: 1 },
+] : [];
 const authorizationRepository = require('../../src/services/signing/repository') as typeof import('../../src/services/signing/repository');
-authorizationRepository.readAppAuthorizationLevel = async () => params.has('permission-layout') ? 'routine' : 'manual';
+authorizationRepository.readAppAuthorization = async () => ({ fullyTrusted: params.has('fully-trusted') });
 
 useThemeStore.setState({ preference: params.get('theme') === 'dark' ? 'dark' : 'light' });
 const auth = params.get('scenario') === 'auth';
@@ -316,14 +319,14 @@ if (['detail', 'permissions'].includes(params.get('scenario') ?? '')) {
     (window as unknown as { savedRuleChange: unknown }).savedRuleChange = change;
     nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
   };
-  nappletService.signingPermissions = async () => ({ rules: params.has('permission-layout') ? [] : rules,
-    level: params.has('permission-layout') ? 'routine' : undefined, activity: [
+  nappletService.signingPermissions = async () => ({ rules: params.has('permission-layout') && !params.has('fully-trusted') && !params.has('permission-groups') ? [] : rules,
+    authorization: { fullyTrusted: params.has('fully-trusted') }, activity: [
     { scope: { operation: 'publish', kind: 1 }, decision: 'allowed', at: 100000 },
   ] });
   nappletService.revokeSigningRule = async (_release, key) => {
     rules = rules.filter((rule) => rule.key !== key); nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));
   };
-  nappletService.domainPermissions = async () => params.has('needs-consent') ? [] : ['shell', ...release.required];
+  nappletService.domainPermissions = async () => params.has('needs-consent') ? [] : ['shell', ...release.required, ...(params.has('fully-trusted') ? ['upload'] : [])];
   nappletService.prepareOpen = (_release, _account, reviewedRequired) => {
     (window as unknown as { reviewedRequired: readonly string[] | undefined }).reviewedRequired = reviewedRequired;
     return 1;
@@ -373,8 +376,8 @@ if (menu) {
     key: 'post', decision: 'allow', duration: 'always', createdAt: 100,
     scope: { operation: 'publish', kind: 1, relays: ['wss://relay.example/'] },
   }];
-  nappletService.signingPermissions = async () => ({ rules: params.has('permission-layout') ? [] : rules,
-    level: params.has('permission-layout') ? 'routine' : undefined, activity: [] });
+  nappletService.signingPermissions = async () => ({ rules: params.has('permission-layout') && !params.has('fully-trusted') && !params.has('permission-groups') ? [] : rules,
+    authorization: { fullyTrusted: params.has('fully-trusted') }, activity: [] });
   nappletService.revokeSigningRule = async (_release, key) => {
     rules = rules.filter((rule) => rule.key !== key);
     nappletPermissionStore.setState((state) => ({ revision: state.revision + 1 }));

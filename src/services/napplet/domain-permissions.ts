@@ -1,5 +1,5 @@
-import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
-import { readAppAuthorizationLevel } from '@/services/signing/repository';
+import type { AppAuthorization } from '@/services/app-authorization/model';
+import { readAppAuthorization } from '@/services/signing/repository';
 import { normalizeSigningSource } from '@/services/signing/source';
 import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
 
@@ -14,7 +14,7 @@ export function resolveDomainPermissions(
   release: Pick<NappletRelease, 'required' | 'optional'>,
   granted: readonly string[],
   denied: readonly string[],
-  level?: AppAuthorizationLevel,
+  authorization?: AppAuthorization,
 ): string[] {
   const required = new Set(['shell', ...nappletAccessDomains(release.required)]);
   const optional = new Set(nappletAccessDomains(release.optional).filter(domain =>
@@ -22,7 +22,7 @@ export function resolveDomainPermissions(
   const blocked = new Set(denied);
   return [...new Set([
     'shell',
-    ...[...required, ...optional].filter(domain => automaticallyAllowsAccess(level, domain)),
+    ...[...required, ...optional].filter(domain => automaticallyAllowsAccess(authorization, domain)),
     ...granted.filter(domain => required.has(domain) || optional.has(domain) && !blocked.has(domain)),
     ...DEFAULT_OPTIONAL_DOMAINS.filter(domain => optional.has(domain) && !blocked.has(domain)),
   ])];
@@ -40,12 +40,12 @@ export async function readDomainPermissions(
   release: Pick<NappletRelease, 'required' | 'optional'>,
   fallback: readonly string[] = [],
 ) {
-  const [saved, storedDenied, level] = await Promise.all([
+  const [saved, storedDenied, authorization] = await Promise.all([
     getData(scope, 'permissions', 'domains'), getData(scope, 'permissions', 'denied-domains'),
-    readAppAuthorizationLevel({ accountPubkey: scope.accountPubkey, sourceId: normalizeSigningSource(scope.appKey) }),
+    readAppAuthorization({ accountPubkey: scope.accountPubkey, sourceId: normalizeSigningSource(scope.appKey) }),
   ]);
   const denied = parseDomainPermissions(storedDenied);
   const granted = saved ? parseDomainPermissions(saved) : [];
-  return { saved: !!saved, denied, level, granted,
-    domains: resolveDomainPermissions(release, saved ? granted : fallback, denied, level) };
+  return { saved: !!saved, denied, authorization, granted,
+    domains: resolveDomainPermissions(release, saved ? granted : fallback, denied, authorization) };
 }

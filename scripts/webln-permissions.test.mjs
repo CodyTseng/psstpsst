@@ -18,9 +18,11 @@ test('wallet information rules survive reopening, expire, isolate sources and re
       CREATE TABLE device_preferences(key TEXT PRIMARY KEY,value TEXT);
       INSERT INTO accounts VALUES('A'),('B');`);
     sqlite.exec(readFileSync('src/db/migrations/0069_browser-authorizations.sql', 'utf8'));
-    const preferences = readFileSync('src/db/migrations/0083_signing-levels.sql', 'utf8');
-    sqlite.exec(preferences.slice(preferences.indexOf('CREATE TABLE signing_preferences')));
-    sqlite.exec(readFileSync('src/db/migrations/0084_app-authorization.sql', 'utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0059_napplets.sql', 'utf8'));
+    sqlite.exec(readFileSync('src/db/migrations/0061_signing-authorizations.sql', 'utf8'));
+    for (const name of ['0064_signer-access', '0065_authorization-destinations', '0066_signer-access-kind', '0067_application-relay-auth',
+      '0068_signing-scope-key', '0073_crypto-operation-permissions', '0082_signing-authorization-scope', '0083_signing-levels',
+      '0084_app-authorization', '0085_authorization-presets']) sqlite.exec(readFileSync(`src/db/migrations/${name}.sql`, 'utf8'));
     const output = path.join(directory, 'permissions.cjs');
     await build({ stdin: { contents: `
       export { createAsyncDatabase } from ${JSON.stringify(path.resolve('src/platform/create-async-database.ts'))};
@@ -61,7 +63,7 @@ test('wallet information rules survive reopening, expire, isolate sources and re
     const scope = { accountPubkey: 'A', sourceId: 'https://site.example' };
     const signal = new AbortController().signal;
     const levels = fixture.levels();
-    await levels.saveAppAuthorizationLevel(scope, 'manual');
+    await levels.initializeAppAuthorization(scope, 'manual');
     let prompts = 0;
     const allowAlways = async () => { prompts++; return 'allow-always'; };
     const noPrompt = async () => { throw new Error('unexpected-prompt'); };
@@ -81,17 +83,15 @@ test('wallet information rules survive reopening, expire, isolate sources and re
       selections++; return 'routine';
     }))();
     assert.equal(selections, 1);
-    assert.equal(await levels.readAppAuthorizationLevel(newcomer), 'routine');
-    assert.deepEqual(await management.readBrowserPermissions(newcomer, 'webln-info'), []);
+    assert.deepEqual(await levels.readAppAuthorization(newcomer), { fullyTrusted: false });
+    assert.equal((await management.readBrowserPermissions(newcomer, 'webln-info'))[0].decision, 'allow');
     (await authorizeWalletInfo(newcomer, 'Site', signal, noPrompt))();
     await management.saveBrowserPermissions(scope, ['webln-info'], 'deny', Date.now() + 3600000);
     await assert.rejects(authorizeWalletInfo(scope, 'Site', signal, noPrompt), /permission-denied/);
-    for (const level of ['routine', 'trusted']) {
-      await levels.saveAppAuthorizationLevel(scope, level);
-      (await authorizeWalletInfo(scope, 'Site', signal, noPrompt))();
-      assert.equal((await management.readBrowserPermissions(scope, 'webln-info'))[0].decision, 'deny');
-    }
-    await levels.saveAppAuthorizationLevel(scope, 'manual');
+    await levels.setFullyTrusted(scope, true);
+    (await authorizeWalletInfo(scope, 'Site', signal, noPrompt))();
+    assert.equal((await management.readBrowserPermissions(scope, 'webln-info'))[0].decision, 'deny');
+    await levels.setFullyTrusted(scope, false);
     await assert.rejects(authorizeWalletInfo(scope, 'Site', signal, noPrompt), /permission-denied/);
     sqlite.prepare("UPDATE browser_authorizations SET expires_at=1 WHERE resource='webln-info'").run();
     await assert.rejects(authorizeWalletInfo(scope, 'Site', signal, async () => { prompts++; return false; }), /permission-denied/);

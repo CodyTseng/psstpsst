@@ -1,4 +1,4 @@
-import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
+import type { AppAuthorization } from '@/services/app-authorization/model';
 import { automaticallyAllowsAccess } from '@/services/app-authorization/policy';
 
 import { nappletAccessDomains } from '@/services/napplet/access-domains';
@@ -41,7 +41,7 @@ export function NappletPanel({ release, page, accountPubkey, onAction }: {
 
 export function NappletSettings({ release, accountPubkey }: { release: NappletRelease; accountPubkey: string }) {
   return <ApplicationSettings accountPubkey={accountPubkey} release={release}
-    access={nappletAccessDomains([...release.required,...release.optional]).some(domain=>domain!=='shell')?level=><DomainPermissions release={release} accountPubkey={accountPubkey} level={level}/>:undefined}
+    access={nappletAccessDomains([...release.required,...release.optional]).some(domain=>domain!=='shell')?authorization=><DomainPermissions release={release} accountPubkey={accountPubkey} authorization={authorization}/>:undefined}
     onReset={()=>nappletService.revoke(release,accountPubkey)}/>;
 }
 
@@ -83,7 +83,7 @@ export function NappletPanelActions({ entry, account, onAction, onOpenExternal }
   </HorizontalScrollView>;
 }
 
-function DomainPermissions({ release, accountPubkey, level }: { release: NappletRelease; accountPubkey: string; level?: AppAuthorizationLevel }) {
+function DomainPermissions({ release, accountPubkey, authorization }: { release: NappletRelease; accountPubkey: string; authorization?: AppAuthorization }) {
   const [saved, setSaved] = useState<string[]>();
   const [selected, setSelected] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
@@ -99,12 +99,12 @@ function DomainPermissions({ release, accountPubkey, level }: { release: Napplet
       }
     }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [release, accountPubkey, level]);
+  }, [release, accountPubkey, authorization?.fullyTrusted]);
   const changed = saved && (saved.length !== selected.length || saved.some((domain) => !selected.includes(domain)));
   async function save() {
     setBusy(true); setFailed(false);
     try {
-      const changes = optional.filter(domain => !automaticallyAllowsAccess(level, domain)
+      const changes = optional.filter(domain => !automaticallyAllowsAccess(authorization, domain)
         && selected.includes(domain) !== saved?.includes(domain))
         .map(domain => ({ domain, enabled: selected.includes(domain) }));
       await nappletService.updateDomainPermissions(release, changes, accountPubkey);
@@ -114,7 +114,7 @@ function DomainPermissions({ release, accountPubkey, level }: { release: Napplet
   }
   return <ApplicationAccessControls required={required} optional={optional} selected={saved?selected:undefined}
     failed={failed} busy={busy} changed={!!changed}
-    automatic={optional.filter(domain=>automaticallyAllowsAccess(level,domain))}
+    automatic={optional.filter(domain=>automaticallyAllowsAccess(authorization,domain))}
     onToggle={(domain,enabled)=>setSelected(current=>enabled?[...current,domain]:current.filter(entry=>entry!==domain))}
     onSave={()=>{void save();}}/>;
 }

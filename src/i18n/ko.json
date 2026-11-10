@@ -1371,7 +1371,14 @@
     "app_authorization_level_trusted_description": "기본 접근, 지갑 정보, 모든 서명, 암호화 및 복호화를 허용합니다.",
     "app_authorization_level_boundaries": "지갑 결제, 청구서 생성과 기기 접근은 별도로 확인합니다.",
     "app_authorization_level_unset": "선택 안 됨",
-    "app_authorization_level_continue": "계속"
+    "app_authorization_level_continue": "계속",
+    "fully_trust": "완전히 신뢰",
+    "fully_trust_on": "앱의 기본 접근과 지원되는 계정 작업을 자동으로 허용합니다. 개별 권한을 수정하려면 끄세요.",
+    "fully_trust_off": "개별 권한을 사용합니다. 저장된 결정이 없는 요청은 승인이 필요합니다.",
+    "fully_trust_enable_notice": "거부를 포함하여 저장된 서명 및 지갑 정보 규칙이 일시 중지됩니다. 기기 접근과 지갑 결제는 계속 별도 승인이 필요합니다. 변경 사항을 적용하기 위해 실행 중인 앱 인스턴스가 닫힙니다.",
+    "fully_trust_disable_notice": "저장된 개별 권한이 다시 적용됩니다. 저장된 결정이 없는 요청은 승인이 필요합니다. 변경 사항을 적용하기 위해 실행 중인 앱 인스턴스가 닫힙니다.",
+    "fully_trust_paused": "완전히 신뢰가 켜져 있으면 개별 서명 규칙이 일시 중지됩니다. 수정하려면 끄세요.",
+    "fully_trust_wallet": "완전히 신뢰가 켜져 있으면 지갑 정보 접근이 자동으로 허용되고 개별 규칙은 일시 중지됩니다."
   },
   "comments": {
     "title": "리뷰",

@@ -1,4 +1,4 @@
-import type { AppAuthorizationLevel } from '@/services/app-authorization/model';
+import type { AppAuthorization } from '@/services/app-authorization/model';
 import { useErrorToast } from '@/hooks/use-error-toast';
 import { Fragment,useState,type ReactNode } from 'react';
 import { View } from 'react-native';
@@ -14,7 +14,7 @@ import { spacing } from '@/theme';
 
 /** Shared signing controls and reset flow; capability-specific controls are an optional slot. */
 export function ApplicationSettings({accountPubkey,release,sourceId,access,onReset,onUninstall}:{
-  accountPubkey:string;release?:NappletRelease;sourceId?:string;access?:ReactNode|((level?:AppAuthorizationLevel)=>ReactNode);onReset():Promise<void>;onUninstall?():Promise<void>;
+  accountPubkey:string;release?:NappletRelease;sourceId?:string;access?:ReactNode|((authorization?:AppAuthorization)=>ReactNode);onReset():Promise<void>;onUninstall?():Promise<void>;
 }) {
   const {t}=useTranslation();
   const [busy,setBusy]=useState(false),[error,setError]=useState(false),[revision,setRevision]=useState(0);
@@ -29,7 +29,7 @@ export function ApplicationSettings({accountPubkey,release,sourceId,access,onRes
   }
   return <View style={{gap:spacing.xl}}>
     <NappletPermissions accountPubkey={accountPubkey} key={`signing:${revision}`} release={release} sourceId={sourceId} initiallyExpanded
-      access={typeof access === 'function' ? level => <Fragment key={`access:${revision}`}>{access(level)}</Fragment>
+      access={typeof access === 'function' ? authorization => <Fragment key={`access:${revision}`}>{access(authorization)}</Fragment>
         : access ? <Fragment key={`access:${revision}`}>{access}</Fragment> : undefined}/>
     {sourceId || release ? <BrowserPermissions accountPubkey={accountPubkey} key={`browser:${revision}`} sourceId={sourceId ?? normalizeSigningSource(release!.eventKey)} /> : null}
     <AppButton variant="danger" label={t('applications.revoke')} loading={busy} onPress={()=>{void reset();}}/>

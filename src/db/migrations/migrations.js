@@ -1,3 +1,4 @@
+import m0085 from './0085_authorization-presets.sql';
 import m0084 from './0084_app-authorization.sql';
 import m0083 from './0083_signing-levels.sql';
 import m0082 from './0082_signing-authorization-scope.sql';
@@ -175,6 +176,7 @@ m0080,
 m0081,
 m0082,
 m0083,
-m0084
+m0084,
+m0085
     }
   }
