@@ -53,6 +53,10 @@
         "filter": ["LICENSE", "LICENSES.chromium.html"]
       },
       {
+        "from": "../assets/images/icon.png",
+        "to": "app-icon.png"
+      },
+      {
         "from": "../assets/images/tray",
         "to": "tray",
         "filter": ["**/*.png"]

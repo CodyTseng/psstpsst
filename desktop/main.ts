@@ -1137,6 +1137,11 @@ function createWindow(kind: 'main' | 'application' | 'update' = 'main'): Browser
     : null;
   const window = new BrowserWindow({
     title: APP_IDENTITY.name,
+    ...(process.platform === 'linux' ? {
+      icon: app.isPackaged
+        ? path.join(process.resourcesPath, 'app-icon.png')
+        : path.join(__dirname, '../../assets/images/icon.png'),
+    } : {}),
     ...(bounds ?? (update ? { width: 640, height: 440 } : { width: 960, height: 720 })),
     useContentSize: !bounds,
     minWidth: update ? 560 : WINDOW_MIN_WIDTH,
