@@ -26,6 +26,26 @@ it.each([15129,35129])('discovers napplet kind %s with its verified release',asy
   expect(apps[0].release?.event.id).toBe(event.id);
 });
 
+const withRequirements = (event: ReturnType<typeof manifest>, required: string[], optional: string[] = []) => finalizeEvent({
+  ...event, tags: [...event.tags, ...required.map(domain => [event.kind === 35129 ? 'R' : 'requires', domain]),
+    ...optional.map(domain => ['O', domain])],
+}, secret);
+
+it('excludes unsupported required capabilities while retaining optional capabilities and nsites', async () => {
+  const supported = [
+    withRequirements(manifest(35130), ['storage', 'ui']),
+    withRequirements(uniqueManifest(35129, 2), ['shell'], ['future-api']),
+    withRequirements(manifest(35128), ['future-api']),
+  ];
+  const unsupported = [withRequirements(manifest(35130, 3), ['future-api']),
+    withRequirements(uniqueManifest(35129, 4, 'app-2'), ['future-api'])];
+  const entries = await discoveryEntries([...supported, ...unsupported]);
+  // Unsupported newer releases must not expose an older launchable release.
+  expect(entries.map(entry => entry.manifest!.id)).toEqual([supported[2].id]);
+  for (const event of supported) expect(await discoveryEntries([event])).toHaveLength(1);
+  for (const event of unsupported) expect(await discoveryEntries([event])).toEqual([]);
+});
+
 it('excludes signed snapshots while retaining the updating application with the same content', async () => {
   const tags = [['x', 'a'.repeat(64)], ['title', 'Mini app']];
   const snapshot = finalizeEvent({ kind: 5129, created_at: 2, content: 'A mini app', tags }, secret);
@@ -81,6 +101,29 @@ function setup(data: Record<string, ReturnType<typeof manifest>[]>) {
   jest.mocked(ApplicationNetwork).mockImplementation(() => ({ query, destroy }) as unknown as ApplicationNetwork);
   return { query, destroy, discovery: new ApplicationDiscovery() };
 }
+
+it('fills visible pages with supported applications and filters the searchable catalogue', async () => {
+  const unsupported = Array.from({ length: 25 }, (_, i) => withRequirements(uniqueManifest(35130, 1000 - i), ['future-api']));
+  const supported = Array.from({ length: 25 }, (_, i) => uniqueManifest(35130, 900 - i));
+  const { discovery } = setup({ [nappRelay]: [...unsupported, ...supported] });
+  await discovery.load('account');
+  expect(discovery.store.getState().visibleEntries.map(app => app.manifest!.id)).toEqual(supported.slice(0, 20).map(event => event.id));
+  expect(discovery.store.getState().entries.map(app => app.manifest!.id)).toEqual(supported.map(event => event.id));
+  await discovery.loadMore('account');
+  expect(discovery.store.getState().visibleEntries.map(app => app.manifest!.id)).toEqual(supported.map(event => event.id));
+});
+
+it('does not revive an older supported release from a later relay page', async () => {
+  const newer = withRequirements(uniqueManifest(35130, 1000, 'same-app'), ['future-api']);
+  const other = Array.from({ length: 200 }, (_, i) => uniqueManifest(35130, 999 - i));
+  const older = uniqueManifest(35130, 700, 'same-app');
+  const { discovery } = setup({ [nappRelay]: [newer, ...other, older] });
+  await discovery.load('account');
+  for (let i = 0; i < 12 && discovery.store.getState().hasMore; i++) await discovery.loadMore('account');
+  expect(discovery.store.getState().visibleEntries).toHaveLength(200);
+  expect(discovery.store.getState().entries).toHaveLength(200);
+  expect(discovery.store.getState().visibleEntries.some(app => app.manifest!.id === older.id)).toBe(false);
+});
 
 it('reveals 20 entries at a time from memory before requesting the next relay page', async () => {
   const events = Array.from({ length: 225 }, (_, i) => uniqueManifest(35130, 1000 - i));

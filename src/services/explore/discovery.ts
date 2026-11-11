@@ -2,12 +2,23 @@ import { createStore } from 'zustand/vanilla';
 import { matchFilters, type Event } from 'nostr-tools';
 import { ApplicationNetwork } from '@/services/applications/network';
 import { parseApplicationEvents } from './application-event';
-import { type ExploreEntry } from './model';
+import { SUPPORTED_NAPP_DOMAINS, type ExploreEntry } from './model';
+import { NAP_DOMAINS } from '@/services/napplet/protocol';
 import { APPLICATION_DISCOVERY_SOURCES, APPLICATION_QUERY_LIMIT } from './catalogue-relays';
 import { RelayTimeline, compareTimelineEvents } from '@/services/relay/relay-timeline';
 
 /** Verify bounded relay results without blocking a frame with a batch of signatures. */
 export async function discoveryEntries(events: Event[], eventRelays?: Map<string, string[]>): Promise<ExploreEntry[]> {
+  return (await latestDiscoveryEntries(events, eventRelays)).filter(isSupported);
+}
+
+function isSupported(app: ExploreEntry): boolean {
+  const domains: readonly string[] | undefined = app.kind === 'napp' ? SUPPORTED_NAPP_DOMAINS : app.kind === 'napplet' ? NAP_DOMAINS : undefined;
+  return !domains || app.required.every(domain => domains.includes(domain));
+}
+
+// Retain unsupported versions internally so older supported releases cannot reappear.
+async function latestDiscoveryEntries(events: Event[], eventRelays?: Map<string, string[]>): Promise<ExploreEntry[]> {
   const entries = new Map<string, ExploreEntry>();
   for (const app of await parseApplicationEvents(events.slice(0, 500).filter(event => [15128, 35128, 15129, 35129, 35130].includes(event.kind)))) {
     if (!app?.manifest) continue;
@@ -96,7 +107,7 @@ export class ApplicationDiscovery {
     if (!missing.length) return;
     for (const event of missing) this.parsed.set(event.id, undefined);
     const changed = new Map<string, ExploreEntry>();
-    for (const entry of await discoveryEntries(missing, eventRelays)) {
+    for (const entry of await latestDiscoveryEntries(missing, eventRelays)) {
       this.parsed.set(entry.manifest!.id, entry);
       setTimeout(() => { void import('./application-cache').then(cache => cache.cacheApplicationEvent(entry)).catch(() => {}); }, 0);
       const previous = this.catalogue.get(entry.key);
@@ -106,7 +117,7 @@ export class ApplicationDiscovery {
       }
     }
     if (changed.size) {
-      const incoming = [...changed.values()].sort(compare);
+      const incoming = [...changed.values()].filter(isSupported).sort(compare);
       const previous = this.cached.filter(entry => !changed.has(entry.key));
       const merged: ExploreEntry[] = [];
       let i = 0, j = 0;
@@ -141,7 +152,7 @@ export class ApplicationDiscovery {
           await this.remember(result.events);
           for (const event of result.events) {
             const entry = this.parsed.get(event.id);
-            if (entry && !this.shown.has(entry.key)) {
+            if (entry && isSupported(this.catalogue.get(entry.key) ?? entry) && !this.shown.has(entry.key)) {
               this.shown.add(entry.key);
               page.push(entry);
             }

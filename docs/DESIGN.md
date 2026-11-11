@@ -1123,8 +1123,10 @@ Explicit Lightning/LNURL links retain their wallet flow in the home scanner.
 Empty My apps opens Discover rather than a separate address-entry task.
 Discover lists verified, continuously updated napps and napplets, excluding nsites
 and immutable snapshots, without recording visits or adding shortcuts until the
-user chooses an action. Publisher directories also omit immutable snapshots;
-exact-address lookup still supports them. Exact naddr and URL input selects address lookup:
+user chooses an action. Discover omits applications whose latest release requires unsupported host
+capabilities; unsupported optional capabilities do not hide an application.
+Publisher directories also omit immutable snapshots; exact-address lookup still
+supports them. Exact naddr and URL input selects address lookup:
 local matches appear first, naddr hints choose manifest relays, and hintless
 addresses use author write relays plus format-specific sources. Exact lookup
 begins only when the live input parses as a complete address; unfinished or
