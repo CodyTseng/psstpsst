@@ -8,6 +8,7 @@ import { copyImageUri } from '@/services/files/attachment-copy.service';
 import { MediaViewerContextMenu } from '@/components/media/MediaViewerContextMenu';
 import { MediaPager } from '@/components/media/MediaPager';
 import { MediaViewerTopBar } from '@/components/media/MediaViewerTopBar';
+import { AnimatedMediaChromeView } from '@/components/media/MediaChromeView';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
@@ -125,7 +126,7 @@ export function SingleImageLightbox({ uri, onClose, inModal = false }: {
           }}
         />
       </Animated.View>
-      <Animated.View style={[StyleSheet.absoluteFill, animatedStyle, { pointerEvents: isClosing ? 'none' : 'box-none' }]}>
+      <AnimatedMediaChromeView blocked={isClosing} style={[StyleSheet.absoluteFill, animatedStyle]}>
         <MediaViewerTopBar
           onClose={() => requestClose()}
           onSave={save}
@@ -136,7 +137,7 @@ export function SingleImageLightbox({ uri, onClose, inModal = false }: {
             zoomOut: () => imageRef.current?.zoomOut(),
           }}
         />
-      </Animated.View>
+      </AnimatedMediaChromeView>
     </MediaViewerContextMenu>
   );
 }

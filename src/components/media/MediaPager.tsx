@@ -23,6 +23,7 @@ import { ZoomableImage, type ZoomableImageHandle } from '@/components/common/Zoo
 import { MediaViewerContextMenu } from './MediaViewerContextMenu';
 import { copyAttachment, copyImageUri } from '@/services/files/attachment-copy.service';
 import { MediaViewerTopBar } from '@/components/media/MediaViewerTopBar';
+import { AnimatedMediaChromeView } from './MediaChromeView';
 import type { MediaViewerPreview } from '@/stores/media-viewer.store';
 import { useMediaViewerTransition } from '@/components/media/use-media-viewer-transition';
 import { MediaVideoPage } from '@/components/media/MediaVideoPage';
@@ -428,7 +429,7 @@ function MediaPagerContent({
           />
         )}
       </Animated.View>
-      <Animated.View style={[StyleSheet.absoluteFill, animatedStyle, { pointerEvents: isClosing ? 'none' : 'box-none' }]}>
+      <AnimatedMediaChromeView blocked={isClosing} style={[StyleSheet.absoluteFill, animatedStyle]}>
         <MediaPagerNavigation
           hasPrevious={ready && currentIndex > 0}
           hasNext={ready && currentIndex < pages.length - 1}
@@ -462,7 +463,7 @@ function MediaPagerContent({
             )}
           />
         </MediaTopChrome>
-      </Animated.View>
+      </AnimatedMediaChromeView>
     </MediaViewerContextMenu>
   );
 }

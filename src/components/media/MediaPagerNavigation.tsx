@@ -9,6 +9,7 @@ import { useIsRTL } from '@/i18n/direction';
 import { IS_ELECTRON } from '@/lib/platform';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 import { iconStrokeWidth } from '@/theme/icons';
+import { mediaChromePointerStyles } from './media-chrome-styles';
 
 type Props = {
   hasPrevious: boolean;
@@ -46,14 +47,15 @@ export function MediaPagerNavigation({ hasPrevious, hasNext, disabled, onPage }:
 
   return (
     <View
-      style={{
+      style={[mediaChromePointerStyles.passthrough, {
         position: 'absolute',
         top: '50%',
         start: spacing.lg,
         end: spacing.lg,
         marginTop: -uiDensity.headerActionSize / 2,
         flexDirection: 'row',
-        justifyContent: 'space-between', pointerEvents: 'box-none' }}
+        justifyContent: 'space-between',
+      }]}
     >
       <View>{hasPrevious ? (
         <IconButton

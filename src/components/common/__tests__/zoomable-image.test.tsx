@@ -45,7 +45,7 @@ jest.mock('react-native-reanimated', () => {
     withSpring: (value: number) => value,
     withTiming: jest.fn((value: number) => value),
     cancelAnimation: jest.fn(),
-    Easing: { cubic: (x: number) => x * x * x, out: (ease: (x: number) => number) => (x: number) => 1 - ease(1 - x) },
+    Easing: { bezier: () => (value: number) => value, cubic: (x: number) => x * x * x, out: (ease: (x: number) => number) => (x: number) => 1 - ease(1 - x) },
     ReduceMotion: { System: 'system' },
     LinearTransition: {
       duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },

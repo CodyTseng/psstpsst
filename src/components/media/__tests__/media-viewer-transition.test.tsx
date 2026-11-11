@@ -16,13 +16,13 @@ jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: { View },
+    default: { View, createAnimatedComponent: (component: unknown) => component },
     useSharedValue: (value: number) => React.useRef({ value }).current,
     useAnimatedStyle: (factory: () => { opacity: number }) => ({ get opacity() { return factory().opacity; } }),
     withTiming: jest.fn((value: number) => value),
     cancelAnimation: jest.fn(),
     runOnJS: (callback: unknown) => callback,
-    Easing: { out: (ease: unknown) => ease, cubic: (x: number) => x * x * x },
+    Easing: { bezier: () => (value: number) => value, out: (ease: unknown) => ease, cubic: (x: number) => x * x * x },
     ReduceMotion: { System: 'system' },
   };
 });

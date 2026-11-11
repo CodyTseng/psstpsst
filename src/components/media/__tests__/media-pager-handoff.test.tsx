@@ -87,7 +87,7 @@ jest.mock('@/hooks/use-attachment', () => ({
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual('react') as typeof import('react');
   return { __esModule: true, default: { View: jest.requireActual('react-native').View, createAnimatedComponent: (component: unknown) => component },
-    Easing: { out: () => (value: number) => value },
+    Easing: { bezier: () => (value: number) => value, out: () => (value: number) => value },
     ReduceMotion: { System: 'system' },
     LinearTransition: {
       duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },

@@ -29,7 +29,9 @@ export const noticeDismissal = {
 /** Short, interruptible transitions for direct manipulation controls. */
 export const manipulationTiming = {
   duration: 200,
-  easing: Easing.out(Easing.cubic),
+  // The x coordinates make x(t) = t; y(t) is exactly cubic ease-out.
+  // Unlike Easing.out(), this also serializes for web layout animations.
+  easing: Easing.bezier(1 / 3, 1, 2 / 3, 1),
   reduceMotion: ReduceMotion.System,
 } as const;
 

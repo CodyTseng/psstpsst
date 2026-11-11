@@ -13,6 +13,7 @@ import { IS_ELECTRON } from '@/lib/platform';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 import { mediaChromeLayout } from './MediaChrome';
+import { AnimatedMediaChromeView } from './MediaChromeView';
 
 type ExtraAction = {
   accessibilityLabel: string;
@@ -35,7 +36,7 @@ export function MediaViewerTopBar({ disabled, extraAction, imageZoom, onClose, o
   const insets = useSafeAreaInsets();
 
   return (
-    <Animated.View
+    <AnimatedMediaChromeView
       layout={mediaChromeLayout}
       style={{
         position: 'absolute',
@@ -46,7 +47,6 @@ export function MediaViewerTopBar({ disabled, extraAction, imageZoom, onClose, o
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        pointerEvents: 'box-none',
       }}
     >
       <IconButton
@@ -100,6 +100,6 @@ export function MediaViewerTopBar({ disabled, extraAction, imageZoom, onClose, o
           accessibilityLabel={t('attach.save')}
         />
       </Animated.View>
-    </Animated.View>
+    </AnimatedMediaChromeView>
   );
 }

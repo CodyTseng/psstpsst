@@ -22,7 +22,7 @@ jest.mock('@/theme/motion', () => ({ manipulationTiming: { duration: 200 } }));
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: jest.requireActual('react-native').View },
-  Easing: { in: (easing: unknown) => easing, out: (easing: unknown) => easing, quad: jest.fn() },
+  Easing: { bezier: () => (value: number) => value, in: (easing: unknown) => easing, out: (easing: unknown) => easing, quad: jest.fn() },
   runOnJS: (callback: unknown) => callback,
   useAnimatedStyle: (callback: () => unknown) => callback(),
   useReducedMotion: () => mockReducedMotion,

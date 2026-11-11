@@ -1,9 +1,8 @@
 import { Image } from 'expo-image';
-import { useEvent } from 'expo';
 import * as Sharing from 'expo-sharing';
-import { useVideoPlayer, type VideoSource } from 'expo-video';
+import type { VideoSource } from 'expo-video';
 import { Play } from '@solar-icons/react-native/category/video/Linear/Play';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
@@ -26,6 +25,7 @@ import { spacing, useThemeColors } from '@/theme';
 import { useVideoPoster } from '@/hooks/use-video-poster';
 import { VideoSurface } from './VideoSurface';
 import { MediaPlaybackControls } from './MediaPlaybackControls';
+import { useMediaVideoPlayer } from './use-media-video-player';
 
 type Props = {
   item: ConversationMediaItem;
@@ -152,24 +152,7 @@ function UnsupportedVideo({ uri, mime, name }: { uri?: string; mime?: string; na
 
 /** An inactive page unmounts this player, including when a download finishes late. */
 function AutoplayVideo({ source, sourceKey, posterUri, thumbhash, onError }: { source: VideoSource; sourceKey: string; posterUri?: string; thumbhash?: string; onError: () => void }) {
-  const player = useVideoPlayer(null, (instance) => {
-    instance.loop = false;
-    instance.timeUpdateEventInterval = IS_ELECTRON ? 0 : 0.5;
-  });
-  const { status } = useEvent(player, 'statusChange', { status: player.status });
-  useEffect(() => {
-    if (status === 'error') onError();
-  }, [status, onError]);
-  useEffect(() => {
-    let cancelled = false;
-    void player.replaceAsync(source).then(() => {
-      if (!cancelled) player.play();
-    }).catch(() => { if (!cancelled) onError(); });
-    return () => {
-      cancelled = true;
-      // useVideoPlayer owns release; its native cleanup runs before this one.
-    };
-  }, [player, source, onError]);
+  const player = useMediaVideoPlayer(source, onError);
   return (
     <>
       <VideoSurface

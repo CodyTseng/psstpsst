@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { IconButton } from '@/components/common/IconButton';
 import { spacing, uiDensity } from '@/theme';
@@ -9,8 +9,8 @@ import { MediaViewerTopBar } from '../MediaViewerTopBar';
 jest.mock('@/components/common/ZoomableImage', () => ({ IMAGE_MAX_SCALE: 4 }));
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
-  default: { View: jest.requireActual('react-native').View },
-  Easing: { out: () => (value: number) => value },
+  default: { View: jest.requireActual('react-native').View, createAnimatedComponent: (component: unknown) => component },
+  Easing: { bezier: () => (value: number) => value, out: () => (value: number) => value },
   ReduceMotion: { System: 'system' },
   LinearTransition: {
     duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },
@@ -65,7 +65,7 @@ describe('MediaViewerTopBar', () => {
     });
 
     const bar = renderer!.root.findAllByType(View)[0];
-    expect(bar.props.style).toEqual(
+    expect(StyleSheet.flatten(bar.props.style)).toEqual(
       expect.objectContaining({
         top: 12 + spacing.sm,
         start: 0,
@@ -86,7 +86,7 @@ describe('MediaViewerTopBar', () => {
     act(() => {
       renderer = create(<MediaViewerTopBar onClose={jest.fn()} onSave={jest.fn()} />);
     });
-    expect(renderer!.root.findAllByType(View)[0].props.style.paddingHorizontal).toBe(44 + spacing.lg);
+    expect(StyleSheet.flatten(renderer!.root.findAllByType(View)[0].props.style).paddingHorizontal).toBe(44 + spacing.lg);
   });
 
   it('adds one context action between close and save', () => {

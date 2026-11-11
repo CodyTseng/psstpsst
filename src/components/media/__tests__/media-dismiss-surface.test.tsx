@@ -105,7 +105,7 @@ it('preserves dismissal without displacement under Reduce Motion', () => {
   expect(translation()).toEqual([{ translateY: 0 }]);
 });
 
-it('disables gestures for neighbouring pages and Electron', () => {
+it('disables gestures for neighbouring pages and omits the detector on Electron', () => {
   mount(false);
   expect(gesture().config.enabled).toBe(false);
   mockElectron = true;
@@ -114,5 +114,5 @@ it('disables gestures for neighbouring pages and Electron', () => {
       {null}
     </MediaDismissSurface>,
   ));
-  expect(gesture().config.enabled).toBe(false);
+  expect(renderer.root.findAllByType(GestureDetector)).toHaveLength(0);
 });

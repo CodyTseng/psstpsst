@@ -97,7 +97,10 @@ it.each([
   mockElectron = electron;
   await act(async () => { renderer = create(<MediaVideoPage item={attachment} active />); });
   expect(fetchVideo).toHaveBeenCalledTimes(1);
-  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith('file:///downloaded.mp4');
+  if (electron) {
+    expect(useVideoPlayer).toHaveBeenLastCalledWith('file:///downloaded.mp4', expect.any(Function));
+    expect(mockPlayer.replaceAsync).not.toHaveBeenCalled();
+  } else expect(mockPlayer.replaceAsync).toHaveBeenCalledWith('file:///downloaded.mp4');
   expect(mockPlayer.play).toHaveBeenCalledTimes(1);
   expect(renderer.root.findByType(VideoView).props.nativeControls).toBe(electron);
   expect(StyleSheet.flatten(renderer.root.findByType(VideoView).props.style))
@@ -192,7 +195,7 @@ it('offers the cached video to external mobile apps without downloading it again
 
 it('shows unsupported status for direct video failures instead of a blank player', async () => {
   mockElectron = true;
-  mockPlayer.replaceAsync.mockRejectedValueOnce(new Error('Unsupported codec'));
+  mockStatus = 'error';
   await act(async () => { renderer = create(<MediaVideoPage item={remote} active />); });
   expect(renderer.root.findByType(AppText).props.children).toBe('attach.video_unsupported_desktop');
   expect(renderer.root.findAllByType(VideoView)).toHaveLength(0);
@@ -200,3 +203,20 @@ it('shows unsupported status for direct video failures instead of a blank player
 
 jest.mock('@/components/chat/AttachmentTransferProgress', () => ({ AttachmentTransferProgress: () => null }));
 jest.mock('lucide-react-native/icons/download', () => ({ __esModule: true, default: () => null }));
+
+it('waits for desktop readiness and never restarts playback after buffering', async () => {
+  mockElectron = true;
+  mockStatus = 'loading';
+  await act(async () => { renderer = create(<MediaVideoPage item={remote} active />); });
+  expect(useVideoPlayer).toHaveBeenLastCalledWith({ uri: remote.meta.url, useCaching: true }, expect.any(Function));
+  expect(mockPlayer.replaceAsync).not.toHaveBeenCalled();
+  expect(mockPlayer.play).not.toHaveBeenCalled();
+  mockStatus = 'readyToPlay';
+  await act(async () => { renderer.update(<MediaVideoPage item={remote} active />); });
+  expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+  mockStatus = 'loading';
+  await act(async () => { renderer.update(<MediaVideoPage item={remote} active />); });
+  mockStatus = 'readyToPlay';
+  await act(async () => { renderer.update(<MediaVideoPage item={remote} active />); });
+  expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+});

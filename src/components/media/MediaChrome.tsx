@@ -4,6 +4,8 @@ import { LinearTransition } from 'react-native-reanimated';
 
 import { manipulationTiming } from '@/theme/motion';
 
+import { mediaChromePointerStyles } from './media-chrome-styles';
+
 /** Layout changes run natively without subscribing the pager to animation frames. */
 export const mediaChromeLayout = LinearTransition
   .duration(manipulationTiming.duration)
@@ -58,7 +60,10 @@ export function MediaTopChrome({ children }: { children: ReactNode }) {
       onTouchStart={touchControls}
       accessibilityElementsHidden={!shown}
       importantForAccessibility={shown ? 'auto' : 'no-hide-descendants'}
-      style={{ flex: 1, opacity: shown ? 1 : 0 , pointerEvents: shown ? 'box-none' : 'none' }}
+      style={[
+        { flex: 1, opacity: shown ? 1 : 0 },
+        shown ? mediaChromePointerStyles.passthrough : mediaChromePointerStyles.hidden,
+      ]}
     >
       {children}
     </View>

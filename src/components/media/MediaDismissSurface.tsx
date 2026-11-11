@@ -23,13 +23,20 @@ type Props = {
 };
 
 /** Vertical dismissal leaves horizontal paging and native control taps available. */
-export function MediaDismissSurface({ children, active, backdrop, onRequestClose }: Props) {
+export function MediaDismissSurface(props: Props) {
+  // Disabled web handlers still register pointer-capture listeners at mount,
+  // interfering with native video controls inside Chromium's shadow DOM.
+  if (IS_ELECTRON) return <View style={StyleSheet.absoluteFill}>{props.children}</View>;
+  return <TouchMediaDismissSurface {...props} />;
+}
+
+function TouchMediaDismissSurface({ children, active, backdrop, onRequestClose }: Props) {
   const translation = useSharedValue(0);
   const origin = useSharedValue(0);
   const committed = useSharedValue(false);
   const reducedMotion = useReducedMotion();
   const gesture = useMemo(() => Gesture.Pan()
-    .enabled(active && !IS_ELECTRON)
+    .enabled(active)
     .maxPointers(1)
     // Match the image pager's axis arbitration and distance/velocity thresholds.
     .activeOffsetY([-15, 15])

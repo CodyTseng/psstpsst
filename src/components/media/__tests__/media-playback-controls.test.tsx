@@ -12,8 +12,8 @@ import { MediaChromeProvider, MediaTopChrome } from '../MediaChrome';
 const mockListeners = new Map<string, (event: Record<string, number>) => void>();
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
-  default: { View: jest.requireActual('react-native').View },
-  Easing: { out: () => (value: number) => value },
+  default: { View: jest.requireActual('react-native').View, createAnimatedComponent: (component: unknown) => component },
+  Easing: { bezier: () => (value: number) => value, out: () => (value: number) => value },
   ReduceMotion: { System: 'system' },
   LinearTransition: {
     duration() { return this; }, easing() { return this; }, reduceMotion() { return this; },
@@ -214,11 +214,11 @@ it('keeps controls visible while selecting speed and restarts the idle timer on 
     mount();
     act(() => { renderer.root.findByType(AppButton).props.onPress(); });
     act(() => { jest.advanceTimersByTime(5000); });
-    expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(1);
+    expect(StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style).opacity).toBe(1);
     act(() => { renderer.root.findByType(ContextMenu).props.onClose(); });
     expect(player.playbackRate).toBe(1);
     act(() => { jest.advanceTimersByTime(3000); });
-    expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(0);
+    expect(StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style).opacity).toBe(0);
   } finally { jest.useRealTimers(); }
 });
 
@@ -268,11 +268,11 @@ it('hides idle playback controls and toggles them from the video canvas', () => 
   act(() => { jest.advanceTimersByTime(3000); });
   expect(panel().opacity).toBe(0);
   expect(panel().pointerEvents).toBe('none');
-  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(0);
+  expect(StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style).opacity).toBe(0);
   act(() => { renderer.root.findByProps({ testID: 'media-controls-toggle' }).props.onPress(); });
   expect(panel().opacity).toBe(1);
   expect(panel().pointerEvents).toBe('box-none');
-  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(1);
+  expect(StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style).opacity).toBe(1);
   act(() => { renderer.root.findByProps({ testID: 'media-controls-toggle' }).props.onPress(); });
   expect(panel().opacity).toBe(0);
   act(() => renderer.unmount());
@@ -303,9 +303,9 @@ it('refreshes the shared idle timer when interacting with top actions', () => {
   act(() => { jest.advanceTimersByTime(2500); });
   act(() => { renderer.root.findByProps({ testID: 'media-top-chrome' }).props.onTouchStart(); });
   act(() => { jest.advanceTimersByTime(1000); });
-  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(1);
+  expect(StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style).opacity).toBe(1);
   act(() => { jest.advanceTimersByTime(2000); });
-  expect(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style.opacity).toBe(0);
+  expect(StyleSheet.flatten(renderer.root.findByProps({ testID: 'media-top-chrome' }).props.style).opacity).toBe(0);
   act(() => renderer.unmount());
   jest.useRealTimers();
 });
