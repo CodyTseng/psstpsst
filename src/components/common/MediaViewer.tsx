@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
 import Animated, { useSharedValue } from 'react-native-reanimated';
@@ -12,8 +12,9 @@ import { useMediaViewerTransition } from '@/components/media/use-media-viewer-tr
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { saveUriToLibrary } from '@/services/files/media-save.service';
+import { getSessionImageUri } from '@/services/emoji/image-cache.service';
 import { useMediaViewerStore } from '@/stores/media-viewer.store';
-import { useThemeColors } from '@/theme';
+import { desktopChrome, useThemeColors } from '@/theme';
 
 /**
  * Global full-screen media viewer, mounted once at the app root. Dispatches on
@@ -54,12 +55,19 @@ export function MediaViewer() {
 }
 
 /** Reusable single-image layer for the root viewer and an existing native Modal. */
-export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: () => void }) {
+export function SingleImageLightbox({ uri, onClose, inModal = false }: {
+  uri: string;
+  onClose: () => void;
+  /** Native Modals cover the entire desktop window, including its title bar. */
+  inModal?: boolean;
+}) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const [saving, setSaving] = useState(false);
   const imageRef = useRef<ZoomableImageHandle>(null);
   const [imageScale, setImageScale] = useState(1);
+  // Keep the selected file stable even if background grid loads evict its URL.
+  const imageUri = useMemo(() => getSessionImageUri(uri) ?? uri, [uri]);
 
   const backdrop = useSharedValue(1);
   const { animatedStyle, contentStyle, isClosing, requestClose } = useMediaViewerTransition(onClose, backdrop);
@@ -96,6 +104,8 @@ export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: ()
         {
           zIndex: 50,
           elevation: 50,
+          // Root viewers already sit below DesktopWindowFrame's title bar.
+          top: IS_ELECTRON && inModal ? desktopChrome.titlebarHeight : 0,
           // Clip like the pager's FlatList does, so a zoomed/dragged image
           // can't paint over the desktop window title bar.
           overflow: 'hidden',
@@ -107,7 +117,7 @@ export function SingleImageLightbox({ uri, onClose }: { uri: string; onClose: ()
         <ZoomableImage
           ref={imageRef}
           onScaleChange={setImageScale}
-          uri={uri}
+          uri={imageUri}
           onRequestClose={() => requestClose()}
           onDragProgress={(p) => {
             // eslint-disable-next-line react-hooks/immutability -- Reanimated shared values are mutable.

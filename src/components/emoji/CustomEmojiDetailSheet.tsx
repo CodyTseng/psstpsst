@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,6 +42,7 @@ export function CustomEmojiDetailSheet() {
   const startForwardDraft = useForwardDraftStore((state) => state.start);
   const collection = useCustomEmojis(accountPubkey);
   const [lightboxUri, setLightboxUri] = useState<string>();
+  const openImage = useCallback((selected: CustomEmoji) => setLightboxUri(selected.url), []);
   const [pendingShareCoordinate, setPendingShareCoordinate] = useState<string>();
   const [pendingAuthorPubkey, setPendingAuthorPubkey] = useState<string>();
   const [packState, setPackState] = useState<{
@@ -139,48 +140,46 @@ export function CustomEmojiDetailSheet() {
       ]}
       scrollOverlay={
         emoji?.setAddress && pack ? (
-          <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}>
-            <View
-              style={{
-                position: 'absolute',
-                left: spacing.xl,
-                right: spacing.xl,
-                bottom: floatingActionBottom,
-              }}
-            >
-              <View style={{ flexDirection: 'row', gap: spacing.xl }}>
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: c.surfaceElevated,
-                    borderRadius: radius.full,
-                    ...shadow.float,
-                  }}
-                >
-                  <AppButton
-                    variant="secondary"
-                    size="md"
-                    corner="full"
-                    label={t('emoji.share_in_chat')}
-                    onPress={sharePack}
-                  />
-                </View>
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: c.surfaceElevated,
-                    borderRadius: radius.full,
-                    ...shadow.float,
-                  }}
-                >
-                  <AppButton
-                    variant="primary"
-                    size="md"
-                    corner="full"
-                    label={packCollected ? t('emoji.remove_pack') : t('emoji.add_pack')}
-                    onPress={togglePack}
-                  />
-                </View>
+          <View
+            style={{
+              position: 'absolute',
+              start: spacing.xl,
+              end: spacing.xl,
+              bottom: floatingActionBottom,
+            }}
+          >
+            <View style={{ flexDirection: 'row', gap: spacing.xl }}>
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: c.surfaceElevated,
+                  borderRadius: radius.full,
+                  ...shadow.float,
+                }}
+              >
+                <AppButton
+                  variant="secondary"
+                  size="md"
+                  corner="full"
+                  label={t('emoji.share_in_chat')}
+                  onPress={sharePack}
+                />
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: c.surfaceElevated,
+                  borderRadius: radius.full,
+                  ...shadow.float,
+                }}
+              >
+                <AppButton
+                  variant="primary"
+                  size="md"
+                  corner="full"
+                  label={packCollected ? t('emoji.remove_pack') : t('emoji.add_pack')}
+                  onPress={togglePack}
+                />
               </View>
             </View>
           </View>
@@ -188,7 +187,7 @@ export function CustomEmojiDetailSheet() {
       }
       modalOverlay={
         lightboxUri ? (
-          <SingleImageLightbox uri={lightboxUri} onClose={() => setLightboxUri(undefined)} />
+          <SingleImageLightbox inModal uri={lightboxUri} onClose={() => setLightboxUri(undefined)} />
         ) : undefined
       }
     >
@@ -200,7 +199,7 @@ export function CustomEmojiDetailSheet() {
           pack={pack}
           loading={loading}
           onOpenAuthor={openAuthorPacks}
-          onOpenImage={() => setLightboxUri(shownEmoji.url)}
+          onOpenImage={openImage}
         />
       ) : null}
     </BottomSheet>
@@ -220,7 +219,7 @@ function EmojiDetailContent({
   pack: EmojiPack | null;
   loading: boolean;
   onOpenAuthor: (authorPubkey: string) => void;
-  onOpenImage: () => void;
+  onOpenImage: (selected: CustomEmoji) => void;
 }) {
   const { t } = useTranslation();
   const c = useThemeColors();
@@ -249,7 +248,7 @@ function EmojiDetailContent({
           variant="plain"
           shape="square"
           size={emojiSize.detailImage}
-          onPress={onOpenImage}
+          onPress={() => onOpenImage(emoji)}
           accessibilityLabel={`${t('emoji.view_emoji_image')} ${emoji.shortcode}`}
           icon={(
             <CustomEmojiImage emoji={emoji} size={emojiSize.detailImage} clickable={false} />
@@ -296,6 +295,7 @@ function EmojiDetailContent({
               <CustomEmojiGrid
                 embedded
                 emojis={pack.emojis}
+                onSelect={onOpenImage}
                 horizontalPadding={0}
               />
             </View>

@@ -1,9 +1,12 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { BackHandler } from 'react-native';
+import { BackHandler, StyleSheet } from 'react-native';
 import { withTiming } from 'react-native-reanimated';
 
 import { MediaViewer, SingleImageLightbox } from '@/components/common/MediaViewer';
+import { ZoomableImage } from '@/components/common/ZoomableImage';
+import { getSessionImageUri } from '@/services/emoji/image-cache.service';
 import { MediaViewerTopBar } from '../MediaViewerTopBar';
+import { MediaViewerContextMenu } from '../MediaViewerContextMenu';
 import { useMediaViewerTransition } from '../use-media-viewer-transition';
 import { useMediaViewerStore } from '@/stores/media-viewer.store';
 import { mediaViewerTiming } from '@/theme/motion';
@@ -27,8 +30,14 @@ jest.mock('@/components/common/ZoomableImage', () => ({ ZoomableImage: () => nul
 jest.mock('../MediaViewerTopBar', () => ({ MediaViewerTopBar: () => null }));
 jest.mock('../MediaPager', () => ({ MediaPager: () => null }));
 jest.mock('@/services/files/media-save.service', () => ({ saveUriToLibrary: jest.fn() }));
+jest.mock('@/services/emoji/image-cache.service', () => ({ getSessionImageUri: jest.fn() }));
 jest.mock('@/platform', () => ({ platform: {} }));
-jest.mock('@/theme', () => ({ useThemeColors: () => ({ lightboxBackdrop: 'black' }) }));
+jest.mock('@/theme', () => ({
+  useThemeColors: () => ({ lightboxBackdrop: 'black' }),
+  desktopChrome: { titlebarHeight: 32 },
+}));
+let mockIsElectron = false;
+jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockIsElectron; } }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 function Probe(_props: { transition: ReturnType<typeof useMediaViewerTransition> }) { return null; }
@@ -50,6 +59,8 @@ function lastExit() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(getSessionImageUri).mockReturnValue(null);
+  mockIsElectron = false;
   frames = [];
   jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => { frames.push(callback); return frames.length; });
   jest.spyOn(global, 'cancelAnimationFrame').mockImplementation(() => {});
@@ -131,6 +142,31 @@ it('discards a pending close and navigation after the viewer is unmounted', () =
   act(() => { finish(true); });
   expect(onClosed).not.toHaveBeenCalled();
   expect(navigate).not.toHaveBeenCalled();
+});
+
+it.each([
+  { desktop: true, inModal: true, top: 32 },
+  { desktop: true, inModal: false, top: 0 },
+  { desktop: false, inModal: true, top: 0 },
+  { desktop: false, inModal: false, top: 0 },
+])('keeps the entire image viewport clear of chrome: %o', ({ desktop, inModal, top }) => {
+  mockIsElectron = desktop;
+  act(() => { renderer = create(<SingleImageLightbox uri="emoji.png" onClose={onClosed} inModal={inModal} />); });
+  const surface = renderer!.root.findByType(MediaViewerContextMenu);
+  expect(StyleSheet.flatten(surface.props.style)).toEqual(expect.objectContaining({
+    top, bottom: 0, left: 0, right: 0, overflow: 'hidden',
+  }));
+});
+
+it('reuses the local image already loaded by an emoji thumbnail', () => {
+  jest.mocked(getSessionImageUri).mockReturnValue('file:///cached-emoji.png');
+  act(() => { renderer = create(<SingleImageLightbox uri="https://example.com/emoji.png" onClose={onClosed} inModal />); });
+  expect(renderer!.root.findByType(ZoomableImage).props.uri).toBe('file:///cached-emoji.png');
+  jest.mocked(getSessionImageUri).mockReturnValue(null);
+  act(() => { renderer!.update(<SingleImageLightbox uri="https://example.com/emoji.png" onClose={onClosed} inModal />); });
+  expect(renderer!.root.findByType(ZoomableImage).props.uri).toBe('file:///cached-emoji.png');
+  act(() => { renderer!.update(<SingleImageLightbox uri="https://example.com/other.png" onClose={onClosed} inModal />); });
+  expect(renderer!.root.findByType(ZoomableImage).props.uri).toBe('https://example.com/other.png');
 });
 
 it('keeps a single-image viewer in the store until its fade-out completes', () => {

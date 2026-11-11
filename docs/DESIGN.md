@@ -628,6 +628,7 @@ surface and playback position without revealing neighbouring previews.
 Visible playback chrome adapts smoothly to viewport changes while actions retain
 their size; Reduce Motion removes the layout transition.
 Playback chrome shares the media action styling and stays clear of window safe areas.
+Image viewers also reserve desktop title-bar space when presented inside a modal.
 Top and bottom media actions align to the same horizontal gutters.
 Scrubbing previews the video frame, retains touch ownership outside the rail,
 and restores the preceding playback intent when released.
