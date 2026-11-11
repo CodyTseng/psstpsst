@@ -1138,6 +1138,7 @@ Clearing the field hides suggestions and restores the resting content.
 Website result rows open directly; their menus retain the explicit details action.
 Search inputs and URL suggestions share three columns: leading icon, flexible
 text, and trailing action. Both icon columns and text starts align across rows.
+Rows without a trailing action give that space to the text.
 Leading search and history glyphs use the same icon family, size, and stroke.
 The leading column fits the glyph width without reserving a button-sized slot.
 The trailing column applies one shared end offset to compensate for the button's

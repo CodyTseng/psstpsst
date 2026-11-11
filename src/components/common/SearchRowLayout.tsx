@@ -51,9 +51,9 @@ export function SearchRowLayout({ icon, children, action, overlay, filled = fals
       onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}>
       {content}
     </Pressable> : <View style={contentStyle}>{content}</View>}
-    <View style={{
+    {action != null ? <View style={{
       width: searchFieldLayout.accessorySize, flexShrink: 0, alignItems: 'center',
       marginEnd: -searchFieldLayout.actionOffset, zIndex: 1,
-    }}>{action}</View>
+    }}>{action}</View> : null}
   </View>;
 }
