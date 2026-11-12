@@ -1,6 +1,4 @@
-import { notifyApplicationChange, subscribeApplicationChanges } from './application-changes';
-import { platform } from '@/platform';
-import { invalidateReplaceableEvents } from '@/services/relay/replaceable-events.service';
+import { notifyApplicationChange } from './application-changes';
 import { assertNotAborted } from '@/platform/abort';
 import { parseNostrEventReference } from '@/lib/nostr/event-reference';
 import { normalizeRelayUrls } from '@/lib/nostr/relay-url';
@@ -175,29 +173,4 @@ async function fetchApplicationMetadata(account: string, entry: ExploreEntry, si
     }
     throw new Error(events.length ? 'applications.invalid_manifest' : response.incomplete || response.error ? 'applications.request_failed' : 'applications.not_found');
   } finally { signal.removeEventListener('abort', abort); network.destroy(); }
-}
-
-
-/** Database notifications cover sibling Electron hosts; version comparisons suppress timestamp-only updates. */
-export function watchApplicationMetadata(account: string, entry: ExploreEntry, onLatest: (entry: ExploreEntry) => void) {
-  const life = new AbortController();
-  let debounce: ReturnType<typeof setTimeout> | undefined;
-  const read = async () => {
-    const cached = (await readApplicationCache([entry])).get(entry.key);
-    if (!life.signal.aborted && cached) onLatest(withApplicationMetadata(entry, cached));
-  };
-  const stopEvents = subscribeApplicationChanges(updated => { if (updated.key === entry.key && !life.signal.aborted) onLatest(withApplicationMetadata(entry, updated)); });
-  const stopDatabase = platform.database?.addChangeListener?.(event => {
-    if (event.tableName && !['replaceable_events', 'cached_events'].includes(event.tableName)) return;
-    if (event.external) invalidateReplaceableEvents();
-    if (debounce) clearTimeout(debounce);
-    debounce = setTimeout(() => { void read().catch(() => {}); }, 40);
-  });
-  return {
-    refresh() {
-      void read().catch(() => {});
-      void refreshApplicationMetadata(account, [entry], life.signal).catch(() => {});
-    },
-    stop() { life.abort(); if (debounce) clearTimeout(debounce); stopEvents(); stopDatabase?.(); },
-  };
 }

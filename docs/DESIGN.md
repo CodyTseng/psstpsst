@@ -1180,6 +1180,9 @@ artwork aligns with the content gutter; wider interaction cells extend into that
 gutter. Responsive grids prioritize recognizable artwork over extra columns:
 icons stay at least 60px and grow to 68px when the pane allows. Column counts and
 distributed gaps adapt around that size. History scrolls vertically with Back navigation in most-recently-used order.
+Signed apps check for updates asynchronously once after opening, without delaying
+launch. Running apps do not poll or recheck on focus or foreground changes;
+applying a newer release requires confirmation and a restart.
 Launching an app updates only recency. Electron
 opens app menus with right-click and sorts desktop icons by direct dragging.
 Grid menus center on the icon, prefer the space above it, fall back below, and

@@ -8,7 +8,7 @@ import type { ExploreEntry } from '@/services/explore/model';
 
 export type ApplicationUpdateTarget = { entry: ExploreEntry; account: string; blocked?: boolean; restart(entry: ExploreEntry): void | Promise<void> };
 
-/** Running content stays pinned until a foreground user accepts one newer release. */
+/** Check once after opening; keep running content pinned until the user accepts. */
 export function useApplicationUpdates(target: ApplicationUpdateTarget | undefined, active: boolean) {
   const { t } = useTranslation();
   const [latest, setLatest] = useState<ExploreEntry>();
@@ -16,6 +16,7 @@ export function useApplicationUpdates(target: ApplicationUpdateTarget | undefine
   const [focused, setFocused] = useState(!IS_ELECTRON);
   const [foreground, setForeground] = useState(() => platform.appState?.currentState?.() !== 'background');
   const mounted = useRef(true), prompting = useRef(false), prompted = useRef(new Set<string>());
+  const check = useRef<{ life: AbortController; started: boolean } | undefined>(undefined);
   const entry = target?.entry, account = target?.account;
   const source = entry?.key, version = entry?.manifest?.id;
   const replaceable = !!entry?.manifest && entry.manifest.kind !== 5129 && entry.kind !== 'website';
@@ -36,20 +37,26 @@ export function useApplicationUpdates(target: ApplicationUpdateTarget | undefine
     return () => { current = false; stop?.(); };
   }, []);
   useEffect(() => {
-    if (!replaceable || !account) return;
+    const request = { life: new AbortController(), started: false };
+    check.current = request;
+    return () => { request.life.abort(); };
+  }, [account, source, version]);
+  useEffect(() => {
+    const request = check.current;
+    if (!replaceable || !account || !active || !request || request.started) return;
     const current = runningEntry();
     if (!current) return;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Defer database-backed services until a signed app mounts.
-    const { watchApplicationMetadata } = require('@/services/explore/application-metadata') as typeof import('@/services/explore/application-metadata');
-    const subscription = watchApplicationMetadata(account, current, updated => {
-      if (updated.key === current.key) setLatest(previous => previous?.manifest?.id === updated.manifest?.id ? previous : updated);
-    });
-    if (presentable) subscription.refresh();
-    const timer = setInterval(() => {
-      if (presentable && platform.appState.currentState() === 'active') subscription.refresh();
-    }, 60_000);
-    return () => { clearInterval(timer); subscription.stop(); };
-  }, [account, source, version, replaceable, presentable]);
+    // Let the application render before loading update services or doing network work.
+    const timer = setTimeout(() => {
+      request.started = true;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- Defer database-backed services until the app has opened.
+      const { resolveApplicationMetadata } = require('@/services/explore/application-metadata') as typeof import('@/services/explore/application-metadata');
+      void resolveApplicationMetadata(account, current, request.life.signal, { refresh: true, known: [current] })
+        .then(updated => { if (!request.life.signal.aborted) setLatest(updated); })
+        .catch(() => {});
+    }, 0);
+    return () => { clearTimeout(timer); };
+  }, [account, source, version, replaceable, active]);
   const settle = useEffectEvent(async (owner: string | undefined, key: string | undefined, old: string | undefined, accepted: boolean) => {
     if (!target || target.account !== owner || target.entry.key !== key || target.entry.manifest?.id !== old || !latest?.manifest) return;
     prompted.current.add(JSON.stringify([owner, key, old, latest.manifest.id]));

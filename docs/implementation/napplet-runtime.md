@@ -6,6 +6,13 @@ The Explore tab separates My apps from Discover. Each account owns its ordered
 application library, recent usage, installations, settings, permissions and default
 intent handlers.
 
+Signed applications perform one deferred, cache-bypassing metadata lookup after
+opening. This lookup does not block launch; failure leaves the current session
+running. There is no runtime update polling or focus-triggered recheck. A newer
+signed release is offered only while the app is foreground and unobscured, and
+requires confirmation before restarting. Immutable kind-5129 snapshots and
+websites do not participate.
+
 ## Protocol baseline
 
 Intent candidates come from napplet manifests in the current account's My apps library,
