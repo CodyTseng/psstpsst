@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium และส่วนประกอบที่รวมอยู่"
   },
   "applications": {
+    "discovery_relays": "แหล่งค้นพบ",
+    "discovery_relays_subtitle": "เลือกรีเลย์ที่ใช้ค้นหาแอปรูปแบบนี้ การเปลี่ยนแปลงมีผลเฉพาะอุปกรณ์นี้เท่านั้น",
     "open_with_title": "เปิดด้วยแอปใด",
     "view_more_apps": "ดูแอปเพิ่มเติม",
     "no_more_apps": "ไม่พบแอปเพิ่มเติม",

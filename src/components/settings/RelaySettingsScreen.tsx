@@ -29,7 +29,10 @@ import { useScrolled } from '@/hooks/use-scrolled';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 
-type RelayMode = 'dm' | 'write';
+import { DEFAULT_DISCOVERY_RELAYS, loadDiscoveryRelays, saveDiscoveryRelays } from '@/services/explore/discovery-relays';
+import { refreshDiscoverySources } from '@/services/explore/discovery';
+
+type RelayMode = 'dm' | 'write' | 'napp' | 'napplet';
 
 export function RelaySettingsScreen({ initialDmRelay = '' }: { initialDmRelay?: string }) {
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
@@ -76,7 +79,7 @@ function RelaySettingsTabs({ accountPubkey, initialDmRelay }: { accountPubkey: s
   );
 }
 
-function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRelay = '' }: {
+export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRelay = '' }: {
   initialRelay?: string;
   mode: RelayMode;
   accountPubkey: string | null;
@@ -85,23 +88,25 @@ function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRelay = ''
   const { t } = useTranslation();
   const c = useThemeColors();
 
+  const discoveryFormat = mode === 'napp' || mode === 'napplet' ? mode : undefined;
   const [relays, setRelays] = useState<string[]>([]);
   const [original, setOriginal] = useState<string[]>([]);
   const [newRelay, setNewRelay] = useState(initialRelay);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const autoSaveVersion = useRef(0);
   const saveAbort = useRef<AbortController | null>(null);
   const [loadedAccountPubkey, setLoadedAccountPubkey] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
-  useEffect(() => () => { saveAbort.current?.abort(); }, []);
+  useEffect(() => () => { saveAbort.current?.abort(); autoSaveVersion.current++; }, []);
 
   useEffect(() => {
     if (!accountPubkey) return;
     let mounted = true;
-    const load = mode === 'write' ? loadAccountWriteRelays : loadAccountDmRelays;
+    const load = discoveryFormat ? async () => (await loadDiscoveryRelays())[discoveryFormat] : mode === 'write' ? loadAccountWriteRelays : loadAccountDmRelays;
     void load(accountPubkey).then((list) => {
       if (!mounted) return;
       setRelays(list);
@@ -113,10 +118,28 @@ function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRelay = ''
     return () => {
       mounted = false;
     };
-  }, [accountPubkey, mode, loadAttempt]);
+  }, [accountPubkey, mode, discoveryFormat, loadAttempt]);
 
   const dirty = relays.join(',') !== original.join(',');
   const canSave = dirty && relays.length > 0 && !saving;
+
+  async function persistDiscoveryRelays(next: string[]) {
+    if (!discoveryFormat || !accountPubkey) return;
+    const version = ++autoSaveVersion.current;
+    setSaveError(null);
+    try {
+      await saveDiscoveryRelays(discoveryFormat, next);
+      refreshDiscoverySources(useActiveAccount.getState().activePubkey ?? accountPubkey);
+      if (autoSaveVersion.current === version) setOriginal(next);
+    } catch {
+      if (autoSaveVersion.current === version) setSaveError(t('relays.save_error'));
+    }
+  }
+
+  function changeRelays(next: string[]) {
+    setRelays(next);
+    if (discoveryFormat) void persistDiscoveryRelays(next);
+  }
 
   function handleAdd() {
     setError(null);
@@ -133,12 +156,12 @@ function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRelay = ''
       setError(t('relays.duplicate'));
       return;
     }
-    setRelays([...relays, normalized]);
+    changeRelays([...relays, normalized]);
     setNewRelay('');
   }
 
   function handleRemove(url: string) {
-    if (!saving) setRelays(relays.filter((r) => r !== url));
+    if (!saving) changeRelays(relays.filter((r) => r !== url));
   }
 
   async function handleSave() {
@@ -201,75 +224,89 @@ function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRelay = ''
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <AppText variant="body" tone="muted">
-        {t(mode === 'write' ? 'relays.write_subtitle' : 'relays.subtitle')}
+      <AppText variant={discoveryFormat ? 'caption' : 'body'} tone="muted">
+        {t(discoveryFormat ? 'applications.discovery_relays_subtitle' : mode === 'write' ? 'relays.write_subtitle' : 'relays.subtitle')}
       </AppText>
 
-      {relays.length === 0 ? (
-        <AppCard variant="muted">
-          <Plus size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.textMuted} />
-          <AppText variant="subtitle">{t('relays.add_label')}</AppText>
-          <AppText variant="body" tone="warning">
-            {t(mode === 'write' ? 'relays.write_empty_warning' : 'relays.empty_warning')}
-          </AppText>
-        </AppCard>
-      ) : (
-        <SortableUrlList
-          value={relays}
-          onChange={(next) => { if (!saving) setRelays(next); }}
-          onRemove={handleRemove}
-          removeAccessibilityLabel={t('common.delete')}
-        />
-      )}
+      <View style={{ gap: discoveryFormat ? spacing.lg : spacing.xl }}>
+        {discoveryFormat && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+          <AppText variant="subtitle">{t('relays.page_title')}</AppText>
+          <AppButton
+            label={t('common.reset')}
+            variant="text"
+            labelVariant="caption"
+            compactAxis="none"
+            disabled={saving || relays.join(',') === DEFAULT_DISCOVERY_RELAYS[discoveryFormat].join(',')}
+            onPress={() => changeRelays([...DEFAULT_DISCOVERY_RELAYS[discoveryFormat]])}
+          />
+        </View>}
+        {relays.length === 0 ? (
+          <AppCard variant="muted">
+            <Plus size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.textMuted} />
+            <AppText variant="subtitle">{t('relays.add_label')}</AppText>
+            <AppText variant="body" tone="warning">
+              {t(discoveryFormat ? 'applications.discovery_relays_subtitle' : mode === 'write' ? 'relays.write_empty_warning' : 'relays.empty_warning')}
+            </AppText>
+          </AppCard>
+        ) : (
+          <SortableUrlList
+            value={relays}
+            onChange={(next) => { if (!saving) changeRelays(next); }}
+            onRemove={handleRemove}
+            removeAccessibilityLabel={t('common.delete')}
+          />
+        )}
 
-      <View style={{ gap: spacing.sm }}>
-        <AppInput
-          label={t('relays.add_label')}
-          placeholder="wss://server.example.com"
-          value={newRelay}
-          onChangeText={setNewRelay}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!saving}
-          error={error ?? undefined}
-          onSubmitEditing={handleAdd}
-          trailingAccessory={
-            <IconButton
-              variant="accent"
-              shape="square"
-              size={uiDensity.inputHeight}
-              accessibilityLabel={t('relays.add_label')}
-              onPress={handleAdd}
-              disabled={saving || !newRelay.trim()}
-              icon={
-                <Plus
-                  strokeWidth={iconStrokeWidth.default}
-                  size={uiDensity.headerActionIconSize}
-                  color={newRelay.trim() ? c.accentForeground : c.textMuted}
-                />
-              }
-            />
-          }
-        />
+        <View style={{ gap: spacing.sm }}>
+          <AppInput
+            label={t('relays.add_label')}
+            placeholder="wss://server.example.com"
+            value={newRelay}
+            onChangeText={setNewRelay}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!saving}
+            error={error ?? undefined}
+            onSubmitEditing={handleAdd}
+            trailingAccessory={
+              <IconButton
+                variant="accent"
+                shape="square"
+                size={uiDensity.inputHeight}
+                accessibilityLabel={t('relays.add_label')}
+                onPress={handleAdd}
+                disabled={saving || !newRelay.trim()}
+                icon={
+                  <Plus
+                    strokeWidth={iconStrokeWidth.default}
+                    size={uiDensity.headerActionIconSize}
+                    color={newRelay.trim() ? c.accentForeground : c.textMuted}
+                  />
+                }
+              />
+            }
+          />
+        </View>
+
       </View>
 
-      <View style={{ height: spacing.sm }} />
+      {!discoveryFormat && <View style={{ height: spacing.sm }} />}
 
-      <View style={{ gap: spacing.sm }}>
+      {(!discoveryFormat || saveError) && <View style={{ gap: spacing.sm }}>
         {saveError && (
           <AppText variant="body" tone="danger" accessibilityLiveRegion="polite" selectable>
             {saveError}
           </AppText>
         )}
         <AppButton
-          label={t('relays.save')}
-          variant="primary"
+          label={t(discoveryFormat ? 'common.retry' : 'relays.save')}
+          variant={discoveryFormat ? 'secondary' : 'primary'}
           size="lg"
           loading={saving}
-          disabled={!canSave}
-          onPress={handleSave}
+          disabled={!discoveryFormat && !canSave}
+          onPress={discoveryFormat ? () => { void persistDiscoveryRelays(relays); } : handleSave}
         />
-      </View>
+      </View>}
     </AppFormScrollView>
   );
 }

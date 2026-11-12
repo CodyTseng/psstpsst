@@ -1144,6 +1144,8 @@
     "runtime_notices": "Chromium والمكونات المضمنة"
   },
   "applications": {
+    "discovery_relays": "مصادر الاكتشاف",
+    "discovery_relays_subtitle": "اختر المرحّلات المستخدمة لاكتشاف هذا النوع من التطبيقات. تُطبّق التغييرات على هذا الجهاز فقط.",
     "open_with_title": "فتح باستخدام",
     "view_more_apps": "عرض المزيد من التطبيقات",
     "no_more_apps": "لم يتم العثور على تطبيقات أخرى",

@@ -1,8 +1,10 @@
+import { getDevicePreference } from '@/services/preferences/device-preferences.service';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { discoveryEntries, ApplicationDiscovery, cacheApplicationAddress, getDiscoveryStore } from '../discovery';
 import { queryApplicationCatalogue } from '../catalogue-relays';
 import { ApplicationNetwork } from '@/services/applications/network';
 
+jest.mock('@/services/preferences/device-preferences.service', () => ({ getDevicePreference: jest.fn(async () => null), setDevicePreference: jest.fn(async () => {}) }));
 jest.mock('../application-cache', () => ({ cacheApplicationEvent: jest.fn(async () => {}) }));
 jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 const secret = generateSecretKey();
@@ -357,4 +359,78 @@ it('publishes idle only after a queued refresh releases ownership, allowing auto
     expect(discovery.store.getState().visibleEntries).toHaveLength(40);
     expect(discovery.store.getState()).toMatchObject({ loading: false, loadingMore: false });
   } finally { detach(); }
+});
+
+
+it('switches both format sources and clears the previous catalogue even when the new source fails', async () => {
+  const { discovery, query } = setup({ [nappRelay]: [uniqueManifest(35130, 10)] });
+  await discovery.load('account');
+  expect(discovery.store.getState().entries).toHaveLength(1);
+  jest.mocked(getDevicePreference).mockImplementation(async key => JSON.stringify([key.endsWith('.napp') ? 'wss://custom-napp.example/' : 'wss://custom-napplet.example/']));
+  try {
+    query.mockClear();
+    await discovery.load('account', true);
+    expect(query.mock.calls.map(call => call[0])).toEqual([['wss://custom-napp.example/'], ['wss://custom-napplet.example/']]);
+    expect(discovery.store.getState()).toMatchObject({ entries: [], visibleEntries: [], loaded: true });
+    query.mockRejectedValue(new Error('offline'));
+    await discovery.load('account', true);
+    expect(discovery.store.getState()).toMatchObject({ entries: [], visibleEntries: [], error: true });
+  } finally {
+    jest.mocked(getDevicePreference).mockImplementation(async () => null);
+  }
+});
+
+
+it.each([false, true])('replays source invalidations during a queued refresh (failed refresh: %s)', async failRefresh => {
+  const { discovery, query } = setup({});
+  const customNapp = 'wss://custom-napp.example/';
+  const customNapplet = 'wss://latest-napplet.example/';
+  const latest = uniqueManifest(35129, 50);
+  const sources = { napp: nappRelay, napplet: nappletRelay };
+  let releaseInitial!: () => void;
+  let releaseRefresh!: () => void;
+  const initialGate = new Promise<void>(resolve => { releaseInitial = resolve; });
+  const refreshGate = new Promise<void>(resolve => { releaseRefresh = resolve; });
+  let startInitial!: () => void;
+  let startRefresh!: () => void;
+  const initialStarted = new Promise<void>(resolve => { startInitial = resolve; });
+  const refreshStarted = new Promise<void>(resolve => { startRefresh = resolve; });
+  let heldRefresh = false;
+  query.mockImplementation(async ([relay], [filter]) => {
+    if (relay === nappRelay) { startInitial(); await initialGate; }
+    if (relay === customNapp && !heldRefresh) {
+      heldRefresh = true;
+      startRefresh();
+      await refreshGate;
+      if (failRefresh) throw new Error('offline');
+    }
+    return { events: relay === customNapplet && filter.until === undefined ? [latest] : [], incomplete: false };
+  });
+  jest.mocked(getDevicePreference).mockImplementation(async key => JSON.stringify([key.endsWith('.napp') ? sources.napp : sources.napplet]));
+  try {
+    const initial = discovery.load('account');
+    await initialStarted;
+    sources.napp = customNapp;
+    discovery.refreshSources('account');
+    const queued = discovery.load('account', true);
+    releaseInitial();
+    await initial;
+    await refreshStarted;
+    sources.napplet = 'wss://intermediate.example/';
+    discovery.refreshSources('account');
+    sources.napplet = customNapplet;
+    discovery.refreshSources('account');
+    releaseRefresh();
+    await queued;
+    await discovery.load('account');
+    expect(query.mock.calls.filter(call => call[0][0] === customNapp)).toHaveLength(2);
+    expect(query.mock.calls.filter(call => call[0][0] === customNapplet && call[1][0].until === undefined)).toHaveLength(1);
+    expect(query.mock.calls.some(call => call[0][0] === 'wss://intermediate.example/')).toBe(false);
+    expect(discovery.store.getState().visibleEntries.map(app => app.manifest?.id)).toEqual([latest.id]);
+    expect(discovery.store.getState()).toMatchObject({ loading: false, loadingMore: false, error: false });
+  } finally {
+    releaseInitial();
+    releaseRefresh();
+    jest.mocked(getDevicePreference).mockImplementation(async () => null);
+  }
 });

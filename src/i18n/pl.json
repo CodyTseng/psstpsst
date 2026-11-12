@@ -1134,6 +1134,8 @@
     "runtime_notices": "Chromium i dołączone komponenty"
   },
   "applications": {
+    "discovery_relays": "Źródła odkrywania",
+    "discovery_relays_subtitle": "Wybierz przekaźniki do wyszukiwania aplikacji tego formatu. Zmiany dotyczą tylko tego urządzenia.",
     "open_with_title": "Otwórz za pomocą",
     "view_more_apps": "Zobacz więcej aplikacji",
     "no_more_apps": "Nie znaleziono więcej aplikacji",

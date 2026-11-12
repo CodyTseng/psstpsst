@@ -5,6 +5,7 @@ import { parseApplicationEvents } from './application-event';
 import { SUPPORTED_NAPP_DOMAINS, type ExploreEntry } from './model';
 import { NAP_DOMAINS } from '@/services/napplet/protocol';
 import { APPLICATION_DISCOVERY_SOURCES, APPLICATION_QUERY_LIMIT } from './catalogue-relays';
+import { loadDiscoveryRelays } from './discovery-relays';
 import { RelayTimeline, compareTimelineEvents } from '@/services/relay/relay-timeline';
 
 /** Verify bounded relay results without blocking a frame with a batch of signatures. */
@@ -40,7 +41,7 @@ const MAX_QUERY_PAGES_PER_READ = 3;
 const CACHE_MS = 5 * 60 * 1000;
 const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 const compare = (a: ExploreEntry, b: ExploreEntry) => compareTimelineEvents(a.manifest!, b.manifest!);
-const createTimeline = (scope: ApplicationDiscoveryScope) => new RelayTimeline(APPLICATION_DISCOVERY_SOURCES.flatMap(source => {
+const createTimeline = (scope: ApplicationDiscoveryScope, sources = APPLICATION_DISCOVERY_SOURCES) => new RelayTimeline(sources.flatMap(source => {
   const kinds = scope === 'napps' ? source.kinds.filter(kind => kind === 35130) : source.kinds;
   return kinds.length ? [{
     urls: source.relays, filter: { kinds },
@@ -60,6 +61,10 @@ export class ApplicationDiscovery {
   private parsed = new Map<string, ExploreEntry | undefined>();
   private updatedAt = 0;
   private queryPages = 0;
+  private account?: string;
+  private sourcesKey = JSON.stringify(APPLICATION_DISCOVERY_SOURCES);
+  private sourcesRevision = 0;
+  private readSourcesRevision = 0;
   private pending?: Promise<void>;
   private pendingRefresh?: Promise<void>;
 
@@ -68,6 +73,7 @@ export class ApplicationDiscovery {
   }
 
   load(account: string, refresh = false): Promise<void> {
+    this.account = account;
     if (refresh && this.pendingRefresh) return this.pendingRefresh;
     if (this.pending) {
       if (!refresh) return this.pending;
@@ -84,9 +90,13 @@ export class ApplicationDiscovery {
     return this.reload(account);
   }
 
+  refreshSources(account: string): void {
+    this.sourcesRevision++;
+    if (this.account) void this.load(account, true);
+  }
+
   private reload(account: string): Promise<void> {
     this.timeline.dispose();
-    this.timeline = createTimeline(this.scope);
     this.shown.clear();
     this.catalogue.clear();
     this.cached = [];
@@ -131,6 +141,7 @@ export class ApplicationDiscovery {
   }
 
   private read(account: string, refresh: boolean): Promise<void> {
+    if (refresh) this.readSourcesRevision = this.sourcesRevision;
     this.store.setState(refresh ? { loading: true, error: false } : { loadingMore: true, error: false });
     const request = (async () => {
       let network: ApplicationNetwork | undefined;
@@ -138,6 +149,21 @@ export class ApplicationDiscovery {
       let queried = 0;
       try {
         await yieldFrame();
+        if (refresh) {
+          const relays = await loadDiscoveryRelays();
+          const sources = APPLICATION_DISCOVERY_SOURCES.map((source, index) => ({
+            ...source, relays: index === 0 ? relays.napp : relays.napplet,
+          }));
+          const sourcesKey = JSON.stringify(sources);
+          if (sourcesKey !== this.sourcesKey) {
+            this.sourcesKey = sourcesKey;
+            this.updatedAt = 0;
+            this.queryPages = 0;
+            this.store.setState({ entries: [], visibleEntries: [], loaded: false, hasMore: false });
+          }
+          this.timeline.dispose();
+          this.timeline = createTimeline(this.scope, sources);
+        }
         let error = false;
         let hasMore = true;
         while (page.length < DISPLAY_PAGE_SIZE && hasMore && !error) {
@@ -184,8 +210,15 @@ export class ApplicationDiscovery {
   private publishIdle() {
     // An idle observer may immediately start the next read. Release both read
     // and queued-refresh ownership before publishing that transition.
-    if (!this.pending && !this.pendingRefresh)
+    if (!this.pending && !this.pendingRefresh) {
+      // Source edits are invalidations, independent of pull-to-refresh deduplication.
+      // A read consumes only the revision it started with, including on failure.
+      if (this.readSourcesRevision !== this.sourcesRevision && this.account) {
+        void this.reload(this.account);
+        return;
+      }
       this.store.setState({ loading: false, loadingMore: false, queryPages: this.queryPages });
+    }
   }
 }
 
@@ -206,4 +239,9 @@ export function cacheApplicationAddress(account: string, entry: ExploreEntry) {
   const addressCache = { account, entries: [entry, ...(previous.account === account ? previous.entries : [])
     .filter(app => app.key !== entry.key)].slice(0, 64) };
   for (const discovery of Object.values(discoveries)) discovery.store.setState({ addressCache });
+}
+
+/** Reload active catalogues after a directory preference is committed. */
+export function refreshDiscoverySources(account: string) {
+  for (const discovery of Object.values(discoveries)) discovery.refreshSources(account);
 }

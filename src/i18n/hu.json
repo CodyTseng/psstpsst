@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium és mellékelt összetevők"
   },
   "applications": {
+    "discovery_relays": "Felfedezési források",
+    "discovery_relays_subtitle": "Válaszd ki az ilyen formátumú alkalmazások kereséséhez használt relayeket. A módosítások csak erre az eszközre érvényesek.",
     "open_with_title": "Megnyitás ezzel",
     "view_more_apps": "További alkalmazások megtekintése",
     "no_more_apps": "Nem található több alkalmazás",

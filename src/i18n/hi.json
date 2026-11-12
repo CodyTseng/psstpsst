@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium और शामिल घटक"
   },
   "applications": {
+    "discovery_relays": "खोज के स्रोत",
+    "discovery_relays_subtitle": "इस ऐप प्रारूप को खोजने के लिए रिले चुनें। बदलाव केवल इस डिवाइस पर लागू होंगे।",
     "open_with_title": "इससे खोलें",
     "view_more_apps": "और ऐप्स देखें",
     "no_more_apps": "और कोई ऐप नहीं मिला",

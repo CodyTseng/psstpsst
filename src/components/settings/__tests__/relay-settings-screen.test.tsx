@@ -1,6 +1,9 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet, View } from 'react-native';
 
+import DiscoveryRelaysScreen from '@/app/(app)/explore-discovery-relays';
+import { saveDiscoveryRelays } from '@/services/explore/discovery-relays';
+import { refreshDiscoverySources } from '@/services/explore/discovery';
 import { RelaySettingsScreen } from '../RelaySettingsScreen';
 import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
@@ -10,6 +13,9 @@ import { darkPalette, lightPalette } from '@/theme';
 import { saveAndPublishWriteRelays, saveAndPublishDmRelays } from '@/services/relay/relay-list.service';
 import { showToast } from '@/stores/toast.store';
 import { AppText } from '@/components/common/AppText';
+
+jest.mock('@/services/explore/discovery', () => ({ refreshDiscoverySources: jest.fn() }));
+jest.mock('@/services/explore/discovery-relays', () => ({ loadDiscoveryRelays: jest.fn(async () => ({ napp: ['wss://napp.example/'], napplet: ['wss://napplet.example/'] })), saveDiscoveryRelays: jest.fn(async () => {}), DEFAULT_DISCOVERY_RELAYS: { napp: ['wss://relay.nostrapps.com/'], napplet: ['wss://relay.napplet.soy/'] } }));
 
 let mockScheme: 'light' | 'dark' = 'light';
 const mockAccount = { activePubkey: 'self' };
@@ -159,4 +165,45 @@ it.each(['light', 'dark'] as const)('prefills only the message-relay input witho
   expect(activePanel().findByType(AppInput).props.value).toBe('');
   await selectTab('dm');
   expect(activePanel().findByType(AppInput).props.value).toBe('wss://relay.psstpsst.chat/');
+});
+
+
+it.each(['light', 'dark'] as const)('applies discovery edits immediately and retries failed writes in %s mode', async scheme => {
+  mockScheme = scheme;
+  await act(async () => { renderer = create(<DiscoveryRelaysScreen />); });
+  const panel = (format: string) => renderer.root.findByProps({ testID: `discovery-panel-${format}` });
+  expect(renderer.root.findAllByProps({ label: 'relays.save' })).toHaveLength(0);
+  jest.mocked(saveDiscoveryRelays).mockRejectedValueOnce(new Error('disk full'));
+  await act(async () => { panel('napp').findByType(SortableUrlList).props.onChange(['wss://custom.example/']); });
+  expect(panel('napp').findByType(SortableUrlList).props.value).toEqual(['wss://custom.example/']);
+  expect(refreshDiscoverySources).not.toHaveBeenCalled();
+  await act(async () => { await panel('napp').findByProps({ label: 'common.retry' }).props.onPress(); });
+  expect(saveDiscoveryRelays).toHaveBeenLastCalledWith('napp', ['wss://custom.example/']);
+  expect(refreshDiscoverySources).toHaveBeenCalledTimes(1);
+  expect(panel('napp').findAllByProps({ label: 'common.retry' })).toHaveLength(0);
+  await act(async () => { renderer.root.findByType(SegmentedControl).props.onChange('napplet'); });
+  expect(panel('napplet').findByType(SortableUrlList).props.value).toEqual(['wss://napplet.example/']);
+  await act(async () => { panel('napplet').findByType(SortableUrlList).props.onRemove('wss://napplet.example/'); });
+  expect(saveDiscoveryRelays).toHaveBeenLastCalledWith('napplet', []);
+  await act(async () => { renderer.root.findByType(SegmentedControl).props.onChange('napp'); });
+  expect(panel('napp').findByType(SortableUrlList).props.value).toEqual(['wss://custom.example/']);
+  await act(async () => { panel('napp').findByProps({ label: 'common.reset' }).props.onPress(); });
+  expect(saveDiscoveryRelays).toHaveBeenLastCalledWith('napp', ['wss://relay.nostrapps.com/']);
+  expect(saveAndPublishDmRelays).not.toHaveBeenCalled();
+  expect(saveAndPublishWriteRelays).not.toHaveBeenCalled();
+  act(() => { panel('napp').findByType(AppInput).props.onChangeText('added.example'); });
+  await act(async () => { panel('napp').findByType(AppInput).props.onSubmitEditing(); });
+  expect(saveDiscoveryRelays).toHaveBeenLastCalledWith('napp', ['wss://relay.nostrapps.com/', 'wss://added.example/']);
+});
+
+it('keeps newer discovery edits interactive and ignores failures from older edits', async () => {
+  await act(async () => { renderer = create(<DiscoveryRelaysScreen />); });
+  const panel = renderer.root.findByProps({ testID: 'discovery-panel-napp' });
+  let fail!: (error: Error) => void;
+  jest.mocked(saveDiscoveryRelays).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+  act(() => { panel.findByType(SortableUrlList).props.onChange(['wss://first.example/']); });
+  await act(async () => { panel.findByType(SortableUrlList).props.onChange(['wss://latest.example/']); });
+  await act(async () => { fail(new Error('old write failed')); });
+  expect(panel.findByType(SortableUrlList).props.value).toEqual(['wss://latest.example/']);
+  expect(panel.findAllByProps({ label: 'common.retry' })).toHaveLength(0);
 });

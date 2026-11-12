@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium 及其內建元件"
   },
   "applications": {
+    "discovery_relays": "探索來源",
+    "discovery_relays_subtitle": "選擇用於探索此類應用程式的 relay。變更僅儲存在本機。",
     "open_with_title": "要用哪個應用開啟？",
     "view_more_apps": "查看更多應用程式",
     "no_more_apps": "找不到更多應用程式了",

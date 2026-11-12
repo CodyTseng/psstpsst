@@ -1121,6 +1121,9 @@ open exact application naddr references in their details page and website URLs
 in their application container, without changing the selected search scope.
 Explicit Lightning/LNURL links retain their wallet flow in the home scanner.
 Empty My apps opens Discover rather than a separate address-entry task.
+Discover directory relays are editable per application format in Explore settings,
+with device-local choices that save and apply immediately and a way to restore
+the defaults. Removing all sources disables discovery for that format.
 Discover lists verified, continuously updated napps and napplets, excluding nsites
 and immutable snapshots, without recording visits or adding shortcuts until the
 user chooses an action. Discover omits applications whose latest release requires unsupported host

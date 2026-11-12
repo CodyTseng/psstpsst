@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium و مؤلفه‌های همراه"
   },
   "applications": {
+    "discovery_relays": "منابع کشف",
+    "discovery_relays_subtitle": "رله‌های مورد استفاده برای یافتن این قالب برنامه را انتخاب کنید. تغییرات فقط در این دستگاه اعمال می‌شوند.",
     "open_with_title": "باز کردن با",
     "view_more_apps": "مشاهدهٔ برنامه‌های بیشتر",
     "no_more_apps": "برنامهٔ دیگری پیدا نشد",

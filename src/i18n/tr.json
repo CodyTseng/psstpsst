@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium ve birlikte gelen bileşenler"
   },
   "applications": {
+    "discovery_relays": "Keşif kaynakları",
+    "discovery_relays_subtitle": "Bu uygulama biçimini keşfetmek için kullanılacak röleleri seçin. Değişiklikler yalnızca bu cihazda geçerlidir.",
     "open_with_title": "Birlikte aç",
     "view_more_apps": "Daha fazla uygulama görüntüle",
     "no_more_apps": "Başka uygulama bulunamadı",

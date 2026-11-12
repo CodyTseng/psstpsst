@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium and bundled components"
   },
   "applications": {
+    "discovery_relays": "Discovery sources",
+    "discovery_relays_subtitle": "Choose the relays used to discover this app format. Changes apply on this device only.",
     "open_with_title": "Open with",
     "view_more_apps": "View more apps",
     "no_more_apps": "No more apps found",

@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium と同梱コンポーネント"
   },
   "applications": {
+    "discovery_relays": "アプリの検索元",
+    "discovery_relays_subtitle": "この形式のアプリを検索するリレーを選択します。変更はこの端末にのみ適用されます。",
     "open_with_title": "アプリを選択",
     "view_more_apps": "アプリをさらに表示",
     "no_more_apps": "これ以上のアプリは見つかりませんでした",

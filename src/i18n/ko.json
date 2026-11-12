@@ -1124,6 +1124,8 @@
     "runtime_notices": "Chromium 및 포함된 구성 요소"
   },
   "applications": {
+    "discovery_relays": "앱 검색 소스",
+    "discovery_relays_subtitle": "이 형식의 앱을 검색할 릴레이를 선택하세요. 변경 사항은 이 기기에만 적용됩니다.",
     "open_with_title": "열 앱 선택",
     "view_more_apps": "더 많은 앱 보기",
     "no_more_apps": "더 이상 앱을 찾을 수 없습니다",

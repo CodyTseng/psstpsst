@@ -1129,6 +1129,8 @@
     "runtime_notices": "Chromium e componenti inclusi"
   },
   "applications": {
+    "discovery_relays": "Fonti di scoperta",
+    "discovery_relays_subtitle": "Scegli i relay per scoprire questo formato di app. Le modifiche si applicano solo a questo dispositivo.",
     "open_with_title": "Apri con",
     "view_more_apps": "Visualizza più app",
     "no_more_apps": "Nessun’altra app trovata",
