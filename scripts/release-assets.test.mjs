@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -107,4 +108,71 @@ test('F-Droid ABI builds select matching binaries and increasing version codes',
     assert.ok(!build.sudo.some((command) => /bookworm|openjdk-17|curl/.test(command)));
     assert.ok(!build.build.some((command) => /JAVA_HOME|sed /.test(command)));
   }
+});
+
+
+function withAndroidReleaseNotes(counter, check) {
+  const directory = mkdtempSync(join(tmpdir(), 'psstpsst-release-notes-'));
+  try {
+    writeFileSync(join(directory, 'app.json'), JSON.stringify({ expo: { android: { versionCode: counter } } }));
+    const notesDirectory = join(directory, 'fastlane/metadata/android/en-US/changelogs');
+    mkdirSync(notesDirectory, { recursive: true });
+    for (let suffix = 0; suffix <= 4; suffix++) writeFileSync(join(notesDirectory, `${counter * 10 + suffix}.txt`), 'Release notes\n');
+    const workflow = yaml.load(readFileSync(new URL('.github/workflows/build.yml', root), 'utf8'));
+    const step = workflow.jobs['validate-version'].steps.find(step => step.name === 'Match tag to desktop and Android versions');
+    // Execute the actual Android validation block without the Linux-only repository-name check.
+    const start = step.run.indexOf('base_version_code=');
+    assert.ok(start >= 0, 'The release preflight must validate installed Android version codes.');
+    const validate = () => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', step.run.slice(start)], {
+      cwd: directory, encoding: 'utf8', env: { ...process.env, LC_ALL: 'en_US.UTF-8' },
+    });
+    check({ notesDirectory, validate });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+for (const counter of [14, 27]) {
+  test(`release preflight accepts installed Android codes for counter ${counter} without a base-counter changelog`, () => {
+    withAndroidReleaseNotes(counter, ({ validate }) => {
+      const result = validate();
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+    });
+  });
+}
+
+for (const suffix of [0, 1, 2, 3, 4]) {
+  test(`release preflight rejects a missing Android changelog for suffix ${suffix}`, () => {
+    withAndroidReleaseNotes(14, ({ notesDirectory, validate }) => {
+      // A legacy counter-named file must never substitute for an installed version.
+      writeFileSync(join(notesDirectory, '14.txt'), 'Legacy notes');
+      rmSync(join(notesDirectory, `${140 + suffix}.txt`));
+      const result = validate();
+      assert.equal(result.status, 1);
+      assert.ok(result.stdout.includes(`changelogs/${140 + suffix}.txt`));
+    });
+  });
+}
+
+for (const [name, text, error] of [
+  ['empty', '', 'missing or empty'],
+  ['whitespace-only', ' \n\t', 'missing or empty'],
+  ['too long', 'a'.repeat(501), '500-character'],
+]) {
+  test(`release preflight rejects ${name} Android notes`, () => {
+    withAndroidReleaseNotes(14, ({ notesDirectory, validate }) => {
+      writeFileSync(join(notesDirectory, '144.txt'), text);
+      const result = validate();
+      assert.equal(result.status, 1);
+      assert.ok(result.stdout.includes(error), result.stdout);
+    });
+  });
+}
+
+test('release preflight counts Unicode characters and accepts the 500-character limit', () => {
+  withAndroidReleaseNotes(14, ({ notesDirectory, validate }) => {
+    writeFileSync(join(notesDirectory, '140.txt'), '字'.repeat(500));
+    const result = validate();
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  });
 });

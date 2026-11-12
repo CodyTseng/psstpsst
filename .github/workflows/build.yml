@@ -118,18 +118,21 @@ jobs:
             exit 1
           fi
 
-          version_code="$(node -p "require('./app.json').expo.android.versionCode")"
-          notes_file="fastlane/metadata/android/en-US/changelogs/${version_code}.txt"
-          if [[ ! -s "$notes_file" ]]; then
-            echo "Release notes are missing or empty: $notes_file"
-            exit 1
-          fi
+          base_version_code="$(node -p "require('./app.json').expo.android.versionCode")"
+          for abi_suffix in 0 1 2 3 4; do
+            version_code="$((base_version_code * 10 + abi_suffix))"
+            notes_file="fastlane/metadata/android/en-US/changelogs/${version_code}.txt"
+            if [[ ! -s "$notes_file" ]] || ! grep -q '[^[:space:]]' "$notes_file"; then
+              echo "Release notes are missing or empty: $notes_file"
+              exit 1
+            fi
 
-          notes_characters="$(wc -m < "$notes_file")"
-          if (( notes_characters > 500 )); then
-            echo "Release notes exceed the 500-character store limit: $notes_file"
-            exit 1
-          fi
+            notes_characters="$(wc -m < "$notes_file")"
+            if (( notes_characters > 500 )); then
+              echo "Release notes exceed the 500-character store limit: $notes_file"
+              exit 1
+            fi
+          done
 
   build:
     name: ${{ matrix.name }}
