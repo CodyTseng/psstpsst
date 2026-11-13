@@ -27,13 +27,13 @@ test('public release assets use stable version-independent names', () => {
 
   const zapstore = readFileSync(new URL('zapstore.yaml', root), 'utf8');
   const zapstoreMatch = zapstore.split('\n').find((line) => line.startsWith('match: '));
-  assert.equal(zapstoreMatch, 'match: ^PsstPsst-android-universal\\.apk$');
+  assert.equal(zapstoreMatch, 'match: ^PsstPsst-android-arm64\\.apk$');
   const apkPattern = new RegExp(zapstoreMatch.slice('match: '.length));
-  assert.ok(apkPattern.test('PsstPsst-android-universal.apk'));
+  assert.ok(apkPattern.test('PsstPsst-android-arm64.apk'));
   assert.ok(!apkPattern.test('PsstPsst-0.2.3-android.apk'));
   assert.ok(!apkPattern.test('PsstPsst-preview-android.apk'));
   for (const name of RELEASE_ASSET_NAMES.filter((asset) => asset.endsWith('.apk'))) {
-    assert.equal(apkPattern.test(name), name === 'PsstPsst-android-universal.apk');
+    assert.equal(apkPattern.test(name), name === 'PsstPsst-android-arm64.apk');
   }
 
   const fdroid = readFileSync(new URL('fdroid/metadata/chat.psstpsst.app.yml', root), 'utf8');

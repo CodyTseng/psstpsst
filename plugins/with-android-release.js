@@ -20,7 +20,7 @@ android.splits.abi {
     enable = (findProperty('psstpsstAbiSplits') ?: 'false').toBoolean()
     reset()
     include(*psstpsstBuildAbis)
-    // Keep the universal APK for direct downloads and Zapstore.
+    // Keep the universal APK for direct downloads.
     universalApk = true
 }
 androidComponents {

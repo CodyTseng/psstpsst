@@ -1,5 +1,5 @@
 repository: https://github.com/codytseng/psstpsst
-match: ^PsstPsst-android-universal\.apk$
+match: ^PsstPsst-android-arm64\.apk$
 name: PsstPsst
 tags:
     - messaging

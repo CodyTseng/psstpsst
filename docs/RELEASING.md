@@ -429,8 +429,9 @@ and [apksigner reference](https://developer.android.com/tools/apksigner).
 CI runs that select AAB upload `PsstPsst-android.aab` as the `android-aab` Actions
 artifact; tag runs also attach it to the draft GitHub Release. Download that file
 and upload it to a Google Play Console testing track before promoting it to
-production. APK distribution through GitHub, Zapstore, and F-Droid continues
-to use `PsstPsst-android-universal.apk`. AAB files cannot be installed directly on a device.
+production. GitHub offers universal and ABI-specific APKs; Zapstore selects
+`PsstPsst-android-arm64.apk`, and F-Droid uses each ABI's matching APK.
+AAB files cannot be installed directly on a device.
 
 For a local build, load the same four `ANDROID_*` signing variables used for APK
 releases, install JDK 21 and the Android SDK, and run:
@@ -490,8 +491,8 @@ are 130 and 131–134. Increment the base counter for every release; never assig
 an ABI digit above the counter. This makes the next release newer across all
 distribution channels.
 
-CI signs, checks, uploads, and audits all five APKs. Zapstore continues to use
-`PsstPsst-android-universal.apk`. F-Droid has four build entries, each selecting one ABI
+CI signs, checks, uploads, and audits all five APKs. Zapstore selects
+`PsstPsst-android-arm64.apk` for ARM64 devices. F-Droid has four build entries, each selecting one ABI
 and its matching `PsstPsst-android-<architecture>.apk` reference binary. Its
 `VercodeOperation` list applies the same suffixes when checking tags.
 
@@ -538,24 +539,25 @@ maintainer has chosen to reuse the supplied iPhone promotional artwork for
 Android listings; see `docs/images/store/README.md`. Refresh the store icon from
 `assets/images/icon.png` when branding changes.
 
-The root `zapstore.yaml` selects the official stable GitHub APK and reads this
+The root `zapstore.yaml` selects the official stable GitHub ARM64 APK and reads this
 Fastlane directory. After committing and pushing the metadata and publishing
 the GitHub release, check APK selection without publishing:
 
 ```sh
-zsp publish --check zapstore.yaml
+zsp check zapstore.yaml
 ```
 
-Use `zsp publish --wizard` for first-time identity setup. Preserve the checked-in
-source, APK match pattern, and Fastlane selection when reviewing wizard edits.
-Add the chosen public `pubkey` to the config and push it before relay ownership
-verification. Subsequent interactive publishing can use browser signing:
+Use `zsp` for first-time setup or to create the app ownership claim required by
+zsp v2. Preserve the checked-in source, ARM64 APK match pattern, and Fastlane
+selection when reviewing wizard edits. Configure `SIGN_WITH` with the claim's
+Nostr identity or an authorized delegate, preferably through a NIP-46 bunker.
+Then publish:
 
 ```sh
-SIGN_WITH=browser zsp publish zapstore.yaml
+zsp publish zapstore.yaml
 ```
 
-This last command publishes publicly; `--check` only verifies APK selection.
+This last command publishes publicly; `zsp check` only verifies and reads state.
 Leave release notes to the selected GitHub release rather than hard-coding
 the first version's changelog in `zapstore.yaml`.
 
@@ -570,14 +572,14 @@ versioned by the `v%v` release-tag path. This gives each reproducibility check a
 version-specific URL without putting the version in the APK filename.
 
 For Zapstore, publish the signed APK as a public GitHub Release asset first.
-Install the official `zsp` publisher, then use `zsp publish --wizard`, selecting
+Install the official `zsp` publisher, then run `zsp`, selecting
 `https://github.com/codytseng/psstpsst` as the release source. Review the generated
 `zapstore.yaml` before adding it to version control. The first publish links the
 APK certificate to the developer's Nostr identity and requires access to the
 keystore. Nostr event signing is separate from Android APK signing. For future
 automation, Zapstore recommends a NIP-46 bunker through `SIGN_WITH`; the current
 workflow neither reads this variable nor publishes to Zapstore. Follow the
-[Zapstore publishing guide](https://zapstore.dev/docs/publish).
+[Zapstore publishing guide](https://zapstore.dev/help/publish).
 
 For the official F-Droid repository, submit source and a build recipe to
 `fdroiddata`; uploading a GitHub APK alone does not list the app. F-Droid normally
