@@ -1055,6 +1055,9 @@ export function ChatInput({
                 marginBottom: -spacing.xs,
                 marginStart: -INPUT_CONTENT_INSET,
                 marginEnd: -INPUT_CONTENT_INSET,
+                // Stretch through the input's padding; the shared quote's
+                // percentage cap would pull the trailing control inward.
+                maxWidth: undefined,
                 paddingTop: spacing.sm,
                 paddingBottom: spacing.xs,
                 paddingStart: INPUT_CONTENT_INSET,
