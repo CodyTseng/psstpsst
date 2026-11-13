@@ -1,0 +1,6 @@
+PsstPsst 26.11.2
+
+- Improved file upload reliability across media servers.
+- Fixed the message input staying hidden behind the keyboard after returning from apps.
+- Fixed long-press message menus closing the keyboard and misaligning the highlighted message.
+- Fixed quoted reply width and close-button alignment in the message input.

@@ -2,7 +2,7 @@
   "expo": {
     "name": "PsstPsst",
     "slug": "psstpsst",
-    "version": "26.11.1",
+    "version": "26.11.2",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "psstpsst",
@@ -11,11 +11,11 @@
       "appleTeamId": "V8288WZJ27",
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "chat.psstpsst.app",
-      "buildNumber": "14",
+      "buildNumber": "15",
       "supportsTablet": true
     },
     "android": {
-      "versionCode": 14,
+      "versionCode": 15,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

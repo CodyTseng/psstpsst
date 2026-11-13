@@ -1,5 +1,15 @@
 # Changelog
 
+## [26.11.2]
+
+- Improved file upload reliability across media servers.
+- Fixed the width and close-button alignment of quoted replies in the message input.
+
+### Android
+
+- Fixed the message input staying hidden behind the keyboard after returning from apps.
+- Fixed long-press message menus closing the keyboard and misaligning the highlighted message.
+
 ## [26.11.1]
 
 - Added apps and mini apps with My Apps, permission controls, and separate app windows.
