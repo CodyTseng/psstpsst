@@ -28,8 +28,8 @@ describe('message action menu window ownership', () => {
     expect(mockListeners.size).toBe(0);
   });
 
-  it('does not open a focus-taking Android Modal and closes when the keyboard starts hiding', () => {
-    Platform.OS = 'android';
+  it.each(['android', 'ios'] as const)('preserves focus on %s and closes when the keyboard starts hiding', (os) => {
+    Platform.OS = os;
     const close = jest.fn();
     act(() => {
       renderer = create(<MessageActionMenuHost active onClose={close}><View /></MessageActionMenuHost>);
@@ -41,8 +41,8 @@ describe('message action menu window ownership', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps its content mounted through exit without reacting to later keyboard events', () => {
-    Platform.OS = 'android';
+  it.each(['android', 'ios'] as const)('keeps %s content mounted through exit without reacting to later keyboard events', (os) => {
+    Platform.OS = os;
     const close = jest.fn();
     act(() => {
       renderer = create(<MessageActionMenuHost active onClose={close}><View testID="menu" /></MessageActionMenuHost>);
@@ -56,8 +56,8 @@ describe('message action menu window ownership', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it('retains native modal dismissal on iOS', () => {
-    Platform.OS = 'ios';
+  it('retains modal dismissal on web', () => {
+    Platform.OS = 'web';
     const close = jest.fn();
     act(() => {
       renderer = create(<MessageActionMenuHost active onClose={close}><View /></MessageActionMenuHost>);

@@ -26,7 +26,6 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, useWindowDimensions, View } from 'react-native';
-import { KeyboardController } from 'react-native-keyboard-controller';
 import Reanimated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1138,10 +1137,8 @@ function ChatPageContent({
     emoji: QuickReaction;
   } | null>(null);
   const [detailRumorId, setDetailRumorId] = useState<string | null>(null);
-  // "Info" was tapped: open the detail sheet only once the action menu has fully
-  // closed (two RN modals can't be presented at once — opening the sheet while
-  // the menu's modal is still dismissing freezes the app, same hazard as the
-  // emoji picker above).
+  // "Info" was tapped: wait for the lifted copy to finish closing before the
+  // detail sheet can change focus and move its source message.
   const [pendingDetailId, setPendingDetailId] = useState<string | null>(null);
   const [copyingPendingCounts, setCopyingPendingCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
   const [pendingCopyAttachment, setPendingCopyAttachment] = useState<
@@ -1159,7 +1156,6 @@ function ChatPageContent({
     emoji: CustomEmoji;
     coordinate?: string;
   } | null>(null);
-  const restoreKeyboardAfterMenuRef = useRef(false);
 
   const messageIds = loadedMessageIds;
 
@@ -1812,9 +1808,6 @@ function ChatPageContent({
   }
 
   function openMeasuredMenu(rect: BubbleRect, bubble: LiftedBubble) {
-    // iOS's Modal temporarily owns window focus; Android's menu preserves it.
-    restoreKeyboardAfterMenuRef.current =
-      Platform.OS === 'ios' && KeyboardController.isVisible();
     const node = contentRef.current;
     if (!node) {
       setMenuAnchor({ rect, bubble });
@@ -1943,9 +1936,8 @@ function ChatPageContent({
     closeMenu();
   }
 
-  /** "⋯" in the pill: close the context menu, then open the full emoji picker
-   * once it has fully closed (iOS can't present two modals at once — opening the
-   * picker while the menu's modal is still dismissing freezes the app). Keeps
+  /** "⋯" in the pill: wait for the lifted copy to finish closing before the
+   * full emoji picker can change focus and move its source message. Keeps
    * `menuTarget` as the reaction target. */
   function handleOpenEmojiPicker(anchor?: EmojiPickerPopoverAnchor) {
     const pointer = menuAnchor?.rect.pointer;
@@ -1961,17 +1953,6 @@ function ChatPageContent({
    * the row (react) or present another modal (picker) without the lifted copy
    * still on screen. */
   function handleMenuClosed() {
-    const restoreKeyboard =
-      restoreKeyboardAfterMenuRef.current &&
-      !pendingReplyTarget &&
-      !pendingPicker &&
-      !pendingDetailId &&
-      !pendingSelectId &&
-      !pendingForwardMessages &&
-      !pendingPackPickerEmoji &&
-      !pendingSaveUpload &&
-      !pendingCopyAttachment;
-    restoreKeyboardAfterMenuRef.current = false;
     if (pendingReplyTarget) {
       const target = pendingReplyTarget;
       setPendingReplyTarget(null);
@@ -2055,9 +2036,6 @@ function ChatPageContent({
       const upload = pendingSaveUpload;
       setPendingSaveUpload(null);
       void handleSavePendingUpload(upload);
-    }
-    if (restoreKeyboard) {
-      setTimeout(() => KeyboardController.setFocusTo('current'), 0);
     }
   }
 
