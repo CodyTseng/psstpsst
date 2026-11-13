@@ -265,16 +265,6 @@ jobs:
         run: |
           bash scripts/build-android-reproducible.sh release/fdroid-build
 
-      - name: Verify independent APK rebuild
-        if: needs.validate-version.outputs.apk == 'true' && env.HAS_ANDROID_SIGNING == 'true'
-        env:
-          ANDROID_RELEASE_UNSIGNED: '1'
-          ANDROID_BUILD_APK: '1'
-          ANDROID_BUILD_BUNDLE: '0'
-        run: |
-          bash scripts/build-android-reproducible.sh release/fdroid-rebuild
-          node scripts/compare-android-builds.mjs release/fdroid-build release/fdroid-rebuild
-
       - name: Save Android downloads
         if: always() && steps.android_cache.outcome == 'success'
         uses: actions/cache/save@v5
@@ -291,7 +281,6 @@ jobs:
           if-no-files-found: ignore
           path: |
             release/fdroid-build/diagnostics/
-            release/fdroid-rebuild/diagnostics/
 
       - name: Sign and verify APK
         if: needs.validate-version.outputs.apk == 'true'

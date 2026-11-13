@@ -129,10 +129,10 @@ at `/home/vagrant/build/chat.psstpsst.app`, uses the buildserver's Java 21 and D
 Forky Node.js/npm packages, provisions the Android native toolchain, sets
 `SOURCE_DATE_EPOCH` from the release commit, and builds every Expo
 Android module from source. Selected signed Android packages are built unsigned
-inside the container and signed on the GitHub runner. Credentialed APK builds
-run twice in separate clean containers; all five unsigned APKs must match
-byte for byte before signing. CI sets `ANDROID_BUILD_APK`
-and `ANDROID_BUILD_BUNDLE` to select the Gradle tasks and output files; AAB signing
+inside the container and signed on the GitHub runner. Release CI builds the
+selected packages once; independent rebuild verification is performed separately
+when validating an F-Droid submission. CI sets `ANDROID_BUILD_APK` and
+`ANDROID_BUILD_BUNDLE` to select the Gradle tasks and output files; AAB signing
 uses `jarsigner`. APK/AAB content checks both enforce the ZXing-C++ scanner and
 exclude ML Kit. The container script defaults to APK-only builds for independent
 F-Droid rebuilds.

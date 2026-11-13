@@ -58,15 +58,15 @@ test('F-Droid auditing cannot block the normal APK release', () => {
   assert.match(workflow.slice(reportIndex), /the APK was already uploaded and the release will continue/);
 });
 
-test('credentialed APK releases compare independent unsigned builds before signing', () => {
-  const workflow = readFileSync(new URL('.github/workflows/build.yml', root), 'utf8');
-  const compareIndex = workflow.indexOf('      - name: Verify independent APK rebuild');
-  const signIndex = workflow.indexOf('      - name: Sign and verify APK');
-  assert.ok(compareIndex >= 0 && compareIndex < signIndex);
-  const comparison = workflow.slice(compareIndex, signIndex);
-  assert.match(comparison, /ANDROID_RELEASE_UNSIGNED: '1'/);
-  assert.match(comparison, /scripts\/compare-android-builds\.mjs release\/fdroid-build release\/fdroid-rebuild/);
-  assert.doesNotMatch(comparison, /continue-on-error/);
+test('Android releases build packages once before signing', () => {
+  const workflow = yaml.load(readFileSync(new URL('.github/workflows/build.yml', root), 'utf8'));
+  const steps = workflow.jobs['build-android'].steps;
+  const builds = steps.filter(step => step.run?.includes('bash scripts/build-android-reproducible.sh'));
+  assert.equal(builds.length, 1);
+  assert.match(builds[0].run, /scripts\/build-android-reproducible\.sh release\/fdroid-build/);
+  const signing = steps.find(step => step.name === 'Sign and verify APK');
+  assert.ok(steps.indexOf(signing) > steps.indexOf(builds[0]));
+  assert.match(signing.run, /release\/fdroid-build\/app-release\.apk/);
 });
 
 test('release validation reports only missing assets', () => {

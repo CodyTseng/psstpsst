@@ -55,14 +55,15 @@ the AAB disables them because AGP's R8 resource shrinker rejects multiple ABI
 resource outputs when packaging a bundle. Verified APKs are staged before
 switching the variant configuration, and the compiled native libraries are reused.
 
-For credentialed APK releases, upstream CI builds twice in separate clean
-containers from source archives that exclude ignored dependencies, generated
-native projects, previous outputs, and Git metadata. Working-tree source edits
-are included for local verification, and the host supplies the commit timestamp.
-CI compares all five unsigned APKs before signing. A mismatch fails
-the release build. The later signature-copy audit checks signing compatibility;
-F-Droid's own build and signature verification remain the final independent test.
-The long-lived signing key is never supplied to F-Droid.
+Upstream release CI builds the selected packages once in a clean container from
+a source archive that excludes ignored dependencies, generated native projects,
+previous outputs, and Git metadata. Working-tree source edits are included for
+local verification, and the host supplies the commit timestamp. Release CI does
+not perform a second build or compare independently rebuilt APKs. The later
+signature-copy audit checks signing compatibility using the original unsigned
+APKs; F-Droid's own build and signature verification remain the independent test.
+The comparison script remains available for manual reproducibility checks before
+an F-Droid submission. The long-lived signing key is never supplied to F-Droid.
 
 For unreliable SDK download connections, set `ANDROID_SDK_ARCHIVES` to a local
 directory of verified official SDK/NDK ZIPs. The script mounts it read-only and
