@@ -42,6 +42,8 @@ jobs:
         run: npm run test:dependencies
       - name: Inverted web scrolling regressions
         run: node --test scripts/react-native-web-inverted-scroll.test.mjs
+      - name: Napp helper generation regressions
+        run: node --test scripts/generate-napp-helpers.test.mjs
       - name: App identity regressions
         run: node --test scripts/app-identities.test.mjs
       - name: Release asset regressions
