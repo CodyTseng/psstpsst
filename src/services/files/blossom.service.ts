@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { base64 } from '@scure/base';
+import { base64, base64urlnopad } from '@scure/base';
 import type { Event } from 'nostr-tools';
 
 import { platform } from '@/platform';
@@ -29,6 +29,12 @@ import { stripImageMetadata } from './strip-metadata';
 const AUTH_EXPIRATION_SECONDS = 60 * 5;
 /** Cap a mirror request so one hung server can't keep the batch pending. */
 const MIRROR_TIMEOUT_MS = 20_000;
+
+/** Preserve the signed event while supporting older standard-Base64 decoders. */
+function legacyAuthToken(token: string): string {
+  const standard = token.replace(/-/g, '+').replace(/_/g, '/');
+  return standard.padEnd(Math.ceil(standard.length / 4) * 4, '=');
+}
 
 /** `fetch` with an abort-based timeout (RN `fetch` has none of its own). */
 async function fetchWithTimeout(
@@ -64,7 +70,7 @@ async function buildUploadAuth(opts: {
       ['expiration', String(now + AUTH_EXPIRATION_SECONDS)],
     ],
   });
-  return base64.encode(new TextEncoder().encode(JSON.stringify(event)));
+  return base64urlnopad.encode(new TextEncoder().encode(JSON.stringify(event)));
 }
 
 /** Upload one encrypted blob to one exact planned target. */
@@ -128,19 +134,25 @@ async function putBlobToServers(opts: {
 }): Promise<PutBlobResult> {
   const errors: string[] = [];
   const failedServers = new Set<string>();
+  const legacyAuthB64 = legacyAuthToken(opts.authB64);
   for (const server of opts.servers) {
     throwIfAborted(opts.signal);
     const base = server.replace(/\/+$/, '');
     try {
-      const res = await platform.fileSystem.uploadFile(`${base}/upload`, opts.fileUri, {
+      const upload = (authB64: string) => platform.fileSystem.uploadFile(`${base}/upload`, opts.fileUri, {
         httpMethod: 'PUT',
         headers: {
-          Authorization: `Nostr ${opts.authB64}`,
+          Authorization: `Nostr ${authB64}`,
           'Content-Type': opts.mime,
         },
         signal: opts.signal,
         onProgress: opts.onProgress,
       });
+      let res = await upload(opts.authB64);
+      if ((res.status === 400 || res.status === 401) && opts.authB64 !== legacyAuthB64) {
+        throwIfAborted(opts.signal);
+        res = await upload(legacyAuthB64);
+      }
       if (res.status < 200 || res.status >= 300) {
         failedServers.add(base);
         errors.push(`${server} → ${res.status} ${res.body.slice(0, 120)}`);
@@ -208,15 +220,16 @@ async function mirrorBlobToServers(opts: {
   authB64: string;
 }): Promise<void> {
   if (opts.servers.length === 0) return;
+  const legacyAuthB64 = legacyAuthToken(opts.authB64);
   await Promise.allSettled(
     opts.servers.map(async (server) => {
       const base = server.replace(/\/+$/, '');
-      const res = await fetchWithTimeout(
+      const mirror = (authB64: string) => fetchWithTimeout(
         `${base}/mirror`,
         {
           method: 'PUT',
           headers: {
-            Authorization: `Nostr ${opts.authB64}`,
+            Authorization: `Nostr ${authB64}`,
             'Content-Type': 'application/json',
             'X-SHA-256': opts.sha256Hex,
             'X-Content-Length': String(opts.sizeBytes),
@@ -226,6 +239,10 @@ async function mirrorBlobToServers(opts: {
         },
         MIRROR_TIMEOUT_MS,
       );
+      let res = await mirror(opts.authB64);
+      if ((res.status === 400 || res.status === 401) && opts.authB64 !== legacyAuthB64) {
+        res = await mirror(legacyAuthB64);
+      }
       if (res.status < 200 || res.status >= 300) {
         throw new Error(`${base}/mirror → ${res.status}`);
       }
@@ -305,7 +322,7 @@ export async function uploadPublicBlob(opts: {
 }): Promise<UploadResult> {
   const result = await putBlobToServers({
     servers: opts.servers, fileUri: opts.fileUri, mime: opts.mime,
-    authB64: base64.encode(new TextEncoder().encode(JSON.stringify(opts.authorization))),
+    authB64: base64urlnopad.encode(new TextEncoder().encode(JSON.stringify(opts.authorization))),
     fallbackSize: opts.size, expectedSha256: opts.sha256,
     signal: opts.signal, onProgress: opts.onProgress,
   });

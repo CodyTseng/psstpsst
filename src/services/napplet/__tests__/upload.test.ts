@@ -1,7 +1,7 @@
 import { finalizeEvent, generateSecretKey, verifyEvent } from 'nostr-tools';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
-import { base64 } from '@scure/base';
+import { base64, base64urlnopad } from '@scure/base';
 import { platform } from '@/platform';
 import { NappletUploads } from '../upload';
 import { UPLOAD_CHUNK_BYTES } from '../upload-transport';
@@ -25,7 +25,7 @@ beforeEach(() => {
   jest.mocked(platform.fileSystem.uploadFile).mockImplementation(async (url, path, options) => {
     const bytes = new Uint8Array(files.get(path)!.flatMap((chunk) => Array.from(chunk)));
     const hash = bytesToHex(sha256(bytes));
-    const auth = JSON.parse(new TextDecoder().decode(base64.decode(options.headers!.Authorization.slice(6))));
+    const auth = JSON.parse(new TextDecoder().decode(base64urlnopad.decode(options.headers!.Authorization.slice(6))));
     expect(verifyEvent(auth)).toBe(true);
     expect(auth.kind).toBe(24242);
     expect(auth.tags).toContainEqual(['x', hash]);
