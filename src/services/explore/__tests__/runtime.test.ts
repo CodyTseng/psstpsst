@@ -9,6 +9,7 @@ import { loadSiteBlob } from '@/services/napplet/artifacts';
 import { getData } from '@/services/napplet/repository';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import { localRelay } from '@/services/local-relay';
+jest.mock('@/services/preferences/device-preferences.service', () => ({ getDevicePreference: jest.fn(async () => null), setDevicePreference: jest.fn(async () => {}) }));
 jest.mock('../application-reference', () => ({ applicationEntryFromAddress: jest.fn(), resolveApplicationReference: jest.fn() }));
 jest.mock('../default-handlers', () => ({ readDefaultActionHandler: jest.fn(async () => null), setDefaultHandler: jest.fn(async () => {}) }));
 jest.mock('../webln', () => ({ WebLn: jest.fn().mockImplementation(() => ({ handle: jest.fn(async () => true) })) }));

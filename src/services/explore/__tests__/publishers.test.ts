@@ -3,6 +3,8 @@ import { ApplicationNetwork } from '@/services/applications/network';
 import { discoveryEntries, discoveryStore } from '../discovery';
 import { publisherCatalogue } from '../publishers';
 
+jest.mock('@/services/preferences/device-preferences.service', () => ({ getDevicePreference: jest.fn(async () => null), setDevicePreference: jest.fn(async () => {}) }));
+jest.mock('../application-cache', () => ({ cacheApplicationEvent: jest.fn(async () => {}) }));
 jest.mock('@/services/applications/network', () => ({ ApplicationNetwork: jest.fn() }));
 let secret: Uint8Array;
 let publisher: string;
