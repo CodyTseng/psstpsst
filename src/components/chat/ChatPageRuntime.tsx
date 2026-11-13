@@ -25,7 +25,7 @@ import {
   type SetStateAction,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import Reanimated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
 
@@ -1812,10 +1812,9 @@ function ChatPageContent({
   }
 
   function openMeasuredMenu(rect: BubbleRect, bubble: LiftedBubble) {
-    // Modal temporarily owns window focus. Remember the user's keyboard state
-    // so a plain dismiss/action can restore it after the native window closes.
+    // iOS's Modal temporarily owns window focus; Android's menu preserves it.
     restoreKeyboardAfterMenuRef.current =
-      KeyboardController.isVisible() && !IS_ELECTRON;
+      Platform.OS === 'ios' && KeyboardController.isVisible();
     const node = contentRef.current;
     if (!node) {
       setMenuAnchor({ rect, bubble });

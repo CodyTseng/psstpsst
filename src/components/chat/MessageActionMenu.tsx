@@ -5,7 +5,6 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  Modal,
   Platform,
   StyleSheet,
   useWindowDimensions,
@@ -48,6 +47,7 @@ import {
 import { BubbleBody, type RemoteContentMode } from './BubbleBody';
 import { ElectronHoverGroup } from './electron-hover-group';
 import type { EmojiPickerPopoverAnchor } from './EmojiPickerSheet';
+import { MessageActionMenuHost } from './message-action-menu-host';
 import {
   placeDesktopMessageActionMenu,
   placeTouchMessageActionMenu,
@@ -331,8 +331,8 @@ export function MessageActionMenu({
 
   const view = dataRef.current;
   // Expo 57 / RN 0.86 edge-to-edge Android includes the viewport offset in
-  // measureInWindow. The translucent Modal uses that same window coordinate
-  // space, so applying the status-bar inset again would move every lifted copy.
+  // measureInWindow. The overlay shares that window coordinate space, so
+  // applying the status-bar inset again would move every lifted copy.
   const {
     rect: vRect,
     bodyRect: vBodyRect,
@@ -708,12 +708,9 @@ export function MessageActionMenu({
     </>
   );
 
-  // A single native window keeps painting and hit-testing in the same coordinate
-  // space, including when this screen is the offset detail pane in split view.
-  // The parent restores any previously visible keyboard after Modal teardown.
   return (
-    <Modal visible transparent statusBarTranslucent onRequestClose={onClose}>
+    <MessageActionMenuHost active={visible} onClose={onClose}>
       {overlayContent}
-    </Modal>
+    </MessageActionMenuHost>
   );
 }

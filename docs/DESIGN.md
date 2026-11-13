@@ -759,6 +759,8 @@ delays guessed at call sites.
 
 Menus consume Android Back and Electron Escape while open, closing before
 route or page handling.
+Android message context menus preserve the composer's keyboard and the source
+message's position; dismissing the keyboard also closes the anchored menu.
 Application chrome places Close at the start and More at the end. In an inline
 application container, Close dismisses the entire application stack and returns
 to the host. Header and system Back traverse the current application's history
