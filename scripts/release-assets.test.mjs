@@ -103,7 +103,8 @@ test('F-Droid ABI builds select matching binaries and increasing version codes',
     const assemble = build.build.find((command) => command.includes(':app:assembleRelease'));
     assert.ok(assemble.includes(`-PreactNativeArchitectures=${abi} `));
     assert.ok(assemble.includes('-PpsstpsstAbiSplits=true'));
-    assert.ok(build.scandelete.includes('android/app/debug.keystore'));
+    assert.ok(!build.scandelete.includes('android/app/debug.keystore'));
+    assert.ok(build.init.indexOf('rm -f android/app/debug.keystore') > build.init.findIndex(command => command.endsWith('npm run android:prebuild')));
     assert.ok(build.init.some((command) => command.endsWith('npm run android:prebuild')));
     assert.ok(!build.sudo.some((command) => /bookworm|openjdk-17|curl/.test(command)));
     assert.ok(!build.build.some((command) => /JAVA_HOME|sed /.test(command)));

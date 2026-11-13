@@ -33,6 +33,7 @@ Builds:
       - find node_modules -type d -name local-maven-repo -prune -exec rm -rf {}
         +
       - CI=1 NODE_ENV=production npm run android:prebuild
+      - rm -f android/app/debug.keystore
     output:
       android/app/build/outputs/apk/release/app-armeabi-v7a-release-unsigned.apk
     binary:
@@ -50,7 +51,6 @@ Builds:
       - node_modules/react-native-view-shot/android/build.gradle
     scandelete:
       - node_modules
-      - android/app/debug.keystore
     build:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle
@@ -76,6 +76,7 @@ Builds:
       - find node_modules -type d -name local-maven-repo -prune -exec rm -rf {}
         +
       - CI=1 NODE_ENV=production npm run android:prebuild
+      - rm -f android/app/debug.keystore
     output:
       android/app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
     binary:
@@ -93,7 +94,6 @@ Builds:
       - node_modules/react-native-view-shot/android/build.gradle
     scandelete:
       - node_modules
-      - android/app/debug.keystore
     build:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle
@@ -119,6 +119,7 @@ Builds:
       - find node_modules -type d -name local-maven-repo -prune -exec rm -rf {}
         +
       - CI=1 NODE_ENV=production npm run android:prebuild
+      - rm -f android/app/debug.keystore
     output: android/app/build/outputs/apk/release/app-x86-release-unsigned.apk
     binary:
       https://github.com/codytseng/psstpsst/releases/download/v%v/PsstPsst-android-x86.apk
@@ -135,7 +136,6 @@ Builds:
       - node_modules/react-native-view-shot/android/build.gradle
     scandelete:
       - node_modules
-      - android/app/debug.keystore
     build:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle
@@ -161,6 +161,7 @@ Builds:
       - find node_modules -type d -name local-maven-repo -prune -exec rm -rf {}
         +
       - CI=1 NODE_ENV=production npm run android:prebuild
+      - rm -f android/app/debug.keystore
     output:
       android/app/build/outputs/apk/release/app-x86_64-release-unsigned.apk
     binary:
@@ -178,7 +179,6 @@ Builds:
       - node_modules/react-native-view-shot/android/build.gradle
     scandelete:
       - node_modules
-      - android/app/debug.keystore
     build:
       - cd android
       - CI=1 NODE_ENV=production EXPO_PUBLIC_APP_ENV=production gradle

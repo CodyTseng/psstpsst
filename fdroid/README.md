@@ -35,10 +35,14 @@ The lockfile and reviewed `patch-package` patches select the framework inputs:
   the production-only deterministic dev-server IP, unsigned release signing,
   and ABI version codes. Development builds retain Metro host discovery.
 - All Android libraries, including Expo SQLite, use the same NDK as the Expo app.
+- The reviewed Expo Application patch removes the unused Play Install Referrer
+  dependency; its attribution API reports that it is unavailable. Release CI
+  rejects this dependency if it returns.
 
 F-Droid retains explicit, narrow scanner exceptions for Hermes and legitimate
-Maven declarations. `scandelete` removes dependency scanner findings and the
-unused generated debug keystore. It then invokes Gradle directly in the generated
+Maven declarations. The init step explicitly removes the unused generated debug
+keystore after prebuild; `scandelete` only handles dependency scanner findings.
+The recipe then invokes Gradle directly in the generated
 `android/` directory. Upstream-only dependency/APK checks stay in release CI.
 
 ## ABI outputs and verification

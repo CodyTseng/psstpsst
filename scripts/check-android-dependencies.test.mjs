@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const script = new URL('./check-android-dependencies.mjs', import.meta.url);
 
-test('the release dependency guard detects direct and transitive remote push and ML Kit SDKs', () => {
+test('the release dependency guard detects direct and transitive remote push, ML Kit, and Install Referrer SDKs', () => {
   const directory = mkdtempSync(join(tmpdir(), 'psstpsst-dependency-test-'));
   const report = join(directory, 'dependencies.txt');
   const check = (body) => {
@@ -27,6 +27,7 @@ test('the release dependency guard detects direct and transitive remote push and
       'com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1',
       'com.google.mlkit:barcode-scanning:17.3.0',
       'com.google.mlkit:common:18.11.0',
+      'com.android.installreferrer:installreferrer:2.2',
       'androidx.camera:camera-mlkit-vision:1.6.0',
       'project :expo-notifications',
       'host.exp.exponent:expo.modules.notifications:57.0.0',
