@@ -77,6 +77,8 @@ test('combined releases stage all verified APKs before building the bundle witho
     assert.deepEqual(events.map(event => event.tool), ['gradle', ...abis.map(() => 'python3'), 'gradle', 'python3']);
     for (const event of events.filter(event => event.tool === 'gradle')) {
       assert.ok(event.args.includes('--no-daemon'));
+      assert.ok(event.args.includes('--stacktrace'));
+      assert.ok(event.args.includes('--console=plain'));
       assert.ok(!event.args.some(arg => arg.startsWith('--max-workers') || arg.startsWith('-Dorg.gradle.jvmargs=')));
     }
     for (const [index, abi] of abis.entries()) {

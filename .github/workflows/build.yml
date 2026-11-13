@@ -221,6 +221,8 @@ jobs:
       CI: '1'
       NODE_ENV: production
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      ANDROID_GRADLE_JVMARGS: '-Xmx8g -XX:MaxMetaspaceSize=1g'
+      ANDROID_GRADLE_WORKERS: '2'
       HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v6
@@ -240,6 +242,20 @@ jobs:
       - name: Install APK signing tools
         run: sdkmanager "build-tools;36.0.0"
 
+      - name: Prepare Android download cache
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-downloads"
+          echo "ANDROID_DOWNLOAD_CACHE=$RUNNER_TEMP/android-downloads" >> "$GITHUB_ENV"
+
+      - name: Restore Android downloads
+        id: android_cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.ANDROID_DOWNLOAD_CACHE }}
+          key: android-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'scripts/build-android-reproducible.sh', 'scripts/android-download-cache.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            android-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'scripts/build-android-reproducible.sh', 'scripts/android-download-cache.sh') }}-
+
       - name: Build Android packages in the F-Droid environment
         shell: bash
         env:
@@ -247,15 +263,7 @@ jobs:
           ANDROID_BUILD_APK: ${{ needs.validate-version.outputs.apk == 'true' && '1' || '0' }}
           ANDROID_BUILD_BUNDLE: ${{ needs.validate-version.outputs.aab == 'true' && '1' || '0' }}
         run: |
-          for attempt in 1 2; do
-            if bash scripts/build-android-reproducible.sh release/fdroid-build; then
-              exit 0
-            fi
-            if (( attempt == 2 )); then
-              exit 1
-            fi
-            echo "::warning::The isolated Android build failed; retrying once with a fresh container."
-          done
+          bash scripts/build-android-reproducible.sh release/fdroid-build
 
       - name: Verify independent APK rebuild
         if: needs.validate-version.outputs.apk == 'true' && env.HAS_ANDROID_SIGNING == 'true'
@@ -266,6 +274,24 @@ jobs:
         run: |
           bash scripts/build-android-reproducible.sh release/fdroid-rebuild
           node scripts/compare-android-builds.mjs release/fdroid-build release/fdroid-rebuild
+
+      - name: Save Android downloads
+        if: always() && steps.android_cache.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.ANDROID_DOWNLOAD_CACHE }}
+          key: ${{ steps.android_cache.outputs.cache-primary-key }}
+
+      - name: Upload Android build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-build-diagnostics
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            release/fdroid-build/diagnostics/
+            release/fdroid-rebuild/diagnostics/
 
       - name: Sign and verify APK
         if: needs.validate-version.outputs.apk == 'true'

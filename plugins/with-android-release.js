@@ -82,6 +82,13 @@ subprojects {
   });
   config = withGradleProperties(config, (config) => {
     const properties = {};
+    // Isolated builders can size Gradle for their runner without changing local defaults.
+    if (process.env.ANDROID_GRADLE_JVMARGS) {
+      properties['org.gradle.jvmargs'] = process.env.ANDROID_GRADLE_JVMARGS;
+    }
+    if (process.env.ANDROID_GRADLE_WORKERS) {
+      properties['org.gradle.workers.max'] = process.env.ANDROID_GRADLE_WORKERS;
+    }
     if (['1', 'true'].includes(process.env.CI)) {
       properties['org.gradle.vfs.watch'] = 'false';
     }

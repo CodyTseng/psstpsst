@@ -139,6 +139,14 @@ F-Droid rebuilds.
 APKs and AABs use separate Gradle invocations: APKs enable ABI splits, while AABs
 disable them to satisfy AGP's R8 resource shrinker. Verified APKs are staged before
 switching the variant configuration for the bundle.
+CI caches only downloaded SDK ZIPs, npm packages, and Gradle distributions/Maven
+artifacts through `ANDROID_DOWNLOAD_CACHE`; each container installs and compiles
+its own copies. Missing downloads are fetched online, and downloads are saved
+even when compilation fails. The 16 GiB runner uses an 8 GiB Gradle heap,
+1 GiB Metaspace, and two workers through `ANDROID_GRADLE_JVMARGS` and
+`ANDROID_GRADLE_WORKERS`. Local defaults are unchanged. Compilation failures
+are not automatically rebuilt; stack traces and uploaded diagnostics support
+investigation before retrying.
 The host provides the source commit timestamp, so the isolated source export also
 works from a Git worktree. Production prebuilds fix the React Native dev-server
 IP for reproducibility; development prebuilds retain Metro host discovery.

@@ -53,7 +53,7 @@ jobs:
           node --test scripts/android-release-config.test.mjs
           node --test scripts/build-android-artifacts.test.mjs scripts/build-android-bundle.test.mjs
           node --test scripts/compare-android-builds.test.mjs
-          node --test scripts/create-android-source-archive.test.mjs
+          node --test scripts/create-android-source-archive.test.mjs scripts/android-download-cache.test.mjs
           python3 -m unittest discover -s scripts -p 'test_check_android_apk.py'
           node --test scripts/release-signing.test.mjs
           node --test scripts/verify-fdroid-reproducibility.test.mjs

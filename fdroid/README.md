@@ -8,9 +8,8 @@ configuration; that result does not certify this new Java 21/R8/ABI build.
 
 An earlier validation run on 2026-11-05 passed Linux unsigned Release APK builds
 for all four ABIs and the universal package, including R8/resource shrinking and
-APK content checks, with temporary memory and concurrency overrides. The current
-flow uses Expo/Gradle defaults; a full Linux build with those defaults remains
-unverified. Local toolchain checks confirmed that all 60 Android Java compile tasks
+APK content checks, with temporary memory and concurrency overrides. CI now explicitly selects an 8 GiB Gradle heap, 1 GiB Metaspace, and two
+workers; a full Linux build with these CI settings remains unverified. Local toolchain checks confirmed that all 60 Android Java compile tasks
 select JDK 21 and bytecode target 17; a Java 17 launcher also selects the Java 21
 daemon through the project criteria. A complete Linux AAB build, independent APK
 byte comparison, and F-Droid signature verification remain unverified.
@@ -71,17 +70,29 @@ copies the archives into each container's disposable sdkmanager cache. Installed
 SDK directories and project build outputs are never shared between builds.
 `ANDROID_NPM_CACHE` similarly accepts an npm cache prepared for Linux x64 from
 the lockfile. Only `_cacache` is mounted and copied into the fresh container;
-npm then installs offline and validates package integrity. User npm configuration,
-credentials, installed dependencies, and compiled outputs are not copied.
+npm prefers cached downloads, fetches missing packages, and validates package
+integrity. User npm configuration, credentials, installed dependencies, and
+compiled outputs are not copied.
 `ANDROID_GRADLE_DOWNLOADS` accepts a `wrapper/` directory containing downloaded
 Gradle distributions and a `maven-files/` directory containing only upstream
 `modules-2/files-2.1` artifacts. Gradle project caches, transformed artifacts, and
 project build outputs are not shared.
 
-JVM memory and Gradle concurrency use the template and tool defaults, without
-additional project-specific limits. `ANDROID_KEEP_FAILED_CONTAINER=1` retains
-a failed container and its source bind-mount snapshot for inspection. The output directory records the
-container ID and `source-snapshot.path`; remove both the container and that
+CI restores and saves SDK ZIPs, npm `_cacache`, and Gradle distribution/Maven
+downloads through `ANDROID_DOWNLOAD_CACHE`. Downloads are copied into disposable
+container caches and exported on exit, including build failures. Installed SDKs,
+`node_modules`, transformed artifacts, and project outputs are never cached.
+Cache misses can download missing inputs; each independent build still compiles
+from scratch. CI does not retry the entire build after compilation failures.
+
+CI sets `ANDROID_GRADLE_JVMARGS=-Xmx8g -XX:MaxMetaspaceSize=1g` and
+`ANDROID_GRADLE_WORKERS=2` for the 16 GiB runner. These explicit overrides pass
+through clean prebuild; local and F-Droid builds retain their own defaults unless
+the same variables are supplied. Gradle prints stack traces on failure, and CI
+uploads reports, daemon logs, and memory/disk diagnostics from failed containers.
+
+`ANDROID_KEEP_FAILED_CONTAINER=1` retains a failed container and its source
+bind-mount snapshot for inspection. The output directory records the container ID and `source-snapshot.path`; remove both the container and that
 snapshot after diagnosis. Successful containers and snapshots are still removed.
 These diagnostic settings do not reuse project outputs between independent builds.
 

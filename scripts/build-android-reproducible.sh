@@ -54,6 +54,12 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
     docker_mounts+=(--mount "type=bind,src=$gradle_downloads,dst=/gradle-downloads,readonly")
   fi
 
+  if [[ -n "${ANDROID_DOWNLOAD_CACHE:-}" ]]; then
+    mkdir -p "$ANDROID_DOWNLOAD_CACHE"
+    download_cache="$(cd "$ANDROID_DOWNLOAD_CACHE" && pwd)"
+    docker_mounts+=(--mount "type=bind,src=$download_cache,dst=/download-cache")
+  fi
+
   docker_args=(run --platform linux/amd64)
   if [[ "${ANDROID_KEEP_FAILED_CONTAINER:-0}" != "1" ]]; then
     docker_args+=(--rm)
@@ -64,6 +70,8 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
     --env ANDROID_RELEASE_UNSIGNED="${ANDROID_RELEASE_UNSIGNED:-1}" \
     --env ANDROID_BUILD_APK="${ANDROID_BUILD_APK:-1}" \
     --env ANDROID_BUILD_BUNDLE="${ANDROID_BUILD_BUNDLE:-0}" \
+    --env ANDROID_GRADLE_JVMARGS="${ANDROID_GRADLE_JVMARGS:-}" \
+    --env ANDROID_GRADLE_WORKERS="${ANDROID_GRADLE_WORKERS:-}" \
     --env PSSTPSST_FDROID_CONTAINER=1 \
     --env SOURCE_DATE_EPOCH="$source_date_epoch" \
     "$IMAGE" \
@@ -86,6 +94,29 @@ if [[ "${PSSTPSST_FDROID_CONTAINER:-}" != "1" ]]; then
 fi
 
 if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
+  # Export diagnostics and downloaded inputs even when the build fails.
+  finish_container() {
+    build_status=$?
+    set +e
+    if [[ -d /download-cache && -f "$PROJECT_DIR/scripts/android-download-cache.sh" ]]; then
+      bash "$PROJECT_DIR/scripts/android-download-cache.sh" save /download-cache /home/vagrant /root/.cache/sdkmanager || echo 'Warning: could not save all Android downloads.' >&2
+    fi
+    if (( build_status != 0 )); then
+      mkdir -p /output/diagnostics
+      { free -m; df -h; cat /sys/fs/cgroup/memory.events 2>/dev/null; } > /output/diagnostics/resources.txt
+      cp -a "$PROJECT_DIR/android/build/reports" /output/diagnostics/ 2>/dev/null
+      cp "$PROJECT_DIR/android-dependencies.txt" /output/diagnostics/ 2>/dev/null
+      find /home/vagrant/.gradle/daemon -name 'daemon-*.out.log' -exec cp '{}' /output/diagnostics/ \; 2>/dev/null
+    fi
+    exit "$build_status"
+  }
+  trap finish_container EXIT
+  mkdir -p "$PROJECT_DIR"
+  tar -xf /source.tar -C "$PROJECT_DIR"
+  if [[ -d /download-cache ]]; then
+    bash "$PROJECT_DIR/scripts/android-download-cache.sh" restore /download-cache /home/vagrant /root/.cache/sdkmanager
+  fi
+
   echo 'deb https://deb.debian.org/debian forky main' > /etc/apt/sources.list.d/psstpsst-forky.list
   apt-get update
   apt-get install -y -t forky nodejs npm sudo
@@ -103,13 +134,10 @@ if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
     'cmake;3.22.1' \
     'ndk;27.1.12297006'
 
-  mkdir -p "$PROJECT_DIR"
-  tar -xf /source.tar -C "$PROJECT_DIR"
   chown -R vagrant:vagrant "$PROJECT_DIR"
   if [[ -d /npm-download-cache ]]; then
     mkdir -p /home/vagrant/.npm/_cacache
     cp -a /npm-download-cache/. /home/vagrant/.npm/_cacache/
-    chown -R vagrant:vagrant /home/vagrant/.npm
   fi
   if [[ -d /gradle-downloads ]]; then
     mkdir -p /home/vagrant/.cache/gradlew-fdroid /home/vagrant/.gradle/caches/modules-2/files-2.1
@@ -119,8 +147,13 @@ if [[ "${PSSTPSST_FDROID_USER:-}" != "1" ]]; then
     if [[ -d /gradle-downloads/maven-files ]]; then
       cp -a /gradle-downloads/maven-files/. /home/vagrant/.gradle/caches/modules-2/files-2.1/
     fi
-    chown -R vagrant:vagrant /home/vagrant/.cache/gradlew-fdroid /home/vagrant/.gradle
   fi
+
+  if [[ -d /home/vagrant/.npm ]]; then chown -R vagrant:vagrant /home/vagrant/.npm; fi
+  if [[ -d /home/vagrant/.gradle ]]; then chown -R vagrant:vagrant /home/vagrant/.gradle; fi
+  if [[ -d /home/vagrant/.cache/gradlew-fdroid ]]; then chown -R vagrant:vagrant /home/vagrant/.cache/gradlew-fdroid; fi
+  free -m
+  df -h
 
   sudo --preserve-env --user vagrant env \
     HOME=/home/vagrant \
@@ -164,16 +197,13 @@ export TZ=UTC
 java -version
 node --version
 npm --version
-if [[ -d /npm-download-cache ]]; then
-  npm ci --include=dev --ignore-scripts --offline --no-audit
-else
-  npm ci --include=dev --ignore-scripts
-fi
+npm ci --include=dev --ignore-scripts --prefer-offline --no-audit
 npm run postinstall
 find node_modules -type d -name local-maven-repo -prune -exec rm -rf {} +
 npm run android:prebuild
+sed -n '/^org.gradle.jvmargs=/p; /^org.gradle.workers.max=/p' android/gradle.properties
 
 find . -name gradle-wrapper.jar -type f -delete
-(cd android && gradle --no-daemon :app:dependencies --configuration releaseRuntimeClasspath --console=plain) > android-dependencies.txt
+(cd android && gradle --no-daemon --stacktrace :app:dependencies --configuration releaseRuntimeClasspath --console=plain) 2>&1 | tee android-dependencies.txt
 node scripts/check-android-dependencies.mjs android-dependencies.txt
 bash scripts/build-android-artifacts.sh

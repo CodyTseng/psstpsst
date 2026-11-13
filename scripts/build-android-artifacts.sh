@@ -23,7 +23,7 @@ if [[ "${ANDROID_BUILD_APK:-1}" == "1" ]]; then
   if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" != "1" ]]; then
     debug_signing=true
   fi
-  (cd android && gradle --no-daemon :app:assembleRelease "-PpsstpsstDebugSigning=$debug_signing" -PpsstpsstAbiSplits=true)
+  (cd android && gradle --no-daemon --stacktrace --console=plain :app:assembleRelease "-PpsstpsstDebugSigning=$debug_signing" -PpsstpsstAbiSplits=true)
   for abi in universal armeabi-v7a arm64-v8a x86 x86_64; do
     if [[ "${ANDROID_RELEASE_UNSIGNED:-1}" == "1" ]]; then
       artifact="android/app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
@@ -44,7 +44,7 @@ fi
 
 if [[ "${ANDROID_BUILD_BUNDLE:-0}" == "1" ]]; then
   # AGP's R8 resource shrinker cannot build an AAB from multiple ABI resource outputs.
-  (cd android && gradle --no-daemon :app:bundleRelease -PpsstpsstDebugSigning=false -PpsstpsstAbiSplits=false)
+  (cd android && gradle --no-daemon --stacktrace --console=plain :app:bundleRelease -PpsstpsstDebugSigning=false -PpsstpsstAbiSplits=false)
   artifact=android/app/build/outputs/bundle/release/app-release.aab
   python3 scripts/check-android-apk.py "$artifact"
   install -m 0644 "$artifact" "$output_dir/app-release.aab"

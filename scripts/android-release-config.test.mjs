@@ -101,3 +101,25 @@ test('CI prebuild disables Gradle file watching', async () => {
     else process.env.CI = previous;
   }
 });
+
+test('isolated build memory overrides survive clean prebuild without changing Kotlin settings', async () => {
+  const previousJvm = process.env.ANDROID_GRADLE_JVMARGS;
+  const previousWorkers = process.env.ANDROID_GRADLE_WORKERS;
+  try {
+    process.env.ANDROID_GRADLE_JVMARGS = '-Xmx8g -XX:MaxMetaspaceSize=1g';
+    process.env.ANDROID_GRADLE_WORKERS = '2';
+    const properties = await runMod('gradleProperties', [
+      { type: 'property', key: 'org.gradle.jvmargs', value: '-Xmx2048m -XX:MaxMetaspaceSize=512m' },
+      { type: 'property', key: 'kotlin.daemon.jvmargs', value: '-Xmx512m' },
+    ]);
+    assert.equal(properties.find(item => item.key === 'org.gradle.jvmargs').value, process.env.ANDROID_GRADLE_JVMARGS);
+    assert.equal(properties.find(item => item.key === 'org.gradle.workers.max').value, '2');
+    assert.equal(properties.find(item => item.key === 'kotlin.daemon.jvmargs').value, '-Xmx512m');
+    assert.deepEqual(await runMod('gradleProperties', structuredClone(properties)), properties);
+  } finally {
+    if (previousJvm === undefined) delete process.env.ANDROID_GRADLE_JVMARGS;
+    else process.env.ANDROID_GRADLE_JVMARGS = previousJvm;
+    if (previousWorkers === undefined) delete process.env.ANDROID_GRADLE_WORKERS;
+    else process.env.ANDROID_GRADLE_WORKERS = previousWorkers;
+  }
+});

@@ -81,6 +81,9 @@ process.exit(Number(process.env.TEST_DOCKER_STATUS || listing.status));
         TEST_SOURCE_FILES: filesFile,
         ANDROID_SDK_ARCHIVES: sdkArchives,
         ANDROID_NPM_CACHE: npmCache,
+        ANDROID_DOWNLOAD_CACHE: join(directory, 'downloads'),
+        ANDROID_GRADLE_JVMARGS: '-Xmx8g -XX:MaxMetaspaceSize=1g',
+        ANDROID_GRADLE_WORKERS: '2',
         SOURCE_DATE_EPOCH: '',
         PSSTPSST_FDROID_CONTAINER: '',
       },
@@ -91,6 +94,9 @@ process.exit(Number(process.env.TEST_DOCKER_STATUS || listing.status));
     assert.ok(args.includes(`SOURCE_DATE_EPOCH=${timestamp}`));
     assert.ok(args.includes(`type=bind,src=${sdkArchives},dst=/sdk-archives,readonly`));
     assert.ok(args.includes(`type=bind,src=${npmCache}/_cacache,dst=/npm-download-cache,readonly`));
+    assert.ok(args.includes(`type=bind,src=${join(directory, 'downloads')},dst=/download-cache`));
+    assert.ok(args.includes('ANDROID_GRADLE_JVMARGS=-Xmx8g -XX:MaxMetaspaceSize=1g'));
+    assert.ok(args.includes('ANDROID_GRADLE_WORKERS=2'));
     const archive = args.find((arg) => arg.includes('dst=/source.tar')).split(',').find((part) => part.startsWith('src=')).slice(4);
     assert.ok(!existsSync(archive));
     const files = readFileSync(filesFile, 'utf8').trim().split('\n');
