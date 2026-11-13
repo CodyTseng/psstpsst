@@ -1,0 +1,25 @@
+diff --git a/node_modules/react-native-keyboard-controller/android/src/main/java/com/reactnativekeyboardcontroller/modal/ModalAttachedWatcher.kt b/node_modules/react-native-keyboard-controller/android/src/main/java/com/reactnativekeyboardcontroller/modal/ModalAttachedWatcher.kt
+--- a/node_modules/react-native-keyboard-controller/android/src/main/java/com/reactnativekeyboardcontroller/modal/ModalAttachedWatcher.kt
++++ b/node_modules/react-native-keyboard-controller/android/src/main/java/com/reactnativekeyboardcontroller/modal/ModalAttachedWatcher.kt
+@@ -4,6 +4,7 @@
+ import android.view.WindowManager
+ import androidx.core.view.ViewCompat
+ import com.facebook.react.uimanager.ThemedReactContext
++import com.facebook.react.uimanager.UIManagerHelper
+ import com.facebook.react.uimanager.events.Event
+ import com.facebook.react.uimanager.events.EventDispatcherListener
+ import com.facebook.react.views.modal.ReactModalHostView
+@@ -30,6 +31,13 @@
+ 
+   override fun onEventDispatch(event: Event<*>) {
+     if (event.eventName != MODAL_SHOW_EVENT) {
++      return
++    }
++
++    // The dispatcher is shared by all React surfaces, including other Activities.
++    // Only the modal's owner may suspend its keyboard callback or install the
++    // single dismiss listener; another surface would leave this one suspended.
++    if (event.surfaceId != UIManagerHelper.getSurfaceId(view)) {
+       return
+     }
+ 

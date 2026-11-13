@@ -788,6 +788,8 @@ before starting queries, media work, or cryptography.
 
 Native gesture, keyboard, and safe-area providers live above account gates so
 screen replacement does not interrupt their event subscriptions.
+Keyboard modal handling is scoped to the owning React surface; independent
+application windows must not suspend or replace another surface's callbacks.
 
 ## 12. Runtime and security boundaries
 
