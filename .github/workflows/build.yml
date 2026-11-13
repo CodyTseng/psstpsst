@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 24.15.0
+          node-version: 24.22.1
           package-manager-cache: false
       - name: Select build targets
         id: targets
@@ -149,8 +149,13 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 24.15.0
+          node-version: 24.22.1
           cache: npm
+
+      - name: Enable Windows Node diagnostics
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/windows-build-diagnostics.ps1 -Mode setup
 
       - name: Use stable Rust
         if: runner.os != 'macOS'
@@ -194,6 +199,21 @@ jobs:
             xcrun stapler validate release/mac-arm64/PsstPsst.app
           fi
 
+      - name: Collect Windows build diagnostics
+        if: failure() && runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: ./scripts/windows-build-diagnostics.ps1 -Mode collect
+
+      - name: Upload Windows build diagnostics
+        if: failure() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-diagnostics-${{ matrix.artifact }}
+          path: ${{ runner.temp }}/psstpsst-node-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:
@@ -229,7 +249,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 24.15.0
+          node-version: 24.22.1
           package-manager-cache: false
 
       - uses: actions/setup-java@v6

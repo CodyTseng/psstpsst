@@ -85,6 +85,14 @@ Before making the repository public or publishing its first release:
 
 ## Workflow behavior
 
+Release runners pin Node.js 24.22.1. Keep Windows builds on a reviewed Node 24
+patch release newer than 24.15.0, which has a confirmed
+[Windows native-crash issue](https://github.com/nodejs/node/issues/63620).
+The isolated Android build retains its buildserver-managed Node runtime.
+Failed Windows builds upload Node diagnostic reports and available Application
+error events as separate diagnostic artifacts. Reports exclude environment
+variables; Windows fast-fail exits may bypass Node's report hooks entirely.
+
 Manual runs let you select platforms and architectures in **Actions → Build Apps
 → Run workflow**. These selections build the production app identity from the
 selected Git ref; they do not change application versions or version codes.
