@@ -794,6 +794,9 @@ calendar month without a leading zero, and the release sequence within that
 month starting at 1. For example, the first release in September 2026 is
 `26.9.1` and its tag is `v26.9.1`.
 
+Release commit messages must be exactly `chore(release): v<version>`, such as
+`chore(release): v26.11.1`, without additional words.
+
 1. Set the root and desktop `package.json` versions and `app.json`'s
    `expo.version` to the same release version. Update the root and desktop
    workspace versions in the lockfile too. The tag must match exactly, for

@@ -1,5 +1,36 @@
 # Changelog
 
+## [26.11.1]
+
+- Added apps and mini apps with My Apps, permission controls, and separate app windows.
+- Added app actions and default handlers for opening shared content.
+- Added chat wallpapers and custom colors for light and dark themes.
+- Added date and time format preferences.
+- Added discovery relay settings and website history suggestions.
+- Added options to view app publishers' profiles and contact them.
+- Improved message history sync and recovery after reconnecting.
+- Improved message request counts and arrival alerts, with a quiet option for requests.
+- Improved app downloads, navigation, and permission management.
+- Improved private-key protection and backup confirmation.
+- Improved remote signer connections with saved app names and icons.
+- Fixed quoted message navigation, preview alignment, and attachment actions.
+- Fixed video playback and covers disappearing before playback starts.
+- Fixed unsupported apps appearing in discovery.
+
+### Android and iOS
+
+- Added long-press menus for conversations.
+
+### Android
+
+- Added smaller downloads for individual device architectures.
+- Improved navigation between apps with a side drawer and back gestures.
+
+### Desktop
+
+- Improved the update window with download progress, release history, and reminder controls.
+- Fixed Linux dock icons and media viewer controls.
+
 ## [26.10.6]
 
 - Improved message history sync to resume after interruptions.

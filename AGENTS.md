@@ -61,3 +61,6 @@ Confirm priorities with the maintainer before starting a major new feature.
 
 Before preparing a release or writing a changelog, read `docs/RELEASING.md` and
 follow its changelog conventions.
+
+Release commit messages must be exactly `chore(release): v<version>` (for example,
+`chore(release): v26.11.1`), with no additional words such as `prepare`.
