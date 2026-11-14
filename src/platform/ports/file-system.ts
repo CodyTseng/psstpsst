@@ -178,7 +178,7 @@ export interface FileSystemPort {
       signal?: AbortSignal;
       onProgress?: (sentBytes: number, totalBytes: number) => void;
     },
-  ): Promise<{ status: number; body: string }>;
+  ): Promise<{ status: number; body: string; headers?: Record<string, string> }>;
 
   /**
    * Ask the desktop file manager to reveal a managed file and select it when

@@ -825,6 +825,7 @@
     "save_error": "Impossibile salvare le impostazioni dei relay. Riprova."
   },
   "media_servers": {
+    "empty_title": "Nessun server multimediale aggiunto",
     "title": "Server multimediali",
     "subtitle": "Le foto, i messaggi vocali e i file inviati vengono crittografati e caricati qui. I server vengono provati in ordine finché uno non accetta il caricamento.",
     "add_label": "Aggiungi server",

@@ -9,6 +9,8 @@ import { AppInput } from '@/components/common/AppInput';
 import { AppScreen } from '@/components/common/AppScreen';
 import { AppText } from '@/components/common/AppText';
 import { IconButton } from '@/components/common/IconButton';
+import { ListRow } from '@/components/common/ListRow';
+import { ServerSquare } from '@solar-icons/react-native/category/devices/Linear/ServerSquare';
 import Plus from 'lucide-react-native/icons/plus';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SectionLabel } from '@/components/common/SectionLabel';
@@ -147,12 +149,14 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
         </AppText>
 
         {servers.length === 0 ? (
-          <AppCard variant="muted">
-            <Plus size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.textMuted} />
-            <AppText variant="subtitle">{t('media_servers.add_label')}</AppText>
-            <AppText variant="body" tone="warning">
-              {t('media_servers.empty_warning')}
-            </AppText>
+          <AppCard variant="muted" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <ServerSquare size={uiDensity.headerActionIconSize} color={c.textMuted} />
+            <View style={{ flex: 1, gap: spacing.xs }}>
+              <AppText variant="body" weight="medium">{t('media_servers.empty_title')}</AppText>
+              <AppText variant="caption" tone="muted">
+                {t('media_servers.empty_warning')}
+              </AppText>
+            </View>
           </AppCard>
         ) : (
           <SortableUrlList
@@ -162,28 +166,6 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
             removeAccessibilityLabel={t('common.delete')}
           />
         )}
-
-        {recommendedServers.length > 0 ? (
-          <View style={{ gap: spacing.sm }}>
-            <SectionLabel>{t('media_servers.recommended_label')}</SectionLabel>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-              {recommendedServers.map((url) => (
-                <AppButton
-                  key={url}
-                  label={new URL(url).hostname}
-                  variant="secondary"
-                  size="sm"
-                  labelVariant="code"
-                  corner="full"
-                  fullWidth={false}
-                  iconLeft={<Plus strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text} />}
-                  disabled={saving}
-                  onPress={() => handleAddRecommended(url)}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
 
         <View style={{ gap: spacing.sm }}>
           <AppInput
@@ -216,7 +198,18 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
           />
         </View>
 
-        <View style={{ height: spacing.sm }} />
+        {recommendedServers.length > 0 ? (
+          <View style={{ gap: spacing.sm }}>
+            <SectionLabel>{t('media_servers.recommended_label')}</SectionLabel>
+            {recommendedServers.map((url) => (
+              <ListRow key={url} title={new URL(url).hostname}
+                accessibilityRole="button"
+                icon={<ServerSquare size={uiDensity.headerActionIconSize} color={c.textMuted} />}
+                trailing={<Plus size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.textMuted} />}
+                disabled={saving} onPress={() => handleAddRecommended(url)} />
+            ))}
+          </View>
+        ) : null}
 
         <View style={{ gap: spacing.sm }}>
           {saveError && (

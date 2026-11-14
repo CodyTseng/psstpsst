@@ -36,6 +36,7 @@ it('uses UTF-8 unpadded Base64URL for encrypted upload authorization', async () 
   await uploadEncryptedBlobToServer(options);
   expect(uploadFile).toHaveBeenCalledTimes(1);
   expect(uploadFile.mock.calls[0][2]?.headers?.Authorization).toBe(modernHeader);
+  expect(uploadFile.mock.calls[0][2]?.headers?.['Content-Length']).toBe('12');
   expect(modernHeader).not.toMatch(/[+/=]/);
   expect(signEvent).toHaveBeenCalledTimes(1);
 });
@@ -46,6 +47,7 @@ it.each([400, 401])('retries status %s once with standard Base64 without signing
   expect(modernHeader).not.toBe(legacyHeader);
   expect(uploadFile).toHaveBeenCalledTimes(2);
   expect(uploadFile.mock.calls.map(call => call[2]?.headers?.Authorization)).toEqual([modernHeader, legacyHeader]);
+  expect(uploadFile.mock.calls.map(call => call[2]?.headers?.['Content-Length'])).toEqual(['12', '12']);
   expect(signEvent).toHaveBeenCalledTimes(1);
 });
 
@@ -116,6 +118,15 @@ describe('background mirror encoding compatibility', () => {
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     return result;
   }
+
+  it.each([200, 401])('aborts the unused mirror body after status %s without reading it', async status => {
+    const text = jest.fn(() => new Promise<string>(() => {}));
+    fetchMock.mockResolvedValue({ status, text } as unknown as Response);
+    await mirrorTo();
+    expect(fetchMock).toHaveBeenCalledTimes(status === 401 ? 2 : 1);
+    for (const [, init] of fetchMock.mock.calls) expect(init.signal.aborted).toBe(true);
+    expect(text).not.toHaveBeenCalled();
+  });
 
   it.each([400, 401])('retries a mirror rejecting Base64URL with status %s using the same event', async status => {
     fetchMock.mockResolvedValueOnce(mirrorResponse(status));

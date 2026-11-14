@@ -821,6 +821,7 @@
     "save_error": "Die Relay-Einstellungen konnten nicht gespeichert werden. Versuche es erneut."
   },
   "media_servers": {
+    "empty_title": "Keine Medienserver hinzugefügt",
     "title": "Medienserver",
     "subtitle": "Fotos, Sprachnachrichten und Dateien, die du sendest, werden verschlüsselt und hier hochgeladen. Die Server werden der Reihe nach ausprobiert, bis einer den Upload annimmt.",
     "add_label": "Server hinzufügen",

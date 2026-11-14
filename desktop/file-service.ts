@@ -311,7 +311,7 @@ export class FileService {
     options: { httpMethod: 'POST' | 'PUT' | 'PATCH'; headers?: Record<string, string> },
     operationId: string,
     onProgress?: (sentBytes: number, totalBytes: number) => void,
-  ): Promise<{ status: number; body: string; cancelled?: boolean }> {
+  ): Promise<{ status: number; body: string; headers?: Record<string, string>; cancelled?: boolean }> {
     const controller = new AbortController();
     let source: Readable | undefined;
     let input: Readable | undefined;
@@ -319,18 +319,20 @@ export class FileService {
     try {
       const resolved = this.resolve(fileUri);
       const totalBytes = (await fs.stat(resolved)).size;
+      const headers = new Headers(options.headers);
+      headers.set('Content-Length', String(totalBytes));
       source = createReadStream(resolved);
       input = source.pipe(createUploadProgressTransform(totalBytes, onProgress));
       onProgress?.(0, totalBytes);
       const response = await fetch(this.validateRemoteUrl(urlValue), {
         method: options.httpMethod,
-        headers: options.headers,
+        headers,
         body: input as unknown as BodyInit,
         duplex: 'half',
         signal: controller.signal,
       } as RequestInit & { duplex: 'half' });
       onProgress?.(totalBytes, totalBytes);
-      return { status: response.status, body: await response.text() };
+      return { status: response.status, body: await response.text(), headers: Object.fromEntries(response.headers.entries()) };
     } catch (error) {
       // Undici normally tears the body down, but explicitly close both sides so
       // TLS/connect failures cannot leave a paused file descriptor behind.

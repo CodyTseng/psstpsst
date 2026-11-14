@@ -825,6 +825,7 @@
     "save_error": "Impossible d’enregistrer les paramètres des relais. Réessayez."
   },
   "media_servers": {
+    "empty_title": "Aucun serveur de médias ajouté",
     "title": "Serveurs multimédias",
     "subtitle": "Les photos, messages vocaux et fichiers que vous envoyez sont chiffrés et téléversés ici. Les serveurs sont essayés dans l'ordre jusqu'à ce que l'un d'eux accepte l'envoi.",
     "add_label": "Ajouter un serveur",

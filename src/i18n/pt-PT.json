@@ -825,6 +825,7 @@
     "save_error": "Não foi possível guardar as definições dos relays. Tenta novamente."
   },
   "media_servers": {
+    "empty_title": "Nenhum servidor de multimédia adicionado",
     "title": "Servidores multimédia",
     "subtitle": "As fotografias, mensagens de voz e ficheiros que envia são encriptados e carregados aqui. Os servidores são testados por ordem até um aceitar o carregamento.",
     "add_label": "Adicionar servidor",

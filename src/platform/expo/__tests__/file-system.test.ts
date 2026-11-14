@@ -5,6 +5,10 @@ import { fileSystemAdapter } from '../file-system';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('expo-file-system/legacy', () => ({
+  uploadAsync: jest.fn(),
+  createUploadTask: jest.fn(),
+  FileSystemUploadType: { BINARY_CONTENT: 0 },
+  FileSystemSessionType: { BACKGROUND: 0 },
   getInfoAsync: jest.fn(async (uri: string) => {
     const fs = jest.requireActual('node:fs') as typeof import('node:fs');
     if (!fs.existsSync(uri)) return { exists: false };
@@ -39,6 +43,16 @@ jest.mock('expo-file-system', () => {
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'psst-expo-fs-')); });
 afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+it.each([false, true])('preserves server failure reasons with upload progress=%s', async progress => {
+  const legacy = jest.requireMock('expo-file-system/legacy');
+  const response = { status: 400, body: '', headers: { 'X-Reason': 'Missing Content-Length' } };
+  legacy.uploadAsync.mockResolvedValue(response);
+  legacy.createUploadTask.mockReturnValue({ uploadAsync: jest.fn().mockResolvedValue(response) });
+  await expect(fileSystemAdapter.uploadFile('https://files.example/upload', 'file:///blob.bin', {
+    httpMethod: 'PUT', onProgress: progress ? jest.fn() : undefined,
+  })).resolves.toEqual(response);
+});
 
 it('moves a staging directory and all nested files to the exact version path', async () => {
   const staging = join(root, 'staging'), version = join(root, 'version');

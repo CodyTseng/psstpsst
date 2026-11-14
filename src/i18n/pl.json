@@ -829,6 +829,7 @@
     "save_error": "Nie udało się zapisać ustawień przekaźników. Spróbuj ponownie."
   },
   "media_servers": {
+    "empty_title": "Nie dodano serwerów multimediów",
     "title": "Serwery multimediów",
     "subtitle": "Wysyłane zdjęcia, wiadomości głosowe i pliki są szyfrowane i przesyłane tutaj. Serwery są sprawdzane po kolei, aż jeden przyjmie plik.",
     "add_label": "Dodaj serwer",

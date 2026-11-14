@@ -821,6 +821,7 @@
     "save_error": "Couldn't save your relay settings. Try again."
   },
   "media_servers": {
+    "empty_title": "No media servers added",
     "title": "Media servers",
     "subtitle": "Photos, voice messages and files you send are encrypted and uploaded here. Servers are tried in order until one accepts the upload.",
     "add_label": "Add a server",

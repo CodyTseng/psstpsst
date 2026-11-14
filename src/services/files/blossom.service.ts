@@ -36,7 +36,7 @@ function legacyAuthToken(token: string): string {
   return standard.padEnd(Math.ceil(standard.length / 4) * 4, '=');
 }
 
-/** `fetch` with an abort-based timeout (RN `fetch` has none of its own). */
+/** Fetch mirror status with a timeout and discard the unused response body. */
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -47,6 +47,8 @@ async function fetchWithTimeout(
   try {
     return await fetch(url, { ...init, signal: ctrl.signal });
   } finally {
+    // Mirroring uses only the status; stop any remaining body transfer immediately.
+    ctrl.abort();
     clearTimeout(timer);
   }
 }
@@ -144,6 +146,7 @@ async function putBlobToServers(opts: {
         headers: {
           Authorization: `Nostr ${authB64}`,
           'Content-Type': opts.mime,
+          'Content-Length': String(opts.fallbackSize),
         },
         signal: opts.signal,
         onProgress: opts.onProgress,
@@ -155,7 +158,8 @@ async function putBlobToServers(opts: {
       }
       if (res.status < 200 || res.status >= 300) {
         failedServers.add(base);
-        errors.push(`${server} → ${res.status} ${res.body.slice(0, 120)}`);
+        const reason = Object.entries(res.headers ?? {}).find(([key]) => key.toLowerCase() === 'x-reason')?.[1];
+        errors.push(`${server} → HTTP ${res.status}${reason || res.body ? `: ${(reason || res.body).slice(0, 512)}` : ''}`);
         continue;
       }
       const json = JSON.parse(res.body) as {

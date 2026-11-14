@@ -821,6 +821,7 @@
     "save_error": "Nem sikerült menteni a relébeállításokat. Próbáld újra."
   },
   "media_servers": {
+    "empty_title": "Nincs hozzáadott médiaszerver",
     "title": "Médiaszerverek",
     "subtitle": "Az elküldött fényképek, hangüzenetek és fájlok titkosítva töltődnek fel ide. A szervereket sorrendben próbáljuk, amíg az egyik elfogadja a feltöltést.",
     "add_label": "Szerver hozzáadása",

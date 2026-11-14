@@ -131,7 +131,7 @@ export type ElectronBridge = {
       fileUri: string,
       options: { httpMethod: 'POST' | 'PUT' | 'PATCH'; headers?: Record<string, string> },
       operationId: string,
-    ): Promise<{ status: number; body: string; cancelled?: boolean }>;
+    ): Promise<{ status: number; body: string; headers?: Record<string, string>; cancelled?: boolean }>;
     /** Optional so a hot-reloaded renderer can tolerate an older preload until restart. */
     addUploadProgressListener?(
       listener: (value: { operationId: string; sentBytes: number; totalBytes: number }) => void,

@@ -825,6 +825,7 @@
     "save_error": "Não foi possível salvar as configurações dos relays. Tente novamente."
   },
   "media_servers": {
+    "empty_title": "Nenhum servidor de mídia adicionado",
     "title": "Servidores de mídia",
     "subtitle": "Fotos, mensagens de voz e arquivos enviados são criptografados e carregados aqui. Os servidores são testados em ordem até que um aceite o envio.",
     "add_label": "Adicionar servidor",

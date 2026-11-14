@@ -821,6 +821,7 @@
     "save_error": "Röle ayarları kaydedilemedi. Tekrar deneyin."
   },
   "media_servers": {
+    "empty_title": "Medya sunucusu eklenmedi",
     "title": "Medya sunucuları",
     "subtitle": "Gönderdiğin fotoğraflar, sesli mesajlar ve dosyalar şifrelenip buraya yüklenir. Biri yüklemeyi kabul edene kadar sunucular sırayla denenir.",
     "add_label": "Sunucu ekle",

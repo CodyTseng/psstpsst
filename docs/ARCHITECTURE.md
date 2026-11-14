@@ -634,6 +634,9 @@ metadata; missing values come from the actual plaintext file (after image
 optimization), through platform adapters. Picker and preview dimensions are UI hints.
 Live upload previews read file metadata before transfer and reuse it for missing
 upload-descriptor fields; server metadata still takes precedence in the rumor.
+Uploads try configured media servers in order, then automatically use Jumble if
+all configured attempts fail. This runtime fallback never changes the account
+server list and is not an additional mirror target.
 Media servers store ciphertext and are not trusted with plaintext. The message
 carries authenticated URL, key, nonce, MIME, size, and optional integrity
 metadata inside the encrypted rumor.

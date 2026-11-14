@@ -239,7 +239,7 @@ export const fileSystemAdapter: FileSystemPort = {
           error.name = 'AbortError';
           throw error;
         }
-        return { status: result.status, body: result.body };
+        return { status: result.status, body: result.body, headers: result.headers };
       } finally {
         options.signal?.removeEventListener('abort', cancel);
       }
@@ -249,7 +249,7 @@ export const fileSystemAdapter: FileSystemPort = {
       uploadType: LegacyFileSystem.FileSystemUploadType.BINARY_CONTENT,
       headers: options.headers,
     });
-    return { status: result.status, body: result.body };
+    return { status: result.status, body: result.body, headers: result.headers };
   },
 
   revealInFolder: () => Promise.resolve(false),
