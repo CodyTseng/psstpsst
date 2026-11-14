@@ -12,8 +12,10 @@ import android.view.ViewConfiguration
 import android.widget.OverScroller
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import expo.modules.kotlin.types.OptimizedRecord
 import kotlin.math.abs
 
+@OptimizedRecord
 class ApplicationTaskDrawerOptions : Record {
   @Field var viewTag: Int = 0
   @Field var handleTag: Int = 0

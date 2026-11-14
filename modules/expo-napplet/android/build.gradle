@@ -1,9 +1,12 @@
 plugins {
   id 'com.android.library'
-  id 'org.jetbrains.kotlin.android'
+  id 'expo-module-gradle-plugin'
 }
 group = 'chat.psstpsst.app'
 version = '0.1.0'
+expoModule {
+  canBePublished = false
+}
 android {
   namespace 'chat.psstpsst.app.napplet'
   compileSdk rootProject.ext.compileSdkVersion

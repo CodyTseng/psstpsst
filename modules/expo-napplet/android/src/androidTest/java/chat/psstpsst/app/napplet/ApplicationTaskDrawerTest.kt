@@ -11,10 +11,31 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import androidx.test.platform.app.InstrumentationRegistry
+import com.facebook.react.bridge.JavaOnlyMap
+import expo.modules.kotlin.types.convert
+import expo.modules.kotlin.types.descriptors.typeDescriptorOf
 import org.junit.Assert.*
 import org.junit.Test
 
 class ApplicationTaskDrawerTest {
+  @Test fun drawerOptionsConvertFromTheJavaScriptBridgeWithoutReflection() {
+    assertNotNull(typeDescriptorOf<ApplicationTaskDrawerOptions>().typeInfo.introspection)
+    val options = convert<ApplicationTaskDrawerOptions>(JavaOnlyMap.of(
+      "viewTag", 42.0, "handleTag", 43.0, "travel", 144.0, "margin", 8.0,
+      "feedbackColor", -3355444.0, "active", true, "expanded", true,
+    ))
+    assertEquals(42, options.viewTag)
+    assertEquals(43, options.handleTag)
+    assertEquals(144.0, options.travel, 0.0)
+    assertEquals(8.0, options.margin, 0.0)
+    assertEquals(-3355444, options.feedbackColor)
+    assertTrue(options.active)
+    assertTrue(options.expanded)
+    val defaults = convert<ApplicationTaskDrawerOptions>(JavaOnlyMap())
+    assertFalse(defaults.active)
+    assertFalse(defaults.expanded)
+  }
+
   @Test fun nativeHandleMovesBothAxesWithoutCapturingDocumentInputAndFillsItsFeedbackRegion() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val activity = instrumentation.startActivitySync(
