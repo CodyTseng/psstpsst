@@ -23,3 +23,35 @@ diff --git a/node_modules/react-native-keyboard-controller/android/src/main/java
        return
      }
  
+diff --git a/node_modules/react-native-keyboard-controller/common/cpp/react/renderer/components/RNKC/RNKCOverKeyboardViewShadowNode.h b/node_modules/react-native-keyboard-controller/common/cpp/react/renderer/components/RNKC/RNKCOverKeyboardViewShadowNode.h
+--- a/node_modules/react-native-keyboard-controller/common/cpp/react/renderer/components/RNKC/RNKCOverKeyboardViewShadowNode.h
++++ b/node_modules/react-native-keyboard-controller/common/cpp/react/renderer/components/RNKC/RNKCOverKeyboardViewShadowNode.h
+@@ -14,10 +14,23 @@
+ /*
+  * `ShadowNode` for <OverKeyboardView> component.
+  */
+-using OverKeyboardViewShadowNode = ConcreteViewShadowNode<
+-    OverKeyboardViewComponentName,
+-    OverKeyboardViewProps,
+-    OverKeyboardViewEventEmitter,
+-    OverKeyboardViewState>;
++class OverKeyboardViewShadowNode final : public ConcreteViewShadowNode<
++                                             OverKeyboardViewComponentName,
++                                             OverKeyboardViewProps,
++                                             OverKeyboardViewEventEmitter,
++                                             OverKeyboardViewState> {
++ public:
++  using ConcreteViewShadowNode::ConcreteViewShadowNode;
++
++  static ShadowNodeTraits BaseTraits() {
++    auto traits = ConcreteViewShadowNode::BaseTraits();
++#ifdef __ANDROID__
++    // Touch events from the panel use its own origin. Stop Fabric measurement
++    // at the panel boundary so Pressability compares the same coordinates.
++    traits.set(ShadowNodeTraits::Trait::RootNodeKind);
++#endif
++    return traits;
++  }
++};
+
+ } // namespace facebook::react
