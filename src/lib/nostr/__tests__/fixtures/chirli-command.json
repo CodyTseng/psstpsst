@@ -1,0 +1,37 @@
+{
+  "kind": 31992,
+  "created_at": 1700000000,
+  "content": "",
+  "tags": [
+    [
+      "d",
+      "chirli:echo"
+    ],
+    [
+      "command",
+      "echo"
+    ],
+    [
+      "title",
+      "Echo text"
+    ],
+    [
+      "description",
+      "Replies with the supplied text."
+    ],
+    [
+      "arg",
+      "text",
+      "text",
+      "optional",
+      "Text"
+    ],
+    [
+      "s",
+      "kind:14"
+    ]
+  ],
+  "pubkey": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+  "id": "36a93eea660c704353ba7b2938a0b5372c776a70ba1474ebf772920fcfe614c6",
+  "sig": "88679d2bf9ad221d750d303f4b5cd06df03f4460839b85cbeede8a01c150938311b64b332f658f15d6b0f769c38dbb0dc9f82dfce08f4608f23e1f840b53dd72"
+}

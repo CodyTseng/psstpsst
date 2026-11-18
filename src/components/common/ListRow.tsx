@@ -58,6 +58,8 @@ type Props = Pick<PressableProps, 'onLongPress' | 'accessibilityActions' | 'onAc
   /** Non-shrinking status after the title; long titles truncate before it. */
   titleTrailing?: React.ReactNode;
   subtitle?: string;
+  /** Place brief supporting text beside the title in a single-line row. */
+  subtitlePlacement?: 'below' | 'inline';
   /** Supporting content with inline status or identity semantics. */
   subtitleContent?: React.ReactNode;
   subtitleTone?: ValueTone;
@@ -104,7 +106,7 @@ type Props = Pick<PressableProps, 'onLongPress' | 'accessibilityActions' | 'onAc
    * `inline` = compact metadata aligned with surrounding text;
    * `search` = the shared three-column search layout. */
   variant?: Variant;
-  /** Content-height inline metadata; expanded hit slop preserves its touch target. */
+  /** Compact single-line list rows, or content-height inline metadata with expanded hit slop. */
   compact?: boolean;
 };
 
@@ -125,6 +127,7 @@ export function ListRow({
   title,
   titleTrailing,
   subtitle,
+  subtitlePlacement = 'below',
   subtitleContent,
   subtitleTone = 'muted',
   subtitleMultiline = false,
@@ -174,14 +177,15 @@ export function ListRow({
     danger: c.danger,
   }[valueTone];
   const hasSubtitle = subtitleContent != null || (subtitle != null && subtitle.length > 0);
+  const inlineSubtitle = hasSubtitle && subtitlePlacement === 'inline';
   const hasBelowValue =
     valuePlacement === 'below' &&
     ((value != null && value.length > 0) || belowValue != null);
   const hasTrailingValue = valuePlacement === 'trailing' && value != null && value.length > 0;
-  const hasTwoLineContent = hasSubtitle || hasBelowValue;
+  const hasTwoLineContent = (hasSubtitle && !inlineSubtitle) || hasBelowValue;
   const multilineValue =
     hasTrailingValue && valueMultiline;
-  const multilineContent = multilineValue || (hasSubtitle && subtitleMultiline);
+  const multilineContent = multilineValue || (hasSubtitle && !inlineSubtitle && subtitleMultiline);
   const flexibleHeight = multilineContent || iconWidth !== undefined;
   // Column preservation only applies when title and value compete side by side.
   // A single text stack must yield to its trailing accessory so long labels,
@@ -194,12 +198,13 @@ export function ListRow({
   const isEmbedded = !grouped && variant === 'embedded';
   const isInline = !grouped && variant === 'inline';
   const compactInline = isInline && compact;
-  const rowHeight = compactInline ? spacing.xl : isInline ? uiDensity.listRowCompactHeight : ROW_HEIGHT;
+  const rowHeight = compactInline ? spacing.xl : isInline || (variant === 'list' && compact)
+    ? uiDensity.listRowCompactHeight : ROW_HEIGHT;
   const rowRadius = isCard || isPlain || isInline ? radius.lg : 0;
   const titleText = <AppText
     selectable={onLongPress ? false : undefined}
     variant={hasBelowValue || isInline ? 'caption' : 'subtitle'} weight="regular" numberOfLines={1}
-    style={{ color: hasBelowValue ? c.textMuted : titleColor, userSelect: onLongPress ? 'none' : undefined, ...(titleTrailing ? { flexShrink: 1, minWidth: 0 } : {}) }}>
+    style={{ color: hasBelowValue ? c.textMuted : titleColor, userSelect: onLongPress ? 'none' : undefined, ...(titleTrailing ? { flexShrink: 1, minWidth: 0 } : {}), ...(inlineSubtitle ? { maxWidth: '50%', flexShrink: 0 } : {}) }}>
     {title}
   </AppText>;
 
@@ -287,7 +292,9 @@ export function ListRow({
                 flexGrow: 1,
                 flexShrink: shrinkContent ? 1 : 0,
                 minWidth: shrinkContent ? 0 : undefined,
-                gap: 2,
+                flexDirection: inlineSubtitle ? 'row' : 'column',
+                alignItems: inlineSubtitle ? 'center' : undefined,
+                gap: inlineSubtitle ? spacing.lg : 2,
               }}
             >
               {titleTrailing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -317,7 +324,8 @@ export function ListRow({
                 <AppText
                   variant="caption"
                   tone={subtitleTone}
-                  numberOfLines={subtitleMultiline ? undefined : 1}
+                  numberOfLines={!inlineSubtitle && subtitleMultiline ? undefined : 1}
+                  style={inlineSubtitle ? { flex: 1, minWidth: 0 } : undefined}
                 >
                   {subtitle}
                 </AppText>

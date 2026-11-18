@@ -1,3 +1,4 @@
+import { fetchCommandDeclarations } from '@/services/profile/command-discovery.service';
 import { eq, inArray } from 'drizzle-orm';
 import { useLiveQuery } from '@/db/use-live-query';
 import { useEffect, useMemo } from 'react';
@@ -65,6 +66,9 @@ export function useProfile(
 
   useEffect(() => {
     if (!pubkey || !liveDataEnabled) return;
+    // A warm profile can predate command support. Discovery owns its own equal
+    // TTL gate, so mounting this same profile lifecycle still checks commands.
+    void fetchCommandDeclarations([pubkey]).catch(() => {});
     const now = Math.floor(Date.now() / 1000);
     const stale = !profile || now - profile.fetchedAt > PROFILE_TTL_SECONDS;
     if (stale) {
@@ -122,6 +126,7 @@ export function useProfilesMap(
 
   useEffect(() => {
     if (uniquePubkeys.length === 0 || !liveDataEnabled) return;
+    void fetchCommandDeclarations(uniquePubkeys).catch(() => {});
     const now = Math.floor(Date.now() / 1000);
     const stalePubkeys = uniquePubkeys.filter((pk) => {
       const p = map[pk];

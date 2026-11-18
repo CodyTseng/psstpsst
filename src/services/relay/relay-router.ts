@@ -7,6 +7,7 @@ import { DISCOVERY_RELAYS, normalizeRelayUrl } from '@/lib/nostr/relay-url';
 
 import { KIND_RELAY_LIST_METADATA } from '../crypto/nip17-gift-wrap';
 import { relayPool } from './relay-pool';
+import { queryMetadataRelay } from './metadata-query';
 import { loadAccountDmRelays } from './local-relay-settings';
 import { RelayQueryError } from './relay-query-error';
 import type { QueryRelayResult } from './managed-relay-pool';
@@ -162,12 +163,14 @@ async function runGroup(group: QueryGroup): Promise<void> {
     }
   };
   try {
-    const events = await relayPool.query({
+    const events = await (group.kind === 0
+      ? queryMetadataRelay(group.relay, [{ kinds: [group.kind], authors: Array.from(group.authors.keys()) }], receive)
+      : relayPool.query({
       relays: [group.relay],
       filter: { kinds: [group.kind], authors: Array.from(group.authors.keys()) },
       timeoutMs: BATCH_TIMEOUT_MS,
       onEvent: receive,
-    });
+    }));
     for (const event of events) receive(event);
     for (const waiter of group.waiters) {
       waiter.completed = true;

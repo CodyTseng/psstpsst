@@ -1,3 +1,4 @@
+import { fetchCommandDeclarations } from './command-discovery.service';
 import { isNewerEvent } from '@/lib/nostr/event-version';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
@@ -109,6 +110,8 @@ export async function cacheProfileEvent(event: Event): Promise<void> {
  */
 export async function fetchProfiles(pubkeys: string[], relays: string[] = []): Promise<void> {
   if (pubkeys.length === 0) return;
+  // Command discovery shares every profile request entry point and TTL lifecycle.
+  void fetchCommandDeclarations(pubkeys, relays).catch(() => {});
 
   // TTL gate: only genuinely stale (or never-fetched) pubkeys hit the relays.
   const now = Math.floor(Date.now() / 1000);

@@ -1,3 +1,4 @@
+import type { CommandContext } from '@/lib/nostr/commands';
 import * as DocumentPicker from 'expo-document-picker';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -183,6 +184,7 @@ type ChatComposerModel = {
   disabled: boolean;
   attachmentSources: readonly AttachmentSource[];
   supportsVoice: boolean;
+  commandContext?: CommandContext;
   replyTo: { senderName: string; contentPreview: string } | null;
   focusRequestVersion: number;
   gateStatus: 'checking' | 'unsupported' | 'proximity_identity_changed' | 'group_read_only' | null;
@@ -423,6 +425,15 @@ export default function ChatPageRuntime() {
     !isProximity && conversationKey && !conversationKey.startsWith('group:')
       ? conversationKey
       : '';
+  const commandContext = useMemo(() => {
+    const context = composerModel.commandContext;
+    if (context?.pubkey === accountPubkey && context.tags.some(tag => tag[0] === 'p' && tag[1] === peerPubkey)) return context;
+    return peerPubkey && accountPubkey ? {
+      pubkey: accountPubkey,
+      kind: 14,
+      tags: [['p', peerPubkey]],
+    } : undefined;
+  }, [accountPubkey, peerPubkey, composerModel.commandContext]);
   const isRelationshipEligible = !!peerPubkey && peerPubkey !== accountPubkey;
   const relationshipKey = `${accountPubkey}:${peerPubkey}`;
   const cachedContact = isRelationshipEligible
@@ -737,8 +748,11 @@ export default function ChatPageRuntime() {
           {!selectionMode ? (
             composerModel.mode === 'input' ? (
               <ChatInput
+                key={`composer:${accountPubkey}:${conversationKey}`}
                 aboveInput={<ForwardConversationBanner accountPubkey={accountPubkey}
                   sourceConversationKey={conversationKey} />}
+                commandPeer={peerPubkey || undefined}
+                commandContext={commandContext}
                 draftKey={conversationKey}
                 liveDataEnabled={secondaryDataReady && routeActive}
                 disabled={composerModel.disabled}
@@ -2313,6 +2327,15 @@ function ChatPageContent({
           disabled: (isProximity && proximityHistoryReadOnly) || groupReadOnly,
           attachmentSources,
           supportsVoice,
+          commandContext: !isProximity && !isGroup ? {
+            kind: 14,
+            pubkey: accountPubkey,
+            tags: [
+              ...counterparties.map(peer => ['p', peer]),
+              ...(replyingTo ? [['e', replyingTo.id]] : []),
+              ...(conversation?.name ? [['subject', conversation.name]] : []),
+            ],
+          } : undefined,
           replyTo: composerReplyTo,
           focusRequestVersion: replyFocusRequestVersion,
           gateStatus: composerGateStatus,

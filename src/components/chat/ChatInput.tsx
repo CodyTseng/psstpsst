@@ -1,3 +1,7 @@
+import { CommandSuggestions } from './CommandSuggestions';
+import { useCommands } from '@/hooks/use-commands';
+import { useCommandCompletion } from '@/hooks/use-command-completion';
+import type { CommandContext } from '@/lib/nostr/commands';
 import { Keyboard as KeyboardIcon } from '@solar-icons/react-native/category/devices/Linear/Keyboard';
 import { Plain3 as Send } from '@solar-icons/react-native/category/messages/Linear/Plain3';
 import { Microphone as Mic } from '@solar-icons/react-native/category/video/Linear/Microphone';
@@ -110,6 +114,8 @@ const LazyEmojiPickerSheet = lazy(() =>
 type Props = {
   /** Non-blocking feedback above the composer, inside its keyboard-safe bounds. */
   aboveInput?: ReactNode;
+  commandPeer?: string;
+  commandContext?: CommandContext;
   /** Called with trimmed, non-empty message text. Relay mode also normalizes bare NIP-19 identifiers. */
   onSend: (text: string, customEmojis: CustomEmoji[]) => Promise<void> | void;
   /** Pick an attachment source from the inline tray; absent hides the `+`. */
@@ -175,6 +181,8 @@ const COMPOSER_PANEL_EASE = Easing.out(Easing.cubic);
 
 export function ChatInput({
   aboveInput,
+  commandPeer,
+  commandContext,
   onSend,
   onPickAttachment,
   onPasteFiles,
@@ -194,6 +202,7 @@ export function ChatInput({
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const [inputBoxHeight, setInputBoxHeight] = useState<number>(COMPOSER_ACTION_SIZE);
   const [aboveInputHeight, setAboveInputHeight] = useState(0);
   const [panelWidth, setPanelWidth] = useState(screenWidth);
   // Track every native keyboard-move event ourselves. The provider-level shared
@@ -256,6 +265,7 @@ export function ChatInput({
   const valueRef = useRef(value);
   valueRef.current = value;
   const [sending, setSending] = useState(false);
+  const sendInFlight = useRef(false);
   useLayoutEffect(() => {
     if (draftKey) markChatComposerMounted(draftKey);
   }, [draftKey]);
@@ -314,6 +324,21 @@ export function ChatInput({
   const [forcedSelection, setForcedSelection] = useState<
     { start: number; end: number } | undefined
   >(undefined);
+  const commands = useCommands(commandPeer, commandContext, liveDataEnabled && !disabled);
+  const completion = useCommandCompletion(commands, value, draftKey, (next) => {
+    valueRef.current = next;
+    setValue(next);
+    if (draftKey) setDraft(draftKey, next);
+    setForcedSelection({ start: next.length, end: next.length });
+    selectionRef.current = { start: next.length, end: next.length };
+    inputRef.current?.focus();
+  }, (text) => { void sendText(text); });
+  const commandMenuVisible = completion.matches.length > 0;
+  const commandMenuExtension = inputBoxHeight / 2;
+  // The menu remains inside the feedback hit region; controls overlap its
+  // opaque lower extension, ending the command rows at the input's top edge.
+  const commandMenuOverlap = commandMenuVisible
+    ? spacing.sm + commandMenuExtension + StyleSheet.hairlineWidth : 0;
   // Shortcode autocomplete: while the whole draft is a short, single token,
   // offer the first few matching custom emojis above the field. The draft
   // itself updates per keystroke; only the *matching* runs off this debounced
@@ -727,6 +752,9 @@ export function ChatInput({
   // without inserting a newline. Electron is handled separately below because
   // React Native Web does not consume submitBehavior.
   function handleSubmitEditing() {
+    // Desktop keydown owns sending; never double-submit after completion.
+    if (IS_ELECTRON) return;
+    if (completion.matches.length) { completion.select(completion.matches[completion.index]); return; }
     if (enterToSend) void handleSend();
   }
 
@@ -737,11 +765,15 @@ export function ChatInput({
     const desktopEvent = event as DesktopTextInputKeyEvent;
     const nativeEvent = desktopEvent.nativeEvent;
     const key = desktopEvent.key ?? nativeEvent.key;
-    const isComposing =
-      desktopEvent.isComposing ??
-      nativeEvent.isComposing ??
-      (desktopEvent.keyCode === 229 || nativeEvent.keyCode === 229);
+    const isComposing = !!(desktopEvent.isComposing || nativeEvent.isComposing ||
+      desktopEvent.keyCode === 229 || nativeEvent.keyCode === 229);
 
+    if (completion.keyDown({
+      ...nativeEvent, ...desktopEvent, key, isComposing,
+    })) {
+      event.preventDefault();
+      return;
+    }
     // With shortcode suggestions on screen, ArrowUp leaves the field and
     // enters the card (first match selected, caret hidden): ArrowLeft/Right
     // move within it, ArrowDown returns to the field with the caret at the
@@ -823,7 +855,12 @@ export function ChatInput({
 
   async function handleSend() {
     if (!canSend) return;
-    const text = normalizeBareNostrUris(value.trim());
+    await sendText(value);
+  }
+
+  async function sendText(rawText: string) {
+    if (disabled || sendInFlight.current || !rawText.trim()) return;
+    const text = normalizeBareNostrUris(rawText.trim());
     const usedCustomEmojis: CustomEmoji[] = [];
     const seenShortcodes = new Set<string>();
     const shortcodeRe = /:([A-Za-z0-9_-]{1,64}):/g;
@@ -836,11 +873,13 @@ export function ChatInput({
         usedCustomEmojis.push(emoji);
       }
     }
+    sendInFlight.current = true;
     // Clear immediately — UI feels snappy. Restore on synchronous failure.
     // Clearing the value collapses the field back to one line (the empty-state
     // height clamp below); reset the measured height too so the next keystroke
     // doesn't briefly flash the prior multi-line height before it re-measures.
     setValue("");
+    valueRef.current = "";
     setContentHeight(INPUT_LINE_HEIGHT);
     if (draftKey) clearDraft(draftKey);
     setSending(true);
@@ -850,6 +889,7 @@ export function ChatInput({
       // A pre-send gate can fail before publish work is scheduled. Restore the
       // draft in that case; failures after optimistic storage remain bubble state.
       setValue(text);
+      valueRef.current = text;
       if (draftKey) setDraft(draftKey, text);
       const failure = classifyMessageSendFailure(error);
       showToast(
@@ -861,6 +901,7 @@ export function ChatInput({
         { variant: 'error', target: 'detail' },
       );
     } finally {
+      sendInFlight.current = false;
       setSending(false);
     }
   }
@@ -875,8 +916,8 @@ export function ChatInput({
     onPasteFiles,
   });
   useElectronComposerEscape({
-    active: replyTo != null,
-    onCancel: onCancelReply,
+    active: (!!commandPeer && liveDataEnabled && !disabled && completion.dismissible) || replyTo != null,
+    onCancel: commandPeer && liveDataEnabled && !disabled && completion.dismissible ? completion.dismiss : onCancelReply,
   });
 
   if (recording && onSendVoice) {
@@ -903,14 +944,14 @@ export function ChatInput({
           bottomBarHeight +
           SAFE +
           aboveInputHeight +
-          (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0)
+          (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0) - commandMenuOverlap
         ),
         zIndex: 1, pointerEvents: 'box-none' }}
     >
       <View
         style={{
           position: "absolute",
-          top: aboveInputHeight + (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0),
+          top: aboveInputHeight + (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0) - commandMenuOverlap,
           start: 0,
           end: 0,
           bottom: 0,
@@ -924,6 +965,15 @@ export function ChatInput({
         onHeightChange={(height) => setAboveInputHeight((current) => Math.max(current, height))}
       >
         {aboveInput}
+        {commandMenuVisible ? (
+          <View style={{
+            paddingStart: spacing.lg + (showAttach ? COMPOSER_ACTION_SIZE + spacing.sm : 0),
+            paddingEnd: spacing.lg + (showVoice || showSend ? COMPOSER_ACTION_SIZE + spacing.sm : 0),
+          }}>
+            <CommandSuggestions commands={completion.matches} selectedIndex={completion.index}
+              onSelect={completion.select} extensionHeight={commandMenuExtension} />
+          </View>
+        ) : null}
       </ChatComposerFeedbackSlot>
       {suggestionsVisible ? (
         // Shortcode suggestions: a floating `surfaceElevated` card above the
@@ -988,6 +1038,8 @@ export function ChatInput({
       ) : null}
       <View
         style={{
+          marginTop: -commandMenuOverlap,
+          zIndex: commandMenuVisible ? 2 : undefined,
           // Single-line height matches the tab bar (shared `bottomBarHeight`) so
           // the bottom edge doesn't shift between a tab screen and a chat; grows
           // past it as the field wraps to multiple lines. The 40px input/buttons
@@ -995,16 +1047,16 @@ export function ChatInput({
           // would push the border-box to 56 + hairline — shave the top padding by
           // that hairline so the total lands *exactly* on bottomBarHeight.
           minHeight: bottomBarHeight,
-          paddingHorizontal: 16,
-          paddingTop: 8 - StyleSheet.hairlineWidth,
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.sm - StyleSheet.hairlineWidth,
           paddingBottom: 8,
           // Hairline to match the tab bar's top border (the two bottom bars
           // should read identically).
           borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: c.border,
+          borderTopColor: commandMenuVisible ? 'transparent' : c.border,
           flexDirection: "row",
           alignItems: "flex-end",
-          gap: 8,
+          gap: spacing.sm,
         }}
       >
         {showAttach ? (
@@ -1023,6 +1075,11 @@ export function ChatInput({
           </View>
         ) : null}
         <Animated.View
+          testID="composer-text-field"
+          onLayout={event => {
+            const height = event.nativeEvent.layout.height;
+            setInputBoxHeight(current => current === height ? current : height);
+          }}
           style={{
             flex: 1,
             position: "relative",
@@ -1082,7 +1139,9 @@ export function ChatInput({
             // field keeps focus but hides its caret.
             caretHidden={IS_ELECTRON && selectedSuggestionIndex !== null}
             onChangeText={(text) => {
+              valueRef.current = text;
               setValue(text);
+              completion.changed();
               // Typed input leaves the suggestion card immediately; the
               // debounce timeout clears programmatic value changes as a
               // backstop.

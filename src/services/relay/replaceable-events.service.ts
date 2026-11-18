@@ -1,5 +1,5 @@
 import { isNewerEvent } from '@/lib/nostr/event-version';
-import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Filter } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -224,6 +224,61 @@ export async function storeReplaceableEvent(event: NostrEvent, options: { confir
   return stored?.event?.id === event.id;
 }
 
+/** Reconcile a completed author/kind snapshot atomically. Unlike a partial
+ * lookup, absence here removes a coordinate; present coordinates stay newest-wins. */
+export async function reconcileReplaceableEventCollection(
+  pubkey: string, kind: number, events: readonly NostrEvent[],
+): Promise<void> {
+  const received = new Map<string, NostrEvent>();
+  for (const event of events) {
+    if (event.pubkey !== pubkey || event.kind !== kind) throw new Error('Replaceable snapshot scope mismatch');
+    const dTag = dTagOfEvent(event);
+    const prior = received.get(dTag);
+    if (!prior || isNewerEvent(event, prior)) received.set(dTag, event);
+  }
+  const affected = new Set(received.keys());
+  const fetchedAt = nowSeconds();
+  await db.transaction(async tx => {
+    const current = await tx.select().from(replaceableEvents).where(and(
+      eq(replaceableEvents.pubkey, pubkey), eq(replaceableEvents.kind, kind),
+    ));
+    const byDTag = new Map(current.map(row => [row.dTag, row]));
+    const removed: string[] = [];
+    for (const row of current) {
+      affected.add(row.dTag);
+      if (!received.has(row.dTag)) removed.push(row.dTag);
+    }
+    // Bound bind counts even for authors with many commands. Do not rewrite
+    // unrelated cache entries or expose a partially reconciled collection.
+    for (let offset = 0; offset < removed.length; offset += 64) {
+      await tx.delete(replaceableEvents).where(and(
+        eq(replaceableEvents.pubkey, pubkey), eq(replaceableEvents.kind, kind),
+        inArray(replaceableEvents.dTag, removed.slice(offset, offset + 64)),
+      ));
+    }
+    const rows = [...received].map(([dTag, incoming]) => {
+      const prior = byDTag.get(dTag);
+      const retain = prior?.event && !isNewerEvent(incoming, prior.event);
+      const event = retain ? prior.event! : incoming;
+      return { pubkey, kind, dTag, event, relays: retain ? prior.relays : [], createdAt: event.created_at, fetchedAt };
+    });
+    for (let offset = 0; offset < rows.length; offset += 64) {
+      await tx.insert(replaceableEvents).values(rows.slice(offset, offset + 64)).onConflictDoUpdate({
+        target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
+        set: { event: sql`excluded.event`, relays: sql`excluded.relays`,
+          createdAt: sql`excluded.created_at`, fetchedAt },
+        setWhere: or(
+          isNull(replaceableEvents.createdAt),
+          sql`${replaceableEvents.createdAt} < excluded.created_at`,
+          sql`(${replaceableEvents.createdAt} = excluded.created_at
+            AND json_extract(${replaceableEvents.event}, '$.id') >= json_extract(excluded.event, '$.id'))`,
+        ),
+      });
+    }
+  });
+  for (const dTag of affected) invalidateReplaceableEvent({ pubkey, kind, dTag });
+}
+
 /** Evicts kind-30030 rows beyond {@link MAX_PERSISTED_EMOJI_PACKS}, keeping the
  * most recently confirmed (fetchedAt) ones. Runs on every emoji-set store; the
  * scan is a few thousand rows at most. */
@@ -379,7 +434,7 @@ function buildFilters(keys: Required<ReplaceableKey>[]): Filter[] {
   const plainAuthors = new Set<string>();
   const addressed = new Map<string, { kind: number; pubkey: string; dTags: Set<string> }>();
   for (const key of keys) {
-    if (key.dTag === '') {
+    if (key.kind < 30000 || key.kind >= 40000) {
       plainKinds.add(key.kind);
       plainAuthors.add(key.pubkey);
     } else {

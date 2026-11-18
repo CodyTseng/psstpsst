@@ -11,7 +11,7 @@ export function ChatComposerFeedbackSlot({ children, height, onHeightChange }: {
 }) {
   return (
     <View
-      style={{ minHeight: height , pointerEvents: 'box-none' }}
+      style={{ minHeight: height, justifyContent: 'flex-end', zIndex: 1, pointerEvents: 'box-none' }}
       onLayout={(event) => onHeightChange(Math.max(height, event.nativeEvent.layout.height))}
     >
       {children}

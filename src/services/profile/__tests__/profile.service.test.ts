@@ -1,6 +1,9 @@
+import { fetchCommandDeclarations } from '../command-discovery.service';
 import type { Event } from 'nostr-tools';
 
 import { fetchProfiles, PROFILE_TTL_SECONDS } from '../profile.service';
+
+jest.mock('../command-discovery.service', () => ({ fetchCommandDeclarations: jest.fn(async () => {}) }));
 
 type Row = {
   pubkey: string;
@@ -234,4 +237,11 @@ describe('profile service', () => {
   it('exposes a 24h TTL', () => {
     expect(PROFILE_TTL_SECONDS).toBe(24 * 60 * 60);
   });
+});
+
+test('command discovery follows every profile fetch entry point, including warm profiles', async () => {
+  const pubkey = 'e'.repeat(64);
+  seedRow({ pubkey, fetchedAt: Math.floor(Date.now() / 1000) });
+  await fetchProfiles([pubkey], ['wss://hint.example/']);
+  expect(fetchCommandDeclarations).toHaveBeenLastCalledWith([pubkey], ['wss://hint.example/']);
 });

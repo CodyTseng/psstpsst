@@ -1543,6 +1543,21 @@ default name. Users can edit the name before connecting; name edits automaticall
 refresh pairing invitations after a short pause in typing. The chosen name is a
 device preference shared by both pairing flows and restored on future visits.
 
+Slash command suggestions keep focus in the composer. Arrow keys choose a
+suggestion. Tapping a command or pressing Enter sends it immediately when it has
+no declared arguments; commands with arguments insert editable text instead.
+Tab always inserts editable text. Suggestions use single-line shared list rows: the slash command is primary,
+its description follows in smaller, muted text and truncates to fit. Selection uses
+the shared neutral row overlay. The floating suggestion surface aligns to the
+input box's edges, excluding the attachment and send controls. Omit avatars,
+outer vertical list padding, redundant command titles and separate
+description footers. The final row meets the input's top edge; the opaque menu
+surface continues behind the input to its vertical midpoint. The input stays
+above this extension, and composer separators never cross the menu. Only the
+menu's top corners are rounded; its bottom corners remain square.
+Shift+Enter retains its normal newline behavior. Escape dismisses suggestions until the draft changes, including when
+remote discovery finishes later. IME composition retains ownership of its keys.
+
 ## 12. Hard Rules
 
 Pinned compatibility UI kits may retain their upstream visual tokens inside an

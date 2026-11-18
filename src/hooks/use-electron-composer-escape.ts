@@ -13,7 +13,7 @@ export function useElectronComposerEscape({ active, onCancel }: Options) {
     if (!IS_ELECTRON || !active || !onCancel || typeof document === 'undefined') return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       if (document.querySelector('[aria-modal="true"]')) return;
       event.preventDefault();
       event.stopImmediatePropagation();
