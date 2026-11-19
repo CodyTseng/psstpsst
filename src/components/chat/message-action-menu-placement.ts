@@ -141,6 +141,11 @@ export function placeTouchMessageActionMenu({
   } else if (roomAbove < needPill && roomBelow >= needPill + needMenu) {
     pillTop = placementBubbleBottom + gap;
     menuTop = pillTop + needPill;
+  } else if (roomAbove >= needMenu && roomBelow >= needPill) {
+    // Splitting the surfaces across opposite sides can fit even when the full
+    // stack cannot. Try this before cutting into the visible message.
+    menuTop = placementBubbleTop - needMenu;
+    pillTop = placementBubbleBottom + gap;
   } else if (!sourceIntersectsViewport) {
     pillTop = Math.max(safeTop, placementBubbleTop - needPill);
     menuTop = Math.min(safeBottom - menuHeight, placementBubbleBottom + gap);

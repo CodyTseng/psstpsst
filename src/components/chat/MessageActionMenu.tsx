@@ -26,6 +26,7 @@ import {
   type ActionMenuItem,
 } from '@/components/common/ActionMenuPanel';
 import { CustomEmojiImage } from '@/components/emoji/CustomEmojiImage';
+import { useIsRTL } from '@/i18n/direction';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { IS_ELECTRON } from '@/lib/platform';
 import type { ReactionAggregate } from '@/lib/nostr/reactions';
@@ -234,6 +235,7 @@ export function MessageActionMenu({
 }: Props) {
   const c = useThemeColors();
   const scheme = useEffectiveColorScheme();
+  const isRTL = useIsRTL();
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
   useFocusedOverlayDismiss(visible, onClose);
@@ -365,6 +367,10 @@ export function MessageActionMenu({
 
   const bubbleTop = vRect.y;
   const bubbleBottom = vRect.y + vRect.height;
+  const copyStart = isRTL ? W - vRect.x - vRect.width : vRect.x;
+  const bodyStart = isRTL
+    ? vRect.x + vRect.width - vBodyRect.x - vBodyRect.width
+    : vBodyRect.x - vRect.x;
 
   // The copy is NEVER moved — only clipped. `visibleTop`/`visibleBottom` are the
   // slice that's painted; the pill/menu take a side and the copy is clipped
@@ -452,8 +458,8 @@ export function MessageActionMenu({
     hoverRectsRef.current = rects;
   }
 
-  // The pill/menu pop in (0.2→1), drifting off the bubble's edge (pill from
-  // below, menu from above) as they scale up, slightly staggered behind it.
+  // The pill/menu pop in (0.2→1), drifting away from the message toward
+  // whichever side has room.
   const popOpacity = progress.interpolate({
     inputRange: [0.2, 1],
     outputRange: [0, 1],
@@ -466,12 +472,12 @@ export function MessageActionMenu({
   });
   const pillShift = progress.interpolate({
     inputRange: [0.2, 1],
-    outputRange: [12, 0],
+    outputRange: [pillTop < visibleTop ? MARGIN : -MARGIN, 0],
     extrapolate: 'clamp',
   });
   const menuShift = progress.interpolate({
     inputRange: [0.2, 1],
-    outputRange: [-12, 0],
+    outputRange: [menuTop < visibleTop ? MARGIN : -MARGIN, 0],
     extrapolate: 'clamp',
   });
 
@@ -481,9 +487,12 @@ export function MessageActionMenu({
       <View style={{ width: vRect.width, minWidth: 0 }}>
         <View
           style={{
-            alignSelf: vBubble.isSelf ? 'flex-end' : 'flex-start',
-            maxWidth: '100%',
-            minWidth: 0,
+            // Keep the source body frame even when reactions make the cluster wider.
+            alignSelf: 'flex-start',
+            marginStart: bodyStart,
+            marginTop: vBodyRect.y - vRect.y,
+            width: vBodyRect.width,
+            height: vBodyRect.height,
           }}
         >
           <BubbleBody
@@ -498,7 +507,6 @@ export function MessageActionMenu({
             attachment={vBubble.attachment}
             remoteContentMode={vBubble.remoteContentMode}
             liftedCopy
-            hideMeta={bodyFadeBottom}
             squareTop={bodyFadeTop}
             squareBottom={bodyFadeBottom}
           />
@@ -639,7 +647,7 @@ export function MessageActionMenu({
               style={{
                 position: 'absolute',
                 top: copyTop,
-                left: vRect.x,
+                start: copyStart,
                 width: vRect.width,
                 height: copyH,
                 pointerEvents: 'none',
@@ -680,7 +688,7 @@ export function MessageActionMenu({
               style={{
                 position: 'absolute',
                 top: copyTop,
-                left: vRect.x,
+                start: copyStart,
                 width: vRect.width,
                 pointerEvents: 'none',
               }}

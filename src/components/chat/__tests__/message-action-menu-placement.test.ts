@@ -6,16 +6,16 @@ import {
 } from '../message-action-menu-placement';
 
 describe('resolveMessageOverlayWindowGeometry', () => {
-  it('preserves measureInWindow coordinates for a translucent Modal', () => {
+  it('preserves the measured body frame within a wider visual cluster', () => {
     const rect = {
       x: 24,
       y: 92,
       width: 180,
       height: 72,
       body: {
-        offsetX: 0,
+        offsetX: 24,
         offsetY: 4,
-        width: 180,
+        width: 156,
         height: 52,
       },
     };
@@ -28,7 +28,7 @@ describe('resolveMessageOverlayWindowGeometry', () => {
     expect(geometry.rect).toBe(rect);
     expect(geometry).toEqual({
       rect,
-      bodyRect: { x: 24, y: 96, width: 180, height: 52 },
+      bodyRect: { x: 48, y: 96, width: 156, height: 52 },
       contentTop: 59,
       contentBottom: 754,
     });
@@ -91,6 +91,38 @@ describe('placeTouchMessageActionMenu', () => {
       visibleBottom: 200,
       pillTop: 111,
       menuTop: 210,
+    });
+  });
+
+  it('swaps the menu and reactions when stacking them would clip the message', () => {
+    expect(
+      placeTouchMessageActionMenu({
+        ...touchBase,
+        bubbleTop: 420,
+        bubbleBottom: 455,
+        safeBottom: 710,
+        menuHeight: 300,
+      }),
+    ).toEqual({
+      visibleTop: 420,
+      visibleBottom: 455,
+      pillTop: 465,
+      menuTop: 110,
+    });
+  });
+
+  it('keeps reactions next to a bottom message when both surfaces fit above it', () => {
+    expect(
+      placeTouchMessageActionMenu({
+        ...touchBase,
+        bubbleTop: 690,
+        bubbleBottom: 725,
+      }),
+    ).toEqual({
+      visibleTop: 690,
+      visibleBottom: 725,
+      pillTop: 631,
+      menuTop: 371,
     });
   });
 

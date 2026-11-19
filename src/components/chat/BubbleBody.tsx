@@ -2,7 +2,7 @@ import { formatTime, timeSpacer } from '@/lib/time';
 import { useDateTimePreferences } from '@/stores/date-time.store';
 import Check from 'lucide-react-native/icons/check';
 import { memo, useMemo } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
 import {
   InteractivePressable as Pressable,
@@ -85,8 +85,7 @@ type Props = {
   onPressReply?: () => void;
   /** Tap the meta row → open the per-relay delivery sheet (own messages). */
   onShowDelivery?: () => void;
-  /** Preserve the measured outer frame while absorbing Android's one-pixel
-   * fixed-width rounding in the invisible metadata spacer. */
+  /** The parent provides the source body width when row constraints are unavailable. */
   liftedCopy?: boolean;
   /** Cache-warmed pure render model; omitted callers reuse the same id cache. */
   presentation?: PreparedMessagePresentation;
@@ -318,11 +317,6 @@ function BubbleBodyBase({
     const blockMetaSpacer = showMeta
       ? `${ZWSP}${isRTL ? `${RLI}${metaWidthSpacer}${PDI}` : metaWidthSpacer}`
       : '';
-    const liftedSpacerLetterSpacing =
-      liftedCopy && blockMetaSpacer.length > 1
-        ? -StyleSheet.hairlineWidth / (blockMetaSpacer.length - 1)
-        : undefined;
-
     const containsCustomEmoji = customEmojiMap.size > 0 && bodySegments.some(
       (segment) =>
         segment.type === 'text' &&
@@ -451,7 +445,6 @@ function BubbleBodyBase({
               ...messageMetadataTypography,
               includeFontPadding: false,
               textAlignVertical: 'center',
-              letterSpacing: liftedSpacerLetterSpacing,
             }}
           >
             {blockMetaSpacer}
@@ -461,7 +454,7 @@ function BubbleBodyBase({
           <View
             style={{
               position: 'absolute',
-              end: liftedCopy ? -StyleSheet.hairlineWidth : 0,
+              end: 0,
               bottom: 0,
             }}
           >

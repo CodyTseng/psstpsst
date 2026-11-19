@@ -1,8 +1,11 @@
+import { PixelRatio } from 'react-native';
+
 /** Row geometry shared by stored and pending chat bubbles. */
 export const BUBBLE_ROW_PADDING_HORIZONTAL = 16;
-/** Compact content insets shared by text and audio messages. */
-export const BUBBLE_PADDING_VERTICAL = 6;
-export const BUBBLE_PADDING_HORIZONTAL = 10;
+// Snap shared insets before layout so bubble copies and aligned content use
+// the same physical pixels at fractional display densities.
+export const BUBBLE_PADDING_VERTICAL = PixelRatio.roundToNearestPixel(6);
+export const BUBBLE_PADDING_HORIZONTAL = PixelRatio.roundToNearestPixel(10);
 export const BUBBLE_MAX_WIDTH = '85%' as const;
 export const BUBBLE_GAP = 2;
 export const BUBBLE_GROUP_GAP = 12;
