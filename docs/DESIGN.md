@@ -613,6 +613,8 @@ Opening or selecting a video in the media viewer starts its download and playbac
 unselected neighbouring pages neither download nor keep playback players mounted.
 Video message posters open the shared conversation media viewer once the file is
 available. Viewer videos fit within both dimensions of the viewport without cropping.
+On Electron, the media viewer and inline embedded videos offer diagnostic export
+from the playback error state.
 On Electron, the player's fullscreen control presents the video on the display
 through system fullscreen; exiting restores the application's previous window.
 Mobile media viewers already fill the screen and omit the player's fullscreen control.

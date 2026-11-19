@@ -23,6 +23,7 @@ import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { spacing, useThemeColors } from '@/theme';
 import { useVideoPoster } from '@/hooks/use-video-poster';
+import { VideoDiagnosticsExportButton } from './VideoDiagnosticsExportButton';
 import { VideoSurface } from './VideoSurface';
 import { MediaPlaybackControls } from './MediaPlaybackControls';
 import { useMediaVideoPlayer } from './use-media-video-player';
@@ -124,10 +125,10 @@ function RemoteMediaVideoPage({ media }: { media: EmbeddedMedia }) {
 function UnsupportedVideo({ uri, mime, name }: { uri?: string; mime?: string; name?: string }) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const [sharing, setSharing] = useState(false);
+  const [busy, setBusy] = useState(false);
   async function openExternally() {
-    if (!uri || sharing) return;
-    setSharing(true);
+    if (!uri || busy) return;
+    setBusy(true);
     try {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(await copyForShare(uri, name), { mimeType: mime });
@@ -135,16 +136,19 @@ function UnsupportedVideo({ uri, mime, name }: { uri?: string; mime?: string; na
     } catch {
       void platform.confirmationDialog.notify({ title: t('attach.open_failed'), okLabel: t('common.ok') });
     } finally {
-      setSharing(false);
+      setBusy(false);
     }
   }
+
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, gap: spacing.md }}>
       <AppText variant="caption" style={{ color: c.onOverlay }} align="center">
         {t(IS_ELECTRON ? 'attach.video_unsupported_desktop' : 'attach.video_unsupported')}
       </AppText>
-      {!IS_ELECTRON && uri ? (
-        <AppButton variant="secondary" label={t('attach.open_external')} loading={sharing} onPress={() => void openExternally()} />
+      {IS_ELECTRON ? (
+        <VideoDiagnosticsExportButton />
+      ) : uri ? (
+        <AppButton variant="secondary" label={t('attach.open_external')} loading={busy} onPress={() => void openExternally()} />
       ) : null}
     </View>
   );

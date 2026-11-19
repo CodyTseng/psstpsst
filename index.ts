@@ -14,6 +14,27 @@ if (IS_ELECTRON) {
   const { createElectronAdapters, installElectronScrollbarVisibility } = require('./src/platform/electron') as typeof import('./src/platform/electron');
   installElectronScrollbarVisibility();
   initPlatformAdapters(createElectronAdapters());
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { default: Constants } = require('expo-constants') as typeof import('expo-constants');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { recordVideoPlaybackError } = require('./src/services/diagnostics/app-error-diagnostics.service') as typeof import('./src/services/diagnostics/app-error-diagnostics.service');
+  const chromiumVersion = navigator.userAgent.match(/\bChrome\/([\d.]+)/)?.[1] ?? 'unknown';
+  // Media errors do not bubble. Capture before the player can unmount the video.
+  document.addEventListener('error', ({ target }) => {
+    if (!(target instanceof HTMLVideoElement) || !target.error) return;
+    const { code, message } = target.error;
+    const scheme = (target.currentSrc || target.src).split(':', 1)[0];
+    void recordVideoPlaybackError({
+      appVersion: Constants.expoConfig?.version ?? 'unknown',
+      chromiumVersion,
+      code,
+      message,
+      currentTime: target.currentTime,
+      duration: Number.isFinite(target.duration) ? target.duration : undefined,
+      source: scheme === 'psstpsst-file' ? 'attachment'
+        : scheme === 'http' || scheme === 'https' ? 'remote' : 'other',
+    });
+  }, true);
 }
 
 if (IS_ANDROID) {

@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { VideoSurface } from '@/components/media/VideoSurface';
+import { VideoDiagnosticsExportButton } from '@/components/media/VideoDiagnosticsExportButton';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { AppText } from '@/components/common/AppText';
@@ -349,6 +350,7 @@ function EmbeddedContainerPlayer({
   const audioTracks = sourceLoad?.availableAudioTracks ?? player.availableAudioTracks;
   const isAudioOnly =
     hasTrackMetadata && videoTracks.length === 0 && audioTracks.length > 0;
+  const desktopPlaybackFailed = status === 'error' && IS_ELECTRON;
 
   function seekAudio(seconds: number): void {
     player.seekBy(seconds - player.currentTime);
@@ -389,28 +391,29 @@ function EmbeddedContainerPlayer({
     <View
       style={{
         width: box.width,
-        height: box.height,
+        height: desktopPlaybackFailed ? undefined : box.height,
+        minHeight: desktopPlaybackFailed ? box.height : undefined,
         borderRadius: radius.md,
         backgroundColor: c.surfaceMuted,
         overflow: 'hidden',
       }}
     >
-      {status === 'error' && IS_ELECTRON ? (
+      {desktopPlaybackFailed ? (
         <View
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: spacing.md,
-              gap: spacing.sm,
-            },
-          ]}
+          style={{
+            flexGrow: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: spacing.md,
+            paddingBottom: overlayMetaSlot ? spacing.xl : spacing.md,
+            gap: spacing.sm,
+          }}
         >
           <Film size={22} color={c.textMuted} />
           <AppText variant="caption" tone="subtle" align="center">
             {t('attach.video_unsupported_desktop')}
           </AppText>
+          <VideoDiagnosticsExportButton size="sm" />
         </View>
       ) : status === 'error' ? (
         <Pressable

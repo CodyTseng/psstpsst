@@ -1,7 +1,10 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { EmbeddedMediaBlock } from '@/components/chat/embedded-media';
 import { InteractivePressable } from '@/components/common/InteractivePressable';
 import { copyForShare } from '@/services/files/file-attachment.service';
+import { exportAppErrorDiagnostics } from '@/services/diagnostics/app-error-diagnostics.service';
+import { platform } from '@/platform';
 import type { ConversationMediaItem } from '@/hooks/use-conversation-media';
 import { MediaVideoPage } from '../MediaVideoPage';
 import { StyleSheet } from 'react-native';
@@ -15,6 +18,7 @@ let mockStatus = 'readyToPlay';
 let mockElectron = false;
 const mockPlayer = {
   replaceAsync: jest.fn(), play: jest.fn(), loop: false, status: 'readyToPlay',
+  availableAudioTracks: [], availableVideoTracks: [], currentTime: 0, duration: 0,
   release: jest.fn(() => { mockReleased = true; }),
   pause: jest.fn(() => { if (mockReleased) throw new Error('Native player already released'); }),
 };
@@ -25,11 +29,25 @@ jest.mock('expo-video', () => ({
     return mockPlayer;
   }), VideoView: () => null,
 }));
-jest.mock('expo', () => ({ useEvent: () => ({ status: mockStatus }) }));
+jest.mock('expo', () => ({
+  useEvent: (_player: unknown, event: string, initial: unknown) =>
+    event === 'statusChange' ? { status: mockStatus } : initial,
+}));
+jest.mock('expo-audio', () => ({}));
 jest.mock('../MediaPlaybackControls', () => ({ MediaPlaybackControls: () => null }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } }));
-jest.mock('@/platform', () => ({ platform: { screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) }, confirmationDialog: { notify: jest.fn() } } }));
+jest.mock('@/platform', () => ({
+  platform: {
+    screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) },
+    confirmationDialog: { notify: jest.fn() },
+    fileSaver: { save: jest.fn().mockResolvedValue(true) },
+  },
+}));
+jest.mock('@/services/diagnostics/app-error-diagnostics.service', () => ({
+  APP_ERROR_DIAGNOSTICS_FILENAME: 'psstpsst-diagnostics.json',
+  exportAppErrorDiagnostics: jest.fn(),
+}));
 jest.mock('@/hooks/use-video-poster', () => ({ useVideoPoster: () => undefined }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('@/components/common/AppButton', () => ({ AppButton: () => null }));
@@ -49,6 +67,8 @@ jest.mock('@/services/files/file-attachment.service', () => ({
   copyForShare: jest.fn(),
 }));
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: () => 'account' }));
+jest.mock('@/services/files/media-index.service', () => ({ ensureEmbeddedMediaIndexed: jest.fn() }));
+jest.mock('@/components/chat/VoiceWaveform', () => ({ VoiceWaveform: () => null }));
 jest.mock('@/components/common/InteractivePressable', () => ({
   InteractivePressable: jest.requireActual('react-native').View,
 }));
@@ -57,6 +77,10 @@ jest.mock('@/lib/attachments/failure', () => ({
   revealOrRetry: (_kind: unknown, _t: unknown, _action: string, retry: (allow: boolean) => void) => retry(false),
 }));
 jest.mock('@solar-icons/react-native/category/video/Linear/Play', () => ({ Play: () => null }), { virtual: true });
+jest.mock('@solar-icons/react-native/category/video/Linear/Clapperboard', () => ({ Clapperboard: () => null }), { virtual: true });
+jest.mock('@solar-icons/react-native/category/video/Linear/GalleryRemove', () => ({ GalleryRemove: () => null }), { virtual: true });
+jest.mock('@solar-icons/react-native/category/video/Linear/Pause', () => ({ Pause: () => null }), { virtual: true });
+jest.mock('@solar-icons/react-native/category/ui/Linear/DangerTriangle', () => ({ DangerTriangle: () => null }), { virtual: true });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 let mockThemePreference: 'light' | 'dark' = 'light';
 jest.mock('@/stores/theme.store', () => ({
@@ -167,7 +191,7 @@ it('keeps a failed download retryable instead of automatically looping', async (
   expect(mockPlayer.play).toHaveBeenCalledTimes(1);
 });
 
-it.each(['light', 'dark'] as const)('shows an inert desktop unsupported status on a native status error in %s mode', async (scheme) => {
+it.each(['light', 'dark'] as const)('offers diagnostics from a desktop playback error in %s mode', async (scheme) => {
   mockElectron = true;
   mockThemePreference = scheme;
   mockCached = 'file:///cached.mp4';
@@ -176,8 +200,16 @@ it.each(['light', 'dark'] as const)('shows an inert desktop unsupported status o
   await act(async () => { renderer.update(<MediaVideoPage item={attachment} active />); });
   expect(renderer.root.findByType(AppText).props.children).toBe('attach.video_unsupported_desktop');
   expect(renderer.root.findAllByType(VideoView)).toHaveLength(0);
-  expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
+  const button = renderer.root.findByType(AppButton);
+  expect(button.props.label).toBe('error.export_diagnostics');
+  jest.mocked(exportAppErrorDiagnostics).mockResolvedValueOnce('psstpsst-file://cache/psstpsst-diagnostics.json');
+  jest.mocked(platform.fileSaver.save).mockResolvedValueOnce(scheme === 'light');
+  await act(async () => { button.props.onPress(); });
+  expect(platform.fileSaver.save).toHaveBeenCalledWith('psstpsst-file://cache/psstpsst-diagnostics.json', {
+    suggestedName: 'psstpsst-diagnostics.json', mimeType: 'application/json',
+  });
   expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  expect(platform.confirmationDialog.notify).not.toHaveBeenCalled();
   expect(mockPlayer.pause).not.toHaveBeenCalled();
 });
 
@@ -193,12 +225,53 @@ it('offers the cached video to external mobile apps without downloading it again
   expect(mockPlayer.play).not.toHaveBeenCalled();
 });
 
-it('shows unsupported status for direct video failures instead of a blank player', async () => {
+it.each(['preparation', 'save'] as const)('shows a dialog if diagnostics %s fails', async (stage) => {
   mockElectron = true;
   mockStatus = 'error';
   await act(async () => { renderer = create(<MediaVideoPage item={remote} active />); });
   expect(renderer.root.findByType(AppText).props.children).toBe('attach.video_unsupported_desktop');
   expect(renderer.root.findAllByType(VideoView)).toHaveLength(0);
+  if (stage === 'preparation') {
+    jest.mocked(exportAppErrorDiagnostics).mockResolvedValueOnce(null);
+  } else {
+    jest.mocked(exportAppErrorDiagnostics).mockResolvedValueOnce('psstpsst-file://cache/psstpsst-diagnostics.json');
+    jest.mocked(platform.fileSaver.save).mockRejectedValueOnce(new Error('Save failed'));
+  }
+  await act(async () => { renderer.root.findByType(AppButton).props.onPress(); });
+  expect(platform.fileSaver.save).toHaveBeenCalledTimes(stage === 'save' ? 1 : 0);
+  expect(platform.confirmationDialog.notify).toHaveBeenCalledWith({
+    title: 'backup.export_failed',
+    okLabel: 'common.ok',
+  });
+  expect(renderer.root.findByType(AppButton).props.loading).toBe(false);
+});
+
+it.each([true, false])('offers inline diagnostics only on Electron (Electron: %s)', async (electron) => {
+  mockElectron = electron;
+  const element = <EmbeddedMediaBlock media={remote.meta} isSelf={false} />;
+  await act(async () => { renderer = create(element); });
+  const play = renderer.root.findAllByType(InteractivePressable)
+    .find((node) => node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function');
+  await act(async () => { play!.props.onPress(); });
+  expect(renderer.root.findAllByType(VideoView)).toHaveLength(1);
+  expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
+
+  mockStatus = 'error';
+  await act(async () => { renderer.update(<EmbeddedMediaBlock media={remote.meta} isSelf={false} />); });
+  expect(renderer.root.findAllByType(VideoView)).toHaveLength(0);
+  if (!electron) {
+    expect(renderer.root.findAllByType(AppButton)).toHaveLength(0);
+    return;
+  }
+
+  const button = renderer.root.findByType(AppButton);
+  expect(button.props.label).toBe('error.export_diagnostics');
+  const uri = 'psstpsst-file://cache/psstpsst-diagnostics.json';
+  jest.mocked(exportAppErrorDiagnostics).mockResolvedValueOnce(uri);
+  await act(async () => { button.props.onPress(); });
+  expect(platform.fileSaver.save).toHaveBeenCalledWith(uri, {
+    suggestedName: 'psstpsst-diagnostics.json', mimeType: 'application/json',
+  });
 });
 
 jest.mock('@/components/chat/AttachmentTransferProgress', () => ({ AttachmentTransferProgress: () => null }));

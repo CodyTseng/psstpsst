@@ -815,10 +815,13 @@ without side effects.
 Render failures terminate at the root route error boundary instead of replacing
 the application with an unrecoverable blank surface. A bounded on-device journal
 stores only the error type, sanitized stack frames, route template, and runtime
-version metadata. It never stores message content, identity values, secrets,
-wallet data, or URLs, and it leaves the device only through an explicit user
-export. Repeated failures favor a safe return to the Chats route over retrying
-the same broken route again.
+version metadata for route failures. A separate bounded journal for Electron
+video errors records only numeric media codes, allowlisted Chromium error
+identifiers, playback timing, source kind, and runtime version metadata.
+Diagnostics never store message content, identity values, secrets, wallet data,
+or URLs, and leave the device only through an explicit user export. Repeated
+route failures favor a safe return to the Chats route over retrying the same
+broken route again.
 
 Wallet connections are non-custodial. NWC connection strings pass between
 routes only through ephemeral memory, never URL parameters. Their secrets stay
