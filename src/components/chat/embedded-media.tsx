@@ -1,6 +1,7 @@
 import { useEvent } from 'expo';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Image } from 'expo-image';
+import { VisibilityAwareImage } from '@/components/common/VisibilityAwareImage';
 import { useVideoPlayer, type VideoSource } from 'expo-video';
 import { Clapperboard as Film } from '@solar-icons/react-native/category/video/Linear/Clapperboard';
 import { GalleryRemove as ImageOff } from '@solar-icons/react-native/category/video/Linear/GalleryRemove';
@@ -220,7 +221,7 @@ function EmbeddedImage({
           </AppText>
         </View>
       ) : (
-        <Image
+        <VisibilityAwareImage
           source={
             loadRemote
               ? { uri: media.url, cacheKey: media.sha256 ?? media.url }

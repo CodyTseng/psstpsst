@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { VisibilityAwareImage } from '@/components/common/VisibilityAwareImage';
 import Download from 'lucide-react-native/icons/download';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -176,7 +177,7 @@ export function AttachmentImage({
               <Image placeholder={placeholder} placeholderContentFit="fill" contentFit="fill" style={StyleSheet.absoluteFill} />
             </View>
           ) : null}
-          <Image
+          <VisibilityAwareImage
             source={localUri ? { uri: localUri } : undefined}
             style={{ width: '100%', height: '100%' }}
             contentFit="contain"

@@ -31,17 +31,19 @@ import {
   View,
 } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   FadeIn,
   FadeOut,
-  runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withTiming,
   ZoomIn,
   ZoomOut,
 } from "react-native-reanimated";
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
@@ -95,6 +97,7 @@ import {
 import { ComposerAttachmentMenu } from './ComposerAttachmentMenu';
 import { useChatComposerPanel } from './chat-composer-panel-context';
 import {
+  type ComposerInsets,
   interpolateComposerPanelToKeyboard,
   scheduleComposerPanelWorkAfterPaint,
 } from './composer-panel-scheduling';
@@ -143,6 +146,7 @@ type Props = {
   /** Delay collection subscription/local cache reads until the route transition
    * finishes while still rendering a fully interactive text field immediately. */
   liveDataEnabled?: boolean;
+  composerInsets?: ComposerInsets;
 };
 
 type ComposerPanelMode = 'attachments' | 'emoji';
@@ -195,6 +199,7 @@ export function ChatInput({
   disabled,
   draftKey,
   liveDataEnabled = true,
+  composerInsets,
 }: Props) {
   const { t } = useTranslation();
   const directionalIconStyle = useDirectionalIconStyle();
@@ -210,15 +215,26 @@ export function ChatInput({
   // preserve the real transition needed for a seamless panel handoff.
   const keyboardHeight = useSharedValue(0);
   const keyboardProgress = useSharedValue(0);
+  const keyboardMoving = useSharedValue(false);
+  const composerRowExtra = useSharedValue(0);
+  const composerInset = composerInsets?.live;
+  const settledComposerInset = composerInsets?.settled;
+  const overlayComposer = composerInsets != null;
   useKeyboardHandler(
     {
+      onStart: () => {
+        'worklet';
+        keyboardMoving.value = true;
+      },
       onMove: (event) => {
         'worklet';
+        keyboardMoving.value = true;
         keyboardHeight.value = event.height;
         keyboardProgress.value = event.progress;
       },
       onInteractive: (event) => {
         'worklet';
+        keyboardMoving.value = true;
         keyboardHeight.value = event.height;
         keyboardProgress.value = event.progress;
       },
@@ -226,10 +242,15 @@ export function ChatInput({
         'worklet';
         keyboardHeight.value = event.height;
         keyboardProgress.value = event.progress;
+        keyboardMoving.value = false;
       },
     },
     [],
   );
+  useLayoutEffect(() => () => {
+    composerInset?.set(0);
+    settledComposerInset?.set(0);
+  }, [composerInset, settledComposerInset]);
   const inputRef = useRef<TextInput>(null);
   const attachmentButtonRef = useRef<View>(null);
   const emojiButtonRef = useRef<View>(null);
@@ -386,6 +407,7 @@ export function ChatInput({
   const [lineUnit, setLineUnit] = useState(INPUT_LINE_HEIGHT);
   // While recording, the whole composer row is replaced by the voice recorder.
   const [recording, setRecording] = useState(false);
+  const showingVoiceRecorder = recording && onSendVoice != null;
   // Entering animations are for later mic/send and emoji/keyboard state changes.
   // Suppressing them on the initial mount keeps the route's first real composer
   // fully opaque while the native push is moving.
@@ -430,6 +452,7 @@ export function ChatInput({
       ? emojiPanelSize.height
       : fallbackEmojiHeight;
   const SAFE = getBottomChromeInset(insets.bottom);
+  const panelCapacity = Math.max(SAFE, attachmentHeight, emojiHeight);
   const attachmentOpen = trayOpen && panelMode === 'attachments';
   const emojiOpen = trayOpen && panelMode === 'emoji';
   useEffect(() => {
@@ -484,41 +507,32 @@ export function ChatInput({
   // Start at the already-visible safe-area height so the first animation has no
   // invisible 0 → SAFE segment before the panel appears to move.
   const customPanelHeight = useSharedValue(SAFE);
+  const panelTargetHeight = useSharedValue(SAFE);
   const keyboardTakeover = useSharedValue(0);
-  const scheduledPanelTransitionRef = useRef<string | null>(null);
+  const scheduledPanelTransitionRef = useRef(`closed:${SAFE}`);
   const animatePanelTransition = useCallback(
     (open: boolean, mode: ComposerPanelMode, targetHeight: number) => {
-      const key = open ? `${mode}:${targetHeight}` : `closed:${SAFE}`;
-      scheduledPanelTransitionRef.current = key;
-      keyboardTakeover.value = 0;
-      attachmentProgress.value = withTiming(open && mode === 'attachments' ? 1 : 0, {
-        duration: 140,
-        easing: COMPOSER_PANEL_EASE,
-      });
-      emojiProgress.value = withTiming(open && mode === 'emoji' ? 1 : 0, {
-        duration: 140,
-        easing: COMPOSER_PANEL_EASE,
-      });
-      if (open) {
-        const kb = keyboardHeight.value;
-        // Seed a newly opening slot from the visible keyboard. For panel-to-panel
-        // switches, retain the current absolute height and animate from there.
-        if (customPanelHeight.value <= SAFE && kb > SAFE) customPanelHeight.value = kb;
-        customPanelHeight.value = withTiming(targetHeight, {
-          duration: 240,
+      scheduledPanelTransitionRef.current = open ? `${mode}:${targetHeight}` : `closed:${SAFE}`;
+      scheduleOnUI(() => {
+        'worklet';
+        const endHeight = open ? targetHeight : SAFE;
+        panelTargetHeight.value = endHeight;
+        keyboardTakeover.value = 0;
+        // Keep the current panel height when switching between panels.
+        if (open && customPanelHeight.value <= SAFE && keyboardHeight.value > SAFE) {
+          customPanelHeight.value = keyboardHeight.value;
+        }
+        const fade = { duration: 140, easing: COMPOSER_PANEL_EASE };
+        attachmentProgress.value = withTiming(open && mode === 'attachments' ? 1 : 0, fade);
+        emojiProgress.value = withTiming(open && mode === 'emoji' ? 1 : 0, fade);
+        customPanelHeight.value = withTiming(endHeight, {
+          duration: open ? 240 : 320,
           easing: COMPOSER_PANEL_EASE,
         }, (finished) => {
-          if (finished && mode === 'emoji') runOnJS(setEmojiMounted)(true);
+          if (!finished) return;
+          if (mode === 'emoji') scheduleOnRN(setEmojiMounted, open);
         });
-      } else {
-        // Ease down slowly so a rising keyboard reclaims the height first.
-        customPanelHeight.value = withTiming(SAFE, {
-          duration: 320,
-          easing: COMPOSER_PANEL_EASE,
-        }, (finished) => {
-          if (finished && mode === 'emoji') runOnJS(setEmojiMounted)(false);
-        });
-      }
+      });
     },
     [
       attachmentProgress,
@@ -526,6 +540,7 @@ export function ChatInput({
       emojiProgress,
       keyboardHeight,
       keyboardTakeover,
+      panelTargetHeight,
       SAFE,
     ],
   );
@@ -545,24 +560,27 @@ export function ChatInput({
 
   const transitionPanelToKeyboard = useCallback(() => {
     // Do not shrink the panel before the keyboard starts moving. Fade its body,
-    // then let panelStyle interpolate the occupied height directly from the
+    // then interpolate the occupied height directly from the
     // current panel to the keyboard with no down-then-up dip.
     scheduledPanelTransitionRef.current = `closed:${SAFE}`;
-    keyboardTakeover.value = 1;
-    attachmentProgress.value = withTiming(0, {
-      duration: 140,
-      easing: COMPOSER_PANEL_EASE,
+    scheduleOnUI(() => {
+      'worklet';
+      if (overlayComposer) {
+        cancelAnimation(customPanelHeight);
+        panelTargetHeight.value = customPanelHeight.value;
+      }
+      keyboardTakeover.value = 1;
+      const fade = { duration: 140, easing: COMPOSER_PANEL_EASE };
+      attachmentProgress.value = withTiming(0, fade);
+      emojiProgress.value = withTiming(0, fade);
     });
-    emojiProgress.value = withTiming(0, {
-      duration: 140,
-      easing: COMPOSER_PANEL_EASE,
-    });
-  }, [attachmentProgress, emojiProgress, keyboardTakeover, SAFE]);
+  }, [attachmentProgress, customPanelHeight, emojiProgress, keyboardTakeover, panelTargetHeight, SAFE, overlayComposer]);
 
   useAnimatedReaction(
     () => keyboardProgress.value,
     (progress, previousProgress) => {
       if (keyboardTakeover.value === 1 && progress >= 1) {
+        panelTargetHeight.value = SAFE;
         customPanelHeight.value = SAFE;
         keyboardTakeover.value = 0;
       } else if (
@@ -570,6 +588,7 @@ export function ChatInput({
         progress <= 0 &&
         (previousProgress ?? 0) > 0
       ) {
+        panelTargetHeight.value = SAFE;
         customPanelHeight.value = withTiming(SAFE, {
           duration: 180,
           easing: COMPOSER_PANEL_EASE,
@@ -585,20 +604,35 @@ export function ChatInput({
   }));
   // The slot is the tallest of the keyboard, the animated active panel, or the
   // home-indicator safe area. Keyboard and custom surfaces never stack.
-  const panelStyle = useAnimatedStyle(() => {
+  const occupiedHeight = useDerivedValue(() => {
     const kb = keyboardHeight.value;
-    if (keyboardTakeover.value === 1) {
-      return {
-        height: interpolateComposerPanelToKeyboard(
-          customPanelHeight.value,
-          kb,
-          keyboardProgress.value,
-          SAFE,
-        ),
-      };
-    }
-    return { height: Math.max(kb, customPanelHeight.value, SAFE) };
+    const customHeight = customPanelHeight.value;
+    const handingOff = keyboardTakeover.value === 1;
+    return handingOff
+      ? interpolateComposerPanelToKeyboard(customHeight, kb, keyboardProgress.value, SAFE)
+      : Math.max(kb, customHeight, SAFE);
   });
+  const surfaceMotion = useAnimatedStyle(() => overlayComposer
+    ? { transform: [{ translateY: SAFE - occupiedHeight.value }] }
+    : { transform: undefined });
+  const inlinePanelStyle = useAnimatedStyle(() =>
+    overlayComposer ? {} : { height: occupiedHeight.value },
+  );
+  useAnimatedReaction(
+    () => {
+      if (!composerInset) return null;
+      if (showingVoiceRecorder) return { inset: 0, settled: true };
+      return {
+        inset: occupiedHeight.value - SAFE + composerRowExtra.value,
+        settled: !keyboardMoving.value && customPanelHeight.value === panelTargetHeight.value,
+      };
+    },
+    (surface, previous) => {
+      if (!surface || !composerInset) return;
+      if (surface.inset !== previous?.inset) composerInset.value = surface.inset;
+      if (surface.settled && settledComposerInset) settledComposerInset.value = surface.inset;
+    },
+  );
   const attachmentStyle = useAnimatedStyle(() => ({ opacity: attachmentProgress.value }));
   const emojiStyle = useAnimatedStyle(() => ({ opacity: emojiProgress.value }));
 
@@ -934,19 +968,21 @@ export function ChatInput({
   }
 
   return (
-    <View
-      onLayout={(event) => {
-        const nextWidth = event.nativeEvent.layout.width;
-        setPanelWidth((current) => (current === nextWidth ? current : nextWidth));
-      }}
-      style={{
+    <Animated.View
+      style={[overlayComposer ? [
+        styles.overlayComposer,
+        // Keep the complete panel inside its touchable parent. The part below
+        // the screen is clipped by the window as the whole composer slides.
+        { bottom: SAFE - panelCapacity },
+        surfaceMotion,
+      ] : {
         marginTop: -(
           bottomBarHeight +
           SAFE +
           aboveInputHeight +
           (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0) - commandMenuOverlap
         ),
-        zIndex: 1, pointerEvents: 'box-none' }}
+      }, { zIndex: 1, pointerEvents: 'box-none' }]}
     >
       <View
         style={{
@@ -1037,6 +1073,10 @@ export function ChatInput({
         </View>
       ) : null}
       <View
+        onLayout={({ nativeEvent: { layout } }) => {
+          setPanelWidth((width) => width === layout.width ? width : layout.width);
+          if (overlayComposer) composerRowExtra.set(Math.max(0, layout.height - bottomBarHeight));
+        }}
         style={{
           marginTop: -commandMenuOverlap,
           zIndex: commandMenuVisible ? 2 : undefined,
@@ -1308,9 +1348,10 @@ export function ChatInput({
           </View>
         ) : null}
       </View>
-      {/* Bottom panel: keyboard space (covered by the OS keyboard), the tray, or
-          the safe-area — one animated height so keyboard ⇄ tray never jumps. */}
-      <Animated.View style={[{ overflow: "hidden" }, panelStyle]}>
+      <Animated.View
+        pointerEvents="box-none"
+        style={[styles.panel, overlayComposer ? { height: panelCapacity } : inlinePanelStyle]}
+      >
         {showAttach ? (
           <Animated.View
             style={[
@@ -1324,6 +1365,8 @@ export function ChatInput({
               attachmentStyle,
               { pointerEvents: attachmentOpen ? 'auto' : 'none' },
             ]}
+            importantForAccessibility={attachmentOpen ? 'auto' : 'no-hide-descendants'}
+            accessibilityElementsHidden={!attachmentOpen}
           >
             <AttachmentPanel
               width={panelWidth}
@@ -1345,6 +1388,8 @@ export function ChatInput({
               emojiStyle,
               { pointerEvents: emojiOpen ? 'auto' : 'none' },
             ]}
+            importantForAccessibility={emojiOpen ? 'auto' : 'no-hide-descendants'}
+            accessibilityElementsHidden={!emojiOpen}
           >
             <Animated.View entering={FadeIn.duration(120)} style={{ flex: 1 }}>
               <ComposerEmojiPickerPanel
@@ -1384,6 +1429,11 @@ export function ChatInput({
           />
         </Suspense>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  overlayComposer: { position: 'absolute', start: 0, end: 0 },
+  panel: { overflow: 'hidden' },
+});

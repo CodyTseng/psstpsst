@@ -26,10 +26,11 @@ import {
   type SetStateAction,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, useWindowDimensions, View } from 'react-native';
-import Reanimated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
+import { useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, FadeIn, ReduceMotion, useSharedValue } from 'react-native-reanimated';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { ComposerInsets } from './composer-panel-scheduling';
 
 import { bottomBarHeight, headerHeight, useThemeColors } from '@/theme';
 import { AppScreen } from '@/components/common/AppScreen';
@@ -291,6 +292,11 @@ export default function ChatPageRuntime() {
   // cache until the window collapses back to the native stack.
   const routeActive = focused || wide;
   const insets = useSafeAreaInsets();
+  const composerInset = useSharedValue(0);
+  const settledComposerInset = useSharedValue(0);
+  const composerInsets = useMemo<ComposerInsets | undefined>(() => IS_ELECTRON
+    ? undefined
+    : { live: composerInset, settled: settledComposerInset }, [composerInset, settledComposerInset]);
   const { t } = useTranslation();
   const unreadIndicatorsEnabled = useUnreadIndicatorsEnabled();
   const [selectionMode, setSelectionMode] = useState(false);
@@ -730,6 +736,7 @@ export default function ChatPageRuntime() {
                   setComposerFiles={setComposerFiles}
                   onFileDropEnabledChange={setFileDropEnabled}
                   onGraduate={handleGraduate}
+                  composerInsets={composerInsets}
                   topInset={contentTopInset}
                   topOccluderRef={topNoticeRef}
                   liveDataReady={liveDataReady}
@@ -749,6 +756,7 @@ export default function ChatPageRuntime() {
             composerModel.mode === 'input' ? (
               <ChatInput
                 key={`composer:${accountPubkey}:${conversationKey}`}
+                composerInsets={composerInsets}
                 aboveInput={<ForwardConversationBanner accountPubkey={accountPubkey}
                   sourceConversationKey={conversationKey} />}
                 commandPeer={peerPubkey || undefined}
@@ -814,6 +822,7 @@ type ChatPageContentProps = {
   setComposerFiles: Dispatch<SetStateAction<ComposerFile[]>>;
   onFileDropEnabledChange: (enabled: boolean) => void;
   onGraduate: () => void;
+  composerInsets?: ComposerInsets;
   topInset: number;
   topOccluderRef: MutableRefObject<View | null>;
   liveDataReady: boolean;
@@ -837,6 +846,7 @@ function ChatPageContent({
   setComposerFiles,
   onFileDropEnabledChange,
   onGraduate,
+  composerInsets,
   topInset,
   topOccluderRef,
   liveDataReady,
@@ -1051,15 +1061,12 @@ function ChatPageContent({
   // cannot restart the in-progress scroll-to-tail animation.
   const [optimistic, setOptimistic] = useState<MessageRow[]>([]);
 
-  const reconciled = (o: MessageRow, m: MessageRow) => m.id === o.id;
-
   const visibleOptimistic = useMemo(
     () =>
       optimistic.length === 0
         ? optimistic
-        : optimistic.filter((o) => !messages.some((m) => reconciled(o, m))),
-
-    [optimistic, messages],
+        : optimistic.filter((row) => !loadedMessageIds.has(row.id)),
+    [optimistic, loadedMessageIds],
   );
   const displayMessages = useMemo(
     () => (visibleOptimistic.length === 0 ? messages : [...messages, ...visibleOptimistic]),
@@ -1082,10 +1089,10 @@ function ChatPageContent({
   useEffect(() => {
     setOptimistic((prev) => {
       if (prev.length === 0) return prev;
-      const next = prev.filter((o) => !messages.some((m) => reconciled(o, m)));
+      const next = prev.filter((row) => !loadedMessageIds.has(row.id));
       return next.length === prev.length ? prev : next;
     });
-  }, [messages]);
+  }, [loadedMessageIds]);
   useEffect(() => {
     setOptimistic([]);
   }, [conversationKey]);
@@ -1834,7 +1841,7 @@ function ChatPageContent({
           containerTop: y,
           containerHeight: h,
           topInset,
-          bottomInset: composerClearance,
+          bottomInset: composerClearance + (composerInsets?.live.get() ?? 0),
           occlusionBottom,
         });
         setMenuAnchor({
@@ -2341,9 +2348,7 @@ function ChatPageContent({
           gateStatus: composerGateStatus,
         }}
       />
-      {/* No KeyboardAvoidingView: the composer (`ChatInput`) reserves the
-          keyboard/tray space itself via a reanimated bottom panel, so the
-          keyboard ⇄ attachment-tray swap is one continuous animation. */}
+      {/* The composer overlays the timeline. Mobile composer motion drives the timeline position. */}
       <View ref={contentRef} collapsable={false} style={{ flex: 1 }}>
         <MessageList
           ref={messageListRef}
@@ -2396,6 +2401,7 @@ function ChatPageContent({
           selectionMode={selectionMode}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
+          composerInsets={composerInsets}
           bottomInset={composerClearance}
           topInset={topInset}
           liveDataEnabled={liveDataReady && routeActive}

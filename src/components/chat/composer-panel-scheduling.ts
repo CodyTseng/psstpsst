@@ -1,3 +1,11 @@
+import type { SharedValue } from 'react-native-reanimated';
+
+/** Live timeline displacement and the last settled clearance for its history edge. */
+export type ComposerInsets = {
+  live: SharedValue<number>;
+  settled: SharedValue<number>;
+};
+
 /**
  * Runs non-urgent panel setup in the macrotask after the next animation frame.
  * The UI-thread panel transition gets a chance to paint before React mounts a

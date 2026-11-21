@@ -5,12 +5,14 @@ import { BubbleBody } from '../BubbleBody';
 import { MessageBubble } from '../MessageBubble';
 import { impact } from '@/lib/haptics';
 import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { State } from 'react-native-gesture-handler';
 
 const mockBodyMount = jest.fn();
 const mockBodyUnmount = jest.fn();
 const mockPanHandlers: Record<string, (...args: any[]) => void> = {};
 const mockPanCreated = jest.fn();
 const mockLongPressHandlers: Record<string, (...args: any[]) => void> = {};
+const mockScheduleOnRN = jest.fn((fn: Function, ...args: unknown[]) => fn(...args));
 
 jest.mock('../BubbleBody', () => ({ BubbleBody: () => {
   const React = jest.requireActual('react');
@@ -40,7 +42,7 @@ jest.mock('@/theme', () => ({
   typography: { caption: { lineHeight: 18 }, message: { lineHeight: 22 } },
   useThemeColors: () => ({}),
 }));
-jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: Function, ...args: unknown[]) => fn(...args) }));
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: (...args: [Function, ...unknown[]]) => mockScheduleOnRN(...args) }));
 jest.mock('react-native-gesture-handler', () => {
   function gesture(pan = false, longPress = false) {
     const g: Record<string, Function> = {};
@@ -54,6 +56,7 @@ jest.mock('react-native-gesture-handler', () => {
     return g;
   }
   return {
+    State: { BEGAN: 2, ACTIVE: 4 },
     GestureDetector: ({ children }: any) => children,
     Gesture: {
       Pan: () => { mockPanCreated(); return gesture(true); },
@@ -92,6 +95,8 @@ it('allocates dormant decorations only when used and preserves the message body'
   expect(count('MessageHighlight')).toBe(0);
   expect(useAnimatedStyle).toHaveBeenCalledTimes(1);
   expect(useSharedValue).toHaveBeenCalledTimes(1);
+  act(() => mockPanHandlers.onFinalize({ oldState: State.BEGAN }, false));
+  expect(mockScheduleOnRN).not.toHaveBeenCalled();
   act(() => mockPanHandlers.onStart());
   expect(count('SwipeReplyDecorations')).toBe(1);
   expect(mockPanCreated).toHaveBeenCalledTimes(1);
@@ -104,7 +109,7 @@ it('allocates dormant decorations only when used and preserves the message body'
   expect(props.onSwipeReply).toHaveBeenCalledTimes(1);
   expect(count('SwipeReplyDecorations')).toBe(0);
   act(() => mockPanHandlers.onStart());
-  act(() => mockPanHandlers.onFinalize({}, false));
+  act(() => mockPanHandlers.onFinalize({ oldState: State.ACTIVE }, false));
   expect(count('SwipeReplyDecorations')).toBe(0);
   act(() => renderer.update(<MessageBubble {...props} highlighted highlightTick={1} />));
   expect(count('MessageHighlight')).toBe(1);

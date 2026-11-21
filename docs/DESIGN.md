@@ -577,6 +577,9 @@ bounded on wide conversation panes.
 Message image and video containers retain minimum width and height so controls
 and metadata remain visible. Media keeps its aspect ratio without cropping;
 unused space uses the theme's muted grey surface, including pending previews.
+Animated images and custom emoji in Android conversation history play while
+visible and the list is at rest. Offscreen rows and scrolling retain their
+image frames.
 Video surfaces retain an opaque themed cover with the available poster or
 ThumbHash until the first frame is displayed. Embedded websites retain their own
 video posters and backgrounds without a host-provided video glyph.

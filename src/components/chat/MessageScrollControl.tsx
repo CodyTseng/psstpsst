@@ -4,7 +4,7 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 import Animated, {
-  useAnimatedStyle, useSharedValue, withTiming,
+  useAnimatedStyle, useSharedValue, withTiming, type SharedValue,
 } from 'react-native-reanimated';
 
 import { isNearMessageTail } from '@/lib/chat/message-tail-follow';
@@ -18,11 +18,12 @@ export interface MessageScrollControlHandle {
 }
 
 /** Keep per-scroll animation updates outside the message list's render state. */
-export function MessageScrollControl({ ref, pinned, hasNewer = false, bottomInset, children }: {
+export function MessageScrollControl({ ref, pinned, hasNewer = false, bottomInset, composerInset, children }: {
   ref: Ref<MessageScrollControlHandle>;
   pinned: boolean;
   hasNewer?: boolean;
   bottomInset: number;
+  composerInset?: SharedValue<number>;
   children: ReactNode;
 }) {
   const progress = useSharedValue(pinned ? 1 : 0);
@@ -66,7 +67,10 @@ export function MessageScrollControl({ ref, pinned, hasNewer = false, bottomInse
 
   useLayoutEffect(reconcileVisibility, [reconcileVisibility]);
 
-  const style = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    ...(composerInset && { transform: [{ translateY: -composerInset.value }] }),
+  }));
 
   return (
     <Animated.View

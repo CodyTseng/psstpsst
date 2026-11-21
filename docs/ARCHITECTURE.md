@@ -589,7 +589,10 @@ cause; cursor progress remains unchanged so the next session can retry safely.
 - Message history reads use indexed chronology cursors. Each database read
   prefetches one bounded batch, then releases UI-sized slices to FlatList before
   the reader reaches the edge. FlatList mounts variable-height rows in small
-  frame-spaced batches. Exposed data is append-only during ordinary history browsing,
+  frame-spaced batches. On mobile the composer and message viewport retain
+  their layout sizes and translate as the keyboard or composer panel moves.
+  History clearance updates when the surface settles.
+  Exposed data is append-only during ordinary history browsing,
   while native virtualization bounds mounted rows. Scrolling toward newer rows
   never removes list data or re-queries SQLite. Tail and anchored windows retain
   their loaded pages across in-screen mode switches and release them only with

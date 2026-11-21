@@ -1,9 +1,9 @@
-import { Image } from 'expo-image';
 import { memo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { useCachedImages } from '@/hooks/use-cached-images';
 import { IconButton } from '@/components/common/IconButton';
+import { VisibilityAwareImage } from '@/components/common/VisibilityAwareImage';
 import type { CustomEmoji } from '@/lib/nostr/custom-emoji';
 import { showCustomEmojiDetail } from '@/stores/custom-emoji-detail.store';
 import { spacing, useThemeColors } from '@/theme';
@@ -100,7 +100,7 @@ function EmojiImageFrame({ uri, shortcode, size, cornerRadius, clickable, loadin
         pointerEvents: clickable ? 'auto' : 'none',
       }}
     >
-      <Image
+      <VisibilityAwareImage
         source={uri ? { uri } : undefined}
         accessibilityLabel={shortcode}
         cachePolicy="memory-disk"

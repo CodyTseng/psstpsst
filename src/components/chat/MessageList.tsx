@@ -18,7 +18,10 @@ import { BUBBLE_SELECTION_OFFSET } from './bubble-layout';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
+  StyleSheet,
   View,
+  type LayoutChangeEvent,
   type ListRenderItemInfo,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -27,13 +30,15 @@ import {
 import Animated, {
   Easing,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
-import { MessageLayoutViewport } from './message-row-layout';
+import { scheduleOnRN } from 'react-native-worklets';
+import { MessageLayoutViewport, type MessageCellFrame } from './message-row-layout';
 import { iconStrokeWidth } from '@/theme/icons';
 import { radius, shadow, spacing, useThemeColors } from '@/theme';
 
@@ -42,6 +47,8 @@ import { AppText } from '@/components/common/AppText';
 import { CountBadge } from '@/components/common/CountBadge';
 import { FrostedBackdrop } from '@/components/common/FrostedBackdrop';
 import { IconButton } from '@/components/common/IconButton';
+import { ImageVisibilityStore } from '@/components/common/VisibilityAwareImage';
+import { getTimelineTouchView } from '@/platform/timeline-touch-view';
 import { useContactsMap } from '@/hooks/use-contacts';
 import { MESSAGES_PAGE_SIZE, type MessageBoundary } from '@/hooks/use-messages';
 import { useElectronHistoryPagination } from '@/hooks/use-electron-history-pagination';
@@ -79,6 +86,7 @@ import { DatePill, DateSeparator } from './message-date-separator';
 import { LoadedMessageWindowCache } from '@/lib/chat/loaded-message-window';
 import { MessageListData, MessageListRowCache, type ListItem } from './message-list-data';
 import { MessageListCell } from './MessageListCell';
+import type { ComposerInsets } from './composer-panel-scheduling';
 import { MessageScrollControl, type MessageScrollControlHandle } from './MessageScrollControl';
 import { measureMessageScrollOffset } from './message-scroll-layout';
 import { IS_ELECTRON } from '@/lib/platform';
@@ -113,10 +121,14 @@ function isGroupSystemMessage(message: MessageRow, group: boolean): boolean {
  * (Telegram/Signal). Distinct from the content-hugging `DatePill` by spanning
  * the row; deliberately calm (`surfaceMuted`, not an alarm red) like the date
  * capsule family. Rendered once, above the first unread message. */
-function UnreadDivider({ label }: { label: string }) {
+function UnreadDivider({ label, onLayout }: {
+  label: string;
+  onLayout?: (event: LayoutChangeEvent) => void;
+}) {
   const c = useThemeColors();
   return (
     <View
+      onLayout={onLayout}
       style={{
         marginVertical: spacing.sm,
         marginHorizontal: spacing.md,
@@ -231,6 +243,7 @@ type Props = {
   onToggleSelect?: (messageId: string) => void;
   /** Clear the composer that overlays the bottom of the list. */
   bottomInset: number;
+  composerInsets?: ComposerInsets;
   /** Clear the title bar that overlays the top of the list. */
   topInset: number;
   /** Attach secondary profile/contact live reads after native navigation while
@@ -248,6 +261,9 @@ const MAX_SMOOTH_REPLY_DISTANCE = 50;
 const MESSAGE_CELL_RENDER_BATCH_PERIOD_MS = 32;
 
 const ANCHORED_VISIBLE_POSITION = { minIndexForVisible: 1 } as const;
+// Drag-end precedes momentum-start. Keep the captured frame across that gap.
+const SCROLL_MEDIA_RESUME_DELAY_MS = 100;
+const DRAG_IDLE_DELAY_MS = 250;
 
 export function MessageList({
   ref,
@@ -298,6 +314,7 @@ export function MessageList({
   selectedIds,
   onToggleSelect,
   bottomInset,
+  composerInsets,
   topInset,
   liveDataEnabled = true,
   interactive = true,
@@ -328,11 +345,78 @@ export function MessageList({
     ? oldestBoundary
     : oldestBoundary.createdAt;
   const listRef = useRef<FlatList<ListItem>>(null);
+  const composerInset = composerInsets?.live;
+  const settledComposerInset = composerInsets?.settled;
+  const timelineMotionStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -(composerInset?.value ?? 0) }],
+  }));
+  const historyClearanceStyle = useAnimatedStyle(() => ({
+    height: topInset + (settledComposerInset?.value ?? 0),
+  }));
+  const [imageVisibility] = useState(() =>
+    Platform.OS === 'android' ? new ImageVisibilityStore() : null,
+  );
+  const hasTranslatedViewport = composerInsets != null;
+  const TimelineTouchView = hasTranslatedViewport ? getTimelineTouchView() : null;
+  const observesViewportClip = hasTranslatedViewport || imageVisibility != null;
   const scrollMetricsRef = useRef({
     offsetY: 0,
     viewportHeight: 0,
     contentHeight: 0,
   });
+  const [cellFrames] = useState(() => new Map<string, MessageCellFrame>());
+  const [inlineDateFrames] = useState(() => new Map<string, MessageCellFrame>());
+  const imageCandidates = useRef(new Set<string>());
+  const viewportClip = useRef(topInset);
+  const composerClipped = useRef(false);
+  const viewableItemsRef = useRef<ViewToken<ListItem>[]>([]);
+  const isFrameInViewport = useCallback((frame: MessageCellFrame | null | undefined) => {
+    if (!frame) return false;
+    const { offsetY, viewportHeight } = scrollMetricsRef.current;
+    const visibleHeight = viewportHeight - viewportClip.current;
+    return visibleHeight > 0 && frame.y < offsetY + visibleHeight && frame.y + frame.height > offsetY;
+  }, []);
+  const refreshImageVisibility = useCallback(() => {
+    if (!imageVisibility) return;
+    const visible = [];
+    for (const key of imageCandidates.current) {
+      if (isFrameInViewport(cellFrames.get(key))) visible.push(key);
+    }
+    imageVisibility.setVisible(visible);
+  }, [cellFrames, imageVisibility, isFrameInViewport]);
+  const recordCellFrame = useCallback((key: string, frame: MessageCellFrame | null) => {
+    if (frame) {
+      const previous = cellFrames.get(key);
+      if (previous?.y === frame.y && previous.height === frame.height) return;
+      cellFrames.set(key, frame);
+    } else {
+      cellFrames.delete(key);
+    }
+    if (imageVisibility?.isActive() && imageCandidates.current.has(key)) {
+      imageVisibility.setRowVisible(key, isFrameInViewport(frame));
+    }
+  }, [cellFrames, imageVisibility, isFrameInViewport]);
+  const scrollToMessageIndex = useCallback((
+    id: string, index: number, viewPosition: number, animated: boolean,
+  ) => {
+    const inset = composerInset?.get() ?? 0;
+    const height = scrollMetricsRef.current.viewportHeight;
+    const frame = inset > 0 ? cellFrames.get(`m:${id}`) : undefined;
+    if (frame && height > 0) {
+      const space = Math.max(0, height - inset - topInset - bottomInset - frame.height);
+      listRef.current?.scrollToOffset({
+        offset: Math.max(0, frame.y - bottomInset - viewPosition * space),
+        animated,
+      });
+      return;
+    }
+    listRef.current?.scrollToIndex({
+      index,
+      viewPosition,
+      ...(inset > 0 && { viewOffset: bottomInset - viewPosition * (inset + topInset + bottomInset) }),
+      animated,
+    });
+  }, [bottomInset, cellFrames, composerInset, topInset]);
   // Warm one page before the first interaction. Once the reader starts moving
   // toward history, keep paging by distance for the rest of the session instead
   // of requiring a fresh gesture for every page.
@@ -341,6 +425,14 @@ export function MessageList({
   // Native content updates must not start a tail correction while the reader's
   // drag or momentum scroll is still in progress.
   const userScrollInProgressRef = useRef(false);
+  const dragInProgressRef = useRef(false);
+  const mediaIdleDeadline = useRef(0);
+  const mediaResumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelMediaResume = useCallback(() => {
+    if (mediaResumeTimer.current == null) return;
+    clearTimeout(mediaResumeTimer.current);
+    mediaResumeTimer.current = null;
+  }, []);
   // Whether the list is currently pinned at the bottom. A ref so
   // pending-row layout corrections can read it without re-subscribing on every
   // scroll.
@@ -438,8 +530,40 @@ export function MessageList({
   const pendingRemovalPinRafRef = useRef<number | null>(null);
   const pinTailAfterPendingRemovalRef = useRef(false);
 
-  function handleContentSizeChange(_width: number, contentHeight: number) {
+  const previousContentLayout = useRef<{
+    width: number;
+    height: number;
+    footer: number;
+    rowCount: number;
+    windowScope: string;
+  } | null>(null);
+  const footerOnlyResize = useRef(false);
+  const deferredNewerEdge = useRef(false);
+
+  function handleContentSizeChange(width: number, contentHeight: number) {
     scrollMetricsRef.current.contentHeight = contentHeight;
+    if (settledComposerInset) {
+      const footer = topInset + settledComposerInset.get();
+      const rowCount = data.length;
+      const previous = previousContentLayout.current;
+      previousContentLayout.current = { width, height: contentHeight, footer, rowCount, windowScope };
+      if (previous) {
+        const sameWindow = previous.windowScope === windowScope && previous.rowCount === rowCount &&
+          previous.width === width;
+        if (!sameWindow || previous.height !== contentHeight) {
+          const footerDelta = footer - previous.footer;
+          // Staged arrivals can replace the data object without changing the
+          // rows in the viewport. Compare the laid-out content at this edge.
+          footerOnlyResize.current = sameWindow && footerDelta !== 0 &&
+            Math.abs(contentHeight - previous.height - footerDelta) < 1;
+          if (!footerOnlyResize.current) deferredNewerEdge.current = false;
+        }
+      }
+      if (footerOnlyResize.current) {
+        refreshVisibleMessageChrome();
+        return;
+      }
+    }
     if (!pendingInitialPosition.ready && tailMode) {
       if (userScrollInProgressRef.current || !atBottomRef.current) {
         setPendingInitialPosition((current) =>
@@ -539,6 +663,9 @@ export function MessageList({
   // / older-ward), 'below' (toward the newest), or null when it's on screen or
   // absent. Drives the jump-to-unread button.
   const [unreadDir, setUnreadDir] = useState<'above' | 'below' | null>(null);
+  const unreadDirectionRef = useRef<typeof unreadDir>(null);
+  const unreadDividerFrame = useRef<{ key: string; layout: MessageCellFrame } | null>(null);
+  const unreadMessageKey = useRef<string | null>(null);
   // Floating sticky date header: the date of the topmost visible message,
   // shown while scrolling and faded out once the list settles / hits bottom.
   // It animates with a directional crossfade — the outgoing capsule slides up
@@ -587,6 +714,57 @@ export function MessageList({
     atBottomRef.current = !userScrollInProgressRef.current && offsetY < 24;
   }, []);
 
+  const mediaFocus = useRef<'initial' | 'active' | 'blurred'>('initial');
+  useLayoutEffect(() => {
+    if (!imageVisibility) return;
+    const previous = mediaFocus.current;
+    if (!liveDataEnabled) {
+      if (previous !== 'initial') mediaFocus.current = 'blurred';
+      imageVisibility.setActive(false);
+    } else {
+      mediaFocus.current = 'active';
+    }
+
+    // A gesture from the old focus session may have ended without a native
+    // event. A fresh session gets its own drag and momentum events.
+    if (mediaFocus.current === 'blurred' || previous === 'blurred') {
+      dragInProgressRef.current = false;
+      userScrollInProgressRef.current = false;
+      updateTailPosition(scrollMetricsRef.current.offsetY);
+    }
+
+    if (liveDataEnabled) {
+      const atRest = !userScrollInProgressRef.current;
+      if (atRest) refreshImageVisibility();
+      imageVisibility.setActive(atRest);
+    }
+    return cancelMediaResume;
+  }, [cancelMediaResume, imageVisibility, liveDataEnabled, refreshImageVisibility, updateTailPosition]);
+
+  const interruptedListScroll = useRef(false);
+  const attachTimelineList = useCallback((instance: FlatList<ListItem> | null) => {
+    // Removing the scroll view can send cancellation directly to that child.
+    // The replacement should never inherit the removed view's gesture state.
+    if (!instance && listRef.current &&
+        (dragInProgressRef.current || userScrollInProgressRef.current)) {
+      interruptedListScroll.current = true;
+      dragInProgressRef.current = false;
+      userScrollInProgressRef.current = false;
+      cancelMediaResume();
+      imageCandidates.current.clear();
+      imageVisibility?.setVisible([]);
+    }
+
+    listRef.current = instance;
+    if (instance && interruptedListScroll.current) {
+      interruptedListScroll.current = false;
+      scrollMetricsRef.current.offsetY = 0;
+      atBottomRef.current = true;
+      nearTailRef.current = true;
+      imageVisibility?.setActive(mediaFocus.current === 'active');
+    }
+  }, [cancelMediaResume, imageVisibility]);
+
   const updateScrollPosition = useCallback((event: NativeScrollEvent) => {
     const metrics = scrollMetricsRef.current;
     const movingOlder = event.contentOffset.y > metrics.offsetY;
@@ -597,13 +775,59 @@ export function MessageList({
     return movingOlder;
   }, [updateTailPosition]);
 
+  // Pausing implies that media can play again. Only the native touch
+  // boundary can tell a held drag from a cancellation.
+  function resumeMediaAfterIdle(delay: number) {
+    if (!imageVisibility || !liveDataEnabled) return;
+    mediaIdleDeadline.current = Date.now() + delay;
+    if (mediaResumeTimer.current != null) return;
+    const checkIdle = () => {
+      const remaining = mediaIdleDeadline.current - Date.now();
+      if (remaining > 0) {
+        mediaResumeTimer.current = setTimeout(checkIdle, remaining);
+        return;
+      }
+      mediaResumeTimer.current = null;
+      if (!TimelineTouchView && dragInProgressRef.current) {
+        dragInProgressRef.current = false;
+        finishScrollActivity();
+      }
+      refreshImageVisibility();
+      imageVisibility.setActive(true);
+    };
+    mediaResumeTimer.current = setTimeout(checkIdle, delay);
+  }
+
+  function handleTouchCancel() {
+    if (!dragInProgressRef.current) return;
+    dragInProgressRef.current = false;
+    finishScrollActivity();
+    cancelMediaResume();
+    resumeMediaAfterIdle(SCROLL_MEDIA_RESUME_DELAY_MS);
+  }
+
+  function finishScrollActivity() {
+    userScrollInProgressRef.current = false;
+    updateTailPosition(scrollMetricsRef.current.offsetY);
+    if (atBottomRef.current) clearFloatingActive();
+    else scheduleFloatingDateHide();
+  }
+
+  function beginUserScroll() {
+    cancelMediaResume();
+    imageVisibility?.setActive(false);
+    userScrollInProgressRef.current = true;
+    continuousHistoryPagingRef.current = true;
+  }
+
   function handleScrollBeginDrag() {
+    dragInProgressRef.current = true;
+    beginUserScroll();
+    resumeMediaAfterIdle(DRAG_IDLE_DELAY_MS);
     scrollControlRef.current?.beginUserScroll();
     cancelMessagePositioning();
     focusHandledRef.current = activeFocusRequest;
     setReady(true);
-    userScrollInProgressRef.current = true;
-    continuousHistoryPagingRef.current = true;
     // Treat a deliberate gesture as leaving the tail until its final offset is
     // known. This prevents an async row commit from racing the first scroll tick.
     atBottomRef.current = false;
@@ -612,8 +836,8 @@ export function MessageList({
   }
 
   function handleMomentumScrollBegin() {
-    userScrollInProgressRef.current = true;
-    continuousHistoryPagingRef.current = true;
+    dragInProgressRef.current = false;
+    beginUserScroll();
     if (scrollMetricsRef.current.offsetY >= 24) activateFloatingDate(false);
   }
 
@@ -643,14 +867,22 @@ export function MessageList({
 
   function handleScrollSettled(
     event: NativeSyntheticEvent<NativeScrollEvent>,
+    endedDrag: boolean,
   ) {
+    dragInProgressRef.current = false;
     userScrollInProgressRef.current = false;
+    cancelMediaResume();
+    resumeMediaAfterIdle(SCROLL_MEDIA_RESUME_DELAY_MS);
     const {
       contentOffset,
       contentSize,
       layoutMeasurement,
     } = event.nativeEvent;
     updateScrollPosition(event.nativeEvent);
+    // A drag can end at the Android edge without changing the scroll offset.
+    if (endedDrag && ready && deferredNewerEdge.current && contentOffset.y <= 0) {
+      replayDeferredNewerEdge();
+    }
     if (atBottomRef.current) clearFloatingActive();
     else scheduleFloatingDateHide();
 
@@ -689,6 +921,18 @@ export function MessageList({
   function releaseStaged() {
     if (messages.length > 0)
       setReleasedNewestId(messages[messages.length - 1].id);
+  }
+
+  function requestNewerFromScroll() {
+    if (!ready) return;
+    if (hasMoreNewer) onLoadNewer();
+    else if (stagedCount > 0) releaseStaged();
+  }
+
+  function replayDeferredNewerEdge() {
+    footerOnlyResize.current = false;
+    deferredNewerEdge.current = false;
+    requestNewerFromScroll();
   }
 
   const flash = useCallback((id: string) => {
@@ -871,77 +1115,130 @@ export function MessageList({
     transform: [{ translateY: floatingTransY.value }],
   }));
 
-  // The label tracks the topmost visible message. `data` is newest-first and the
-  // list is inverted, so the largest viewable index is the message highest on
-  // screen. Fires only on viewability changes
-  // (not per scroll frame), so it's cheap regardless of conversation size. The
-  // ref callback is stable, so it reads the live list through `dataRef`.
-  const handleViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken<ListItem>[] }) => {
-      // Unread divider direction: compare its row index to the visible range.
-      // Inverted (newest-first): an index past the visible maximum is above the
-      // viewport (older); below the minimum is toward the newest end (down).
-      const fuIdx = firstUnreadIndexRef.current;
-      if (fuIdx == null) {
-        setUnreadDir((p) => (p === null ? p : null));
-      } else {
-        let minIdx = Infinity;
-        let maxIdx = -Infinity;
-        for (const v of viewableItems) {
-          if (v.index == null) continue;
-          if (v.index < minIdx) minIdx = v.index;
-          if (v.index > maxIdx) maxIdx = v.index;
-        }
-        const dir: 'above' | 'below' | null =
-          maxIdx < minIdx
-            ? null
-            : fuIdx > maxIdx
-              ? 'above'
-              : fuIdx < minIdx
-                ? 'below'
-                : null;
-        setUnreadDir((p) => (p === dir ? p : dir));
+  // FlatList still reports its full layout viewport. Reuse those candidates
+  // for the clipped viewport and only update React when the result changes.
+  const lastFloatingRow = useRef<{
+    key: string;
+    index: number;
+    timestamp: number;
+    data: MessageListData;
+    hasInlineDate: boolean;
+  } | null>(null);
+  const refreshVisibleMessageChrome = useRef(() => {
+    const clipped = composerClipped.current;
+    let minIdx = Infinity;
+    let maxIdx = -Infinity;
+    let topIdx = -Infinity;
+    let topMsg: MessageRow | null = null;
+    for (const token of viewableItemsRef.current) {
+      if (token.index == null || !token.isViewable) continue;
+      const frame = clipped ? cellFrames.get(token.key) : undefined;
+      if (frame && !isFrameInViewport(frame)) continue;
+      minIdx = Math.min(minIdx, token.index);
+      maxIdx = Math.max(maxIdx, token.index);
+      const item = token.item;
+      if (token.index > topIdx && item.kind === 'message' && !isGroupSystemMessage(item.message, groupRef.current)) {
+        topIdx = token.index;
+        topMsg = item.message;
       }
-
-      let topIdx = -Infinity;
-      let topMsg: MessageRow | null = null;
-      for (const v of viewableItems) {
-        if (v.index == null) continue;
-        const it = v.item as ListItem;
-        if (it.kind !== 'message' || !v.isViewable) continue;
-        if (isGroupSystemMessage(it.message, groupRef.current)) continue;
-        if (v.index > topIdx) {
-          topIdx = v.index;
-          topMsg = it.message;
-        }
+    }
+    const unreadIndex = firstUnreadIndexRef.current;
+    let direction: typeof unreadDir = unreadIndex == null || maxIdx < minIdx ? null
+      : unreadIndex > maxIdx ? 'above'
+      : unreadIndex < minIdx ? 'below'
+      : null;
+    const divider = unreadDividerFrame.current;
+    if (direction == null && unreadIndex != null && clipped && divider?.key === unreadMessageKey.current) {
+      const cell = cellFrames.get(divider.key);
+      if (cell) {
+        // CellRenderer flips this row back upright. Convert the marker's
+        // cell-local coordinates to the inverted scroll-content coordinates.
+        const { y, height } = divider.layout;
+        const start = cell.y + cell.height - y - height;
+        const { offsetY, viewportHeight } = scrollMetricsRef.current;
+        if (start >= offsetY + viewportHeight - viewportClip.current) direction = 'above';
+        else if (start + height <= offsetY) direction = 'below';
       }
-      if (!topMsg) return;
+    }
+    if (direction !== unreadDirectionRef.current) {
+      unreadDirectionRef.current = direction;
+      setUnreadDir(direction);
+    }
+    if (!topMsg) {
+      lastFloatingRow.current = null;
+      return;
+    }
+    const arr = dataRef.current;
+    const key = `m:${topMsg.id}`;
+    const last = lastFloatingRow.current;
+    const rowChanged = last?.key !== key || last.index !== topIdx ||
+      last.timestamp !== topMsg.createdAt || last.data !== arr;
+    let hasInlineDate = last?.hasInlineDate ?? false;
+    if (rowChanged) {
       floatingTimestampRef.current = topMsg.createdAt;
-      // This callback is retained across renders; resolve current preferences when invoked.
       floatingTargetRef.current = formatDateSeparator(topMsg.createdAt);
-      // When the topmost visible message is itself a day-start, its inline
-      // separator is on screen — suppress the floating copy so they don't
-      // double up. (Same predicate the renderer uses for `showDate`: the older
-      // neighbour is `topIdx + 1`.)
-      const arr = dataRef.current;
-      let older: ListItem | undefined;
+      // Match the inline day boundary without repeating the scan as the clip moves.
+      let older: MessageRow | undefined;
       for (let index = topIdx + 1; index < arr.length; index += 1) {
         const candidate = arr[index];
-        if (
-          candidate.kind === 'message' &&
-          !isGroupSystemMessage(candidate.message, groupRef.current)
-        ) {
-          older = candidate;
+        if (candidate.kind === 'message' && !isGroupSystemMessage(candidate.message, groupRef.current)) {
+          older = candidate.message;
           break;
         }
       }
-      floatingDupeRef.current =
-        !older ||
-        older.kind !== 'message' ||
-        isDifferentDay(topMsg.createdAt, older.message.createdAt);
+      hasInlineDate = !older || isDifferentDay(topMsg.createdAt, older.createdAt);
+      lastFloatingRow.current = { key, index: topIdx, timestamp: topMsg.createdAt, data: arr, hasInlineDate };
+    }
+
+    const cell = clipped ? cellFrames.get(key) : undefined;
+    const date = cell ? inlineDateFrames.get(key) : undefined;
+    const inlineDateVisible = cell && date ? isFrameInViewport({
+      y: cell.y + cell.height - date.y - date.height,
+      height: date.height,
+    }) : hasInlineDate;
+    if (rowChanged || floatingDupeRef.current !== inlineDateVisible) {
+      floatingDupeRef.current = inlineDateVisible;
       reconcileFloating();
+    }
+  }).current;
+  const recordInlineDate = useCallback((key: string, frame: MessageCellFrame | null) => {
+    if (frame) inlineDateFrames.set(key, frame);
+    else inlineDateFrames.delete(key);
+    if (composerClipped.current && lastFloatingRow.current?.key === key) refreshVisibleMessageChrome();
+  }, [inlineDateFrames, refreshVisibleMessageChrome]);
+  const handleViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken<ListItem>[] }) => {
+      viewableItemsRef.current = viewableItems;
+      if (imageVisibility) {
+        imageCandidates.current = new Set(viewableItems.filter((item) => item.isViewable).map((item) => item.key));
+        if (imageVisibility.isActive()) refreshImageVisibility();
+      }
+      refreshVisibleMessageChrome();
     },
   ).current;
+  const setViewportClip = useCallback((clip: number, hasComposerClip: boolean) => {
+    const clipChanged = viewportClip.current !== clip;
+    const composerClipChanged = composerClipped.current !== hasComposerClip;
+    if (!clipChanged && !composerClipChanged) return;
+    viewportClip.current = clip;
+    composerClipped.current = hasComposerClip;
+    if (clipChanged && imageVisibility?.isActive()) refreshImageVisibility();
+    if (hasComposerClip || composerClipChanged) refreshVisibleMessageChrome();
+  }, [imageVisibility, refreshImageVisibility, refreshVisibleMessageChrome]);
+
+  // Reuse native cell layouts and cross to JS only when the composer settles.
+  useAnimatedReaction(
+    () => {
+      if (!observesViewportClip) return null;
+      const inset = settledComposerInset?.value ?? 0;
+      return { clip: topInset + inset, hasComposerClip: inset > 0 };
+    },
+    (viewport, previous) => {
+      if (viewport && (viewport.clip !== previous?.clip || viewport.hasComposerClip !== previous.hasComposerClip)) {
+        scheduleOnRN(setViewportClip, viewport.clip, viewport.hasComposerClip);
+      }
+    },
+  );
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 1 }).current;
 
   // React to new tail messages. A new message prepends at index 0 of the
@@ -1118,11 +1415,7 @@ export function MessageList({
       if (scrollTargetRef.current !== request || request.requestId !== navigationSequenceRef.current) return;
       const i = dataIndexByIdRef.current.get(id);
       if (i != null && !scrollToMeasuredMessage(id, 0.5, animated))
-        void listRef.current?.scrollToIndex({
-          index: i,
-          viewPosition: 0.5,
-          animated,
-        });
+        scrollToMessageIndex(id, i, 0.5, animated);
     };
     const raf = requestAnimationFrame(() => snap(animatedFirst));
     const timer = setTimeout(() => snap(false), 220);
@@ -1130,9 +1423,17 @@ export function MessageList({
       cancelAnimationFrame(raf);
       clearTimeout(timer);
     };
-  }, [scrollToMeasuredMessage]);
+  }, [scrollToMeasuredMessage, scrollToMessageIndex]);
 
   const firstUnreadId = showUnreadDivider ? firstUnreadMessageId : null;
+  unreadMessageKey.current = firstUnreadId == null ? null : `m:${firstUnreadId}`;
+  const recordUnreadDivider = useCallback(({ nativeEvent: { layout } }: LayoutChangeEvent) => {
+    if (!firstUnreadId) return;
+    const key = `m:${firstUnreadId}`;
+    if (unreadMessageKey.current !== key) return;
+    unreadDividerFrame.current = { key, layout };
+    if (composerClipped.current) refreshVisibleMessageChrome();
+  }, [firstUnreadId, refreshVisibleMessageChrome]);
   const unreadTargetLoaded =
     firstUnreadId != null && dataIndexById.has(firstUnreadId);
   const loadedUnreadCount = useMemo(() => {
@@ -1201,11 +1502,7 @@ export function MessageList({
     }
     scrollTargetRef.current = { id: firstUnreadId, requestId: navigationSequenceRef.current, viewPosition: 0.8, retries: 0 };
     if (scrollToMeasuredMessage(firstUnreadId, 0.8, !reducedMotion)) return;
-    listRef.current?.scrollToIndex({
-      index: idx,
-      viewPosition: 0.8,
-      animated: true,
-    });
+    scrollToMessageIndex(firstUnreadId, idx, 0.8, true);
   }
   const unreadAbove =
     !anchored &&
@@ -1234,9 +1531,7 @@ export function MessageList({
       setReady(true);
       scrollTargetRef.current = { id, requestId: navigationSequenceRef.current, viewPosition: 0.5, retries: 0 };
       if (!scrollToMeasuredMessage(id, 0.5, !reducedMotion)) {
-        void listRef.current?.scrollToIndex({
-          index, viewPosition: 0.5, animated: !reducedMotion,
-        });
+        scrollToMessageIndex(id, index, 0.5, !reducedMotion);
       }
       flash(id);
       return;
@@ -1245,7 +1540,7 @@ export function MessageList({
     if (!target) return;
     setLocalFocus({ id, sourceFocusId: focusMessageId, requestId: navigationSequenceRef.current });
     onFocusAnchor({ id, orderAt: target.orderAt });
-  }, [activeFocusRequest, cancelMessagePositioning, dataIndexById, flash, focusMessageId, onFocusAnchor, reducedMotion, resolveTarget, scrollToMeasuredMessage, setReady, setLocalFocus]);
+  }, [activeFocusRequest, cancelMessagePositioning, dataIndexById, flash, focusMessageId, onFocusAnchor, reducedMotion, resolveTarget, scrollToMeasuredMessage, scrollToMessageIndex, setReady, setLocalFocus]);
 
   useImperativeHandle(ref, () => ({
     scrollToMessage(message) {
@@ -1506,7 +1801,7 @@ export function MessageList({
                   : undefined
               }
             />
-            {showUnread ? <UnreadDivider label={t('chat.unread_divider')} /> : null}
+            {showUnread ? <UnreadDivider label={t('chat.unread_divider')} onLayout={hasTranslatedViewport ? recordUnreadDivider : undefined} /> : null}
             {dateLabel ? <DateSeparator label={dateLabel} /> : null}
           </>
         );
@@ -1677,9 +1972,15 @@ export function MessageList({
             onToggleSelect={() => rowActionsRef.current.onToggleSelect?.(msg.id)}
           />
           {showUnread ? (
-            <UnreadDivider label={t('chat.unread_divider')} />
+            <UnreadDivider label={t('chat.unread_divider')} onLayout={hasTranslatedViewport ? recordUnreadDivider : undefined} />
           ) : null}
-          {dateLabel ? <DateSeparator label={dateLabel} /> : null}
+          {dateLabel ? (
+            <DateSeparator
+              label={dateLabel}
+              cellKey={hasTranslatedViewport ? `m:${msg.id}` : undefined}
+              onFrame={hasTranslatedViewport ? recordInlineDate : undefined}
+            />
+          ) : null}
         </>
       );
     },
@@ -1689,152 +1990,194 @@ export function MessageList({
       accountPubkey, attachmentLabels, canShowDelivery, canSwipeReply,
       conversationKey, group, openGroupMemberProfile,
       oldestBoundary, dateTimeFormatPreferences,
-      deliveriesByMessageId, firstUnreadId, flashTarget, interactive,
+      deliveriesByMessageId, firstUnreadId, flashTarget, hasTranslatedViewport, interactive, recordInlineDate, recordUnreadDivider,
       presentationsByMessageId, profileMap,
       proximity, reactionsByMessageId, remoteContentMode, replySenderName,
       resolveTarget, selectedIds, selectionMode,
       selectionShiftStyle, selfPubkey, t,
     ],
   );
+  const historyIndicator = (
+    <View style={{ height: topInset, justifyContent: 'center' }}>
+      {loadingOlder ? <ActivityIndicator color={c.textMuted} /> : null}
+    </View>
+  );
+  const timeline = waitingForFocus ? null : (
+    <FlatList
+      key={listWindowKey}
+      ref={TimelineTouchView ? attachTimelineList : listRef}
+      data={data}
+      style={{
+        opacity: pendingInitialPosition.ready ? 1 : 0,
+        pointerEvents: pendingInitialPosition.ready ? 'auto' : 'none',
+      }}
+      accessibilityElementsHidden={!pendingInitialPosition.ready}
+      importantForAccessibility={
+        pendingInitialPosition.ready ? 'auto' : 'no-hide-descendants'
+      }
+      onContentSizeChange={handleContentSizeChange}
+      onLayout={(event) => {
+        const viewportHeight = event.nativeEvent.layout.height;
+        scrollMetricsRef.current.viewportHeight = viewportHeight;
+        if (imageVisibility?.isActive()) refreshImageVisibility();
+        const { contentHeight } = scrollMetricsRef.current;
+        if (contentHeight > 0 && contentHeight <= viewportHeight) {
+          requestOlderFromScroll(true);
+        }
+      }}
+      inverted
+      maintainVisibleContentPosition={
+        shouldMaintainVisibleMessagePosition({
+          anchored,
+          initialPositionReady: pendingInitialPosition.ready,
+        })
+          ? ANCHORED_VISIBLE_POSITION
+          : undefined
+      }
+      initialNumToRender={activeFocusId != null ? 60 : MESSAGES_PAGE_SIZE}
+      maxToRenderPerBatch={activeFocusId != null ? 60 : MESSAGES_PAGE_SIZE}
+      updateCellsBatchingPeriod={
+        activeFocusId != null ? 0 : MESSAGE_CELL_RENDER_BATCH_PERIOD_MS
+      }
+      // Retain FlatList's full two-sided Android fling buffer. Database pages
+      // are exposed incrementally, while FlatList owns view virtualization;
+      // reducing this window causes visible blanks on fast flings.
+      windowSize={21}
+      // Android clipping and inverted transforms can detach visible cells.
+      // Virtualization still unmounts rows outside the render window.
+      removeClippedSubviews={false}
+      onTouchCancel={imageVisibility && !TimelineTouchView ? handleTouchCancel : undefined}
+      onScrollBeginDrag={handleScrollBeginDrag}
+      onScrollEndDrag={(event) => handleScrollSettled(event, true)}
+      onMomentumScrollBegin={handleMomentumScrollBegin}
+      onMomentumScrollEnd={(event) => handleScrollSettled(event, false)}
+      onScroll={(e) => {
+        const y = e.nativeEvent.contentOffset.y;
+        const moved = y !== scrollMetricsRef.current.offsetY;
+        const movingOlder = updateScrollPosition(e.nativeEvent);
+        if (moved && composerClipped.current) refreshVisibleMessageChrome();
+        if (moved && userScrollInProgressRef.current) {
+          footerOnlyResize.current = false;
+          if (ready && deferredNewerEdge.current) {
+            if (y > e.nativeEvent.layoutMeasurement.height) {
+              deferredNewerEdge.current = false;
+            } else if (!movingOlder) {
+              replayDeferredNewerEdge();
+            }
+          }
+        }
+        if (imageVisibility) {
+          if (dragInProgressRef.current && moved) {
+            imageVisibility.setActive(false);
+            resumeMediaAfterIdle(DRAG_IDLE_DELAY_MS);
+          } else if (imageVisibility.isActive()) {
+            refreshImageVisibility();
+          }
+        }
+        if (movingOlder && userScrollInProgressRef.current &&
+            isNearMessageHistoryEdge({
+              offsetY: y,
+              contentHeight: e.nativeEvent.contentSize.height,
+              viewportHeight: e.nativeEvent.layoutMeasurement.height,
+            })) {
+          requestOlderFromScroll();
+        }
+        const atBottom = y < 24;
+        // Cross the React boundary only when the floating-date visibility
+        // changes. Gesture-end callbacks arm the idle fade once per scroll.
+        if (atBottom) {
+          clearFloatingActive();
+        } else if (!floatingActiveRef.current) {
+          activateFloatingDate(!userScrollInProgressRef.current);
+        }
+      }}
+      scrollEventThrottle={64}
+      onViewableItemsChanged={handleViewableItemsChanged}
+      viewabilityConfig={viewabilityConfig}
+      keyExtractor={(item) =>
+        item.kind === 'message'
+          ? `m:${item.message.id}`
+          : `p:${item.pending.tempId}`
+      }
+      renderItem={renderItem}
+      CellRendererComponent={MessageListCell}
+      // Inverted list end = oldest → load an older page.
+      onEndReached={() => {
+        if (!footerOnlyResize.current) requestOlderFromScroll();
+      }}
+      onEndReachedThreshold={MESSAGE_HISTORY_PREFETCH_VIEWPORTS}
+      // Inverted list start = newest → in an anchored window page forward;
+      // in tail mode
+      // reveal whatever was staged while the user read up. Also gated on `ready`:
+      // a jump-open mounts at the bottom, so this would otherwise fire instantly
+      // and `loadNewer` would move the target mid-positioning (the cause of jumps
+      // landing near, but not on, the target).
+      onStartReached={() => {
+        if (footerOnlyResize.current) {
+          deferredNewerEdge.current = true;
+          return;
+        }
+        deferredNewerEdge.current = false;
+        requestNewerFromScroll();
+      }}
+      onStartReachedThreshold={1}
+      onScrollToIndexFailed={(info) => {
+        const request = scrollTargetRef.current;
+        if (!request || request.requestId !== navigationSequenceRef.current ||
+            dataIndexByIdRef.current.get(request.id) !== info.index || request.retries >= 3) return;
+        request.retries += 1;
+        if (scrollRetryTimerRef.current != null) clearTimeout(scrollRetryTimerRef.current);
+        // Bring an unmeasured target into the render window before retrying.
+        if (info.index > info.highestMeasuredFrameIndex && info.averageItemLength > 0) {
+          listRef.current?.scrollToOffset({
+            offset: Math.max(0, info.averageItemLength * info.index - scrollMetricsRef.current.viewportHeight / 2),
+            animated: false,
+          });
+        }
+        scrollRetryTimerRef.current = setTimeout(() => {
+          scrollRetryTimerRef.current = null;
+          if (scrollTargetRef.current !== request || request.requestId !== navigationSequenceRef.current) return;
+          // Resolve identity again: new rows can move the target's index.
+          const index = dataIndexByIdRef.current.get(request.id);
+          if (index == null) return;
+          if (scrollToMeasuredMessage(request.id, request.viewPosition, false)) return;
+          scrollToMessageIndex(request.id, index, request.viewPosition, false);
+        }, 80);
+      }}
+      ListFooterComponent={settledComposerInset ? (
+        <Animated.View style={[styles.historyClearance, historyClearanceStyle]}>
+          {loadingOlder ? historyIndicator : null}
+        </Animated.View>
+      ) : historyIndicator}
+      ListHeaderComponent={
+          <View
+            style={{
+              height: bottomInset + spacing.md,
+              justifyContent: 'center',
+            }}
+          >
+            {loadingNewer ? <ActivityIndicator color={c.textMuted} /> : null}
+          </View>
+      }
+    />
+  );
+
+  const translatedTimeline = composerInset ? (
+    <Animated.View style={[styles.timeline, timelineMotionStyle]}>{timeline}</Animated.View>
+  ) : timeline;
+
   return (
-    <MessageLayoutViewport>
-      {!waitingForFocus ? (
-        <FlatList
-          key={listWindowKey}
-          ref={listRef}
-          data={data}
-          style={{
-            opacity: pendingInitialPosition.ready ? 1 : 0,
-            pointerEvents: pendingInitialPosition.ready ? 'auto' : 'none',
-          }}
-          accessibilityElementsHidden={!pendingInitialPosition.ready}
-          importantForAccessibility={
-            pendingInitialPosition.ready ? 'auto' : 'no-hide-descendants'
-          }
-          onContentSizeChange={handleContentSizeChange}
-          onLayout={(event) => {
-            const viewportHeight = event.nativeEvent.layout.height;
-            scrollMetricsRef.current.viewportHeight = viewportHeight;
-            const { contentHeight } = scrollMetricsRef.current;
-            if (contentHeight > 0 && contentHeight <= viewportHeight) {
-              requestOlderFromScroll(true);
-            }
-          }}
-          inverted
-          maintainVisibleContentPosition={
-            shouldMaintainVisibleMessagePosition({
-              anchored,
-              initialPositionReady: pendingInitialPosition.ready,
-            })
-              ? ANCHORED_VISIBLE_POSITION
-              : undefined
-          }
-          initialNumToRender={activeFocusId != null ? 60 : MESSAGES_PAGE_SIZE}
-          maxToRenderPerBatch={activeFocusId != null ? 60 : MESSAGES_PAGE_SIZE}
-          updateCellsBatchingPeriod={
-            activeFocusId != null ? 0 : MESSAGE_CELL_RENDER_BATCH_PERIOD_MS
-          }
-          // Retain FlatList's full two-sided Android fling buffer. Database pages
-          // are exposed incrementally, while FlatList owns view virtualization;
-          // reducing this window causes visible blanks on fast flings.
-          windowSize={21}
-          // Android clipping and inverted transforms can detach visible cells.
-          // Virtualization still unmounts rows outside the render window.
-          removeClippedSubviews={false}
-          onScrollBeginDrag={handleScrollBeginDrag}
-          onScrollEndDrag={handleScrollSettled}
-          onMomentumScrollBegin={handleMomentumScrollBegin}
-          onMomentumScrollEnd={handleScrollSettled}
-          onScroll={(e) => {
-            const y = e.nativeEvent.contentOffset.y;
-            const movingOlder = updateScrollPosition(e.nativeEvent);
-            if (movingOlder && userScrollInProgressRef.current &&
-                isNearMessageHistoryEdge({
-                  offsetY: y,
-                  contentHeight: e.nativeEvent.contentSize.height,
-                  viewportHeight: e.nativeEvent.layoutMeasurement.height,
-                })) {
-              requestOlderFromScroll();
-            }
-            const atBottom = y < 24;
-            // Cross the React boundary only when the floating-date visibility
-            // changes. Gesture-end callbacks arm the idle fade once per scroll.
-            if (atBottom) {
-              clearFloatingActive();
-            } else if (!floatingActiveRef.current) {
-              activateFloatingDate(!userScrollInProgressRef.current);
-            }
-          }}
-          scrollEventThrottle={64}
-          onViewableItemsChanged={handleViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          keyExtractor={(item) =>
-            item.kind === 'message'
-              ? `m:${item.message.id}`
-              : `p:${item.pending.tempId}`
-          }
-          renderItem={renderItem}
-          CellRendererComponent={MessageListCell}
-          // Inverted list end = oldest → load an older page.
-          onEndReached={() => {
-            requestOlderFromScroll();
-          }}
-          onEndReachedThreshold={MESSAGE_HISTORY_PREFETCH_VIEWPORTS}
-          // Inverted list start = newest → in an anchored window page forward;
-          // in tail mode
-          // reveal whatever was staged while the user read up. Also gated on `ready`:
-          // a jump-open mounts at the bottom, so this would otherwise fire instantly
-          // and `loadNewer` would move the target mid-positioning (the cause of jumps
-          // landing near, but not on, the target).
-          onStartReached={() => {
-            if (!ready) return;
-            if (hasMoreNewer) {
-              onLoadNewer();
-            } else if (stagedCount > 0) {
-              releaseStaged();
-            }
-          }}
-          onStartReachedThreshold={1}
-          onScrollToIndexFailed={(info) => {
-            const request = scrollTargetRef.current;
-            if (!request || request.requestId !== navigationSequenceRef.current ||
-                dataIndexByIdRef.current.get(request.id) !== info.index || request.retries >= 3) return;
-            request.retries += 1;
-            if (scrollRetryTimerRef.current != null) clearTimeout(scrollRetryTimerRef.current);
-            // Bring an unmeasured target into the render window before retrying.
-            if (info.index > info.highestMeasuredFrameIndex && info.averageItemLength > 0) {
-              listRef.current?.scrollToOffset({
-                offset: Math.max(0, info.averageItemLength * info.index - scrollMetricsRef.current.viewportHeight / 2),
-                animated: false,
-              });
-            }
-            scrollRetryTimerRef.current = setTimeout(() => {
-              scrollRetryTimerRef.current = null;
-              if (scrollTargetRef.current !== request || request.requestId !== navigationSequenceRef.current) return;
-              // Resolve identity again: new rows can move the target's index.
-              const index = dataIndexByIdRef.current.get(request.id);
-              if (index == null) return;
-              if (scrollToMeasuredMessage(request.id, request.viewPosition, false)) return;
-              listRef.current?.scrollToIndex({ index, viewPosition: request.viewPosition, animated: false });
-            }, 80);
-          }}
-          ListFooterComponent={
-              <View style={{ height: topInset, justifyContent: 'center' }}>
-                {loadingOlder ? <ActivityIndicator color={c.textMuted} /> : null}
-              </View>
-          }
-          ListHeaderComponent={
-              <View
-                style={{
-                  height: bottomInset + spacing.md,
-                  justifyContent: 'center',
-                }}
-              >
-                {loadingNewer ? <ActivityIndicator color={c.textMuted} /> : null}
-              </View>
-          }
-        />
-      ) : null}
+    <MessageLayoutViewport
+      imageVisibility={imageVisibility}
+      onCellFrame={composerInsets || imageVisibility ? recordCellFrame : undefined}
+    >
+      {TimelineTouchView ? (
+        <TimelineTouchView style={styles.timelineClip} onTouchCancelled={handleTouchCancel}>
+          {translatedTimeline}
+        </TimelineTouchView>
+      ) : composerInset ? (
+        <View style={styles.timelineClip}>{translatedTimeline}</View>
+      ) : timeline}
       {/* Floating sticky date header — overlaid at the top, identical capsule to
           the inline separators, parked at their resting position (marginTop 8). */}
       <Animated.View
@@ -1860,6 +2203,7 @@ export function MessageList({
         pinned={showUnreadAction || (showNewMessageIndicators && stagedCount > 0)}
         hasNewer={hasMoreNewer}
         bottomInset={bottomInset}
+        composerInset={composerInset}
       >
         <View>
           <View
@@ -1933,3 +2277,9 @@ export function MessageList({
     </MessageLayoutViewport>
   );
 }
+
+const styles = StyleSheet.create({
+  timeline: { flex: 1 },
+  timelineClip: { flex: 1, overflow: 'hidden' },
+  historyClearance: { justifyContent: 'flex-end' },
+});

@@ -1,8 +1,12 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
+import { ImageVisibilityStoreContext, type ImageVisibilityStore } from '@/components/common/VisibilityAwareImage';
 
 import { ATTACHMENT_FAILURE_TARGET_SIZE } from './attachment-layout';
 import { BUBBLE_MAX_WIDTH } from './bubble-layout';
+
+export type MessageCellFrame = { y: number; height: number };
+export const MessageCellFrameContext = createContext<((key: string, frame: MessageCellFrame | null) => void) | null>(null);
 
 const MessageViewportWidth = createContext<number | undefined>(undefined);
 const BUBBLE_WIDTH_FRACTION = parseFloat(BUBBLE_MAX_WIDTH) / 100;
@@ -25,11 +29,19 @@ export function messageBodyLayout(
 }
 
 /** Measure the conversation pane once, rather than measuring every virtualized row. */
-export function MessageLayoutViewport({ children }: { children: ReactNode }) {
+export function MessageLayoutViewport({ children, imageVisibility = null, onCellFrame = null }: {
+  children: ReactNode;
+  imageVisibility?: ImageVisibilityStore | null;
+  onCellFrame?: ((key: string, frame: MessageCellFrame | null) => void) | null;
+}) {
   const [width, setWidth] = useState(0);
   return (
     <View style={{ flex: 1 }} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
-      <MessageViewportWidth.Provider value={width}>{children}</MessageViewportWidth.Provider>
+      <MessageViewportWidth.Provider value={width}>
+        <MessageCellFrameContext value={onCellFrame}>
+          <ImageVisibilityStoreContext value={imageVisibility}>{children}</ImageVisibilityStoreContext>
+        </MessageCellFrameContext>
+      </MessageViewportWidth.Provider>
     </View>
   );
 }

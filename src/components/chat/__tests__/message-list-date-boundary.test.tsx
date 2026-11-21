@@ -1,15 +1,25 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { FlatList } from 'react-native';
+import { FlatList, Platform, StyleSheet, View } from 'react-native';
 import { createRef, type ComponentProps } from 'react';
 
 import { MessageList, type MessageListHandle } from '../MessageList';
 import { MessageBubble } from '../MessageBubble';
 import { PendingAttachmentBubble } from '../PendingAttachmentBubble';
-import { DateSeparator } from '../message-date-separator';
+import { DatePill, DateSeparator } from '../message-date-separator';
+import { MessageLayoutViewport } from '../message-row-layout';
 import { IconButton } from '@/components/common/IconButton';
 
 let mockPreference = 'light';
 let mockReducedMotion = false;
+function MockTimelineTouchView({ children }: { children: React.ReactNode; onTouchCancelled: () => void }) {
+  return <View>{children}</View>;
+}
+let mockHasTimelineTouchView = false;
+jest.mock('@/platform/timeline-touch-view', () => ({
+  getTimelineTouchView: () => mockHasTimelineTouchView ? MockTimelineTouchView : null,
+}));
+const mockClipReaction = jest.fn();
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) => callback(...args) }));
 jest.mock('@/lib/platform', () => ({
   ...jest.requireActual('@/lib/platform'),
   IS_ELECTRON: true,
@@ -25,6 +35,7 @@ jest.mock('react-native-reanimated', () => ({
   Easing: { bezier: () => (value: number) => value, in: (easing: unknown) => easing, out: (easing: unknown) => easing, quad: jest.fn() },
   runOnJS: (callback: unknown) => callback,
   useAnimatedStyle: (callback: () => unknown) => callback(),
+  useAnimatedReaction: (prepare: unknown, react: unknown) => mockClipReaction(prepare, react),
   useReducedMotion: () => mockReducedMotion,
   useSharedValue: (value: unknown) => {
     const { useRef } = jest.requireActual('react');
@@ -143,7 +154,479 @@ describe('MessageList boundaries and reply navigation', () => {
     });
     mockPreference = 'light';
     mockReducedMotion = false;
+    mockHasTimelineTouchView = false;
     jest.restoreAllMocks();
+  });
+
+  it('translates the inverted list immediately and only adds history padding once settled', () => {
+    const composerInset = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+    const settledComposerInset = { value: 0 } as NonNullable<Props['composerInsets']>['settled'];
+    const listProps = props({ composerInsets: { live: composerInset, settled: settledComposerInset }, topInset: 48, bottomInset: 56 });
+    const draw = () => act(() => { list.update(<MessageList {...listProps} />); });
+    const historyHeight = () => StyleSheet.flatten(list.root.findByType(FlatList).props.ListFooterComponent.props.style).height;
+    const getTimelineTransform = () => list.root.findAllByType(View)
+      .map(({ props }) => StyleSheet.flatten(props.style)?.transform)
+      .find((transform) => transform?.some((part: object) => 'translateY' in part) && transform.length === 1);
+
+    act(() => { list = create(<MessageList {...listProps} />); });
+    const flatList = () => list.root.findByType(FlatList);
+    const instance = flatList().instance;
+    const scroll = jest.spyOn(instance, 'scrollToOffset');
+    const newestClearance = flatList().props.ListHeaderComponent.props.style.height;
+    expect(flatList().props.inverted).toBe(true);
+    expect(historyHeight()).toBe(48);
+
+    composerInset.value = 80;
+    draw();
+    expect(getTimelineTransform()).toEqual([{ translateY: -80 }]);
+    expect(historyHeight()).toBe(48);
+
+    composerInset.value = settledComposerInset.value = 160;
+    draw();
+    expect(getTimelineTransform()).toEqual([{ translateY: -160 }]);
+    expect(historyHeight()).toBe(208);
+
+    composerInset.value = 40;
+    draw();
+    composerInset.value = 100;
+    draw();
+    expect(getTimelineTransform()).toEqual([{ translateY: -100 }]);
+    expect(historyHeight()).toBe(208);
+
+    composerInset.value = settledComposerInset.value = 0;
+    draw();
+    expect(historyHeight()).toBe(48);
+    expect(flatList().props.ListHeaderComponent.props.style.height).toBe(newestClearance);
+    expect(flatList().instance).toBe(instance);
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it('keeps animated frames paused between an Android drag and its momentum scroll', () => {
+    const android = jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    try {
+      act(() => { list = create(<MessageList {...props()} />); });
+      const listProps = () => list.root.findByType(FlatList).props;
+      const viewport = list.root.findByType(MessageLayoutViewport);
+      const visibility = viewport.props.imageVisibility;
+      viewport.props.onCellFrame('m:first-message', { y: 100, height: 90 });
+      act(() => { listProps().onLayout({ nativeEvent: { layout: { height: 600 } } }); });
+      reportVisible([0]);
+      expect(visibility.isVisible('m:first-message')).toBe(true);
+      const event = { nativeEvent: {
+        contentOffset: { y: 0 },
+        layoutMeasurement: { height: 600 },
+        contentSize: { height: 1800 },
+      } };
+      act(() => { listProps().onScrollBeginDrag(); });
+      expect(visibility.isVisible('m:first-message')).toBe(false);
+      act(() => {
+        listProps().onScrollEndDrag(event);
+        listProps().onMomentumScrollBegin();
+        jest.advanceTimersByTime(150);
+      });
+      expect(visibility.isVisible('m:first-message')).toBe(false);
+      act(() => {
+        listProps().onMomentumScrollEnd(event);
+        jest.advanceTimersByTime(100);
+      });
+      expect(visibility.isVisible('m:first-message')).toBe(true);
+    } finally {
+      android.restore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('stops playback for rows beyond the settled clip and resumes after a canceled drag', () => {
+    const android = jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    try {
+      const messages = loadedHistory(3);
+      act(() => { list = create(<MessageList {...props({ messages })} />); });
+      const flatList = list.root.findByType(FlatList);
+      const viewport = list.root.findByType(MessageLayoutViewport);
+      const visibleKey = `m:${flatList.props.data[0].message.id}`;
+      const clippedKey = `m:${flatList.props.data[1].message.id}`;
+      const visibility = viewport.props.imageVisibility;
+      act(() => {
+        viewport.props.onCellFrame(visibleKey, { y: 100, height: 100 });
+        viewport.props.onCellFrame(clippedKey, { y: 440, height: 120 });
+        flatList.props.onLayout({ nativeEvent: { layout: { height: 600 } } });
+      });
+      reportVisible([0, 1]);
+      expect(visibility.isVisible(clippedKey)).toBe(true);
+      settleClip(200, 0);
+      expect(visibility.isVisible(clippedKey)).toBe(false);
+      expect(visibility.isVisible(visibleKey)).toBe(true);
+      act(() => { viewport.props.onCellFrame(clippedKey, { y: 380, height: 120 }); });
+      expect(visibility.isVisible(clippedKey)).toBe(true);
+      act(() => { viewport.props.onCellFrame(clippedKey, { y: 440, height: 120 }); });
+
+      act(() => { flatList.props.onScrollBeginDrag(); });
+      expect(visibility.isVisible(visibleKey)).toBe(false);
+      act(() => {
+        flatList.props.onTouchCancel();
+        jest.advanceTimersByTime(100);
+      });
+      expect(visibility.isVisible(visibleKey)).toBe(true);
+      act(() => {
+        flatList.props.onScrollBeginDrag();
+        jest.advanceTimersByTime(150);
+        flatList.props.onScroll({ nativeEvent: {
+          contentOffset: { y: 20 },
+          layoutMeasurement: { height: 600 },
+          contentSize: { height: 1200 },
+        } });
+        jest.advanceTimersByTime(100);
+      });
+      expect(visibility.isVisible(visibleKey)).toBe(false);
+      act(() => { jest.advanceTimersByTime(150); });
+      expect(visibility.isVisible(visibleKey)).toBe(true);
+      expect(visibility.isVisible(clippedKey)).toBe(false);
+    } finally {
+      android.restore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('centres a measured tall reply in the clipped viewport and clamps near the tail', () => {
+    const messages = loadedHistory(4);
+    const target = messages[1];
+    const ref = createRef<MessageListHandle>();
+    const live = { value: 200, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+    const settled = { value: 200 } as NonNullable<Props['composerInsets']>['settled'];
+    act(() => {
+      list = create(<MessageList {...props({
+        messages, composerInsets: { live, settled }, topInset: 40, bottomInset: 50,
+      })} ref={ref} />);
+    });
+    const flatList = list.root.findByType(FlatList);
+    const viewport = list.root.findByType(MessageLayoutViewport);
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+    act(() => { flatList.props.onLayout({ nativeEvent: { layout: { height: 600 } } }); });
+    act(() => {
+      viewport.props.onCellFrame(`m:${target.id}`, { y: 500, height: 300 });
+      ref.current!.scrollToMessage(target);
+    });
+    expect(scroll).toHaveBeenLastCalledWith({ offset: 445, animated: true });
+    act(() => {
+      viewport.props.onCellFrame(`m:${target.id}`, { y: 20, height: 300 });
+      ref.current!.scrollToMessage(target);
+    });
+    expect(scroll).toHaveBeenLastCalledWith({ offset: 0, animated: true });
+
+    const scrollToIndex = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {});
+    act(() => {
+      viewport.props.onCellFrame(`m:${target.id}`, null);
+      ref.current!.scrollToMessage(target);
+    });
+    expect(scrollToIndex).toHaveBeenLastCalledWith({
+      index: flatList.props.data.get(target.id),
+      viewPosition: 0.5,
+      viewOffset: -95,
+      animated: true,
+    });
+  });
+
+  function settleClip(inset: number, previousInset: number) {
+    const viewport = (clip: number) => ({ clip, hasComposerClip: clip > 0 });
+    const updateClip = mockClipReaction.mock.lastCall![1];
+    act(() => { updateClip(viewport(inset), viewport(previousInset)); });
+  }
+
+  it('defers the newer edge after a footer-only resize and resumes on deliberate scrolling', () => {
+    const settled = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['settled'];
+    const live = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+    const initial = props({ anchored: true, hasMoreNewer: true, composerInsets: { live, settled } });
+    act(() => { list = create(<MessageList {...initial} />); });
+    const flatList = () => list.root.findByType(FlatList).props;
+    const event = (y: number, height: number) => ({ nativeEvent: {
+      contentOffset: { y }, layoutMeasurement: { height: 600 }, contentSize: { height },
+    } });
+    act(() => {
+      flatList().onContentSizeChange(400, 2000);
+      flatList().onScroll(event(400, 2000));
+      settled.value = 180;
+      flatList().onContentSizeChange(400, 2180);
+      flatList().onStartReached();
+    });
+    expect(initial.onLoadNewer).not.toHaveBeenCalled();
+    act(() => {
+      flatList().onScrollBeginDrag();
+      flatList().onScroll(event(430, 2180));
+    });
+    expect(initial.onLoadNewer).not.toHaveBeenCalled();
+    act(() => { flatList().onScroll(event(410, 2180)); });
+    expect(initial.onLoadNewer).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an incoming message staged when its data update coincides with a footer-only resize', () => {
+    const settled = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['settled'];
+    const live = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+    const history = loadedHistory(80).map((item) => ({ ...item, senderPubkey: 'peer' }));
+    const initial = props({ messages: history, composerInsets: { live, settled } });
+    const flatList = () => list.root.findByType(FlatList).props;
+    const event = (y: number, height: number) => ({ nativeEvent: {
+      contentOffset: { y }, layoutMeasurement: { height: 600 }, contentSize: { height },
+    } });
+    act(() => { list = create(<MessageList {...initial} />); });
+    act(() => {
+      flatList().onContentSizeChange(400, 3000);
+      flatList().onScroll(event(420, 3000));
+    });
+    const previousData = flatList().data;
+    const newest = history[history.length - 1];
+    const incoming = { ...newest, id: 'incoming', orderAt: newest.orderAt + 1000 };
+    act(() => { list.update(<MessageList {...initial} messages={[...history, incoming]} />); });
+    expect(flatList().data).not.toBe(previousData);
+    expect(flatList().data.length).toBe(history.length);
+
+    act(() => {
+      settled.value = 180;
+      flatList().onContentSizeChange(400, 3180);
+      flatList().onStartReached();
+    });
+    expect(flatList().data.length).toBe(history.length);
+    act(() => {
+      flatList().onScrollBeginDrag();
+      flatList().onScroll(event(400, 3180));
+    });
+    expect(flatList().data.length).toBe(history.length + 1);
+  });
+
+  it('replays the Android newest edge on finger-up after the drag idle timer has fired', () => {
+    const android = jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    try {
+      const settled = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['settled'];
+      const live = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+      const initial = props({ anchored: true, hasMoreNewer: true, composerInsets: { live, settled } });
+      const flatList = () => list.root.findByType(FlatList).props;
+      act(() => { list = create(<MessageList {...initial} />); });
+      act(() => {
+        flatList().onContentSizeChange(400, 2000);
+        settled.value = 180;
+        flatList().onContentSizeChange(400, 2180);
+        flatList().onStartReached();
+      });
+      expect(initial.onLoadNewer).not.toHaveBeenCalled();
+      act(() => {
+        flatList().onScrollBeginDrag();
+        jest.advanceTimersByTime(350);
+      });
+      const event = { nativeEvent: {
+        contentOffset: { y: 0 }, layoutMeasurement: { height: 600 }, contentSize: { height: 2180 },
+      } };
+      act(() => { flatList().onMomentumScrollEnd(event); });
+      expect(initial.onLoadNewer).not.toHaveBeenCalled();
+      act(() => { flatList().onScrollEndDrag(event); });
+      expect(initial.onLoadNewer).toHaveBeenCalledTimes(1);
+    } finally {
+      android.restore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('shows the floating date if the same row stays visible but its inline date is clipped', () => {
+    const live = { value: 0 } as NonNullable<Props['composerInsets']>['live'];
+    const settled = { value: 0 } as NonNullable<Props['composerInsets']>['settled'];
+    const initial = props({ composerInsets: { live, settled } });
+    act(() => { list = create(<MessageList {...initial} />); });
+    const flatList = list.root.findByType(FlatList).props;
+    const viewport = list.root.findByType(MessageLayoutViewport);
+    act(() => {
+      viewport.props.onCellFrame(`m:${message.id}`, { y: 390, height: 220 });
+      flatList.onScroll({ nativeEvent: {
+        contentOffset: { y: 100 }, layoutMeasurement: { height: 600 }, contentSize: { height: 800 },
+      } });
+      row?.unmount();
+      row = create(flatList.renderItem({ item: flatList.data[0], index: 0 }));
+    });
+    const date = row.root.findByType(DateSeparator);
+    act(() => { date.props.onFrame(date.props.cellKey, { y: 20, height: 30 }); });
+    reportVisible([0]);
+    expect(list.root.findAllByType(DatePill)).toHaveLength(1);
+    const renderAnimatedStyle = () => {
+      act(() => { list.update(<MessageList {...initial} />); });
+      const floatingDate = list.root.findAllByType(DatePill)[1];
+      return StyleSheet.flatten(floatingDate.parent!.props.style)?.opacity;
+    };
+    settleClip(200, 0);
+    expect(renderAnimatedStyle()).toBe(1);
+    settleClip(0, 200);
+    expect(renderAnimatedStyle()).toBe(0);
+  });
+
+  it('recomputes the unread action after clipping even without new FlatList viewability tokens', () => {
+    const messages = loadedHistory(80);
+    const settled = { value: 0 } as NonNullable<Props['composerInsets']>['settled'];
+    const live = { value: 0 } as NonNullable<Props['composerInsets']>['live'];
+    const unread = messages[0];
+    const initial = props({
+      messages, firstUnreadId: unread.id, firstUnreadOrderAt: unread.orderAt, unreadCount: 80,
+      composerInsets: { live, settled },
+    });
+    act(() => { list = create(<MessageList {...initial} />); });
+    const flatList = list.root.findByType(FlatList).props;
+    const viewport = list.root.findByType(MessageLayoutViewport);
+    const index = flatList.data.get(unread.id);
+    const newer = flatList.data[index - 1].message;
+    act(() => {
+      viewport.props.onCellFrame(`m:${unread.id}`, { y: 370, height: 190 });
+      viewport.props.onCellFrame(`m:${newer.id}`, { y: 260, height: 110 });
+      flatList.onLayout({ nativeEvent: { layout: { height: 600 } } });
+      row?.unmount();
+      row = create(flatList.renderItem({ item: flatList.data[index], index }));
+    });
+    const divider = row.root.find((node) => typeof node.type === 'function' && node.type.name === 'UnreadDivider');
+    act(() => {
+      divider.props.onLayout({ nativeEvent: { layout: { y: 20, height: 30 } } });
+    });
+    reportVisible([index - 1, index]);
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+    settleClip(200, 0);
+    expect(visibleScrollButtons(list)[0].props.accessibilityLabel).toBe('chat.scroll_to_unread');
+    settleClip(0, 200);
+    expect(visibleScrollButtons(list)).toHaveLength(0);
+  });
+
+  it('restores tail follow when Android omits both drag-end and touch-cancel', () => {
+    const android = jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    try {
+      const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+      const initial = props();
+      act(() => { list = create(<MessageList {...initial} />); });
+      const flatList = () => list.root.findByType(FlatList).props;
+      act(() => {
+        flatList().onScrollBeginDrag();
+        jest.advanceTimersByTime(250);
+      });
+      const visibility = list.root.findByType(MessageLayoutViewport).props.imageVisibility;
+      expect(visibility.isActive()).toBe(true);
+      act(() => {
+        for (const y of [80, 0]) {
+          flatList().onScroll({ nativeEvent: {
+            contentOffset: { y }, layoutMeasurement: { height: 600 }, contentSize: { height: 1000 },
+          } });
+        }
+      });
+      expect(visibility.isActive()).toBe(true);
+      const messages = [message, { ...message, id: 'incoming', senderPubkey: 'peer', orderAt: message.orderAt + 1000 }];
+      act(() => { list.update(<MessageList {...initial} messages={messages} />); });
+      act(() => { flatList().onContentSizeChange(400, 1000); });
+      expect(scroll).toHaveBeenCalledWith({ offset: 0, animated: false });
+    } finally {
+      android.restore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('preserves a held Android drag through media idle and resumes tail follow on native cancellation', () => {
+    const android = jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    mockHasTimelineTouchView = true;
+    try {
+      const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+      const inset = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+      const initial = props({ composerInsets: { live: inset, settled: inset } });
+      act(() => { list = create(<MessageList {...initial} />); });
+      const flatList = () => list.root.findByType(FlatList).props;
+      const visibility = list.root.findByType(MessageLayoutViewport).props.imageVisibility;
+      const scrollEvent = (y: number) => ({ nativeEvent: {
+        contentOffset: { y }, layoutMeasurement: { height: 600 }, contentSize: { height: 1000 },
+      } });
+      expect(flatList().onTouchCancel).toBeUndefined();
+      act(() => {
+        flatList().onScrollBeginDrag();
+        jest.advanceTimersByTime(350);
+      });
+      expect(visibility.isActive()).toBe(true);
+      act(() => { flatList().onScroll(scrollEvent(40)); });
+      expect(visibility.isActive()).toBe(false);
+
+      const incoming = { ...message, id: 'incoming-held', senderPubkey: 'peer', orderAt: message.orderAt + 1000 };
+      act(() => { list.update(<MessageList {...initial} messages={[message, incoming]} />); });
+      scroll.mockClear();
+      act(() => { flatList().onContentSizeChange(400, 1300); });
+      expect(scroll).not.toHaveBeenCalled();
+
+      act(() => { flatList().onScroll(scrollEvent(0)); });
+      act(() => { list.root.findByType(MockTimelineTouchView).props.onTouchCancelled(); });
+      act(() => { jest.advanceTimersByTime(100); });
+      expect(visibility.isActive()).toBe(true);
+      const afterCancel = { ...incoming, id: 'incoming-after-cancel', orderAt: incoming.orderAt + 1000 };
+      act(() => { list.update(<MessageList {...initial} messages={[message, incoming, afterCancel]} />); });
+      act(() => { flatList().onContentSizeChange(400, 1500); });
+      expect(scroll).toHaveBeenCalledWith({ offset: 0, animated: false });
+    } finally {
+      android.restore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('discards the old gesture when the Android timeline waits for and mounts a new list window', () => {
+    const android = jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    mockHasTimelineTouchView = true;
+    try {
+      const inset = { value: 0, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+      const initial = props({ composerInsets: { live: inset, settled: inset } });
+      act(() => { list = create(<MessageList {...initial} />); });
+      const originalList = list.root.findByType(FlatList);
+      const visibility = list.root.findByType(MessageLayoutViewport).props.imageVisibility;
+      act(() => { originalList.props.onScrollBeginDrag(); });
+      expect(visibility.isActive()).toBe(false);
+
+      act(() => { list.update(<MessageList {...initial} />); });
+      expect(list.root.findByType(FlatList).instance).toBe(originalList.instance);
+      expect(visibility.isActive()).toBe(false);
+
+      const target = { ...message, id: 'new-window-target', orderAt: message.orderAt - 1000 };
+      const focus = { focusMessageId: target.id };
+      act(() => { list.update(<MessageList {...initial} {...focus} />); });
+      expect(list.root.findAllByType(FlatList)).toHaveLength(0);
+      act(() => { list.update(<MessageList {...initial} {...focus} messages={[target, message]} />); });
+      const replacement = list.root.findByType(FlatList);
+      expect(visibility.isActive()).toBe(true);
+      act(() => { replacement.props.onScrollBeginDrag(); });
+      expect(visibility.isActive()).toBe(false);
+    } finally {
+      android.restore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('resumes visible Android images after a drag is interrupted by losing focus', () => {
+    const android = jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    try {
+      const initial = props();
+      act(() => { list = create(<MessageList {...initial} />); });
+      const flatList = () => list.root.findByType(FlatList).props;
+      const viewport = list.root.findByType(MessageLayoutViewport);
+      const visibility = viewport.props.imageVisibility;
+      const key = `m:${message.id}`;
+      act(() => {
+        viewport.props.onCellFrame(key, { y: 100, height: 90 });
+        flatList().onLayout({ nativeEvent: { layout: { height: 600 } } });
+      });
+      reportVisible([0]);
+      expect(visibility.isVisible(key)).toBe(true);
+      act(() => { flatList().onScrollBeginDrag(); });
+      expect(visibility.isVisible(key)).toBe(false);
+      act(() => { list.update(<MessageList {...initial} liveDataEnabled={false} />); });
+      act(() => {
+        jest.advanceTimersByTime(350);
+        flatList().onMomentumScrollBegin();
+      });
+      expect(visibility.isVisible(key)).toBe(false);
+      act(() => { list.update(<MessageList {...initial} />); });
+      expect(visibility.isVisible(key)).toBe(true);
+    } finally {
+      android.restore();
+      jest.useRealTimers();
+    }
   });
 
   function renderOldestRow() {
@@ -180,7 +663,7 @@ describe('MessageList boundaries and reply navigation', () => {
     const flatList = list.root.findByType(FlatList);
     act(() => {
       flatList.props.onViewableItemsChanged({ viewableItems: indices.map((index) => ({
-        item: flatList.props.data[index], index, isViewable: true, key: String(index),
+        item: flatList.props.data[index], index, isViewable: true, key: flatList.props.keyExtractor(flatList.props.data[index]),
       })) });
     });
   }

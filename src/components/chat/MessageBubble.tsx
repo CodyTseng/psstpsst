@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, State } from 'react-native-gesture-handler';
 import Reanimated, {
   Easing,
   Extrapolation,
@@ -302,8 +302,9 @@ function MessageBubbleBase({
           }),
         );
       })
-      .onFinalize((_event, success) => {
-        if (!success) {
+      .onFinalize((event, success) => {
+        // A vertical scroll can fail this pan before it ever activates.
+        if (!success && event.oldState === State.ACTIVE) {
           tx.set(0);
           scheduleOnRN(setSwipeDecorationsMounted, false);
         }

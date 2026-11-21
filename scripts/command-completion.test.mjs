@@ -34,7 +34,8 @@ const mocks = {
   './chat-composer-panel-context': `import {useState} from 'react';export const useChatComposerPanel=()=>{const [open,setOpen]=useState(false);return {open,setOpen};};`,
   'react-native-safe-area-context': `export const useSafeAreaInsets=()=>({top:0,bottom:0,left:0,right:0});`,
   'react-native-keyboard-controller': `export const KeyboardController={isVisible:()=>false,setFocusTo:()=>{}},useKeyboardHandler=()=>{};`,
-  'react-native-reanimated': `import {View} from 'react-native';import {useRef} from 'react';export default {View};const animation={duration:()=>animation,delay:()=>animation};export const FadeIn=animation,FadeOut=animation,ZoomIn=animation,ZoomOut=animation,Easing={out:fn=>fn,cubic:x=>x};export const useSharedValue=value=>useRef({value}).current,useAnimatedStyle=fn=>fn(),useAnimatedReaction=()=>{},withTiming=value=>value,runOnJS=fn=>fn;`,
+  'react-native-reanimated': `import {View} from 'react-native';import {useRef} from 'react';export default {View};const animation={duration:()=>animation,delay:()=>animation};export const FadeIn=animation,FadeOut=animation,ZoomIn=animation,ZoomOut=animation,Easing={out:fn=>fn,cubic:x=>x};export const useSharedValue=value=>useRef({value}).current,useAnimatedStyle=fn=>fn(),useAnimatedReaction=()=>{},useDerivedValue=fn=>({value:fn()}),cancelAnimation=()=>{},withTiming=value=>value,runOnJS=fn=>fn;`,
+  'react-native-worklets': `export const scheduleOnUI=fn=>fn(),scheduleOnRN=(fn,...args)=>fn(...args);`,
   '@/theme': `
     import {createThemePalettes} from ${JSON.stringify(path.join(root,'src/theme/palette.ts'))};
     import {density} from ${JSON.stringify(path.join(root,'src/theme/layout.ts'))};
