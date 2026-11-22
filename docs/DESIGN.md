@@ -1534,8 +1534,10 @@ action. They never offer remembered payment approval. Creating a payment request
 shows its amount and allows editing only within the application's constraints.
 
 Account-key backup and outgoing message-key transfer use trusted platform
-confirmation. Private-key backup copies inside the trusted boundary; the ordinary
-account screen never renders the private key. Backup confirmation omits key material
+confirmation. The key sync prompt identifies the request by the short pairing code
+for comparison with the other device. Private-key backup copies inside the trusted
+boundary; the ordinary account screen never renders the private key.
+Backup confirmation omits key material
 and presents copying as the enabled primary action with a separate cancel action. New-account creation explains private-key backup without displaying key material;
 its explicit copy action uses the same trusted confirmation as existing-account backup and enables continuation after a successful copy. Clipboard
 content is never cleared on a timer.

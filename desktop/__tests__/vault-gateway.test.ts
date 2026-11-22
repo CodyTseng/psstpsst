@@ -50,6 +50,7 @@ test('key transfer needs platform approval and is cancelled when vault state cha
   expect(vault.execute).not.toHaveBeenCalled();
   jest.mocked(dialog.showMessageBox).mockResolvedValueOnce({ response: 1, checkboxChecked: false });
   expect(await gateway.execute(event, command)).toEqual({ ok: true, value: 'result' });
+  expect(dialog.showMessageBox).toHaveBeenLastCalledWith(owner, expect.objectContaining({ detail: 'BBBB BBBB' }));
 });
 
 test('a caller-supplied trusted flag cannot bypass wallet payment authentication', async () => {

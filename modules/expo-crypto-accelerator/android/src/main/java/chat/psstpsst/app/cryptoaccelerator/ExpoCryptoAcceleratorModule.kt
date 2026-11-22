@@ -169,7 +169,9 @@ class ExpoCryptoAcceleratorModule : Module() {
         val confirmationNeeded = request.getString("method") == "exportTransfer" || bindingNeeded
         if (confirmationNeeded) {
           val recipient = request.getString(if (bindingNeeded) "peer" else "recipient"); require(recipient.length == 64)
-          val detail = request.getString("account") + "\n\n" + recipient.take(4).uppercase() + " " + recipient.drop(4).take(4).uppercase() + "\n" + recipient
+          val account = request.getString("account")
+          val code = recipient.take(4).uppercase() + " " + recipient.drop(4).take(4).uppercase()
+          val detail = if (bindingNeeded) "$account\n\n$code\n$recipient" else code
           if (!confirmVault(request.getJSONObject("confirmation"), detail, if (bindingNeeded) "bunker" else "transfer")) throw IllegalStateException()
         }
         withContext(Dispatchers.IO) { vaultMutex.withLock {

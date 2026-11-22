@@ -146,7 +146,8 @@ public class ExpoCryptoAcceleratorModule: Module {
                 let recipient = request[bindingNeeded ? "peer" : "recipient"] as? String, recipient.count == 64
               else { promise.reject("ERR_KEY_VAULT", "Vault confirmation unavailable"); return }
               let code = String(recipient.prefix(4)).uppercased() + " " + String(recipient.dropFirst(4).prefix(4)).uppercased()
-              let alert = UIAlertController(title: options["title"], message: (options["message"] ?? "") + "\n\n" + account + "\n\n" + code + "\n" + recipient, preferredStyle: .alert)
+              let detail = bindingNeeded ? "\(account)\n\n\(code)\n\(recipient)" : code
+              let alert = UIAlertController(title: options["title"], message: (options["message"] ?? "") + "\n\n" + detail, preferredStyle: .alert)
               alert.addAction(UIAlertAction(title: options["cancelLabel"], style: .cancel) { _ in promise.reject("ERR_KEY_VAULT", "Vault operation cancelled") })
               alert.addAction(UIAlertAction(title: options["confirmLabel"], style: .destructive) { _ in execute() })
               presenter.present(alert, animated: true)

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, type IpcMainInvokeEvent } from 'electron';
+import { verificationCodeFromPubkey } from '../src/lib/nostr/verification-code';
 import { isVaultMethod, type VaultCommand, type VaultConsent } from '../src/platform/ports/key-vault';
 import type { CredentialSecurityService } from './credential-security';
 import type { KeyVaultService } from './key-vault-service';
@@ -56,9 +57,11 @@ export class DesktopVaultGateway {
         const recipient = accountHex(command.method === 'exportTransfer' ? command.recipient : command.method === 'bunkerRequest' ? command.peer : undefined);
         const language = 'confirmation' in command ? command.confirmation?.language : undefined;
         const options = vaultConsent(language, app.getLocale(), bindingNeeded ? 'bunker' : 'transfer');
+        const code = verificationCodeFromPubkey(recipient);
+        const detail = bindingNeeded ? `${account}\n\n${code}\n${recipient}` : code;
         const result = await dialog.showMessageBox(owner, { type: 'warning',
           title: options.title, message: options.message,
-          detail: `${account}\n\n${recipient.slice(0, 4).toUpperCase()} ${recipient.slice(4, 8).toUpperCase()}\n${recipient}`,
+          detail,
           buttons: [options.cancel, options.confirm], defaultId: 0, cancelId: 0, noLink: true });
         if (result.response !== 1 || owner.isDestroyed() || !this.trusted(event) || this.vault.revision !== revision) throw new Error('Vault operation cancelled');
         if (bindingNeeded) await this.vault.bindBunker(account, recipient);
