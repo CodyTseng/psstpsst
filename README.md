@@ -186,7 +186,7 @@ Nearby uses authenticated Noise sessions over BLE.
 TypeScript, React Native, Expo SDK 57, SQLite, and Electron share a core behind
 platform interfaces. UI, services, storage, and OS adapters have explicit
 boundaries; conversation history is read in bounded windows. See the
-[architecture guide](docs/ARCHITECTURE.md) for the full design.
+[architecture guide](docs/ARCHITECTURE.md) for system boundaries and data ownership.
 
 ## Contributing and documentation
 
@@ -195,12 +195,10 @@ welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); discuss major features
 with the maintainer before implementation. Report vulnerabilities through the
 [security process](SECURITY.md).
 
-- [Architecture](docs/ARCHITECTURE.md) and [design system](docs/DESIGN.md)
+- [Architecture](docs/ARCHITECTURE.md) and [shared design constraints](docs/DESIGN.md)
 - [Builds and releases](docs/RELEASING.md)
-- [Protocol specifications](docs/protocols/README.md): NIP-4E profile, NIP-17
-  extensions, Nearby messaging, and file transfer
-- [Implementation notes](docs/implementation/README.md): delivery, recovery,
-  publication, groups, and client behavior
+- [Protocol specifications](docs/protocols/README.md) for interoperable contracts
+- [Implementation notes](docs/implementation/README.md) for local rationale and platform caveats
 - [Android QR scanner maintenance](docs/ANDROID_QR_SCANNER.md)
 - [Third-party notice maintenance](docs/OPEN_SOURCE_NOTICES.md)
 

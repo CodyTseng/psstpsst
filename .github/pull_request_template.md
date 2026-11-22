@@ -11,4 +11,5 @@ State any checks you could not run.
 ## Review notes
 
 Mention migrations, compatibility changes, dependency/license updates, or
-exceptions to the design rules when applicable. Remove this section if unused.
+exceptions to the design rules when applicable. Link updated guidance when a
+lasting rule or contract changes. Remove this section if unused.

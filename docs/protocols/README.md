@@ -1,23 +1,26 @@
-# PsstPsst Protocols
+# Protocol specifications
 
-This directory contains the wire specifications needed to interoperate with
-PsstPsst. Documents here define events, byte formats, validation rules, and
-peer-to-peer exchanges. They do not describe database schemas, service classes,
-UI behavior, background scheduling, retry workers, or platform adapters.
+Observable contracts for peers, compatible clients, and embedded applications.
+Use these specifications for event formats, validation, exchanges, and public
+APIs. Host architecture and implementation details have separate owners.
 
-Compatible clients may choose any local architecture, persistence model, retry
-policy, and user experience as long as their observable protocol behavior
-matches the relevant specification.
+## Private messaging
 
-## Specifications
+- [NIP-4E profile](nip4e.md) for messaging-key announcements and device sync
+- [NIP-17 extensions](nip17-extensions.md) for split keys, timestamps, and groups
 
-- [`napplet-manifests.md`](./napplet-manifests.md): standalone and legacy
-  single-file app manifests and content-addressed validation.
-- [`nip4e.md`](./nip4e.md): encryption-key announcement and device
-  synchronization.
-- [`nip17-extensions.md`](./nip17-extensions.md): split-key envelopes, message
-  timestamps, and stable groups.
-- [`nearby-messaging.md`](./nearby-messaging.md): authenticated messaging over
-  Bluetooth Low Energy.
-- [`nearby-file-transfer.md`](./nearby-file-transfer.md): direct and
-  resumable file exchange for Nearby peers.
+## Nearby
+
+- [Nearby messaging](nearby-messaging.md) for authenticated BLE messaging
+- [Nearby file transfer](nearby-file-transfer.md) for direct and resumable files
+
+## Embedded applications
+
+- [Explore manifests](explore-manifests.md) and [napplet manifests](napplet-manifests.md)
+- [Napp bridge](napp-bridge.md) and [application authorization](app-authorization.md)
+- [Application comments](application-comments.md) and [private app library](application-favorites.md)
+- [Local event store](local-relay.md)
+
+## Command discovery
+
+- [NIP-CD](nip-cd.md) for command announcements and discovery

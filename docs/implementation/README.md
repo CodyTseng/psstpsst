@@ -1,17 +1,26 @@
-# Implementation Notes
+# Implementation notes
 
-This directory records PsstPsst-specific implementation behavior. It may name
-services, persistence structures, queues, platform adapters, UI flows, retry
-policy, and tests. Interoperable event and wire formats belong in
-[`../protocols/`](../protocols/).
+Feature-specific rationale, compatibility constraints, platform caveats, and
+verification steps that are hard to recover from source. Follow the
+[architecture](../ARCHITECTURE.md) for shared invariants and the
+[protocol specifications](../protocols/README.md) for observable contracts.
 
-- [`configuration-publication.md`](./configuration-publication.md)
-- [`group-messaging.md`](./group-messaging.md)
-- [`nearby-file-transfer.md`](./nearby-file-transfer.md)
-- [`nearby-messaging.md`](./nearby-messaging.md)
-- [`nip05-registration.md`](./nip05-registration.md)
-- [`notification-recovery.md`](./notification-recovery.md)
-- [`relay-message-delivery.md`](./relay-message-delivery.md)
+## Messaging and configuration
 
-- [Napplet runtime](napplet-runtime.md): account-isolated application hosting, capabilities and lifecycle.
-- [Napp UI and local installation](napp-ui-dev.md): UI-kit compatibility, local app installation, isolation and validation.
+- [Group messaging](group-messaging.md)
+- [Relay message delivery](relay-message-delivery.md)
+- [Relay history and notification recovery](notification-recovery.md)
+- [iOS push notifications](ios-push-notifications.md)
+- [Configuration publication](configuration-publication.md)
+- [NIP-05 registration](nip05-registration.md)
+
+## Nearby
+
+- [Nearby messaging](nearby-messaging.md)
+- [Nearby file transfer](nearby-file-transfer.md)
+
+## Embedded applications
+
+- [Embedded application runtime](napplet-runtime.md)
+- [Napp UI and local installation](napp-ui-dev.md)
+- [WebLN](webln.md)

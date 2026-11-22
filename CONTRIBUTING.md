@@ -145,21 +145,11 @@ signing credentials are required for ordinary development.
 
 ## Project conventions
 
-- Keep documentation and code comments in English. User-facing copy belongs in
-  `src/i18n/`; follow the existing locale structure.
-- Read [AGENTS.md](AGENTS.md) and [the architecture guide](docs/ARCHITECTURE.md)
-  before changing system boundaries. UI reads through hooks/stores and starts
-  work through services; new OS capabilities start with a platform port.
-- Read [the design system](docs/DESIGN.md), especially its hard rules, before any
-  UI change. Explain any exception in the PR or commit message. Update durable
-  design or architecture rules in the same change when the convention changes.
-- Bound history queries and keep work incremental. Explain the cost of changes
-  affecting large histories or the UI thread; use realistic data for performance
-  checks.
-- Add or update tests for meaningful behavior changes. UI-only changes should
-  include screenshots; native and Bluetooth changes need device verification.
-- Use Conventional Commits, with an optional scope: `fix: restore message
-  delivery`, `docs: clarify setup`, or `feat(chat): add reply navigation`.
+Follow [the repository instructions](AGENTS.md) for project rules, document
+ownership, and when to update guidance. Explain the cost of changes affecting
+large histories or the UI thread and use realistic data for performance checks.
+Run focused tests for meaningful behaviour changes. Include screenshots for UI
+changes and device verification for native and Bluetooth changes.
 
 ## Quality checks
 
