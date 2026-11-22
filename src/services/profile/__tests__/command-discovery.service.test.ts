@@ -40,23 +40,28 @@ beforeEach(() => {
 });
 afterEach(() => { invalidateReplaceableEvents(); mockFixture.sqlite.close(); jest.restoreAllMocks(); });
 
-test('queries all peer declarations from write, discovery and extra relays without d or list filters', async () => {
+test('queries kind-14 peer declarations from write, discovery and extra relays', async () => {
   mockOutbox.mockResolvedValue({ write: ['wss://write.example/', DISCOVERY_RELAYS[0]] });
   await fetchCommandDeclarations([author], ['wss://profile-hint.example/']);
   expect(mockQuery.mock.calls.map(([request]) => request.relays)).toEqual(
     [...new Set(['wss://write.example/', DISCOVERY_RELAYS[0], 'wss://profile-hint.example/', ...DISCOVERY_RELAYS])].map(relay => [relay]),
   );
-  for (const [request] of mockQuery.mock.calls) expect(request.filters).toEqual([{ kinds: [31992], authors: [author] }]);
+  for (const [request] of mockQuery.mock.calls) {
+    expect(request.filters).toEqual([{ kinds: [31992], authors: [author], '#s': ['kind:14'] }]);
+  }
 });
 
-test('stores all signed definitions by coordinate, ignores forgeries and deduplicates concurrent discovery', async () => {
+test('stores matching signed definitions by coordinate and deduplicates concurrent discovery', async () => {
   const good = definition(), second = definition(1, 'ping'), other = definition(1, 'help', generateSecretKey());
+  const outsideScope = finalizeEvent({ kind: COMMAND_KIND, content: '', created_at: 1,
+    tags: [['d', 'outside-scope'], ['s', 'kind:1']] }, key);
   const forged = { ...JSON.parse(JSON.stringify(good)), content: 'forged' };
-  mockQuery.mockResolvedValue([good, second, other, forged]);
+  mockQuery.mockResolvedValue([good, second, other, outsideScope, forged]);
   await Promise.all([fetchCommandDeclarations([author]), fetchCommandDeclarations([author])]);
   expect(row()?.id).toBe(good.id);
   expect(row('ping')?.id).toBe(second.id);
   expect(row('help', other.pubkey)).toBeNull();
+  expect(row('outside-scope')).toBeNull();
   expect(mockQuery).toHaveBeenCalledTimes(DISCOVERY_RELAYS.length + 1);
   await fetchCommandDeclarations([author]);
   expect(mockQuery).toHaveBeenCalledTimes(DISCOVERY_RELAYS.length + 1);
@@ -73,7 +78,7 @@ test('profile and declaration requests share one subscription per relay', async 
     request.filters?.some(filter => filter.kinds?.includes(0)),
   );
   expect(shared?.filters).toEqual(expect.arrayContaining([
-    { kinds: [0], authors: [author] }, { kinds: [31992], authors: [author] },
+    { kinds: [0], authors: [author] }, { kinds: [31992], authors: [author], '#s': ['kind:14'] },
   ]));
 });
 
@@ -121,7 +126,7 @@ test('present coordinates stay newest-wins, complete empty results clear them, a
   expire(); mockQuery.mockResolvedValue([]);
   await fetchCommandDeclarations([author]); expect(row()).toBeNull();
   const invalid = finalizeEvent({ kind: COMMAND_KIND, content: '', created_at: 4,
-    tags: [['d', 'help'], ['command', 'help']] }, key);
+    tags: [['d', 'help'], ['command', 'help'], ['s', 'kind:14']] }, key);
   expire(); mockQuery.mockResolvedValue([invalid]);
   await fetchCommandDeclarations([author]); expect(row()?.id).toBe(invalid.id);
   expect(availableCommands([row()!], { kind: 14, pubkey: author, tags: [] })).toEqual([]);

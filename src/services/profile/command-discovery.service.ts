@@ -12,7 +12,7 @@ const MAX_DISCOVERY_AUTHORS = 4096;
 const checkedAt = new Map<string, number>();
 const inflight = new Map<string, Promise<void>>();
 
-/** Discover all of a peer's declarations; persist each address in the shared cache.
+/** Discover a peer's kind-14 command declarations and persist them in the shared cache.
  * Collection freshness is session-scoped because unseen d values have no cache key. */
 export async function fetchCommandDeclarations(pubkeys: string[], extraRelays: string[] = []): Promise<void> {
   const authors = [...new Set(pubkeys)].filter(pubkey => /^[a-f0-9]{64}$/.test(pubkey));
@@ -34,7 +34,7 @@ async function refresh(pubkey: string, extraRelays: string[]): Promise<void> {
   const outbox = [...new Set(pickPeerRelays(write).map(normalizeRelayUrl))];
   const relays = [...new Set([...outbox, ...extraRelays, ...DISCOVERY_RELAYS].map(normalizeRelayUrl))];
   const results = await Promise.allSettled(relays.map(relay => queryMetadataRelay(relay, [
-    { kinds: [COMMAND_KIND], authors: [pubkey] },
+    { kinds: [COMMAND_KIND], authors: [pubkey], '#s': ['kind:14'] },
   ])));
   const completed = results.flatMap((result, index) => result.status === 'fulfilled' ? [relays[index]] : []);
   if (!completed.length) throw new Error('Command discovery did not complete on any relay');

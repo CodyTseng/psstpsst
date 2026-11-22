@@ -1,8 +1,9 @@
 # NIP-CD command discovery
 
-PsstPsst discovers kind-31992 declarations from the counterparty directly using
-`{kinds:[31992],authors:[peer]}`. Kind 10992 user-saved lists and the previously
-proposed kind 10993 advertisement are not queried or required for suggestions.
+PsstPsst discovers kind-31992 declarations explicitly scoped to kind-14 messages
+using `{kinds:[31992],authors:[peer],"#s":["kind:14"]}`. Kind 10992 user-saved
+lists and the previously proposed kind 10993 advertisement are not queried or
+required for suggestions.
 Definitions follow the [NIP-CD draft](https://github.com/nostr-protocol/nips/blob/master/CD.md).
 
 Discovery follows the same profile hook lifecycle and `fetchProfiles` entry
@@ -26,7 +27,8 @@ update received declarations but never delete cached ones or advance discovery
 freshness, so failed source queries remain retryable.
 A connected subscription reaching its query deadline counts as effective EOSE;
 connection and authentication failures remain failures.
-Malformed newer definitions remain cached and retire older valid versions.
+Malformed newer definitions that match the relay filter remain cached and retire
+older valid versions.
 Verification yields between chunks, and database writes remain asynchronous.
 
 Suggestions read all cached declarations for the current peer and match their
