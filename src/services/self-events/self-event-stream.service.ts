@@ -160,7 +160,7 @@ class SelfEventStream {
 
   /** Resolve the relay sets and open the fixed REQ table. Re-entrant: closes
    * the previous subscriptions and resets the dispatch state first. */
-  async start(): Promise<void> {
+  async start(localWriteRelays?: string[]): Promise<void> {
     const config = this.config;
     if (!config) throw new Error('SelfEventStream.start() called before configure()');
     this.closeSubscriptions();
@@ -168,7 +168,7 @@ class SelfEventStream {
 
     const [dmRelays, writeRelays] = await Promise.all([
       loadAccountDmRelays(config.accountPubkey),
-      loadAccountWriteRelays(config.accountPubkey),
+      localWriteRelays ?? loadAccountWriteRelays(config.accountPubkey),
     ]);
     // A destroy/re-configure landing while the relay sets resolved must not
     // leave subscriptions behind for the stale session.
@@ -308,8 +308,10 @@ class SelfEventStream {
         return;
       case KIND_BLOSSOM_SERVER_LIST:
         if (!this.isNewerReplaceable(event)) return;
-        this.storeReplaceable(event);
-        this.enqueue('media', () => applyMediaServersEvent(config.accountPubkey, event));
+        this.enqueue('media', async () => {
+          await storeReplaceableEvent(event);
+          await applyMediaServersEvent(config.accountPubkey, event);
+        });
         return;
       case KIND_RELAY_LIST_METADATA:
         this.dispatchRelayListMetadata(config, event);
@@ -368,8 +370,8 @@ class SelfEventStream {
         kind: KIND_RELAY_LIST_METADATA,
       });
       const newer = !prev || isReplaceableNewer(event, prev);
-      await storeReplaceableEvent(event).catch(() => {});
-      if (newer) config.handlers.onOwnRelayListsChanged();
+      const stored = await storeReplaceableEvent(event).catch(() => false);
+      if (newer && stored) config.handlers.onOwnRelayListsChanged();
     });
   }
 
@@ -377,8 +379,8 @@ class SelfEventStream {
    * (newest-wins), and notify only when the table actually changed. */
   private dispatchOwnDmRelayList(config: SelfEventStreamConfig, event: Event): void {
     if (!this.isNewerReplaceable(event)) return;
-    this.storeReplaceable(event);
     this.enqueue('relay-lists', async () => {
+      await storeReplaceableEvent(event);
       const updated = await applyOwnDmRelayListEvent(config.accountPubkey, event);
       if (updated) config.handlers.onOwnRelayListsChanged();
     });

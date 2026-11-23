@@ -83,13 +83,17 @@ local state. Only production consumes production updates.
 
 ## 5. Relay routing and configuration
 
+- A connected network link can reach LAN relays even when the Internet
+  reachability probe fails. Relay sockets and delivery workers use link state
+  for offline gating.
 - `relay-router.ts` owns routing. Discovery, public outbox, and private inbox
   routing serve distinct purposes. Read/write relay declarations stay
   independent of DM inbox settings.
 - Use the shared managed transport for queries, subscriptions, and
   publication. Normalize addresses for identity and reuse. Preserve signed
   tags. Keep caller cancellation scoped to that caller and retain failure
-  separately from confirmed empty results. EOSE settles the initial query
+  separately from confirmed empty results. Publish outcomes distinguish relay
+  refusals, rate limits, and transport failures. EOSE settles the initial query
   phase while live subscription ownership continues. Keep each relay's
   settlement reason. History coverage accepts wire or timeout EOSE and
   leaves gaps after connection, closure, or authentication failures.
@@ -98,7 +102,9 @@ local state. Only production consumes production updates.
   in-memory cursors and do not establish durable message history coverage.
 - Local private-list edits and their sync revisions commit atomically.
   Reconciliation must protect dirty or pending local work. Configuration
-  publication and message delivery have separate account-scoped outboxes.
+  publication and message delivery have separate account-scoped outboxes. Relay
+  and Blossom settings take effect from durable local edits before signing and
+  publication.
   See [configuration publication](implementation/configuration-publication.md).
 
 ## 6. Message lifecycle and notifications

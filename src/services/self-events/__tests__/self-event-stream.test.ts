@@ -78,9 +78,9 @@ jest.mock('@/db/client', () => {
       from: jest.fn(() => {
         if ('updatedAt' in selection) {
           return {
-            where: jest.fn(async () =>
-              mockRelayListRows.map((r) => ({ updatedAt: r.updatedAt })),
-            ),
+            where: jest.fn(() => ({
+              orderBy: jest.fn(async () => mockRelayListRows),
+            })),
           };
         }
         return { where: jest.fn(async () => [...mockReplStore.values()]) };
@@ -100,7 +100,7 @@ jest.mock('@/db/client', () => {
           onConflictDoUpdate: jest.fn(async (config: { set: Partial<ReplRow> }) => {
             const key = JSON.stringify([row.pubkey, row.kind, row.dTag]);
             const existing = mockReplStore.get(key);
-            if (existing) Object.assign(existing, config.set);
+            if (existing) Object.assign(existing, config.set, { relays: [] });
             else mockReplStore.set(key, { ...row });
           }),
         };

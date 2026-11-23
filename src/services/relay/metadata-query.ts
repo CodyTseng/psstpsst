@@ -1,11 +1,12 @@
 import { matchFilters, type Event, type Filter } from 'nostr-tools';
 
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
-import { relayPool } from './relay-pool';
+import { relayPool, type QueryCompletion } from './relay-pool';
 
 type Request = {
   filters: Filter[];
   onEvent?: (event: Event) => void;
+  onComplete?: (result: QueryCompletion) => void;
   resolve: (events: Event[]) => void;
   reject: (error: unknown) => void;
 };
@@ -16,11 +17,14 @@ let scheduled = false;
 
 /** Share a bounded subscription for profile and command requests queued together.
  * Each consumer retains its filters, streamed events and completion outcome. */
-export function queryMetadataRelay(relay: string, filters: Filter[], onEvent?: (event: Event) => void): Promise<Event[]> {
+export function queryMetadataRelay(
+  relay: string, filters: Filter[], onEvent?: (event: Event) => void,
+  onComplete?: (result: QueryCompletion) => void,
+): Promise<Event[]> {
   return new Promise((resolve, reject) => {
     const url = normalizeRelayUrl(relay);
     const requests = pending.get(url) ?? [];
-    requests.push({ filters, onEvent, resolve, reject });
+    requests.push({ filters, onEvent, onComplete, resolve, reject });
     pending.set(url, requests);
     if (scheduled) return;
     scheduled = true;
@@ -63,6 +67,7 @@ async function run(relay: string, requests: Request[]): Promise<void> {
   try {
     const events = await relayPool.query({
       relays: [relay], filters, timeoutMs: 10_000, label: 'peer-metadata',
+      onComplete: result => { for (const request of requests) request.onComplete?.(result); },
       onEvent: event => {
         for (const request of requests) {
           if (request.onEvent && matchFilters(request.filters, event)) request.onEvent(event);

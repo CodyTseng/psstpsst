@@ -22,12 +22,14 @@ blocking other recipients. Wrapping is likewise isolated per recipient and
 yields between copies. Session invalidation pauses unfinished work rather than
 turning cancellation into delivery failure.
 
-A relay's boolean `OK` value alone decides
-success. Settling a target updates the long-lived recipient copy and removes the
-target atomically. `ok` is terminal; any other durable relay state may enter
-`pending` when a job starts, and `pending` settles to `ok` or `failed`. Explicit
-failures are not retried automatically. When no targets remain, payloads and the
-job are deleted. No attempt history is retained.
+A relay's boolean `OK` value decides success. A refusal settles the target as
+failed. A rate limit keeps the target and its signed gift wrap pending. The
+target retries up to three times, with minimum waits of 30, 60, and 120 seconds.
+A longer NIP-01 wait from the relay takes precedence. Deadlines survive restart
+and later ready jobs can proceed while a target waits.
+
+Settling a target updates the long-lived recipient copy and removes the target
+atomically. When no targets remain, the queue deletes the payloads and the job.
 
 Each copy is delivered when at least one target and at least half of its targets
 acknowledge it. Message delivery uses every frozen copy, including self. A copy

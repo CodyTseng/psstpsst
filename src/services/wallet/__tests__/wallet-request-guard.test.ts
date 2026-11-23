@@ -1,4 +1,4 @@
-import { payInvoice, type WalletRow } from '../wallet.service';
+import { lookupInvoiceStatus, payInvoice, type WalletRow } from '../wallet.service';
 import { vaultAccess } from '@/platform/vault-access';
 import { relayPool } from '@/services/relay/relay-pool';
 jest.mock('@/db/client', () => ({ db: {} }));
@@ -37,4 +37,50 @@ it('does not publish a payment rejected by the trusted platform', async () => {
   jest.mocked(vaultAccess.execute).mockImplementation(async command => { if (command.method === 'walletRequest') throw new Error('Rejected'); return null; });
   await expect(payInvoice({ ...wallet, id: 'guard-rejected' }, 'invoice', { prompt: '', cancel: '' })).rejects.toMatchObject({ kind: 'authentication_failed' });
   expect(relayPool.publishEvent).not.toHaveBeenCalled();
+});
+
+it.each([undefined, 120_000])('retries wallet lookup at the eligible relay (hint %s)', async retryAfterMs => {
+  const refused = 'wss://refused.example/';
+  const limited = 'wss://limited.example/';
+  jest.mocked(vaultAccess.execute).mockImplementation(async command => command.method === 'walletRequest'
+    ? { event: { id: 'request' }, peer: wallet.walletPubkey, relays: [refused, limited] }
+    : null);
+  jest.mocked(relayPool.subscribe).mockReturnValue(jest.fn());
+  jest.mocked(relayPool.publishEvent)
+    .mockResolvedValueOnce([
+      { url: refused, outcome: { ok: false, failure: 'rejected', reason: 'blocked: relay policy' } },
+      { url: limited, outcome: { ok: false, failure: 'rate-limited', reason: 'rate-limited: slow down', retryAfterMs } },
+    ])
+    .mockResolvedValueOnce([{ url: limited, outcome: { ok: false, failure: 'rejected', reason: 'blocked: relay policy' } }]);
+
+  jest.useFakeTimers();
+  try {
+    const lookup = lookupInvoiceStatus({ ...wallet, id: `wallet-relay-limits-${retryAfterMs}` }, { invoice: 'invoice' });
+    await jest.advanceTimersByTimeAsync((retryAfterMs ?? 62_500) - 1);
+    expect(relayPool.publishEvent).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    await expect(lookup).resolves.toBe('unknown');
+    expect(jest.mocked(relayPool.publishEvent).mock.calls.map(([request]) => request.relays))
+      .toEqual([[refused, limited], [limited]]);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('ends the wallet lookup when the relay asks for a longer wait than the request budget', async () => {
+  const url = 'wss://relay.example/';
+  jest.mocked(relayPool.subscribe).mockReturnValue(jest.fn());
+  jest.mocked(relayPool.publishEvent).mockResolvedValueOnce([
+    { url, outcome: { ok: false, failure: 'rate-limited', reason: 'rate-limited: slow down', retryAfterMs: 300_000 } },
+  ]);
+
+  jest.useFakeTimers();
+  try {
+    const lookup = lookupInvoiceStatus({ ...wallet, id: 'wallet-long-relay-limit' }, { invoice: 'invoice' });
+    await jest.advanceTimersByTimeAsync(60_000);
+    await expect(lookup).resolves.toBe('unknown');
+    expect(relayPool.publishEvent).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.useRealTimers();
+  }
 });

@@ -8,9 +8,11 @@ import {
 
 import { db } from '@/db/client';
 import { wallets, walletTransactions } from '@/db/schema';
+import { normalizeRelayUrl, normalizeRelayUrls } from '@/lib/nostr/relay-url';
 import { walletDescriptionText } from '@/lib/wallet/description';
 import { platform } from '@/platform';
-import { relayPool } from '@/services/relay/relay-pool';
+import { isRelayRateLimit, relayRetryDeadline } from '@/services/relay/publish-retry';
+import { relayPool, type PublishOutcome } from '@/services/relay/relay-pool';
 import { parseBolt11Invoice } from '@/services/wallet/bolt11';
 
 
@@ -438,10 +440,23 @@ export function getCachedTransactions(walletId: string): Promise<WalletTransacti
 
 export type WalletRequestGuard = { check: () => void; beforeSend?: () => Promise<void> };
 
-async function callWallet<T>(wallet: WalletRow, method: WalletOperation, params: Record<string, unknown>, guard?: WalletRequestGuard): Promise<T> {
+type WalletRelayAttempt = {
+  relays: string[];
+  rejected: Set<string>;
+  rateLimitedUntil: Map<string, number>;
+};
+
+function walletRelayAttempt(): WalletRelayAttempt {
+  return { relays: [], rejected: new Set(), rateLimitedUntil: new Map() };
+}
+
+async function callWallet<T>(
+  wallet: WalletRow, method: WalletOperation, params: Record<string, unknown>,
+  guard?: WalletRequestGuard, attempt = walletRelayAttempt(),
+): Promise<T> {
   return enqueueWalletRequest(wallet.id, async () => {
     guard?.check();
-    return requestNwc<T>(wallet, method, params, guard);
+    return requestNwc<T>(wallet, method, params, guard, attempt);
   });
 }
 
@@ -450,8 +465,9 @@ async function callWalletWithRetry<T>(
   method: WalletOperation,
   params: Record<string, unknown>,
 ): Promise<T> {
+  const attempt = walletRelayAttempt();
   try {
-    return await callWallet<T>(wallet, method, params);
+    return await callWallet<T>(wallet, method, params, undefined, attempt);
   } catch (err) {
     if (
       !(err instanceof WalletError) ||
@@ -459,8 +475,15 @@ async function callWalletWithRetry<T>(
     ) {
       throw err;
     }
-    if (err.kind === 'rate_limited') await delay(RATE_LIMIT_BACKOFF_MS);
-    return callWallet<T>(wallet, method, params);
+    const candidates = attempt.relays.filter(url => !attempt.rejected.has(url));
+    if (attempt.relays.length && !candidates.length) throw err;
+    const earliest = candidates.length ? Math.min(...candidates.map(url => attempt.rateLimitedUntil.get(url) ?? 0)) : 0;
+    const deadline = Math.max(earliest, Date.now() + (err.kind === 'rate_limited' ? RATE_LIMIT_BACKOFF_MS : 0));
+    const remaining = deadline - Date.now();
+    // Keep this interactive request bounded. A later request can try again.
+    if (remaining > REQUEST_TIMEOUT_MS) throw err;
+    if (remaining > 0) await delay(remaining);
+    return callWallet<T>(wallet, method, params, undefined, attempt);
   }
 }
 
@@ -475,6 +498,7 @@ async function requestNwc<T>(
   method: WalletOperation,
   params: Record<string, unknown>,
   guard?: WalletRequestGuard,
+  attempt = walletRelayAttempt(),
 ): Promise<T> {
   guard?.check();
   const confirmation = walletConsent();
@@ -487,7 +511,7 @@ async function requestNwc<T>(
   guard?.check();
   await guard?.beforeSend?.();
   guard?.check();
-  const response = await waitForNwcResponse<T>(wallet, method, prepared.peer, prepared.relays, prepared.event);
+  const response = await waitForNwcResponse<T>(wallet, method, prepared.peer, prepared.relays, prepared.event, attempt);
   if (response.error) throw mapNwcError(response.error);
   if (!response.result) return {} as T;
   return response.result;
@@ -499,7 +523,13 @@ function waitForNwcResponse<T>(
   walletPubkey: string,
   relays: string[],
   request: Event,
+  attempt: WalletRelayAttempt,
 ): Promise<NwcResponse<T>> {
+  attempt.relays = normalizeRelayUrls(relays);
+  const now = Date.now();
+  const targets = attempt.relays.filter(url => !attempt.rejected.has(url) &&
+    (attempt.rateLimitedUntil.get(url) ?? 0) <= now);
+  if (!targets.length && attempt.relays.length) return Promise.reject(new WalletError('unknown'));
   return new Promise((resolve, reject) => {
     let done = false;
     const finish = (fn: () => void) => {
@@ -530,19 +560,36 @@ function waitForNwcResponse<T>(
 
     let allPublishFailed = false;
     let rateLimited = false;
+    const observed = new Set<string>();
+    const observe = (url: string, outcome: PublishOutcome) => {
+      const target = normalizeRelayUrl(url);
+      if (observed.has(target)) return;
+      observed.add(target);
+      if (outcome.ok) return;
+      if (outcome.failure === 'rejected') attempt.rejected.add(target);
+      if (outcome.failure === 'rate-limited' && outcome.retryAfterMs !== undefined) {
+        attempt.rateLimitedUntil.set(target, relayRetryDeadline(Date.now(), outcome.retryAfterMs));
+      }
+    };
     void relayPool
       .publishEvent({
-        relays,
+        relays: targets,
         event: request,
         timeoutMs: 6000,
         signAuth: (authEvt) => signWalletRelayAuth(wallet, authEvt),
+        onRelay: observe,
       })
       .then(
         (results) => {
-          allPublishFailed = results.every((r) => !r.outcome.ok);
-          rateLimited = results.some(
-            (r) => !r.outcome.ok && isRateLimitedReason(r.outcome.reason),
-          );
+          for (const { url, outcome } of results) observe(url, outcome);
+          if (results.length > 0 && results.every(({ outcome }) => !outcome.ok && outcome.failure === 'rejected')) {
+            finish(() => reject(new WalletError('unknown')));
+            return;
+          }
+          allPublishFailed = results.every(({ outcome }) => !outcome.ok);
+          rateLimited = allPublishFailed && results.some(({ outcome }) =>
+            !outcome.ok && (outcome.failure === 'rate-limited' || (!outcome.failure && isRelayRateLimit(outcome.reason))));
+
         },
         () => {
           allPublishFailed = true;
@@ -668,10 +715,6 @@ function enqueueWalletRequest<T>(walletId: string, task: () => Promise<T>): Prom
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isRateLimitedReason(reason: string): boolean {
-  return reason.toLowerCase().includes('rate');
 }
 
 function nowSec(): number {

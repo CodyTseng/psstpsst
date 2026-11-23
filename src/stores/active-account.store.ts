@@ -23,6 +23,7 @@ import {
   rotateEncryptionKey,
   rotateEncryptionKeyIfDue,
 } from '@/services/dm/encryption-key-rotation.service';
+import { pushRegistrationService } from '@/services/notifications/push-registration.service';
 import { configurationPublisher } from '@/services/relay/configuration-publish.service';
 import { relayPool } from '@/services/relay/relay-pool';
 import {
@@ -244,7 +245,10 @@ async function holdAtLeast(startedAt: number, minMs: number): Promise<void> {
 async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
   const signal = beginBootstrap();
   beginMessagingSendPreparation(pubkey);
-  configurationPublisher.start(pubkey);
+  configurationPublisher.start(pubkey, (kind) => {
+    if (kind === 10002 || kind === 10050) dmService.refreshRelayConfiguration(pubkey);
+    if (kind === 10050) void pushRegistrationService.reconcile();
+  });
   const profile = createPerfSpan('boot.comeOnline', { minHoldMs });
   let outcome = 'unknown';
   const startedAt = Date.now();

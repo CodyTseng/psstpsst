@@ -17,6 +17,7 @@ import { RelayQueryError } from './relay-query-error';
 import { DEFAULT_EOSE_TIMEOUT_MS } from './relay-read';
 import {
   ManagedRelayPool,
+  type ManagedPublishOutcome,
   type QueryObservers,
   type ManagedSubscribeOptions,
   type QueryRelayResult,
@@ -24,7 +25,7 @@ import {
   type SignAuth,
 } from './managed-relay-pool';
 
-export type PublishOutcome = { ok: true } | { ok: false; reason: string };
+export type PublishOutcome = { ok: true } | Extract<ManagedPublishOutcome, { ok: false }>;
 
 export type RelayPublishResult = { url: string; outcome: PublishOutcome };
 
@@ -161,7 +162,7 @@ class RelayPool {
         });
         const outcome: PublishOutcome = result.ok
           ? { ok: true }
-          : { ok: false, reason: result.reason };
+          : result;
         opts.onRelay?.(url, outcome);
         return { url, outcome };
       }),

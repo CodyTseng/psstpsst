@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, StyleSheet, View } from 'react-native';
 
@@ -14,17 +14,15 @@ import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/Scre
 import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { SortableUrlList } from '@/components/common/SortableUrlList';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
-import { buildSigner } from '@/services/account/account-access';
-import type { Signer } from '@/services/signer/signer.interface';
 import { dmService } from '@/services/dm/dm.service';
 import {
   loadAccountDmRelays,
-  loadAccountWriteRelays,
-  saveAndPublishWriteRelays,
-  saveAndPublishDmRelays,
+  loadLocalWriteRelays,
+  saveWriteRelays,
+  saveDmRelays,
 } from '@/services/relay/relay-list.service';
 import { useActiveAccount } from '@/stores/active-account.store';
-import { showToast } from '@/stores/toast.store';
+import { useSettingsAutosave } from '@/hooks/use-settings-autosave';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
@@ -89,62 +87,38 @@ export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRel
   const c = useThemeColors();
 
   const discoveryFormat = mode === 'napp' || mode === 'napplet' ? mode : undefined;
-  const [relays, setRelays] = useState<string[]>([]);
-  const [original, setOriginal] = useState<string[]>([]);
   const [newRelay, setNewRelay] = useState(initialRelay);
   const [error, setError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const autoSaveVersion = useRef(0);
-  const saveAbort = useRef<AbortController | null>(null);
-  const [loadedAccountPubkey, setLoadedAccountPubkey] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-
-  useEffect(() => () => { saveAbort.current?.abort(); autoSaveVersion.current++; }, []);
-
-  useEffect(() => {
-    if (!accountPubkey) return;
-    let mounted = true;
-    const load = discoveryFormat ? async () => (await loadDiscoveryRelays())[discoveryFormat] : mode === 'write' ? loadAccountWriteRelays : loadAccountDmRelays;
-    void load(accountPubkey).then((list) => {
-      if (!mounted) return;
-      setRelays(list);
-      setOriginal(list);
-      setLoadedAccountPubkey(accountPubkey);
-    }).catch((error: unknown) => {
-      if (mounted) setLoadError(String(error instanceof Error ? error.message : error));
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [accountPubkey, mode, discoveryFormat, loadAttempt]);
-
-  const dirty = relays.join(',') !== original.join(',');
-  const canSave = dirty && relays.length > 0 && !saving;
-
-  async function persistDiscoveryRelays(next: string[]) {
-    if (!discoveryFormat || !accountPubkey) return;
-    const version = ++autoSaveVersion.current;
-    setSaveError(null);
-    try {
-      await saveDiscoveryRelays(discoveryFormat, next);
-      refreshDiscoverySources(useActiveAccount.getState().activePubkey ?? accountPubkey);
-      if (autoSaveVersion.current === version) setOriginal(next);
-    } catch {
-      if (autoSaveVersion.current === version) setSaveError(t('relays.save_error'));
-    }
-  }
+  const loadRelays = useCallback(async () => {
+    if (!accountPubkey) return [];
+    if (discoveryFormat) return (await loadDiscoveryRelays())[discoveryFormat];
+    return (mode === 'write' ? loadLocalWriteRelays : loadAccountDmRelays)(accountPubkey);
+  }, [accountPubkey, discoveryFormat, mode]);
+  const { urls: relays, saveFailed, persist, loadError, retryLoad } = useSettingsAutosave(
+    discoveryFormat ? 'discovery' : mode === 'write' ? 'write' : 'dm',
+    accountPubkey ? loadRelays : null,
+    async (next) => {
+      if (!accountPubkey) return;
+      if (discoveryFormat) {
+        await saveDiscoveryRelays(discoveryFormat, next);
+        refreshDiscoverySources(useActiveAccount.getState().activePubkey ?? accountPubkey);
+      } else {
+        await (mode === 'write' ? saveWriteRelays : saveDmRelays)(accountPubkey, next);
+        dmService.refreshRelayConfiguration(accountPubkey);
+      }
+    },
+    t('relays.save_error'),
+  );
 
   function changeRelays(next: string[]) {
-    setRelays(next);
-    if (discoveryFormat) void persistDiscoveryRelays(next);
+    if (!relays || (!discoveryFormat && next.length === 0) || next.join('\n') === relays.join('\n')) return;
+    void persist(next);
   }
 
   function handleAdd() {
     setError(null);
     const raw = newRelay.trim();
-    if (!raw || saving) return;
+    if (!raw || !relays) return;
     let normalized: string;
     try {
       normalized = normalizeRelayUrl(raw);
@@ -161,52 +135,16 @@ export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRel
   }
 
   function handleRemove(url: string) {
-    if (!saving) changeRelays(relays.filter((r) => r !== url));
+    if (relays) changeRelays(relays.filter((r) => r !== url));
   }
 
-  async function handleSave() {
-    if (!accountPubkey || !canSave || saveAbort.current) return;
-    const abort = new AbortController();
-    saveAbort.current = abort;
-    setSaving(true);
-    setError(null);
-    setSaveError(null);
-    let signer: Signer | undefined;
-    try {
-      signer = await buildSigner(accountPubkey);
-      if (useActiveAccount.getState().activePubkey !== accountPubkey || abort.signal.aborted) return;
-      if (mode === 'write') {
-        await saveAndPublishWriteRelays({ accountPubkey, signer, relays, abort: abort.signal });
-      } else {
-        await saveAndPublishDmRelays({ accountPubkey, signer, relays, abort: abort.signal });
-      }
-
-      if (useActiveAccount.getState().activePubkey !== accountPubkey || abort.signal.aborted) return;
-      dmService.refreshRelayConfiguration(accountPubkey);
-      setOriginal(relays);
-      showToast(t('relays.save_success'), { target: 'detail' });
-    } catch {
-      if (useActiveAccount.getState().activePubkey !== accountPubkey || abort.signal.aborted) return;
-      const message = t('relays.save_error');
-      setSaveError(message);
-      showToast(message, { variant: 'error', target: 'detail' });
-    } finally {
-      saveAbort.current = null;
-      setSaving(false);
-      try { await signer?.destroy?.(); } catch { /* Publication already settled. */ }
-    }
-  }
-
-  if (!accountPubkey || loadedAccountPubkey !== accountPubkey) {
+  if (!accountPubkey || !relays) {
     return (
       <View>
         {loadError && (
           <View style={{ padding: spacing.lg, paddingTop: spacing.sm, gap: spacing.lg }}>
-            <AppText variant="body" tone="danger" selectable>{loadError}</AppText>
-            <AppButton label={t('common.retry')} onPress={() => {
-              setLoadError(null);
-              setLoadAttempt((attempt) => attempt + 1);
-            }} />
+            <AppText variant="body" tone="danger" selectable>{loadError.message}</AppText>
+            <AppButton label={t('common.retry')} onPress={retryLoad} />
           </View>
         )}
       </View>
@@ -236,7 +174,7 @@ export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRel
             variant="text"
             labelVariant="caption"
             compactAxis="none"
-            disabled={saving || relays.join(',') === DEFAULT_DISCOVERY_RELAYS[discoveryFormat].join(',')}
+            disabled={relays.join(',') === DEFAULT_DISCOVERY_RELAYS[discoveryFormat].join(',')}
             onPress={() => changeRelays([...DEFAULT_DISCOVERY_RELAYS[discoveryFormat]])}
           />
         </View>}
@@ -251,8 +189,9 @@ export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRel
         ) : (
           <SortableUrlList
             value={relays}
-            onChange={(next) => { if (!saving) changeRelays(next); }}
+            onChange={changeRelays}
             onRemove={handleRemove}
+            removeDisabled={!discoveryFormat && relays.length === 1}
             removeAccessibilityLabel={t('common.delete')}
           />
         )}
@@ -265,7 +204,6 @@ export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRel
             onChangeText={setNewRelay}
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!saving}
             error={error ?? undefined}
             onSubmitEditing={handleAdd}
             trailingAccessory={
@@ -275,7 +213,7 @@ export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRel
                 size={uiDensity.inputHeight}
                 accessibilityLabel={t('relays.add_label')}
                 onPress={handleAdd}
-                disabled={saving || !newRelay.trim()}
+                disabled={!newRelay.trim()}
                 icon={
                   <Plus
                     strokeWidth={iconStrokeWidth.default}
@@ -290,22 +228,11 @@ export function RelaySettingsForm({ mode, accountPubkey, scrollProps, initialRel
 
       </View>
 
-      {!discoveryFormat && <View style={{ height: spacing.sm }} />}
-
-      {(!discoveryFormat || saveError) && <View style={{ gap: spacing.sm }}>
-        {saveError && (
-          <AppText variant="body" tone="danger" accessibilityLiveRegion="polite" selectable>
-            {saveError}
-          </AppText>
-        )}
-        <AppButton
-          label={t(discoveryFormat ? 'common.retry' : 'relays.save')}
-          variant={discoveryFormat ? 'secondary' : 'primary'}
-          size="lg"
-          loading={saving}
-          disabled={!discoveryFormat && !canSave}
-          onPress={discoveryFormat ? () => { void persistDiscoveryRelays(relays); } : handleSave}
-        />
+      {saveFailed && <View style={{ gap: spacing.sm }}>
+        <AppText variant="body" tone="danger" accessibilityLiveRegion="polite" selectable>
+          {t('relays.save_error')}
+        </AppText>
+        <AppButton label={t('common.retry')} variant="secondary" onPress={() => persist(relays)} />
       </View>}
     </AppFormScrollView>
   );

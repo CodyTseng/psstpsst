@@ -9,6 +9,7 @@ import { queryMetadataRelay } from '../metadata-query';
 jest.mock('../local-relay-settings', () => ({
   loadAccountDmRelays: async () => ['wss://dm.example/'],
 }));
+jest.mock('../routing-settings-edits', () => ({ readRoutingSettingsEdit: async () => undefined }));
 jest.mock('@/db/client', () => ({ db: {} }));
 jest.mock('../relay-pool', () => ({ relayPool: { query: jest.fn() } }));
 jest.mock('../replaceable-events.service', () => ({
@@ -132,6 +133,45 @@ it('rejects only after all target relays fail and permits retry', async () => {
   calls.get(A)!.resolve([]);
   calls.get(B)!.resolve([]);
   await expect(retry).resolves.toBeNull();
+});
+
+it.each(['query timed out', 'auth-required: sign in', 'rate-limited: slow down'])(
+  'does not treat %s or an empty reply from a newly added relay as an established baseline',
+  async reason => {
+    const pending = fetchReplaceable([A, B], 10002, 'alice', { confirmedMissRelays: [A] });
+    const outcome = expect(pending).rejects.toBeInstanceOf(RelayQueryError);
+    await flushQueries();
+    calls.get(A)!.options.onComplete?.({ status: 'complete', eosed: true, relays: [
+      { url: A, status: 'eose', received: 0, reason },
+    ] });
+    calls.get(B)!.options.onComplete?.({ status: 'complete', eosed: true, relays: [
+      { url: B, status: 'eose', received: 0 },
+    ] });
+    calls.get(A)!.resolve([]);
+    calls.get(B)!.resolve([]);
+    await outcome;
+  },
+);
+
+it('accepts wire EOSE from a prior relay as a confirmed miss', async () => {
+  const pending = fetchReplaceable([A, B], 10002, 'alice', { confirmedMissRelays: [A] });
+  await flushQueries();
+  calls.get(A)!.options.onComplete?.({ status: 'complete', eosed: true, relays: [
+    { url: A, status: 'eose', received: 0 },
+  ] });
+  calls.get(A)!.resolve([]);
+  calls.get(B)!.reject(new RelayQueryError([]));
+  await expect(pending).resolves.toBeNull();
+});
+
+it('can merge a declaration observed even when the read fails before EOSE', async () => {
+  const pending = fetchReplaceable([A, B], 10002, 'alice', { confirmedMissRelays: [A] });
+  await flushQueries();
+  const received = { ...event('alice'), kind: 10002 };
+  calls.get(B)!.options.onEvent?.(received);
+  calls.get(A)!.reject(new RelayQueryError([]));
+  calls.get(B)!.reject(new RelayQueryError([]));
+  await expect(pending).resolves.toEqual(received);
 });
 
 it('retains events already received from a slower relay when another sends empty EOSE', async () => {

@@ -58,6 +58,7 @@ jest.mock('@/db/client', () => {
   return mockDatabase;
 });
 
+jest.mock('@/services/account/account.service', () => ({ buildSigner: jest.fn() }));
 jest.mock('@/services/conversation/message-tail-cache', () => ({
   mergeStoredMessageIntoTail: jest.fn(),
 }));
@@ -598,4 +599,79 @@ it('restores a deleted group request without another alert', async () => {
   expect(mockDatabase!.sqlite.prepare('SELECT deleted, has_replied, unread_count FROM conversations WHERE conversation_key = ?').get(key))
     .toEqual({ deleted: 0, has_replied: 0, unread_count: 1 });
   expect(hasEvent(restored)).toBe(false);
+});
+
+it('delays rate-limited gift wraps without blocking later jobs or retrying refusals', async () => {
+  const { platform } = jest.requireActual('@/platform') as typeof import('@/platform');
+  const { relayPool } = jest.requireActual('../../relay/relay-pool') as typeof import('../../relay/relay-pool');
+  const { relayMessageOutbox } = jest.requireActual('../../dm/relay-message-outbox') as typeof import('../../dm/relay-message-outbox');
+  const account = 'e'.repeat(64);
+  const limited = 'wss://limited.example/';
+  const refused = 'wss://refused.example/';
+  const accepted = 'wss://accepted.example/';
+  const sqlite = mockDatabase!.sqlite;
+  sqlite.prepare("INSERT INTO accounts (pubkey, signer_type, added_at, sort_order) VALUES (?, 'nsec', 1, 0)").run(account);
+  const group = await groupService.createLocalGroup(account, [BOB, CAROL]);
+
+  async function queue(targets: string[]) {
+    const message = recoveryRumor(group.groupId);
+    message.pubkey = account;
+    message.tags = [['p', BOB], ['p', CAROL], ['h', group.groupId]];
+    await groupReceiveService.receive({
+      accountPubkey: account, rumor: message, intake: 'local', active: true, senderBlocked: false,
+    });
+    const { id } = sqlite.prepare('SELECT id FROM relay_outbox_jobs WHERE message_id = ?').get(message.id!)!;
+    sqlite.prepare("INSERT INTO message_delivery_copies (account_pubkey,message_id,recipient_pubkey,relays,updated_at) VALUES (?,?,?,'[]',0)")
+      .run(account, message.id!, BOB);
+    for (const url of targets) {
+      sqlite.prepare('INSERT INTO relay_outbox_job_targets (job_id,recipient_pubkey,relay_url) VALUES (?,?,?)').run(id as number, BOB, url);
+    }
+    sqlite.prepare('INSERT INTO relay_outbox_payloads (job_id,recipient_pubkey,gift_wrap) VALUES (?,?,?)')
+      .run(id as number, BOB, JSON.stringify({ id: message.id }));
+    return message.id;
+  }
+
+  const first = await queue([limited, refused]);
+  const second = await queue([accepted]);
+  let limitedOnce = false;
+  const publish = jest.spyOn(relayPool, 'publishEvent').mockImplementation(async ({ relays, onRelay }) =>
+    relays.map((url) => {
+      let outcome: import('../../relay/relay-pool').PublishOutcome = { ok: true };
+      if (url === limited && !limitedOnce) {
+        limitedOnce = true;
+        outcome = { ok: false, failure: 'rate-limited', reason: 'rate-limited: slow down', retryAfterMs: 120_000 };
+      } else if (url === refused) {
+        outcome = { ok: false, failure: 'rejected', reason: 'blocked: relay policy' };
+      }
+      onRelay?.(url, outcome);
+      return { url, outcome };
+    }));
+  const app = jest.spyOn(platform.appState, 'currentState').mockReturnValue('active');
+  const online = jest.spyOn(platform.networkState, 'getState').mockResolvedValue({ isConnected: true });
+  const observe = jest.spyOn(platform.networkState, 'addStateListener').mockImplementation(() => {});
+  jest.useFakeTimers();
+  try {
+    relayMessageOutbox.activate({
+      accountPubkey: account, dmRelays: [],
+      encryptionKeypair: { pubkey: account, key: { account, role: 'messaging' }, createdAt: 0 },
+      signSeal: jest.fn(),
+    });
+    await relayMessageOutbox.waitForIdle();
+    expect(publish.mock.calls.map(([call]) => call.event.id)).toEqual([first, second]);
+    await jest.advanceTimersByTimeAsync(119_999);
+    expect(publish).toHaveBeenCalledTimes(2);
+    await jest.advanceTimersByTimeAsync(1);
+    await relayMessageOutbox.waitForIdle();
+    expect(publish.mock.calls.map(([call]) => [call.event.id, call.relays])).toEqual([
+      [first, [limited, refused]], [second, [accepted]], [first, [limited]],
+    ]);
+    expect(sqlite.prepare('SELECT id FROM relay_outbox_jobs WHERE account_pubkey = ?').all(account)).toEqual([]);
+  } finally {
+    relayMessageOutbox.deactivate();
+    jest.useRealTimers();
+    observe.mockRestore();
+    online.mockRestore();
+    app.mockRestore();
+    publish.mockRestore();
+  }
 });

@@ -603,6 +603,34 @@
       "when": 1794355200000,
       "tag": "0085_authorization-presets",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "6",
+      "when": 1794441600000,
+      "tag": "0086_routing-settings-edits",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1794528000000,
+      "tag": "0087_relay-publish-retries",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1794614400000,
+      "tag": "0088_message-relay-rate-limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1794700800000,
+      "tag": "0089_routing-settings-edit-time",
+      "breakpoints": true
     }
   ]
 }

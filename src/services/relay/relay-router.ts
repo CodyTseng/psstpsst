@@ -6,8 +6,9 @@ import { replaceableEvents } from '@/db/schema';
 import { DISCOVERY_RELAYS, normalizeRelayUrl } from '@/lib/nostr/relay-url';
 
 import { KIND_RELAY_LIST_METADATA } from '../crypto/nip17-gift-wrap';
-import { relayPool } from './relay-pool';
+import { relayPool, type QueryCompletion } from './relay-pool';
 import { queryMetadataRelay } from './metadata-query';
+import { readRoutingSettingsEdit } from './routing-settings-edits';
 import { loadAccountDmRelays } from './local-relay-settings';
 import { RelayQueryError } from './relay-query-error';
 import type { QueryRelayResult } from './managed-relay-pool';
@@ -44,11 +45,12 @@ const NORMALIZED_DISCOVERY = DISCOVERY_RELAYS.map(normalizeRelayUrl);
 export async function configurationPublishRelays(event: Event): Promise<string[]> {
   // Publishing must not depend on a successful metadata refresh. Bootstrap and
   // self-event intake reconcile remote configuration separately.
-  const [metadata, inbox] = await Promise.all([
+  const [metadata, inbox, edit] = await Promise.all([
     getReplaceableEvent({ pubkey: event.pubkey, kind: KIND_RELAY_LIST_METADATA }),
     event.kind === 10044 ? loadAccountDmRelays(event.pubkey) : Promise.resolve([]),
+    readRoutingSettingsEdit(event.pubkey, KIND_RELAY_LIST_METADATA),
   ]);
-  const write = metadata ? parseRelayListMetadata(metadata).write : [];
+  const write = edit?.urls ?? (metadata ? parseRelayListMetadata(metadata).write : []);
   const editedWrite = event.kind === KIND_RELAY_LIST_METADATA ? parseRelayListMetadata(event).write : [];
   const urls = [...inbox, ...write, ...editedWrite, ...NORMALIZED_DISCOVERY];
   return Array.from(new Set(urls.map(normalizeRelayUrl)));
@@ -103,6 +105,7 @@ type Waiter = {
   failures: QueryRelayResult[];
   latest: Event | null;
   completed: boolean;
+  confirmedMissRelays: ReadonlySet<string> | null;
 };
 type QueryGroup = {
   relay: string;
@@ -162,18 +165,27 @@ async function runGroup(group: QueryGroup): Promise<void> {
       }
     }
   };
+  let relayResults: QueryRelayResult[] = [];
+  const onComplete = (result: QueryCompletion) => { relayResults = result.relays; };
+  const authors = Array.from(group.authors.keys());
   try {
     const events = await (group.kind === 0
-      ? queryMetadataRelay(group.relay, [{ kinds: [group.kind], authors: Array.from(group.authors.keys()) }], receive)
+      ? queryMetadataRelay(group.relay, [{ kinds: [group.kind], authors }], receive, onComplete)
       : relayPool.query({
       relays: [group.relay],
-      filter: { kinds: [group.kind], authors: Array.from(group.authors.keys()) },
+      filter: { kinds: [group.kind], authors },
       timeoutMs: BATCH_TIMEOUT_MS,
       onEvent: receive,
+      onComplete,
     }));
     for (const event of events) receive(event);
+    const wireEose = relayResults.some(result => result.status === 'eose' && result.reason === undefined);
     for (const waiter of group.waiters) {
-      waiter.completed = true;
+      if (!waiter.confirmedMissRelays || (wireEose && waiter.confirmedMissRelays.has(group.relay))) {
+        waiter.completed = true;
+      } else {
+        waiter.failures.push(...relayResults);
+      }
     }
   } catch (error) {
     for (const waiter of group.waiters) {
@@ -184,7 +196,7 @@ async function runGroup(group: QueryGroup): Promise<void> {
     for (const waiter of group.waiters) {
       waiter.groups.delete(group);
       if (waiter.groups.size > 0) continue;
-      if (waiter.completed) waiter.resolve(waiter.latest);
+      if (waiter.completed || (waiter.confirmedMissRelays && waiter.latest)) waiter.resolve(waiter.latest);
       else waiter.reject(new RelayQueryError(waiter.failures));
     }
     group.waiters.clear();
@@ -199,15 +211,19 @@ async function runGroup(group: QueryGroup): Promise<void> {
  * requests is hit once; identical concurrent calls dedup onto one promise.
  * Waits for every target relay to settle, then returns the newest received event.
  * Returns null on a completed miss; rejects when all target relays fail.
+ * A caller that supplies confirmedMissRelays requires a signed result or a wire
+ * EOSE from one of those relays. Effective EOSE alone cannot confirm absence.
  */
 export function fetchReplaceable(
   relays: string[],
   kind: number,
   pubkey: string,
+  options?: { confirmedMissRelays: readonly string[] },
 ): Promise<Event | null> {
   const targets = uniq(relays.map(normalizeRelayUrl));
   if (targets.length === 0) return Promise.reject(new RelayQueryError([]));
-  const key = `${relaySig(targets)}|${kind}|${pubkey}`;
+  const confirmedMissRelays = options && new Set(options.confirmedMissRelays.map(normalizeRelayUrl));
+  const key = JSON.stringify([relaySig(targets), kind, pubkey, confirmedMissRelays && relaySig([...confirmedMissRelays])]);
 
   const existing = inflight.get(key);
   if (existing) return existing;
@@ -221,6 +237,7 @@ export function fetchReplaceable(
     pending.push({
       relays: targets, kind, author: pubkey, resolve, reject,
       groups: new Set(), failures: [], latest: null, completed: false,
+      confirmedMissRelays: confirmedMissRelays ?? null,
     });
   }).finally(() => inflight.delete(key));
 

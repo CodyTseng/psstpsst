@@ -231,7 +231,7 @@ export async function storeReplaceableEvent(event: NostrEvent, options: { confir
       target: [replaceableEvents.pubkey, replaceableEvents.kind, replaceableEvents.dTag],
       set: { event, relays: sql`CASE WHEN json_extract(${replaceableEvents.event},'$.id')=${event.id}
         THEN ${mergeEventRelaySources(replaceableEvents.relays, relays)} ELSE ${JSON.stringify(relays)} END`, createdAt: event.created_at, fetchedAt },
-      // Guards the read-then-write window against an interleaved newer event.
+      // Guard the read-then-write window against an interleaved newer event.
       setWhere: or(
         isNull(replaceableEvents.createdAt),
         lt(replaceableEvents.createdAt, event.created_at),

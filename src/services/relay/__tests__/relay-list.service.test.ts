@@ -38,13 +38,9 @@ jest.mock('../configuration-publish.service', () => ({
     await mockPublishEvent(event);
     return event;
   },
-  publishConfigurationAndWait: async (_pubkey: string, signer: { signEvent: (template: unknown) => Promise<Event> }, template: unknown) => {
-    const event = await signer.signEvent(template);
-    await jest.requireActual('../replaceable-events.service').storeReplaceableEvent(event);
-    await mockPublishEvent(event);
-    return event;
-  },
 }));
+
+jest.mock('../routing-settings-edits', () => ({ readRoutingSettingsEdit: async () => undefined }));
 
 jest.mock('@/db/client', () => ({
   db: {
@@ -356,7 +352,7 @@ describe('relay-list service', () => {
   describe('background write relay preparation', () => {
     async function prepareWriteRelays(opts: { accountPubkey: string; relays: string[] }): Promise<Event> {
       const { prepareWriteRelayConfiguration } = jest.requireActual('../relay-configuration-template') as typeof import('../relay-configuration-template');
-      const { template } = await prepareWriteRelayConfiguration(opts.accountPubkey, opts.relays);
+      const { template } = await prepareWriteRelayConfiguration(opts.accountPubkey, opts.relays, nowSeconds());
       return { ...template, pubkey: opts.accountPubkey, id: 'prepared', sig: '' };
     }
     function parsePrepared(event: Event) {
@@ -496,43 +492,4 @@ describe('relay-list service', () => {
     });
   });
 
-  describe('saveAndPublishDmRelays', () => {
-    it.each([false, true])('publishes only the DM list, preserving existing NIP-65 metadata: %s', async (hasMetadata) => {
-      const service = loadService();
-      const existing = makeEvent('self', KIND_RELAY_LIST_METADATA, nowSeconds(), [
-        ['r', 'wss://read.example/', 'read'],
-        ['r', 'wss://write.example/', 'write'],
-      ]);
-      if (hasMetadata) {
-        seedRow({ pubkey: 'self', kind: KIND_RELAY_LIST_METADATA, dTag: '',
-          event: existing, createdAt: existing.created_at, fetchedAt: nowSeconds() });
-      }
-      const signer = {
-        signEvent: jest.fn(async (template: Partial<Event>) => ({
-          id: `signed-${template.kind}`,
-          pubkey: 'self',
-          kind: template.kind!,
-          created_at: template.created_at!,
-          tags: template.tags ?? [],
-          content: template.content ?? '',
-          sig: 'sig',
-        })),
-        // The service only calls signEvent here.
-      } as never;
-
-      await service.saveAndPublishDmRelays({
-        accountPubkey: 'self',
-        signer,
-        relays: ['wss://dm.example/'],
-      });
-
-      const dmRow = getRow('self', KIND_DM_RELAY_LIST);
-      expect(dmRow?.event?.kind).toBe(KIND_DM_RELAY_LIST);
-      expect(dmRow?.event?.tags).toEqual([['relay', 'wss://dm.example/']]);
-      const metaRow = getRow('self', KIND_RELAY_LIST_METADATA);
-      expect(metaRow?.event).toEqual(hasMetadata ? existing : undefined);
-      expect(mockPublishEvent).toHaveBeenCalledTimes(1);
-      expect(mockQuery).not.toHaveBeenCalled();
-    });
-  });
 });

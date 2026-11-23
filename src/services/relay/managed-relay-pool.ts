@@ -17,6 +17,7 @@ import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { platform, type AppStateStatus, type NetworkStateSnapshot } from '@/platform';
 
 import { LifecycleRelay } from './lifecycle-relay';
+import { isRelayRateLimit, RelayPublishRejection } from './publish-retry';
 import { RelayQueryError } from './relay-query-error';
 import { DEFAULT_EOSE_TIMEOUT_MS } from './relay-read';
 
@@ -108,7 +109,24 @@ export type ManagedPublishOptions = {
   abort?: AbortSignal;
 };
 
-export type ManagedPublishOutcome = { ok: true; message?: string } | { ok: false; reason: string };
+export type ManagedPublishOutcome =
+  | { ok: true; message?: string }
+  | { ok: false; reason: string; failure?: 'rejected'; retryAfterMs?: never }
+  | { ok: false; reason: string; failure: 'rate-limited'; retryAfterMs?: number };
+
+function publishFailure(error: unknown, prefix = ''): ManagedPublishOutcome {
+  const reason = errorMessage(error);
+  if (error instanceof RelayPublishRejection) {
+    if (isRelayRateLimit(reason)) {
+      return {
+        ok: false, reason: prefix + reason, failure: 'rate-limited',
+        ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
+      };
+    }
+    return { ok: false, reason: prefix + reason, failure: 'rejected' };
+  }
+  return { ok: false, reason: prefix + reason };
+}
 
 type RelayFactory = (url: string, options: AbstractRelayConstructorOptions) => AbstractRelay;
 
@@ -370,13 +388,13 @@ export class ManagedRelayPool {
             await this.authenticate(relay, options.signAuth);
             return await attempt();
           } catch (authError) {
-            return { ok: false, reason: `auth failed: ${errorMessage(authError)}` };
+            return publishFailure(authError, 'auth failed: ');
           }
         }
-        if (error instanceof SendingOnClosedConnection || reason === 'publish timed out') {
+        if (error instanceof SendingOnClosedConnection || (!(error instanceof RelayPublishRejection) && reason === 'publish timed out')) {
           this.recycleIfCurrent(url, relay);
         }
-        return { ok: false, reason };
+        return publishFailure(error);
       }
     };
 
@@ -554,8 +572,9 @@ export class ManagedRelayPool {
   }
 
   private handleNetworkState(state: NetworkStateSnapshot, initial = false): void {
-    const available = state.isConnected !== false && state.isInternetReachable !== false;
-    const signature = `${state.type ?? 'unknown'}:${String(state.isConnected)}:${String(state.isInternetReachable)}`;
+    // A LAN relay can be reachable even when the Internet probe fails.
+    const available = state.isConnected !== false;
+    const signature = `${state.type ?? 'unknown'}:${String(state.isConnected)}`;
     const previousAvailable = this.networkAvailable;
     const previousSignature = this.networkSignature;
     this.networkAvailable = available;

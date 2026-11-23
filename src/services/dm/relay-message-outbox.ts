@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, exists, lte, notExists, or } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -22,6 +22,7 @@ import {
   KIND_FILE,
   type SignSeal,
 } from '../crypto/nip17-gift-wrap';
+import { MAX_RELAY_RETRY_TIMER_MS, RELAY_RATE_LIMIT_BACKOFF_MS, relayRetryDeadline } from '../relay/publish-retry';
 import { relayPool, type PublishOutcome } from '../relay/relay-pool';
 import { capDeliveryRelays } from '../relay/relay-router';
 import type { Signer } from '../signer/signer.interface';
@@ -39,6 +40,7 @@ import {
 
 const PUBLISH_TIMEOUT_MS = 10_000;
 const RECIPIENT_PREPARATION_CONCURRENCY = 4;
+const MAX_RATE_LIMIT_RETRIES = 3;
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
@@ -105,13 +107,6 @@ async function mapBounded<T, R>(
   return results;
 }
 
-function isOffline(state: {
-  isConnected?: boolean;
-  isInternetReachable?: boolean;
-}): boolean {
-  return state.isConnected === false || state.isInternetReachable === false;
-}
-
 /**
  * Durable, account-scoped FIFO relay delivery. The database is both the queue
  * and the crash-recovery boundary; this class only owns the active worker.
@@ -123,6 +118,7 @@ class RelayMessageOutbox {
   private wakeRequested = false;
   private online = true;
   private observing = false;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private currentPublishAbort: AbortController | null = null;
   private readonly messageWrites = new Map<string, Promise<void>>();
 
@@ -132,14 +128,16 @@ class RelayMessageOutbox {
     const networkState = platform.networkState;
     if (!networkState) return;
     networkState.addStateListener((state) => {
-      this.online = !isOffline(state);
-      if (!this.online) this.currentPublishAbort?.abort();
-      else this.wake();
+      this.online = state.isConnected !== false;
+      if (!this.online) {
+        this.clearRetryTimer();
+        this.currentPublishAbort?.abort();
+      } else this.wake();
     });
     void networkState
       .getState()
       .then((state) => {
-        this.online = !isOffline(state);
+        this.online = state.isConnected !== false;
         if (this.online) this.wake();
       })
       .catch(() => {});
@@ -155,6 +153,7 @@ class RelayMessageOutbox {
 
   deactivate(): void {
     this.generation += 1;
+    this.clearRetryTimer();
     this.currentPublishAbort?.abort();
     this.currentPublishAbort = null;
     this.session = null;
@@ -176,6 +175,7 @@ class RelayMessageOutbox {
     // Some focused service tests replace the database module with an empty
     // boundary mock. Production adapters always expose the async query API.
     if (typeof (db as unknown as { select?: unknown }).select !== 'function') return;
+    this.clearRetryTimer();
     this.wakeRequested = true;
     if (this.drainTask) return;
     this.drainTask = this.drain()
@@ -301,6 +301,11 @@ class RelayMessageOutbox {
     this.wake(accountPubkey);
   }
 
+  private clearRetryTimer(): void {
+    if (this.retryTimer !== undefined) clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+  }
+
   private async drain(): Promise<void> {
     this.wakeRequested = false;
     const session = this.session;
@@ -313,14 +318,39 @@ class RelayMessageOutbox {
       this.online &&
       platform.appState.currentState() === 'active'
     ) {
+      const matchingJob = eq(relayOutboxJobTargets.jobId, relayOutboxJobs.id);
+      const targets = db.select({ jobId: relayOutboxJobTargets.jobId }).from(relayOutboxJobTargets);
       const job = await db
         .select()
         .from(relayOutboxJobs)
-        .where(eq(relayOutboxJobs.accountPubkey, session.accountPubkey))
+        .where(and(
+          eq(relayOutboxJobs.accountPubkey, session.accountPubkey),
+          or(
+            notExists(targets.where(matchingJob)),
+            exists(db.select({ jobId: relayOutboxJobTargets.jobId }).from(relayOutboxJobTargets).where(and(
+              matchingJob, lte(relayOutboxJobTargets.nextAttemptAt, Date.now()),
+            ))),
+          ),
+        ))
         .orderBy(asc(relayOutboxJobs.id))
         .limit(1)
         .get();
-      if (!job) return;
+      if (!job) {
+        const next = await db.select({ at: relayOutboxJobTargets.nextAttemptAt })
+          .from(relayOutboxJobTargets)
+          .innerJoin(relayOutboxJobs, matchingJob)
+          .where(eq(relayOutboxJobs.accountPubkey, session.accountPubkey))
+          .orderBy(asc(relayOutboxJobTargets.nextAttemptAt))
+          .limit(1)
+          .get();
+        if (next && this.isCurrent(session, generation) && this.online) {
+          this.retryTimer = setTimeout(
+            () => this.wake(session.accountPubkey),
+            Math.min(MAX_RELAY_RETRY_TIMER_MS, Math.max(0, next.at - Date.now())),
+          );
+        }
+        return;
+      }
       try {
         const completed = await this.processJob(job, session, generation);
         if (!completed) return;
@@ -377,6 +407,7 @@ class RelayMessageOutbox {
     }
 
     if (!this.isCurrent(session, generation) || !this.online) return false;
+    targets = targets.filter(target => target.nextAttemptAt <= Date.now());
     targets = await this.skipSuccessfulTargets(job, targets, durable);
     if (targets.length === 0) return true;
 
@@ -393,6 +424,8 @@ class RelayMessageOutbox {
       await this.finishEmptyJob(job, durable);
       return true;
     }
+    targets = targets.filter(target => target.nextAttemptAt <= Date.now());
+    if (targets.length === 0) return true;
     if (durable) await this.markTargetsPending(job, targets);
 
     const payloadRows = await db
@@ -823,7 +856,7 @@ class RelayMessageOutbox {
     return this.serializeMessageWrite(job, async () => {
       await db.transaction(async (tx) => {
         const target = await tx
-          .select({ jobId: relayOutboxJobTargets.jobId })
+          .select({ rateLimitAttempts: relayOutboxJobTargets.rateLimitAttempts })
           .from(relayOutboxJobTargets)
           .where(
             and(
@@ -835,6 +868,21 @@ class RelayMessageOutbox {
           .get();
         if (!target) return;
 
+        if (!outcome.ok && outcome.failure === 'rate-limited' && target.rateLimitAttempts < MAX_RATE_LIMIT_RETRIES) {
+          const delay = Math.max(
+            RELAY_RATE_LIMIT_BACKOFF_MS * 2 ** target.rateLimitAttempts,
+            outcome.retryAfterMs ?? 0,
+          );
+          await tx.update(relayOutboxJobTargets).set({
+            rateLimitAttempts: target.rateLimitAttempts + 1,
+            nextAttemptAt: relayRetryDeadline(Date.now(), delay),
+          }).where(and(
+            eq(relayOutboxJobTargets.jobId, job.id),
+            eq(relayOutboxJobTargets.recipientPubkey, recipientPubkey),
+            eq(relayOutboxJobTargets.relayUrl, relayUrl),
+          ));
+          return;
+        }
         if (durable) {
           const copy = await tx
             .select()

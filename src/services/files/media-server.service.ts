@@ -5,12 +5,12 @@ import { db } from '@/db/client';
 import { mediaServerLists } from '@/db/schema';
 import { DEFAULT_BLOSSOM_SERVERS, normalizeBlossomUrl, normalizeBlossomUrls, normalizeAdvertisedBlossomUrl } from '@/lib/nostr/blossom-url';
 
-import { canApplyConfigurationEvent, prepareConfiguration, publishConfigurationAndWait } from '../relay/configuration-publish.service';
+import { canApplyConfigurationEvent, saveRoutingSettings } from '../relay/configuration-publish.service';
 import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
 import { publicUrl } from '../napplet/protocol';
 import { fetchReplaceable, peerMetaRelays } from '../relay/relay-router';
 import { loadCachedReplaceableEvent } from '../relay/replaceable-events.service';
-import type { Signer } from '../signer/signer.interface';
+import { persistRoutingSettingsEvent, readRoutingSettingsEdit } from '../relay/routing-settings-edits';
 
 /** BUD-03 "User Server List" — the account's preferred Blossom media servers. */
 export const KIND_BLOSSOM_SERVER_LIST = 10063;
@@ -24,6 +24,8 @@ function parseServerTags(event: Event): string[] {
 
 /** Load the account's stored media servers (in order), falling back to defaults. */
 export async function loadAccountMediaServers(accountPubkey: string): Promise<string[]> {
+  const edit = await readRoutingSettingsEdit(accountPubkey, KIND_BLOSSOM_SERVER_LIST);
+  if (edit) return edit.urls;
   const rows = await db
     .select()
     .from(mediaServerLists)
@@ -59,27 +61,11 @@ export async function loadSenderMediaServers(senderPubkey: string): Promise<stri
   return [...servers];
 }
 
-/** Replace the account's media-server list and publish kind 10063 (BUD-03). */
-export async function saveAndPublishMediaServers(opts: {
-  accountPubkey: string;
-  signer: Signer;
-  servers: string[];
-  abort?: AbortSignal;
-}): Promise<void> {
-  const normalized = Array.from(new Set(opts.servers.map(normalizeBlossomUrl)));
+/** Apply the preferred media servers and schedule their BUD-03 declaration. */
+export async function saveMediaServers(accountPubkey: string, servers: string[]): Promise<void> {
+  const normalized = [...new Set(servers.map(normalizeBlossomUrl))];
   if (!normalized.length) throw new Error('At least one media server is required.');
-  await prepareConfiguration(opts.accountPubkey, KIND_BLOSSOM_SERVER_LIST, '', () =>
-    publishConfigurationAndWait(opts.accountPubkey, opts.signer, {
-      kind: KIND_BLOSSOM_SERVER_LIST, content: '', tags: normalized.map(url => ['server', url]),
-      created_at: Math.floor(Date.now() / 1000),
-    }, async (event, tx) => {
-      await tx.delete(mediaServerLists).where(eq(mediaServerLists.accountPubkey, opts.accountPubkey));
-      for (const serverUrl of normalized) {
-        await tx.insert(mediaServerLists).values({ accountPubkey: opts.accountPubkey,
-          serverUrl, updatedAt: event.created_at });
-      }
-    }, undefined, opts.abort),
-  );
+  await saveRoutingSettings(accountPubkey, KIND_BLOSSOM_SERVER_LIST, normalized);
 }
 
 /**
@@ -101,25 +87,14 @@ export async function applyMediaServersEvent(
   const rows = await db
     .select()
     .from(mediaServerLists)
-    .where(eq(mediaServerLists.accountPubkey, accountPubkey));
+    .where(eq(mediaServerLists.accountPubkey, accountPubkey))
+    .orderBy(sql`rowid`);
   const localTs = rows.reduce((max, r) => Math.max(max, r.updatedAt), 0);
-  if (event.created_at <= localTs) return;
+  if (event.created_at < localTs || (event.created_at === localTs &&
+    normalizeBlossomUrls(rows.map(row => row.serverUrl)).join('\n') === servers.join('\n'))) return;
 
   await db.transaction(async (tx) => {
     if (!(await canApplyConfigurationEvent(accountPubkey, event.kind, '', event, tx))) return;
-    await tx
-      .delete(mediaServerLists)
-      .where(eq(mediaServerLists.accountPubkey, accountPubkey))
-      .run();
-    for (const url of servers) {
-      await tx
-        .insert(mediaServerLists)
-        .values({
-          accountPubkey,
-          serverUrl: url,
-          updatedAt: event.created_at,
-        })
-        .run();
-    }
+    await persistRoutingSettingsEvent(event, tx);
   });
 }

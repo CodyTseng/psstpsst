@@ -10,6 +10,7 @@ import { waitForMessagingSendReadiness } from '@/services/dm/messaging-send-read
 jest.mock('@/services/signer/signer-sessions', () => ({ endAccountSignerSession: jest.fn(async () => {}) }));
 
 jest.mock('@/services/account/generated-account-setup', () => ({ initializeGeneratedAccount: jest.fn() }));
+jest.mock('@/services/notifications/push-registration.service', () => ({ pushRegistrationService: { reconcile: jest.fn() } }));
 jest.mock('@/services/relay/configuration-publish.service', () => ({ configurationPublisher: { start: jest.fn(), stop: jest.fn() } }));
 jest.mock('@/services/account/account.service', () => ({
   getAccount: jest.fn(async () => ({ signerType: 'nsec', signerPayload: '', localSetupPending: false })),

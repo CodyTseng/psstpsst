@@ -3,6 +3,7 @@ export * from './attachment-urls';
 export * from './blocked-users';
 export * from './contacts';
 export * from './configuration-outbox';
+export * from './routing-settings-edits';
 export * from './contact-sync-state';
 export * from './conversations';
 export * from './device-preferences';

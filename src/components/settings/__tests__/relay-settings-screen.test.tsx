@@ -10,15 +10,23 @@ import { AppButton } from '@/components/common/AppButton';
 import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { SortableUrlList } from '@/components/common/SortableUrlList';
 import { darkPalette, lightPalette } from '@/theme';
-import { saveAndPublishWriteRelays, saveAndPublishDmRelays } from '@/services/relay/relay-list.service';
-import { showToast } from '@/stores/toast.store';
+import { saveWriteRelays, saveDmRelays } from '@/services/relay/relay-list.service';
+import { dmService } from '@/services/dm/dm.service';
 import { AppText } from '@/components/common/AppText';
 
 jest.mock('@/services/explore/discovery', () => ({ refreshDiscoverySources: jest.fn() }));
-jest.mock('@/services/explore/discovery-relays', () => ({ loadDiscoveryRelays: jest.fn(async () => ({ napp: ['wss://napp.example/'], napplet: ['wss://napplet.example/'] })), saveDiscoveryRelays: jest.fn(async () => {}), DEFAULT_DISCOVERY_RELAYS: { napp: ['wss://relay.nostrapps.com/'], napplet: ['wss://relay.napplet.soy/'] } }));
+jest.mock('@/services/explore/discovery-relays', () => ({
+  loadDiscoveryRelays: jest.fn(async () => mockDiscoveryLists),
+  saveDiscoveryRelays: jest.fn(async (kind: 'napp' | 'napplet', urls: string[]) => { mockDiscoveryLists[kind] = urls; }),
+  DEFAULT_DISCOVERY_RELAYS: { napp: ['wss://relay.nostrapps.com/'], napplet: ['wss://relay.napplet.soy/'] },
+}));
 
 let mockScheme: 'light' | 'dark' = 'light';
 const mockAccount = { activePubkey: 'self' };
+let mockDmRelays: string[];
+let mockWriteRelays: string[];
+let mockDiscoveryLists: { napp: string[]; napplet: string[] };
+const mockChangeListeners = new Set<(event: { tableName?: string }) => void>();
 jest.mock('@/stores/theme.store', () => ({
   useThemeStore: (selector: (state: object) => unknown) => selector({ accent: 'blue', preference: mockScheme }),
 }));
@@ -28,13 +36,12 @@ jest.mock('@/stores/active-account.store', () => ({
   }),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-jest.mock('@/services/account/account-access', () => ({ buildSigner: async () => ({}) }));
 jest.mock('@/services/dm/dm.service', () => ({ dmService: { refreshRelayConfiguration: jest.fn() } }));
 jest.mock('@/services/relay/relay-list.service', () => ({
-  loadAccountDmRelays: async () => ['wss://dm.example/'],
-  loadAccountWriteRelays: async () => ['wss://write.example/'],
-  saveAndPublishWriteRelays: jest.fn(async () => ({})),
-  saveAndPublishDmRelays: jest.fn(async () => {}),
+  loadAccountDmRelays: async () => mockDmRelays,
+  loadLocalWriteRelays: async () => mockWriteRelays,
+  saveWriteRelays: jest.fn(async (_account: string, urls: string[]) => { mockWriteRelays = urls; }),
+  saveDmRelays: jest.fn(async (_account: string, urls: string[]) => { mockDmRelays = urls; }),
 }));
 jest.mock('@/hooks/use-scrolled', () => ({ useScrolled: () => ({ scrolled: false, scrollProps: {} }) }));
 jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null, useScreenHeaderClearance: () => 48 }));
@@ -46,8 +53,12 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: jest.requireActual('react-native').View,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock('@/platform', () => ({ platform: {} }));
-jest.mock('@/stores/toast.store', () => ({ showToast: jest.fn() }));
+jest.mock('@/platform', () => ({ platform: { database: {
+  addChangeListener: (listener: (event: { tableName?: string }) => void) => {
+    mockChangeListeners.add(listener);
+    return () => mockChangeListeners.delete(listener);
+  },
+} } }));
 
 let renderer: ReactTestRenderer;
 let activeMode = 'dm';
@@ -61,6 +72,11 @@ async function renderSettings(mode: 'dm' | 'write') {
   await act(async () => { renderer = create(<RelaySettingsScreen />); });
   if (mode === 'write') await selectTab(mode);
 }
+beforeEach(() => {
+  mockDmRelays = ['wss://dm.example/'];
+  mockWriteRelays = ['wss://write.example/'];
+  mockDiscoveryLists = { napp: ['wss://napp.example/'], napplet: ['wss://napplet.example/'] };
+});
 afterEach(() => { act(() => renderer?.unmount()); jest.clearAllMocks(); });
 
 it.each(['light', 'dark'] as const)('edits publishing relays independently in %s mode', async (scheme) => {
@@ -71,85 +87,48 @@ it.each(['light', 'dark'] as const)('edits publishing relays independently in %s
   expect(JSON.stringify(renderer.toJSON())).toContain('relays.write_subtitle');
   expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://write.example/']);
   act(() => { activePanel().findByType(AppInput).props.onChangeText('new.example'); });
-  act(() => { activePanel().findByType(AppInput).props.onSubmitEditing(); });
-  await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
-  expect(saveAndPublishWriteRelays).toHaveBeenCalledWith(expect.objectContaining({
-    accountPubkey: 'self', relays: ['wss://write.example/', 'wss://new.example/'],
-  }));
-  expect(saveAndPublishDmRelays).not.toHaveBeenCalled();
-  expect(showToast).toHaveBeenCalledWith('relays.save_success', { target: 'detail' });
+  await act(async () => { activePanel().findByType(AppInput).props.onSubmitEditing(); });
+  expect(saveWriteRelays).toHaveBeenCalledWith('self', ['wss://write.example/', 'wss://new.example/']);
+  expect(saveDmRelays).not.toHaveBeenCalled();
+  expect(dmService.refreshRelayConfiguration).toHaveBeenCalledWith('self');
+  expect(activePanel().findAllByType(AppButton)).toHaveLength(0);
 });
 
-it('keeps the draft and shows a save failure even when the input is empty', async () => {
-  jest.mocked(saveAndPublishWriteRelays).mockRejectedValueOnce(new Error('disk unavailable'));
-  await renderSettings('write');
-  act(() => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new.example/']); });
-  await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
+it.each(['dm', 'write'] as const)('keeps a failed %s relay edit retryable', async (mode) => {
+  const save = mode === 'dm' ? saveDmRelays : saveWriteRelays;
+  jest.mocked(save).mockRejectedValueOnce(new Error('disk unavailable'));
+  await renderSettings(mode);
+  await act(async () => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new.example/']); });
   expect(activePanel().findByType(AppInput).props.error).toBeUndefined();
   expect(activePanel().findAllByType(AppText).some((node) => node.props.children === 'relays.save_error')).toBe(true);
-  expect(showToast).toHaveBeenCalledWith('relays.save_error', { variant: 'error', target: 'detail' });
-  expect(activePanel().findByType(AppButton).props.disabled).toBe(false);
   expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://new.example/']);
+  expect(dmService.refreshRelayConfiguration).not.toHaveBeenCalled();
+  const retry = activePanel().findByType(AppButton);
+  expect(retry.props.label).toBe('common.retry');
+  await act(async () => { await retry.props.onPress(); });
+  expect(save).toHaveBeenLastCalledWith('self', ['wss://new.example/']);
+  expect(activePanel().findAllByType(AppButton)).toHaveLength(0);
 });
 
-it('keeps message-relay edits on their independent save path', async () => {
+it('applies each tab immediately and preserves unfinished input across tabs', async () => {
   await renderSettings('dm');
-  act(() => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new-dm.example/']); });
-  await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
-  expect(saveAndPublishDmRelays).toHaveBeenCalled();
-  expect(saveAndPublishWriteRelays).not.toHaveBeenCalled();
-  expect(showToast).toHaveBeenCalledWith('relays.save_success', { target: 'detail' });
-});
-
-it('shows saving until the save completes, then acknowledges success', async () => {
-  let finish!: () => void;
-  jest.mocked(saveAndPublishDmRelays).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
-  await renderSettings('dm');
-  act(() => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new.example/']); });
-  let pending!: Promise<void>;
-  await act(async () => { pending = activePanel().findByType(AppButton).props.onPress(); });
-  expect(activePanel().findByType(AppButton).props.loading).toBe(true);
-  expect(activePanel().findByType(AppButton).props.label).toBe('relays.save');
-  expect(showToast).not.toHaveBeenCalled();
-  await act(async () => { finish(); await pending; });
-  expect(showToast).toHaveBeenCalledWith('relays.save_success', { target: 'detail' });
-  expect(activePanel().findByType(AppButton).props.loading).toBe(false);
-  expect(activePanel().findByType(AppButton).props.disabled).toBe(true);
-});
-
-it.each(['dm', 'write'] as const)('keeps a failed %s relay draft retryable and clears the error after a successful retry', async (mode) => {
-  jest.mocked(mode === 'dm' ? saveAndPublishDmRelays : saveAndPublishWriteRelays).mockRejectedValueOnce(new Error('publish failed'));
-  await renderSettings(mode);
-  act(() => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new.example/']); });
-  await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
-  expect(showToast).toHaveBeenLastCalledWith('relays.save_error', { variant: 'error', target: 'detail' });
-  expect(activePanel().findAllByType(AppText).some((node) => node.props.children === 'relays.save_error')).toBe(true);
-  expect(activePanel().findByType(AppButton).props.disabled).toBe(false);
-  expect(activePanel().findByType(AppButton).props.loading).toBe(false);
-  expect(activePanel().findByType(AppButton).props.label).toBe('relays.save');
-  expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://new.example/']);
-  await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
-  expect(showToast).toHaveBeenLastCalledWith('relays.save_success', { target: 'detail' });
-  expect(activePanel().findAllByType(AppText).some((node) => node.props.children === 'relays.save_error')).toBe(false);
-});
-
-it('preserves both drafts across tab switches and saves only the selected list', async () => {
-  await renderSettings('dm');
-  act(() => { activePanel().findByType(SortableUrlList).props.onChange(['wss://draft-dm.example/']); });
+  await act(async () => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new-dm.example/']); });
   act(() => { activePanel().findByType(AppInput).props.onChangeText('unfinished.example'); });
   await selectTab('write');
-  act(() => { activePanel().findByType(SortableUrlList).props.onChange(['wss://draft-write.example/']); });
+  await act(async () => { activePanel().findByType(SortableUrlList).props.onChange(['wss://new-write.example/']); });
+  expect(saveDmRelays).toHaveBeenCalledWith('self', ['wss://new-dm.example/']);
+  expect(saveWriteRelays).toHaveBeenCalledWith('self', ['wss://new-write.example/']);
   await selectTab('dm');
-  expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://draft-dm.example/']);
   expect(activePanel().findByType(AppInput).props.value).toBe('unfinished.example');
-  await selectTab('write');
-  await act(async () => { await activePanel().findByType(AppButton).props.onPress(); });
-  expect(saveAndPublishWriteRelays).toHaveBeenCalledWith(expect.objectContaining({ relays: ['wss://draft-write.example/'] }));
-  expect(saveAndPublishDmRelays).not.toHaveBeenCalled();
-  expect(activePanel().findByType(AppButton).props.disabled).toBe(true);
-  await selectTab('dm');
-  expect(activePanel().findByType(AppButton).props.disabled).toBe(false);
-  expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://draft-dm.example/']);
+  expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://new-dm.example/']);
+});
+
+it('keeps at least one inbox relay', async () => {
+  await renderSettings('dm');
+  const list = activePanel().findByType(SortableUrlList);
+  expect(list.props.removeDisabled).toBe(true);
+  await act(async () => { list.props.onRemove('wss://dm.example/'); });
+  expect(saveDmRelays).not.toHaveBeenCalled();
 });
 
 it.each(['light', 'dark'] as const)('prefills only the message-relay input without adding or saving in %s mode', async (scheme) => {
@@ -160,7 +139,7 @@ it.each(['light', 'dark'] as const)('prefills only the message-relay input witho
   });
   expect(activePanel().findByType(AppInput).props.value).toBe('wss://relay.psstpsst.chat/');
   expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://dm.example/']);
-  expect(saveAndPublishDmRelays).not.toHaveBeenCalled();
+  expect(saveDmRelays).not.toHaveBeenCalled();
   await selectTab('write');
   expect(activePanel().findByType(AppInput).props.value).toBe('');
   await selectTab('dm');
@@ -189,8 +168,8 @@ it.each(['light', 'dark'] as const)('applies discovery edits immediately and ret
   expect(panel('napp').findByType(SortableUrlList).props.value).toEqual(['wss://custom.example/']);
   await act(async () => { panel('napp').findByProps({ label: 'common.reset' }).props.onPress(); });
   expect(saveDiscoveryRelays).toHaveBeenLastCalledWith('napp', ['wss://relay.nostrapps.com/']);
-  expect(saveAndPublishDmRelays).not.toHaveBeenCalled();
-  expect(saveAndPublishWriteRelays).not.toHaveBeenCalled();
+  expect(saveDmRelays).not.toHaveBeenCalled();
+  expect(saveWriteRelays).not.toHaveBeenCalled();
   act(() => { panel('napp').findByType(AppInput).props.onChangeText('added.example'); });
   await act(async () => { panel('napp').findByType(AppInput).props.onSubmitEditing(); });
   expect(saveDiscoveryRelays).toHaveBeenLastCalledWith('napp', ['wss://relay.nostrapps.com/', 'wss://added.example/']);
@@ -206,4 +185,23 @@ it('keeps newer discovery edits interactive and ignores failures from older edit
   await act(async () => { fail(new Error('old write failed')); });
   expect(panel.findByType(SortableUrlList).props.value).toEqual(['wss://latest.example/']);
   expect(panel.findAllByProps({ label: 'common.retry' })).toHaveLength(0);
+});
+
+it.each([
+  ['dm', 'relay_lists', saveDmRelays],
+  ['write', 'replaceable_events', saveWriteRelays],
+] as const)('reloads the open %s list after it changes and adds to the updated list', async (mode, tableName, save) => {
+  await renderSettings(mode);
+  act(() => { activePanel().findByType(AppInput).props.onChangeText('added.example'); });
+  await act(async () => {
+    if (mode === 'dm') mockDmRelays = ['wss://remote.example/'];
+    else mockWriteRelays = ['wss://remote.example/'];
+    mockChangeListeners.forEach(listener => listener({ tableName }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+  });
+  expect(activePanel().findByType(SortableUrlList).props.value).toEqual(['wss://remote.example/']);
+  expect(activePanel().findByType(AppInput).props.value).toBe('added.example');
+  expect(save).not.toHaveBeenCalled();
+  await act(async () => { activePanel().findByType(AppInput).props.onSubmitEditing(); });
+  expect(save).toHaveBeenCalledWith('self', ['wss://remote.example/', 'wss://added.example/']);
 });

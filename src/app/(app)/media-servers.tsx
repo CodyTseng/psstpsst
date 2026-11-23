@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -16,14 +16,12 @@ import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/Scre
 import { SectionLabel } from '@/components/common/SectionLabel';
 import { SortableUrlList } from '@/components/common/SortableUrlList';
 import { DEFAULT_BLOSSOM_SERVERS, normalizeBlossomUrl } from '@/lib/nostr/blossom-url';
-import { buildSigner } from '@/services/account/account-access';
-import type { Signer } from '@/services/signer/signer.interface';
 import {
   loadAccountMediaServers,
-  saveAndPublishMediaServers,
+  saveMediaServers,
 } from '@/services/files/media-server.service';
 import { useActiveAccount } from '@/stores/active-account.store';
-import { showToast } from '@/stores/toast.store';
+import { useSettingsAutosave } from '@/hooks/use-settings-autosave';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
@@ -39,39 +37,28 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
 
-  const [servers, setServers] = useState<string[]>([]);
-  const [original, setOriginal] = useState<string[]>([]);
   const [newServer, setNewServer] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const saveAbort = useRef<AbortController | null>(null);
-  const [loadedAccountPubkey, setLoadedAccountPubkey] = useState<string | null>(null);
+  const loadServers = useCallback(
+    () => accountPubkey ? loadAccountMediaServers(accountPubkey) : Promise.resolve([]),
+    [accountPubkey],
+  );
+  const { urls: servers, saveFailed, persist, loadError, retryLoad } = useSettingsAutosave(
+    'blossom',
+    accountPubkey ? loadServers : null,
+    async (next) => { if (accountPubkey) await saveMediaServers(accountPubkey, next); },
+    t('media_servers.save_error'),
+  );
 
-  useEffect(() => () => { saveAbort.current?.abort(); }, []);
-
-  useEffect(() => {
-    if (!accountPubkey) return;
-    let mounted = true;
-    void loadAccountMediaServers(accountPubkey).then((list) => {
-      if (!mounted) return;
-      setServers(list);
-      setOriginal(list);
-      setLoadedAccountPubkey(accountPubkey);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [accountPubkey]);
-
-  const dirty = servers.join(',') !== original.join(',');
-  const canSave = dirty && servers.length > 0 && !saving;
-  const recommendedServers = DEFAULT_BLOSSOM_SERVERS.filter((server) => !servers.includes(server));
+  function changeServers(next: string[]) {
+    if (!servers || next.length === 0 || next.join('\n') === servers.join('\n')) return;
+    void persist(next);
+  }
 
   function handleAdd() {
     setError(null);
     const raw = newServer.trim();
-    if (!raw || saving) return;
+    if (!raw || !servers) return;
     let normalized: string;
     try {
       normalized = normalizeBlossomUrl(raw);
@@ -83,54 +70,32 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
       setError(t('media_servers.duplicate'));
       return;
     }
-    setServers([...servers, normalized]);
+    changeServers([...servers, normalized]);
     setNewServer('');
   }
 
   function handleRemove(url: string) {
-    if (!saving) setServers(servers.filter((s) => s !== url));
+    if (servers) changeServers(servers.filter((s) => s !== url));
   }
 
   function handleAddRecommended(url: string) {
-    if (saving) return;
     setError(null);
-    setServers((current) => (current.includes(url) ? current : [...current, url]));
+    if (servers && !servers.includes(url)) changeServers([...servers, url]);
   }
 
-  async function handleSave() {
-    if (!accountPubkey || !canSave || saveAbort.current) return;
-    const abort = new AbortController();
-    saveAbort.current = abort;
-    setSaving(true);
-    setError(null);
-    setSaveError(null);
-    let signer: Signer | undefined;
-    try {
-      signer = await buildSigner(accountPubkey);
-      if (useActiveAccount.getState().activePubkey !== accountPubkey || abort.signal.aborted) return;
-      await saveAndPublishMediaServers({ accountPubkey, signer, servers, abort: abort.signal });
-      if (useActiveAccount.getState().activePubkey !== accountPubkey || abort.signal.aborted) return;
-      setOriginal(servers);
-      showToast(t('media_servers.save_success'), { target: 'detail' });
-    } catch {
-      if (useActiveAccount.getState().activePubkey !== accountPubkey || abort.signal.aborted) return;
-      const message = t('media_servers.save_error');
-      setSaveError(message);
-      showToast(message, { variant: 'error', target: 'detail' });
-    } finally {
-      saveAbort.current = null;
-      setSaving(false);
-      try { await signer?.destroy?.(); } catch { /* Publication already settled. */ }
-    }
-  }
-
-  if (!accountPubkey || loadedAccountPubkey !== accountPubkey) {
+  if (!accountPubkey || !servers) {
     return (
       <AppScreen edges={['bottom']}>
+        {loadError && <View style={{ padding: spacing.lg, paddingTop: titleClearance + spacing.sm, gap: spacing.sm }}>
+          <AppText variant="body" tone="danger">{t('error.unexpected_title')}</AppText>
+          <AppButton label={t('common.retry')} onPress={retryLoad} />
+        </View>}
         <ScreenHeader title={t('media_servers.title')} />
       </AppScreen>
     );
   }
+
+  const recommendedServers = DEFAULT_BLOSSOM_SERVERS.filter((server) => !servers.includes(server));
 
   return (
     <AppScreen edges={['bottom']}>
@@ -161,8 +126,9 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
         ) : (
           <SortableUrlList
             value={servers}
-            onChange={(next) => { if (!saving) setServers(next); }}
+            onChange={changeServers}
             onRemove={handleRemove}
+            removeDisabled={servers.length === 1}
             removeAccessibilityLabel={t('common.delete')}
           />
         )}
@@ -175,7 +141,6 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
             onChangeText={setNewServer}
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!saving}
             error={error ?? undefined}
             onSubmitEditing={handleAdd}
             trailingAccessory={
@@ -185,7 +150,7 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
                 size={uiDensity.inputHeight}
                 accessibilityLabel={t('media_servers.add_label')}
                 onPress={handleAdd}
-                disabled={saving || !newServer.trim()}
+                disabled={!newServer.trim()}
                 icon={
                   <Plus
                     strokeWidth={iconStrokeWidth.default}
@@ -206,24 +171,17 @@ function MediaServersForm({ accountPubkey }: { accountPubkey: string | null }) {
                 accessibilityRole="button"
                 icon={<ServerSquare size={uiDensity.headerActionIconSize} color={c.textMuted} />}
                 trailing={<Plus size={uiDensity.headerActionIconSize} strokeWidth={iconStrokeWidth.default} color={c.textMuted} />}
-                disabled={saving} onPress={() => handleAddRecommended(url)} />
+                onPress={() => handleAddRecommended(url)} />
             ))}
           </View>
         ) : null}
 
-        <View style={{ gap: spacing.sm }}>
-          {saveError && (
-            <AppText variant="body" tone="danger" accessibilityLiveRegion="polite" selectable>{saveError}</AppText>
-          )}
-          <AppButton
-            label={t('media_servers.save')}
-            variant="primary"
-            size="lg"
-            loading={saving}
-            disabled={!canSave}
-            onPress={handleSave}
-          />
-        </View>
+        {saveFailed && <View style={{ gap: spacing.sm }}>
+          <AppText variant="body" tone="danger" accessibilityLiveRegion="polite" selectable>
+            {t('media_servers.save_error')}
+          </AppText>
+          <AppButton label={t('common.retry')} variant="secondary" onPress={() => persist(servers)} />
+        </View>}
       </AppFormScrollView>
       <ScreenHeader bordered={scrolled} title={t('media_servers.title')} />
     </AppScreen>

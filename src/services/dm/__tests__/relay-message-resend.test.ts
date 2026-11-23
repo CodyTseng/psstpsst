@@ -83,8 +83,8 @@ it('prepares and publishes a resend to peer and self from the original stored ru
     markTargetsPending: () => Promise<void>;
   };
   const targets = [
-    { recipientPubkey: 'peer', relayUrl: 'wss://peer.example/' },
-    { recipientPubkey: 'self', relayUrl: 'wss://self.example/' },
+    { recipientPubkey: 'peer', relayUrl: 'wss://peer.example/', nextAttemptAt: 0 },
+    { recipientPubkey: 'self', relayUrl: 'wss://self.example/', nextAttemptAt: 0 },
   ];
   const job = { id: 1, scope: 'resend_all', accountPubkey: 'self', messageId: originalRumor.id };
   const query = {

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -10,8 +10,8 @@ import {
 } from '@/lib/nostr/relay-url';
 
 import { KIND_DM_RELAY_LIST, KIND_RELAY_LIST_METADATA } from '../crypto/nip17-gift-wrap';
-import { canApplyConfigurationEvent, prepareConfiguration, publishConfiguration, publishConfigurationAndWait } from './configuration-publish.service';
-import { prepareWriteRelayConfiguration } from './relay-configuration-template';
+import { canApplyConfigurationEvent, publishConfiguration, saveRoutingSettings } from './configuration-publish.service';
+import { persistRoutingSettingsEvent, readRoutingSettingsEdit } from './routing-settings-edits';
 import type { Signer } from '../signer/signer.interface';
 import { loadAccountDmRelays } from './local-relay-settings';
 import { pushRegistrationService } from '../notifications/push-registration.service';
@@ -82,27 +82,17 @@ export async function applyOwnDmRelayListEvent(
 ): Promise<boolean> {
   if (event.kind !== KIND_DM_RELAY_LIST || event.pubkey !== accountPubkey) return false;
   const rows = await db
-    .select({ updatedAt: relayLists.updatedAt })
+    .select({ updatedAt: relayLists.updatedAt, relayUrl: relayLists.relayUrl })
     .from(relayLists)
-    .where(eq(relayLists.accountPubkey, accountPubkey));
+    .where(eq(relayLists.accountPubkey, accountPubkey))
+    .orderBy(sql`rowid`);
   const currentUpdatedAt = rows.reduce((max, r) => Math.max(max, r.updatedAt), 0);
-  if (currentUpdatedAt >= event.created_at) return false;
   const relays = parseRelayTags(event);
+  if (currentUpdatedAt > event.created_at || (currentUpdatedAt === event.created_at &&
+    normalizeRelayUrls(rows.map(row => row.relayUrl)).join('\n') === relays.join('\n'))) return false;
   const applied = await db.transaction(async (tx) => {
     if (!(await canApplyConfigurationEvent(accountPubkey, event.kind, '', event, tx))) return false;
-    await tx.delete(relayLists).where(eq(relayLists.accountPubkey, accountPubkey)).run();
-    for (const url of relays) {
-      await tx
-        .insert(relayLists)
-        .values({
-          accountPubkey,
-          relayUrl: url,
-          read: false,
-          write: false,
-          updatedAt: event.created_at,
-        })
-        .run();
-    }
+    await persistRoutingSettingsEvent(event, tx);
     return true;
   });
   if (!applied) return false;
@@ -234,27 +224,25 @@ async function loadOwnRelayListMetadata(accountPubkey: string): Promise<Event | 
  * Falls back to the discovery set when no list is known.
  */
 export async function loadAccountWriteRelays(accountPubkey: string): Promise<string[]> {
-  const event = await loadOwnRelayListMetadata(accountPubkey);
+  const edit = await readRoutingSettingsEdit(accountPubkey, KIND_RELAY_LIST_METADATA);
+  if (edit) return edit.urls;
+  await loadOwnRelayListMetadata(accountPubkey);
+  return loadLocalWriteRelays(accountPubkey);
+}
+
+/** Read the editor's starting list without waiting for relay discovery. */
+export async function loadLocalWriteRelays(accountPubkey: string): Promise<string[]> {
+  const edit = await readRoutingSettingsEdit(accountPubkey, KIND_RELAY_LIST_METADATA);
+  if (edit) return edit.urls;
+  const event = await getReplaceableEvent({ pubkey: accountPubkey, kind: KIND_RELAY_LIST_METADATA });
   const write = event ? parseRelayListMetadata(event).write : [];
   return write.length > 0 ? write : [...NORMALIZED_DISCOVERY];
 }
 
-/** Refresh, merge, sign, and confirm a manual write-relay edit before returning. */
-export function saveAndPublishWriteRelays(opts: {
-  accountPubkey: string;
-  signer: Signer;
-  relays: string[];
-  abort?: AbortSignal;
-}): Promise<Event> {
-  return prepareConfiguration(opts.accountPubkey, KIND_RELAY_LIST_METADATA, '', async () => {
-    const checkCurrent = () => {
-      if (opts.abort?.aborted) throw new Error('Relay settings publication was cancelled.');
-    };
-    checkCurrent();
-    const snapshot = await prepareWriteRelayConfiguration(opts.accountPubkey, opts.relays, checkCurrent);
-    return publishConfigurationAndWait(opts.accountPubkey, opts.signer, snapshot.template,
-      undefined, snapshot.previousEventId, opts.abort);
-  });
+export async function saveWriteRelays(accountPubkey: string, urls: string[]): Promise<void> {
+  const relays = [...new Set(urls.map(normalizeRelayUrl))];
+  if (!relays.length) throw new Error('At least one write relay is required.');
+  await saveRoutingSettings(accountPubkey, KIND_RELAY_LIST_METADATA, relays);
 }
 
 /**
@@ -307,38 +295,20 @@ export async function ownMetaRelays(accountPubkey: string): Promise<string[]> {
   return Array.from(new Set([...write, ...NORMALIZED_DISCOVERY]));
 }
 
-/** Replace the current account's DM relay list and publish kind 10050. */
-export async function saveAndPublishDmRelays(opts: {
-  accountPubkey: string;
-  signer: Signer;
-  relays: string[];
-  abort?: AbortSignal;
-}): Promise<void> {
-  const relays = Array.from(new Set(opts.relays.map(normalizeRelayUrl)));
+/** Apply the new inbox list and schedule its declaration. */
+export async function saveDmRelays(accountPubkey: string, urls: string[]): Promise<void> {
+  const relays = [...new Set(urls.map(normalizeRelayUrl))];
   if (!relays.length) throw new Error('At least one relay is required.');
-  await prepareConfiguration(opts.accountPubkey, KIND_DM_RELAY_LIST, '', () =>
-    publishConfigurationAndWait(opts.accountPubkey, opts.signer, {
-      kind: KIND_DM_RELAY_LIST, content: '', tags: relays.map(url => ['relay', url]), created_at: Math.floor(Date.now() / 1000),
-    }, persistDmRelays, undefined, opts.abort),
-  );
+  await saveRoutingSettings(accountPubkey, KIND_DM_RELAY_LIST, relays);
   void pushRegistrationService.reconcile();
 }
 
-async function persistDmRelays(event: Event, tx: typeof db): Promise<void> {
-  await tx.delete(relayLists).where(eq(relayLists.accountPubkey, event.pubkey));
-  for (const relayUrl of parseRelayTags(event)) {
-    await tx.insert(relayLists).values({ accountPubkey: event.pubkey, relayUrl,
-      read: false, write: false, updatedAt: event.created_at });
-  }
-}
-
-/** Initial account setup uses the shared durable outbox, independently of the
- * manual relay editor's confirmation flow. */
+/** Initial account setup queues a signed declaration immediately. */
 export async function queueInitialDmRelays(opts: { accountPubkey: string; signer: Signer; relays: string[] }): Promise<void> {
   const relays = Array.from(new Set(opts.relays.map(normalizeRelayUrl)));
   if (!relays.length) throw new Error('At least one relay is required.');
   await publishConfiguration(opts.accountPubkey, opts.signer, {
     kind: KIND_DM_RELAY_LIST, content: '', tags: relays.map(url => ['relay', url]), created_at: Math.floor(Date.now() / 1000),
-  }, persistDmRelays);
+  }, persistRoutingSettingsEvent);
   void pushRegistrationService.reconcile();
 }

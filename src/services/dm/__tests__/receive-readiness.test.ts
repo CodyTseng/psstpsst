@@ -54,7 +54,11 @@ jest.mock('../../account/account.service', () => ({ buildSigner: async () => ({ 
 jest.mock('../../files/media-index.service', () => ({}));
 jest.mock('../../files/file-attachment.service', () => ({}));
 jest.mock('../../conversation/message-tail-cache', () => ({}));
-jest.mock('../../relay/relay-list.service', () => ({ ownKeyTransferRelays: async () => [] }));
+jest.mock('../../relay/relay-list.service', () => ({
+  ownKeyTransferRelays: async () => [],
+  loadAccountDmRelays: async () => ['ws://192.168.1.10:7777/'],
+  loadLocalWriteRelays: async () => ['ws://192.168.1.11:7777/'],
+}));
 jest.mock('../../relay/relay-router', () => ({}));
 jest.mock('../../relay/relay-pool', () => ({ relayPool: { subscribe: jest.fn(), query: jest.fn(), destroy: jest.fn(), hasHealthySubscription: jest.fn(() => false) } }));
 jest.mock('../../self-events/self-event-stream.service', () => ({
@@ -156,6 +160,42 @@ it('opens no message intake before metadata resolves, then uses fresh relays', a
   await starting;
   expect(live().relays).toEqual(['wss://fresh.example']);
   expect(live().filters).toEqual([{ kinds: [1059], '#p': [self], limit: 0 }]);
+});
+
+it('rebuilds ready intake from local routing without waiting for remote metadata', async () => {
+  await dmService.init(options);
+  expect(receiveSessionStore.getState().status).toBe('ready');
+  resolveMetadata.mockClear();
+  dmService.refreshRelayConfiguration(self);
+  await flush();
+  expect(resolveMetadata).not.toHaveBeenCalled();
+  expect(live().relays).toEqual(['ws://192.168.1.10:7777/']);
+  expect(selfEventStream.start).toHaveBeenLastCalledWith(['ws://192.168.1.11:7777/']);
+});
+
+it('rebuilds after a committed remote relay change without querying metadata again', async () => {
+  await dmService.init(options);
+  const config = jest.mocked(selfEventStream.configure).mock.calls.at(-1)![0];
+  config.handlers.onOwnRelayListsChanged();
+  await flush();
+  expect(resolveMetadata).toHaveBeenCalledTimes(1);
+  expect(live().relays).toEqual(['ws://192.168.1.10:7777/']);
+});
+
+it('applies saved routing after an in-progress initialization reaches ready', async () => {
+  const pending = deferred<MessagingMetadata>();
+  resolveMetadata.mockReturnValueOnce(pending.promise);
+  const starting = dmService.init(options);
+  await flush();
+
+  dmService.refreshRelayConfiguration(self);
+  expect(relayPool.subscribe).not.toHaveBeenCalled();
+  pending.resolve(metadata());
+  await starting;
+  await flush();
+  expect(resolveMetadata).toHaveBeenCalledTimes(1);
+  expect(live().relays).toEqual(['ws://192.168.1.10:7777/']);
+  expect(selfEventStream.start).toHaveBeenLastCalledWith(['ws://192.168.1.11:7777/']);
 });
 
 it('waits for live effective EOSE before anchoring history to avoid a subscription startup gap', async () => {

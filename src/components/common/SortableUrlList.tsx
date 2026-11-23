@@ -26,6 +26,7 @@ type Props = {
   onChange: (next: string[]) => void;
   onRemove: (url: string) => void;
   removeAccessibilityLabel: string;
+  removeDisabled?: boolean;
 };
 
 type Slots = Record<string, number>;
@@ -52,7 +53,7 @@ function moveSlot(slots: Slots, from: number, to: number): Slots {
   return next;
 }
 
-export function SortableUrlList({ value, onChange, onRemove, removeAccessibilityLabel }: Props) {
+export function SortableUrlList({ value, onChange, onRemove, removeAccessibilityLabel, removeDisabled }: Props) {
   const slots = useSharedValue<Slots>(Object.fromEntries(value.map((url, index) => [url, index])));
   const orderKey = value.join('\n');
   const height = value.length * ROW_HEIGHT + Math.max(0, value.length - 1) * ROW_GAP;
@@ -79,6 +80,7 @@ export function SortableUrlList({ value, onChange, onRemove, removeAccessibility
           slots={slots}
           onCommit={commitOrder}
           onRemove={onRemove}
+          removeDisabled={removeDisabled}
           removeAccessibilityLabel={removeAccessibilityLabel}
         />
       ))}
@@ -94,6 +96,7 @@ type RowProps = {
   onCommit: () => void;
   onRemove: (url: string) => void;
   removeAccessibilityLabel: string;
+  removeDisabled?: boolean;
 };
 
 function SortableUrlRow({
@@ -103,6 +106,7 @@ function SortableUrlRow({
   slots,
   onCommit,
   onRemove,
+  removeDisabled,
   removeAccessibilityLabel,
 }: RowProps) {
   const c = useThemeColors();
@@ -192,6 +196,7 @@ function SortableUrlRow({
 
         <IconButton
           onPress={() => onRemove(url)}
+          disabled={removeDisabled}
           hitSlop={spacing.sm}
           size={spacing['2xl']}
           icon={<CloseIcon size={16} color={c.textMuted} />}

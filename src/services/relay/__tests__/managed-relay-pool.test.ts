@@ -7,6 +7,7 @@ import type {
   SubscriptionParams,
 } from 'nostr-tools/abstract-relay';
 
+import { RelayPublishRejection } from '../publish-retry';
 import { ManagedRelayPool } from '../managed-relay-pool';
 
 let mockAppState = 'active';
@@ -43,6 +44,19 @@ describe('ManagedRelayPool', () => {
     jest.useRealTimers();
   });
 
+  test('connects to a LAN relay when the network has no Internet access', async () => {
+    const { pool, relays } = createHarness();
+    const lanRelay = 'ws://192.168.1.10:7777/';
+    pool.updateNetworkState({ isConnected: true, isInternetReachable: false });
+    try {
+      await pool.ensureRelay(lanRelay);
+      expect(relays).toHaveLength(1);
+      expect(pool.listConnectionStatus().get(lanRelay)).toBe(true);
+    } finally {
+      pool.destroy();
+    }
+  });
+
   test('idle cleanup preserves another session on the same connection', async () => {
     const { pool, relays } = createHarness();
     const onEvent = jest.fn();
@@ -76,6 +90,33 @@ describe('ManagedRelayPool', () => {
     await pending;
     expect(onEventSource.mock.calls).toEqual([[event, RELAY_A]]);
     harness.pool.destroy();
+  });
+
+  test.each([
+    ['blocked: relay policy', 'rejected'],
+    ['rate-limited: slow down', 'rate-limited'],
+  ])('classifies the negative OK %s', async (reason, failure) => {
+    const { pool, relays } = createHarness();
+    try {
+      await pool.ensureRelay(RELAY_A);
+      jest.spyOn(relays[0], 'publish').mockRejectedValue(new RelayPublishRejection(reason));
+      await expect(pool.publishToRelay({ url: RELAY_A, event: eventAt('publish', 100) }))
+        .resolves.toEqual({ ok: false, reason, failure });
+    } finally {
+      pool.destroy();
+    }
+  });
+
+  test('preserves the advertised wait on rate-limited publication', async () => {
+    const { pool, relays } = createHarness();
+    try {
+      await pool.ensureRelay(RELAY_A);
+      jest.spyOn(relays[0], 'publish').mockRejectedValue(new RelayPublishRejection('rate-limited: slow down', 120_000));
+      await expect(pool.publishToRelay({ url: RELAY_A, event: eventAt('publish', 100) }))
+        .resolves.toEqual({ ok: false, reason: 'rate-limited: slow down', failure: 'rate-limited', retryAfterMs: 120_000 });
+    } finally {
+      pool.destroy();
+    }
   });
 
   test('settles a publish whose connection promise never resolves', async () => {

@@ -1,3 +1,7 @@
+import m0089 from './0089_routing-settings-edit-time.sql';
+import m0088 from './0088_message-relay-rate-limits.sql';
+import m0087 from './0087_relay-publish-retries.sql';
+import m0086 from './0086_routing-settings-edits.sql';
 import m0085 from './0085_authorization-presets.sql';
 import m0084 from './0084_app-authorization.sql';
 import m0083 from './0083_signing-levels.sql';
@@ -177,6 +181,10 @@ m0081,
 m0082,
 m0083,
 m0084,
-m0085
+m0085,
+m0086,
+m0087,
+m0088,
+m0089
     }
   }

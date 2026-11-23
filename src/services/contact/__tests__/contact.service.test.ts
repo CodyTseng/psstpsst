@@ -62,6 +62,9 @@ jest.mock('@/db/client', () => {
   `);
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0044_contact-sync-state.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0045_configuration-outbox.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0086_routing-settings-edits.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0087_relay-publish-retries.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0089_routing-settings-edit-time.sql`, 'utf8'));
   const execute = async (query: string, params: unknown[], method: string) => {
     const statement = sqlite.prepare(query);
     statement.setReturnArrays(true);

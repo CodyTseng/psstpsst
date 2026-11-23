@@ -60,6 +60,7 @@ import {
 } from '../files/file-attachment.service';
 import {
   loadAccountDmRelays,
+  loadLocalWriteRelays,
   ownKeyTransferRelays,
 } from '../relay/relay-list.service';
 import { relayPool } from '../relay/relay-pool';
@@ -302,7 +303,8 @@ export class DmService {
    * account/session detects it's stale and stops. */
   private syncEpoch = 0;
   private receiveAbort: AbortController | null = null;
-  private initializing = false;
+  private initializingAccountPubkey: string | null = null;
+  private deferredRelayReinit = false;
   private historyBackfillTasks = new Map<string, Promise<void>>();
   private inFlightHistoryTasks = new Set<Promise<void>>();
   private historyCompletedRelays = new Set<string>();
@@ -317,6 +319,7 @@ export class DmService {
     accountPubkey: string;
     dmRelays: string[];
     metadata?: MessagingMetadata;
+    localWriteRelays?: string[];
     /** A just-created local identity has no history before its first live session. */
     skipInitialHistory?: boolean;
     abort?: AbortSignal;
@@ -327,7 +330,7 @@ export class DmService {
     const epoch = this.syncEpoch;
     const controller = new AbortController();
     this.receiveAbort = controller;
-    this.initializing = true;
+    this.initializingAccountPubkey = opts.accountPubkey;
     const cancel = () => {
       if (this.syncEpoch === epoch) this.destroy();
     };
@@ -374,7 +377,9 @@ export class DmService {
       // Key transfers use the account's DM and write relays.
       checkCurrent();
       const keyTransferRelays = await profileAsync(profile, 'db.loadKeyRelays', () =>
-        ownKeyTransferRelays(opts.accountPubkey),
+        opts.localWriteRelays
+          ? Promise.resolve([...new Set([...this.dmRelays, ...opts.localWriteRelays])])
+          : ownKeyTransferRelays(opts.accountPubkey),
       );
 
       checkCurrent();
@@ -406,10 +411,10 @@ export class DmService {
           onKeyAnnouncement: (event) => {
             keySyncRequired = this.handleEncryptionKeyAnnouncement(event);
           },
-          onOwnRelayListsChanged: () => this.scheduleRelayListReinit(),
+          onOwnRelayListsChanged: () => this.refreshRelayConfiguration(opts.accountPubkey),
         },
       });
-      await profileAsync(profile, 'relay.startSelfEventStream', () => selfEventStream.start());
+      await profileAsync(profile, 'relay.startSelfEventStream', () => selfEventStream.start(opts.localWriteRelays));
       checkCurrent();
 
       configureSyncRelays(opts.accountPubkey, this.dmRelays);
@@ -493,7 +498,13 @@ export class DmService {
       throw error;
     } finally {
       opts.abort?.removeEventListener('abort', cancel);
-      if (this.syncEpoch === epoch) this.initializing = false;
+      if (this.syncEpoch === epoch) {
+        this.initializingAccountPubkey = null;
+        if (this.deferredRelayReinit) {
+          this.deferredRelayReinit = false;
+          this.scheduleRelayListReinit();
+        }
+      }
       profile?.end();
     }
   }
@@ -507,7 +518,8 @@ export class DmService {
     this.notificationPolls.clear();
     this.receiveAbort?.abort();
     this.receiveAbort = null;
-    this.initializing = false;
+    this.initializingAccountPubkey = null;
+    this.deferredRelayReinit = false;
     this.removeHistoryAppStateListener?.();
     this.removeHistoryAppStateListener = null;
     this.removeUserReturnedListener?.();
@@ -1478,7 +1490,7 @@ export class DmService {
     // A periodic task must never bypass a foreground preparation or resurrect
     // its receiver with stale local keys. Use an isolated, cancellable receiver
     // so a cold poll cannot overwrite a live/init session across async reads.
-    if (this.initializing || options.abort?.aborted) return [];
+    if (this.initializingAccountPubkey || options.abort?.aborted) return [];
     if (this.accountPubkey && this.accountPubkey !== accountPubkey) return [];
     // Healthy live intake already receives new messages; history coverage and
     // earlier disconnects do not justify a concurrent notification scan.
@@ -1938,33 +1950,28 @@ export class DmService {
     for (const listener of this.encryptionKeyChangedListeners) listener(newPubkey);
   }
 
-  /**
-   * Another device edited our own relay lists (10002/10050, observed by the
-   * self-event stream): debounce ~1.5s, then rebuild every REQ by re-running
-   * init with the fresh DM relay list. Init destroys itself first, which also
-   * tears down and restarts the self-event stream — the stream therefore needs
-   * no restart logic of its own. Epoch-guarded so a stale timer from a previous
-   * account/session can never resurrect it.
-   */
+  /** Rebuild the active session from committed routing after a short debounce. */
   private scheduleRelayListReinit(): void {
     if (this.relayListReinitTimer) clearTimeout(this.relayListReinitTimer);
     const epoch = this.syncEpoch;
-    // Background RN timers may be suspended. Relay-list changes directly affect
-    // where new messages arrive, so rebuild immediately while no UI is rendering.
-    if (platform.appState.currentState() !== 'active') {
-      this.relayListReinitTimer = null;
-      void this.reinitWithFreshRelayLists(epoch);
-      return;
-    }
-    this.relayListReinitTimer = setTimeout(() => {
+    const reinit = () => {
       this.relayListReinitTimer = null;
       if (epoch !== this.syncEpoch || !this.accountPubkey) return;
-      void this.reinitWithFreshRelayLists(epoch);
-    }, 1500);
+      void this.reinitWithFreshRelayLists(epoch).catch(error =>
+        console.warn('[DM] Could not refresh relay subscriptions.', error),
+      );
+    };
+    // Background RN timers may be suspended, so apply committed routing now.
+    if (platform.appState.currentState() !== 'active') reinit();
+    else this.relayListReinitTimer = setTimeout(reinit, 1500);
   }
 
-  /** Apply locally saved routing only to an already ready messaging session. */
+  /** Apply locally saved routing to the active or initializing messaging session. */
   refreshRelayConfiguration(accountPubkey: string): void {
+    if (this.initializingAccountPubkey === accountPubkey) {
+      this.deferredRelayReinit = true;
+      return;
+    }
     const session = receiveSessionStore.getState();
     if (session.status === 'ready' && session.accountPubkey === accountPubkey && this.accountPubkey === accountPubkey) {
       this.scheduleRelayListReinit();
@@ -1974,9 +1981,15 @@ export class DmService {
   private async reinitWithFreshRelayLists(epoch: number): Promise<void> {
     const accountPubkey = this.accountPubkey;
     if (!accountPubkey) return;
-    const dmRelays = await loadAccountDmRelays(accountPubkey);
+    const [dmRelays, localWriteRelays] = await Promise.all([
+      loadAccountDmRelays(accountPubkey),
+      loadLocalWriteRelays(accountPubkey),
+    ]);
     if (epoch !== this.syncEpoch || this.accountPubkey !== accountPubkey) return;
-    await this.init({ accountPubkey, dmRelays });
+    const metadata = {
+      accountPubkey, dmRelays, announcement: this.latestKeyAnnouncement, announcementRelays: [],
+    };
+    await this.init({ accountPubkey, dmRelays, metadata, localWriteRelays });
   }
 
   /** Import one bounded batch of decrypted rumors, reusing the live save path.

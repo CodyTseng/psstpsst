@@ -101,6 +101,9 @@ jest.mock('@/db/client', () => {
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0076_local-applications.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0044_contact-sync-state.sql`, 'utf8'));
   sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0045_configuration-outbox.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0086_routing-settings-edits.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0087_relay-publish-retries.sql`, 'utf8'));
+  sqlite.exec(readFileSync(`${process.cwd()}/src/db/migrations/0089_routing-settings-edit-time.sql`, 'utf8'));
   const execute = async (query: string, params: unknown[], method: string) => {
     const statement = sqlite.prepare(query);
     statement.setReturnArrays(true);
@@ -167,6 +170,45 @@ afterEach(() => { worker.stop(); jest.clearAllTimers(); sqlite.close(); jest.use
 
 it.each([[0, 1], [1, 1], [2, 2], [3, 2], [4, 3], [5, 3]])('requires a strict majority for %i relays', (total, quorum) => {
   expect(service.configurationPublishQuorum(total)).toBe(quorum);
+});
+
+it.each([undefined, 120_000])('keeps relay backoff across restart and skips permanent refusals (hint %s)', async retryAfterMs => {
+  const snapshot = event(10002);
+  await service.enqueueConfigurationEvent(snapshot);
+  mockPublish.mockResolvedValueOnce([
+    { url: mockTargets[0], outcome: { ok: false, failure: 'rejected', reason: 'invalid: obsolete event' } },
+    { url: mockTargets[1], outcome: { ok: false, failure: 'rate-limited', reason: 'rate-limited: slow down', retryAfterMs } },
+    { url: mockTargets[2], outcome: { ok: true } },
+  ]);
+  await start();
+  await jest.advanceTimersByTimeAsync(10);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  worker.stop();
+  await start();
+  mockApp('active');
+  await jest.advanceTimersByTimeAsync((retryAfterMs ?? 30_000) - 20);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  mockPublish.mockResolvedValueOnce([{ url: mockTargets[1], outcome: { ok: true } }]);
+  await jest.advanceTimersByTimeAsync(20);
+  expect(mockPublish).toHaveBeenCalledTimes(2);
+  expect(mockPublish.mock.calls[1][0].relays).toEqual([mockTargets[1]]);
+  expect(await pending(10002)).toBeNull();
+  expect(await service.enqueueConfigurationEvent(snapshot)).toBe(false);
+});
+
+it('retires an event when all relays refuse it and permits a fresh event', async () => {
+  const obsolete = event(10002);
+  await service.enqueueConfigurationEvent(obsolete);
+  mockPublish.mockResolvedValueOnce(mockTargets.map(url => ({
+    url, outcome: { ok: false, failure: 'rejected', reason: 'invalid: obsolete event' },
+  })));
+  await start();
+  await jest.advanceTimersByTimeAsync(60_000);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  expect(await pending(10002)).toBeNull();
+  expect(await service.enqueueConfigurationEvent(obsolete)).toBe(false);
+  expect(await service.enqueueConfigurationEvent(event(10002, '', obsolete.created_at + 1))).toBe(true);
+  expect(await pending(10002)).not.toBeNull();
 });
 
 it('rejects a partial edit when another client changed its base event', async () => {
@@ -340,47 +382,34 @@ function mediaServerService() {
   return jest.requireActual('../../files/media-server.service') as typeof import('../../files/media-server.service');
 }
 
-it('commits an ordered media-server list only after publication confirmation', async () => {
-  sqlite.prepare('INSERT INTO media_server_lists VALUES (?, ?, 100)').run(SELF, 'https://old.example');
-  let resolve!: (value: ReturnType<typeof results>) => void;
-  mockPublish.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-  let settled = false;
-  const save = mediaServerService().saveAndPublishMediaServers({
-    accountPubkey: SELF, signer: mockSigner,
-    servers: ['https://SECOND.example/', 'https://first.example', 'https://second.example'],
-  }).then(() => { settled = true; });
-  await jest.advanceTimersByTimeAsync(20);
-  expect(settled).toBe(false);
-  expect(sqlite.prepare('SELECT server_url FROM media_server_lists').all()).toEqual([{ server_url: 'https://old.example' }]);
-  await mediaServerService().applyMediaServersEvent(SELF, {
+it('commits ordered media servers locally and coalesces edits across worker restarts', async () => {
+  await start();
+  mockNetwork({ isConnected: false, isInternetReachable: false });
+  const { saveMediaServers, loadAccountMediaServers, applyMediaServersEvent } = mediaServerService();
+  await saveMediaServers(SELF, ['https://old.example']);
+  await jest.advanceTimersByTimeAsync(1_000);
+  const editedAt = Math.floor(Date.now() / 1000);
+  await saveMediaServers(SELF, ['https://SECOND.example/', 'https://first.example', 'https://second.example']);
+  await applyMediaServersEvent(SELF, {
     ...event(10063, '', Math.floor(Date.now() / 1000) + 100), tags: [['server', 'https://remote.example']],
   });
-  expect(sqlite.prepare('SELECT server_url FROM media_server_lists').all()).toEqual([{ server_url: 'https://old.example' }]);
-  resolve(results(2));
-  await save;
-  expect(sqlite.prepare('SELECT server_url FROM media_server_lists ORDER BY rowid').all())
-    .toEqual([{ server_url: 'https://second.example/' }, { server_url: 'https://first.example/' }]);
-  expect(await pending(10063)).toBeNull();
-});
+  expect(await loadAccountMediaServers(SELF)).toEqual(['https://second.example/', 'https://first.example/']);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
 
-it('retains the saved media-server list on failure without background retry and accepts an explicit retry', async () => {
-  sqlite.prepare('INSERT INTO media_server_lists VALUES (?, ?, 100)').run(SELF, 'https://old.example');
-  const opts = { accountPubkey: SELF, signer: mockSigner, servers: ['https://new.example'] };
-  mockPublish.mockResolvedValueOnce(results(1));
-  const failure = expect(mediaServerService().saveAndPublishMediaServers(opts)).rejects.toThrow('acknowledgements');
-  await jest.advanceTimersByTimeAsync(20);
-  await failure;
-  expect(sqlite.prepare('SELECT server_url FROM media_server_lists').all()).toEqual([{ server_url: 'https://old.example' }]);
-  expect(sqlite.prepare('SELECT * FROM replaceable_events WHERE kind = 10063').all()).toEqual([]);
-  expect(await pending(10063)).toBeNull();
+  worker.stop();
   await start();
-  await jest.advanceTimersByTimeAsync(1000);
-  expect(mockPublish).toHaveBeenCalledTimes(1);
+  mockNetwork({ isConnected: true, isInternetReachable: true });
+  await jest.advanceTimersByTimeAsync(1_999);
+  expect(mockPublish).not.toHaveBeenCalled();
   mockPublish.mockResolvedValueOnce(results(2));
-  const retry = mediaServerService().saveAndPublishMediaServers(opts);
   await jest.advanceTimersByTimeAsync(20);
-  await retry;
-  expect(sqlite.prepare('SELECT server_url FROM media_server_lists').all()).toEqual([{ server_url: 'https://new.example/' }]);
+  expect(mockSigner.signEvent).toHaveBeenCalledTimes(1);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  expect(mockPublish.mock.calls[0][0].event.created_at).toBe(editedAt);
+  expect(mockPublish.mock.calls[0][0].event.tags).toEqual([
+    ['server', 'https://second.example/'], ['server', 'https://first.example/'],
+  ]);
+  expect(await loadAccountMediaServers(SELF)).toEqual(['https://second.example/', 'https://first.example/']);
   expect(await pending(10063)).toBeNull();
 });
 
@@ -394,89 +423,184 @@ it('reads legacy media-server URLs canonically without rewriting their stored ro
   expect(sqlite.prepare('SELECT count(*) AS n FROM media_server_lists').get()).toEqual({ n: 3 });
 });
 
-it('keeps a manual inbox save pending until quorum and commits its rows only after publication', async () => {
-  sqlite.prepare('INSERT INTO relay_lists VALUES (?, ?, 0, 0, 100)').run(SELF, 'wss://old.example/');
-  let resolve!: (value: ReturnType<typeof results>) => void;
-  mockPublish.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-  let settled = false;
-  const save = manualRelayService().saveAndPublishDmRelays({
-    accountPubkey: SELF, signer: mockSigner, relays: ['wss://new.example/'],
-  }).then(() => { settled = true; });
-  await jest.advanceTimersByTimeAsync(20);
-  expect(settled).toBe(false);
-  expect(sqlite.prepare('SELECT relay_url FROM relay_lists').all()).toEqual([{ relay_url: 'wss://old.example/' }]);
-  expect(await pending(10050)).toBeNull();
-  resolve(results(2));
-  await save;
-  expect(settled).toBe(true);
-  expect(sqlite.prepare('SELECT relay_url FROM relay_lists').all()).toEqual([{ relay_url: 'wss://new.example/' }]);
-  expect(await pending(10050)).toBeNull();
-});
+it('keeps the local inbox usable while signing and relay delivery fail', async () => {
+  const { saveDmRelays, loadAccountDmRelays, applyOwnDmRelayListEvent } = manualRelayService();
+  const relays = ['ws://192.168.1.10:7777/'];
+  const editedAt = Math.floor(Date.now() / 1000);
+  await saveDmRelays(SELF, relays);
+  expect(await loadAccountDmRelays(SELF)).toEqual(relays);
+  expect(await applyOwnDmRelayListEvent(SELF, {
+    ...event(10050, '', 101), tags: [['relay', 'wss://remote.example/']],
+  })).toBe(false);
 
-it('does not commit a failed inbox save or retry it in the background, and accepts an explicit retry', async () => {
-  sqlite.prepare('INSERT INTO relay_lists VALUES (?, ?, 0, 0, 100)').run(SELF, 'wss://old.example/');
-  const opts = { accountPubkey: SELF, signer: mockSigner, relays: ['wss://new.example/'] };
-  mockPublish.mockResolvedValueOnce(results(1));
-  const failed = expect(manualRelayService().saveAndPublishDmRelays(opts)).rejects.toThrow('acknowledgements');
-  await jest.advanceTimersByTimeAsync(20);
-  await failed;
-  expect(sqlite.prepare('SELECT relay_url FROM relay_lists').all()).toEqual([{ relay_url: 'wss://old.example/' }]);
-  expect(sqlite.prepare('SELECT * FROM replaceable_events WHERE kind = 10050').all()).toEqual([]);
-  expect(await pending(10050)).toBeNull();
+  mockSigner.signEvent.mockRejectedValueOnce(new Error('remote signer unavailable'));
   await start();
-  await jest.advanceTimersByTimeAsync(1000);
-  expect(mockPublish).toHaveBeenCalledTimes(1);
-  mockPublish.mockResolvedValueOnce(results(2));
-  const retry = manualRelayService().saveAndPublishDmRelays(opts);
-  await jest.advanceTimersByTimeAsync(20);
-  await retry;
-  expect(sqlite.prepare('SELECT relay_url FROM relay_lists').all()).toEqual([{ relay_url: 'wss://new.example/' }]);
+  await jest.advanceTimersByTimeAsync(2_020);
+  expect(await loadAccountDmRelays(SELF)).toEqual(relays);
   expect(await pending(10050)).toBeNull();
+  expect(mockPublish).not.toHaveBeenCalled();
+
+  await jest.advanceTimersByTimeAsync(1_000);
+  expect((await pending(10050))?.event).toMatchObject({ created_at: editedAt, tags: [['relay', relays[0]]] });
+  expect(await loadAccountDmRelays(SELF)).toEqual(relays);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+
+  mockPublish.mockResolvedValueOnce(results(2));
+  await jest.advanceTimersByTimeAsync(1_000);
+  expect(await pending(10050)).toBeNull();
+  expect(await loadAccountDmRelays(SELF)).toEqual(relays);
 });
 
-it('waits for publication of a merged write declaration and preserves remote read tags', async () => {
+it('uses local write relays immediately and merges remote read tags during publication', async () => {
+  const { loadLocalWriteRelays, loadAccountWriteRelays, saveWriteRelays } = manualRelayService();
   const remote = { ...event(10002), tags: [
-    ['r', 'wss://shared.example/', 'read'], ['r', 'wss://read.example/', 'read'], ['client', 'other-app'],
+    ['r', 'wss://shared.example/', 'read'], ['r', 'wss://read.example/', 'read'],
+    ['r', 'wss://previous.example/', 'write'], ['client', 'other-app'],
   ], content: 'remote content' };
   mockFetchReplaceable.mockResolvedValueOnce(remote);
   mockPublish.mockResolvedValueOnce(results(2));
-  const save = manualRelayService().saveAndPublishWriteRelays({
-    accountPubkey: SELF, signer: mockSigner, relays: ['wss://shared.example/'],
-  });
-  await jest.advanceTimersByTimeAsync(20);
-  expect(await save).toMatchObject({
+  const relays = ['wss://shared.example/'];
+  const editedAt = Math.floor(Date.now() / 1000);
+  await saveWriteRelays(SELF, relays);
+  expect(await loadLocalWriteRelays(SELF)).toEqual(relays);
+  expect(await loadAccountWriteRelays(SELF)).toEqual(relays);
+  expect(mockFetchReplaceable).not.toHaveBeenCalled();
+  await start();
+  await jest.advanceTimersByTimeAsync(2_020);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  expect(mockPublish.mock.calls[0][0].relays).toEqual([...mockTargets, 'wss://previous.example/']);
+  expect(mockPublish.mock.calls[0][0].event).toMatchObject({
     content: 'remote content',
+    created_at: editedAt,
     tags: [['r', 'wss://shared.example/'], ['r', 'wss://read.example/', 'read'], ['client', 'other-app']],
   });
-  expect(mockPublish).toHaveBeenCalledTimes(1);
+  expect(await loadLocalWriteRelays(SELF)).toEqual(relays);
   expect(await pending(10002)).toBeNull();
 });
 
-it('rejects a cancelled publish without committing its inbox edit', async () => {
-  const abort = new AbortController();
-  let resolve!: (value: ReturnType<typeof results>) => void;
-  mockPublish.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-  const failure = expect(manualRelayService().saveAndPublishDmRelays({
-    accountPubkey: SELF, signer: mockSigner, relays: ['wss://new.example/'], abort: abort.signal,
-  })).rejects.toThrow('cancelled');
-  await jest.advanceTimersByTimeAsync(20);
-  abort.abort();
-  resolve(results(3));
-  await failure;
-  expect(sqlite.prepare('SELECT * FROM relay_lists').all()).toEqual([]);
-  expect(await pending(10050)).toBeNull();
+it('holds a write edit locally when the read query fails, then merges once the baseline is available', async () => {
+  const { loadLocalWriteRelays, saveWriteRelays } = manualRelayService();
+  const { RelayQueryError } = jest.requireActual('../relay-query-error') as typeof import('../relay-query-error');
+  const editedAt = Math.floor(Date.now() / 1000);
+  mockFetchReplaceable.mockRejectedValueOnce(new RelayQueryError([]));
+  const relays = ['ws://192.168.1.10:7777/'];
+  await saveWriteRelays(SELF, relays);
+  await start();
+  await jest.advanceTimersByTimeAsync(2_020);
+  expect(await loadLocalWriteRelays(SELF)).toEqual(relays);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  expect(mockPublish).not.toHaveBeenCalled();
+  expect(await pending(10002)).toBeNull();
+
+  mockFetchReplaceable.mockResolvedValueOnce({
+    ...event(10002, '', editedAt - 1),
+    tags: [['r', 'wss://read.example/', 'read'], ['client', 'other-app']],
+    content: 'preserve',
+  });
+  mockPublish.mockResolvedValueOnce(results(2));
+  await jest.advanceTimersByTimeAsync(1_000);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  expect(mockPublish.mock.calls[0][0].event).toMatchObject({
+    created_at: editedAt,
+    tags: [['r', 'wss://read.example/', 'read'], ['client', 'other-app'], ['r', relays[0], 'write']],
+    content: 'preserve',
+  });
 });
 
-it('uses increasing timestamps for same-second retries after partial publication', async () => {
-  const template = { kind: 10050, content: '', tags: [['relay', 'wss://new.example/']], created_at: 100 };
-  const firstFailure = expect(service.publishConfigurationAndWait(SELF, mockSigner, template)).rejects.toThrow('acknowledgements');
-  await jest.advanceTimersByTimeAsync(0);
-  await firstFailure;
+it('preserves write order and retires a signed declaration when a newer remote version arrives', async () => {
+  const { loadLocalWriteRelays, saveWriteRelays } = manualRelayService();
+  const { storeReplaceableEvent } = jest.requireActual('../replaceable-events.service') as typeof import('../replaceable-events.service');
+  await storeReplaceableEvent({
+    ...event(10002), tags: [['r', 'wss://shared.example/'], ['r', 'wss://read.example/', 'read']],
+  });
+  await saveWriteRelays(SELF, ['wss://first.example/', 'wss://shared.example/']);
+  await start();
+  await jest.advanceTimersByTimeAsync(2_020);
+
+  const signed = (await pending(10002))!.event;
+  expect(signed.tags).toEqual([
+    ['r', 'wss://shared.example/', 'read'], ['r', 'wss://read.example/', 'read'],
+    ['r', 'wss://first.example/', 'write'], ['r', 'wss://shared.example/', 'write'],
+  ]);
+  const remote = { ...event(10002, '', signed.created_at + 1), tags: [['r', 'wss://remote.example/', 'write']] };
+  expect(await storeReplaceableEvent(remote)).toBe(true);
+  await jest.advanceTimersByTimeAsync(1_000);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  expect(await pending(10002)).toBeNull();
+  expect(await loadLocalWriteRelays(SELF)).toEqual(['wss://remote.example/']);
+});
+
+it.each([true, false])('keeps the newer remote edit when refresh succeeds or fails (%s)', async refreshSucceeds => {
+  const { saveWriteRelays, loadLocalWriteRelays } = manualRelayService();
+  const editedAt = Math.floor(Date.now() / 1000);
+  await saveWriteRelays(SELF, ['wss://local.example/']);
+  const remote = { ...event(10002, '', editedAt + 1), tags: [['r', 'wss://remote.example/', 'write']] };
+  if (refreshSucceeds) {
+    mockFetchReplaceable.mockResolvedValueOnce(remote);
+  } else {
+    const { storeReplaceableEvent } = jest.requireActual('../replaceable-events.service') as typeof import('../replaceable-events.service');
+    const { RelayQueryError } = jest.requireActual('../relay-query-error') as typeof import('../relay-query-error');
+    await storeReplaceableEvent(remote);
+    mockFetchReplaceable.mockRejectedValueOnce(new RelayQueryError([]));
+  }
+  await start();
+  await jest.advanceTimersByTimeAsync(2_020);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  expect(mockPublish).not.toHaveBeenCalled();
+  expect(await pending(10002)).toBeNull();
+  expect(await loadLocalWriteRelays(SELF)).toEqual(['wss://remote.example/']);
+});
+
+it('mirrors a newer inbox declaration when an older edit is still awaiting signing', async () => {
+  const { saveDmRelays, loadAccountDmRelays } = manualRelayService();
+  const { storeReplaceableEvent } = jest.requireActual('../replaceable-events.service') as typeof import('../replaceable-events.service');
+  const editedAt = Math.floor(Date.now() / 1000);
+  await saveDmRelays(SELF, ['wss://local.example/']);
+  await storeReplaceableEvent({
+    ...event(10050, '', editedAt + 1), tags: [['relay', 'wss://remote.example/']],
+  });
+  const onRoutingChanged = jest.fn();
+  worker.start(SELF, onRoutingChanged);
+  await jest.advanceTimersByTimeAsync(2_020);
+  expect(mockSigner.signEvent).not.toHaveBeenCalled();
+  expect(mockPublish).not.toHaveBeenCalled();
+  expect(await loadAccountDmRelays(SELF)).toEqual(['wss://remote.example/']);
+  expect(onRoutingChanged).toHaveBeenCalledWith(10050);
+});
+
+it('applies the same-second tie breaker to the local media server list after publication', async () => {
+  const { saveMediaServers, loadAccountMediaServers, applyMediaServersEvent } = mediaServerService();
+  const { storeReplaceableEvent } = jest.requireActual('../replaceable-events.service') as typeof import('../replaceable-events.service');
+  const editedAt = Math.floor(Date.now() / 1000);
+  await saveMediaServers(SELF, ['https://local.example/']);
   mockPublish.mockResolvedValueOnce(results(2));
-  const retry = service.publishConfigurationAndWait(SELF, mockSigner, template);
-  await jest.advanceTimersByTimeAsync(0);
-  await retry;
-  expect(mockPublish.mock.calls[1][0].event.created_at).toBe(mockPublish.mock.calls[0][0].event.created_at + 1);
+  await start();
+  await jest.advanceTimersByTimeAsync(2_020);
+  const winner = {
+    ...event(10063, '', editedAt), id: 'a'.repeat(64), tags: [['server', 'https://remote.example/']],
+  };
+  expect(await storeReplaceableEvent(winner)).toBe(true);
+  await applyMediaServersEvent(SELF, winner);
+  expect(await loadAccountMediaServers(SELF)).toEqual(['https://remote.example/']);
+});
+
+it('discards an in-flight signature for a superseded local edit', async () => {
+  const { saveDmRelays, loadAccountDmRelays } = manualRelayService();
+  let finish!: () => void;
+  mockSigner.signEvent.mockImplementationOnce(template => new Promise(resolve => {
+    finish = () => resolve({ ...template, pubkey: SELF, id: 'obsolete', sig: 'sig' });
+  }));
+  await saveDmRelays(SELF, ['wss://old.example/']);
+  await start();
+  await jest.advanceTimersByTimeAsync(2_020);
+  await saveDmRelays(SELF, ['wss://new.example/']);
+  finish();
+  await settle();
+  expect(await loadAccountDmRelays(SELF)).toEqual(['wss://new.example/']);
+  expect(await pending(10050)).toBeNull();
+  await jest.advanceTimersByTimeAsync(2_020);
+  expect(mockPublish).toHaveBeenCalledTimes(1);
+  expect(mockPublish.mock.calls[0][0].event.tags).toEqual([['relay', 'wss://new.example/']]);
 });
 
 it('saves emoji packs and their collection offline, replacing only the edited pack', async () => {

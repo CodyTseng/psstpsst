@@ -1,4 +1,6 @@
 import { SendingOnClosedConnection } from 'nostr-tools/abstract-relay';
+import type { Event } from 'nostr-tools';
+import { RelayPublishRejection } from '../publish-retry';
 import { LifecycleRelay } from '../lifecycle-relay';
 
 class Socket {
@@ -92,4 +94,37 @@ it('handles failed AUTH frames without an unobserved rejection', async () => {
   await expect(relay.send('["AUTH",{}]')).resolves.toBeUndefined();
   jest.runAllTicks();
   expect(relay.connected).toBe(false);
+});
+
+it('preserves a negative OK as an explicit rejection even with timeout text', async () => {
+  const relay = await connectedRelay();
+  const event: Event = { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), kind: 1, created_at: 1, tags: [], content: '', sig: '' };
+  const pending = expect(relay.publish(event)).rejects.toBeInstanceOf(RelayPublishRejection);
+  relay._onmessage({ data: JSON.stringify(['OK', event.id, false, 'publish timed out']) } as MessageEvent);
+  await pending;
+  relay.close();
+});
+
+it('leaves socket closure retryable without a negative OK', async () => {
+  const relay = await connectedRelay();
+  const event: Event = { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), kind: 1, created_at: 1, tags: [], content: '', sig: '' };
+  const pending = expect(relay.publish(event)).rejects.not.toBeInstanceOf(RelayPublishRejection);
+  relay.close();
+  await pending;
+});
+
+it.each([
+  ['120000', 120_000],
+  ['0', undefined],
+  ['0020', undefined],
+  ['1e3', undefined],
+  [1_000, undefined],
+  ['9007199254740992', undefined],
+])('decodes the optional NIP-01 retry parameter %s', async (params, retryAfterMs) => {
+  const relay = await connectedRelay();
+  const event: Event = { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), kind: 1, created_at: 1, tags: [], content: '', sig: '' };
+  const pending = expect(relay.publish(event)).rejects.toMatchObject({ retryAfterMs });
+  relay._onmessage({ data: JSON.stringify(['OK', event.id, false, 'rate-limited: slow down', params]) } as MessageEvent);
+  await pending;
+  relay.close();
 });

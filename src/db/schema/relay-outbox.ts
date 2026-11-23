@@ -32,6 +32,8 @@ export const relayOutboxJobTargets = sqliteTable(
       .references(() => relayOutboxJobs.id, { onDelete: 'cascade' }),
     recipientPubkey: text('recipient_pubkey').notNull(),
     relayUrl: text('relay_url').notNull(),
+    nextAttemptAt: integer('next_attempt_at').notNull().default(0),
+    rateLimitAttempts: integer('rate_limit_attempts').notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.jobId, t.recipientPubkey, t.relayUrl] }),

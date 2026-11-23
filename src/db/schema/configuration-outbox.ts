@@ -3,18 +3,23 @@ import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlit
 import { accounts } from './accounts';
 import type { NostrEvent } from './types';
 
-/** Only unconfirmed configuration snapshots live here; one per Nostr coordinate. */
+/** Only unconfirmed configuration snapshots live here; one per Nostr coordinate. Stopped rows remember
+ * terminal refusals so automatic repair cannot enqueue the same event again. */
 export const configurationOutbox = sqliteTable('configuration_outbox', {
   accountPubkey: text('account_pubkey').notNull().references(() => accounts.pubkey, { onDelete: 'cascade' }),
   kind: integer('kind').notNull(),
   dTag: text('d_tag').notNull().default(''),
   eventId: text('event_id').notNull(),
   event: text('event', { mode: 'json' }).$type<NostrEvent>().notNull(),
+  previousWriteRelays: text('previous_write_relays', { mode: 'json' }).$type<string[]>().notNull().default([]),
   acknowledgedRelays: text('acknowledged_relays', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  rejectedRelays: text('rejected_relays', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  retryNotBefore: integer('retry_not_before').notNull().default(0),
+  stopped: integer('stopped', { mode: 'boolean' }).notNull().default(false),
   attempts: integer('attempts').notNull().default(0),
   nextAttemptAt: integer('next_attempt_at').notNull(),
   lastError: text('last_error'),
 }, (t) => [
   primaryKey({ columns: [t.accountPubkey, t.kind, t.dTag] }),
-  index('idx_configuration_outbox_due').on(t.accountPubkey, t.nextAttemptAt),
+  index('idx_configuration_outbox_due').on(t.accountPubkey, t.stopped, t.nextAttemptAt),
 ]);

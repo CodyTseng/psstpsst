@@ -15,7 +15,7 @@ function observeNetwork(): void {
   if (networkObserved) return;
   networkObserved = true;
   platform.networkState.addStateListener((state) => {
-    if (state.isConnected === false || state.isInternetReachable === false) return;
+    if (state.isConnected === false) return;
     for (const wake of [...networkWaiters]) wake();
   });
 }

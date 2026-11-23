@@ -1,7 +1,6 @@
 # Configuration Publication Implementation
 
-Configuration saves hand signed events to `configuration-publish.service.ts`.
-Manual relay and media-server edits use its confirmed-publication path instead of the outbox.
+Configuration publication hands signed events to `configuration-publish.service.ts`.
 The SQLite transaction stores both the replaceable cache and a pending outbox
 row before relay delivery starts. Private-list actions (contacts with saved
 groups, mute, and block) complete once plaintext and their durable revision are
@@ -21,9 +20,14 @@ semantics and do not enter this queue.
 - The unique coordinate is `(account_pubkey, kind, d_tag)`. Plain replaceable
   kinds ignore `d`; addressable kinds use the first `d` value, including empty.
 - Newer snapshots replace the pending payload and reset receipts, attempts, and
-  deadline atomically. Local signing uses increasing timestamps for consecutive
-  same-second edits. Already signed snapshots follow Nostr timestamp/ID ordering.
-- Retries reuse the signed event. Every result updates/deletes by coordinate
+  deadline atomically. Ordinary local signing uses increasing timestamps for
+  consecutive same-second edits. Relay and Blossom settings use their persisted
+  edit time. Replaceable snapshots follow Nostr timestamp and ID ordering.
+- Retries reuse the signed event. A definitive relay refusal settles that target
+  for the event. The worker persists those refusals and stops once the current
+  targets have all settled or quorum is met. Stopped rows with refusals prevent
+  automatic repair from replaying the same event. A newer edit replaces them.
+  Every result updates/deletes by coordinate
   **and event ID**, so a late response cannot delete or delay a replacement.
   Bytes already handed to a relay cannot be recalled; replaceable-event ordering
   ensures the newer snapshot wins there too.
@@ -35,9 +39,9 @@ semantics and do not enter this queue.
   acknowledgements. Zero targets never succeeds. Receipts accumulate across
   attempts but count only toward the current target set. Removed targets cannot
   contribute to its quorum. Targets are normalized and deduplicated.
-- Reaching quorum removes the pending row. The local configuration/cache remains;
-  absence from the queue means no signed snapshot is awaiting publication, not
-  that every replica has accepted it.
+- Reaching quorum ends pending publication. Local configuration remains in the
+  cache and local read models. Quorum is sufficient even if some replicas refused
+  the event or were unavailable.
 
 ## Routing and recovery
 
@@ -47,32 +51,56 @@ events use write ∪ discovery. Destinations are not frozen when an event is sav
 The worker rechecks routing before deciding whether acknowledgements form a
 quorum, since settings can change during a network attempt.
 
-Write-relay edits refresh kind 10002 from discovery and the known/new write
-relays before merging. They replace only write membership, preserve read
-membership (including the read side of unmarked tags), and retain unrelated
-tags and content. A failed refresh aborts the save. The cache commit checks
-the merged event's base ID atomically, rejecting concurrent changes rather
-than overwriting them. Local account creation advertises write-only defaults.
-Unknown relay markers are preserved verbatim but do not grant read or write
-membership in routing or the editor. An absent or empty marker grants both roles.
+## Relay and Blossom settings
 
-Manual relay and Blossom server-list editors await a bounded publish attempt and require the same
-strict-majority acknowledgement rule. Write declarations reach their previous
-and newly selected write relays plus discovery. Signing and publication must
-finish before the local cache and inbox/server rows commit together. Failed attempts
-leave the form dirty and retryable, without creating a background job or unsigned
-intent record. Retries use increasing event timestamps within the session so an
-earlier partially published edit cannot win over a later edit. A concurrent newer
-cached declaration rejects the handoff; an echo of the exact submitted event is
-accepted. Account setup and repair of initial declarations retain the outbox path.
+Adding, removing, or reordering inbox relays, write relays, or Blossom servers
+commits the local list immediately. A pending edit in `routing_settings_edits`
+takes precedence over the last signed declaration or its local read model.
+Each list keeps at least one entry. Settings editors show a retry action if the
+local transaction fails.
+
+The worker starts signing two seconds after the latest edit to that list.
+One durable row per account and kind holds the latest edit, its Unix timestamp
+in seconds, and its deadline. The worker uses the edit timestamp for
+`created_at` across debounce, restart, and retries. At the same second the
+lexically smaller event ID wins. Legacy unsigned edits recover an approximate
+timestamp from their stored deadline. Opening the app or regaining connectivity
+preserves the debounce deadline.
+A newer edit discards superseded queued events, and the signing handoff checks
+the edit revision inside the transaction. A successful handoff caches the
+signed event, updates the inbox or Blossom read model when applicable, and
+removes the unsigned edit in the same transaction. Signing and delivery failures
+retry independently of local use, including when a remote signer is unavailable.
+Open settings editors observe committed changes to the effective lists. An
+in-flight local write keeps its optimistic list visible until it settles. A
+ready messaging session rebuilds its subscriptions from local settings on the
+relay-change debounce. Refresh requests during initialization are coalesced and
+applied after the session becomes ready.
+
+Before signing a kind 10002 edit, the worker queries discovery and the previous
+and newly selected write relays. It needs a signed declaration or a wire EOSE
+from discovery or a previous write relay. An empty reply from a newly selected
+relay, a timeout, or a closed read leaves the local edit effective and unsigned.
+Once a baseline is available, the worker preserves the latest known read
+membership, unrelated tags, and content. Delivery also attempts the previous
+write relays so clients can discover the change there. Quorum uses the current
+targets. When a shared tag would change either list's order, separate role tags
+preserve both orders. The cache commit checks the base
+event ID atomically and retries concurrent changes. A known newer declaration
+supersedes older unsigned or signed settings work and updates the local routing
+or server read model. Unknown markers are
+preserved verbatim and grant neither role. An absent or empty marker grants
+both roles. Local account creation advertises write-only defaults.
 
 The active account's worker processes at most four events per batch and reads
 only the earliest indexed deadlines. Connection and publish attempts have bounded
 timeouts. Failures persist the receipts, last error, attempt count, and next
-deadline. Retry waits are 1, 2, 5, 10, 30, then 60 seconds, capped at 60 seconds
-without a retry limit for configuration events other than private lists.
-Contact, mute, and block failures retire the pending snapshot and leave
-plaintext for the next local edit instead of scheduling another delivery attempt.
+deadline. Retry waits are 1, 2, 5, 10, 30, then 60 seconds, capped at 60 seconds.
+An explicit rate limit delays the next attempt by at least 30 seconds or the
+relay's advertised NIP-01 wait, whichever is longer. The deadline survives
+foreground entry, network recovery, and restart. Contact, mute, and block
+failures other than rate limits retire the snapshot and leave plaintext for the
+next local edit.
 
 Account activation resumes the queue before messaging metadata lookup. Network
 recovery and foreground entry wake retries early; backgrounding pauses scheduled
