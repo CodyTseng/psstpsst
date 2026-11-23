@@ -406,10 +406,7 @@
     "quality_original": "Original",
     "verify_failed": "Error de verificación",
     "tap_retry": "Toca para reintentar",
-    "verify_failed_message": "El contenido de este archivo no coincide con lo indicado en el mensaje. Puede estar dañado o haber sido modificado en el servidor.",
-    "verify_failed_show": "Mostrar de todos modos",
-    "verify_failed_play": "Reproducir de todos modos",
-    "verify_failed_open": "Abrir de todos modos"
+    "verify_failed_message": "El contenido de este archivo no coincide con lo indicado en el mensaje. Puede estar dañado o haber sido modificado en el servidor."
   },
   "media": {
     "previous": "Contenido anterior",

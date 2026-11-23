@@ -1,11 +1,12 @@
 import { platform } from '@/platform';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
+import type { AttachmentDownloadSource } from './attachment-download-task';
 import { fetchAndDecryptAttachment, getCachedAttachmentUri } from './file-attachment.service';
 
 /** Explicit copy authorizes resolving this attachment, preserving integrity checks. */
 export async function copyAttachment(
   meta: FileAttachmentMeta,
-  options?: { accountPubkey?: string | null },
+  options?: AttachmentDownloadSource,
 ): Promise<void> {
   if (!platform.clipboard.canCopyAttachment(meta.mime)) throw new Error('Clipboard unavailable');
   const uri = (await getCachedAttachmentUri(meta)) ?? (await fetchAndDecryptAttachment(meta, options));

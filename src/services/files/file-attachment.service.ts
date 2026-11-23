@@ -7,7 +7,7 @@ import {
   DEFAULT_IMAGE_SEND_QUALITY,
   type ImageSendQuality,
 } from '@/lib/attachments/image-quality';
-import { buildFileTags, type FileAttachmentMeta } from '@/lib/nostr/file-tags';
+import { attachmentHttpBlobName, buildFileTags, type FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { blossomDownloadUrls, parseBlossomUri } from '@/lib/nostr/blossom-uri';
 
 import type { Signer } from '../signer/signer.interface';
@@ -30,11 +30,11 @@ import {
   resolveAttachmentPath,
   sniffMime,
 } from './attachment-store';
-import { getHashFromURL, uploadEncryptedBlob } from './blossom.service';
+import { uploadEncryptedBlob } from './blossom.service';
 import { decryptBytes, encryptBytes, sha256Hex } from './file-crypto';
 import { attachmentDownloadTaskKey, runAttachmentDownload } from './attachment-download-task';
 import { downloadAttachmentBytes, type DownloadedAttachment } from './attachment-download.service';
-import { loadAccountMediaServers } from './media-server.service';
+import { loadSenderMediaServers } from './media-server.service';
 import { stageNearbyUpload } from './nearby-file-upload.service';
 import { prepareAttachmentImage } from './strip-metadata';
 import { fetchNearbyNetworkFirst } from './nearby-file-source-order';
@@ -68,8 +68,7 @@ import {
  *   server, wrong key). Transient/operational → the UI offers a plain retry.
  * - `integrity` — the bytes arrived but their `x`/`ox` content hash didn't
  *   match what the message claimed: corruption, or tampering on the (untrusted)
- *   media server. A security signal → the UI warns and only proceeds on an
- *   explicit confirm (which re-fetches with `allowIntegrityMismatch`).
+ *   media server. Do not display or publish unverified bytes.
  */
 export type AttachmentErrorKind = 'download' | 'integrity';
 
@@ -429,16 +428,16 @@ async function resolvePath(meta: FileAttachmentMeta): Promise<string | null> {
  * If we've already decrypted this blob, return the cached file URI. Otherwise
  * download → (verify `x`) → decrypt → (verify `ox`) → content-address by the
  * plaintext hash → cache, then return the URI. The `x`/`ox` integrity checks
- * run only when those tags are present (other clients may omit them).
+ * run when the message or its blob locator provides the corresponding hash.
  *
  * Throws an {@link AttachmentError} on failure — `kind: 'download'` for a fetch/
  * decrypt failure (caller offers retry), `kind: 'integrity'` for an `x`/`ox`
- * hash mismatch (caller warns + confirms). Pass `allowIntegrityMismatch` to
- * proceed past a known mismatch once the user has accepted the risk.
+ * hash mismatch (the attachment remains unavailable).
  */
 export type AttachmentFetchOptions = {
   accountPubkey?: string | null;
-  allowIntegrityMismatch?: boolean;
+  /** The message author, independent of the downloading account. */
+  senderPubkey?: string | null;
   signal?: AbortSignal;
   nearby?: NearbyAttachmentFetchContext;
 };
@@ -450,8 +449,7 @@ export async function fetchAndDecryptAttachment(
   opts?: AttachmentFetchOptions,
 ): Promise<string> {
   const key = attachmentDownloadKey(opts?.accountPubkey ?? null, meta.url);
-  // Integrity overrides cannot share the verified task's decision.
-  const taskKey = attachmentDownloadTaskKey(opts?.accountPubkey ?? null, meta, opts?.allowIntegrityMismatch);
+  const taskKey = attachmentDownloadTaskKey(opts?.accountPubkey ?? null, meta);
   return runAttachmentDownload(taskKey, opts?.signal, async (signal) => {
     const attempt = Symbol();
     activeDownloadAttempts.set(key, attempt);
@@ -460,7 +458,11 @@ export async function fetchAndDecryptAttachment(
     };
     signal.addEventListener('abort', paused, { once: true });
     try {
-      return await fetchAndDecryptAttachmentInternal(meta, { ...opts, signal }, key);
+      return await fetchAndDecryptAttachmentInternal(meta, { ...opts, signal }, (source, received, total) => {
+        if (!signal.aborted && activeDownloadAttempts.get(key) === attempt) {
+          attachmentTransferStore.getState().update(key, source, received, total);
+        }
+      });
     } finally {
       signal.removeEventListener('abort', paused);
       if (activeDownloadAttempts.get(key) === attempt) {
@@ -475,7 +477,7 @@ export async function fetchAndDecryptAttachment(
 async function fetchAndDecryptAttachmentInternal(
   meta: FileAttachmentMeta,
   opts: AttachmentFetchOptions | undefined,
-  progressKey: string | null,
+  onProgress: (source: 'network' | 'bluetooth', received: number, total: number) => void,
 ): Promise<string> {
   throwIfAborted(opts?.signal);
   await ensureAttachmentDir();
@@ -494,37 +496,28 @@ async function fetchAndDecryptAttachmentInternal(
   if (nearbyOffer && opts?.accountPubkey && opts.nearby) {
     const accountPubkey = opts.accountPubkey;
     const nearby = opts.nearby;
-    const progressKey = attachmentDownloadKey(accountPubkey, meta.url);
     throwIfAborted(opts.signal);
     const result = await fetchNearbyNetworkFirst({
       signal: opts.signal,
       network: async () => {
-        attachmentTransferStore.getState().update(progressKey, 'network', 0, nearbyOffer.size);
+        onProgress('network', 0, nearbyOffer.size);
         return fetchNearbyAttachmentFromBlossom({
           accountPubkey,
           peerPubkey: nearby.peerPubkey,
           rumorId: nearby.rumorId,
           offer: nearbyOffer,
           signal: opts.signal,
-          onProgress: (receivedBytes, totalBytes) =>
-            attachmentTransferStore
-              .getState()
-              .update(progressKey, 'network', receivedBytes, totalBytes),
+          onProgress: (received, total) => onProgress('network', received, total),
         });
       },
       bluetooth: async () => {
-        attachmentTransferStore
-          .getState()
-          .update(progressKey, 'bluetooth', 0, nearbyOffer.plainSize);
+        onProgress('bluetooth', 0, nearbyOffer.plainSize);
         return proximityService.fetchAttachmentDirect({
           accountPubkey,
           peerPubkey: nearby.peerPubkey,
           rumorId: nearby.rumorId,
           signal: opts.signal,
-          onProgress: (receivedBytes, totalBytes) =>
-            attachmentTransferStore
-              .getState()
-              .update(progressKey, 'bluetooth', receivedBytes, totalBytes),
+          onProgress: (received, total) => onProgress('bluetooth', received, total),
         });
       },
     });
@@ -554,108 +547,90 @@ async function fetchAndDecryptAttachmentInternal(
     throw new AttachmentError('download', errors.join('\n') || 'Attachment is unavailable');
   }
 
-  // With an account, fall back across its configured media servers (kind 10063)
-  // if the embedded URL is dead/rotated — the blob is mirrored there (BUD-04).
-  // A fetch failure is operational (network/dead server) → `download` kind.
-  let cipher: Uint8Array;
-  let downloadedCipher!: DownloadedAttachment;
-  try {
-    if (progressKey) {
-      attachmentTransferStore.getState().update(progressKey, 'network', 0, meta.size ?? 0);
-    }
-    const blossom = parseBlossomUri(meta.url);
-    const candidates = blossom ? blossomDownloadUrls(blossom) : [meta.url];
-    const hash = getHashFromURL(meta.url);
-    if (!blossom && hash && opts?.accountPubkey) {
-      const extension = new URL(meta.url).pathname.match(/\.\w+$/)?.[0] ?? '';
-      for (const server of await loadAccountMediaServers(opts.accountPubkey)) {
-        candidates.push(`${server.replace(/\/+$/, '')}/${hash}${extension}`);
-      }
-    }
-    const errors: string[] = [];
-    let downloaded: DownloadedAttachment | null = null;
-    for (const url of new Set(candidates)) {
+  onProgress('network', 0, meta.size ?? 0);
+  const blossom = parseBlossomUri(meta.url);
+  const cipherHash = /^[0-9a-f]{64}$/i.test(meta.cipherSha256Hex)
+    ? meta.cipherSha256Hex.toLowerCase()
+    : undefined;
+  const seen = new Set<string>();
+  let downloadError: AttachmentError | undefined;
+
+  const tryCandidate = async (url: string, discovered = false) => {
+    throwIfAborted(opts?.signal);
+    const key = (() => { try { return new URL(url).href; } catch { return url; } })();
+    if (seen.has(key)) return;
+    seen.add(key);
+    try {
+      const downloaded = await downloadAttachmentBytes({
+        url,
+        identity: `${meta.cipherSha256Hex}:${meta.decryptionKeyHex}:${meta.decryptionNonceHex}`,
+        expectedSize: meta.size,
+        immutable: cipherHash !== undefined,
+        signal: opts?.signal,
+        onProgress: (received, total) => onProgress('network', received, total),
+      });
       throwIfAborted(opts?.signal);
-      try {
-        downloaded = await downloadAttachmentBytes({
-          url,
-          identity: `${meta.cipherSha256Hex}:${meta.decryptionKeyHex}:${meta.decryptionNonceHex}`,
-          expectedSize: meta.size,
-          immutable: /^[0-9a-f]{64}$/i.test(meta.cipherSha256Hex),
-          signal: opts?.signal,
-          onProgress: progressKey
-            ? (received, total) => {
-                if (!opts?.signal?.aborted) {
-                  attachmentTransferStore.getState().update(progressKey, 'network', received, total);
-                }
-              }
-            : undefined,
-        });
-        break;
-      } catch (error) {
-        if (isAbortError(error)) throw error;
-        throwIfAborted(opts?.signal);
-        errors.push(error instanceof Error ? error.message : String(error));
+      return downloaded;
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      throwIfAborted(opts?.signal);
+      downloadError ??= new AttachmentError('download', discovered
+        ? 'Could not download attachment from the sender’s media server'
+        : error instanceof Error ? error.message : String(error));
+    }
+  };
+  let download: DownloadedAttachment | undefined;
+  for (const url of blossom ? blossomDownloadUrls(blossom) : [meta.url]) {
+    download = await tryCandidate(url);
+    if (download) break;
+  }
+  // Only a failed original HTTP(S) URL can trigger a lookup of the sender's
+  // signed server list. Never substitute the receiver's own upload settings.
+  if (!download && !blossom && cipherHash && opts?.senderPubkey) {
+    let original: URL | undefined;
+    try { original = new URL(meta.url); } catch { /* not a usable HTTPS URL */ }
+    if (original?.protocol === 'https:' || original?.protocol === 'http:') {
+      const name = attachmentHttpBlobName(original);
+      const suffix = name?.hash === cipherHash ? name.extension : '';
+      const servers = await loadSenderMediaServers(opts.senderPubkey).catch(() => []);
+      throwIfAborted(opts?.signal);
+      for (const server of servers) {
+        const url = `${server.replace(/\/+$/, '')}/${cipherHash}${suffix}`;
+        download = await tryCandidate(url, true);
+        if (download) break;
       }
     }
-    if (!downloaded) throw new Error(errors.join('\n') || 'No media server is available');
-    downloadedCipher = downloaded;
-    cipher = downloaded.bytes;
-    throwIfAborted(opts?.signal);
-  } catch (err) {
-    if (isAbortError(err)) throw err;
-    throwIfAborted(opts?.signal);
-    throw new AttachmentError('download', (err as Error).message);
   }
+  if (!download) throw downloadError ?? new AttachmentError('download', 'No media server is available');
 
-  // Whether either content hash failed to match. When the user has accepted the
-  // risk (`allowIntegrityMismatch`) we still decrypt + show the bytes, but we
-  // never persist them as the canonical blob in the index (see below).
-  let mismatched = false;
-
-  // Ciphertext integrity: `meta.cipherSha256Hex` is a real content address when
-  // it's a 64-hex (from the `x` tag, or the hash embedded in a Blossom URL); a
-  // non-hex value (a plain URL slug) carries no hash to check against.
-  if (/^[0-9a-f]{64}$/i.test(meta.cipherSha256Hex)) {
-    const cipherHash = await sha256Hex(cipher);
-    throwIfAborted(opts?.signal);
-    if (cipherHash !== meta.cipherSha256Hex.toLowerCase()) {
-      if (!opts?.allowIntegrityMismatch) {
-        await downloadedCipher.discard();
-        throw new AttachmentError('integrity', 'ciphertext hash mismatch');
-      }
-      mismatched = true;
-    }
-  }
-
-  // AES-GCM decrypt runs off the JS thread (expo-crypto, async), so loading an
-  // image no longer janks the message list while scrolling. A decrypt failure
-  // (wrong key / unreadable bytes) leaves nothing to reveal → `download` kind.
+  // Once any server delivers the complete ciphertext, verification and
+  // decryption are terminal for this attempt. Do not try another server here.
+  const downloadedCipher = download;
   let plain: Uint8Array;
+  let plainHash: string;
   try {
+    if (cipherHash) {
+      const actual = await sha256Hex(downloadedCipher.bytes);
+      throwIfAborted(opts?.signal);
+      if (actual !== cipherHash) throw new AttachmentError('integrity', 'ciphertext hash mismatch');
+    }
     plain = await decryptBytes({
-      cipher,
-      keyHex: meta.decryptionKeyHex,
-      nonceHex: meta.decryptionNonceHex,
+      cipher: downloadedCipher.bytes, keyHex: meta.decryptionKeyHex, nonceHex: meta.decryptionNonceHex,
     });
-  } catch (err) {
     throwIfAborted(opts?.signal);
-    await downloadedCipher.discard();
-    throw new AttachmentError('download', (err as Error).message);
-  }
-
-  throwIfAborted(opts?.signal);
-
-  // Plaintext hash names the file (content address → dedup) and, when the sender
-  // gave an `ox`, verifies it (guards corruption + a spoofed `ox`).
-  const plainHash = await sha256Hex(plain);
-  throwIfAborted(opts?.signal);
-  if (meta.plainSha256Hex && meta.plainSha256Hex.toLowerCase() !== plainHash) {
-    if (!opts?.allowIntegrityMismatch) {
-      await downloadedCipher.discard();
+    plainHash = await sha256Hex(plain);
+    throwIfAborted(opts?.signal);
+    if (meta.plainSha256Hex && meta.plainSha256Hex.toLowerCase() !== plainHash) {
       throw new AttachmentError('integrity', 'plaintext hash mismatch');
     }
-    mismatched = true;
+  } catch (error) {
+    // A paused download keeps its staged ciphertext for the next attempt.
+    if (isAbortError(error)) throw error;
+    throwIfAborted(opts?.signal);
+    await downloadedCipher.discard().catch(() => undefined);
+    throwIfAborted(opts?.signal);
+    if (error instanceof AttachmentError) throw error;
+    throw new AttachmentError('download', error instanceof Error ? error.message : String(error));
   }
 
   // Real type from the decrypted bytes; fall back to the sender's `file-type`
@@ -673,11 +648,8 @@ async function fetchAndDecryptAttachmentInternal(
   throwIfAborted(opts?.signal);
   await writeDedup(target, plain);
   throwIfAborted(opts?.signal);
-  // Mark this content downloaded for every message that references it (so a
-  // sibling message resolves it without re-downloading) — but NOT when the user
-  // bypassed a hash mismatch: a tampered/corrupt blob must never be recorded as
-  // the canonical attachment, so it re-checks (and re-warns) on the next view.
-  if (!mismatched) await markDownloaded(meta.url, plainHash, mime, plain.byteLength);
+  // Share only verified bytes with other messages that reference this blob.
+  await markDownloaded(meta.url, plainHash, mime, plain.byteLength);
   sessionCache.set(meta.url, target);
   await downloadedCipher.discard().catch(() => {});
   return target;

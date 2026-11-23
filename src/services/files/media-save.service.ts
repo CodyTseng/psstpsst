@@ -1,5 +1,6 @@
 import { platform } from '@/platform';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
+import type { AttachmentDownloadSource } from './attachment-download-task';
 import type { EmbeddedMedia } from '@/lib/nostr/embedded-media';
 
 import { mimeToExt } from './attachment-store';
@@ -74,7 +75,7 @@ export async function saveUriToLibrary(uri: string): Promise<SaveResult> {
  */
 export async function saveAttachmentToLibrary(
   meta: FileAttachmentMeta,
-  opts?: { accountPubkey?: string | null },
+  opts?: AttachmentDownloadSource,
 ): Promise<SaveResult> {
   let uri: string;
   try {
@@ -92,7 +93,7 @@ export async function saveAttachmentToLibrary(
  */
 export async function saveAttachment(
   meta: FileAttachmentMeta,
-  opts?: { accountPubkey?: string | null },
+  opts?: AttachmentDownloadSource,
 ): Promise<SaveResult> {
   if (meta.mime?.startsWith('image/') || meta.mime?.startsWith('video/')) {
     return saveAttachmentToLibrary(meta, opts);

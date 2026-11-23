@@ -3,9 +3,13 @@ import type { Event } from 'nostr-tools';
 
 import { db } from '@/db/client';
 import { mediaServerLists } from '@/db/schema';
-import { DEFAULT_BLOSSOM_SERVERS, normalizeBlossomUrl, normalizeBlossomUrls } from '@/lib/nostr/blossom-url';
+import { DEFAULT_BLOSSOM_SERVERS, normalizeBlossomUrl, normalizeBlossomUrls, normalizeAdvertisedBlossomUrl } from '@/lib/nostr/blossom-url';
 
 import { canApplyConfigurationEvent, prepareConfiguration, publishConfigurationAndWait } from '../relay/configuration-publish.service';
+import { DISCOVERY_RELAYS } from '@/lib/nostr/relay-url';
+import { publicUrl } from '../napplet/protocol';
+import { fetchReplaceable, peerMetaRelays } from '../relay/relay-router';
+import { loadCachedReplaceableEvent } from '../relay/replaceable-events.service';
 import type { Signer } from '../signer/signer.interface';
 
 /** BUD-03 "User Server List" — the account's preferred Blossom media servers. */
@@ -27,6 +31,32 @@ export async function loadAccountMediaServers(accountPubkey: string): Promise<st
     .orderBy(sql`rowid`);
   if (rows.length === 0) return DEFAULT_BLOSSOM_SERVERS.map(normalizeBlossomUrl);
   return normalizeBlossomUrls(rows.map((r) => r.serverUrl));
+}
+
+/** Resolve the sender's published list, never the receiving account's settings. */
+export async function loadSenderMediaServers(senderPubkey: string): Promise<string[]> {
+  if (!/^[0-9a-f]{64}$/.test(senderPubkey)) return [];
+  const key = { pubkey: senderPubkey, kind: KIND_BLOSSOM_SERVER_LIST };
+  const event = await loadCachedReplaceableEvent(key, {
+    relays: async () => {
+      const hints = await peerMetaRelays(senderPubkey).catch(() => []);
+      return [...new Set([...hints, ...DISCOVERY_RELAYS].flatMap((hint) => {
+        try { return [publicUrl(hint, true)]; } catch { return []; }
+      }))];
+    },
+    query: async (relays) => {
+      const fetched = await fetchReplaceable(relays, key.kind, key.pubkey);
+      return fetched ? [fetched] : [];
+    },
+  });
+  if (!event) return [];
+  const servers = new Set<string>();
+  for (const [type, value] of event.tags) {
+    if (type !== 'server' || !value) continue;
+    try { servers.add(normalizeAdvertisedBlossomUrl(value)); } catch { /* An authenticated hint is still an untrusted URL. */ }
+    if (servers.size === 8) break;
+  }
+  return [...servers];
 }
 
 /** Replace the account's media-server list and publish kind 10063 (BUD-03). */

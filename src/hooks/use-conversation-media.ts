@@ -19,7 +19,7 @@ type ConversationMediaBase = {
 
 /** One viewable image/video, encrypted attachment or direct media URL. */
 export type ConversationMediaItem =
-  | (ConversationMediaBase & { source: 'attachment'; meta: FileAttachmentMeta })
+  | (ConversationMediaBase & { source: 'attachment'; meta: FileAttachmentMeta; senderPubkey?: string })
   | (ConversationMediaBase & { source: 'embedded'; meta: EmbeddedMedia });
 
 /** Centre the media window on a specific item (opened from a chat bubble / a grid
@@ -56,6 +56,7 @@ function isViewable(mime: string | undefined): boolean {
 }
 
 type Row = {
+  senderPubkey: string;
   id: string;
   source: MessageMediaSource;
   url: string;
@@ -71,6 +72,7 @@ function toItem(row: Row): ConversationMediaItem | null {
     if (!meta || !isViewable(meta.mime)) return null;
     return {
       source: 'attachment',
+      senderPubkey: row.senderPubkey,
       mediaKey: `${row.id}\u0000${row.url}`,
       messageId: row.id,
       createdAt: row.createdAt,
@@ -108,7 +110,7 @@ function toItem(row: Row): ConversationMediaItem | null {
  *
  * Driven off the **`message_media`
  * `(account_pubkey, conversation_key, gallery, order_at, message_id, url)`** index, joined
- * to `messages` only for the rumor `content`/`tags` — so it never scans the
+ * to `messages` for the rumor and its author — so it never scans the
  * conversation's text messages, and the index covers both filter and order.
  * Kind-15 rows use their declared `file-type`; kind-14 rows run the same direct-
  * media parser as the message bubble. All three queries are always subscribed
@@ -140,6 +142,7 @@ export function useConversationMedia(
 
   const cols = {
     id: messages.id,
+    senderPubkey: messages.senderPubkey,
     source: messageMedia.source,
     url: messageMedia.url,
     content: messages.content,

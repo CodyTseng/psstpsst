@@ -6,8 +6,7 @@ import { IconButton } from '@/components/common/IconButton';
 import { ExclamationIcon } from '@/components/common/ExclamationIcon';
 import {
   attachmentFailureCopy,
-  promptRevealUnverified,
-  type RevealAction,
+  showAttachmentIntegrityFailure,
 } from '@/lib/attachments/failure';
 import { platform } from '@/platform';
 import type { AttachmentErrorKind } from '@/services/files/file-attachment.service';
@@ -25,37 +24,36 @@ export function AttachmentFrame({
   children,
   isSelf = false,
   failure,
-  action,
   onRetry,
   overlay,
 }: {
   children: ReactNode;
   isSelf?: boolean;
   failure: AttachmentErrorKind | null;
-  action: RevealAction;
-  onRetry: (allowIntegrityMismatch: boolean) => void;
+  onRetry: () => void;
   /** Media metadata stays anchored to the media, excluding the action slot. */
   overlay?: ReactNode;
 }) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const dialogOpen = useRef(false);
-  const copy = failure ? attachmentFailureCopy(failure, action) : null;
+  const copy = failure ? attachmentFailureCopy(failure) : null;
 
   async function showFailure() {
     if (!failure || dialogOpen.current) return;
     dialogOpen.current = true;
     try {
-      const integrity = failure === 'integrity';
-      const retry = integrity
-        ? await promptRevealUnverified(t, action)
-        : await platform.confirmationDialog.confirm({
-            title: t('attach.download_failed'),
-            message: t('attach.tap_retry'),
-            cancelLabel: t('common.close'),
-            confirmLabel: t('common.retry'),
-          });
-      if (retry) onRetry(integrity);
+      if (failure === 'integrity') {
+        await showAttachmentIntegrityFailure(t);
+        return;
+      }
+      const retry = await platform.confirmationDialog.confirm({
+        title: t('attach.download_failed'),
+        message: t('attach.tap_retry'),
+        cancelLabel: t('common.close'),
+        confirmLabel: t('common.retry'),
+      });
+      if (retry) onRetry();
     } finally {
       dialogOpen.current = false;
     }

@@ -57,7 +57,8 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } }));
 jest.mock('@/platform', () => ({ platform: { screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) } } }));
 jest.mock('@/services/files/media-save.service', () => ({ saveAttachmentToLibrary: jest.fn(), saveRemoteMediaToLibrary: jest.fn() }));
-jest.mock('@/lib/attachments/failure', () => ({ revealOrRetry: jest.fn() }));
+jest.mock('@/lib/attachments/failure', () => ({ attachmentFailureCopy: () => ({ reasonKey: 'attach.verify_failed' }), retryOrShowIntegrityFailure: jest.fn() }));
+jest.mock('@/components/chat/AttachmentFailure', () => ({ AttachmentFailure: () => null }));
 jest.mock('@/stores/active-account.store', () => ({ useActiveAccount: () => 'account' }));
 jest.mock('@/theme', () => ({ useThemeColors: () => ({}), desktopChrome: { titlebarHeight: 32 }, uiDensity: {}, spacing: { lg: 16 } }));
 jest.mock('../MediaTouchPager', () => ({ MediaTouchPager: ({ pageKey, children }: { pageKey: string; children: ReactNode }) => {

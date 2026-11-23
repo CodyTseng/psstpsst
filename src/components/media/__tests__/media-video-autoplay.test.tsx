@@ -40,7 +40,7 @@ jest.mock('@/lib/platform', () => ({ get IS_ELECTRON() { return mockElectron; } 
 jest.mock('@/platform', () => ({
   platform: {
     screenOrientation: { setVideoActive: jest.fn().mockResolvedValue(undefined) },
-    confirmationDialog: { notify: jest.fn() },
+    confirmationDialog: { notify: jest.fn(async () => undefined) },
     fileSaver: { save: jest.fn().mockResolvedValue(true) },
   },
 }));
@@ -57,7 +57,7 @@ jest.mock('@/services/files/file-attachment.service', () => ({
   fetchAndDecryptAttachment: jest.fn((meta, options = {}) => {
     const task = jest.requireActual('@/services/files/attachment-download-task');
     return task.runAttachmentDownload(
-      task.attachmentDownloadTaskKey(options.accountPubkey ?? null, meta, options.allowIntegrityMismatch),
+      task.attachmentDownloadTaskKey(options.accountPubkey ?? null, meta),
       options.signal, () => mockFetchVideo(meta, options),
     );
   }),
@@ -73,9 +73,6 @@ jest.mock('@/components/common/InteractivePressable', () => ({
   InteractivePressable: jest.requireActual('react-native').View,
 }));
 jest.mock('@/components/chat/AttachmentFailure', () => ({ AttachmentFailure: () => null }));
-jest.mock('@/lib/attachments/failure', () => ({
-  revealOrRetry: (_kind: unknown, _t: unknown, _action: string, retry: (allow: boolean) => void) => retry(false),
-}));
 jest.mock('@solar-icons/react-native/category/video/Linear/Play', () => ({ Play: () => null }), { virtual: true });
 jest.mock('@solar-icons/react-native/category/video/Linear/Clapperboard', () => ({ Clapperboard: () => null }), { virtual: true });
 jest.mock('@solar-icons/react-native/category/video/Linear/GalleryRemove', () => ({ GalleryRemove: () => null }), { virtual: true });
@@ -130,6 +127,19 @@ it.each([
   expect(StyleSheet.flatten(renderer.root.findByType(VideoView).props.style))
     .toMatchObject({ width: '100%', height: '100%' });
   expect(renderer.root.findByType(VideoView).props.fullscreenOptions).toEqual({ enable: electron });
+});
+
+it('does not retry or play a video that failed integrity verification', async () => {
+  fetchVideo.mockRejectedValueOnce({ kind: 'integrity' });
+  await act(async () => { renderer = create(<MediaVideoPage item={attachment} active />); });
+  await act(async () => { renderer.root.findByType(InteractivePressable).props.onPress(); });
+  expect(platform.confirmationDialog.notify).toHaveBeenCalledWith({
+    title: 'attach.verify_failed',
+    message: 'attach.verify_failed_message',
+    okLabel: 'common.close',
+  });
+  expect(fetchVideo).toHaveBeenCalledTimes(1);
+  expect(useVideoPlayer).not.toHaveBeenCalled();
 });
 
 it('plays an already-cached video without downloading it', async () => {

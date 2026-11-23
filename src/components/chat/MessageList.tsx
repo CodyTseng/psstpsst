@@ -1899,6 +1899,7 @@ export function MessageList({
       const groupSenderName = group && !isSelf
         ? replySenderName(msg.senderPubkey, senderProfile)
         : null;
+      const attachmentSender = attachment ? msg.senderPubkey : undefined;
 
       return (
         <>
@@ -1913,6 +1914,7 @@ export function MessageList({
             replyTo={replyPreview}
             reactions={reactions}
             attachment={attachment}
+            attachmentSenderPubkey={attachmentSender}
             presentation={presentation}
             interactive={interactive}
             conversationKey={msg.conversationKey}
@@ -1937,6 +1939,7 @@ export function MessageList({
                       persistedDelivery,
                       replyTo: replyPreview,
                       attachment,
+                      attachmentSenderPubkey: attachmentSender,
                       remoteContentMode,
                       reactions,
                     })

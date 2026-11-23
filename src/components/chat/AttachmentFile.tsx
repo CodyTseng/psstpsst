@@ -9,7 +9,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
 import { AppText } from '@/components/common/AppText';
-import { revealOrRetry } from '@/lib/attachments/failure';
+import { retryOrShowIntegrityFailure } from '@/lib/attachments/failure';
 import { isAbortError } from '@/lib/async/abort';
 import { formatFileSize } from '@/lib/nostr/file-tags';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
@@ -50,6 +50,7 @@ import { AttachmentTransferProgress } from './AttachmentTransferProgress';
  */
 export function AttachmentFile({
   meta,
+  senderPubkey,
   maxWidth,
   isSelf,
   metaSlot,
@@ -57,6 +58,7 @@ export function AttachmentFile({
   messageId,
 }: {
   meta: FileAttachmentMeta;
+  senderPubkey?: string;
   maxWidth?: number;
   isSelf?: boolean;
   nearby?: NearbyAttachmentFetchContext;
@@ -72,7 +74,6 @@ export function AttachmentFile({
   const [downloading, setDownloading] = useState(false);
   const [paused, setPaused] = useState(false);
   const downloadController = useRef<AbortController | null>(null);
-  const pausedAllowIntegrityMismatch = useRef(false);
 
   // Whether the decrypted blob is already on disk (drives download-vs-file glyph).
   const [ownLocal, setLocal] = useState<boolean>(() => !!getSessionCachedUri(meta));
@@ -83,8 +84,9 @@ export function AttachmentFile({
 
   const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
   const sharedActive = !!transfer && !transfer.paused && !local;
-  const isDownloading = !local && !transfer?.paused && (downloading || sharedActive);
-  const isPaused = !isDownloading && (paused || !!transfer?.paused) && !local;
+  const integrityFailure = failKind === 'integrity';
+  const isDownloading = !integrityFailure && !local && !transfer?.paused && (downloading || sharedActive);
+  const isPaused = !integrityFailure && !isDownloading && (paused || !!transfer?.paused) && !local;
 
   const name = meta.name || t('attach.file');
   const size = formatFileSize(meta.plainSize ?? meta.size);
@@ -107,9 +109,8 @@ export function AttachmentFile({
     };
   }, [meta.cipherSha256Hex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function open(allowIntegrityMismatch = false) {
+  async function open() {
     if (busy && !transfer?.paused) return;
-    pausedAllowIntegrityMismatch.current = allowIntegrityMismatch;
     const controller = new AbortController();
     downloadController.current = controller;
     setBusy(true);
@@ -122,7 +123,7 @@ export function AttachmentFile({
         getSessionCachedUri(meta) ??
         (await fetchAndDecryptAttachment(meta, {
           accountPubkey,
-          allowIntegrityMismatch,
+          senderPubkey,
           nearby,
           signal: controller.signal,
         }));
@@ -132,7 +133,7 @@ export function AttachmentFile({
     } catch (err) {
       if (downloadController.current !== controller) return;
       // A fetch/integrity failure becomes the bubble's persistent state (retry
-      // or confirm-to-reveal); a later share-sheet error is a one-off alert.
+      // or explain); a later share-sheet error is a one-off alert.
       if (isAbortError(err)) setPaused(true);
       else setFailKind(attachmentErrorKind(err));
       if (downloadController.current === controller) {
@@ -172,8 +173,7 @@ export function AttachmentFile({
     setDownloading(false);
   }
 
-  // Tap the card: open / retry a failed download / confirm-then-open past an
-  // integrity failure.
+  // Tap the card to open, retry a download, or explain an integrity failure.
   function onTap() {
     if (isDownloading) {
       pauseDownload();
@@ -181,18 +181,17 @@ export function AttachmentFile({
     }
     if (busy && !transfer?.paused) return;
     if (isPaused) {
-      void open(pausedAllowIntegrityMismatch.current);
+      void open();
       return;
     }
-    void revealOrRetry(failKind, t, 'open', (allow) => void open(allow));
+    retryOrShowIntegrityFailure(failKind, t, () => void open());
   }
 
   return (
     <AttachmentFrame
       isSelf={isSelf}
       failure={failKind}
-      action="open"
-      onRetry={(allow) => void open(allow)}
+      onRetry={() => void open()}
     >
       <Pressable
         onPress={onTap}

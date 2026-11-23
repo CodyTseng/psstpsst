@@ -30,8 +30,9 @@ it('copies cached content without downloading it', async () => {
 it('resolves uncached content using the authorized account and integrity checks', async () => {
   jest.mocked(getCachedAttachmentUri).mockResolvedValue(null);
   jest.mocked(fetchAndDecryptAttachment).mockResolvedValue('verified-photo');
-  await copyAttachment(meta, { accountPubkey: 'owner' });
-  expect(fetchAndDecryptAttachment).toHaveBeenCalledWith(meta, { accountPubkey: 'owner' });
+  const options = { accountPubkey: 'owner', senderPubkey: 'b'.repeat(64) };
+  await copyAttachment(meta, options);
+  expect(fetchAndDecryptAttachment).toHaveBeenCalledWith(meta, options);
   expect(platform.clipboard.copyAttachment).toHaveBeenCalledWith('verified-photo', expect.anything());
 });
 

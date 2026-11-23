@@ -406,10 +406,7 @@
     "quality_original": "Original",
     "verify_failed": "Falha na verificação",
     "tap_retry": "Toque para tentar novamente",
-    "verify_failed_message": "O conteúdo deste ficheiro não corresponde ao que a mensagem indica. Pode estar danificado ou ter sido alterado no servidor.",
-    "verify_failed_show": "Mostrar mesmo assim",
-    "verify_failed_play": "Reproduzir mesmo assim",
-    "verify_failed_open": "Abrir mesmo assim"
+    "verify_failed_message": "O conteúdo deste ficheiro não corresponde ao que a mensagem indica. Pode estar danificado ou ter sido alterado no servidor."
   },
   "media": {
     "previous": "Multimédia anterior",

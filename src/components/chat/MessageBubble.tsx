@@ -112,6 +112,7 @@ type Props = {
   replyTo?: MessageBubbleReplyPreview | null;
   reactions: ReactionAggregate[];
   attachment?: FileAttachmentMeta | null;
+  attachmentSenderPubkey?: string;
   presentation?: PreparedMessagePresentation;
   /** False during the native push: paint the exact bubble without installing
    * swipe/long-press recognizers or their hidden reply affordance yet. */
@@ -179,6 +180,7 @@ function MessageBubbleBase({
   replyTo,
   reactions,
   attachment,
+  attachmentSenderPubkey,
   presentation,
   interactive = true,
   conversationKey,
@@ -338,6 +340,7 @@ function MessageBubbleBase({
       replyTo={replyTo}
       layout={layout}
       attachment={attachment}
+      attachmentSenderPubkey={attachmentSenderPubkey}
       conversationKey={conversationKey}
       proximity={proximity}
       remoteContentMode={remoteContentMode}
@@ -699,6 +702,7 @@ function areEqual(a: Props, b: Props): boolean {
     a.interactive !== b.interactive ||
     a.remoteContentMode !== b.remoteContentMode ||
     a.rumorId !== b.rumorId ||
+    a.attachmentSenderPubkey !== b.attachmentSenderPubkey ||
     a.highlighted !== b.highlighted ||
     a.highlightTick !== b.highlightTick ||
     a.groupStart !== b.groupStart ||

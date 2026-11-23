@@ -23,11 +23,11 @@ jest.mock('@/stores/active-account.store', () => ({
 const mockDownload = jest.fn<Promise<string>, [FileAttachmentMeta, AttachmentFetchOptions]>();
 
 jest.mock('@/services/files/file-attachment.service', () => ({
-  attachmentErrorKind: jest.fn(() => 'download'),
+  attachmentErrorKind: (error: { kind?: string }) => error.kind ?? 'download',
   fetchAndDecryptAttachment: jest.fn((meta, options = {}) => {
     const task = jest.requireActual('@/services/files/attachment-download-task');
     return task.runAttachmentDownload(
-      task.attachmentDownloadTaskKey(options.accountPubkey ?? null, meta, options.allowIntegrityMismatch),
+      task.attachmentDownloadTaskKey(options.accountPubkey ?? null, meta),
       options.signal, (signal: AbortSignal) => mockDownload(meta, { ...options, signal }),
     );
   }),
@@ -84,6 +84,26 @@ describe('useAttachment download controls', () => {
     await act(async () => { renderer = create(<Harness />); });
     expect(fetchAndDecryptAttachment).not.toHaveBeenCalled();
     expect(result!.state).toEqual({ status: 'ready', localUri: '/attachments/cached.jpg' });
+  });
+
+  it('passes a sender for fallback while sharing the same attachment across senders', async () => {
+    const first = 'd'.repeat(64), second = 'e'.repeat(64);
+    let finish!: (uri: string) => void;
+    mockDownload.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const states: Record<string, UseAttachment> = {};
+    function Harness({ senderPubkey, autoLoad }: { senderPubkey: string; autoLoad: boolean }) {
+      states[senderPubkey] = useAttachment(META, { senderPubkey, autoLoad });
+      return null;
+    }
+    await act(async () => {
+      renderer = create(<><Harness senderPubkey={first} autoLoad /><Harness senderPubkey={second} autoLoad={false} /></>);
+    });
+    expect(fetchAndDecryptAttachment).toHaveBeenCalledTimes(1);
+    expect(fetchAndDecryptAttachment).toHaveBeenCalledWith(META, expect.objectContaining({ accountPubkey: 'account', senderPubkey: first }));
+    await act(async () => { finish('/attachments/first.jpg'); });
+    expect(states[first].state.status).toBe('ready');
+    expect(states[second].state).toEqual(states[first].state);
+    expect(mockDownload).toHaveBeenCalledTimes(1);
   });
 
   it('keeps local lookup separate from a missing attachment and never discards a ready URI', async () => {
@@ -243,17 +263,21 @@ describe('useAttachment download controls', () => {
     expect(result.state).toEqual({ status: 'ready', localUri: '/attachments/new.jpg' });
   });
 
-  it('does not publish an integrity override to a sibling that did not approve it', async () => {
-    mockDownload.mockRejectedValueOnce(new Error('Integrity mismatch'))
-      .mockResolvedValueOnce('/attachments/revealed.jpg');
+  it('keeps an integrity rejection terminal for the download controls', async () => {
+    mockDownload.mockRejectedValueOnce({ kind: 'integrity' });
     const consumers: Record<string, UseAttachment> = {};
     function Harness({ id }: { id: string }) { consumers[id] = useAttachment(META); return null; }
-    await act(async () => { renderer = create(<><Harness id="approved" /><Harness id="verified" /></>); });
-    expect(consumers.verified.state.status).toBe('error');
-    await act(async () => { consumers.approved.reveal(); });
-    expect(consumers.approved.state).toEqual({ status: 'ready', localUri: '/attachments/revealed.jpg' });
-    expect(consumers.verified.state.status).toBe('error');
-    expect(mockDownload).toHaveBeenCalledTimes(2);
+    await act(async () => { renderer = create(<><Harness id="original" /><Harness id="sibling" /></>); });
+    expect(consumers.original.state).toEqual({ status: 'error', kind: 'integrity' });
+    expect(consumers.sibling.state).toEqual({ status: 'error', kind: 'integrity' });
+    await act(async () => {
+      consumers.original.retry();
+      consumers.sibling.resume();
+      consumers.sibling.load();
+    });
+    expect(consumers.original.state).toEqual({ status: 'error', kind: 'integrity' });
+    expect(consumers.sibling.state).toEqual({ status: 'error', kind: 'integrity' });
+    expect(mockDownload).toHaveBeenCalledTimes(1);
   });
 
 });

@@ -17,7 +17,7 @@ import { VideoSurface } from '@/components/media/VideoSurface';
 import { useVideoPoster } from '@/hooks/use-video-poster';
 import { AppText } from '@/components/common/AppText';
 import { isAbortError } from '@/lib/async/abort';
-import { revealOrRetry } from '@/lib/attachments/failure';
+import { retryOrShowIntegrityFailure } from '@/lib/attachments/failure';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
@@ -95,6 +95,7 @@ function parseDim(dim?: string): { w: number; h: number } | null {
  */
 export function AttachmentVideo({
   meta,
+  senderPubkey,
   maxWidth,
   isSelf,
   overlay,
@@ -104,6 +105,7 @@ export function AttachmentVideo({
   nearby,
 }: {
   meta: FileAttachmentMeta;
+  senderPubkey?: string;
   /** Space remaining after the frame's action slot. */
   maxWidth?: number;
   isSelf?: boolean;
@@ -130,11 +132,11 @@ export function AttachmentVideo({
   const [sharing, setSharing] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const downloadController = useRef<AbortController | null>(null);
-  const pausedAllowIntegrityMismatch = useRef(false);
   const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
   const sharedActive = !!transfer && !transfer.paused && !localUri;
-  const isDownloading = !localUri && !transfer?.paused && (loading || sharedActive);
-  const isPaused = !isDownloading && (paused || !!transfer?.paused) && !localUri;
+  const integrityFailure = failKind === 'integrity';
+  const isDownloading = !integrityFailure && !localUri && !transfer?.paused && (loading || sharedActive);
+  const isPaused = !integrityFailure && !isDownloading && (paused || !!transfer?.paused) && !localUri;
 
   useEffect(() => () => {
     downloadController.current?.abort();
@@ -167,9 +169,8 @@ export function AttachmentVideo({
     };
   }, [meta.cipherSha256Hex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function load(allowIntegrityMismatch = false) {
+  async function load() {
     if ((loading && !transfer?.paused) || started) return;
-    pausedAllowIntegrityMismatch.current = allowIntegrityMismatch;
     // Already on disk → just attach it to the player.
     if (localUri) {
       setPaused(false);
@@ -184,7 +185,7 @@ export function AttachmentVideo({
     try {
       const fetched = await fetchAndDecryptAttachment(meta, {
         accountPubkey,
-        allowIntegrityMismatch,
+        senderPubkey,
         nearby,
         signal: controller.signal,
       });
@@ -211,18 +212,17 @@ export function AttachmentVideo({
     setLoading(false);
   }
 
-  // Tap the poster: first play / retry a download / confirm-then-play past an
-  // integrity failure.
+  // Tap the poster to play, retry a download, or explain an integrity failure.
   function onTap() {
     if (isDownloading) {
       pauseDownload();
       return;
     }
     if (isPaused) {
-      void load(pausedAllowIntegrityMismatch.current);
+      void load();
       return;
     }
-    void revealOrRetry(failKind, t, 'play', (allow) => void load(allow));
+    retryOrShowIntegrityFailure(failKind, t, () => void load());
   }
 
   // Plan B (player couldn't decode it): hand the already-downloaded blob to the
@@ -256,8 +256,7 @@ export function AttachmentVideo({
     <AttachmentFrame
       isSelf={isSelf}
       failure={failKind}
-      action="play"
-      onRetry={(allow) => void load(allow)}
+      onRetry={() => void load()}
       // Native playback controls share the video's bottom edge with message
       // metadata. Keep the timestamp on the poster, then remove it for the
       // lifetime of the inline player so those controls remain unobstructed.

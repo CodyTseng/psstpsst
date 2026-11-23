@@ -403,10 +403,7 @@
     "quality_original": "Orijinal",
     "verify_failed": "Doğrulama başarısız",
     "tap_retry": "Tekrar denemek için dokun",
-    "verify_failed_message": "Bu dosyanın içeriği mesajdaki bilgilerle eşleşmiyor. Bozulmuş veya sunucuda değiştirilmiş olabilir.",
-    "verify_failed_show": "Yine de göster",
-    "verify_failed_play": "Yine de oynat",
-    "verify_failed_open": "Yine de aç"
+    "verify_failed_message": "Bu dosyanın içeriği mesajdaki bilgilerle eşleşmiyor. Bozulmuş veya sunucuda değiştirilmiş olabilir."
   },
   "media": {
     "previous": "Önceki medya",

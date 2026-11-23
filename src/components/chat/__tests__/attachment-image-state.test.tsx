@@ -8,11 +8,12 @@ import { useAttachmentTransfer } from '@/stores/attachment-transfer.store';
 import { lightPalette } from '@/theme';
 import { platform } from '@/platform';
 import { IconButton } from '@/components/common/IconButton';
+import { InteractivePressable } from '@/components/common/InteractivePressable';
 
 import { AttachmentImage } from '../AttachmentImage';
 
 jest.mock('@/platform', () => ({
-  platform: { confirmationDialog: { confirm: jest.fn() } },
+  platform: { confirmationDialog: { confirm: jest.fn(), notify: jest.fn(async () => undefined) } },
 }));
 jest.mock('@solar-icons/react-native/category/security/Linear/ShieldWarning', () => ({
   ShieldWarning: () => null,
@@ -95,7 +96,6 @@ const controls = {
   pause: jest.fn(),
   resume: jest.fn(),
   retry: jest.fn(),
-  reveal: jest.fn(),
 };
 
 function renderWithState(state: UseAttachment['state']): ReactTestRenderer {
@@ -195,17 +195,33 @@ describe('AttachmentImage transfer states', () => {
     expect(renderer.root.findAllByProps({ testID: 'attachment-placeholder' })).toHaveLength(0);
   });
 
-  it.each(['download', 'integrity'] as const)('retries a %s failure from the side action', async (kind) => {
+  it('retries a download failure from the side action', async () => {
     jest.mocked(platform.confirmationDialog.confirm).mockResolvedValueOnce(true);
-    renderer = renderWithState({ status: 'error', kind });
+    renderer = renderWithState({ status: 'error', kind: 'download' });
 
     await act(async () => {
       renderer!.root.findByType(IconButton).props.onPress();
     });
 
     expect(platform.confirmationDialog.confirm).toHaveBeenCalledTimes(1);
-    expect(kind === 'integrity' ? controls.reveal : controls.retry).toHaveBeenCalledTimes(1);
-    expect(kind === 'integrity' ? controls.retry : controls.reveal).not.toHaveBeenCalled();
+    expect(controls.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a close-only notice without retrying from either integrity failure control', async () => {
+    renderer = renderWithState({ status: 'error', kind: 'integrity' });
+    await act(async () => { renderer!.root.findByType(IconButton).props.onPress(); });
+    const image = renderer.root.findAllByType(InteractivePressable)
+      .find((node) => node.props.accessibilityLabel !== 'attach.verify_failed')!;
+    await act(async () => { image.props.onPress(); });
+    expect(platform.confirmationDialog.notify).toHaveBeenCalledTimes(2);
+    expect(platform.confirmationDialog.notify).toHaveBeenLastCalledWith({
+      title: 'attach.verify_failed',
+      message: 'attach.verify_failed_message',
+      okLabel: 'common.close',
+    });
+    expect(platform.confirmationDialog.confirm).not.toHaveBeenCalled();
+    expect(controls.retry).not.toHaveBeenCalled();
+    expect(controls.load).not.toHaveBeenCalled();
   });
 
   it('shows a download action after pausing', () => {

@@ -409,10 +409,7 @@
     "quality_original": "Oryginał",
     "verify_failed": "Weryfikacja nie powiodła się",
     "tap_retry": "Dotknij, aby spróbować ponownie",
-    "verify_failed_message": "Zawartość pliku nie jest zgodna z informacją w wiadomości. Plik może być uszkodzony lub zmieniony na serwerze.",
-    "verify_failed_show": "Pokaż mimo to",
-    "verify_failed_play": "Odtwórz mimo to",
-    "verify_failed_open": "Otwórz mimo to"
+    "verify_failed_message": "Zawartość pliku nie jest zgodna z informacją w wiadomości. Plik może być uszkodzony lub zmieniony na serwerze."
   },
   "media": {
     "previous": "Poprzednie multimedia",

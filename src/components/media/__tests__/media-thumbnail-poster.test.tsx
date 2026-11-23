@@ -21,6 +21,7 @@ jest.mock('@/stores/theme.store', () => ({
 
 const item: ConversationMediaItem = {
   source: 'attachment', isVideo: true, mediaKey: 'video', messageId: 'message', createdAt: 1, orderAt: 1,
+  senderPubkey: 'b'.repeat(64),
   meta: { url: 'https://remote.example/video', mime: 'video/mp4', cipherSha256Hex: 'a'.repeat(64),
     decryptionKeyHex: 'b'.repeat(64), decryptionNonceHex: 'c'.repeat(24), thumbhash: 'preview' },
 };
@@ -35,7 +36,7 @@ it.each(['light', 'dark'] as const)('shows local video posters in %s mode withou
   jest.mocked(useAttachment).mockReturnValue({ state: { status: 'ready', localUri: 'file:///video.mp4' } } as ReturnType<typeof useAttachment>);
   jest.mocked(useVideoPoster).mockReturnValue('file:///poster.jpg');
   act(() => { renderer = create(<MediaThumbnail item={item} size={100} conversationKey="peer" autoLoad />); });
-  expect(useAttachment).toHaveBeenCalledWith(item.meta, { autoLoad: false });
+  expect(useAttachment).toHaveBeenCalledWith(item.meta, { autoLoad: false, senderPubkey: item.senderPubkey });
   expect(useVideoPoster).toHaveBeenCalledWith('file:///video.mp4');
   expect(renderer.root.findByType(Image).props.source).toEqual({ uri: 'file:///poster.jpg' });
 });

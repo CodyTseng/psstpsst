@@ -18,6 +18,7 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 import Animated, { useSharedValue } from 'react-native-reanimated';
 
 import { IconButton } from '@/components/common/IconButton';
+import { AttachmentFailure } from '@/components/chat/AttachmentFailure';
 import { AttachmentTransferProgress } from '@/components/chat/AttachmentTransferProgress';
 import { ZoomableImage, type ZoomableImageHandle } from '@/components/common/ZoomableImage';
 import { MediaViewerContextMenu } from './MediaViewerContextMenu';
@@ -39,7 +40,7 @@ import {
   type ConversationMediaItem,
   useConversationMedia,
 } from '@/hooks/use-conversation-media';
-import { revealOrRetry } from '@/lib/attachments/failure';
+import { attachmentFailureCopy, retryOrShowIntegrityFailure } from '@/lib/attachments/failure';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
@@ -168,7 +169,7 @@ function MediaPagerContent({
     setSaving(true);
     const result =
       item.source === 'attachment'
-        ? await saveAttachmentToLibrary(item.meta, { accountPubkey })
+        ? await saveAttachmentToLibrary(item.meta, { accountPubkey, senderPubkey: item.senderPubkey })
         : await saveRemoteMediaToLibrary(item.meta);
     setSaving(false);
     if (result === 'denied')
@@ -336,7 +337,7 @@ function MediaPagerContent({
       onGoToMessage={!showGrid && currentItem ? () => jumpToChat(currentItem) : undefined}
       onCopy={!currentItem || currentItem.isVideo ? undefined : () =>
         currentItem.source === 'attachment'
-          ? copyAttachment(currentItem.meta, { accountPubkey })
+          ? copyAttachment(currentItem.meta, { accountPubkey, senderPubkey: currentItem.senderPubkey })
           : copyImageUri(currentItem.meta.url)}
       style={[StyleSheet.absoluteFill, { zIndex: 50, elevation: 50, overflow: 'hidden' }]}
     >
@@ -505,7 +506,7 @@ function MediaImagePage({ item, preview, active, cachePending, imageRef, cachedU
     return <MediaPagePreview item={item} showPlaceholder={!cachePending} />;
   }
   if (!preview && item.source === 'attachment') {
-    return <AttachmentMediaImagePage {...imageProps} cachedUri={cachedUri} active={active} imageRef={imageRef} meta={item.meta} />;
+    return <AttachmentMediaImagePage {...imageProps} cachedUri={cachedUri} active={active} imageRef={imageRef} meta={item.meta} senderPubkey={item.senderPubkey} />;
   }
   const image = preview ?? (item.source === 'embedded' ? {
     uri: cachedUri ?? item.meta.url,
@@ -516,15 +517,16 @@ function MediaImagePage({ item, preview, active, cachePending, imageRef, cachedU
   return image ? <ZoomableImage interactionEnabled={active} {...imageProps} {...image} aspectRatio={mediaAspectRatio(item)} ref={imageRef} dismissAxis="vertical" /> : null;
 }
 
-function AttachmentMediaImagePage({ meta, active, imageRef, cachedUri, ...imageProps }: ImagePageProps & {
+function AttachmentMediaImagePage({ meta, senderPubkey, active, imageRef, cachedUri, ...imageProps }: ImagePageProps & {
   meta: FileAttachmentMeta;
+  senderPubkey?: string;
   active: boolean;
 }) {
   const { t } = useTranslation();
   const c = useThemeColors();
   // A later cache fill must not recycle an image already displaying its local URI.
   const [preparedImage] = useState(imageProps.decodedImage);
-  const { state, pause, resume, retry, reveal } = useAttachment(meta, { autoLoad: active });
+  const { state, pause, resume, retry } = useAttachment(meta, { autoLoad: active, senderPubkey });
 
   if (state.status === 'ready' || preparedImage || cachedUri) {
     return (
@@ -545,10 +547,11 @@ function AttachmentMediaImagePage({ meta, active, imageRef, cachedUri, ...imageP
   if (state.status === 'error') {
     return (
       <Pressable
-        onPress={() => revealOrRetry(state.kind, t, 'show', (allow) => (allow ? reveal() : retry()))}
+        onPress={() => retryOrShowIntegrityFailure(state.kind, t, retry)}
+        accessibilityLabel={t(attachmentFailureCopy(state.kind).reasonKey)}
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
       >
-        <ActivityIndicator color={c.onOverlay} />
+        <AttachmentFailure kind={state.kind} iconSize={28} />
       </Pressable>
     );
   }

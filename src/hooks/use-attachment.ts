@@ -27,12 +27,10 @@ export type UseAttachment = {
   load: () => void;
   /** Pause an active resumable download. */
   pause: () => void;
-  /** Resume a paused download without changing its integrity decision. */
+  /** Resume a paused download. */
   resume: () => void;
   /** Re-attempt a failed download (operational failure). */
   retry: () => void;
-  /** Proceed past an integrity failure: re-fetch accepting the hash mismatch. */
-  reveal: () => void;
 };
 
 /**
@@ -42,17 +40,17 @@ export type UseAttachment = {
  * called, which keeps message-request bytes behind explicit user intent.
  *
  * Shared tasks notify every mounted consumer when an attempt starts or is
- * replaced, and publish the resulting URI. Integrity overrides remain separate
- * from verified downloads.
+ * replaced, and publish the resulting verified URI.
  */
 export function useAttachment(
   meta: FileAttachmentMeta | null | undefined,
-  options?: { autoLoad?: boolean; nearby?: NearbyAttachmentFetchContext },
+  options?: { autoLoad?: boolean; nearby?: NearbyAttachmentFetchContext; senderPubkey?: string },
 ): UseAttachment {
   const cipherSha = meta?.cipherSha256Hex ?? null;
   const url = meta?.url ?? null;
   const autoLoad = options?.autoLoad ?? true;
   const nearby = options?.nearby;
+  const senderPubkey = options?.senderPubkey;
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const [state, setState] = useState<AttachmentState>(() => {
     if (!meta) return { status: 'idle' };
@@ -63,10 +61,8 @@ export function useAttachment(
   const resolvedUri = useRef<{ cipherSha: string | null; uri: string } | null>(
     state.status === 'ready' ? { cipherSha, uri: state.localUri } : null,
   );
-  // Bumping this re-runs the load effect (retry / reveal); `allowMismatch`
-  // carries through to bypass the integrity check on a reveal.
+  // Bumping this re-runs the load effect (load / retry / resume).
   const [attempt, setAttempt] = useState(0);
-  const allowMismatch = useRef(false);
   const activeController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -113,10 +109,9 @@ export function useAttachment(
         },
       );
     }
-    // Subscribe by crypto metadata as well as URL: an integrity override must
-    // never reveal unverified bytes to consumers that did not approve it.
+    // Subscribe by crypto metadata and URL, independent of the message author.
     const unsubscribe = subscribeAttachmentDownload(
-      attachmentDownloadTaskKey(accountPubkey, meta, allowMismatch.current), observe,
+      attachmentDownloadTaskKey(accountPubkey, meta), observe,
     );
     const deferred = !autoLoad && attempt === 0;
     if (!observed) setState({ status: 'checking' });
@@ -135,7 +130,7 @@ export function useAttachment(
         // The service starts and publishes the task synchronously; its observer
         // owns state transitions, including replacement attempts from siblings.
         void fetchAndDecryptAttachment(meta, {
-          accountPubkey, nearby, allowIntegrityMismatch: allowMismatch.current,
+          accountPubkey, senderPubkey, nearby,
         }).catch(() => {});
       } catch (error) {
         if (!cancelled && !observed) setState({ status: 'error', kind: attachmentErrorKind(error) });
@@ -147,24 +142,18 @@ export function useAttachment(
       detachAbort?.();
       if (activeController.current === observed?.controller) activeController.current = null;
     };
-  }, [cipherSha, url, accountPubkey, autoLoad, attempt, nearby?.rumorId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cipherSha, url, accountPubkey, senderPubkey, autoLoad, attempt, nearby?.rumorId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const integrityFailure = state.status === 'error' && state.kind === 'integrity';
   const load = useCallback(() => {
-    allowMismatch.current = false;
-    setAttempt((a) => a + 1);
-  }, []);
+    if (!integrityFailure) setAttempt((a) => a + 1);
+  }, [integrityFailure]);
   const retry = load;
   const pause = useCallback(() => {
     activeController.current?.abort();
     setState((current) => (current.status === 'loading' ? { status: 'paused' } : current));
   }, []);
-  const reveal = useCallback(() => {
-    allowMismatch.current = true;
-    setAttempt((a) => a + 1);
-  }, []);
-  const resume = useCallback(() => {
-    setAttempt((a) => a + 1);
-  }, []);
+  const resume = load;
 
-  return { state, load, pause, resume, retry, reveal };
+  return { state, load, pause, resume, retry };
 }

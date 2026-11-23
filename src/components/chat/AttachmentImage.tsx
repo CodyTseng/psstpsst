@@ -10,7 +10,7 @@ import { InteractivePressable as Pressable } from '@/components/common/Interacti
 import { AttachmentFrame } from '@/components/chat/AttachmentFrame';
 import { AppText } from '@/components/common/AppText';
 import { useAttachment } from '@/hooks/use-attachment';
-import { revealOrRetry } from '@/lib/attachments/failure';
+import { retryOrShowIntegrityFailure } from '@/lib/attachments/failure';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import type { NearbyAttachmentFetchContext } from '@/services/files/file-attachment.service';
 import { pauseAttachmentDownload } from '@/services/files/attachment-download-task';
@@ -28,6 +28,7 @@ import { AttachmentTransferProgress } from './AttachmentTransferProgress';
 
 type Props = {
   meta: FileAttachmentMeta;
+  senderPubkey?: string;
   /** Space remaining after the frame's action slot. */
   maxWidth?: number;
   isSelf?: boolean;
@@ -60,6 +61,7 @@ function parseDim(dim?: string): { w: number; h: number } | null {
 
 export function AttachmentImage({
   meta,
+  senderPubkey,
   maxWidth,
   isSelf,
   overlay,
@@ -72,15 +74,17 @@ export function AttachmentImage({
 }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const { state, load, pause, resume, retry, reveal } = useAttachment(meta, {
+  const { state, load, pause, resume, retry } = useAttachment(meta, {
     autoLoad: autoDownload,
+    senderPubkey,
     nearby,
   });
   const accountPubkey = useActiveAccount((s) => s.activePubkey);
   const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
   const sharedActive = !!transfer && !transfer.paused && state.status !== 'ready';
-  const isDownloading = !transfer?.paused && (state.status === 'loading' || sharedActive);
-  const isPaused = !isDownloading && state.status !== 'ready' && (state.status === 'paused' || !!transfer?.paused);
+  const integrityFailure = state.status === 'error' && state.kind === 'integrity';
+  const isDownloading = !integrityFailure && !transfer?.paused && (state.status === 'loading' || sharedActive);
+  const isPaused = !integrityFailure && !isDownloading && state.status !== 'ready' && (state.status === 'paused' || !!transfer?.paused);
   const canPromptLoad = !autoDownload && showLoadPrompt && state.status === 'idle';
   // Cache-warmed route and long-press copies must not show the placeholder again.
   const localUri = state.status === 'ready' ? state.localUri : undefined;
@@ -104,8 +108,7 @@ export function AttachmentImage({
     <AttachmentFrame
       isSelf={isSelf}
       failure={state.status === 'error' ? state.kind : null}
-      action="show"
-      onRetry={(allow) => allow ? reveal() : retry()}
+      onRetry={retry}
       overlay={overlay}
     >
       <View
@@ -129,9 +132,7 @@ export function AttachmentImage({
             }
             if (isPaused) { resume(); return; }
             if (state.status === 'error') {
-              void revealOrRetry(state.kind, t, 'show', (allow) =>
-                allow ? reveal() : retry(),
-              );
+              retryOrShowIntegrityFailure(state.kind, t, retry);
               return;
             }
             if (state.status === 'idle') {

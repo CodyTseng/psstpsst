@@ -15,7 +15,7 @@ import { AppText } from '@/components/common/AppText';
 import { AppButton } from '@/components/common/AppButton';
 import { useAttachment } from '@/hooks/use-attachment';
 import type { ConversationMediaItem } from '@/hooks/use-conversation-media';
-import { revealOrRetry } from '@/lib/attachments/failure';
+import { attachmentFailureCopy, retryOrShowIntegrityFailure } from '@/lib/attachments/failure';
 import type { EmbeddedMedia } from '@/lib/nostr/embedded-media';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { copyForShare } from '@/services/files/file-attachment.service';
@@ -37,7 +37,7 @@ type Props = {
 export function MediaVideoPage({ item, active }: Props) {
   if (!active) return <VideoPlaceholder thumbhash={item.meta.thumbhash} />;
   return item.source === 'attachment' ? (
-    <AttachmentMediaVideoPage key={item.mediaKey} meta={item.meta} />
+    <AttachmentMediaVideoPage key={item.mediaKey} meta={item.meta} senderPubkey={item.senderPubkey} />
   ) : (
     <RemoteMediaVideoPage key={item.mediaKey} media={item.meta} />
   );
@@ -55,10 +55,10 @@ function VideoPlaceholder({ thumbhash }: { thumbhash?: string }) {
 }
 
 /** Opening or selecting this page is the explicit intent to download and play. */
-function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
+function AttachmentMediaVideoPage({ meta, senderPubkey }: { meta: FileAttachmentMeta; senderPubkey?: string }) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const attachment = useAttachment(meta, { autoLoad: true });
+  const attachment = useAttachment(meta, { autoLoad: true, senderPubkey });
   const { state } = attachment;
   const posterUri = useVideoPoster(state.status === 'ready' ? state.localUri : null);
   const [playbackFailed, setPlaybackFailed] = useState(false);
@@ -68,10 +68,7 @@ function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
     if (state.status === 'loading') { attachment.pause(); return; }
     if (state.status === 'checking') return;
     if (state.status === 'paused') attachment.resume();
-    else void revealOrRetry(state.status === 'error' ? state.kind : null, t, 'play', (allow) => {
-      if (allow) attachment.reveal();
-      else attachment.retry();
-    });
+    else retryOrShowIntegrityFailure(state.status === 'error' ? state.kind : null, t, attachment.retry);
   }
 
   if (state.status === 'ready') {
@@ -83,7 +80,12 @@ function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
   return (
     <Pressable
       onPress={onTap}
-      accessibilityLabel={state.status === 'loading' ? t('common.pause') : state.status === 'paused' ? t('common.resume') : undefined}
+      accessibilityLabel={
+        state.status === 'loading' ? t('common.pause')
+          : state.status === 'paused' ? t('common.resume')
+            : state.status === 'error' ? t(attachmentFailureCopy(state.kind).reasonKey)
+              : undefined
+      }
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
     >
       {meta.thumbhash ? (
@@ -96,7 +98,7 @@ function AttachmentMediaVideoPage({ meta }: { meta: FileAttachmentMeta }) {
       ) : state.status === 'paused' ? (
         <Download strokeWidth={iconStrokeWidth.default} size={28} color={c.onOverlay} />
       ) : state.status === 'error' ? (
-        <AttachmentFailure kind={state.kind} action="play" iconSize={28} />
+        <AttachmentFailure kind={state.kind} iconSize={28} />
       ) : (
         <View
           style={{

@@ -9,7 +9,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 
-import { revealOrRetry } from '@/lib/attachments/failure';
+import { retryOrShowIntegrityFailure } from '@/lib/attachments/failure';
 import { isAbortError } from '@/lib/async/abort';
 import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import {
@@ -54,6 +54,7 @@ const FLAT_BARS = Array.from({ length: 24 }, () => 16);
  */
 export function AttachmentAudio({
   meta,
+  senderPubkey,
   maxWidth,
   isSelf,
   metaSlot,
@@ -63,6 +64,7 @@ export function AttachmentAudio({
   messageId,
 }: {
   meta: FileAttachmentMeta;
+  senderPubkey?: string;
   maxWidth?: number;
   isSelf: boolean;
   /** Resolve session state immediately but defer a remote fetch until play. */
@@ -86,11 +88,11 @@ export function AttachmentAudio({
   const [paused, setPaused] = useState(false);
   const [failKind, setFailKind] = useState<AttachmentErrorKind | null>(null);
   const downloadController = useRef<AbortController | null>(null);
-  const pausedAllowIntegrityMismatch = useRef(false);
   const transfer = useAttachmentTransfer(accountPubkey, undefined, meta.url);
   const sharedActive = !!transfer && !transfer.paused && !uri;
-  const isDownloading = !uri && !transfer?.paused && (loading || sharedActive);
-  const isPaused = !isDownloading && (paused || !!transfer?.paused) && !uri;
+  const integrityFailure = failKind === 'integrity';
+  const isDownloading = !integrityFailure && !uri && !transfer?.paused && (loading || sharedActive);
+  const isPaused = !integrityFailure && !isDownloading && (paused || !!transfer?.paused) && !uri;
   // Set when the user taps play before the blob is ready; an effect starts
   // playback once the freshly-fetched source has loaded.
   const [wantPlay, setWantPlay] = useState(false);
@@ -132,9 +134,8 @@ export function AttachmentAudio({
     }
   }, [wantPlay, uri, status.isLoaded, player]);
 
-  async function ensureLoaded(allowIntegrityMismatch = false) {
+  async function ensureLoaded() {
     if (uri || (loading && !transfer?.paused)) return;
-    pausedAllowIntegrityMismatch.current = allowIntegrityMismatch;
     const controller = new AbortController();
     downloadController.current = controller;
     setLoading(true);
@@ -143,7 +144,7 @@ export function AttachmentAudio({
     try {
       const fetched = await fetchAndDecryptAttachment(meta, {
         accountPubkey,
-        allowIntegrityMismatch,
+        senderPubkey,
         nearby,
         signal: controller.signal,
       });
@@ -176,7 +177,7 @@ export function AttachmentAudio({
   useEffect(() => {
     if (uri || !autoDownload) return;
     void ensureLoaded();
-  }, [meta.cipherSha256Hex, accountPubkey, autoDownload]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [meta.cipherSha256Hex, accountPubkey, senderPubkey, autoDownload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A request still gets the cheap local-store lookup: a clip downloaded in a
   // previous session should remain instantly playable without any network I/O.
@@ -201,18 +202,17 @@ export function AttachmentAudio({
       pauseDownload();
       return;
     }
-    // A failed clip: retry a download, or confirm before fetching past an
-    // integrity mismatch — then (either way) play once loaded.
+    // Only a failed download may retry and play once loaded.
     if (failKind) {
-      await revealOrRetry(failKind, t, 'play', (allow) => {
+      retryOrShowIntegrityFailure(failKind, t, () => {
         setWantPlay(true);
-        void ensureLoaded(allow);
+        void ensureLoaded();
       });
       return;
     }
     if (isPaused) {
       setWantPlay(true);
-      void ensureLoaded(pausedAllowIntegrityMismatch.current);
+      void ensureLoaded();
       return;
     }
     if (!uri) {
@@ -246,10 +246,9 @@ export function AttachmentAudio({
     <AttachmentFrame
       isSelf={isSelf}
       failure={failKind}
-      action="play"
-      onRetry={(allow) => {
+      onRetry={() => {
         setWantPlay(true);
-        void ensureLoaded(allow);
+        void ensureLoaded();
       }}
     >
       <View

@@ -161,6 +161,26 @@ export async function getReplaceableEvent(key: ReplaceableKey): Promise<NostrEve
   return (await loadRows([key])).get(cacheKeyOf(key))?.event ?? null;
 }
 
+/**
+ * Return a cached event (or a cached miss) immediately. Revalidate stale rows
+ * in the background; wait for the shared refresh only on a true cold miss.
+ */
+export async function loadCachedReplaceableEvent(
+  key: ReplaceableKey,
+  opts: Omit<EnsureReplaceableFreshOpts, 'ttlSeconds'> & { ttlSeconds?: number },
+): Promise<NostrEvent | null> {
+  const cached = (await loadRows([key])).get(cacheKeyOf(key));
+  const ttlSeconds = opts.ttlSeconds ?? REPLACEABLE_DEFAULT_TTL_SECONDS;
+  if (cached && nowSeconds() - cached.fetchedAt < ttlSeconds) return cached.event;
+  const refresh = ensureReplaceableFresh([key], { ...opts, ttlSeconds });
+  if (cached) {
+    void refresh.catch(() => undefined);
+    return cached.event;
+  }
+  await refresh;
+  return getReplaceableEvent(key);
+}
+
 /** Latest stored events aligned with `keys` (null where absent). Reads only, one batched query. */
 export async function getReplaceableEvents(
   keys: ReplaceableKey[],

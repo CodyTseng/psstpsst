@@ -1,3 +1,5 @@
+import { parseBlossomUri } from './blossom-uri';
+
 /**
  * NIP-17 kind-15 file-message encoding.
  *
@@ -89,16 +91,26 @@ function pickTag(tags: string[][], name: string): string | undefined {
   return tags.find((t) => t[0] === name)?.[1];
 }
 
-/**
- * A stable cache key for the blob. Prefer the explicit `x` (ciphertext sha256),
- * but many clients omit it because the Blossom URL already encodes the hash —
- * so fall back to the 64-hex in the URL, then to a filesystem-safe slug of it.
- */
+/** BUD-01 blob address: a hash-named final HTTP(S) path component. */
+export function attachmentHttpBlobName(url: URL): { hash: string; extension: string } | undefined {
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+  const match = url.pathname.split('/').at(-1)?.match(/^([0-9a-f]{64})(\.[a-z0-9]{1,16})?$/i);
+  if (match) return { hash: match[1].toLowerCase(), extension: match[2] ?? '' };
+}
+
+/** Prefer the x tag, then the URL's actual blob address, never its query. */
 function deriveBlobKey(xTag: string | undefined, url: string): string {
   if (xTag && /^[0-9a-f]{64}$/i.test(xTag)) return xTag.toLowerCase();
-  const inUrl = url.match(/[0-9a-f]{64}/i);
-  if (inUrl) return inUrl[0].toLowerCase();
-  return url.replace(/[^a-zA-Z0-9]+/g, '_').slice(-80) || 'attachment';
+  if (url.startsWith('blossom:')) {
+    const manifest = parseBlossomUri(url);
+    if (manifest) return manifest.sha256;
+  }
+  try {
+    const name = attachmentHttpBlobName(new URL(url));
+    if (name) return name.hash;
+  } catch { /* An invalid locator has no content hash. */ }
+  const slug = url.replace(/[^a-zA-Z0-9]+/g, '_').slice(-80);
+  return `url_${slug}`;
 }
 
 /** Read the mime from a kind-15 message's tags (no URL/decryption needed). */
@@ -111,7 +123,7 @@ export function fileMime(tags: string[][]): string | undefined {
  * (NIP-17 puts it there); the rest comes from tags. Returns null only when the
  * URL or the decryption material is missing — the `x` (ciphertext sha256) tag is
  * **not** required (the Blossom URL already carries the hash, so other clients
- * routinely omit it; it's only used as a local cache key here).
+ * routinely omit it). If neither supplies a hash, use a local cache key only.
  */
 export function findFileMeta(
   content: string,

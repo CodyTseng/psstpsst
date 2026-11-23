@@ -1163,7 +1163,7 @@ function ChatPageContent({
   const [pendingDetailId, setPendingDetailId] = useState<string | null>(null);
   const [copyingPendingCounts, setCopyingPendingCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
   const [pendingCopyAttachment, setPendingCopyAttachment] = useState<
-    FileAttachmentMeta | PendingAttachment | null
+    { meta: FileAttachmentMeta; senderPubkey?: string } | PendingAttachment | null
   >(null);
   const [pendingSaveUpload, setPendingSaveUpload] = useState<PendingAttachment | null>(null);
   // Enter selection mode only *after* the action menu has fully closed, so the
@@ -1808,11 +1808,11 @@ function ChatPageContent({
   }
 
   /** Resolve and save an attachment to the platform-appropriate destination. */
-  async function handleSaveAttachment(meta: FileAttachmentMeta) {
+  async function handleSaveAttachment(meta: FileAttachmentMeta, senderPubkey?: string) {
     const savesToLibrary =
       !!meta.mime &&
       (meta.mime.startsWith('image/') || meta.mime.startsWith('video/'));
-    const result = await saveAttachment(meta, { accountPubkey });
+    const result = await saveAttachment(meta, { accountPubkey, senderPubkey });
     await reportSaveResult(result, savesToLibrary);
   }
 
@@ -2038,7 +2038,7 @@ function ChatPageContent({
             if (!current) throw new Error('Pending attachment unavailable');
             await copyLocalAttachment({ uri: current.localUri, mime: current.mime, name: current.name });
           })()
-        : copyAttachment(attachment, { accountPubkey });
+        : copyAttachment(attachment.meta, { accountPubkey, senderPubkey: attachment.senderPubkey });
       void operation.then(
         () => showToast(t('common.copied'), { target: 'detail' }),
         () => showToast(t('attach.copy_failed'), { variant: 'error', target: 'detail' }),
@@ -2129,6 +2129,7 @@ function ChatPageContent({
   // saveable; its MIME type determines photo library versus file destination.
   const targetAttachment =
     menuTarget?.kind === 15 ? findFileMeta(menuTarget.content, menuTarget.tags) : null;
+  const targetAttachmentSender = targetAttachment && menuTarget ? menuTarget.senderPubkey : undefined;
   const menuSingleCustomEmoji = menuTarget ? singleCustomEmojiFromMessage(menuTarget) : null;
 
   // Action-menu rows for the long-pressed message. Reply is unavailable for
@@ -2142,7 +2143,8 @@ function ChatPageContent({
           label: t('chat.actions.copy'),
           icon: <Copy size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
           onPress: () => {
-            setPendingCopyAttachment(pendingMenuTarget || targetAttachment);
+            if (pendingMenuTarget) setPendingCopyAttachment(pendingMenuTarget);
+            else if (targetAttachment) setPendingCopyAttachment({ meta: targetAttachment, senderPubkey: targetAttachmentSender });
             closeMenu();
           },
         }]
@@ -2214,7 +2216,7 @@ function ChatPageContent({
                   icon: <Download size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
                   onPress: () => {
                     closeMenu();
-                    void handleSaveAttachment(targetAttachment);
+                    void handleSaveAttachment(targetAttachment, targetAttachmentSender);
                   },
                 } as MessageMenuAction,
               ]

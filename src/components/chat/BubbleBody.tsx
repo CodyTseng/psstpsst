@@ -65,6 +65,7 @@ type Props = {
   replyTo?: MessageBubbleReplyPreview | null;
   layout?: MessageBodyLayout;
   attachment?: FileAttachmentMeta | null;
+  attachmentSenderPubkey?: string;
   /** Hide the in-bubble timestamp + delivery glyph. Used by the long-press
    * `MessageActionMenu` for a **clipped** lifted copy — a truncated preview that
    * fades out before its end has no business showing a (cut-off) send time. */
@@ -126,6 +127,7 @@ function BubbleBodyBase({
   replyTo,
   layout,
   attachment,
+  attachmentSenderPubkey,
   hideMeta,
   squareTop,
   squareBottom,
@@ -496,6 +498,7 @@ function BubbleBodyBase({
             <AttachmentVideo
               maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
+              senderPubkey={attachmentSenderPubkey}
               isSelf={isSelf}
               overlay={renderOverlayMeta()}
               messageId={rumorId}
@@ -507,6 +510,7 @@ function BubbleBodyBase({
             <AttachmentImage
               maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
+              senderPubkey={attachmentSenderPubkey}
               isSelf={isSelf}
               overlay={renderOverlayMeta()}
               conversationKey={conversationKey}
@@ -520,6 +524,7 @@ function BubbleBodyBase({
             <AttachmentAudio
               maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
+              senderPubkey={attachmentSenderPubkey}
               isSelf={isSelf}
               autoDownload={attachmentAutoDownload}
               showLoadPrompt={showAttachmentLoadPrompt}
@@ -531,6 +536,7 @@ function BubbleBodyBase({
             <AttachmentFile
               maxWidth={layout?.attachmentMaxWidth}
               meta={attachment}
+              senderPubkey={attachmentSenderPubkey}
               isSelf={isSelf}
               metaSlot={hideMeta ? undefined : renderMeta(c.textMuted)}
               nearby={nearbyAttachment}
@@ -809,6 +815,7 @@ function areBubbleBodyPropsEqual(a: Props, b: Props): boolean {
     a.rumorId === b.rumorId &&
     a.persistedDelivery === b.persistedDelivery &&
     a.attachment === b.attachment &&
+    a.attachmentSenderPubkey === b.attachmentSenderPubkey &&
     a.hideMeta === b.hideMeta &&
     a.squareTop === b.squareTop &&
     a.squareBottom === b.squareBottom &&

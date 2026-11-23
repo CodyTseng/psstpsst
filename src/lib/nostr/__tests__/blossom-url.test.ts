@@ -6,6 +6,7 @@ import {
   withBlossomUploadFallback,
   normalizeBlossomUrl,
   normalizeBlossomUrls,
+  normalizeAdvertisedBlossomUrl,
 } from '../blossom-url';
 
 describe('Blossom URL normalization', () => {
@@ -79,4 +80,26 @@ describe('Blossom upload fallback', () => {
       ),
     ).toEqual(['https://mirror.example']);
   });
+});
+
+it.each([
+  ['https://MEDIA.example:443/as/Typed/', 'https://media.example/as/Typed'],
+  ['http://127.0.0.1:8080/', 'http://127.0.0.1:8080/'],
+  ['https://localhost:8443/media/', 'https://localhost:8443/media'],
+  ['http://[::1]:8080/', 'http://[::1]:8080/'],
+  ['http://blossom.local/', 'http://blossom.local/'],
+])('normalizes an advertised media server without excluding local endpoints: %s', (url, expected) => {
+  expect(normalizeAdvertisedBlossomUrl(url)).toBe(expected);
+});
+
+it.each([
+  'https://media.example/file?',
+  'https://media.example/file#',
+  'https://user:pass@media.example/file',
+  'file:///tmp/file',
+  'ftp://media.example/file',
+  'https:///media.example/file',
+  'http://',
+])('rejects a malformed or credential-bearing media URL: %s', url => {
+  expect(() => normalizeAdvertisedBlossomUrl(url)).toThrow('Invalid advertised media server URL');
 });

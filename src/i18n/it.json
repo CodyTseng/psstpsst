@@ -406,10 +406,7 @@
     "quality_original": "Originale",
     "verify_failed": "Verifica non riuscita",
     "tap_retry": "Tocca per riprovare",
-    "verify_failed_message": "Il contenuto di questo file non corrisponde a quanto dichiarato nel messaggio. Potrebbe essere danneggiato o essere stato modificato sul server.",
-    "verify_failed_show": "Mostra comunque",
-    "verify_failed_play": "Riproduci comunque",
-    "verify_failed_open": "Apri comunque"
+    "verify_failed_message": "Il contenuto di questo file non corrisponde a quanto dichiarato nel messaggio. Potrebbe essere danneggiato o essere stato modificato sul server."
   },
   "media": {
     "previous": "Contenuto precedente",

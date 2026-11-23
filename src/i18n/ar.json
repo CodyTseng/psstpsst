@@ -523,10 +523,7 @@
     "quality_original": "الأصلية",
     "verify_failed": "فشل التحقق",
     "tap_retry": "اضغط لإعادة المحاولة",
-    "verify_failed_message": "لا يطابق محتوى هذا الملف وصف الرسالة. قد يكون تالفًا أو تم تعديله على الخادم.",
-    "verify_failed_show": "إظهار على أي حال",
-    "verify_failed_play": "تشغيل على أي حال",
-    "verify_failed_open": "فتح على أي حال"
+    "verify_failed_message": "لا يطابق محتوى هذا الملف وصف الرسالة. قد يكون تالفًا أو تم تعديله على الخادم."
   },
   "media": {
     "previous": "الوسائط السابقة",

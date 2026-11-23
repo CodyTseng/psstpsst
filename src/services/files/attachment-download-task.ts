@@ -3,18 +3,19 @@ import type { FileAttachmentMeta } from '@/lib/nostr/file-tags';
 import { attachmentDownloadKey } from './attachment-transfer-state';
 
 export type DownloadTask = { controller: AbortController; promise: Promise<string> };
+export type AttachmentDownloadSource = { accountPubkey?: string | null; senderPubkey?: string | null };
 const tasks = new Map<string, DownloadTask>();
 const groups = new Map<string, Set<AbortController>>();
 const subscribers = new Map<string, Set<(task: DownloadTask) => void>>();
 
+/** Identical attachments share one task; the initiating message supplies routing hints. */
 export function attachmentDownloadTaskKey(
   accountPubkey: string | null,
   meta: FileAttachmentMeta,
-  allowIntegrityMismatch = false,
 ): string {
   return JSON.stringify([
     attachmentDownloadKey(accountPubkey, meta.url), meta.cipherSha256Hex, meta.plainSha256Hex,
-    meta.decryptionKeyHex, meta.decryptionNonceHex, allowIntegrityMismatch,
+    meta.decryptionKeyHex, meta.decryptionNonceHex,
   ]);
 }
 

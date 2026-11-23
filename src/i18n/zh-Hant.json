@@ -403,10 +403,7 @@
     "quality_original": "原圖",
     "verify_failed": "驗證失敗",
     "tap_retry": "點一下以重試",
-    "verify_failed_message": "此檔案的內容與訊息所聲稱的不符。檔案可能已損毀，或在伺服器上遭到修改。",
-    "verify_failed_show": "仍要顯示",
-    "verify_failed_play": "仍要播放",
-    "verify_failed_open": "仍要開啟"
+    "verify_failed_message": "此檔案的內容與訊息所聲稱的不符。檔案可能已損毀，或在伺服器上遭到修改。"
   },
   "media": {
     "previous": "上一個媒體",

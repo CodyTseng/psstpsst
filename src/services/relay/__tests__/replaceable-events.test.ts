@@ -94,6 +94,58 @@ describe('replaceable-events service', () => {
     jest.resetModules();
   });
 
+  describe('loadCachedReplaceableEvent', () => {
+    const key = { pubkey: 'alice', kind: 10063 };
+    const opts = { relays: ['wss://relay.example'], ttlSeconds: 3600 };
+
+    it.each([true, false])('returns a fresh cached result without querying (event: %s)', async (found) => {
+      const event = found ? makeEvent(key.pubkey, key.kind, 100) : null;
+      seedRow({ ...key, dTag: '', event, createdAt: event?.created_at ?? null, fetchedAt: nowSeconds() });
+      await expect(loadService().loadCachedReplaceableEvent(key, opts)).resolves.toEqual(event);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])('returns a stale result before one shared refresh completes (event: %s)', async (found) => {
+      const cached = found ? makeEvent(key.pubkey, key.kind, 100) : null;
+      const updated = makeEvent(key.pubkey, key.kind, 200);
+      seedRow({ ...key, dTag: '', event: cached, createdAt: cached?.created_at ?? null, fetchedAt: 1 });
+      let release!: (events: Event[]) => void;
+      mockQuery.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+      const service = loadService();
+
+      await expect(Promise.all([
+        service.loadCachedReplaceableEvent(key, opts),
+        service.loadCachedReplaceableEvent(key, opts),
+      ])).resolves.toEqual([cached, cached]);
+      const refreshing = service.ensureReplaceableFresh([key], opts);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      release([updated]);
+      await refreshing;
+      await expect(service.loadCachedReplaceableEvent(key, opts)).resolves.toEqual(updated);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for a cold lookup and remembers a confirmed miss', async () => {
+      const service = loadService();
+      const pending = service.loadCachedReplaceableEvent(key, opts);
+      await expect(pending).resolves.toBeNull();
+      expect(getRow(key.pubkey, key.kind)?.event).toBeNull();
+      await expect(service.loadCachedReplaceableEvent(key, opts)).resolves.toBeNull();
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps stale data when its background lookup fails', async () => {
+      const event = makeEvent(key.pubkey, key.kind, 100);
+      seedRow({ ...key, dTag: '', event, createdAt: event.created_at, fetchedAt: 1 });
+      mockQuery.mockRejectedValue(new Error('offline'));
+      const service = loadService();
+      await expect(service.loadCachedReplaceableEvent(key, opts)).resolves.toEqual(event);
+      await expect(service.ensureReplaceableFresh([key], opts)).rejects.toThrow('offline');
+      await expect(service.getReplaceableEvent(key)).resolves.toEqual(event);
+      expect(getRow(key.pubkey, key.kind)?.fetchedAt).toBe(1);
+    });
+  });
+
   describe('storeReplaceableEvent', () => {
     it('derives the dTag from the first d tag for addressable kinds', async () => {
       const service = loadService();

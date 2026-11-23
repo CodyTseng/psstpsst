@@ -68,7 +68,7 @@ function AttachmentImageCell({ item, autoLoad, ...props }: Omit<ImageCellProps, 
   item: Extract<ConversationMediaItem, { source: 'attachment' }>;
   autoLoad: boolean;
 }) {
-  const { state } = useAttachment(item.meta, { autoLoad });
+  const { state } = useAttachment(item.meta, { autoLoad, senderPubkey: item.senderPubkey });
   return <ImageCell {...props} uri={state.status === 'ready' ? state.localUri : undefined} />;
 }
 
@@ -97,7 +97,7 @@ function AttachmentVideoCell({ item, placeholder }: {
   item: Extract<ConversationMediaItem, { source: 'attachment' }>;
   placeholder: { thumbhash: string } | undefined;
 }) {
-  const { state } = useAttachment(item.meta, { autoLoad: false });
+  const { state } = useAttachment(item.meta, { autoLoad: false, senderPubkey: item.senderPubkey });
   const uri = useVideoPoster(state.status === 'ready' ? state.localUri : null);
   return <VideoCell uri={uri} placeholder={placeholder} />;
 }

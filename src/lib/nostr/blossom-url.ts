@@ -93,3 +93,23 @@ export function eligibleBlossomMirrorTargets(
  * Used until the account configures its own list (kind 10063).
  */
 export const DEFAULT_BLOSSOM_SERVERS = [BLOSSOM_UPLOAD_FALLBACK_SERVER];
+
+/** BUD-03 download bases may be local, but cannot carry URL credentials or suffixes. */
+export function normalizeAdvertisedBlossomUrl(value: string): string {
+  if (
+    typeof value !== 'string' || value.length > 2048 ||
+    !/^https?:\/\/[^/]/i.test(value) || /[\s\x00-\x1f\x7f?#\\]/.test(value)
+  ) {
+    throw new Error('Invalid advertised media server URL');
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Invalid advertised media server URL');
+  }
+  if (!url.hostname || url.username || url.password) {
+    throw new Error('Invalid advertised media server URL');
+  }
+  return normalizeBlossomUrl(url.href);
+}

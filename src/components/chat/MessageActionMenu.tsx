@@ -77,6 +77,7 @@ export type LiftedBubble = {
   persistedDelivery?: MessageDelivery | null;
   replyTo?: MessageBubbleReplyPreview | null;
   attachment?: FileAttachmentMeta | null;
+  attachmentSenderPubkey?: string;
   remoteContentMode?: RemoteContentMode;
   reactions?: ReactionAggregate[];
   /** Exact custom body for non-message rows such as failed uploads. */
@@ -505,6 +506,7 @@ export function MessageActionMenu({
             replyTo={vBubble.replyTo}
             layout={view.rect.layout}
             attachment={vBubble.attachment}
+            attachmentSenderPubkey={vBubble.attachmentSenderPubkey}
             remoteContentMode={vBubble.remoteContentMode}
             liftedCopy
             squareTop={bodyFadeTop}

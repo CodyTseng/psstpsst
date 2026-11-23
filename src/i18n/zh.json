@@ -403,10 +403,7 @@
     "quality_original": "原图",
     "verify_failed": "校验未通过",
     "tap_retry": "点按重试",
-    "verify_failed_message": "该文件内容与消息所声明的不一致，可能已损坏，或在服务器上被篡改。",
-    "verify_failed_show": "仍要显示",
-    "verify_failed_play": "仍要播放",
-    "verify_failed_open": "仍要打开"
+    "verify_failed_message": "该文件内容与消息所声明的不一致，可能已损坏，或在服务器上被篡改。"
   },
   "media": {
     "previous": "上一个媒体",

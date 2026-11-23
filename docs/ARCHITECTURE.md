@@ -158,9 +158,21 @@ frequency, and downstream invalidation before changing a hot path.
 Media servers receive ciphertext. Verify supplied integrity data, stage
 resumable bytes separately, and publish managed plaintext only after successful
 verification and decryption. Scope download ownership and consent to the
-account and resource. Cache lookups cannot trigger a remote download. Deduplicate
+account and resource. Identical attachment downloads share a task across
+messages; the initiating message supplies the mirror lookup hint. Cache lookups cannot trigger a remote download. Deduplicate
 managed files and release them by reference. Lists and archives consume local
-metadata and files without eagerly loading remote attachments.
+metadata and files without eagerly loading remote attachments. For an HTTP(S)
+attachment that cannot be downloaded from its original URL, use the message
+author to look up their signed Blossom server list (kind 10063), regardless of
+which relay delivered the message. Use the shared peer metadata query and
+replaceable cache: cached results (including misses) return immediately, stale
+rows refresh in the background, and only a cold miss waits for the relays.
+Try those servers in order using the ciphertext hash from the event or a
+hash-named URL path. Local Blossom servers are valid. The receiver's own upload
+settings are not download hints. Once ciphertext has downloaded, hash or
+decryption failures do not trigger a different server,
+including for `blossom:` attachments. A hash mismatch blocks viewing,
+sharing, and saving; there is no override.
 
 Pending upload state belongs to services and survives route changes. Persist
 staged external shares independently of the OS share grant. Shared uploads

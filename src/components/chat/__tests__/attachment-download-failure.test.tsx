@@ -26,7 +26,7 @@ import { VoiceWaveform } from '../VoiceWaveform';
 jest.mock('@/hooks/use-video-poster', () => ({ useVideoPoster: jest.fn() }));
 jest.mock('@/stores/media-viewer.store', () => ({ mediaViewer: { openConversation: jest.fn() } }));
 jest.mock('@/platform', () => ({
-  platform: { confirmationDialog: { confirm: jest.fn(), notify: jest.fn() } },
+  platform: { confirmationDialog: { confirm: jest.fn(), notify: jest.fn(async () => undefined) } },
 }));
 jest.mock('@/services/files/file-attachment.service', () => ({
   fetchAndDecryptAttachment: jest.fn(),
@@ -104,7 +104,7 @@ describe('attachment side failure action', () => {
 
   function render(failure: 'download' | 'integrity' | null, isSelf = false) {
     const element = (
-      <AttachmentFrame failure={failure} action="show" onRetry={onRetry} isSelf={isSelf}>
+      <AttachmentFrame failure={failure} onRetry={onRetry} isSelf={isSelf}>
         <View style={{ width: 240, height: 2.4, overflow: 'hidden' }} />
       </AttachmentFrame>
     );
@@ -139,7 +139,7 @@ describe('attachment side failure action', () => {
     expect(platform.confirmationDialog.confirm).toHaveBeenCalledTimes(1);
     expect(onRetry).not.toHaveBeenCalled();
     await act(async () => { decide(true); });
-    expect(onRetry).toHaveBeenCalledWith(false);
+    expect(onRetry).toHaveBeenCalledWith();
   });
 
   it('does not retry when the dialog is dismissed', async () => {
@@ -149,18 +149,23 @@ describe('attachment side failure action', () => {
     expect(onRetry).not.toHaveBeenCalled();
   });
 
-  it('confirms the integrity warning once before allowing a reveal', async () => {
-    jest.mocked(platform.confirmationDialog.confirm).mockResolvedValueOnce(true);
+  it('shows a single close-only integrity notice and never retries', async () => {
+    let close!: () => void;
+    jest.mocked(platform.confirmationDialog.notify).mockImplementationOnce(
+      () => new Promise<void>((resolve) => { close = resolve; }),
+    );
     render('integrity');
     await pressSide();
-    expect(platform.confirmationDialog.confirm).toHaveBeenCalledTimes(1);
-    expect(platform.confirmationDialog.confirm).toHaveBeenCalledWith(expect.objectContaining({
+    await pressSide();
+    expect(platform.confirmationDialog.confirm).not.toHaveBeenCalled();
+    expect(platform.confirmationDialog.notify).toHaveBeenCalledTimes(1);
+    expect(platform.confirmationDialog.notify).toHaveBeenCalledWith({
       title: 'attach.verify_failed',
       message: 'attach.verify_failed_message',
-      confirmLabel: 'attach.verify_failed_show',
-      destructive: true,
-    }));
-    expect(onRetry).toHaveBeenCalledWith(true);
+      okLabel: 'common.close',
+    });
+    await act(async () => { close(); });
+    expect(onRetry).not.toHaveBeenCalled();
   });
 });
 
@@ -271,23 +276,30 @@ describe.each(['audio', 'file', 'video'] as const)('%s download failure', (mediu
     await pressSide();
     expect(fetchAndDecryptAttachment).toHaveBeenCalledTimes(2);
     expect(fetchAndDecryptAttachment).toHaveBeenLastCalledWith(META, expect.objectContaining({
-      allowIntegrityMismatch: false,
+      accountPubkey: 'account',
     }));
     expect(renderer.root.findAllByType(IconButton)).toHaveLength(0);
   });
 
-  it('uses the appropriate integrity confirmation before retrying', async () => {
+  it('never fetches again from either integrity failure control', async () => {
     await renderFailure('integrity');
-    jest.mocked(platform.confirmationDialog.confirm).mockResolvedValueOnce(true);
-    jest.mocked(fetchAndDecryptAttachment).mockResolvedValueOnce('file:///attachment');
     await pressSide();
-    expect(platform.confirmationDialog.confirm).toHaveBeenCalledTimes(1);
-    expect(platform.confirmationDialog.confirm).toHaveBeenCalledWith(expect.objectContaining({
-      confirmLabel: medium === 'file' ? 'attach.verify_failed_open' : 'attach.verify_failed_play',
-    }));
-    expect(fetchAndDecryptAttachment).toHaveBeenLastCalledWith(META, expect.objectContaining({
-      allowIntegrityMismatch: true,
-    }));
+    await act(async () => {
+      const key = attachmentDownloadKey('account', META.url);
+      attachmentTransferStore.getState().update(key, 'network', 10, 100);
+      attachmentTransferStore.getState().pause(key);
+    });
+    await act(async () => {
+      renderer.root.findAllByType(InteractivePressable)[0].props.onPress();
+    });
+    expect(platform.confirmationDialog.notify).toHaveBeenCalledTimes(2);
+    expect(platform.confirmationDialog.notify).toHaveBeenLastCalledWith({
+      title: 'attach.verify_failed',
+      message: 'attach.verify_failed_message',
+      okLabel: 'common.close',
+    });
+    expect(platform.confirmationDialog.confirm).not.toHaveBeenCalled();
+    expect(fetchAndDecryptAttachment).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { AppText } from '@/components/common/AppText';
-import { attachmentFailureCopy, type RevealAction } from '@/lib/attachments/failure';
+import { attachmentFailureCopy } from '@/lib/attachments/failure';
 import type { AttachmentErrorKind } from '@/services/files/file-attachment.service';
 import { spacing, useThemeColors } from '@/theme';
 
@@ -13,22 +13,20 @@ import { spacing, useThemeColors } from '@/theme';
  * icon + reason + tap action, centered. Both operational and integrity failures
  * use the shared danger colour; integrity keeps its distinct shield glyph.
  * Purely presentational — the caller owns the Pressable and
- * its tap action (`revealOrRetry`). The reason/action copy comes from the one
+ * its tap action. The reason/action copy comes from the one
  * shared {@link attachmentFailureCopy} vocabulary.
  */
 export function AttachmentFailure({
   kind,
-  action,
   iconSize = 20,
 }: {
   kind: AttachmentErrorKind;
-  action: RevealAction;
   iconSize?: number;
   tone?: 'neutral' | 'media';
 }) {
   const { t } = useTranslation();
   const c = useThemeColors();
-  const copy = attachmentFailureCopy(kind, action);
+  const copy = attachmentFailureCopy(kind);
   const failureColor = c.danger;
 
   return (
@@ -46,14 +44,11 @@ export function AttachmentFailure({
       >
         {t(copy.reasonKey)}
       </AppText>
-      <AppText
-        variant="caption"
-        tone="danger"
-        align="center"
-        style={{ color: failureColor }}
-      >
-        {t(copy.actionKey)}
-      </AppText>
+      {copy.actionKey ? (
+        <AppText variant="caption" tone="danger" align="center" style={{ color: failureColor }}>
+          {t(copy.actionKey)}
+        </AppText>
+      ) : null}
     </View>
   );
 }

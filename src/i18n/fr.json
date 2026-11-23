@@ -406,10 +406,7 @@
     "quality_original": "Originale",
     "verify_failed": "Échec de la vérification",
     "tap_retry": "Toucher pour réessayer",
-    "verify_failed_message": "Le contenu de ce fichier ne correspond pas à ce qu'indique le message. Il est peut-être endommagé ou a été modifié sur le serveur.",
-    "verify_failed_show": "Afficher quand même",
-    "verify_failed_play": "Lire quand même",
-    "verify_failed_open": "Ouvrir quand même"
+    "verify_failed_message": "Le contenu de ce fichier ne correspond pas à ce qu'indique le message. Il est peut-être endommagé ou a été modifié sur le serveur."
   },
   "media": {
     "previous": "Média précédent",
