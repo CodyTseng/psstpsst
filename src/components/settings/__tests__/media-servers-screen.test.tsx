@@ -33,6 +33,7 @@ jest.mock('@/hooks/use-scrolled', () => ({ useScrolled: () => ({ scrolled: false
 jest.mock('@/components/common/ScreenHeader', () => ({ ScreenHeader: () => null, useScreenHeaderClearance: () => 48 }));
 jest.mock('@/components/common/AppFormScrollView', () => ({ AppFormScrollView: jest.requireActual('react-native').ScrollView }));
 jest.mock('@/components/common/SortableUrlList', () => ({ SortableUrlList: () => null }));
+jest.mock('@solar-icons/react-native/category/devices/Linear/ServerSquare', () => ({ ServerSquare: () => null }), { virtual: true });
 jest.mock('lucide-react-native/icons/plus', () => () => null, { virtual: true });
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: jest.requireActual('react-native').View,

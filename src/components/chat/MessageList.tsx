@@ -145,6 +145,39 @@ function UnreadDivider({ label, onLayout }: {
   );
 }
 
+function scrollClock() {
+  return Date.now();
+}
+
+function useTimelineCaches(windowScope: string, selfPubkey: string, proximity: boolean) {
+  return useMemo(() => ({
+    scope: windowScope,
+    messages: new LoadedMessageWindowCache((row) => isMessageFromSelf(row, selfPubkey, proximity)),
+    rows: new MessageListRowCache(),
+  }), [windowScope, selfPubkey, proximity]);
+}
+
+function useTimelineData(
+  messageWindow: ReturnType<LoadedMessageWindowCache['read']>,
+  displayedCount: number,
+  pendingAttachments: Props['pendingAttachments'],
+  bubbleRenderItemsById: Props['bubbleRenderItemsById'],
+  oldestBoundaryCreatedAt: number | null | undefined,
+  boundaryIsSelf: boolean | null | undefined,
+  listItemCache: MessageListRowCache,
+) {
+  return useMemo(() => new MessageListData({
+    window: messageWindow,
+    count: displayedCount,
+    pending: pendingAttachments,
+    prepared: bubbleRenderItemsById,
+    oldestBoundaryCreatedAt,
+    boundaryIsSelf,
+    cache: listItemCache,
+  }), [messageWindow, displayedCount, pendingAttachments, bubbleRenderItemsById,
+    oldestBoundaryCreatedAt, boundaryIsSelf, listItemCache]);
+}
+
 export type MessageListHandle = {
   scrollToMessage: (message: MessageRow) => void;
 };
@@ -357,7 +390,8 @@ export function MessageList({
     Platform.OS === 'android' ? new ImageVisibilityStore() : null,
   );
   const hasTranslatedViewport = composerInsets != null;
-  const TimelineTouchView = hasTranslatedViewport ? getTimelineTouchView() : null;
+  const [NativeTimelineTouchView] = useState(getTimelineTouchView);
+  const TimelineTouchView = hasTranslatedViewport ? NativeTimelineTouchView : null;
   const observesViewportClip = hasTranslatedViewport || imageVisibility != null;
   const scrollMetricsRef = useRef({
     offsetY: 0,
@@ -779,10 +813,10 @@ export function MessageList({
   // boundary can tell a held drag from a cancellation.
   function resumeMediaAfterIdle(delay: number) {
     if (!imageVisibility || !liveDataEnabled) return;
-    mediaIdleDeadline.current = Date.now() + delay;
+    mediaIdleDeadline.current = scrollClock() + delay;
     if (mediaResumeTimer.current != null) return;
     const checkIdle = () => {
-      const remaining = mediaIdleDeadline.current - Date.now();
+      const remaining = mediaIdleDeadline.current - scrollClock();
       if (remaining > 0) {
         mediaResumeTimer.current = setTimeout(checkIdle, remaining);
         return;
@@ -902,11 +936,7 @@ export function MessageList({
   }
 
   const windowScope = `${accountPubkey}\0${conversationKey}\0${listWindowKey}\0${tailJumpVersion}`;
-  const listCaches = useMemo(() => ({
-    scope: windowScope,
-    messages: new LoadedMessageWindowCache((row) => isMessageFromSelf(row, selfPubkey, proximity)),
-    rows: new MessageListRowCache(),
-  }), [windowScope, selfPubkey, proximity]);
+  const listCaches = useTimelineCaches(windowScope, selfPubkey, proximity);
   const messageWindow = listCaches.messages.read(messages);
   const releasedIdx = useMemo(() => {
     const stored = releasedNewestId == null ? messages.length - 1 : messageWindow.position(releasedNewestId);
@@ -1216,7 +1246,7 @@ export function MessageList({
       refreshVisibleMessageChrome();
     },
   ).current;
-  const setViewportClip = useCallback((clip: number, hasComposerClip: boolean) => {
+  const [setViewportClip] = useState(() => (clip: number, hasComposerClip: boolean) => {
     const clipChanged = viewportClip.current !== clip;
     const composerClipChanged = composerClipped.current !== hasComposerClip;
     if (!clipChanged && !composerClipChanged) return;
@@ -1224,7 +1254,7 @@ export function MessageList({
     composerClipped.current = hasComposerClip;
     if (clipChanged && imageVisibility?.isActive()) refreshImageVisibility();
     if (hasComposerClip || composerClipChanged) refreshVisibleMessageChrome();
-  }, [imageVisibility, refreshImageVisibility, refreshVisibleMessageChrome]);
+  });
 
   // Reuse native cell layouts and cross to JS only when the composer settles.
   useAnimatedReaction(
@@ -1239,7 +1269,7 @@ export function MessageList({
       }
     },
   );
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 1 }).current;
+  const [viewabilityConfig] = useState(() => ({ itemVisiblePercentThreshold: 1 }));
 
   // React to new tail messages. A new message prepends at index 0 of the
   // inverted list. MVCP holds the reader's position, so we follow the tail
@@ -1357,16 +1387,8 @@ export function MessageList({
     [messageById, referencedById],
   );
 
-  const data = useMemo(() => new MessageListData({
-    window: messageWindow,
-    count: displayedCount,
-    pending: pendingAttachments,
-    prepared: bubbleRenderItemsById,
-    oldestBoundaryCreatedAt,
-    boundaryIsSelf,
-    cache: listItemCache,
-  }), [messageWindow, displayedCount, pendingAttachments, bubbleRenderItemsById,
-    oldestBoundaryCreatedAt, boundaryIsSelf, listItemCache]);
+  const data = useTimelineData(messageWindow, displayedCount, pendingAttachments, bubbleRenderItemsById,
+    oldestBoundaryCreatedAt, boundaryIsSelf, listItemCache);
   const dataRef = useRef(data);
   const dataIndexById = data;
   const dataIndexByIdRef = useRef(dataIndexById);
