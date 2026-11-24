@@ -70,7 +70,7 @@
     "expo-task-manager": "~57.0.17",
     "expo-video": "~57.0.4",
     "expo-web-browser": "~57.0.3",
-    "i18next": "^26.3.0",
+    "i18next": "^26.7.2",
     "jpeg-js": "^0.4.4",
     "lucide-react-native": "^1.38.0",
     "nostr-tools": "2.25.2",
