@@ -631,6 +631,20 @@
       "when": 1794700800000,
       "tag": "0089_routing-settings-edit-time",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1794787200000,
+      "tag": "0090_message-deletions",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "6",
+      "when": 1794873600000,
+      "tag": "0091_pending-message-deletions",
+      "breakpoints": true
     }
   ]
 }

@@ -492,6 +492,15 @@
       "unavailable": "Pré-visualização indisponível",
       "open_external": "Abrir noutra aplicação"
     },
+    "message_delete": {
+      "title": "Eliminar mensagem?",
+      "description": "A mensagem ficará oculta no seu histórico de conversas.",
+      "peer": "Eliminar também para a outra pessoa",
+      "named_peer": "Eliminar também para {{name}}",
+      "group": "Eliminar também para os membros do grupo",
+      "deleted": "Mensagem eliminada",
+      "failed": "Não foi possível eliminar a mensagem."
+    },
     "actions": {
       "reply": "Responder",
       "copy": "Copiar",

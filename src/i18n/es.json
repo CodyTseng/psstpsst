@@ -492,6 +492,15 @@
       "unavailable": "Vista previa no disponible",
       "open_external": "Abrir en otra app"
     },
+    "message_delete": {
+      "title": "¿Eliminar el mensaje?",
+      "description": "El mensaje se ocultará de tu historial de chat.",
+      "peer": "Eliminar también para la otra persona",
+      "named_peer": "Eliminar también para {{name}}",
+      "group": "Eliminar también para los miembros del grupo",
+      "deleted": "Mensaje eliminado",
+      "failed": "No se pudo eliminar el mensaje."
+    },
     "actions": {
       "reply": "Responder",
       "copy": "Copiar",

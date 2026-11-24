@@ -1,4 +1,5 @@
 import { Forward } from '@solar-icons/react-native/category/arrows-action/Linear/Forward';
+import Trash2 from 'lucide-react-native/icons/trash-2';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,22 +7,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/common/IconButton';
 import { ChromeBackdrop } from '@/components/common/ChromeBackdrop';
 import { getBottomChromeInset } from '@/lib/layout/bottom-chrome';
-import { bottomBarHeight, useThemeColors } from '@/theme';
+import { bottomBarHeight, spacing, useThemeColors } from '@/theme';
 
 type Props = {
   count: number;
   onForward: () => void;
+  onDelete?: () => void;
+  deleteDisabled?: boolean;
 };
 
-/**
- * Bottom bar shown while the chat is in selection mode (forwarding) — the
- * actions area that replaces the composer. Same structure/height as `ChatInput`
- * (a `bottomBarHeight` bar + top hairline + safe-area spacer) so the list never
- * shifts when the bars swap. The action is a **`surface` `IconButton`** — the
- * same control as the composer's attachment (＋) button, so it reads as native
- * to the chat rather than a heavy primary slab. (The count lives in the header.)
- */
-export function ForwardActionBar({ count, onForward }: Props) {
+/** Replaces the composer at the same height while messages are selected. */
+export function SelectionActionBar({ count, onForward, onDelete, deleteDisabled = false }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -42,6 +38,7 @@ export function ForwardActionBar({ count, onForward }: Props) {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: spacing['3xl'],
         }}
       >
         <IconButton
@@ -52,6 +49,16 @@ export function ForwardActionBar({ count, onForward }: Props) {
           accessibilityLabel={t('chat.actions.forward')}
           icon={<Forward size={22} color={c.text} />}
         />
+        {onDelete ? (
+          <IconButton
+            variant="dangerSoft"
+            size={40}
+            onPress={onDelete}
+            disabled={!enabled || deleteDisabled}
+            accessibilityLabel={t('common.delete')}
+            icon={<Trash2 size={22} color={c.danger} />}
+          />
+        ) : null}
       </View>
       {/* Match ChatInput's resting bottom panel (the safe-area space). */}
       <View style={{ height: safe }} />

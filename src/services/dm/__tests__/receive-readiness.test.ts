@@ -92,7 +92,7 @@ jest.mock('../messaging-metadata', () => ({
   ...jest.requireActual('../messaging-metadata'), resolveMessagingMetadata: jest.fn(),
 }));
 jest.mock('../../crypto/nip17-gift-wrap', () => ({
-  KIND_GIFT_WRAP: 1059, KIND_CHAT: 14, KIND_FILE: 15, KIND_REACTION: 7,
+  KIND_GIFT_WRAP: 1059, KIND_CHAT: 14, KIND_FILE: 15, KIND_REACTION: 7, KIND_MESSAGE_DELETION: 5,
   KIND_ENCRYPTION_KEY_ANNOUNCEMENT: 10044,
   unwrapGiftWrapForAccount: jest.fn(),
 }));
@@ -1107,4 +1107,27 @@ it('resumes deep history from the last completed page after an interrupted page'
     expect(jest.mocked(relayPool.query).mock.calls[3][0].filter?.until).toBe(900);
     expect(setBackwardUntil).toHaveBeenCalledWith(self, relay, 0);
   } finally { clock.mockRestore(); }
+});
+
+it('routes a wrapped message deletion without publishing a new-message arrival', async () => {
+  await dmService.init(options);
+  const wrap = { id: 'deletion-wrap', tags: [['p', self]], kind: 1059 } as Event;
+  const rumor: Rumor = { id: 'deletion-id', pubkey: self, created_at: 1, kind: 5, content: '', tags: [['e', oldKey]] };
+  jest.mocked(unwrapGiftWrapForAccount).mockResolvedValue({
+    status: 'decrypted', value: { giftWrap: wrap, seal: wrap, rumor, senderEncryptionPubkey: oldKey },
+  });
+  const receive = dmService as unknown as { applyMessageDeletion: (...args: unknown[]) => Promise<boolean> };
+  const apply = jest.spyOn(receive, 'applyMessageDeletion').mockResolvedValue(true);
+  const onNewMessage = jest.fn();
+  const stop = dmService.addListener({ onNewMessage });
+  try {
+    live().onEvent(wrap, 'wss://fresh.example');
+    await flush();
+    expect(apply).toHaveBeenCalledWith(self, rumor, true);
+    expect(markGiftWrapProcessed).toHaveBeenCalledWith(wrap.id, self);
+    expect(onNewMessage).not.toHaveBeenCalled();
+  } finally {
+    stop();
+    apply.mockRestore();
+  }
 });

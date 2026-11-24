@@ -310,8 +310,10 @@ async function messageCounts(accountPubkey: string): Promise<MessageCounts> {
   const rows = await platform.database.rawQuery<{
     messages: number;
   }>(
-    'SELECT count(*) AS messages FROM messages WHERE account_pubkey = ?',
-    [accountPubkey],
+    `SELECT (SELECT count(*) FROM messages WHERE account_pubkey = ?) +
+            (SELECT count(*) FROM message_deletions
+              WHERE account_pubkey = ? AND pending_target_id IS NULL) AS messages`,
+    [accountPubkey, accountPubkey],
   );
   const row = rows[0];
   return {
@@ -347,15 +349,18 @@ async function exportMessages(
       proximity_account_pubkey: string | null;
       rumor: string;
     }>(
-      `SELECT c.delivery_kind, c.proximity_account_pubkey, m.rumor
+      `SELECT c.delivery_kind AS delivery_kind, c.proximity_account_pubkey AS proximity_account_pubkey,
+              m.rumor AS rumor, m.order_at AS order_at, m.id AS id
        FROM conversations c INDEXED BY idx_conv_backup_owner
        INNER JOIN messages m INDEXED BY idx_msg_conv_time
          ON m.account_pubkey = c.account_pubkey
         AND m.conversation_key = c.conversation_key
        WHERE c.account_pubkey = ?
-       ORDER BY c.delivery_kind ASC, c.proximity_account_pubkey ASC,
-                c.conversation_key ASC`,
-      [accountPubkey],
+       UNION ALL
+       SELECT 'relay', NULL, rumor, order_at, id
+       FROM message_deletions WHERE account_pubkey = ? AND pending_target_id IS NULL
+       ORDER BY delivery_kind ASC, proximity_account_pubkey ASC, order_at ASC, id DESC`,
+      [accountPubkey, accountPubkey],
     )) {
       if (row.delivery_kind === 'relay') {
         await relayWriter.appendLine(row.rumor);

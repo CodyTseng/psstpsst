@@ -489,6 +489,15 @@
       "unavailable": "無法預覽",
       "open_external": "在其他應用程式中開啟"
     },
+    "message_delete": {
+      "title": "刪除訊息？",
+      "description": "這則訊息將從你的聊天記錄中隱藏。",
+      "peer": "也為對方刪除",
+      "named_peer": "也為 {{name}} 刪除",
+      "group": "也為群組成員刪除",
+      "deleted": "訊息已刪除",
+      "failed": "無法刪除訊息。"
+    },
     "actions": {
       "reply": "回覆",
       "copy": "複製",

@@ -13,6 +13,7 @@ export * from './media-server-lists';
 export * from './message-media';
 export * from './message-drafts';
 export * from './message-delivery-copies';
+export * from './message-deletions';
 export * from './messages';
 export * from './outbox';
 export * from './observed-peer-encryption-keys';

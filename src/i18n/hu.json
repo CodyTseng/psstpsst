@@ -489,6 +489,15 @@
       "unavailable": "Az előnézet nem érhető el",
       "open_external": "Megnyitás másik alkalmazásban"
     },
+    "message_delete": {
+      "title": "Törli az üzenetet?",
+      "description": "Az üzenet eltűnik a saját csevegési előzményeiből.",
+      "peer": "Törlés a másik félnél is",
+      "named_peer": "Törlés {{name}} számára is",
+      "group": "Törlés a csoporttagoknál is",
+      "deleted": "Törölt üzenet",
+      "failed": "Az üzenetet nem sikerült törölni."
+    },
     "actions": {
       "reply": "Válasz",
       "copy": "Másolás",

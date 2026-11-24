@@ -492,6 +492,15 @@
       "unavailable": "Aperçu indisponible",
       "open_external": "Ouvrir dans une autre app"
     },
+    "message_delete": {
+      "title": "Supprimer le message ?",
+      "description": "Ce message sera masqué dans votre historique.",
+      "peer": "Supprimer aussi pour votre interlocuteur",
+      "named_peer": "Supprimer aussi pour {{name}}",
+      "group": "Supprimer aussi pour les membres du groupe",
+      "deleted": "Message supprimé",
+      "failed": "Impossible de supprimer le message."
+    },
     "actions": {
       "reply": "Répondre",
       "copy": "Copier",

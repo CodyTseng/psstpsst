@@ -37,6 +37,7 @@ import {
 } from '@/services/files/media-index.service';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { getSyncCursor, type SyncCursor } from '@/services/dm/sync-store';
+import { resolvePendingMessageDeletions } from '@/services/dm/message-deletions';
 import { mergeStoredMessageIntoTail } from '@/services/conversation/message-tail-cache';
 
 import {
@@ -65,6 +66,8 @@ export type ReceiveGroupRumorResult = {
   stored: boolean;
   conversationKey: string | null;
   promoted: Rumor[];
+  /** Stored originals that an earlier deletion request hid on arrival. */
+  hiddenIds?: ReadonlySet<string>;
 };
 
 const UNREAD_CAP = 100;
@@ -119,6 +122,7 @@ async function countUnread(
         eq(messages.accountPubkey, accountPubkey),
         eq(messages.conversationKey, conversationKey),
         inArray(messages.kind, [KIND_CHAT, KIND_FILE]),
+        eq(messages.deleted, false),
         cursor ? unreadAfterCursor(cursor.orderAt, cursor.id) : undefined,
       ),
     )
@@ -134,13 +138,16 @@ async function insertGroupMessage(
   rumor: Rumor,
   sourceRelays?: string[],
   enqueueRelay = false,
+  hiddenIds?: Set<string>,
 ): Promise<boolean> {
   const subject = parseGroupSubject(rumor.tags);
+  const deleted = await resolvePendingMessageDeletions(tx, accountPubkey, rumor, true);
   const inserted = await tx
     .insert(messages)
     .values({
       accountPubkey,
       id: rumor.id!,
+      deleted,
       conversationKey,
       senderPubkey: rumor.pubkey,
       kind: rumor.kind,
@@ -161,6 +168,7 @@ async function insertGroupMessage(
     .returning({ id: messages.id })
     .all();
   if (inserted.length === 0) return false;
+  if (deleted) hiddenIds?.add(rumor.id);
   if (enqueueRelay) {
     await tx.insert(relayOutboxJobs).values({
       accountPubkey,
@@ -274,6 +282,7 @@ async function refreshConversationMessageState(
   tx: Tx,
   options: ReceiveGroupRumorOptions,
   conversationKey: string,
+  hidden = false,
 ): Promise<void> {
   const { accountPubkey, rumor, active } = options;
   const [conversation] = await tx
@@ -290,8 +299,7 @@ async function refreshConversationMessageState(
   const eventOrderAt = messageOrderAt(rumor);
   const canResurrect =
     !conversation.deleted ||
-    conversation.deletedOrderAt == null ||
-    eventOrderAt > conversation.deletedOrderAt;
+    (!hidden && (conversation.deletedOrderAt == null || eventOrderAt > conversation.deletedOrderAt));
   if (!canResurrect) return;
 
   const newest = await tx
@@ -302,12 +310,13 @@ async function refreshConversationMessageState(
         eq(messages.accountPubkey, accountPubkey),
         eq(messages.conversationKey, conversationKey),
         inArray(messages.kind, [KIND_CHAT, KIND_FILE]),
+        eq(messages.deleted, false),
       ),
     )
     .orderBy(desc(messages.orderAt), asc(messages.id))
     .limit(1);
 
-  const ownOrActive = rumor.pubkey === accountPubkey || active;
+  const ownOrActive = !hidden && (rumor.pubkey === accountPubkey || active);
   const eventCursor = { orderAt: messageOrderAt(rumor), id: rumor.id! };
   const previousCursor =
     conversation.lastReadOrderAt == null
@@ -315,7 +324,7 @@ async function refreshConversationMessageState(
       : { orderAt: conversation.lastReadOrderAt, id: conversation.lastReadMessageId ?? '' };
   const readCursor = ownOrActive ? newestCursor(previousCursor, eventCursor) : previousCursor;
   const unread = await countUnread(tx, accountPubkey, conversationKey, readCursor);
-  const acceptedByOwnActivity = options.intake === 'local' || rumor.pubkey === accountPubkey;
+  const acceptedByOwnActivity = !hidden && (options.intake === 'local' || rumor.pubkey === accountPubkey);
   const acceptedBySavedGroup =
     !acceptedByOwnActivity &&
     !conversation.hasReplied &&
@@ -338,7 +347,7 @@ async function refreshConversationMessageState(
             lastReadOrderAt: readCursor.orderAt,
             lastReadMessageId: readCursor.id || null,
             lastReadAt:
-              readCursor.orderAt === eventCursor.orderAt
+              ownOrActive && readCursor.orderAt === eventCursor.orderAt
                 ? rumor.created_at
                 : conversation.lastReadAt,
           }
@@ -673,6 +682,7 @@ async function releasePrebootstrapRumors(
   bootstrapRumor: Rumor,
   finalityCursor: SyncCursor | null,
   arrivalCandidates: Map<Rumor, boolean>,
+  hiddenIds: Set<string>,
 ): Promise<Rumor[]> {
   const { accountPubkey } = options;
   const pending = await tx
@@ -760,6 +770,8 @@ async function releasePrebootstrapRumors(
         conversationKey,
         row.rumor,
         row.sourceRelays ?? undefined,
+        false,
+        hiddenIds,
       )
     ) {
       promoted.push(row.rumor);
@@ -851,6 +863,7 @@ class GroupReceiveService {
     }
 
     const arrivalCandidates = new Map<Rumor, boolean>();
+    const hiddenIds = new Set<string>();
     const transactionResult = await db.transaction(async (tx) => {
       let before: typeof conversations.$inferSelect | null = null;
       const persist = async (): Promise<ReceiveGroupRumorResult> => {
@@ -938,6 +951,7 @@ class GroupReceiveService {
             rumor,
             options.sourceRelays,
             intake === 'local',
+            hiddenIds,
           );
           if (stored) {
             const promoted = await releasePrebootstrapRumors(
@@ -947,8 +961,9 @@ class GroupReceiveService {
               rumor,
               cursor,
               arrivalCandidates,
+              hiddenIds,
             );
-            await refreshConversationMessageState(tx, options, conversationKey);
+            await refreshConversationMessageState(tx, options, conversationKey, hiddenIds.has(rumor.id));
             return { handled: true, stored, conversationKey, promoted };
           }
           return { handled: true, stored, conversationKey, promoted: [] };
@@ -990,10 +1005,13 @@ class GroupReceiveService {
             rumor,
             options.sourceRelays,
             true,
+            hiddenIds,
           );
           if (stored) {
             await updateNameState(tx, accountPubkey, conversationKey, rumor, false);
-            await refreshConversationMessageState(tx, options, conversationKey);
+            if (!hiddenIds.has(rumor.id)) {
+              await refreshConversationMessageState(tx, options, conversationKey);
+            }
           }
           return { handled: true, stored, conversationKey, promoted: [] };
         }
@@ -1024,10 +1042,13 @@ class GroupReceiveService {
           rumor,
           options.sourceRelays,
           intake === 'local',
+          hiddenIds,
         );
         if (!stored) return { handled: true, stored: false, conversationKey, promoted: [] };
         await updateNameState(tx, accountPubkey, conversationKey, rumor, finalized);
-        await refreshConversationMessageState(tx, options, conversationKey);
+        if (!hiddenIds.has(rumor.id)) {
+          await refreshConversationMessageState(tx, options, conversationKey);
+        }
         return { handled: true, stored: true, conversationKey, promoted: [] };
       };
       const result = await persist();
@@ -1040,6 +1061,7 @@ class GroupReceiveService {
             ...(result.stored ? [rumor] : []), ...result.promoted,
           ].map(candidate => [candidate.id!, candidate]));
           for (const candidate of delivered.values()) {
+            if (hiddenIds.has(candidate.id)) continue;
             const current = candidate.id === rumor.id;
             await recordNotificationEvent(tx, {
               accountPubkey, conversationKey, rumor: candidate,
@@ -1052,14 +1074,15 @@ class GroupReceiveService {
           }
         }
       }
-      return result;
+      return hiddenIds.size > 0 ? { ...result, hiddenIds } : result;
     });
     if (transactionResult.stored || transactionResult.promoted.length > 0) {
       const delivered = [
         ...(transactionResult.stored ? [rumor] : []),
         ...transactionResult.promoted,
       ];
-      const ids = [...new Set(delivered.map((item) => item.id!))];
+      const ids = [...new Set(delivered.map((item) => item.id))].filter((id) => !hiddenIds.has(id));
+      if (ids.length === 0) return transactionResult;
       const storedRows = await db
         .select()
         .from(messages)
@@ -1067,6 +1090,7 @@ class GroupReceiveService {
           and(
             eq(messages.accountPubkey, accountPubkey),
             inArray(messages.id, ids),
+            eq(messages.deleted, false),
           ),
         );
       for (const row of storedRows) mergeStoredMessageIntoTail(accountPubkey, row);

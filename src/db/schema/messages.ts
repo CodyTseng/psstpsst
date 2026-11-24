@@ -17,6 +17,7 @@ export const messages = sqliteTable(
     senderPubkey: text('sender_pubkey').notNull(),
     kind: integer('kind').notNull(),
     content: text('content').notNull(),
+    deleted: integer('deleted', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),
     /** Normalized authenticated `ms` tag, or the legacy second floor. Equal
      * values use the smaller event ID as the newer message. */

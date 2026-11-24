@@ -46,7 +46,7 @@ The complete envelope is:
 {
   "id": "<gift-wrap-id>",
   "pubkey": "<one-time-ephemeral-pubkey>",
-  "created_at": "<random-time-within-the-previous-two-days>",
+  "created_at": "<randomized-gift-wrap-timestamp>",
   "kind": 1059,
   "tags": [["p", "<recipient-identity-pubkey>"]],
   "content": nip44_encrypt(
@@ -78,6 +78,10 @@ One gift wrap is created for each recipient and for the sender. Relay routing
 continues to use the identity pubkey and kind `10050`; only NIP-44 key agreement
 uses the encryption key.
 
+Senders randomize the gift wrap timestamp within two days of the rumor. They
+sample from the latest available window of up to two days, bounded by the
+current time. This also applies when wrapping an older rumor for retry.
+
 ### Receiving
 
 A receiver:
@@ -89,6 +93,9 @@ A receiver:
    decrypts the rumor with that key and the recipient's encryption private key.
 4. Verifies the rumor ID and requires the rumor `pubkey` to equal the seal
    `pubkey`.
+5. Rejects the envelope if the rumor and outer gift wrap `created_at` values
+   differ by more than 172,800 seconds in either direction. Arrival time does
+   not affect this check.
 
 After verification, the receiver submits the seal's encryption public key as
 device-wide key evidence for the sender identity. Seal evidence uses the
@@ -226,6 +233,29 @@ wins independently of membership replay. An overlong subject is ignored on an
 ordinary message or `invite`; it invalidates a `rename` action.
 
 This extension does not deliver earlier rumors to a newly invited member.
+
+## Message deletion
+
+A kind `5` rumor requests that a client hide a Relay chat message or
+file message. The rumor has empty content, one `e` tag referencing the target's
+rumor ID, and a `k` tag naming the target kind. It may carry the standard
+`ms` tag. The same envelope and timestamp checks apply.
+
+For deletion scoped to the requesting account, that account is the sole
+recipient, and the target may be a sent or received message. For a shared
+deletion, the requester must be the target author, and the recipients are
+the author and the target rumor's original `p` recipients. This includes former
+group members who received the target and excludes members who joined later.
+A multi-selection containing a received message is scoped entirely to the
+requesting account.
+
+The receiver looks up the target ID within the receiving account. If the
+target has yet to arrive, the receiver keeps the authenticated request pending
+until it can check the target. A request authenticated as the receiving account
+can hide any eligible target. For requests authenticated as another account,
+the target author must match the deletion author. The receiver discards
+requests that fail these checks. A deletion request does not affect group
+membership or create a timeline entry.
 
 ## Private saved groups
 

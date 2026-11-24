@@ -68,6 +68,7 @@ import { attachmentLabel } from '@/lib/nostr/attachment-label';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import { prepareMessagePresentation } from '@/lib/chat/message-presentation';
+import { isMessageOrderNewer, type MessageOrderKey } from '@/lib/nostr/message-order';
 import { formatDateSeparator, isDifferentDay } from '@/lib/time';
 import type { MessageDelivery } from '@/stores/delivery-status.store';
 import type { PendingAttachment } from '@/stores/pending-attachments.store';
@@ -86,6 +87,8 @@ import { DatePill, DateSeparator } from './message-date-separator';
 import { LoadedMessageWindowCache } from '@/lib/chat/loaded-message-window';
 import { MessageListData, MessageListRowCache, type ListItem } from './message-list-data';
 import { MessageListCell } from './MessageListCell';
+import { RemovingMessageRow } from './RemovingMessageRow';
+import { includeRemovingMessages, messageInsertionIndex, useRemovingMessages } from './message-removal';
 import type { ComposerInsets } from './composer-panel-scheduling';
 import { MessageScrollControl, type MessageScrollControlHandle } from './MessageScrollControl';
 import { measureMessageScrollOffset } from './message-scroll-layout';
@@ -100,6 +103,7 @@ import {
 } from './message-timeline-boundary';
 
 type MessageRow = typeof messagesSchema.$inferSelect;
+const EMPTY_REMOVAL_WINDOW: MessageRow[] = [];
 
 function isMessageFromSelf(
   message: MessageRow,
@@ -154,6 +158,7 @@ function useTimelineCaches(windowScope: string, selfPubkey: string, proximity: b
     scope: windowScope,
     messages: new LoadedMessageWindowCache((row) => isMessageFromSelf(row, selfPubkey, proximity)),
     rows: new MessageListRowCache(),
+    removals: new LoadedMessageWindowCache((row) => isMessageFromSelf(row, selfPubkey, proximity)),
   }), [windowScope, selfPubkey, proximity]);
 }
 
@@ -208,6 +213,8 @@ type Props = {
   deliveriesByMessageId: Record<string, MessageDelivery>;
   /** Reply targets that fall outside the loaded window (fetched by id). */
   referencedById: Record<string, MessageRow>;
+  deletedMessageIds?: ReadonlySet<string>;
+  deferRemovalAnimations?: boolean;
   /** Load an older page (reaching the top of the list). */
   onLoadOlder: () => void;
   /** Load a newer page (anchored mode → reaching the bottom). */
@@ -316,6 +323,8 @@ export function MessageList({
   bubbleRenderItemsById,
   deliveriesByMessageId,
   referencedById,
+  deletedMessageIds,
+  deferRemovalAnimations = false,
   onLoadOlder,
   onLoadNewer,
   hasMore,
@@ -733,7 +742,7 @@ export function MessageList({
   // stay staged just past this boundary and only get revealed when the user
   // returns to the bottom (scroll or button). null = release everything (the
   // common at-bottom case).
-  const [releasedNewestId, setReleasedNewestId] = useState<string | null>(null);
+  const [releasedNewest, setReleasedNewest] = useState<MessageOrderKey | null>(null);
   // Whether the reader is close enough to the bottom that new messages should
   // join the visible tail immediately, independently of scroll direction.
   const nearTailRef = useRef(true);
@@ -939,18 +948,23 @@ export function MessageList({
   const listCaches = useTimelineCaches(windowScope, selfPubkey, proximity);
   const messageWindow = listCaches.messages.read(messages);
   const releasedIdx = useMemo(() => {
-    const stored = releasedNewestId == null ? messages.length - 1 : messageWindow.position(releasedNewestId);
+    const position = releasedNewest == null ? -1 : messageWindow.position(releasedNewest.id);
+    // A deleted boundary may have newer staged arrivals after it. Keep those
+    // staged and locate the preceding row by the original chronology cursor.
+    const stored = releasedNewest && deletedMessageIds?.has(releasedNewest.id)
+      ? messageInsertionIndex(messages, releasedNewest) - 1
+      : position < 0 ? messages.length - 1 : position;
     const lastSelf = messageWindow.lastSelf == null ? -1 : messageWindow.position(messageWindow.lastSelf.id);
-    return Math.max(stored < 0 ? messages.length - 1 : stored, lastSelf);
-  }, [messageWindow, messages.length, releasedNewestId]);
+    return Math.max(stored, lastSelf);
+  }, [deletedMessageIds, messageWindow, messages, releasedNewest]);
   const displayedCount = anchored ? messages.length : releasedIdx + 1;
   // How many messages are staged just past the boundary — drives the badge.
   const stagedCount = anchored ? 0 : messages.length - (releasedIdx + 1);
 
   /** Reveal all staged messages by advancing the boundary to the newest. */
   function releaseStaged() {
-    if (messages.length > 0)
-      setReleasedNewestId(messages[messages.length - 1].id);
+    const newest = messages.at(-1);
+    if (newest) setReleasedNewest({ id: newest.id, orderAt: newest.orderAt });
   }
 
   function requestNewerFromScroll() {
@@ -1281,18 +1295,22 @@ export function MessageList({
   // nothing shifts while history is being read. An older page prepends at the
   // top, leaving the newest unchanged, so it never triggers here.
   useLayoutEffect(() => {
-    if (messages.length === 0) return;
+    if (messages.length === 0) {
+      prevNewestRef.current = null;
+      return;
+    }
     const newest = messages[messages.length - 1];
     const prev = prevNewestRef.current;
-    prevNewestRef.current = { id: newest.id, orderAt: newest.orderAt };
+    const cursor = { id: newest.id, orderAt: newest.orderAt };
+    prevNewestRef.current = cursor;
     // Anchored mode renders the whole window and never stages — growing it via
     // loadNewer must not be mistaken for a tail arrival or trigger an auto-scroll.
     if (anchored) return;
     if (!prev) {
-      setReleasedNewestId(newest.id); // first load: show the whole window
+      setReleasedNewest(cursor); // first load: show the whole window
       return;
     }
-    if (newest.id === prev.id) return;
+    if (!isMessageOrderNewer(cursor, prev)) return;
 
     const fromSelf = isMessageFromSelf(newest, selfPubkey, proximity);
     if (fromSelf || nearTailRef.current) {
@@ -1305,7 +1323,7 @@ export function MessageList({
         nearTail: nearTailRef.current,
         atBottom: atBottomRef.current,
       });
-      setReleasedNewestId(newest.id);
+      setReleasedNewest(cursor);
     }
     // else: scrolled up + incoming → leave staged (boundary frozen).
   }, [messages, selfPubkey, proximity, anchored]);
@@ -1322,7 +1340,7 @@ export function MessageList({
     previousTailJumpRef.current = tailJumpVersion;
     cancelMessagePositioning();
     setLocalFocus(null); // a far-reply focus (if any) ends when we return to tail
-    setReleasedNewestId(null); // show the whole fresh tail
+    setReleasedNewest(null); // show the whole fresh tail
     const requestId = navigationSequenceRef.current;
     const toBottom = () => {
       if (requestId !== navigationSequenceRef.current || !listRef.current) return;
@@ -1387,8 +1405,29 @@ export function MessageList({
     [messageById, referencedById],
   );
 
-  const data = useTimelineData(messageWindow, displayedCount, pendingAttachments, bubbleRenderItemsById,
-    oldestBoundaryCreatedAt, boundaryIsSelf, listItemCache);
+  const { removing, finish: finishRemoval } = useRemovingMessages({
+    scope: windowScope,
+    deletedIds: deletedMessageIds,
+    reduceMotion: reducedMotion || !liveDataEnabled,
+    defer: deferRemovalAnimations,
+    visibleRows: () => viewableItemsRef.current.flatMap(({ item, key, isViewable }) => {
+      if (!isViewable || item.kind !== 'message') return [];
+      const frame = cellFrames.get(key);
+      return frame && !isFrameInViewport(frame) ? [] : [item.message];
+    }),
+  });
+  const removalWindow = useMemo(() => {
+    if (removing.size) {
+      return listCaches.removals.read(includeRemovingMessages(messages, displayedCount, removing));
+    }
+    // Drop the transient index as soon as there are no preview rows left.
+    listCaches.removals.read(EMPTY_REMOVAL_WINDOW);
+    return null;
+  }, [displayedCount, listCaches, messages, removing]);
+  const data = useTimelineData(
+    removalWindow ?? messageWindow, removalWindow?.rows.length ?? displayedCount,
+    pendingAttachments, bubbleRenderItemsById, oldestBoundaryCreatedAt, boundaryIsSelf, listItemCache,
+  );
   const dataRef = useRef(data);
   const dataIndexById = data;
   const dataIndexByIdRef = useRef(dataIndexById);
@@ -1710,6 +1749,7 @@ export function MessageList({
             isMessageFromSelf(older.message, selfPubkey, proximity));
         const replyId = item.pending.replyToId;
         const target = replyId ? resolveTarget(replyId) : null;
+        const replyDeleted = !!replyId && (deletedMessageIds?.has(replyId) || target?.deleted);
         const profile = target ? profileMap[target.senderPubkey] : null;
         const replyPreview: MessageBubbleReplyPreview | null = target
           ? {
@@ -1719,7 +1759,7 @@ export function MessageList({
                 profile,
               ),
               contentPreview:
-                target.kind === 15
+                replyDeleted ? t('chat.message_delete.deleted') : target.kind === 15
                   ? attachmentLabel(target.tags, attachmentLabels)
                   : target.content,
             }
@@ -1727,7 +1767,7 @@ export function MessageList({
             ? {
                 senderPubkey: '',
                 senderDisplayName: null,
-                contentPreview: '…',
+                contentPreview: replyDeleted ? t('chat.message_delete.deleted') : '…',
               }
             : null;
         const dateLabel = startsLoadedTimelineDay(
@@ -1830,6 +1870,7 @@ export function MessageList({
       }
 
       let replyPreview: MessageBubbleReplyPreview | null = null;
+      const replyDeleted = msg.replyToId != null && deletedMessageIds?.has(msg.replyToId);
       if (msg.replyToId) {
         const target =
           preparedRow?.replyTarget ?? resolveTarget(msg.replyToId);
@@ -1842,7 +1883,9 @@ export function MessageList({
               profile,
             ),
             contentPreview:
-              target.kind === 15
+              replyDeleted || target.deleted
+                ? t('chat.message_delete.deleted')
+                : target.kind === 15
                 ? attachmentLabel(target.tags, attachmentLabels)
                 : target.content,
           };
@@ -1851,7 +1894,7 @@ export function MessageList({
           replyPreview = {
             senderPubkey: '',
             senderDisplayName: null,
-            contentPreview: '…',
+            contentPreview: replyDeleted ? t('chat.message_delete.deleted') : '…',
           };
         }
       }
@@ -1923,7 +1966,7 @@ export function MessageList({
         : null;
       const attachmentSender = attachment ? msg.senderPubkey : undefined;
 
-      return (
+      const content = (
         <>
           <MessageBubble
             content={msg.content}
@@ -1970,7 +2013,7 @@ export function MessageList({
               canShowDelivery ? () => rowActionsRef.current.onShowDelivery?.(msg.id) : undefined
             }
             onPressReply={
-              msg.replyToId
+              msg.replyToId && !replyDeleted && !resolveTarget(msg.replyToId)?.deleted
                 ? () => rowActionsRef.current.scrollToMessage(msg.replyToId!, undefined, { kind: 'message', id: msg.id })
                 : undefined
             }
@@ -2008,10 +2051,16 @@ export function MessageList({
           ) : null}
         </>
       );
+      return removing.has(msg.id) ? (
+        <RemovingMessageRow id={msg.id} play={!deferRemovalAnimations} onFinished={finishRemoval}>
+          {content}
+        </RemovingMessageRow>
+      ) : content;
     },
     // Date formatters read the preference snapshot outside React; invalidate visible cells on changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      deletedMessageIds, deferRemovalAnimations, finishRemoval, removing,
       accountPubkey, attachmentLabels, canShowDelivery, canSwipeReply,
       conversationKey, group, openGroupMemberProfile,
       oldestBoundary, dateTimeFormatPreferences,
@@ -2053,7 +2102,7 @@ export function MessageList({
       inverted
       maintainVisibleContentPosition={
         shouldMaintainVisibleMessagePosition({
-          anchored,
+          anchored: anchored || (removing.size > 0 && !atBottomRef.current),
           initialPositionReady: pendingInitialPosition.ready,
         })
           ? ANCHORED_VISIBLE_POSITION

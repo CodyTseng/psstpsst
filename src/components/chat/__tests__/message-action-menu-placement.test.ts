@@ -140,6 +140,70 @@ describe('placeTouchMessageActionMenu', () => {
     });
   });
 
+  it('keeps the full menu and reactions separate when the source viewport is stale', () => {
+    const input = {
+      ...touchBase,
+      bubbleTop: 410,
+      bubbleBottom: 442,
+      contentTop: 500,
+      safeBottom: 710,
+      menuHeight: 350,
+    };
+    const placement = placeTouchMessageActionMenu(input);
+    expect(placement).toEqual({
+      visibleTop: 500,
+      visibleBottom: 500,
+      pillTop: 301,
+      menuTop: 360,
+    });
+  });
+
+  it('uses the top gutter for the full menu before clipping the bubble', () => {
+    const placement = placeTouchMessageActionMenu({
+      ...touchBase,
+      bubbleTop: 397.33,
+      bubbleBottom: 432.38,
+      safeTop: 53.9,
+      safeBottom: 724.38,
+      menuHeight: 353.05,
+      menuTopInset: 41.9,
+      compactGap: 2,
+    });
+    expect(placement.visibleTop).toBe(397.33);
+    expect(placement.visibleBottom).toBe(432.38);
+    expect(placement.menuTop).toBeCloseTo(41.9);
+    expect(placement.menuTop + 353.05).toBeLessThan(placement.visibleTop);
+    expect(placement.pillTop).toBeCloseTo(442.38);
+  });
+
+  it('clips the stationary bubble when neither gutter fits the full menu', () => {
+    expect(placeTouchMessageActionMenu({
+      ...touchBase,
+      bubbleTop: 335,
+      bubbleBottom: 385,
+      safeBottom: 710,
+      menuHeight: 350,
+    })).toEqual({
+      visibleTop: 335,
+      visibleBottom: 350,
+      pillTop: 276,
+      menuTop: 360,
+    });
+  });
+
+  it('keeps both controls apart when no preview fits in a short viewport', () => {
+    const input = {
+      ...touchBase,
+      bubbleTop: 175,
+      bubbleBottom: 205,
+      safeBottom: 368,
+    };
+    const placement = placeTouchMessageActionMenu(input);
+    expect(placement.visibleBottom).toBe(placement.visibleTop);
+    expect(placement.pillTop + input.pillHeight + input.gap).toBe(placement.menuTop);
+    expect(placement.menuTop + input.menuHeight).toBe(input.safeBottom);
+  });
+
   it('clips a message at the top notice and keeps the surfaces outside it', () => {
     expect(
       placeTouchMessageActionMenu({
@@ -158,13 +222,15 @@ describe('placeTouchMessageActionMenu', () => {
     expect(
       placeTouchMessageActionMenu({
         ...touchBase,
-        bubbleTop: 90,
-        bubbleBottom: 700,
+        bubbleTop: touchBase.safeTop,
+        bubbleBottom: touchBase.safeBottom,
+        contentTop: touchBase.safeTop,
+        contentBottom: touchBase.safeBottom,
       }),
     ).toEqual({
-      visibleTop: 158,
+      visibleTop: 118,
       visibleBottom: 545,
-      pillTop: 99,
+      pillTop: 59,
       menuTop: 555,
     });
   });

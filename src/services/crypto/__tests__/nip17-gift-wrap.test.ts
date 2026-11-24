@@ -1,7 +1,8 @@
-import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
+import { finalizeEvent, generateSecretKey, getPublicKey, nip44 } from 'nostr-tools';
 
 import {
   KIND_CHAT,
+  KIND_GIFT_WRAP,
   KIND_REACTION,
   createGiftWrappedMessage,
   unwrapGiftWrap,
@@ -36,6 +37,8 @@ describe('NIP-17 gift wraps', () => {
 
     expect(wrapped.seal.tags).toEqual([]);
     expect(wrapped.giftWrap.tags).toEqual([['p', recipientPubkey]]);
+    // Rewrapping an old rumor must produce a timestamp the receiver accepts.
+    expect(Math.abs(wrapped.giftWrap.created_at - wrapped.rumor.created_at)).toBeLessThanOrEqual(172_800);
     const result = await unwrapGiftWrap(wrapped.giftWrap, recipientSecret);
     expect(result?.rumor).toEqual(wrapped.rumor);
     expect(result?.senderEncryptionPubkey).toBe(senderPubkey);
@@ -156,6 +159,30 @@ async function splitKeyFixture(sealOptions: { tags?: string[][]; content?: strin
 
 describe('relay split-key intake', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  test.each([
+    [-172_801, false],
+    [-172_800, true],
+    [172_800, true],
+    [172_801, false],
+  ])('validates a gift-wrap offset of %i seconds in both decoders', async (offset, accepted) => {
+    const { wrapped, recipientEncryption, recipientIdentity } = await splitKeyFixture();
+    const ephemeralKey = generateSecretKey();
+    const conversationKey = nip44.v2.utils.getConversationKey(ephemeralKey, getPublicKey(recipientEncryption));
+    const giftWrap = finalizeEvent({
+      kind: KIND_GIFT_WRAP,
+      content: nip44.v2.encrypt(JSON.stringify(wrapped.seal), conversationKey),
+      tags: wrapped.giftWrap.tags,
+      created_at: wrapped.rumor.created_at + offset,
+    }, ephemeralKey);
+    jest.mocked(vaultAccess.execute).mockResolvedValue({ status: 'decrypted', seal: wrapped.seal,
+      rumorJson: JSON.stringify(wrapped.rumor), senderEncryptionPubkey: wrapped.seal.tags[0][1] });
+
+    const genericResult = await unwrapGiftWrap(giftWrap, recipientEncryption);
+    expect(genericResult?.rumor ?? null).toEqual(accepted ? wrapped.rumor : null);
+    const accountResult = await unwrapGiftWrapForAccount(giftWrap, getPublicKey(recipientIdentity));
+    expect(accountResult.status).toBe(accepted ? 'decrypted' : 'failed');
+  });
 
   test('delegates key selection and both decryptions to the account vault in one request', async () => {
     const { wrapped, recipientIdentity } = await splitKeyFixture();

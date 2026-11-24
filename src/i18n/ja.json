@@ -489,6 +489,15 @@
       "unavailable": "プレビューできません",
       "open_external": "別のアプリで開く"
     },
+    "message_delete": {
+      "title": "メッセージを削除しますか？",
+      "description": "このメッセージはあなたのチャット履歴から非表示になります。",
+      "peer": "相手側でも削除する",
+      "named_peer": "{{name}}側でも削除する",
+      "group": "グループメンバー側でも削除する",
+      "deleted": "メッセージを削除しました",
+      "failed": "メッセージを削除できませんでした。"
+    },
     "actions": {
       "reply": "返信",
       "copy": "コピー",

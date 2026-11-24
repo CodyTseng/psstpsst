@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { DatabaseSync } from 'node:sqlite';
 import { useMessages } from '../use-messages';
+import { emitMessageDeletion, invalidateAllWarmedMessageTails } from '@/services/conversation/message-tail-cache';
 jest.mock('@/i18n', () => ({ language: 'en', t: (key: string) => key }));
 
 jest.mock('@/db/client', () => {
@@ -11,7 +12,7 @@ jest.mock('@/db/client', () => {
     account_pubkey TEXT, id TEXT, conversation_key TEXT, sender_pubkey TEXT,
     kind INTEGER, content TEXT, created_at INTEGER, order_at INTEGER,
     reply_to_id TEXT, subject TEXT, tags TEXT, rumor TEXT,
-    delivery_status TEXT, delivery_error TEXT, source_relays TEXT
+    delivery_status TEXT, delivery_error TEXT, source_relays TEXT, deleted INTEGER NOT NULL DEFAULT 0
   )`);
   const queries: string[] = [];
   return {
@@ -61,7 +62,8 @@ describe('chat cursor pagination', () => {
   }
   beforeEach(async () => {
     sqlite.exec('DELETE FROM messages');
-    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL)');
+    invalidateAllWarmedMessageTails();
+    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL, 0)');
     for (let i = 1; i <= 420; i++) {
       insert.run('account', String(i), 'conversation', 'peer', 14, 'hello', 1000, i, '[]', '{}');
     }
@@ -94,6 +96,19 @@ describe('chat cursor pagination', () => {
     expect(new Set(result!.messages.map((row) => row.id)).size).toBe(result!.messages.length);
     expect(result!.bubbleMessages.slice(-latestIds.length).map((row) => row.id)).toEqual(latestIds);
     expect(queries.filter((query) => query.includes('"rumor"'))).toHaveLength(databaseReads);
+  });
+
+  it('removes a deleted message from retained history after the live tail refreshes', async () => {
+    await act(async () => result.loadOlder());
+    const older = result.bubbleMessages[0].id;
+    const latest = result.bubbleMessages.at(-1)!.id;
+    sqlite.prepare('UPDATE messages SET deleted = 1 WHERE id IN (?, ?)').run(older, latest);
+    await act(async () => {
+      emitMessageDeletion('account', 'conversation', older);
+      emitMessageDeletion('account', 'conversation', latest);
+      await notifyMessagesChanged();
+    });
+    expect(result.bubbleMessages.some((row) => row.id === older || row.id === latest)).toBe(false);
   });
 
   it('coalesces repeated requests and does not requery the live tail for every page', async () => {
@@ -179,7 +194,7 @@ describe('chat cursor pagination', () => {
   it('retains the reading window across a burst larger than the live tail', async () => {
     await act(async () => result.loadOlder());
     const retainedIds = new Set(result!.messages.map((message) => message.id));
-    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL)');
+    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL, 0)');
     for (let i = 421; i <= 500; i++) {
       insert.run('account', String(i), 'conversation', 'peer', 14, 'new', 1001, i, '[]', '{}');
     }

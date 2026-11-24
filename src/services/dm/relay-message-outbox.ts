@@ -4,6 +4,7 @@ import type { Event, EventTemplate } from 'nostr-tools';
 import { db } from '@/db/client';
 import {
   messageDeliveryCopies,
+  messageDeletions,
   messages,
   relayOutboxJobs,
   relayOutboxJobTargets,
@@ -371,22 +372,22 @@ class RelayMessageOutbox {
     generation: number,
   ): Promise<boolean> {
     const message = await db
-      .select({ rumor: messages.rumor, kind: messages.kind })
+      .select({ rumor: messages.rumor })
       .from(messages)
-      .where(
-        and(
-          eq(messages.accountPubkey, job.accountPubkey),
-          eq(messages.id, job.messageId),
-        ),
-      )
+      .where(and(eq(messages.accountPubkey, job.accountPubkey), eq(messages.id, job.messageId)))
       .get();
-    if (!message) {
+    const jobRumor = message ?? await db
+      .select({ rumor: messageDeletions.rumor })
+      .from(messageDeletions)
+      .where(and(eq(messageDeletions.accountPubkey, job.accountPubkey), eq(messageDeletions.id, job.messageId)))
+      .get();
+    if (!jobRumor) {
       await db.delete(relayOutboxJobs).where(eq(relayOutboxJobs.id, job.id));
       return true;
     }
 
-    const rumor = message.rumor as Rumor;
-    const durable = isDurableDelivery(message.kind);
+    const { rumor } = jobRumor;
+    const durable = isDurableDelivery(rumor.kind);
     let targets = await this.loadTargets(job.id);
     if (
       targets.length === 0 &&

@@ -35,6 +35,9 @@ export const manipulationTiming = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
+/** Visible deleted messages fade and collapse together. */
+export const messageRemovalTiming = { ...manipulationTiming, duration: 150 } as const;
+
 /** Media overlays finish fading before their content is released. */
 export const mediaViewerTiming = {
   enter: manipulationTiming,

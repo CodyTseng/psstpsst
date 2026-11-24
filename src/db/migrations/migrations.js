@@ -1,3 +1,5 @@
+import m0091 from './0091_pending-message-deletions.sql';
+import m0090 from './0090_message-deletions.sql';
 import m0089 from './0089_routing-settings-edit-time.sql';
 import m0088 from './0088_message-relay-rate-limits.sql';
 import m0087 from './0087_relay-publish-retries.sql';
@@ -185,6 +187,8 @@ m0085,
 m0086,
 m0087,
 m0088,
-m0089
+m0089,
+m0090,
+m0091
     }
   }

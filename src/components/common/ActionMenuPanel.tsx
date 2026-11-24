@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode, useState } from 'react';
 import {
+  ScrollView,
   StyleSheet,
   type StyleProp,
   View,
@@ -73,6 +74,7 @@ type Props = {
   density?: ActionMenuDensity;
   onSelect?: (item: ActionMenuItem) => void;
   style?: StyleProp<ViewStyle>;
+  scrollableHeight?: number;
 };
 
 /** Shared menu chrome and rows; callers own only overlay and positioning. */
@@ -81,10 +83,56 @@ export function ActionMenuPanel({
   density = 'pointer',
   onSelect,
   style,
+  scrollableHeight,
 }: Props) {
   const c = useThemeColors();
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const metrics = ACTION_MENU_METRICS[density];
+
+  const rows = items.map((item, index) => (
+    <Fragment key={item.key}>
+      {index > 0 && (density === 'touch' || item.separatorBefore) ? (
+        <View
+          style={{
+            height: StyleSheet.hairlineWidth,
+            marginStart: density === 'touch' ? 52 : spacing.sm,
+            marginEnd: density === 'touch' ? 0 : spacing.sm,
+            backgroundColor: c.border,
+          }}
+        />
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={item.selected === undefined ? undefined : { selected: item.selected }}
+        onPress={() => (onSelect ? onSelect(item) : item.onPress())}
+        onHoverIn={() => setHoveredKey(item.key)}
+        onHoverOut={() => setHoveredKey(null)}
+        style={({ pressed }) => ({
+          height: metrics.rowHeight,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: metrics.iconGap,
+          paddingHorizontal: metrics.rowPaddingH,
+          backgroundColor:
+            pressed || (density === 'pointer' && hoveredKey === item.key)
+              ? c.interactionOverlay
+              : 'transparent',
+        })}
+      >
+        {item.icon}
+        <AppText
+          variant="body"
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            color: item.tone === 'danger' ? c.danger : c.text,
+          }}
+        >
+          {item.title}
+        </AppText>
+      </Pressable>
+    </Fragment>
+  ));
 
   return (
     <View
@@ -101,50 +149,11 @@ export function ActionMenuPanel({
         style,
       ]}
     >
-      {items.map((item, index) => (
-        <Fragment key={item.key}>
-          {index > 0 && (density === 'touch' || item.separatorBefore) ? (
-            <View
-              style={{
-                height: StyleSheet.hairlineWidth,
-                marginStart: density === 'touch' ? 52 : spacing.sm,
-                marginEnd: density === 'touch' ? 0 : spacing.sm,
-                backgroundColor: c.border,
-              }}
-            />
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={item.selected === undefined ? undefined : { selected: item.selected }}
-            onPress={() => (onSelect ? onSelect(item) : item.onPress())}
-            onHoverIn={() => setHoveredKey(item.key)}
-            onHoverOut={() => setHoveredKey(null)}
-            style={({ pressed }) => ({
-              height: metrics.rowHeight,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: metrics.iconGap,
-              paddingHorizontal: metrics.rowPaddingH,
-              backgroundColor:
-                pressed || (density === 'pointer' && hoveredKey === item.key)
-                  ? c.interactionOverlay
-                  : 'transparent',
-            })}
-          >
-            {item.icon}
-            <AppText
-              variant="body"
-              numberOfLines={1}
-              style={{
-                flex: 1,
-                color: item.tone === 'danger' ? c.danger : c.text,
-              }}
-            >
-              {item.title}
-            </AppText>
-          </Pressable>
-        </Fragment>
-      ))}
+      {scrollableHeight === undefined ? rows : (
+        <ScrollView style={{ maxHeight: scrollableHeight }} keyboardShouldPersistTaps="handled">
+          {rows}
+        </ScrollView>
+      )}
     </View>
   );
 }

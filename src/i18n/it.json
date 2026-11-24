@@ -492,6 +492,15 @@
       "unavailable": "Anteprima non disponibile",
       "open_external": "Apri in un’altra app"
     },
+    "message_delete": {
+      "title": "Eliminare il messaggio?",
+      "description": "Il messaggio verrà nascosto dalla tua cronologia.",
+      "peer": "Elimina anche per l’altra persona",
+      "named_peer": "Elimina anche per {{name}}",
+      "group": "Elimina anche per i membri del gruppo",
+      "deleted": "Messaggio eliminato",
+      "failed": "Impossibile eliminare il messaggio."
+    },
     "actions": {
       "reply": "Rispondi",
       "copy": "Copia",

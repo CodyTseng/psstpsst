@@ -3511,6 +3511,7 @@ class ProximityService {
       // The write already holds every column — merge into the warm tail instead
       // of invalidating it and queueing a full window re-read.
       mergeStoredMessageIntoTail(accountPubkey, {
+        deleted: false,
         accountPubkey,
         id: rumor.id!,
         conversationKey: peerPubkey,

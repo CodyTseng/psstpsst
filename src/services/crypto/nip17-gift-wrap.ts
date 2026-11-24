@@ -38,6 +38,7 @@ export const KIND_GIFT_WRAP = 1059;
 export const KIND_CHAT = 14;
 export const KIND_FILE = 15;
 export const KIND_REACTION = 7;
+export const KIND_MESSAGE_DELETION = 5;
 export const KIND_CLIENT_KEY_ANNOUNCEMENT = 4454;
 export const KIND_KEY_TRANSFER = 4455;
 export const KIND_ENCRYPTION_KEY_ANNOUNCEMENT = 10044;
@@ -50,9 +51,13 @@ export const KIND_RELAY_LIST_METADATA = 10002;
 
 const DM_TIME_RANDOMIZATION_SECONDS = 2 * 24 * 60 * 60; // 2 days, per NIP-59
 
-function randomTimeUpTo2DaysInThePast(): number {
+function randomGiftWrapTime(rumorTime: number): number {
   const now = Math.floor(Date.now() / 1000);
-  return now - Math.floor(Math.random() * DM_TIME_RANDOMIZATION_SECONDS);
+  // Delayed delivery and resends retain the original rumor timestamp.
+  const latest = Math.min(now, rumorTime + DM_TIME_RANDOMIZATION_SECONDS);
+  const earliest = Math.max(0, latest - DM_TIME_RANDOMIZATION_SECONDS, rumorTime - DM_TIME_RANDOMIZATION_SECONDS);
+  if (latest < earliest) throw new Error('Rumor timestamp is too far in the future to wrap');
+  return earliest + Math.floor(Math.random() * (latest - earliest + 1));
 }
 
 /** Build an unsigned rumor (no `sig`) and compute its NIP-01 id. */
@@ -116,6 +121,7 @@ async function createSeal(
 
 async function createGiftWrap(
   seal: Event,
+  rumorTime: number,
   recipientMainPubkey: string,
   recipientEncPubkey: string,
 ): Promise<Event> {
@@ -131,7 +137,7 @@ async function createGiftWrap(
       // key is already used to encrypt the content and need not be exposed as a
       // second public recipient tag.
       tags: [['p', recipientMainPubkey]],
-      created_at: randomTimeUpTo2DaysInThePast(),
+      created_at: randomGiftWrapTime(rumorTime),
     },
     ephemeralPrivkey,
   );
@@ -164,7 +170,7 @@ export async function createGiftWrappedMessage(opts: {
     opts.signSeal,
     opts.senderIdentityPubkey === opts.senderEncPubkey,
   );
-  const giftWrap = await createGiftWrap(seal, opts.recipientIdentityPubkey, opts.recipientEncPubkey);
+  const giftWrap = await createGiftWrap(seal, rumor.created_at, opts.recipientIdentityPubkey, opts.recipientEncPubkey);
   return { rumor, seal, giftWrap };
 }
 
@@ -186,6 +192,15 @@ export type GiftWrapUnwrapOutcome =
   | { status: 'decrypted'; value: UnwrapResult }
   | { status: 'unsupported'; reason: 'missing-encryption-key-tag' }
   | { status: 'failed' };
+
+function isValidWrappedRumor(rumor: Rumor, seal: Event, giftWrap: Event): boolean {
+  return validateEvent(rumor) &&
+    Number.isSafeInteger(rumor.created_at) && rumor.created_at >= 0 &&
+    Number.isSafeInteger(giftWrap.created_at) && giftWrap.created_at >= 0 &&
+    Math.abs(rumor.created_at - giftWrap.created_at) <= DM_TIME_RANDOMIZATION_SECONDS &&
+    Number.isSafeInteger(rumor.kind) && rumor.kind >= 0 &&
+    seal.pubkey === rumor.pubkey && rumor.id === getEventHash(rumor);
+}
 
 /** Generic envelope decoder retained for unified-key Nearby envelopes. Relay
  * account intake uses the stricter `unwrapGiftWrapForAccount` boundary below. */
@@ -241,9 +256,7 @@ async function unwrapGiftWrapAttempt(
     // claims author `rumor.pubkey`. They MUST match — otherwise someone
     // re-sealed another author's rumor under their own signature. This binding
     // is exactly what signing the seal with the encryption key could not give.
-    if (!validateEvent(rumor) || !Number.isSafeInteger(rumor.created_at) || rumor.created_at < 0 ||
-      !Number.isSafeInteger(rumor.kind) || rumor.kind < 0 ||
-      seal.pubkey !== rumor.pubkey || rumor.id !== getEventHash(rumor)) return { status: 'failed' };
+    if (!isValidWrappedRumor(rumor, seal, giftWrap)) return { status: 'failed' };
 
     return {
       status: 'decrypted',
@@ -266,9 +279,7 @@ export async function unwrapGiftWrapForAccount(
   if (result.status !== 'decrypted') return result;
   try {
     const rumor = JSON.parse(result.rumorJson) as Rumor;
-    if (!validateEvent(rumor) || !Number.isSafeInteger(rumor.created_at) || rumor.created_at < 0 ||
-      !Number.isSafeInteger(rumor.kind) || rumor.kind < 0 ||
-      result.seal.pubkey !== rumor.pubkey || rumor.id !== getEventHash(rumor)) return { status: 'failed' };
+    if (!isValidWrappedRumor(rumor, result.seal, giftWrap)) return { status: 'failed' };
     return { status: 'decrypted', value: {
       giftWrap, seal: result.seal, rumor, senderEncryptionPubkey: result.senderEncryptionPubkey,
     } };

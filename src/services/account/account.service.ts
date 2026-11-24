@@ -19,6 +19,7 @@ import {
   messageDeliveryCopies,
   messageMedia,
   messages,
+  messageDeletions,
   outbox,
   configurationOutbox,
   pendingAttachments,
@@ -175,6 +176,7 @@ async function deleteAccountData(pubkey: string): Promise<void> {
   const scoped = [
     exploreHistory, exploreEntries, nappletData, nappletDataLegacy, nappletUsage, nappletInstallations, signingAuthorizations, signingActivity,
     messages,
+    messageDeletions,
     groupMemberActions,
     pendingGroupRumors,
     messageDeliveryCopies,

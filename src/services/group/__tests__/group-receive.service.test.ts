@@ -1,4 +1,6 @@
+import { buildRumor } from '@/services/crypto/nip17-gift-wrap';
 import { groupConversationKey } from '@/lib/nostr/group-messaging';
+import { messageOrderAt } from '@/lib/nostr/message-order';
 import { filterNotifiableMessages } from '@/services/notifications/notification-filter';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -58,9 +60,11 @@ jest.mock('@/db/client', () => {
   return mockDatabase;
 });
 
+jest.mock('@/services/files/file-attachment.service', () => ({}));
 jest.mock('@/services/account/account.service', () => ({ buildSigner: jest.fn() }));
 jest.mock('@/services/conversation/message-tail-cache', () => ({
   mergeStoredMessageIntoTail: jest.fn(),
+  emitMessageDeletion: jest.fn(),
 }));
 jest.mock('@/services/files/pending-attachment-file.service', () => ({
   deletePendingAttachmentFile: jest.fn(),
@@ -674,4 +678,182 @@ it('delays rate-limited gift wraps without blocking later jobs or retrying refus
     app.mockRestore();
     publish.mockRestore();
   }
+});
+
+describe('private message deletions', () => {
+  const { dmService } = jest.requireActual('@/services/dm/dm.service') as typeof import('@/services/dm/dm.service');
+  const { relayMessageOutbox } = jest.requireActual('@/services/dm/relay-message-outbox') as typeof import('@/services/dm/relay-message-outbox');
+  const receiveDm = dmService as unknown as {
+    applyMessageDeletion(accountPubkey: string, rumor: Rumor, keepPending: boolean): Promise<boolean | null>;
+    storeRumor(rumor: Rumor, accountPubkey: string): Promise<boolean | 'hidden' | null>;
+  };
+
+  it.each([
+    ['direct', 'message author', BOB, BOB, true],
+    ['direct', 'own device', DAVE, ACCOUNT, true],
+    ['direct', 'unrelated author', 'f'.repeat(64), CAROL, false],
+    ['group', 'message author', BOB, BOB, true],
+    ['group', 'own device', BOB, ACCOUNT, true],
+    ['group', 'unrelated author', BOB, CAROL, false],
+  ] as const)('resolves a pending %s deletion from the %s', async (chat, _, author, requestAuthor, deleted) => {
+    const h = `pending-deletion-${requestAuthor[0]}`;
+    const target = buildRumor({
+      kind: 14, created_at: 880, content: `Out-of-order ${chat} message`,
+      tags: chat === 'group' ? [['p', ACCOUNT], ['p', CAROL], ['h', h]] : [['p', ACCOUNT]],
+    }, author);
+    const deletion = buildRumor({
+      kind: 5, created_at: 881, tags: [['e', target.id], ['p', ACCOUNT]], content: '',
+    }, requestAuthor);
+    const sqlite = mockDatabase!.sqlite;
+    const request = sqlite.prepare('SELECT pending_target_id FROM message_deletions WHERE account_pubkey = ? AND id = ?');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await receiveDm.applyMessageDeletion(ACCOUNT, deletion, true);
+      expect(request.get(ACCOUNT, deletion.id)).toEqual({ pending_target_id: target.id });
+    }
+    if (chat === 'group') {
+      const result = await groupReceiveService.receive({
+        accountPubkey: ACCOUNT, rumor: target, intake: 'live', active: false,
+        senderBlocked: false, syncCursor: null,
+      });
+      expect(result.stored).toBe(true);
+      expect(result.hiddenIds?.has(target.id) ?? false).toBe(deleted);
+    } else {
+      await expect(receiveDm.storeRumor(target, ACCOUNT)).resolves.toBe(deleted ? 'hidden' : true);
+    }
+    expect(request.get(ACCOUNT, deletion.id)).toEqual(deleted ? { pending_target_id: null } : undefined);
+    expect(sqlite.prepare('SELECT deleted, content FROM messages WHERE account_pubkey = ? AND id = ?')
+      .get(ACCOUNT, target.id)).toEqual({ deleted: Number(deleted), content: target.content });
+    expect(sqlite.prepare('SELECT count(*) AS n FROM message_fts WHERE id = ?')
+      .get(target.id)?.n).toBe(deleted ? 0 : 1);
+    expect(hasEvent(target)).toBe(!deleted);
+    expect(sqlite.prepare('SELECT last_message_id, unread_count FROM conversations WHERE account_pubkey = ? AND conversation_key = ?')
+      .get(ACCOUNT, chat === 'group' ? groupConversationKey(h) : author)).toEqual({
+      last_message_id: deleted ? null : target.id,
+      unread_count: deleted ? 0 : 1,
+    });
+  });
+
+  it('places a local deletion after a target authored on a device whose clock is ahead', async () => {
+    const wake = jest.spyOn(relayMessageOutbox, 'wake').mockImplementation(() => {});
+    try {
+      const target = buildRumor({
+        kind: 14, created_at: Math.floor(Date.now() / 1000) + 120,
+        tags: [['p', BOB], ['ms', '999']], content: 'Synced from a device with a fast clock',
+      }, ACCOUNT);
+      expect(await dmService.importRumors(ACCOUNT, [target])).toMatchObject({ inserted: 1 });
+      await dmService.deleteMessage(ACCOUNT, target.id, false);
+      const row = mockDatabase!.sqlite.prepare(`SELECT d.rumor, d.order_at FROM relay_outbox_jobs j
+        JOIN message_deletions d ON d.account_pubkey = j.account_pubkey AND d.id = j.message_id
+        WHERE j.account_pubkey = ? ORDER BY j.id DESC LIMIT 1`).get(ACCOUNT);
+      const deletion = JSON.parse(String(row?.rumor)) as Rumor;
+      expect(deletion.tags).toContainEqual(['e', target.id]);
+      expect(messageOrderAt(deletion)).toBe(messageOrderAt(target) + 1);
+      expect(row?.order_at).toBe(messageOrderAt(deletion));
+    } finally {
+      wake.mockRestore();
+    }
+  });
+
+  it('replays only author-owned deletions against existing targets and removes search content', async () => {
+    const author = 'e'.repeat(64);
+    const target = buildRumor({
+      kind: 14, created_at: 900, tags: [['p', ACCOUNT]], content: 'Deletable archive text',
+    }, author);
+    const deletion = (author: string, id: string): Rumor => ({
+      ...rumor(id, author, 901, [['e', target.id], ['k', '14']]),
+      kind: 5,
+    });
+    const valid = deletion(author, '8');
+    expect(await dmService.importRumors(ACCOUNT, [valid])).toMatchObject({ invalid: 1 });
+    expect(await dmService.importRumors(ACCOUNT, [target, deletion(CAROL, '7')]))
+      .toEqual({ inserted: 1, existing: 0, invalid: 1 });
+    const sqlite = mockDatabase!.sqlite;
+    const search = sqlite.prepare('SELECT count(*) AS n FROM message_fts WHERE id = ?');
+    expect(search.get(target.id)?.n).toBe(1);
+    expect(await dmService.importRumors(ACCOUNT, [valid, valid]))
+      .toEqual({ inserted: 1, existing: 1, invalid: 0 });
+    expect(search.get(target.id)?.n).toBe(0);
+    expect(sqlite.prepare('SELECT deleted, content FROM messages WHERE account_pubkey = ? AND id = ?')
+      .get(ACCOUNT, target.id)).toEqual({ deleted: 1, content: target.content });
+    expect(sqlite.prepare('SELECT last_message_id FROM conversations WHERE account_pubkey = ? AND conversation_key = ?')
+      .get(ACCOUNT, author)?.last_message_id).toBeNull();
+  });
+
+  it.each([false, true])('queues the proper group audience with shared deletion = %s', async (forEveryone) => {
+    const wake = jest.spyOn(relayMessageOutbox, 'wake').mockImplementation(() => {});
+    try {
+      const h = forEveryone ? 'delete-for-group' : 'delete-for-self';
+      const target = buildRumor({
+        kind: 14, created_at: 910, tags: [['p', BOB], ['p', CAROL], ['h', h]], content: 'Group history',
+      }, ACCOUNT);
+      expect(await dmService.importRumors(ACCOUNT, [target])).toMatchObject({ inserted: 1 });
+      const sqlite = mockDatabase!.sqlite;
+      sqlite.prepare('UPDATE conversations SET member_pubkeys = ? WHERE account_pubkey = ? AND conversation_key = ?')
+        .run(JSON.stringify([ACCOUNT, BOB, DAVE]), ACCOUNT, groupConversationKey(h));
+      await dmService.deleteMessage(ACCOUNT, target.id, forEveryone);
+      const row = sqlite.prepare(`SELECT d.rumor FROM relay_outbox_jobs j
+        JOIN message_deletions d ON d.account_pubkey = j.account_pubkey AND d.id = j.message_id
+        WHERE j.account_pubkey = ? ORDER BY j.id DESC LIMIT 1`).get(ACCOUNT);
+      const sent = JSON.parse(String(row?.rumor)) as Rumor;
+      expect(sent).toMatchObject({ kind: 5, pubkey: ACCOUNT });
+      expect(sent.tags).toContainEqual(['e', target.id]);
+      expect(sent.tags.filter(([name]) => name === 'p')).toEqual(
+        forEveryone ? [['p', BOB], ['p', CAROL]] : [['p', ACCOUNT]],
+      );
+      expect(wake).toHaveBeenCalledWith(ACCOUNT);
+    } finally {
+      wake.mockRestore();
+    }
+  });
+  it('scopes an entire mixed-author selection to the requesting account', async () => {
+    const wake = jest.spyOn(relayMessageOutbox, 'wake').mockImplementation(() => {});
+    try {
+      const first = buildRumor({
+        kind: 14, created_at: 920, tags: [['p', BOB], ['p', CAROL], ['h', 'batch-delete']], content: 'First selected',
+      }, ACCOUNT);
+      const second = buildRumor({
+        kind: 14, created_at: 921, tags: [['p', CAROL], ['h', 'batch-delete']], content: 'Second selected',
+      }, ACCOUNT);
+      const peer = buildRumor({
+        kind: 14, created_at: 922, tags: [['p', ACCOUNT]], content: 'Peer message',
+      }, CAROL);
+      expect(await dmService.importRumors(ACCOUNT, [first, second, peer])).toMatchObject({ inserted: 3 });
+
+      const sqlite = mockDatabase!.sqlite;
+      const lastJob = sqlite.prepare('SELECT max(id) AS id FROM relay_outbox_jobs').get()?.id;
+      await dmService.deleteMessages(ACCOUNT, [first.id, second.id, peer.id, first.id], true);
+
+      const jobs = sqlite.prepare(`SELECT d.rumor FROM relay_outbox_jobs j
+        JOIN message_deletions d ON d.account_pubkey = j.account_pubkey AND d.id = j.message_id
+        WHERE j.account_pubkey = ? AND j.id > ? ORDER BY j.id`).all(ACCOUNT, lastJob as number);
+      expect(jobs.map((row) => {
+        const deletion = JSON.parse(String(row.rumor)) as Rumor;
+        return deletion.tags.filter(([name]) => name === 'e' || name === 'p');
+      })).toEqual([
+        [['e', first.id], ['p', ACCOUNT]],
+        [['e', second.id], ['p', ACCOUNT]],
+        [['e', peer.id], ['p', ACCOUNT]],
+      ]);
+      const status = sqlite.prepare('SELECT deleted FROM messages WHERE account_pubkey = ? AND id = ?');
+      expect([first, second, peer].map((message) => status.get(ACCOUNT, message.id)?.deleted))
+        .toEqual([1, 1, 1]);
+      expect(wake).toHaveBeenCalledTimes(1);
+    } finally {
+      wake.mockRestore();
+    }
+  });
+  it('replays a self-authored deletion of an incoming message on another device', async () => {
+    const target = buildRumor({
+      kind: 14, created_at: 930, tags: [['p', ACCOUNT]], content: 'Incoming message from history',
+    }, DAVE);
+    const selfDeletion = buildRumor({
+      kind: 5, created_at: 931, tags: [['e', target.id], ['k', '14'], ['p', ACCOUNT]], content: '',
+    }, ACCOUNT);
+
+    expect(await dmService.importRumors(ACCOUNT, [target, selfDeletion]))
+      .toEqual({ inserted: 2, existing: 0, invalid: 0 });
+    expect(mockDatabase!.sqlite.prepare('SELECT deleted FROM messages WHERE account_pubkey = ? AND id = ?')
+      .get(ACCOUNT, target.id)?.deleted).toBe(1);
+  });
+
 });

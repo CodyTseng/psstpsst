@@ -489,6 +489,15 @@
       "unavailable": "미리보기 사용 불가",
       "open_external": "다른 앱에서 열기"
     },
+    "message_delete": {
+      "title": "메시지를 삭제할까요?",
+      "description": "내 채팅 기록에서 이 메시지를 숨깁니다.",
+      "peer": "상대방의 채팅에서도 삭제",
+      "named_peer": "{{name}}님의 채팅에서도 삭제",
+      "group": "그룹 구성원의 채팅에서도 삭제",
+      "deleted": "삭제된 메시지",
+      "failed": "메시지를 삭제할 수 없습니다."
+    },
     "actions": {
       "reply": "답장",
       "copy": "복사",

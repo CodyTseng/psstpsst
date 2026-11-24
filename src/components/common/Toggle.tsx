@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import Animated, {
   interpolate,
@@ -13,7 +14,8 @@ import { radius, uiDensity, useThemeColors } from '@/theme';
 
 type Props = {
   value: boolean;
-  onValueChange: (value: boolean) => void;
+  /** Omit when the parent row owns the switch interaction. */
+  onValueChange?: (value: boolean) => void;
   disabled?: boolean;
   accessibilityLabel?: string;
 };
@@ -57,6 +59,35 @@ export function Toggle({ value, onValueChange, disabled, accessibilityLabel }: P
     ],
   }));
 
+  const track = (
+    <Animated.View
+      style={[
+        {
+          width: TRACK_W,
+          height: TRACK_H,
+          borderRadius: radius.full,
+          padding: PAD,
+          direction: isRTL ? 'rtl' : 'ltr',
+        },
+        trackStyle,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: THUMB,
+            height: THUMB,
+            borderRadius: radius.full,
+            backgroundColor: c.accentForeground,
+          },
+          thumbStyle,
+        ]}
+      />
+    </Animated.View>
+  );
+  const style = { opacity: disabled ? 0.5 : 1 };
+  if (!onValueChange) return <View style={style}>{track}</View>;
+
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -66,32 +97,9 @@ export function Toggle({ value, onValueChange, disabled, accessibilityLabel }: P
       aria-disabled={disabled}
       disabled={disabled}
       onPress={() => onValueChange(!value)}
-      style={{ opacity: disabled ? 0.5 : 1 }}
+      style={style}
     >
-      <Animated.View
-        style={[
-          {
-            width: TRACK_W,
-            height: TRACK_H,
-            borderRadius: radius.full,
-            padding: PAD,
-            direction: isRTL ? 'rtl' : 'ltr',
-          },
-          trackStyle,
-        ]}
-      >
-        <Animated.View
-          style={[
-            {
-              width: THUMB,
-              height: THUMB,
-              borderRadius: radius.full,
-              backgroundColor: c.accentForeground,
-            },
-            thumbStyle,
-          ]}
-        />
-      </Animated.View>
+      {track}
     </Pressable>
   );
 }

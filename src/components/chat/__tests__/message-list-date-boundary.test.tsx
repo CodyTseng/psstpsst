@@ -4,6 +4,7 @@ import { createRef, type ComponentProps } from 'react';
 
 import { MessageList, type MessageListHandle } from '../MessageList';
 import { MessageBubble } from '../MessageBubble';
+import { RemovingMessageRow } from '../RemovingMessageRow';
 import { PendingAttachmentBubble } from '../PendingAttachmentBubble';
 import { DatePill, DateSeparator } from '../message-date-separator';
 import { MessageLayoutViewport } from '../message-row-layout';
@@ -19,6 +20,7 @@ jest.mock('@/platform/timeline-touch-view', () => ({
   getTimelineTouchView: () => mockHasTimelineTouchView ? MockTimelineTouchView : null,
 }));
 const mockClipReaction = jest.fn();
+const mockRemovalCompletion = jest.fn();
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) => callback(...args) }));
 jest.mock('@/lib/platform', () => ({
   ...jest.requireActual('@/lib/platform'),
@@ -28,7 +30,7 @@ jest.mock('@/lib/platform', () => ({
 jest.mock('lucide-react-native/icons/chevron-down', () => () => null);
 jest.mock('lucide-react-native/icons/chevron-up', () => () => null);
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
-jest.mock('@/theme/motion', () => ({ manipulationTiming: { duration: 200 } }));
+jest.mock('@/theme/motion', () => ({ manipulationTiming: { duration: 200 }, messageRemovalTiming: { duration: 150 } }));
 jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: jest.requireActual('react-native').View },
@@ -41,7 +43,10 @@ jest.mock('react-native-reanimated', () => ({
     const { useRef } = jest.requireActual('react');
     return useRef({ value, set(next: unknown) { this.value = next; } }).current;
   },
-  withTiming: (value: unknown) => value,
+  withTiming: (value: unknown, config?: { duration?: number }, complete?: (finished: boolean) => void) => {
+    if (config?.duration === 150 && complete) mockRemovalCompletion(complete);
+    return value;
+  },
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -85,6 +90,7 @@ function visibleScrollButtons(list: ReactTestRenderer) {
 type Props = ComponentProps<typeof MessageList>;
 const createdAt = Math.floor(new Date(2026, 8, 2, 8).getTime() / 1000);
 const message: Props['messages'][number] = {
+  deleted: false,
   accountPubkey: 'self',
   id: 'first-message',
   conversationKey: 'peer',
@@ -156,6 +162,59 @@ describe('MessageList boundaries and reply navigation', () => {
     mockReducedMotion = false;
     mockHasTimelineTouchView = false;
     jest.restoreAllMocks();
+  });
+
+  it.each([false, true])('retains only visible deleted rows when reduced motion is %s', (reducedMotion) => {
+    mockReducedMotion = reducedMotion;
+    const second = { ...message, id: 'second', orderAt: message.orderAt + 1 };
+    const offscreen = { ...message, id: 'offscreen', orderAt: message.orderAt - 1 };
+    const initial = props({ messages: [offscreen, message, second] });
+    act(() => { list = create(<MessageList {...initial} />); });
+    const flatList = () => list.root.findByType(FlatList).props;
+    act(() => {
+      flatList().onViewableItemsChanged({
+        viewableItems: [0, 1].map((index) => ({
+          item: flatList().data[index],
+          key: `m:${flatList().data[index].message.id}`,
+          isViewable: true,
+          index,
+        })),
+      });
+    });
+    const deleted = {
+      ...initial,
+      messages: [],
+      deletedMessageIds: new Set([offscreen.id, message.id, second.id]),
+    };
+
+    act(() => { list.update(<MessageList {...deleted} deferRemovalAnimations />); });
+    expect(flatList().data.length).toBe(reducedMotion ? 0 : 2);
+    if (reducedMotion) return;
+    expect(flatList().data[0].message.id).toBe(second.id);
+    expect(flatList().data[1].message.id).toBe(message.id);
+    expect(flatList().renderItem({ item: flatList().data[0], index: 0 }).props.play).toBe(false);
+
+    act(() => { list.update(<MessageList {...deleted} />); });
+    const firstExit = flatList().renderItem({ item: flatList().data[0], index: 0 });
+    const secondExit = flatList().renderItem({ item: flatList().data[1], index: 1 });
+    expect(firstExit.type).toBe(RemovingMessageRow);
+    expect([firstExit.props.play, secondExit.props.play]).toEqual([true, true]);
+    mockRemovalCompletion.mockClear();
+    act(() => {
+      row = create(<>{firstExit}{secondExit}</>);
+    });
+    const collapsing = row.root.findAllByType(RemovingMessageRow);
+    act(() => {
+      for (const preview of collapsing) {
+        const content = preview.findAllByType(View).find((view) => view.props.onLayout);
+        content!.props.onLayout({ nativeEvent: { layout: { height: 42 } } });
+      }
+    });
+    expect(mockRemovalCompletion).toHaveBeenCalledTimes(2);
+    act(() => {
+      for (const [complete] of mockRemovalCompletion.mock.calls) complete(true);
+    });
+    expect(flatList().data.length).toBe(0);
   });
 
   it('translates the inverted list immediately and only adds history padding once settled', () => {

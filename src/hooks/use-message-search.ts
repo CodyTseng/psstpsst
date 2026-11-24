@@ -133,7 +133,7 @@ async function runSearch(
       FROM message_fts
       JOIN messages ON messages.account_pubkey = message_fts.account_pubkey AND messages.id = message_fts.id
       JOIN conversations ON conversations.account_pubkey = message_fts.account_pubkey AND conversations.conversation_key = message_fts.conversation_key
-      WHERE message_fts MATCH ? AND message_fts.account_pubkey = ? AND conversations.deleted = 0 ${scope} ${keyset}
+      WHERE message_fts MATCH ? AND message_fts.account_pubkey = ? AND conversations.deleted = 0 AND messages.deleted = 0 ${scope} ${keyset}
       ${tail}`;
     const params: (string | number)[] = [ftsPhrase(query), accountPubkey];
     if (conversationKey) params.push(conversationKey);
@@ -157,7 +157,7 @@ async function runSearch(
     FROM message_fts
     JOIN messages ON messages.account_pubkey = message_fts.account_pubkey AND messages.id = message_fts.id
     JOIN conversations ON conversations.account_pubkey = message_fts.account_pubkey AND conversations.conversation_key = message_fts.conversation_key
-    WHERE message_fts.content LIKE ? ESCAPE '\\' AND message_fts.account_pubkey = ? AND conversations.deleted = 0 ${scope} ${keyset}
+    WHERE message_fts.content LIKE ? ESCAPE '\\' AND message_fts.account_pubkey = ? AND conversations.deleted = 0 AND messages.deleted = 0 ${scope} ${keyset}
     ${tail}`;
   const params: (string | number)[] = [likePattern(query), accountPubkey];
   if (conversationKey) params.push(conversationKey);

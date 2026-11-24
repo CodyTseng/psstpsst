@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Reply } from '@solar-icons/react-native/category/arrows-action/Linear/Reply';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
+import Trash2 from 'lucide-react-native/icons/trash-2';
 import { DownloadMinimalistic as Download } from '@solar-icons/react-native/category/arrows-action/Linear/DownloadMinimalistic';
 import { Forward } from '@solar-icons/react-native/category/arrows-action/Linear/Forward';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
@@ -34,6 +35,12 @@ import type { ComposerInsets } from './composer-panel-scheduling';
 
 import { bottomBarHeight, headerHeight, useThemeColors } from '@/theme';
 import { AppScreen } from '@/components/common/AppScreen';
+import { ActionRow } from '@/components/common/ActionRow';
+import { AppText } from '@/components/common/AppText';
+import { BottomSheet } from '@/components/common/BottomSheet';
+import { DeleteForEveryoneRow } from '@/components/chat/DeleteForEveryoneRow';
+import { getPTags } from '@/lib/nostr/tags';
+import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
 import { PhotoCaptureModal } from '@/components/common/PhotoCaptureModal';
 import type { AttachmentSource } from '@/components/chat/AttachmentPanel';
@@ -56,7 +63,7 @@ import {
   ChatComposerPanelProvider,
 } from '@/components/chat/chat-composer-panel-context';
 import { ChatSelectionCancelHandler } from '@/components/chat/chat-selection-cancel-handler';
-import { ForwardActionBar } from '@/components/chat/ForwardActionBar';
+import { SelectionActionBar } from '@/components/chat/SelectionActionBar';
 import { SelectionHeader } from '@/components/chat/SelectionHeader';
 import type { VoicePayload } from '@/components/chat/VoiceRecorderBar';
 import { MessageDetailSheet } from '@/components/chat/MessageDetailSheet';
@@ -126,7 +133,7 @@ import {
   saveLocalAttachment,
   type SaveResult,
 } from '@/services/files/media-save.service';
-import { resolveDisplayName } from '@/lib/nostr/display-name';
+import { resolveDisplayName, resolveName } from '@/lib/nostr/display-name';
 import type { ForwardMessage } from '@/lib/share/forward';
 import { shareContactContent } from '@/lib/share/contact-card';
 import type { ShareTarget } from '@/lib/share/share-target';
@@ -139,7 +146,7 @@ import { conversationSendService } from '@/services/conversation/conversation-se
 import { addContact } from '@/services/contact/contact.service';
 import { unreadCountService } from '@/services/conversation/unread-count.service';
 import { blockUser, getSessionCachedBlockedStatus, unblockUser } from '@/services/dm/block.service';
-import { buildRumor, KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
+import { buildRumor, KIND_CHAT, KIND_FILE } from '@/services/crypto/nip17-gift-wrap';
 import { dmService } from '@/services/dm/dm.service';
 import { nextRumorTimestamp } from '@/services/dm/rumor-clock';
 import { pendingAttachmentSendService, UPLOAD_PREPARING_PERCENT } from '@/services/files/pending-attachment-send.service';
@@ -1003,6 +1010,7 @@ function ChatPageContent({
     presentationsByMessageId,
     bubbleRenderItemsById,
     replyTargetsById: referencedById,
+    deletedMessageIds,
     loadOlder,
     loadNewer,
     hasMore,
@@ -1065,8 +1073,8 @@ function ChatPageContent({
     () =>
       optimistic.length === 0
         ? optimistic
-        : optimistic.filter((row) => !loadedMessageIds.has(row.id)),
-    [optimistic, loadedMessageIds],
+        : optimistic.filter((row) => !loadedMessageIds.has(row.id) && !deletedMessageIds.has(row.id)),
+    [optimistic, loadedMessageIds, deletedMessageIds],
   );
   const displayMessages = useMemo(
     () => (visibleOptimistic.length === 0 ? messages : [...messages, ...visibleOptimistic]),
@@ -1089,10 +1097,10 @@ function ChatPageContent({
   useEffect(() => {
     setOptimistic((prev) => {
       if (prev.length === 0) return prev;
-      const next = prev.filter((row) => !loadedMessageIds.has(row.id));
+      const next = prev.filter((row) => !loadedMessageIds.has(row.id) && !deletedMessageIds.has(row.id));
       return next.length === prev.length ? prev : next;
     });
-  }, [loadedMessageIds]);
+  }, [loadedMessageIds, deletedMessageIds]);
   useEffect(() => {
     setOptimistic([]);
   }, [conversationKey]);
@@ -1161,6 +1169,14 @@ function ChatPageContent({
   // "Info" was tapped: wait for the lifted copy to finish closing before the
   // detail sheet can change focus and move its source message.
   const [pendingDetailId, setPendingDetailId] = useState<string | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<MessageRow | null>(null);
+  const [deletion, setDeletion] = useState<{
+    targets: readonly MessageRow[];
+    fromSelection: boolean;
+  } | null>(null);
+  const [deletionOpen, setDeletionOpen] = useState(false);
+  const [deleteForEveryone, setDeleteForEveryone] = useState(false);
+  const [deletingMessage, setDeletingMessage] = useState(false);
   const [copyingPendingCounts, setCopyingPendingCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
   const [pendingCopyAttachment, setPendingCopyAttachment] = useState<
     { meta: FileAttachmentMeta; senderPubkey?: string } | PendingAttachment | null
@@ -1444,6 +1460,7 @@ function ChatPageContent({
     );
     const optimisticRow: MessageRow = {
       accountPubkey,
+      deleted: false,
       id: optimisticRumor.id!,
       conversationKey,
       senderPubkey: isProximity ? proximitySelfPubkey! : accountPubkey,
@@ -1924,6 +1941,27 @@ function ChatPageContent({
     openForwardPage(picked);
   }
 
+  function canDeleteMessage(message: MessageRow): boolean {
+    return !isProximity && !!accountPubkey && !message.deleted && (message.kind === KIND_CHAT || message.kind === KIND_FILE) &&
+      (!isGroup || parseGroupAction(message.tags).status !== 'valid');
+  }
+
+  function openMessageDeletion(targets: readonly MessageRow[], fromSelection: boolean) {
+    setDeletion({ targets, fromSelection });
+    setDeleteForEveryone(false);
+    setDeletionOpen(true);
+  }
+
+  const selectedMessages = selectionMode && selectedIds.size > 0
+    ? messages.filter((message) => selectedIds.has(message.id))
+    : [];
+  const canDeleteSelection = selectedMessages.length > 0 &&
+    selectedMessages.length === selectedIds.size && selectedMessages.every(canDeleteMessage);
+
+  function deleteSelected() {
+    if (canDeleteSelection) openMessageDeletion(selectedMessages, true);
+  }
+
   /** Send the reaction. Reactions are **not** retractable — an un-react could
    * only delete our local copy, but the kind-7 event stays on the relay so the
    * peer would still see it; a fake local-only retract would mislead. So
@@ -1990,6 +2028,10 @@ function ChatPageContent({
       setPendingPickerAnchor(null);
       setEmojiPickerMounted(true);
       setEmojiPickerOpen(true);
+    }
+    if (pendingDeletion) {
+      setPendingDeletion(null);
+      openMessageDeletion([pendingDeletion], false);
     }
     if (pendingDetailId) {
       const id = pendingDetailId;
@@ -2149,6 +2191,41 @@ function ChatPageContent({
           },
         }]
       : [];
+  const canDeleteForEveryone = !!accountPubkey && !!deletion &&
+    deletion.targets.every((target) => target.senderPubkey === accountPubkey) &&
+    deletion.targets.some((target) => getPTags(target.tags).some((pubkey) => pubkey !== accountPubkey));
+  const deletionCount = deletion?.targets.length ?? 0;
+  const deletionPeerProfile = canDeleteForEveryone && !isGroup
+    ? getSessionCachedProfile(conversationKey) : null;
+  const deletionPeerContact = canDeleteForEveryone && !isGroup && accountPubkey
+    ? getSessionCachedContact(accountPubkey, conversationKey) : null;
+  const deletionPeerName = resolveName({
+    petname: deletionPeerContact?.petname,
+    displayName: deletionPeerProfile?.displayName,
+    name: deletionPeerProfile?.name,
+  });
+
+  async function confirmMessageDeletion() {
+    if (!accountPubkey || !deletion || deletingMessage ||
+      deletion.targets.some((target) => target.accountPubkey !== accountPubkey)) return;
+    setDeletingMessage(true);
+    try {
+      const ids = deletion.targets.map((target) => target.id);
+      const forEveryone = canDeleteForEveryone && deleteForEveryone;
+      if (ids.length === 1) await dmService.deleteMessage(accountPubkey, ids[0], forEveryone);
+      else await dmService.deleteMessages(accountPubkey, ids, forEveryone);
+      if (deletion.fromSelection) {
+        setSelectionMode(false);
+        setSelectedIds(new Set());
+      }
+      setDeletionOpen(false);
+    } catch {
+      showToast(t('chat.message_delete.failed'), { variant: 'error', target: 'detail' });
+    } finally {
+      setDeletingMessage(false);
+    }
+  }
+
   const menuActions: MessageMenuAction[] = pendingMenuTarget
     ? [
         ...attachmentCopyAction,
@@ -2275,6 +2352,18 @@ function ChatPageContent({
               setPendingDetailId(id);
             },
           },
+          ...(canDeleteMessage(menuTarget)
+            ? [{
+                key: 'delete',
+                label: t('common.delete'),
+                destructive: true,
+                icon: <Trash2 size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.danger} />,
+                onPress: () => {
+                  setPendingDeletion(menuTarget);
+                  closeMenu();
+                },
+              }]
+            : []),
         ]
       : [];
 
@@ -2291,7 +2380,9 @@ function ChatPageContent({
     ? {
         senderName: replySenderDisplayName,
         contentPreview:
-          replyingTo.kind === 15
+          deletedMessageIds.has(replyingTo.id)
+            ? t('chat.message_delete.deleted')
+            : replyingTo.kind === 15
             ? attachmentLabel(replyingTo.tags, attachmentLabels)
             : replyingTo.content,
       }
@@ -2327,7 +2418,7 @@ function ChatPageContent({
           sendVoice: handleSendVoice,
           cancelReply: () => setReplyingTo(null),
           focusReply: () => {
-            if (replyingTo) messageListRef.current?.scrollToMessage(replyingTo);
+            if (replyingTo && !deletedMessageIds.has(replyingTo.id)) messageListRef.current?.scrollToMessage(replyingTo);
           },
           openUnsupported: () => setShowUnsupported(true),
         }}
@@ -2373,6 +2464,8 @@ function ChatPageContent({
           bubbleRenderItemsById={bubbleRenderItemsById}
           deliveriesByMessageId={deliveriesForDisplay}
           referencedById={referencedById}
+          deletedMessageIds={deletedMessageIds}
+          deferRemovalAnimations={deletion != null && (deletingMessage || !deletionOpen)}
           onLoadOlder={loadOlder}
           onLoadNewer={loadNewer}
           hasMore={hasMore}
@@ -2415,10 +2508,45 @@ function ChatPageContent({
         <ChatComposerPanelDismissOverlay />
       </View>
       {selectionMode ? (
-        <ForwardActionBar count={selectedIds.size} onForward={forwardSelected} />
+        <SelectionActionBar
+          count={selectedIds.size}
+          onForward={forwardSelected}
+          onDelete={isProximity ? undefined : deleteSelected}
+          deleteDisabled={!canDeleteSelection}
+        />
       ) : null}
       {liveDataReady ? (
         <>
+          {deletion ? (
+            <BottomSheet
+              visible={deletionOpen}
+              onClose={() => { if (!deletingMessage) setDeletionOpen(false); }}
+              onClosed={() => setDeletion(null)}
+              title={t(deletionCount > 1 ? 'common.delete' : 'chat.message_delete.title')}
+              fixedFooter={(
+                <ActionRow
+                  layout="horizontal"
+                  dismiss={{ label: t('common.cancel'), onPress: () => setDeletionOpen(false), disabled: deletingMessage }}
+                  confirm={{ label: t('common.delete'), onPress: () => void confirmMessageDeletion(), destructive: true, loading: deletingMessage }}
+                />
+              )}
+            >
+              <AppText variant="body" tone="muted">
+                {deletionCount > 1
+                  ? t('chat.selected_count', { count: deletionCount })
+                  : t('chat.message_delete.description')}
+              </AppText>
+              {canDeleteForEveryone ? (
+                <DeleteForEveryoneRow
+                  group={isGroup}
+                  peerName={deletionPeerName}
+                  value={deleteForEveryone}
+                  disabled={deletingMessage}
+                  onValueChange={setDeleteForEveryone}
+                />
+              ) : null}
+            </BottomSheet>
+          ) : null}
           {pickedAttachments.length > 0 &&
           (!isProximity || (proximityOwnershipLoaded && !proximityHistoryReadOnly)) ? (
             <AttachmentSendConfirmation

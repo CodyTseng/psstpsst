@@ -489,6 +489,15 @@
       "unavailable": "Önizleme kullanılamıyor",
       "open_external": "Başka uygulamada aç"
     },
+    "message_delete": {
+      "title": "Mesaj silinsin mi?",
+      "description": "Bu mesaj sohbet geçmişinizden gizlenecek.",
+      "peer": "Diğer kişi için de sil",
+      "named_peer": "{{name}} için de sil",
+      "group": "Grup üyeleri için de sil",
+      "deleted": "Mesaj silindi",
+      "failed": "Mesaj silinemedi."
+    },
     "actions": {
       "reply": "Yanıtla",
       "copy": "Kopyala",

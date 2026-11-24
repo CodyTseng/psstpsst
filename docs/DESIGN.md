@@ -79,6 +79,8 @@ media. Frosted chrome must stay opaque enough for clear text.
 - Give immediate press feedback. Use shared motion tokens for short,
   interruptible state transitions. Keep gesture-driven animation on the UI
   thread. With Reduce Motion, remove displacement while preserving clarity.
+- Fade and collapse deleted messages that are visible in the timeline. With
+  Reduce Motion enabled, remove them immediately.
 - Reuse pressed feedback for pointer hover. Framed surfaces composite one
   shared interaction overlay over the resting fill and clip it to the outer
   contour. Edge-to-edge rows use full-width rectangular feedback. Use opacity
@@ -141,6 +143,10 @@ loading so actions and metadata stay accessible.
   Host overlays cover embedded apps and retain input ownership through
   dismissal. Keep closing sheets and their content stable until dismissal
   finishes. Toasts appear above active overlays.
+- On touch, place the message action panel and quick reactions in separate
+  bounds. Keep the message preview aligned to the original bubble. Try both
+  sides and use the optional top gutter before clipping the preview. Scroll
+  the action panel when the full menu exceeds the safe viewport.
 - Focused search preserves field geometry and keeps the resting content
   visible until there is a non-blank query.
 - Focus pushed inputs with `useFocusAfterTransition`. Use presentation-aware

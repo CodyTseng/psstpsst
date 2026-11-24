@@ -164,6 +164,7 @@ export function useConversationMedia(
         and(
           eq(messages.accountPubkey, messageMedia.accountPubkey),
           eq(messages.id, messageMedia.messageId),
+          eq(messages.deleted, false),
         ),
       );
 

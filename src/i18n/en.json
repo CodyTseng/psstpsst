@@ -489,6 +489,15 @@
       "unavailable": "Preview unavailable",
       "open_external": "Open in another app"
     },
+    "message_delete": {
+      "title": "Delete message?",
+      "description": "This removes the message from your chat history.",
+      "peer": "Also delete for the other person",
+      "named_peer": "Also delete for {{name}}",
+      "group": "Also delete for group members",
+      "deleted": "Message deleted",
+      "failed": "Could not delete the message."
+    },
     "actions": {
       "reply": "Reply",
       "copy": "Copy",

@@ -106,6 +106,7 @@ function decodeRow(row: RawMessageRow): MessageRow {
     senderPubkey: row.sender_pubkey,
     kind: row.kind,
     content: row.content,
+    deleted: false,
     createdAt: row.created_at,
     orderAt: row.order_at,
     replyToId: row.reply_to_id,
@@ -294,6 +295,20 @@ export function invalidateWarmedMessageTail(
   cache.delete(key);
 }
 
+type MessageDeletionListener = (accountPubkey: string, conversationKey: string, messageId: string) => void;
+
+const deletionListeners = new Set<MessageDeletionListener>();
+
+export function subscribeToMessageDeletions(listener: MessageDeletionListener): () => void {
+  deletionListeners.add(listener);
+  return () => deletionListeners.delete(listener);
+}
+
+export function emitMessageDeletion(accountPubkey: string, conversationKey: string, messageId: string): void {
+  invalidateWarmedMessageTail(accountPubkey, conversationKey);
+  for (const listener of deletionListeners) listener(accountPubkey, conversationKey, messageId);
+}
+
 /** Independent extension writes invalidate only the bounded warm windows. */
 export function invalidateAllWarmedMessageTails(): void {
   for (const key of new Set([...cache.keys(), ...inFlight.keys()])) advanceGeneration(key);
@@ -320,7 +335,7 @@ export async function warmMessageTail(
                 created_at, order_at, reply_to_id, subject, tags, rumor,
                 delivery_status, source_relays
            FROM messages
-          WHERE account_pubkey = ? AND conversation_key = ? AND kind IN (14, 15, 7)
+          WHERE account_pubkey = ? AND conversation_key = ? AND kind IN (14, 15, 7) AND deleted = 0
           ORDER BY order_at DESC, id ASC
           LIMIT ?`,
         [accountPubkey, conversationKey, MESSAGES_PAGE_SIZE],

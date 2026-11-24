@@ -30,7 +30,7 @@ export type ChatArchiveManifest = {
   createdAt: string;
   accountPubkey: string;
   counts: {
-    /** Relay messages stored in the root `messages.ndjson`. */
+    /** Relay message and deletion rumors stored in the root `messages.ndjson`. */
     messages: number;
     proximityMessages: number;
     proximityIdentities: number;

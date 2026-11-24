@@ -489,6 +489,15 @@
       "unavailable": "Vorschau nicht verfügbar",
       "open_external": "In anderer App öffnen"
     },
+    "message_delete": {
+      "title": "Nachricht löschen?",
+      "description": "Die Nachricht wird in deinem Chatverlauf ausgeblendet.",
+      "peer": "Auch für die andere Person löschen",
+      "named_peer": "Auch für {{name}} löschen",
+      "group": "Auch für Gruppenmitglieder löschen",
+      "deleted": "Nachricht gelöscht",
+      "failed": "Die Nachricht konnte nicht gelöscht werden."
+    },
     "actions": {
       "reply": "Antworten",
       "copy": "Kopieren",

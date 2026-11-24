@@ -44,6 +44,9 @@ Every manual retry creates a fresh gift wrap. Whole-message resend works for any
 own stored rumor, including messages received from another device with no local
 delivery records. It resolves current relay metadata for the rumor's original
 recipients, including self; it never creates a new timeline entry.
+Fresh wraps still follow the [envelope timestamp rule](../protocols/nip17-extensions.md#split-key-envelope).
+A sufficiently old resend can therefore have a wrap timestamp outside a
+recipient's recent-history query window.
 
 The UI reads the coarse status from `messages` and reads compact recipient copies
 only while message details are open. Detail rows remain in recipient-pubkey
@@ -52,3 +55,28 @@ The UI never derives display
 state from queue rows. Whole-message failures before copy materialization live
 on the message; pre-relay failures live on the copy; relay failure strings live
 with the corresponding relay result.
+
+## Message deletion and chat archives
+
+Local deletion commits the visibility flag, the kind `5` rumor, and the
+outbox job in one transaction. A multi-selection commits all eligible targets
+together and queues one kind `5` rumor per message, with each message’s original
+recipient set for shared deletion. A selection containing a received message
+is scoped to the requesting account. Receive and archive replay both use the
+[author validation rule](../protocols/nip17-extensions.md#message-deletion).
+Authenticated relay requests can arrive before the target. When the original
+is accepted for storage, its insert transaction resolves matching pending
+requests. A target hidden on arrival skips timeline and notification updates.
+The database retains the original rumor for history export and reply
+resolution. Timeline reads exclude deleted rows using the existing chronology
+index. FTS excludes their searchable text.
+
+The Relay stream in a version 2 chat archive merges stored message and
+validated deletion rumors in ascending message time, with descending ID for
+equal times. Each record remains a single unsigned rumor. Locally authored
+deletions use a timestamp at least one millisecond later than the target so
+they replay after it, including when another device's clock was ahead. The
+importer derives the local visibility flag when it encounters a deletion whose
+target is already present, and discards archive requests with missing targets.
+Older importers may store the deletion as an ordinary rumor and restore the
+original message as visible.

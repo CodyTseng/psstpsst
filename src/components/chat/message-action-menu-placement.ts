@@ -78,6 +78,10 @@ type TouchPlacementInput = {
   safeBottom: number;
   pillHeight: number;
   menuHeight: number;
+  /** The system inset. The menu can use the space between this and safeTop
+   * when it would otherwise clip the preview. */
+  menuTopInset?: number;
+  compactGap?: number;
   showPill: boolean;
   gap: number;
 };
@@ -99,8 +103,10 @@ export function placeTouchMessageActionMenu({
   safeBottom,
   pillHeight,
   menuHeight,
+  menuTopInset = safeTop,
   showPill,
   gap,
+  compactGap = gap,
 }: TouchPlacementInput): TouchMessageMenuPlacement {
   const clipTop = Math.max(safeTop, contentTop);
   const clipBottom = Math.min(safeBottom, contentBottom);
@@ -115,8 +121,8 @@ export function placeTouchMessageActionMenu({
   // source rect only to anchor the pill/menu. The copy itself stays collapsed at
   // the occlusion edge, so a stale measurement can never paint it over chrome.
   if (!sourceIntersectsViewport) {
-    placementBubbleTop = Math.max(safeTop, bubbleTop);
-    placementBubbleBottom = Math.min(safeBottom, bubbleBottom);
+    placementBubbleTop = clamp(bubbleTop, safeTop, safeBottom);
+    placementBubbleBottom = clamp(bubbleBottom, safeTop, safeBottom);
     const occlusionEdge = bubbleBottom <= clipTop ? clipTop : clipBottom;
     bubbleVisibleTop = occlusionEdge;
     bubbleVisibleBottom = occlusionEdge;
@@ -126,6 +132,7 @@ export function placeTouchMessageActionMenu({
   const needMenu = menuHeight + gap;
   const roomAbove = placementBubbleTop - safeTop;
   const roomBelow = safeBottom - placementBubbleBottom;
+  const upperMenuGap = Math.min(gap, placementBubbleTop - menuTopInset - menuHeight);
 
   let visibleTop = bubbleVisibleTop;
   let visibleBottom = bubbleVisibleBottom;
@@ -142,18 +149,31 @@ export function placeTouchMessageActionMenu({
     pillTop = placementBubbleBottom + gap;
     menuTop = pillTop + needPill;
   } else if (roomAbove >= needMenu && roomBelow >= needPill) {
-    // Splitting the surfaces across opposite sides can fit even when the full
-    // stack cannot. Try this before cutting into the visible message.
     menuTop = placementBubbleTop - needMenu;
     pillTop = placementBubbleBottom + gap;
-  } else if (!sourceIntersectsViewport) {
-    pillTop = Math.max(safeTop, placementBubbleTop - needPill);
-    menuTop = Math.min(safeBottom - menuHeight, placementBubbleBottom + gap);
+  } else if (sourceIntersectsViewport && roomBelow >= needPill && upperMenuGap >= compactGap) {
+    // Spend the optional edge and gap space before covering the source.
+    menuTop = placementBubbleTop - menuHeight - upperMenuGap;
+    pillTop = placementBubbleBottom + gap;
   } else {
-    visibleTop = Math.max(bubbleVisibleTop, safeTop + needPill);
-    visibleBottom = Math.min(bubbleVisibleBottom, safeBottom - needMenu);
-    pillTop = visibleTop - needPill;
-    menuTop = visibleBottom + gap;
+    // Reserve the full controls and clip only the stationary preview.
+    const clippedTop = Math.max(bubbleVisibleTop, safeTop + needPill);
+    const clippedBottom = Math.min(bubbleVisibleBottom, safeBottom - needMenu);
+    if (sourceIntersectsViewport && clippedBottom > clippedTop) {
+      visibleTop = clippedTop;
+      visibleBottom = clippedBottom;
+      pillTop = visibleTop - needPill;
+      menuTop = visibleBottom + gap;
+    } else {
+      const clusterTop = clamp(
+        placementBubbleTop - needPill,
+        safeTop,
+        safeBottom - needPill - menuHeight,
+      );
+      pillTop = clusterTop;
+      menuTop = clusterTop + needPill;
+      visibleBottom = visibleTop;
+    }
   }
 
   return { visibleTop, visibleBottom, pillTop, menuTop };

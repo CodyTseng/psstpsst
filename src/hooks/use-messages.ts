@@ -24,6 +24,7 @@ import {
   getWarmedMessageTailPresentation,
   invalidateWarmedMessageTail,
   replaceWarmedMessageTail,
+  subscribeToMessageDeletions,
   type PreparedBubbleRenderItem,
   type PreparedMessageTail,
 } from '@/services/conversation/message-tail-cache';
@@ -32,6 +33,7 @@ import {
   type ReactionAggregate,
 } from '@/lib/nostr/reactions';
 import type { PreparedMessagePresentation } from '@/lib/chat/message-presentation';
+import { platform } from '@/platform';
 import { isMessageOrderNewer } from '@/lib/nostr/message-order';
 
 /** How many message/reaction rows to load per page. The newest page shows first;
@@ -67,6 +69,7 @@ type AnchorWindow = {
 };
 
 const KINDS = [14, 15, 7];
+const EMPTY_DELETED_IDS: ReadonlySet<string> = new Set();
 const EMPTY_MESSAGE_ROWS: MessageRow[] = [];
 const EMPTY_PRESENTATIONS: Record<string, PreparedMessagePresentation> = {};
 const EMPTY_RENDER_ITEMS: Record<string, PreparedBubbleRenderItem> = {};
@@ -124,6 +127,7 @@ export type PaginatedMessages = {
   /** Reply targets outside the retained window, fetched once with their source
    * page rather than reactively from FlatList viewability changes. */
   replyTargetsById: Record<string, MessageRow>;
+  deletedMessageIds: ReadonlySet<string>;
   /** Expose one more page of OLDER messages. */
   loadOlder: () => void;
   /** Grow the window by one page of NEWER messages (anchored mode only). */
@@ -221,6 +225,12 @@ export function useMessages(
     [sessionKey],
   );
   const [, bumpReplyTargetVersion] = useState(0);
+  const [observedDeletions, setObservedDeletions] = useState(EMPTY_DELETED_IDS);
+  useEffect(() => subscribeToMessageDeletions((account, conversation, id) => {
+    if (account === accountPubkey && conversation === conversationKey) {
+      setObservedDeletions((ids) => ids.has(id) ? ids : new Set([...ids, id]));
+    }
+  }), [accountPubkey, conversationKey]);
 
   // A new conversation resets to the first tail page. Done during render (the
   // React-recommended "adjust state when a prop changes" pattern) rather than in
@@ -229,6 +239,7 @@ export function useMessages(
   const [previousSessionKey, setPreviousSessionKey] = useState(sessionKey);
   if (previousSessionKey !== sessionKey) {
     setPreviousSessionKey(sessionKey);
+    setObservedDeletions(EMPTY_DELETED_IDS);
     setAnchor(null);
     setTailHistory([]);
     setTailOlderPrefetch([]);
@@ -245,6 +256,7 @@ export function useMessages(
         eq(messages.accountPubkey, accountPubkey),
         eq(messages.conversationKey, conversationKey),
         inArray(messages.kind, KINDS),
+        eq(messages.deleted, false),
       ),
     [accountPubkey, conversationKey],
   );
@@ -254,6 +266,7 @@ export function useMessages(
         eq(messages.accountPubkey, accountPubkey),
         eq(messages.conversationKey, conversationKey),
         inArray(messages.kind, [14, 15]),
+        eq(messages.deleted, false),
       ),
     [accountPubkey, conversationKey],
   );
@@ -588,7 +601,7 @@ export function useMessages(
     const exposedIds = new Set(tailLoadedNewestFirst.map((row) => row.id));
     const rowsToExpose: MessageRow[] = [];
     if (previous.length > 0) {
-      const shiftedOut = previous.filter((row) => !currentTailIds.has(row.id));
+      const shiftedOut = previous.filter((row) => !currentTailIds.has(row.id) && !observedDeletions.has(row.id));
       if (shiftedOut.length > 0) {
         rowsToExpose.push(...shiftedOut);
         for (const row of shiftedOut) exposedIds.add(row.id);
@@ -660,6 +673,7 @@ export function useMessages(
       setTailHasMore(tail.data.length > MESSAGE_HISTORY_FETCH_SIZE);
     });
   }, [
+    observedDeletions,
     anchor,
     base,
     hydrateReplyTargets,
@@ -748,13 +762,62 @@ export function useMessages(
     [],
   );
 
-  const ascending = useMemo(
+  const retainedAscending = useMemo(
     () => !anchor
       ? tailWindow.prepared?.rowsNewestFirst === tailRows && tailHistory.length === 0
         ? tailWindow.prepared.rowsAscending
         : [...tailNewestFirst].reverse()
       : [...olderRows].reverse().concat(newerRows),
     [anchor, tailHistory.length, tailNewestFirst, tailRows, tailWindow.prepared, olderRows, newerRows],
+  );
+  const retainedForDeletionCheck = useRef({
+    tailRows, tailHistory, tailOlderPrefetch, anchorWindows,
+  });
+  useLayoutEffect(() => {
+    retainedForDeletionCheck.current = { tailRows, tailHistory, tailOlderPrefetch, anchorWindows };
+  }, [tailRows, tailHistory, tailOlderPrefetch, anchorWindows]);
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = platform.database.addChangeListener(({ external, tableName }) => {
+      if (!external || (tableName && tableName !== 'message_deletions' && tableName !== 'messages')) return;
+      // The notification extension runs in a different JS runtime, so it can
+      // only signal a database change. Check retained IDs, not the full thread.
+      const retained = retainedForDeletionCheck.current;
+      const retainedIds = new Set(Object.keys(replyTargetCache.values()));
+      const pages = [retained.tailRows, retained.tailHistory, retained.tailOlderPrefetch];
+      for (const window of retained.anchorWindows.values()) {
+        pages.push(window.olderRows, window.newerRows, window.olderPrefetch, window.newerPrefetch);
+      }
+      for (const page of pages) for (const row of page) retainedIds.add(row.id);
+      const ids = [...retainedIds];
+      void (async () => {
+        const deletedIds: string[] = [];
+        for (let offset = 0; offset < ids.length && active; offset += 250) {
+          const rows = await db.select({ id: messages.id }).from(messages).where(and(
+            eq(messages.accountPubkey, accountPubkey),
+            eq(messages.deleted, true),
+            inArray(messages.id, ids.slice(offset, offset + 250)),
+          ));
+          deletedIds.push(...rows.map((row) => row.id));
+        }
+        if (active && deletedIds.length) {
+          setObservedDeletions((previous) => deletedIds.every((id) => previous.has(id))
+            ? previous
+            : new Set([...previous, ...deletedIds]));
+        }
+      })().catch(() => {});
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [accountPubkey, replyTargetCache]);
+
+  const ascending = useMemo(
+    () => observedDeletions.size
+      ? retainedAscending.filter((row) => !observedDeletions.has(row.id))
+      : retainedAscending,
+    [observedDeletions, retainedAscending],
   );
   const bubbleMessages = useMemo(
     () => !anchor && tailWindow.prepared?.rowsAscending === ascending
@@ -1114,6 +1177,7 @@ export function useMessages(
     presentationsByMessageId,
     bubbleRenderItemsById,
     replyTargetsById: replyTargetCache.values(),
+    deletedMessageIds: observedDeletions,
     loadOlder,
     loadNewer,
     hasMore,

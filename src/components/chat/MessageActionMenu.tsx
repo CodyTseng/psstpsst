@@ -261,8 +261,7 @@ export function MessageActionMenu({
   }
 
   // One progress value drives every part: backdrop blur fades in, the lifted
-  // bubble eases up, and the pill/menu pop in (scaled, drifting off the bubble)
-  // slightly staggered behind it. Native-driver friendly (opacity + transform).
+  // The preview stays in its allocated position while the controls fade and scale in.
   const progress = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -357,7 +356,7 @@ export function MessageActionMenu({
     onPress: action.onPress,
   }));
   const isSelf = vBubble.isSelf;
-  const showReactionPill = !hideReactions && vBubble.renderBody == null;
+  const wantsReactionPill = !hideReactions && vBubble.renderBody == null;
 
   const menuMetrics = ACTION_MENU_METRICS[MENU_DENSITY];
   const menuH = actionMenuHeight(menuItems, MENU_DENSITY);
@@ -366,16 +365,21 @@ export function MessageActionMenu({
   const safeLeft = insets.left + MARGIN;
   const safeRight = W - insets.right - MARGIN;
 
+  const safeHeight = Math.max(0, safeBottom - safeTop);
+  const menuChromeHeight = (StyleSheet.hairlineWidth + menuMetrics.menuPaddingV) * 2;
   const bubbleTop = vRect.y;
   const bubbleBottom = vRect.y + vRect.height;
+  const menuMinimumHeight = menuMetrics.rowHeight + menuChromeHeight;
+  const showReactionPill = wantsReactionPill && (IS_ELECTRON ||
+    safeHeight >= PILL_H + GAP + menuMinimumHeight);
+  const touchMenuHeight = Math.min(menuH, safeHeight - (showReactionPill ? PILL_H + GAP : 0));
   const copyStart = isRTL ? W - vRect.x - vRect.width : vRect.x;
   const bodyStart = isRTL
     ? vRect.x + vRect.width - vBodyRect.x - vBodyRect.width
     : vBodyRect.x - vRect.x;
 
-  // The copy is NEVER moved — only clipped. `visibleTop`/`visibleBottom` are the
-  // slice that's painted; the pill/menu take a side and the copy is clipped
-  // further only when the gutters can't fit them.
+  // Keep the preview aligned to the source and give the controls priority
+  // when the gutters cannot fit them around the full preview.
   const touchPlacement = placeTouchMessageActionMenu({
     bubbleTop,
     bubbleBottom,
@@ -384,18 +388,20 @@ export function MessageActionMenu({
     safeTop,
     safeBottom,
     pillHeight: PILL_H,
-    menuHeight: menuH,
+    menuHeight: touchMenuHeight,
+    menuTopInset: insets.top,
+    compactGap: spacing.xs / 2,
     showPill: showReactionPill,
     gap: GAP,
   });
-  let { visibleTop, visibleBottom, pillTop, menuTop } = touchPlacement;
+  const { visibleTop, visibleBottom } = touchPlacement;
+  const menuHeight = IS_ELECTRON ? menuH : touchMenuHeight;
+  let { pillTop, menuTop } = touchPlacement;
 
-  // The painted slice + the offset that keeps the copy at its real position, and
-  // the cut flags — an edge is faded when the bubble continues past the slice
-  // (under the header/input, or clipped for pill/menu room).
+  // Compare the painted slice with the original source and body frames.
   const copyTop = visibleTop;
   const copyH = Math.max(0, visibleBottom - visibleTop);
-  const copyOffset = vRect.y - visibleTop; // ≤ 0 when the top is cut
+  const copyOffset = bubbleTop - visibleTop;
   const fadeTop = bubbleTop < visibleTop;
   const fadeBottom = bubbleBottom > visibleBottom;
   const bodyFadeTop = vBodyRect.y < visibleTop;
@@ -459,8 +465,7 @@ export function MessageActionMenu({
     hoverRectsRef.current = rects;
   }
 
-  // The pill/menu pop in (0.2→1), drifting away from the message toward
-  // whichever side has room.
+  // Scale each control within its allocated frame during entry and exit.
   const popOpacity = progress.interpolate({
     inputRange: [0.2, 1],
     outputRange: [0, 1],
@@ -471,17 +476,6 @@ export function MessageActionMenu({
     outputRange: [0.8, 1],
     extrapolate: 'clamp',
   });
-  const pillShift = progress.interpolate({
-    inputRange: [0.2, 1],
-    outputRange: [pillTop < visibleTop ? MARGIN : -MARGIN, 0],
-    extrapolate: 'clamp',
-  });
-  const menuShift = progress.interpolate({
-    inputRange: [0.2, 1],
-    outputRange: [menuTop < visibleTop ? MARGIN : -MARGIN, 0],
-    extrapolate: 'clamp',
-  });
-
   function renderLiftedMessage() {
     if (vBubble.renderBody) return vBubble.renderBody;
     return (
@@ -599,7 +593,7 @@ export function MessageActionMenu({
               opacity: IS_ELECTRON ? 1 : popOpacity,
               transform: IS_ELECTRON
                 ? undefined
-                : [{ translateY: pillShift }, { scale: popScale }],
+                : [{ scale: popScale }],
               ...shadow.float,
             }}
           >
@@ -637,13 +631,9 @@ export function MessageActionMenu({
           </Animated.View>
         ) : null}
 
-        {/* Lifted bubble — static and opaque, sitting *exactly* over the real
-            bubble (it never moves), so the two are pixel-aligned and never read
-            as a duplicate. Non-interactive, so a tap on it dismisses. When it's
-            too tall to fit, it stays put but is clipped to the window the pill /
-            menu leave and its cut edge(s) dissolve into the blurred backdrop — a
-            hard cut would read as a weird truncated whole bubble. */}
-        {!IS_ELECTRON ? (
+        {/* The preview is non-interactive. A tall, clipped preview fades at
+            the cut edges while the panel and reactions stay fully usable. */}
+        {!IS_ELECTRON && copyH > 0 ? (
           clipped ? (
             <View
               style={{
@@ -678,8 +668,7 @@ export function MessageActionMenu({
                   </Svg>
                 }
               >
-                {/* Offset so the copy paints at the real bubble's position; the
-                    mask clips the part outside the window. */}
+                {/* Keep the full copy aligned with the visible slice. */}
                 <View style={{ marginTop: copyOffset }}>
                   {renderLiftedMessage()}
                 </View>
@@ -709,10 +698,14 @@ export function MessageActionMenu({
             opacity: IS_ELECTRON ? 1 : popOpacity,
             transform: IS_ELECTRON
               ? undefined
-              : [{ translateY: menuShift }, { scale: popScale }],
+              : [{ scale: popScale }],
           }}
         >
-          <ActionMenuPanel density={MENU_DENSITY} items={menuItems} />
+          <ActionMenuPanel
+            density={MENU_DENSITY}
+            items={menuItems}
+            scrollableHeight={menuHeight < menuH ? Math.max(0, menuHeight - menuChromeHeight) : undefined}
+          />
         </Animated.View>
       </View>
     </>
