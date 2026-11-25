@@ -1,3 +1,4 @@
+import type { SharedValue } from 'react-native-reanimated';
 import { DangerCircle as CircleAlert } from '@solar-icons/react-native/category/ui/Linear/DangerCircle';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,7 @@ import { bottomBarHeight, useThemeColors } from '@/theme';
 
 type Props = {
   aboveInput?: ReactNode;
+  composerOcclusionExtra?: SharedValue<number>;
   status: 'checking' | 'unsupported' | 'proximity_identity_changed' | 'group_read_only';
   /** Open the reason sheet. Only meaningful for `unsupported`. */
   onPressDetails: () => void;
@@ -22,12 +24,13 @@ type Props = {
 
 type FrameProps = {
   aboveInput?: ReactNode;
+  composerOcclusionExtra?: SharedValue<number>;
   children?: ReactNode;
   onPress?: () => void;
 };
 
 /** Stable composer chrome used by every support-gate state. */
-function ChatComposerFrame({ children, aboveInput, onPress }: FrameProps) {
+function ChatComposerFrame({ children, aboveInput, composerOcclusionExtra, onPress }: FrameProps) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const [feedbackHeight, setFeedbackHeight] = useState(0);
@@ -49,6 +52,7 @@ function ChatComposerFrame({ children, aboveInput, onPress }: FrameProps) {
         <ChromeBackdrop scrollbarOcclusion="bottom" />
       </View>
       <ChatComposerFeedbackSlot
+        occlusion={composerOcclusionExtra}
         height={feedbackHeight}
         onHeightChange={(height) => setFeedbackHeight((current) => Math.max(current, height))}
       >{aboveInput}</ChatComposerFeedbackSlot>
@@ -84,13 +88,14 @@ function ChatComposerFrame({ children, aboveInput, onPress }: FrameProps) {
  * border) over a safe-area panel — so the bottom of the screen doesn't shift
  * when the gate is swapped for the real composer after the DM-support check.
  */
-export function ChatComposerGate({ status, aboveInput, onPressDetails }: Props) {
+export function ChatComposerGate({ status, aboveInput, composerOcclusionExtra, onPressDetails }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
 
   return (
     <ChatComposerFrame
       aboveInput={aboveInput}
+      composerOcclusionExtra={composerOcclusionExtra}
       onPress={status === 'unsupported' ? onPressDetails : undefined}
     >
       {status === 'checking' ? (

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 
 import type { Rumor } from './types';
@@ -18,6 +19,8 @@ export const messages = sqliteTable(
     kind: integer('kind').notNull(),
     content: text('content').notNull(),
     deleted: integer('deleted', { mode: 'boolean' }).notNull().default(false),
+    disappearAfterSeconds: integer('disappear_after_seconds'),
+    expiresAt: integer('expires_at'),
     createdAt: integer('created_at').notNull(),
     /** Normalized authenticated `ms` tag, or the legacy second floor. Equal
      * values use the smaller event ID as the newer message. */
@@ -45,6 +48,7 @@ export const messages = sqliteTable(
   },
   (t) => [
     primaryKey({ columns: [t.accountPubkey, t.id] }),
+    index('idx_msg_expiry').on(t.accountPubkey, t.expiresAt).where(sql`${t.expiresAt} IS NOT NULL`),
     index('idx_msg_conv_time').on(t.accountPubkey, t.conversationKey, t.orderAt, t.id),
   ],
 );

@@ -3512,6 +3512,8 @@ class ProximityService {
       // of invalidating it and queueing a full window re-read.
       mergeStoredMessageIntoTail(accountPubkey, {
         deleted: false,
+        disappearAfterSeconds: null,
+        expiresAt: null,
         accountPubkey,
         id: rumor.id!,
         conversationKey: peerPubkey,

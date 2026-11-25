@@ -465,6 +465,17 @@
     "yesterday": "Ayer"
   },
   "chat": {
+    "disappearing": {
+      "title": "Mensajes temporales",
+      "off": "Desactivados",
+      "duration_30": "30 segundos",
+      "duration_300": "5 minutos",
+      "duration_3600": "1 hora",
+      "duration_86400": "24 horas",
+      "duration_604800": "7 días",
+      "hint": "Se aplica a los mensajes de texto nuevos que envíes desde este dispositivo. Tu temporizador empieza al enviar el mensaje. El de la otra persona empieza cuando lo ve.",
+      "save_failed": "No se pudo guardar el temporizador. Inténtalo de nuevo."
+    },
     "input_placeholder": "Escribe un mensaje",
     "add_to_contacts": "Añadir a contactos",
     "block": "Bloquear",

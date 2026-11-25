@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { EmojiPickerSheet } from '../EmojiPickerSheet';
+import { overlayPresentation } from '@/services/presentation/overlays';
 
 const mockPush = jest.fn();
 
@@ -20,13 +21,15 @@ jest.mock('react-native-keyboard-controller', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => {
+  const { useRef } = jest.requireActual('react') as typeof import('react');
   const { FlatList, View } = jest.requireActual('react-native') as typeof import('react-native');
   const timing = (
     value: number,
     _config?: unknown,
     completion?: (finished: boolean) => void,
   ) => {
-    completion?.(true);
+    if (value === 0) completion?.(true);
+    else if (completion) setTimeout(() => completion(true), 16);
     return value;
   };
   return {
@@ -44,7 +47,7 @@ jest.mock('react-native-reanimated', () => {
     runOnJS: (callback: (...args: unknown[]) => unknown) => callback,
     useAnimatedScrollHandler: () => jest.fn(),
     useAnimatedStyle: (factory: () => unknown) => factory(),
-    useSharedValue: (value: number) => ({ value }),
+    useSharedValue: (value: number) => useRef({ value }).current,
     withSpring: timing,
     withTiming: timing,
   };
@@ -161,16 +164,19 @@ describe('EmojiPickerSheet close navigation', () => {
       jest.runOnlyPendingTimers();
     });
 
+    expect(overlayPresentation.getSnapshot()).toBe(true);
     const packsTab = renderer!.root.findByProps({ accessibilityLabel: 'emoji.my_packs' });
     act(() => {
       packsTab.props.onPress();
     });
     expect(mockPush).not.toHaveBeenCalled();
+    expect(overlayPresentation.getSnapshot()).toBe(true);
     act(() => {
       jest.runAllTimers();
     });
 
     expect(mockPush).toHaveBeenCalledWith('/emoji-packs');
     expect(renderer!.toJSON()).toBeNull();
+    expect(overlayPresentation.getSnapshot()).toBe(false);
   });
 });

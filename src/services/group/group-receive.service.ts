@@ -141,7 +141,7 @@ async function insertGroupMessage(
   hiddenIds?: Set<string>,
 ): Promise<boolean> {
   const subject = parseGroupSubject(rumor.tags);
-  const deleted = await resolvePendingMessageDeletions(tx, accountPubkey, rumor, true);
+  const deleted = (await resolvePendingMessageDeletions(tx, accountPubkey, rumor, true)) !== null;
   const inserted = await tx
     .insert(messages)
     .values({

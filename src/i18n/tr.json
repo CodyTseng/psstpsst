@@ -462,6 +462,17 @@
     "yesterday": "Dün"
   },
   "chat": {
+    "disappearing": {
+      "title": "Kaybolan mesajlar",
+      "off": "Kapalı",
+      "duration_30": "30 saniye",
+      "duration_300": "5 dakika",
+      "duration_3600": "1 saat",
+      "duration_86400": "24 saat",
+      "duration_604800": "7 gün",
+      "hint": "Bu cihazdan gönderdiğin yeni metin mesajları için geçerlidir. Senin süren gönderdiğinde, karşı tarafın süresi mesajı gördüğünde başlar.",
+      "save_failed": "Süre kaydedilemedi. Tekrar dene."
+    },
     "input_placeholder": "Bir mesaj yaz",
     "add_to_contacts": "Kişilere ekle",
     "block": "Engelle",

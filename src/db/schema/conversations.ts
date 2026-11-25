@@ -28,6 +28,8 @@ export const conversations = sqliteTable(
     deletedAt: integer('deleted_at'),
     deletedOrderAt: integer('deleted_order_at'),
     muted: integer('muted', { mode: 'boolean' }).notNull().default(false),
+    /** Device-local default for newly authored direct Relay text. */
+    disappearAfterSeconds: integer('disappear_after_seconds'),
     /** "Pinned" — pins the conversation to the top of the inbox (and floats the
      * row off the page with a surface fill). Distinct from `muted` (which
      * de-emphasises). */

@@ -14,6 +14,7 @@ announcement and synchronization are specified separately in the
 | kind `13` seal | `n` tag | Identify the sender's encryption key |
 | kind `1059` gift wrap | identity-key `p` tag | Route a split-key envelope |
 | message rumor | `ms` tag | Add the millisecond component of creation time |
+| direct text rumor | `disappear-after` tag | Set a local lifetime on each side |
 | group rumor | `h` tag | Keep one group identity across membership changes |
 | group rumor | `action` tag | Express creation, membership changes, and renaming |
 
@@ -275,3 +276,36 @@ encryption. PsstPsst no longer queries or subscribes to the old `kind 30078`,
 Clients that ignore `h` and `action` can still decrypt ordinary NIP-17 content,
 but may split one stable group into multiple rooms when its `p` tags change and
 may display empty action rumors as messages.
+
+## Disappearing direct messages
+
+A non-empty kind `14` rumor addressed to one other account may carry a timer
+inside its encrypted tags:
+
+```text
+["disappear-after", "<seconds>"]
+```
+
+Use the first tag. The value is a decimal integer from 1 through 604800 with
+no leading zero. Clients ignore malformed values and ignore this extension
+for groups, notes to self, files, reactions, and Nearby messages.
+
+The sender's deadline is the rumor's authenticated creation time, including
+`ms`, plus the duration. The recipient starts its own deadline on first
+sighting in the unobstructed foreground chat. The sighting occurs as soon as
+the visible portion of the bubble reaches half the smaller of the bubble
+height and the available chat viewport height. Receipt, notifications and
+conversation-list previews do not start that deadline. Each device persists
+its own absolute deadline. Clients do not exchange read receipts or use the
+NIP-40 expiration tag for these messages.
+
+At expiration, each account removes the local content and sends the ordinary
+kind `5` deletion request with itself as the sole `p` recipient. Manual deletion
+scoped to that account uses the same format. Other devices apply the ordinary
+deletion author checks, even when the request precedes the original message.
+Archives retain self-addressed requests independently of the original.
+The other party receives no deletion request when this account's timer ends.
+
+A client that ignores the timer can still render the original text. The
+extension does not revoke already published encrypted envelopes or copies
+made outside a participating client.

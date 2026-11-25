@@ -39,6 +39,7 @@ import Animated, {
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
+  type SharedValue,
   withTiming,
   ZoomIn,
   ZoomOut,
@@ -147,6 +148,7 @@ type Props = {
    * finishes while still rendering a fully interactive text field immediately. */
   liveDataEnabled?: boolean;
   composerInsets?: ComposerInsets;
+  composerOcclusionExtra?: SharedValue<number>;
 };
 
 type ComposerPanelMode = 'attachments' | 'emoji';
@@ -200,6 +202,7 @@ export function ChatInput({
   draftKey,
   liveDataEnabled = true,
   composerInsets,
+  composerOcclusionExtra,
 }: Props) {
   const { t } = useTranslation();
   const directionalIconStyle = useDirectionalIconStyle();
@@ -954,9 +957,13 @@ export function ChatInput({
     onCancel: commandPeer && liveDataEnabled && !disabled && completion.dismissible ? completion.dismiss : onCancelReply,
   });
 
+  const feedbackAdjustment = (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0) - commandMenuOverlap;
+  const composerFeedbackClearance = aboveInputHeight + feedbackAdjustment;
+
   if (recording && onSendVoice) {
     return (
       <VoiceRecorderBar
+        composerOcclusionExtra={composerOcclusionExtra}
         aboveInput={aboveInput}
         onSendVoice={(p) => {
           setRecording(false);
@@ -976,18 +983,13 @@ export function ChatInput({
         { bottom: SAFE - panelCapacity },
         surfaceMotion,
       ] : {
-        marginTop: -(
-          bottomBarHeight +
-          SAFE +
-          aboveInputHeight +
-          (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0) - commandMenuOverlap
-        ),
+        marginTop: -(bottomBarHeight + SAFE + composerFeedbackClearance),
       }, { zIndex: 1, pointerEvents: 'box-none' }]}
     >
       <View
         style={{
           position: "absolute",
-          top: aboveInputHeight + (suggestionsVisible ? SUGGESTION_STRIP_HEIGHT : 0) - commandMenuOverlap,
+          top: composerFeedbackClearance,
           start: 0,
           end: 0,
           bottom: 0,
@@ -997,6 +999,8 @@ export function ChatInput({
         <ChromeBackdrop scrollbarOcclusion="bottom" />
       </View>
       <ChatComposerFeedbackSlot
+        occlusion={composerOcclusionExtra}
+        occlusionAdjustment={feedbackAdjustment}
         height={aboveInputHeight}
         onHeightChange={(height) => setAboveInputHeight((current) => Math.max(current, height))}
       >

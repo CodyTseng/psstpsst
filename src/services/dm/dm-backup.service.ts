@@ -306,13 +306,36 @@ async function hashFile(fileUri: string): Promise<string> {
   }
 }
 
+// Archives omit timed messages. Keep self-addressed requests independently,
+// including when the target has yet to arrive.
+const exportableDeletion = `(
+  (
+    json_extract(message_deletions.rumor, '$.pubkey') = message_deletions.account_pubkey
+    AND (SELECT count(*) FROM json_each(message_deletions.rumor, '$.tags')
+      WHERE json_extract(value, '$[0]') = 'p') = 1
+    AND EXISTS (
+      SELECT 1 FROM json_each(message_deletions.rumor, '$.tags')
+      WHERE json_extract(value, '$[0]') = 'p'
+        AND json_extract(value, '$[1]') = message_deletions.account_pubkey
+    )
+  ) OR (
+    message_deletions.pending_target_id IS NULL AND NOT EXISTS (
+      SELECT 1 FROM json_each(message_deletions.rumor, '$.tags') as tag
+      INNER JOIN messages AS target
+        ON target.account_pubkey = message_deletions.account_pubkey
+       AND target.id = json_extract(tag.value, '$[1]')
+      WHERE json_extract(tag.value, '$[0]') = 'e' AND target.disappear_after_seconds IS NOT NULL
+    )
+  )
+)`;
+
 async function messageCounts(accountPubkey: string): Promise<MessageCounts> {
   const rows = await platform.database.rawQuery<{
     messages: number;
   }>(
-    `SELECT (SELECT count(*) FROM messages WHERE account_pubkey = ?) +
+    `SELECT (SELECT count(*) FROM messages WHERE account_pubkey = ? AND disappear_after_seconds IS NULL) +
             (SELECT count(*) FROM message_deletions
-              WHERE account_pubkey = ? AND pending_target_id IS NULL) AS messages`,
+              WHERE account_pubkey = ? AND ${exportableDeletion}) AS messages`,
     [accountPubkey, accountPubkey],
   );
   const row = rows[0];
@@ -355,10 +378,10 @@ async function exportMessages(
        INNER JOIN messages m INDEXED BY idx_msg_conv_time
          ON m.account_pubkey = c.account_pubkey
         AND m.conversation_key = c.conversation_key
-       WHERE c.account_pubkey = ?
+       WHERE c.account_pubkey = ? AND m.disappear_after_seconds IS NULL
        UNION ALL
        SELECT 'relay', NULL, rumor, order_at, id
-       FROM message_deletions WHERE account_pubkey = ? AND pending_target_id IS NULL
+       FROM message_deletions WHERE account_pubkey = ? AND ${exportableDeletion}
        ORDER BY delivery_kind ASC, proximity_account_pubkey ASC, order_at ASC, id DESC`,
       [accountPubkey, accountPubkey],
     )) {

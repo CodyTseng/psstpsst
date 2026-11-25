@@ -645,6 +645,13 @@
       "when": 1794873600000,
       "tag": "0091_pending-message-deletions",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "6",
+      "when": 1794960000000,
+      "tag": "0092_disappearing-messages",
+      "breakpoints": true
     }
   ]
 }

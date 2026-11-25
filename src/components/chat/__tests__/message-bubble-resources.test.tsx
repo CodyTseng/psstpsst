@@ -219,3 +219,21 @@ it('captures the original row constraints for a lifted attachment copy', () => {
     expect(onLongPress.mock.calls[0][0].layout).toBe(sourceLayout);
   } finally { act(() => renderer?.unmount()); }
 });
+
+it('reports only the bubble height with the reactions below it as the offset', () => {
+  const report = jest.fn();
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(
+    <MessageBubble content="Timed" isSelf={false} createdAt={0} orderAt={0}
+      reactions={[]} onTapReaction={jest.fn()} rumorId="timed" onBodyFrame={report} />,
+  ); });
+  const measured = renderer.root.findAllByType(View)
+    .filter(node => node.props.collapsable === false && node.props.onLayout);
+  expect(measured).toHaveLength(2);
+  act(() => { measured[0].props.onLayout({ nativeEvent: { layout: { height: 120 } } }); });
+  expect(report).not.toHaveBeenCalled();
+  act(() => { measured[1].props.onLayout({ nativeEvent: { layout: { height: 100 } } }); });
+  expect(report).toHaveBeenLastCalledWith('timed', { y: 20, height: 100 });
+  act(() => renderer.unmount());
+  expect(report).toHaveBeenLastCalledWith('timed', null);
+});

@@ -17,6 +17,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { AppText } from '@/components/common/AppText';
 import { useFocusedOverlayDismiss } from '@/components/common/use-focused-overlay-dismiss';
+import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
 import {
   ACTION_MENU_ICON_SIZE,
   ACTION_MENU_METRICS,
@@ -275,6 +276,7 @@ export function MessageActionMenu({
   // each inflated by ELECTRON_HOVER_SLACK. Filled during render (like dataRef).
   const hoverRectsRef = useRef<HoverRect[]>([]);
   const [mounted, setMounted] = useState(visible);
+  useOverlayPresentation(visible || mounted);
 
   // Drive Electron hover dismissal from a window-level pointermove hit-test
   // against the inflated cluster rects. Per-element hover events (onHoverIn/Out,

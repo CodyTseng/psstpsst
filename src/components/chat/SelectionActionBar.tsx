@@ -12,12 +12,13 @@ import { bottomBarHeight, spacing, useThemeColors } from '@/theme';
 type Props = {
   count: number;
   onForward: () => void;
+  forwardDisabled?: boolean;
   onDelete?: () => void;
   deleteDisabled?: boolean;
 };
 
 /** Replaces the composer at the same height while messages are selected. */
-export function SelectionActionBar({ count, onForward, onDelete, deleteDisabled = false }: Props) {
+export function SelectionActionBar({ count, onForward, onDelete, forwardDisabled = false, deleteDisabled = false }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -45,7 +46,7 @@ export function SelectionActionBar({ count, onForward, onDelete, deleteDisabled 
           variant="surface"
           size={40}
           onPress={onForward}
-          disabled={!enabled}
+          disabled={!enabled || forwardDisabled}
           accessibilityLabel={t('chat.actions.forward')}
           icon={<Forward size={22} color={c.text} />}
         />

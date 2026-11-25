@@ -1,6 +1,6 @@
 import { notificationEvents } from '@/db/schema/notification-events';
 import { recordNotificationEvent, type NotificationConversationState } from '@/services/notifications/notification-events.service';
-import { and, asc, count, desc, eq, gt, inArray, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -9,6 +9,8 @@ import {
   conversations,
   messages,
   messageDeletions,
+  messageDeliveryCopies,
+  messageMedia,
   peerDmInfo,
   relayOutboxJobs,
 } from '@/db/schema';
@@ -29,6 +31,7 @@ import {
   messageOrderAt,
   withMessageOrderTag,
 } from '@/lib/nostr/message-order';
+import { DISAPPEAR_AFTER_TAG, disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
 import { normalizeBareNostrUris } from '@/lib/nostr/normalize-content';
 import {
   createPerfSpan,
@@ -51,7 +54,7 @@ import {
   type SignSeal,
 } from '../crypto/nip17-gift-wrap';
 import { nextRumorTimestamp, rumorTimestampFromOrderAt, type RumorTimestamp } from './rumor-clock';
-import { deletionAuthorMatches, isDeletableMessage, resolvePendingMessageDeletions } from './message-deletions';
+import { deletionAuthorMatches, isDeletableMessage, isSelfAddressedMessageDeletion, resolvePendingMessageDeletions } from './message-deletions';
 import { buildSigner } from '../account/account.service';
 import { canReceiveForAccount } from '../account/account-receive-guard';
 import {
@@ -72,7 +75,7 @@ import { syncStatusStore } from './sync-status';
 import type { Signer } from '../signer/signer.interface';
 import { isBlocked, loadBlockedIntoCache } from './block.service';
 
-import { emitMessageDeletion, mergeStoredMessageIntoTail } from '../conversation/message-tail-cache';
+import { emitMessageDeadlines, emitMessageDeletion, mergeStoredMessageIntoTail } from '../conversation/message-tail-cache';
 import { encryptionKeyWatcher } from './encryption-key-watcher';
 import {
   getClientPubkeyFromEvent,
@@ -185,7 +188,26 @@ const deletionTargetFields = {
   tags: messages.tags,
   orderAt: messages.orderAt,
   deleted: messages.deleted,
+  disappearAfterSeconds: messages.disappearAfterSeconds,
 };
+
+function disappearingDeletionRumor(accountPubkey: string, targetId: string): Rumor {
+  const timestamp = nextRumorTimestamp();
+  return buildRumor({
+    kind: KIND_MESSAGE_DELETION,
+    content: '',
+    created_at: timestamp.createdAt,
+    tags: withMessageOrderTag([
+      ['e', targetId],
+      ['k', String(KIND_CHAT)],
+      ['p', accountPubkey],
+    ], timestamp.millisecond),
+  }, accountPubkey);
+}
+
+function scrubbedRumor(rumor: Pick<Rumor, 'id' | 'kind' | 'pubkey' | 'created_at'>): Rumor {
+  return { id: rumor.id, kind: rumor.kind, pubkey: rumor.pubkey, created_at: rumor.created_at, content: '', tags: [] };
+}
 
 /** The unread set: kind-14/15 messages in this account's view of the
  * conversation after `cursor` (or all of them when nothing's been read). */
@@ -274,6 +296,12 @@ export class DmService {
   /** Tracks which conversation the user is currently looking at, so incoming
    * messages for it don't bump unreadCount. */
   private independentReceiver = false;
+  private expiryWatch: {
+    accountPubkey: string;
+    running: boolean;
+    requested: boolean;
+    timer: ReturnType<typeof setTimeout> | undefined;
+  } | null = null;
   private receivePresence: boolean | undefined;
   private activeConversation: { accountPubkey: string; conversationKey: string } | null = null;
   /** Incoming gift wraps are processed through this queue rather than all at
@@ -917,6 +945,113 @@ export class DmService {
     relayMessageOutbox.wake(accountPubkey);
   }
 
+  /** Set the receiver's deadline once, on a foreground viewport observation. */
+  async markDisappearingMessagesSeen(
+    accountPubkey: string, conversationKey: string, ids: string[], seenAt = Date.now(),
+  ): Promise<void> {
+    if (!ids.length || platform.appState.currentState() !== 'active' || platform.notifications.shouldNotifyNow()) return;
+    const updated = await db.transaction(async tx => {
+      if (!await canReceiveForAccount(accountPubkey, tx)) return [];
+      return tx.update(messages).set({
+        expiresAt: sql`${seenAt} + ${messages.disappearAfterSeconds} * 1000`,
+      }).where(and(
+        eq(messages.accountPubkey, accountPubkey),
+        eq(messages.conversationKey, conversationKey),
+        inArray(messages.id, ids),
+        ne(messages.senderPubkey, accountPubkey),
+        eq(messages.deleted, false),
+        isNotNull(messages.disappearAfterSeconds),
+        isNull(messages.expiresAt),
+      )).returning({ id: messages.id, expiresAt: messages.expiresAt });
+    });
+    if (updated.length) {
+      emitMessageDeadlines(accountPubkey, conversationKey, updated);
+      this.requestExpirySweep(accountPubkey);
+    }
+  }
+
+  /** Clears expired content and commits its self-addressed deletion job together. */
+  async expireDisappearingMessages(accountPubkey: string): Promise<number | null> {
+    const now = Date.now();
+    let changed = false;
+    while (true) {
+      const batch = await db.transaction(async tx => {
+        if (!await canReceiveForAccount(accountPubkey, tx)) return [];
+        const due = await tx.select({ id: messages.id }).from(messages).where(and(
+          eq(messages.accountPubkey, accountPubkey),
+          lte(messages.expiresAt, now),
+          eq(messages.deleted, false),
+        )).orderBy(asc(messages.expiresAt)).limit(32);
+        const deleted: { id: string; conversationKey: string }[] = [];
+        for (const { id } of due) {
+          const target = await this.findDeletionTarget(tx, accountPubkey, id);
+          if (!target) throw new Error('Expiring message has no conversation');
+          const result = await this.storeMessageDeletion(tx, accountPubkey, target, disappearingDeletionRumor(accountPubkey, id), true);
+          if (typeof result === 'string') deleted.push({ id, conversationKey: result });
+        }
+        return deleted;
+      });
+      if (!batch.length) break;
+      changed = true;
+      for (const { id, conversationKey } of batch) emitMessageDeletion(accountPubkey, conversationKey, id);
+    }
+    if (changed) relayMessageOutbox.wake(accountPubkey);
+
+    const next = await db.select({ expiresAt: messages.expiresAt }).from(messages).where(and(
+      eq(messages.accountPubkey, accountPubkey),
+      isNotNull(messages.expiresAt),
+      eq(messages.deleted, false),
+    )).orderBy(asc(messages.expiresAt)).limit(1).get();
+    return next?.expiresAt ?? null;
+  }
+
+  watchDisappearingMessages(accountPubkey: string): () => void {
+    const sweep = {
+      accountPubkey,
+      running: false,
+      requested: false,
+      timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    };
+    this.expiryWatch = sweep;
+    const refresh = () => this.requestExpirySweep(accountPubkey);
+    const offAppState = platform.appState.addChangeListener(state => {
+      if (state === 'active') refresh();
+    });
+    const offUserReturned = platform.notifications.addUserReturnedListener(refresh);
+    refresh();
+    return () => {
+      if (this.expiryWatch === sweep) this.expiryWatch = null;
+      clearTimeout(sweep.timer);
+      offAppState();
+      offUserReturned();
+    };
+  }
+
+  private requestExpirySweep(accountPubkey: string): void {
+    const watch = this.expiryWatch;
+    if (watch?.accountPubkey !== accountPubkey) return;
+    clearTimeout(watch.timer);
+    if (watch.running) {
+      watch.requested = true;
+      return;
+    }
+    watch.running = true;
+    void this.expireDisappearingMessages(accountPubkey).then(next => {
+      if (this.expiryWatch === watch && next !== null) {
+        watch.timer = setTimeout(() => this.requestExpirySweep(accountPubkey), Math.min(2147483647, Math.max(0, next - Date.now())));
+      }
+    }).catch(error => {
+      console.warn('[dm] Could not expire disappearing messages.', error);
+      if (this.expiryWatch === watch) watch.timer = setTimeout(() => this.requestExpirySweep(accountPubkey), 5000);
+    }).finally(() => {
+      watch.running = false;
+      if (this.expiryWatch === watch && watch.requested) {
+        watch.requested = false;
+        this.requestExpirySweep(accountPubkey);
+      }
+    });
+  }
+
   private findDeletionTarget(
     tx: Pick<typeof db, 'select'>,
     accountPubkey: string,
@@ -947,12 +1082,11 @@ export class DmService {
       if (this.independentReceiver && !await canReceiveForAccount(accountPubkey, tx)) return null;
       const target = await this.findDeletionTarget(tx, accountPubkey, targetId);
       if (target) return this.storeMessageDeletion(tx, accountPubkey, target, rumor, false);
-      if (keepPending) {
-        await tx.insert(messageDeletions).values({
-          accountPubkey, id: rumor.id, orderAt: messageOrderAt(rumor), rumor, pendingTargetId: targetId,
-        }).onConflictDoNothing();
-      }
-      return null;
+      if (!keepPending) return null;
+      const inserted = await tx.insert(messageDeletions).values({
+        accountPubkey, id: rumor.id, orderAt: messageOrderAt(rumor), rumor, pendingTargetId: targetId,
+      }).onConflictDoNothing().returning({ id: messageDeletions.id });
+      return isSelfAddressedMessageDeletion(rumor, accountPubkey) ? inserted.length > 0 : null;
     });
 
     if (typeof affectedConversation === 'string') {
@@ -960,6 +1094,27 @@ export class DmService {
       return true;
     }
     return affectedConversation;
+  }
+
+  private async recordMessageDeletion(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    accountPubkey: string,
+    rumor: Rumor,
+    enqueue: boolean,
+  ): Promise<boolean> {
+    const inserted = await tx.insert(messageDeletions).values({
+      accountPubkey, id: rumor.id, orderAt: messageOrderAt(rumor), rumor,
+    }).onConflictDoNothing().returning({ id: messageDeletions.id });
+    if (!inserted.length) return false;
+    if (enqueue) {
+      await tx.insert(relayOutboxJobs).values({
+        accountPubkey,
+        messageId: rumor.id,
+        scope: 'all_recipient_relays',
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+    }
+    return true;
   }
 
   private async storeMessageDeletion(
@@ -973,22 +1128,43 @@ export class DmService {
         !isDeletableMessage(target.kind, target.tags, !!target.conversation.groupId) ||
         !deletionAuthorMatches(accountPubkey, target.senderPubkey, rumor.pubkey)) return null;
 
-    const inserted = await tx.insert(messageDeletions).values({
-      accountPubkey, id: rumor.id, orderAt: messageOrderAt(rumor), rumor,
-    }).onConflictDoNothing().returning({ id: messageDeletions.id });
-    if (!inserted.length) return false;
-    if (enqueue) {
-      await tx.insert(relayOutboxJobs).values({
-        accountPubkey,
-        messageId: rumor.id,
-        scope: 'all_recipient_relays',
-        createdAt: Math.floor(Date.now() / 1000),
-      });
-    }
+    if (!await this.recordMessageDeletion(tx, accountPubkey, rumor, enqueue)) return false;
     if (target.deleted) return true;
 
     const messageScope = and(eq(messages.accountPubkey, accountPubkey), eq(messages.id, target.id));
-    await tx.update(messages).set({ deleted: true }).where(messageScope);
+    if (target.disappearAfterSeconds != null) {
+      await tx.update(messages).set({
+        content: '',
+        tags: [],
+        rumor: scrubbedRumor({
+          id: target.id, kind: target.kind, pubkey: target.senderPubkey,
+          created_at: Math.floor(target.orderAt / 1000),
+        }),
+        replyToId: null,
+        subject: null,
+        expiresAt: null,
+        deliveryStatus: null,
+        deliveryError: null,
+        sourceRelays: null,
+        deleted: true,
+      }).where(messageScope);
+      if (!isSelfAddressedMessageDeletion(rumor, accountPubkey)) {
+        // The original may be omitted from a later archive. Preserve an
+        // independent self marker only after validating the original request.
+        await this.recordMessageDeletion(tx, accountPubkey, disappearingDeletionRumor(accountPubkey, target.id), false);
+      }
+      await tx.delete(messageMedia).where(and(
+        eq(messageMedia.accountPubkey, accountPubkey), eq(messageMedia.messageId, target.id),
+      ));
+      await tx.delete(messageDeliveryCopies).where(and(
+        eq(messageDeliveryCopies.accountPubkey, accountPubkey), eq(messageDeliveryCopies.messageId, target.id),
+      ));
+      await tx.delete(relayOutboxJobs).where(and(
+        eq(relayOutboxJobs.accountPubkey, accountPubkey), eq(relayOutboxJobs.messageId, target.id),
+      ));
+    } else {
+      await tx.update(messages).set({ deleted: true }).where(messageScope);
+    }
     await tx.delete(notificationEvents).where(and(
       eq(notificationEvents.accountPubkey, accountPubkey),
       eq(notificationEvents.messageId, target.id),
@@ -1128,7 +1304,7 @@ export class DmService {
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
     const kind = opts.kind ?? KIND_CHAT;
     const content = kind === KIND_CHAT ? normalizeBareNostrUris(opts.content) : opts.content;
-    const routingTags = new Set(['p', 'e', 'h', 'subject', 'action', 'ms']);
+    const routingTags = new Set(['p', 'e', 'h', 'subject', 'action', 'ms', DISAPPEAR_AFTER_TAG]);
     const groupName = group.name;
     const tags = withMessageOrderTag(
       [
@@ -1294,12 +1470,23 @@ export class DmService {
     };
   }
 
+  private async directTextDuration(accountPubkey: string, recipients: string[], tags: string[][]): Promise<number | null> {
+    const peer = deriveConversationKey(accountPubkey, recipients, accountPubkey);
+    if (!peer || peer === accountPubkey || tags.some(([key]) => key === 'h' || key === 'action')) return null;
+    const row = await db.select({ duration: conversations.disappearAfterSeconds }).from(conversations)
+      .where(and(eq(conversations.accountPubkey, accountPubkey), eq(conversations.conversationKey, peer),
+        eq(conversations.deliveryKind, 'relay'), isNull(conversations.groupId))).get();
+    return row?.duration ?? null;
+  }
+
   /** Store the optimistic message and its FIFO job in one transaction. */
   async sendMessage(opts: SendMessageOpts): Promise<{ rumorId: string }> {
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
     const content = normalizeBareNostrUris(opts.content);
     let tags: string[][] = opts.recipientPubkeys.map((recipient) => ['p', recipient]);
-    if (opts.extraTags) tags.push(...opts.extraTags);
+    if (opts.extraTags) tags.push(...opts.extraTags.filter(([key]) => key !== DISAPPEAR_AFTER_TAG));
+    const duration = await this.directTextDuration(opts.accountPubkey, opts.recipientPubkeys, tags);
+    if (duration !== null) tags.push([DISAPPEAR_AFTER_TAG, String(duration)]);
     if (opts.replyToId) tags.push(['e', opts.replyToId]);
     if (opts.subject) tags.push(['subject', opts.subject]);
     tags = withMessageOrderTag(tags, timestamp.millisecond);
@@ -1328,13 +1515,16 @@ export class DmService {
     timestamp?: RumorTimestamp;
   }): Promise<{ rumorId: string }> {
     const timestamp = opts.timestamp ?? nextRumorTimestamp();
-    const routingTags = new Set(['p', 'e', 'h', 'subject', 'action', 'ms']);
+    const routingTags = new Set(['p', 'e', 'h', 'subject', 'action', 'ms', DISAPPEAR_AFTER_TAG]);
+    const duration = opts.kind === KIND_CHAT
+      ? await this.directTextDuration(opts.accountPubkey, opts.recipientPubkeys, []) : null;
     const tags = withMessageOrderTag(
       [
         ...opts.recipientPubkeys.map((recipient) => ['p', recipient]),
         ...opts.contentTags.filter((tag) => !routingTags.has(tag[0])),
         ...(opts.replyToId ? [['e', opts.replyToId]] : []),
         ...(opts.subject ? [['subject', opts.subject]] : []),
+        ...(duration !== null ? [[DISAPPEAR_AFTER_TAG, String(duration)]] : []),
       ],
       timestamp.millisecond,
     );
@@ -2187,7 +2377,7 @@ export class DmService {
     let unsupported = 0;
     for (const rumor of valid) {
       if (rumor.kind === KIND_MESSAGE_DELETION) {
-        const result = await this.applyMessageDeletion(accountPubkey, rumor);
+        const result = await this.applyMessageDeletion(accountPubkey, rumor, isSelfAddressedMessageDeletion(rumor, accountPubkey));
         if (result === true) inserted += 1;
         else if (result === false) existing += 1;
         else unsupported += 1;
@@ -2240,10 +2430,18 @@ export class DmService {
     const replyToId = getReplyToId(rumor.tags) ?? null;
     const orderAt = messageOrderAt(rumor);
 
+    const disappearAfterSeconds = conversationKey !== accountPubkey && rumor.content.trim()
+      ? disappearingMessageDuration(rumor) : null;
+    const expiresAt = disappearAfterSeconds !== null && rumor.pubkey === accountPubkey
+      ? orderAt + disappearAfterSeconds * 1000 : null;
+
     const stored = await profileAsync(profile, 'db.storeTransaction', () =>
       db.transaction(async (tx) => {
         if (this.independentReceiver && !await canReceiveForAccount(accountPubkey, tx)) return false;
-        const deleted = await resolvePendingMessageDeletions(tx, accountPubkey, rumor, false);
+        const pendingDeletion = await resolvePendingMessageDeletions(tx, accountPubkey, rumor, false);
+        const expired = expiresAt !== null && expiresAt <= Date.now();
+        const deleted = pendingDeletion !== null || expired;
+        const scrub = deleted && disappearAfterSeconds !== null;
         const inserted = await profileAsync(profile, 'db.insertMessage', () =>
           tx
             .insert(messages)
@@ -2254,15 +2452,17 @@ export class DmService {
               conversationKey,
               senderPubkey: rumor.pubkey,
               kind: rumor.kind,
-              content: rumor.content,
+              content: scrub ? '' : rumor.content,
+              disappearAfterSeconds,
+              expiresAt: scrub ? null : expiresAt,
               createdAt: rumor.created_at,
               orderAt,
-              replyToId,
-              subject,
-              tags: rumor.tags,
-              rumor,
+              replyToId: scrub ? null : replyToId,
+              subject: scrub ? null : subject,
+              tags: scrub ? [] : rumor.tags,
+              rumor: scrub ? scrubbedRumor(rumor) : rumor,
               deliveryStatus:
-                options?.enqueueRelay && (rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE)
+                !scrub && options.enqueueRelay && (rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE)
                   ? 'queued'
                   : null,
               sourceRelays: sourceRelays && sourceRelays.length > 0 ? normalizeRelayUrls(sourceRelays) : null,
@@ -2273,6 +2473,12 @@ export class DmService {
         );
         if (inserted.length === 0) return false;
 
+        if (scrub) {
+          if (!pendingDeletion || !pendingDeletion.selfAddressed) {
+            await this.recordMessageDeletion(tx, accountPubkey, disappearingDeletionRumor(accountPubkey, rumor.id), !pendingDeletion);
+          }
+          return 'hidden';
+        }
         if (options?.enqueueRelay) {
           await tx.insert(relayOutboxJobs).values({
             accountPubkey,
@@ -2288,7 +2494,7 @@ export class DmService {
           await profileAsync(profile, 'db.recordAttachmentMedia', () =>
             recordAttachmentMedia(tx, rumor, accountPubkey, conversationKey),
           );
-        } else if (rumor.kind === 14) {
+        } else if (rumor.kind === 14 && disappearAfterSeconds === null) {
           await profileAsync(profile, 'db.recordEmbeddedMedia', () =>
             recordEmbeddedMedia(tx, rumor, accountPubkey, conversationKey),
           );
@@ -2473,6 +2679,8 @@ export class DmService {
       return deleted ? 'hidden' : true;
       }),
     );
+    if (stored === 'hidden' && expiresAt !== null) relayMessageOutbox.wake(accountPubkey);
+    if (stored === true && expiresAt !== null) dmService.requestExpirySweep(accountPubkey);
     if (stored === true) {
       // The write already holds every column — merge into the warm tail instead
       // of invalidating it and queueing a full window re-read.
@@ -2484,6 +2692,8 @@ export class DmService {
         senderPubkey: rumor.pubkey,
         kind: rumor.kind,
         content: rumor.content,
+        disappearAfterSeconds,
+        expiresAt,
         createdAt: rumor.created_at,
         orderAt,
         replyToId,

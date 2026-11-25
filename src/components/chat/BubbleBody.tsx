@@ -1,5 +1,7 @@
 import { formatTime, timeSpacer } from '@/lib/time';
 import { useDateTimePreferences } from '@/stores/date-time.store';
+import { useTranslation } from 'react-i18next';
+import Timer from 'lucide-react-native/icons/timer';
 import Check from 'lucide-react-native/icons/check';
 import { memo, useMemo } from 'react';
 import { Platform, Text, View } from 'react-native';
@@ -143,6 +145,7 @@ function BubbleBodyBase({
   const dateTimeFormatPreferences = useDateTimePreferences();
   const c = useThemeColors();
   const isRTL = useIsRTL();
+  const { t } = useTranslation();
 
   // Live delivery (this session) wins; else the persisted (DB) status survives
   // restarts. null for incoming messages or ones that were never tracked.
@@ -225,6 +228,9 @@ function BubbleBodyBase({
         >
           {time}
         </AppText>
+        {presentation.disappearing ? (
+          <Timer accessibilityLabel={t('chat.disappearing.title')} size={MESSAGE_DELIVERY_ICON_SIZE} color={color} strokeWidth={iconStrokeWidth.compact} />
+        ) : null}
         {isSelf ? (
           delivery ? (
             <MessageDeliveryStatus delivery={delivery} color={color} />
@@ -313,9 +319,9 @@ function BubbleBodyBase({
   }
 
   function renderInlineText(bodySegments: InlineMessageSegment[], showMeta: boolean) {
-    const metaWidthSpacer = isSelf
-      ? `${FIG}${FIG}${FIG}${timeWidthSpacer}`
-      : `${FIG}${timeWidthSpacer}`;
+    const deliverySpacer = isSelf ? FIG.repeat(2) : '';
+    const timerSpacer = presentation.disappearing ? FIG.repeat(2) : '';
+    const metaWidthSpacer = `${FIG}${deliverySpacer}${timerSpacer}${timeWidthSpacer}`;
     const blockMetaSpacer = showMeta
       ? `${ZWSP}${isRTL ? `${RLI}${metaWidthSpacer}${PDI}` : metaWidthSpacer}`
       : '';

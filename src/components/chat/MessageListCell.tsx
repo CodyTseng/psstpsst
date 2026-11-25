@@ -11,7 +11,10 @@ type Props = ComponentProps<NonNullable<FlatListProps<ListItem>['CellRendererCom
 /** Preserve FlatList's cell wrapper and layout callbacks, adding only identity
  * for exact Electron geometry reads after rows change their list indices. */
 export function MessageListCell({ cellKey, item, children, style, onLayout, onFocusCapture }: Props) {
-  const onCellFrame = useContext(MessageCellFrameContext);
+  const frameReporter = useContext(MessageCellFrameContext);
+  const timedMessage = item.kind === 'message' && item.message.disappearAfterSeconds != null &&
+    item.message.expiresAt == null && item.message.senderPubkey !== item.message.accountPubkey && !item.message.deleted;
+  const onCellFrame = frameReporter && (!frameReporter.timedOnly || timedMessage) ? frameReporter.report : null;
   useLayoutEffect(() => () => onCellFrame?.(cellKey, null), [cellKey, onCellFrame]);
   const store = useContext(ImageVisibilityStoreContext);
   const visibility = useMemo(() => store ? { store, key: cellKey } : null, [store, cellKey]);

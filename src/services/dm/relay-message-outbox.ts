@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, lte, notExists, or } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, isNull, lte, notExists, or } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -35,6 +35,7 @@ import {
   settleRelayTarget,
 } from './delivery-status';
 import type { EncryptionKeypair } from './encryption-key.service';
+import { isSelfAddressedMessageDeletion } from './message-deletions';
 import {
   resolvePeerMessagingMetadata,
 } from './peer-encryption-key.service';
@@ -53,6 +54,15 @@ type RelayOutboxSession = {
   dmRelays: string[];
   signSeal: SignSeal;
 };
+
+const DISAPPEARING_DELETION_RETRY_MS = 60_000;
+
+function canPublishMessage() {
+  return or(isNull(messages.disappearAfterSeconds), and(
+    eq(messages.deleted, false),
+    or(isNull(messages.expiresAt), gt(messages.expiresAt, Date.now())),
+  ));
+}
 
 type RelayJob = typeof relayOutboxJobs.$inferSelect;
 type RelayTarget = typeof relayOutboxJobTargets.$inferSelect;
@@ -207,7 +217,7 @@ class RelayMessageOutbox {
       const message = await tx
         .select({ deliveryStatus: messages.deliveryStatus, rumor: messages.rumor })
         .from(messages)
-        .where(and(eq(messages.accountPubkey, accountPubkey), eq(messages.id, messageId)))
+        .where(and(eq(messages.accountPubkey, accountPubkey), eq(messages.id, messageId), canPublishMessage()))
         .get();
       if (!message) throw new Error('Message not found');
       if (message.rumor.pubkey !== accountPubkey) {
@@ -326,6 +336,7 @@ class RelayMessageOutbox {
         .from(relayOutboxJobs)
         .where(and(
           eq(relayOutboxJobs.accountPubkey, session.accountPubkey),
+          lte(relayOutboxJobs.nextAttemptAt, Date.now()),
           or(
             notExists(targets.where(matchingJob)),
             exists(db.select({ jobId: relayOutboxJobTargets.jobId }).from(relayOutboxJobTargets).where(and(
@@ -337,17 +348,21 @@ class RelayMessageOutbox {
         .limit(1)
         .get();
       if (!job) {
-        const next = await db.select({ at: relayOutboxJobTargets.nextAttemptAt })
-          .from(relayOutboxJobTargets)
-          .innerJoin(relayOutboxJobs, matchingJob)
-          .where(eq(relayOutboxJobs.accountPubkey, session.accountPubkey))
-          .orderBy(asc(relayOutboxJobTargets.nextAttemptAt))
-          .limit(1)
-          .get();
-        if (next && this.isCurrent(session, generation) && this.online) {
+        const now = Date.now();
+        const [nextTarget, nextJob] = await Promise.all([
+          db.select({ at: relayOutboxJobTargets.nextAttemptAt })
+            .from(relayOutboxJobTargets).innerJoin(relayOutboxJobs, matchingJob)
+            .where(and(eq(relayOutboxJobs.accountPubkey, session.accountPubkey), lte(relayOutboxJobs.nextAttemptAt, now)))
+            .orderBy(asc(relayOutboxJobTargets.nextAttemptAt)).limit(1).get(),
+          db.select({ at: relayOutboxJobs.nextAttemptAt }).from(relayOutboxJobs)
+            .where(and(eq(relayOutboxJobs.accountPubkey, session.accountPubkey), gt(relayOutboxJobs.nextAttemptAt, now)))
+            .orderBy(asc(relayOutboxJobs.nextAttemptAt)).limit(1).get(),
+        ]);
+        const next = Math.min(nextTarget?.at ?? Infinity, nextJob?.at ?? Infinity);
+        if (Number.isFinite(next) && this.isCurrent(session, generation) && this.online) {
           this.retryTimer = setTimeout(
             () => this.wake(session.accountPubkey),
-            Math.min(MAX_RELAY_RETRY_TIMER_MS, Math.max(0, next.at - Date.now())),
+            Math.min(MAX_RELAY_RETRY_TIMER_MS, Math.max(0, next - Date.now())),
           );
         }
         return;
@@ -372,9 +387,9 @@ class RelayMessageOutbox {
     generation: number,
   ): Promise<boolean> {
     const message = await db
-      .select({ rumor: messages.rumor })
+      .select({ rumor: messages.rumor, expiresAt: messages.expiresAt })
       .from(messages)
-      .where(and(eq(messages.accountPubkey, job.accountPubkey), eq(messages.id, job.messageId)))
+      .where(and(eq(messages.accountPubkey, job.accountPubkey), eq(messages.id, job.messageId), canPublishMessage()))
       .get();
     const jobRumor = message ?? await db
       .select({ rumor: messageDeletions.rumor })
@@ -387,6 +402,15 @@ class RelayMessageOutbox {
     }
 
     const { rumor } = jobRumor;
+    // Scrubbing keeps the target duration, so a resumed job can still pick its retry policy.
+    const targetId = isSelfAddressedMessageDeletion(rumor, job.accountPubkey)
+      ? rumor.tags.find(([key]) => key === 'e')?.[1]
+      : undefined;
+    const target = targetId ? await db.select({ duration: messages.disappearAfterSeconds })
+      .from(messages)
+      .where(and(eq(messages.accountPubkey, job.accountPubkey), eq(messages.id, targetId)))
+      .get() : undefined;
+    const retryDeletion = target?.duration != null;
     const durable = isDurableDelivery(rumor.kind);
     let targets = await this.loadTargets(job.id);
     if (
@@ -398,12 +422,14 @@ class RelayMessageOutbox {
         targets = await this.prepareAllTargets(job, rumor, durable, session, generation);
       } catch (error) {
         if (!this.isCurrent(session, generation) || !this.online) return false;
-        await this.failBeforePublish(job, durable, messageError(error));
+        if (retryDeletion) await this.deferDisappearingDeletion(job);
+        else await this.failBeforePublish(job, durable, messageError(error));
         return true;
       }
     }
     if (targets.length === 0) {
-      await this.finishEmptyJob(job, durable);
+      if (retryDeletion) await this.deferDisappearingDeletion(job);
+      else await this.finishEmptyJob(job, durable);
       return true;
     }
 
@@ -413,10 +439,11 @@ class RelayMessageOutbox {
     if (targets.length === 0) return true;
 
     try {
-      await this.ensurePayloads(job, rumor, targets, session, generation);
+      await this.ensurePayloads(job, rumor, targets, session, generation, retryDeletion);
     } catch (error) {
       if (!this.isCurrent(session, generation) || !this.online) return false;
-      await this.failBeforePublish(job, durable, messageError(error), true);
+      if (retryDeletion) await this.deferDisappearingDeletion(job);
+      else await this.failBeforePublish(job, durable, messageError(error), true);
       return true;
     }
     if (!this.isCurrent(session, generation) || !this.online) return false;
@@ -434,6 +461,10 @@ class RelayMessageOutbox {
       .from(relayOutboxPayloads)
       .where(eq(relayOutboxPayloads.jobId, job.id))
       .all();
+    if (message?.expiresAt != null && message.expiresAt <= Date.now()) {
+      await db.delete(relayOutboxJobs).where(eq(relayOutboxJobs.id, job.id));
+      return true;
+    }
     const payloadByRecipient = new Map(
       payloadRows.map((row) => [row.recipientPubkey, row.giftWrap] as const),
     );
@@ -480,6 +511,7 @@ class RelayMessageOutbox {
           await relayPool.publishEvent({
             relays: Array.from(storedUrls.keys()),
             event: giftWrap,
+            expiresAt: message?.expiresAt ?? undefined,
             signAuth,
             timeoutMs: PUBLISH_TIMEOUT_MS,
             abort: abort.signal,
@@ -493,6 +525,7 @@ class RelayMessageOutbox {
                       storedUrl,
                       outcome,
                       durable,
+                      retryDeletion,
                     ),
                   );
                 }
@@ -506,6 +539,12 @@ class RelayMessageOutbox {
     } finally {
       if (this.currentPublishAbort === abort) this.currentPublishAbort = null;
     }
+  }
+
+  private async deferDisappearingDeletion(job: RelayJob): Promise<void> {
+    await db.update(relayOutboxJobs)
+      .set({ nextAttemptAt: Date.now() + DISAPPEARING_DELETION_RETRY_MS })
+      .where(eq(relayOutboxJobs.id, job.id));
   }
 
   private loadTargets(jobId: number): Promise<RelayTarget[]> {
@@ -573,6 +612,10 @@ class RelayMessageOutbox {
 
     const now = nowSeconds();
     await db.transaction(async (tx) => {
+      const pending = await tx.select({ id: relayOutboxJobs.id }).from(relayOutboxJobs)
+        .where(eq(relayOutboxJobs.id, job.id)).get();
+      if (!pending) return;
+
       for (const outcome of outcomes) {
         const { recipientPubkey, relays, error } = outcome;
         if (relays.length > 0) {
@@ -713,6 +756,7 @@ class RelayMessageOutbox {
     targets: RelayTarget[],
     session: RelayOutboxSession,
     generation: number,
+    retryDeletion: boolean,
   ): Promise<void> {
     const existing = await db
       .select({ recipientPubkey: relayOutboxPayloads.recipientPubkey })
@@ -760,12 +804,15 @@ class RelayMessageOutbox {
           recipientEncPubkey,
           signSeal: session.signSeal,
         });
-        await db
-          .insert(relayOutboxPayloads)
-          .values({ jobId: job.id, recipientPubkey, giftWrap })
-          .onConflictDoNothing();
+        await db.transaction(async tx => {
+          const pending = await tx.select({ id: relayOutboxJobs.id }).from(relayOutboxJobs)
+            .where(eq(relayOutboxJobs.id, job.id)).get();
+          if (!pending) return;
+          await tx.insert(relayOutboxPayloads).values({ jobId: job.id, recipientPubkey, giftWrap })
+            .onConflictDoNothing();
+        });
       } catch (error) {
-        if (!this.isCurrent(session, generation) || !this.online) throw error;
+        if (!this.isCurrent(session, generation) || !this.online || retryDeletion) throw error;
         await this.failRecipientBeforePublish(
           job,
           recipientPubkey,
@@ -853,6 +900,7 @@ class RelayMessageOutbox {
     relayUrl: string,
     outcome: PublishOutcome,
     durable: boolean,
+    retryDeletion = false,
   ): Promise<void> {
     return this.serializeMessageWrite(job, async () => {
       await db.transaction(async (tx) => {
@@ -877,6 +925,16 @@ class RelayMessageOutbox {
           await tx.update(relayOutboxJobTargets).set({
             rateLimitAttempts: target.rateLimitAttempts + 1,
             nextAttemptAt: relayRetryDeadline(Date.now(), delay),
+          }).where(and(
+            eq(relayOutboxJobTargets.jobId, job.id),
+            eq(relayOutboxJobTargets.recipientPubkey, recipientPubkey),
+            eq(relayOutboxJobTargets.relayUrl, relayUrl),
+          ));
+          return;
+        }
+        if (!outcome.ok && retryDeletion) {
+          await tx.update(relayOutboxJobTargets).set({
+            nextAttemptAt: relayRetryDeadline(Date.now(), Math.max(DISAPPEARING_DELETION_RETRY_MS, outcome.retryAfterMs ?? 0)),
           }).where(and(
             eq(relayOutboxJobTargets.jobId, job.id),
             eq(relayOutboxJobTargets.recipientPubkey, recipientPubkey),

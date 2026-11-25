@@ -1,3 +1,4 @@
+import { disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/db/client';
@@ -175,7 +176,7 @@ export async function getNotificationPreview(
           video: i18n.t('conversations.attachment_video_preview'),
           voice: i18n.t('conversations.attachment_voice_preview'),
         })
-      : rumor.content.trim() || null;
+      : disappearingMessageDuration(rumor) === null ? rumor.content.trim() || null : null;
 
   return {
     displayName,

@@ -2,6 +2,7 @@ import type { Rumor } from '@/db/schema/types';
 import i18n from '@/i18n';
 import type { NotificationCommunication } from '@/platform/ports/notifications';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
+import { disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
 import { firstGroupId } from '@/lib/nostr/group-messaging';
 
 import { discardNotificationEvents } from './notification-events.service';
@@ -36,7 +37,8 @@ export async function buildNotificationContent(
   const genericTitle = count <= 1
     ? i18n.t(firstGroupId(latest.tags) ? 'group.new_message' : 'notifications.new_message')
     : i18n.t('notifications.new_messages', { count });
-  const preview = contentPreferences.showSender || contentPreferences.showMessageContent
+  const showMessageContent = contentPreferences.showMessageContent && disappearingMessageDuration(latest) === null;
+  const preview = contentPreferences.showSender || showMessageContent
     ? await getNotificationPreview(latest, accountPubkey, {
         includeIdentity: contentPreferences.showSender,
       })
@@ -46,7 +48,7 @@ export async function buildNotificationContent(
   return {
     title,
     subtitle: title !== genericTitle && count > 1 ? genericTitle : undefined,
-    body: contentPreferences.showMessageContent
+    body: showMessageContent
       ? preview?.group && contentPreferences.showSender && preview.senderName && preview.messageContent
         ? `${preview.senderName}: ${preview.messageContent}`
         : preview?.messageContent ?? undefined

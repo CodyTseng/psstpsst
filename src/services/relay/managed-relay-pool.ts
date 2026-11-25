@@ -104,6 +104,7 @@ export type ManagedQueryResult = {
 export type ManagedPublishOptions = {
   url: string;
   event: Event;
+  expiresAt?: number;
   signAuth?: SignAuth;
   timeoutMs?: number;
   abort?: AbortSignal;
@@ -370,6 +371,10 @@ export class ManagedRelayPool {
 
     let hasAuthed = false;
     const attempt = async (): Promise<ManagedPublishOutcome> => {
+      if (options.abort?.aborted) return { ok: false, reason: 'publish cancelled' };
+      if (options.expiresAt !== undefined && options.expiresAt <= Date.now()) {
+        return { ok: false, reason: 'message expired' };
+      }
       try {
         const message = await abortable(
           withBackgroundTimeout(

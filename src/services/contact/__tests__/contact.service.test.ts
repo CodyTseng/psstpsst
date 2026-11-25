@@ -49,6 +49,7 @@ jest.mock('@/db/client', () => {
       PRIMARY KEY (account_pubkey, pubkey)
     );
     CREATE TABLE conversations (
+      disappear_after_seconds INTEGER,
       account_pubkey TEXT, conversation_key TEXT, has_replied INTEGER,
       group_id TEXT, deleted INTEGER DEFAULT 0, deleted_at INTEGER, deleted_order_at INTEGER
     );

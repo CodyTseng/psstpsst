@@ -1,3 +1,4 @@
+import type { SharedValue } from 'react-native-reanimated';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -57,6 +58,7 @@ const WEB_VOICE_MIME: VoiceMime = 'audio/webm';
 
 type Props = {
   aboveInput?: ReactNode;
+  composerOcclusionExtra?: SharedValue<number>;
   /** Hand off the finished recording to the send pipeline. */
   onSendVoice: (payload: VoicePayload) => void;
   /** Discard and return to the text composer. */
@@ -70,7 +72,7 @@ type Props = {
  * be auditioned and scrubbed, then sent or deleted. Owns the recorder/player and
  * cleans up the temp file unless it's handed off on send. (DESIGN §8)
  */
-export function VoiceRecorderBar({ onSendVoice, onCancel, aboveInput }: Props) {
+export function VoiceRecorderBar({ onSendVoice, onCancel, aboveInput, composerOcclusionExtra }: Props) {
   const c = useThemeColors();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -290,6 +292,7 @@ export function VoiceRecorderBar({ onSendVoice, onCancel, aboveInput }: Props) {
           <ChromeBackdrop scrollbarOcclusion="bottom" />
         </View>
         <ChatComposerFeedbackSlot
+          occlusion={composerOcclusionExtra}
           height={feedbackHeight}
           onHeightChange={(height) => setFeedbackHeight((current) => Math.max(current, height))}
         >{aboveInput}</ChatComposerFeedbackSlot>
@@ -363,6 +366,7 @@ export function VoiceRecorderBar({ onSendVoice, onCancel, aboveInput }: Props) {
         <ChromeBackdrop scrollbarOcclusion="bottom" />
       </View>
       <ChatComposerFeedbackSlot
+        occlusion={composerOcclusionExtra}
         height={feedbackHeight}
         onHeightChange={(height) => setFeedbackHeight((current) => Math.max(current, height))}
       >{aboveInput}</ChatComposerFeedbackSlot>

@@ -16,7 +16,7 @@ function reactionRow({
   tags?: string[][];
 }): MessageRow {
   return {
-    deleted: false,
+    deleted: false, disappearAfterSeconds: null, expiresAt: null,
     accountPubkey: 'self',
     id,
     conversationKey: 'peer',

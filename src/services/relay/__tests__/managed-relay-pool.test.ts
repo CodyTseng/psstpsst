@@ -119,6 +119,45 @@ describe('ManagedRelayPool', () => {
     }
   });
 
+  test('never writes a message that expires while the relay is connecting', async () => {
+    const { pool, relays } = createHarness();
+    const relay = await pool.ensureRelay(RELAY_A);
+    const publish = jest.spyOn(relays[0], 'publish');
+    jest.spyOn(pool, 'ensureRelay').mockImplementation(() => new Promise(resolve => {
+      setTimeout(() => resolve(relay), 1000);
+    }));
+    try {
+      const result = pool.publishToRelay({
+        url: RELAY_A, event: eventAt('expiring', 100), expiresAt: Date.now() + 500,
+      });
+      await jest.advanceTimersByTimeAsync(1000);
+      await expect(result).resolves.toEqual({ ok: false, reason: 'message expired' });
+      expect(publish).not.toHaveBeenCalled();
+    } finally {
+      pool.destroy();
+    }
+  });
+
+  test('never retries an expired message after relay authentication', async () => {
+    const { pool, relays } = createHarness();
+    await pool.ensureRelay(RELAY_A);
+    const publish = jest.spyOn(relays[0], 'publish')
+      .mockRejectedValueOnce(new RelayPublishRejection('auth-required: authenticate to publish'));
+    jest.spyOn(relays[0], 'auth').mockImplementation(() => new Promise(resolve => {
+      setTimeout(() => resolve('signed in'), 1000);
+    }));
+    try {
+      const result = pool.publishToRelay({
+        url: RELAY_A, event: eventAt('expiring', 100), expiresAt: Date.now() + 500, signAuth: jest.fn(),
+      });
+      await jest.advanceTimersByTimeAsync(1000);
+      await expect(result).resolves.toEqual({ ok: false, reason: 'message expired' });
+      expect(publish).toHaveBeenCalledTimes(1);
+    } finally {
+      pool.destroy();
+    }
+  });
+
   test('settles a publish whose connection promise never resolves', async () => {
     const harness = createHarness();
     jest.spyOn(harness.pool, 'ensureRelay').mockReturnValue(new Promise(() => {}));

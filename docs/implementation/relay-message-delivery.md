@@ -80,3 +80,32 @@ importer derives the local visibility flag when it encounters a deletion whose
 target is already present, and discards archive requests with missing targets.
 Older importers may store the deletion as an ordinary rumor and restore the
 original message as visible.
+
+## Disappearing message deadlines
+
+The conversation setting is device-local and applies to newly authored Relay
+direct text. The account bootstrap clears overdue rows before opening its chat
+state. A foreground sweep and a timer for the nearest persisted deadline
+handle subsequent expiry without waiting for connectivity. Loaded chat rows and
+open message surfaces check their deadlines on the foreground transition
+before waiting for the database write. A busy database delays persistence of
+the first visible time. The chat queues observations during a retry delay and
+keeps them when the rows leave the viewport.
+
+Relay delivery checks the original's deadline at each attempt to write the
+event to a connected relay, including after NIP-42 authentication.
+
+Each expiry transaction scrubs the local body and rumor payload, updates the
+conversation preview and unread count, removes notification and outbox work
+for the original, and records a self-addressed deletion with its durable
+delivery job. The original's ID remains reserved for deduplication. An
+offline worker sends the deletion when connectivity returns. Transient
+delivery failures back off without discarding the deletion job.
+
+Disappearing text stays out of chat archives, full-text search, notification
+previews, conversation previews, and quoted excerpts. Embedded media links
+appear as links in the bubble and do not enter the media gallery. Archives
+retain self-addressed expiry confirmations, including those waiting for
+their targets. An authenticated shared deletion of timed text produces a local
+self marker for the archive so a later relay replay remains blocked. Ordinary message deletions retain their existing archive and
+reply behaviour.

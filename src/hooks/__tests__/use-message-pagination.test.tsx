@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { DatabaseSync } from 'node:sqlite';
 import { useMessages } from '../use-messages';
-import { emitMessageDeletion, invalidateAllWarmedMessageTails } from '@/services/conversation/message-tail-cache';
+import { emitMessageDeadlines, emitMessageDeletion, invalidateAllWarmedMessageTails } from '@/services/conversation/message-tail-cache';
 jest.mock('@/i18n', () => ({ language: 'en', t: (key: string) => key }));
 
 jest.mock('@/db/client', () => {
@@ -9,6 +9,7 @@ jest.mock('@/db/client', () => {
   const { drizzle } = jest.requireActual('drizzle-orm/sqlite-proxy');
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(`CREATE TABLE messages (
+    disappear_after_seconds INTEGER, expires_at INTEGER,
     account_pubkey TEXT, id TEXT, conversation_key TEXT, sender_pubkey TEXT,
     kind INTEGER, content TEXT, created_at INTEGER, order_at INTEGER,
     reply_to_id TEXT, subject TEXT, tags TEXT, rumor TEXT,
@@ -27,9 +28,18 @@ jest.mock('@/db/client', () => {
 });
 jest.mock('@/platform', () => {
   const listeners = new Set();
+  const appStateListeners = new Set();
   return {
     databaseListeners: listeners,
+    appStateListeners,
     platform: {
+      appState: {
+        addChangeListener(listener: (state: string) => void) {
+          appStateListeners.add(listener);
+          return () => appStateListeners.delete(listener);
+        },
+      },
+      notifications: { addUserReturnedListener: () => () => {} },
       database: {
         addChangeListener: jest.fn((listener) => {
           listeners.add(listener);
@@ -44,8 +54,9 @@ const { sqlite, queries } = jest.requireMock('@/db/client') as {
   sqlite: DatabaseSync;
   queries: string[];
 };
-const { databaseListeners } = jest.requireMock('@/platform') as {
+const { databaseListeners, appStateListeners } = jest.requireMock('@/platform') as {
   databaseListeners: Set<(event: { tableName?: string }) => void>;
+  appStateListeners: Set<(state: string) => void>;
 };
 
 async function notifyMessagesChanged() {
@@ -63,7 +74,7 @@ describe('chat cursor pagination', () => {
   beforeEach(async () => {
     sqlite.exec('DELETE FROM messages');
     invalidateAllWarmedMessageTails();
-    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL, 0)');
+    const insert = sqlite.prepare('INSERT INTO messages (account_pubkey, id, conversation_key, sender_pubkey, kind, content, created_at, order_at, reply_to_id, subject, tags, rumor, delivery_status, delivery_error, source_relays, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL, 0)');
     for (let i = 1; i <= 420; i++) {
       insert.run('account', String(i), 'conversation', 'peer', 14, 'hello', 1000, i, '[]', '{}');
     }
@@ -74,6 +85,24 @@ describe('chat cursor pagination', () => {
   });
   afterEach(() => act(() => renderer.unmount()));
   afterAll(() => sqlite.close());
+
+  it('hides a timed row on foreground return before the cleanup transaction changes SQLite', () => {
+    jest.useFakeTimers();
+    try {
+      const row = result.bubbleMessages[result.bubbleMessages.length - 1];
+      const deadline = Date.now() + 1000;
+      act(() => { emitMessageDeadlines('account', 'conversation', [{ id: row.id, expiresAt: deadline }]); });
+      expect(result.bubbleMessages.some(message => message.id === row.id)).toBe(true);
+      jest.setSystemTime(deadline + 1000);
+      act(() => { for (const listener of appStateListeners) listener('active'); });
+      expect(result.bubbleMessages.some(message => message.id === row.id)).toBe(false);
+      expect(result.deletedMessageIds.has(row.id)).toBe(true);
+      expect(sqlite.prepare('SELECT content, deleted FROM messages WHERE id = ?').get(row.id))
+        .toEqual({ content: 'hello', deleted: 0 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('releases prefetched cursor pages in UI-sized slices without rereading them', async () => {
     expect(result!.oldestBoundary).toEqual({ createdAt: 1000, senderPubkey: 'peer' });
@@ -194,7 +223,7 @@ describe('chat cursor pagination', () => {
   it('retains the reading window across a burst larger than the live tail', async () => {
     await act(async () => result.loadOlder());
     const retainedIds = new Set(result!.messages.map((message) => message.id));
-    const insert = sqlite.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL, 0)');
+    const insert = sqlite.prepare('INSERT INTO messages (account_pubkey, id, conversation_key, sender_pubkey, kind, content, created_at, order_at, reply_to_id, subject, tags, rumor, delivery_status, delivery_error, source_relays, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, NULL, 0)');
     for (let i = 421; i <= 500; i++) {
       insert.run('account', String(i), 'conversation', 'peer', 14, 'new', 1001, i, '[]', '{}');
     }

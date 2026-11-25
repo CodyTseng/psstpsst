@@ -104,7 +104,7 @@ it('prepares and publishes a resend to peer and self from the original stored ru
   jest.mocked(relayPool.publishEvent).mockClear().mockResolvedValue(undefined as never);
   expect(await harness.processJob(job, {}, 0)).toBe(true);
   expect(prepare).toHaveBeenCalledWith(job, originalRumor, true, {}, 0);
-  expect(wrap).toHaveBeenCalledWith(job, originalRumor, targets, {}, 0);
+  expect(wrap).toHaveBeenCalledWith(job, originalRumor, targets, {}, 0, false);
   expect(relayPool.publishEvent).toHaveBeenCalledTimes(2);
   expect(relayPool.publishEvent).toHaveBeenCalledWith(expect.objectContaining({
     relays: ['wss://peer.example/'], event: { id: 'fresh-peer-wrap' },

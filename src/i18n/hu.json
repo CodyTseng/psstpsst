@@ -462,6 +462,17 @@
     "yesterday": "Tegnap"
   },
   "chat": {
+    "disappearing": {
+      "title": "Eltűnő üzenetek",
+      "off": "Kikapcsolva",
+      "duration_30": "30 másodperc",
+      "duration_300": "5 perc",
+      "duration_3600": "1 óra",
+      "duration_86400": "24 óra",
+      "duration_604800": "7 nap",
+      "hint": "Az erről az eszközről küldött új szöveges üzenetekre vonatkozik. A te időzítőd a küldéskor, a másik félé az üzenet megtekintésekor indul.",
+      "save_failed": "Az időzítőt nem sikerült menteni. Próbáld újra."
+    },
     "input_placeholder": "Írj üzenetet",
     "add_to_contacts": "Hozzáadás a névjegyekhez",
     "block": "Letiltás",

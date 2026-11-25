@@ -462,6 +462,17 @@
     "yesterday": "昨天"
   },
   "chat": {
+    "disappearing": {
+      "title": "閱後即焚",
+      "off": "關閉",
+      "duration_30": "30 秒",
+      "duration_300": "5 分鐘",
+      "duration_3600": "1 小時",
+      "duration_86400": "24 小時",
+      "duration_604800": "7 天",
+      "hint": "適用於你從此裝置傳送的新文字訊息。你的倒數計時從傳送時開始，對方的倒數計時從看到訊息時開始。",
+      "save_failed": "無法儲存倒數計時，請再試一次。"
+    },
     "input_placeholder": "輸入訊息",
     "add_to_contacts": "加入聯絡人",
     "block": "封鎖",

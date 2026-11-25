@@ -24,6 +24,7 @@ import {
   View,
 } from "react-native";
 
+import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
 import {
   Gesture,
@@ -359,6 +360,7 @@ export function EmojiPickerSheet({
   }, [onClosed]);
 
   const [mounted, setMounted] = useState(visible);
+  useOverlayPresentation(visible || mounted);
   // The heavy emoji grid (data build + FlatList mount) is deferred until the
   // slide-in has *finished* — never built on the first mount render or mid-slide
   // — so the open animation runs on a clean frame. Until then only the cheap

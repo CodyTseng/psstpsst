@@ -34,6 +34,7 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  type SharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -48,6 +49,8 @@ import { CountBadge } from '@/components/common/CountBadge';
 import { FrostedBackdrop } from '@/components/common/FrostedBackdrop';
 import { IconButton } from '@/components/common/IconButton';
 import { ImageVisibilityStore } from '@/components/common/VisibilityAwareImage';
+import { platform } from '@/platform';
+import { overlayPresentation } from '@/services/presentation/overlays';
 import { getTimelineTouchView } from '@/platform/timeline-touch-view';
 import { useContactsMap } from '@/hooks/use-contacts';
 import { MESSAGES_PAGE_SIZE, type MessageBoundary } from '@/hooks/use-messages';
@@ -215,6 +218,7 @@ type Props = {
   referencedById: Record<string, MessageRow>;
   deletedMessageIds?: ReadonlySet<string>;
   deferRemovalAnimations?: boolean;
+  onDisappearingMessagesVisible?: (ids: string[], seenAt: number) => Promise<void>;
   /** Load an older page (reaching the top of the list). */
   onLoadOlder: () => void;
   /** Load a newer page (anchored mode → reaching the bottom). */
@@ -284,6 +288,7 @@ type Props = {
   /** Clear the composer that overlays the bottom of the list. */
   bottomInset: number;
   composerInsets?: ComposerInsets;
+  composerOcclusionExtra?: SharedValue<number>;
   /** Clear the title bar that overlays the top of the list. */
   topInset: number;
   /** Attach secondary profile/contact live reads after native navigation while
@@ -325,6 +330,7 @@ export function MessageList({
   referencedById,
   deletedMessageIds,
   deferRemovalAnimations = false,
+  onDisappearingMessagesVisible,
   onLoadOlder,
   onLoadNewer,
   hasMore,
@@ -357,6 +363,7 @@ export function MessageList({
   onToggleSelect,
   bottomInset,
   composerInsets,
+  composerOcclusionExtra,
   topInset,
   liveDataEnabled = true,
   interactive = true,
@@ -407,6 +414,16 @@ export function MessageList({
     viewportHeight: 0,
     contentHeight: 0,
   });
+  const disappearingFrames = useRef(new Map<string, MessageCellFrame>());
+  const observedDisappearingIds = useRef(new Set<string>());
+  const pendingDisappearingObservations = useRef(new Map<string, number>());
+  const visibleObserver = useRef<() => void>(() => {});
+  const [sampleTimedScroll, setSampleTimedScroll] = useState(false);
+  const hasDisappearingFrames = useSharedValue(false);
+  const setTimedSampling = useCallback((active: boolean) => {
+    hasDisappearingFrames.set(active);
+    setSampleTimedScroll(active);
+  }, [hasDisappearingFrames]);
   const [cellFrames] = useState(() => new Map<string, MessageCellFrame>());
   const [inlineDateFrames] = useState(() => new Map<string, MessageCellFrame>());
   const imageCandidates = useRef(new Set<string>());
@@ -438,7 +455,22 @@ export function MessageList({
     if (imageVisibility?.isActive() && imageCandidates.current.has(key)) {
       imageVisibility.setRowVisible(key, isFrameInViewport(frame));
     }
+    if (frame && disappearingFrames.current.has(key)) visibleObserver.current();
   }, [cellFrames, imageVisibility, isFrameInViewport]);
+  const recordDisappearingFrame = useCallback((id: string, frame: MessageCellFrame | null) => {
+    const key = `m:${id}`;
+    const frames = disappearingFrames.current;
+    if (!frame || frame.height <= 0) {
+      if (frames.delete(key) && frames.size === 0) setTimedSampling(false);
+      return;
+    }
+    if (observedDisappearingIds.current.has(id) || pendingDisappearingObservations.current.has(id)) return;
+    const previous = frames.get(key);
+    if (previous?.y === frame.y && previous.height === frame.height) return;
+    frames.set(key, frame);
+    if (!previous && frames.size === 1) setTimedSampling(true);
+    visibleObserver.current();
+  }, [setTimedSampling]);
   const scrollToMessageIndex = useCallback((
     id: string, index: number, viewPosition: number, animated: boolean,
   ) => {
@@ -922,6 +954,7 @@ export function MessageList({
       layoutMeasurement,
     } = event.nativeEvent;
     updateScrollPosition(event.nativeEvent);
+    if (disappearingFrames.current.size) visibleObserver.current();
     // A drag can end at the Android edge without changing the scroll offset.
     if (endedDrag && ready && deferredNewerEdge.current && contentOffset.y <= 0) {
       replayDeferredNewerEdge();
@@ -1250,9 +1283,100 @@ export function MessageList({
     else inlineDateFrames.delete(key);
     if (composerClipped.current && lastFloatingRow.current?.key === key) refreshVisibleMessageChrome();
   }, [inlineDateFrames, refreshVisibleMessageChrome]);
+  const disappearingObserver = useRef<typeof onDisappearingMessagesVisible>(undefined);
+  const writingDisappearingObservations = useRef(false);
+  const disappearingRetry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const disappearingRetryDelay = useRef(500);
+  const observeDisappearingRows = useCallback(() => {
+    const observe = disappearingObserver.current;
+    const frames = disappearingFrames.current;
+    const pending = pendingDisappearingObservations.current;
+    if ((!frames.size && !pending.size) || !observe ||
+        platform.appState.currentState() !== 'active' || platform.notifications.shouldNotifyNow()) return;
+    const observed = observedDisappearingIds.current;
+    if (frames.size && !overlayPresentation.getSnapshot()) {
+      const { offsetY, viewportHeight } = scrollMetricsRef.current;
+      const viewportStart = offsetY + bottomInset + (composerOcclusionExtra?.get() ?? 0);
+      const viewportEnd = offsetY + viewportHeight - topInset - (composerInset?.get() ?? 0);
+      const visibleHeight = viewportEnd - viewportStart;
+      if (visibleHeight > 0) {
+        const now = scrollClock();
+        for (const [key, bubble] of frames) {
+          const cell = cellFrames.get(key);
+          if (!cell) continue;
+          const start = cell.y + bubble.y;
+          const end = start + bubble.height;
+          const visible = Math.min(end, viewportEnd) - Math.max(start, viewportStart);
+          if (visible * 2 < Math.min(bubble.height, visibleHeight)) continue;
+          pending.set(key.slice(2), now);
+          frames.delete(key);
+        }
+        if (frames.size === 0) setTimedSampling(false);
+      }
+    }
+    // A real sighting survives a scroll. Backoff gates writes, not observation.
+    if (!pending.size || writingDisappearingObservations.current || disappearingRetry.current !== undefined) return;
+    writingDisappearingObservations.current = true;
+    const byTime = new Map<number, string[]>();
+    for (const [id, seenAt] of pending) {
+      const group = byTime.get(seenAt);
+      if (group) group.push(id);
+      else byTime.set(seenAt, [id]);
+    }
+    let failed = false;
+    void Promise.all([...byTime].map(async ([seenAt, group]) => {
+      try {
+        await observe(group, seenAt);
+        for (const id of group) {
+          pending.delete(id);
+          observed.add(id);
+        }
+      } catch {
+        failed = true;
+      }
+    })).then(() => {
+      writingDisappearingObservations.current = false;
+      if (!failed) {
+        disappearingRetryDelay.current = 500;
+        if (pending.size) visibleObserver.current();
+        return;
+      }
+      if (!disappearingObserver.current) return;
+      disappearingRetry.current = setTimeout(() => {
+        disappearingRetry.current = undefined;
+        visibleObserver.current();
+      }, disappearingRetryDelay.current);
+      disappearingRetryDelay.current = Math.min(8000, disappearingRetryDelay.current * 2);
+    });
+  }, [bottomInset, cellFrames, composerInset, composerOcclusionExtra, setTimedSampling, topInset]);
+  useLayoutEffect(() => {
+    visibleObserver.current = observeDisappearingRows;
+    disappearingObserver.current = ready && pendingInitialPosition.ready && liveDataEnabled
+      ? onDisappearingMessagesVisible : undefined;
+    observeDisappearingRows();
+    return () => { disappearingObserver.current = undefined; };
+  }, [ready, pendingInitialPosition.ready, liveDataEnabled, observeDisappearingRows, onDisappearingMessagesVisible]);
+  useEffect(() => {
+    if (!onDisappearingMessagesVisible) return;
+    const offAppState = platform.appState.addChangeListener(state => {
+      if (state === 'active') visibleObserver.current();
+    });
+    const refresh = () => visibleObserver.current();
+    const offReturn = platform.notifications.addUserReturnedListener(refresh);
+    const offOverlay = overlayPresentation.subscribe(refresh);
+    return () => {
+      clearTimeout(disappearingRetry.current);
+      disappearingRetry.current = undefined;
+      offAppState();
+      offReturn();
+      offOverlay();
+    };
+  }, [onDisappearingMessagesVisible]);
+
   const handleViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken<ListItem>[] }) => {
       viewableItemsRef.current = viewableItems;
+      visibleObserver.current();
       if (imageVisibility) {
         imageCandidates.current = new Set(viewableItems.filter((item) => item.isViewable).map((item) => item.key));
         if (imageVisibility.isActive()) refreshImageVisibility();
@@ -1267,9 +1391,25 @@ export function MessageList({
     viewportClip.current = clip;
     composerClipped.current = hasComposerClip;
     if (clipChanged && imageVisibility?.isActive()) refreshImageVisibility();
-    if (hasComposerClip || composerClipChanged) refreshVisibleMessageChrome();
+    if (hasComposerClip || composerClipChanged) {
+      visibleObserver.current();
+      refreshVisibleMessageChrome();
+    }
   });
 
+  const [observeComposerMovement] = useState(() => () => visibleObserver.current());
+  // Sample live keyboard and composer clipping only while an unread timed
+  // bubble is mounted. Other list consumers keep their settled-inset path.
+  useAnimatedReaction(
+    () => hasDisappearingFrames.value
+      ? [composerInset?.value ?? 0, composerOcclusionExtra?.value ?? 0]
+      : null,
+    (insets, previous) => {
+      if (insets && (insets[0] !== previous?.[0] || insets[1] !== previous?.[1])) {
+        scheduleOnRN(observeComposerMovement);
+      }
+    },
+  );
   // Reuse native cell layouts and cross to JS only when the composer settles.
   useAnimatedReaction(
     () => {
@@ -1411,7 +1551,7 @@ export function MessageList({
     reduceMotion: reducedMotion || !liveDataEnabled,
     defer: deferRemovalAnimations,
     visibleRows: () => viewableItemsRef.current.flatMap(({ item, key, isViewable }) => {
-      if (!isViewable || item.kind !== 'message') return [];
+      if (!isViewable || item.kind !== 'message' || item.message.disappearAfterSeconds != null) return [];
       const frame = cellFrames.get(key);
       return frame && !isFrameInViewport(frame) ? [] : [item.message];
     }),
@@ -1759,7 +1899,8 @@ export function MessageList({
                 profile,
               ),
               contentPreview:
-                replyDeleted ? t('chat.message_delete.deleted') : target.kind === 15
+                replyDeleted ? t('chat.message_delete.deleted') : target.disappearAfterSeconds != null
+                  ? t('chat.disappearing.title') : target.kind === 15
                   ? attachmentLabel(target.tags, attachmentLabels)
                   : target.content,
             }
@@ -1885,6 +2026,8 @@ export function MessageList({
             contentPreview:
               replyDeleted || target.deleted
                 ? t('chat.message_delete.deleted')
+                : target.disappearAfterSeconds != null
+                ? t('chat.disappearing.title')
                 : target.kind === 15
                 ? attachmentLabel(target.tags, attachmentLabels)
                 : target.content,
@@ -1906,6 +2049,7 @@ export function MessageList({
         presentationsByMessageId[msg.id] ??
         prepareMessagePresentation({
           messageId: msg.id,
+          disappearing: msg.disappearAfterSeconds != null,
           kind: msg.kind,
           content: msg.content,
           tags: msg.tags,
@@ -1975,6 +2119,9 @@ export function MessageList({
             createdAt={msg.createdAt}
             orderAt={msg.orderAt}
             rumorId={msg.id}
+            onBodyFrame={onDisappearingMessagesVisible && !group && !proximity && msg.disappearAfterSeconds != null &&
+              msg.expiresAt == null && msg.senderPubkey !== accountPubkey && !msg.deleted
+              ? recordDisappearingFrame : undefined}
             persistedDelivery={persistedDelivery}
             replyTo={replyPreview}
             reactions={reactions}
@@ -2061,7 +2208,7 @@ export function MessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       deletedMessageIds, deferRemovalAnimations, finishRemoval, removing,
-      accountPubkey, attachmentLabels, canShowDelivery, canSwipeReply,
+      accountPubkey, attachmentLabels, canShowDelivery, canSwipeReply, onDisappearingMessagesVisible, recordDisappearingFrame,
       conversationKey, group, openGroupMemberProfile,
       oldestBoundary, dateTimeFormatPreferences,
       deliveriesByMessageId, firstUnreadId, flashTarget, hasTranslatedViewport, interactive, recordInlineDate, recordUnreadDivider,
@@ -2093,6 +2240,7 @@ export function MessageList({
       onLayout={(event) => {
         const viewportHeight = event.nativeEvent.layout.height;
         scrollMetricsRef.current.viewportHeight = viewportHeight;
+        if (disappearingFrames.current.size) visibleObserver.current();
         if (imageVisibility?.isActive()) refreshImageVisibility();
         const { contentHeight } = scrollMetricsRef.current;
         if (contentHeight > 0 && contentHeight <= viewportHeight) {
@@ -2128,7 +2276,9 @@ export function MessageList({
       onScroll={(e) => {
         const y = e.nativeEvent.contentOffset.y;
         const moved = y !== scrollMetricsRef.current.offsetY;
+        const viewportResized = e.nativeEvent.layoutMeasurement.height !== scrollMetricsRef.current.viewportHeight;
         const movingOlder = updateScrollPosition(e.nativeEvent);
+        if (disappearingFrames.current.size && (moved || viewportResized)) visibleObserver.current();
         if (moved && composerClipped.current) refreshVisibleMessageChrome();
         if (moved && userScrollInProgressRef.current) {
           footerOnlyResize.current = false;
@@ -2165,7 +2315,8 @@ export function MessageList({
           activateFloatingDate(!userScrollInProgressRef.current);
         }
       }}
-      scrollEventThrottle={64}
+      // Timed messages can cross the threshold entirely between 64ms samples.
+      scrollEventThrottle={sampleTimedScroll && liveDataEnabled ? 16 : 64}
       onViewableItemsChanged={handleViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
       keyExtractor={(item) =>
@@ -2243,7 +2394,8 @@ export function MessageList({
   return (
     <MessageLayoutViewport
       imageVisibility={imageVisibility}
-      onCellFrame={composerInsets || imageVisibility ? recordCellFrame : undefined}
+      onCellFrame={composerInsets || imageVisibility || onDisappearingMessagesVisible ? recordCellFrame : undefined}
+      timedCellFramesOnly={!composerInsets && imageVisibility == null}
     >
       {TimelineTouchView ? (
         <TimelineTouchView style={styles.timelineClip} onTouchCancelled={handleTouchCancel}>

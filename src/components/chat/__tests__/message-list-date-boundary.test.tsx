@@ -9,6 +9,25 @@ import { PendingAttachmentBubble } from '../PendingAttachmentBubble';
 import { DatePill, DateSeparator } from '../message-date-separator';
 import { MessageLayoutViewport } from '../message-row-layout';
 import { IconButton } from '@/components/common/IconButton';
+import { overlayPresentation } from '@/services/presentation/overlays';
+
+let mockAppState = 'active';
+const mockAppStateListeners = new Set<(state: string) => void>();
+jest.mock('@/platform', () => ({
+  platform: {
+    appState: {
+      currentState: () => mockAppState,
+      addChangeListener: (listener: (state: string) => void) => {
+        mockAppStateListeners.add(listener);
+        return () => mockAppStateListeners.delete(listener);
+      },
+    },
+    notifications: {
+      shouldNotifyNow: () => mockAppState !== 'active',
+      addUserReturnedListener: () => () => {},
+    },
+  },
+}));
 
 let mockPreference = 'light';
 let mockReducedMotion = false;
@@ -90,7 +109,7 @@ function visibleScrollButtons(list: ReactTestRenderer) {
 type Props = ComponentProps<typeof MessageList>;
 const createdAt = Math.floor(new Date(2026, 8, 2, 8).getTime() / 1000);
 const message: Props['messages'][number] = {
-  deleted: false,
+  deleted: false, disappearAfterSeconds: null, expiresAt: null,
   accountPubkey: 'self',
   id: 'first-message',
   conversationKey: 'peer',
@@ -162,6 +181,178 @@ describe('MessageList boundaries and reply navigation', () => {
     mockReducedMotion = false;
     mockHasTimelineTouchView = false;
     jest.restoreAllMocks();
+  });
+
+  function layoutTimedBubble(id: string, cell: { y: number; height: number }, bubble = { y: 0, height: cell.height }) {
+    const flatList = list.root.findByType(FlatList).props;
+    const index = flatList.data.get(id);
+    const item = flatList.data[index];
+    const body = flatList.renderItem({ item, index }).props.children[0];
+    list.root.findByType(MessageLayoutViewport).props.onCellFrame(`m:${id}`, cell);
+    body.props.onBodyFrame(id, bubble);
+  }
+
+  function scrollTimedList(offset: number, height = 600) {
+    list.root.findByType(FlatList).props.onScroll({ nativeEvent: {
+      contentOffset: { y: offset }, contentSize: { height: 30_000 }, layoutMeasurement: { height },
+    } });
+  }
+
+  it('observes a disappearing received row only once it is viewable in the foreground', () => {
+    const visible = { ...message, id: 'timed-visible', senderPubkey: 'peer', disappearAfterSeconds: 30 };
+    const offscreen = { ...visible, id: 'timed-offscreen', orderAt: visible.orderAt + 1 };
+    const onSeen = jest.fn(async () => {});
+    mockAppState = 'background';
+    try {
+      act(() => { list = create(<MessageList {...props({ messages: [visible, offscreen], onDisappearingMessagesVisible: onSeen })} />); });
+      const flatList = list.root.findByType(FlatList).props;
+      const index = flatList.data[0].message.id === visible.id ? 0 : 1;
+      const tokens = { viewableItems: [{ index, item: flatList.data[index], key: `m:${visible.id}`, isViewable: true }] };
+      expect(onSeen).not.toHaveBeenCalled();
+      act(() => {
+        flatList.onLayout({ nativeEvent: { layout: { height: 600 } } });
+        layoutTimedBubble(visible.id, { y: 100, height: 100 });
+        flatList.onViewableItemsChanged(tokens);
+      });
+      expect(onSeen).not.toHaveBeenCalled();
+      const closeOverlay = overlayPresentation.register();
+      try {
+        mockAppState = 'active';
+        act(() => { for (const listener of mockAppStateListeners) listener('active'); });
+        expect(onSeen).not.toHaveBeenCalled();
+      } finally {
+        act(closeOverlay);
+      }
+      expect(onSeen).toHaveBeenCalledWith([visible.id], expect.any(Number));
+      act(() => { flatList.onViewableItemsChanged(tokens); });
+      expect(onSeen).toHaveBeenCalledTimes(1);
+    } finally {
+      mockAppState = 'active';
+    }
+  });
+
+  it('starts immediately on a scroll crossing half the bubble while viewability tokens stay unchanged', () => {
+    const timed = { ...message, senderPubkey: 'peer', disappearAfterSeconds: 30 };
+    const onSeen = jest.fn(async () => {});
+    act(() => { list = create(<MessageList {...props({ messages: [timed], onDisappearingMessagesVisible: onSeen })} />); });
+    const flatList = list.root.findByType(FlatList).props;
+    expect(flatList.scrollEventThrottle).toBe(64);
+    expect(flatList.viewabilityConfig).toEqual({ itemVisiblePercentThreshold: 1 });
+    act(() => {
+      scrollTimedList(0);
+      layoutTimedBubble(timed.id, { y: 500, height: 250 }, { y: 30, height: 200 });
+      flatList.onViewableItemsChanged({
+        viewableItems: [{ index: 0, item: flatList.data[0], key: `m:${timed.id}`, isViewable: true }],
+      });
+    });
+    expect(list.root.findByType(FlatList).props.scrollEventThrottle).toBe(16);
+    // Bubble bounds in inverted coordinates are [530, 730].
+    act(() => { scrollTimedList(29); });
+    expect(onSeen).not.toHaveBeenCalled();
+    act(() => { scrollTimedList(30); });
+    expect(onSeen).toHaveBeenCalledWith([timed.id], expect.any(Number));
+    expect(list.root.findByType(FlatList).props.scrollEventThrottle).toBe(64);
+    act(() => { scrollTimedList(100); });
+    expect(onSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses half the clipped viewport for a bubble taller than it, even without a 1% token', () => {
+    const timed = { ...message, senderPubkey: 'peer', disappearAfterSeconds: 30 };
+    const onSeen = jest.fn(async () => {});
+    const live = { value: 200, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+    const extra = { value: 30, get() { return this.value; } } as NonNullable<Props['composerOcclusionExtra']>;
+    act(() => {
+      list = create(<MessageList {...props({
+        messages: [timed], onDisappearingMessagesVisible: onSeen, composerInsets: { live, settled: live },
+        topInset: 40, bottomInset: 50, composerOcclusionExtra: extra,
+      })} />);
+    });
+    act(() => {
+      scrollTimedList(0);
+      // Viewport is [80, 360]. The bubble starts at 221, leaving 139 visible.
+      layoutTimedBubble(timed.id, { y: 221, height: 30_000 });
+    });
+    expect(onSeen).not.toHaveBeenCalled();
+    act(() => { scrollTimedList(1); });
+    expect(onSeen).toHaveBeenCalledWith([timed.id], expect.any(Number));
+  });
+
+  it('re-evaluates a stationary timed bubble as the live keyboard inset changes', () => {
+    const timed = { ...message, senderPubkey: 'peer', disappearAfterSeconds: 30 };
+    const onSeen = jest.fn(async () => {});
+    const live = { value: 160, get() { return this.value; } } as NonNullable<Props['composerInsets']>['live'];
+    act(() => {
+      list = create(<MessageList {...props({
+        messages: [timed], onDisappearingMessagesVisible: onSeen, composerInsets: { live, settled: live },
+        topInset: 40, bottomInset: 50,
+      })} />);
+    });
+    act(() => {
+      scrollTimedList(0);
+      layoutTimedBubble(timed.id, { y: 351, height: 100 });
+    });
+    expect(onSeen).not.toHaveBeenCalled();
+    const [prepare, recheck] = mockClipReaction.mock.calls.at(-2)!;
+    const before = prepare();
+    live.value = 159;
+    act(() => { recheck(prepare(), before); });
+    expect(onSeen).toHaveBeenCalledWith([timed.id], expect.any(Number));
+  });
+
+  it('retries a failed first-view write with its original timestamp while the row stays visible', async () => {
+    jest.useFakeTimers();
+    const timed = { ...message, senderPubkey: 'peer', disappearAfterSeconds: 30 };
+    const onSeen = jest.fn().mockRejectedValueOnce(new Error('database busy')).mockResolvedValue(undefined);
+    try {
+      act(() => { list = create(<MessageList {...props({ messages: [timed], onDisappearingMessagesVisible: onSeen })} />); });
+      const flatList = list.root.findByType(FlatList).props;
+      await act(async () => {
+        flatList.onLayout({ nativeEvent: { layout: { height: 600 } } });
+        layoutTimedBubble(timed.id, { y: 100, height: 100 });
+      });
+      expect(onSeen).toHaveBeenCalledTimes(1);
+      await act(async () => { await jest.advanceTimersByTimeAsync(500); });
+      expect(onSeen.mock.calls).toEqual([onSeen.mock.calls[0], onSeen.mock.calls[0]]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('records a second first sighting during backoff even after that row scrolls out', async () => {
+    jest.useFakeTimers();
+    const first = { ...message, id: 'first-timed', senderPubkey: 'peer', disappearAfterSeconds: 30 };
+    const second = { ...first, id: 'second-timed', orderAt: first.orderAt + 1 };
+    const onSeen = jest.fn().mockRejectedValueOnce(new Error('database busy')).mockResolvedValue(undefined);
+    try {
+      act(() => { list = create(<MessageList {...props({ messages: [first, second], onDisappearingMessagesVisible: onSeen })} />); });
+      const flatList = list.root.findByType(FlatList).props;
+      const tokens = (id: string) => {
+        const index = flatList.data[0].message.id === id ? 0 : 1;
+        return { viewableItems: [{ index, item: flatList.data[index], key: `m:${id}`, isViewable: true }] };
+      };
+      const firstSeenAt = Date.now();
+      await act(async () => {
+        scrollTimedList(0);
+        layoutTimedBubble(first.id, { y: 100, height: 100 });
+        layoutTimedBubble(second.id, { y: 670, height: 100 });
+        flatList.onViewableItemsChanged(tokens(first.id));
+      });
+      await act(async () => { await jest.advanceTimersByTimeAsync(100); });
+      const secondSeenAt = Date.now();
+      await act(async () => {
+        scrollTimedList(150);
+        flatList.onViewableItemsChanged(tokens(second.id));
+        scrollTimedList(800);
+        flatList.onViewableItemsChanged({ viewableItems: [] });
+      });
+      expect(onSeen.mock.calls).toEqual([[[first.id], firstSeenAt]]);
+      await act(async () => { await jest.advanceTimersByTimeAsync(400); });
+      expect(onSeen.mock.calls).toEqual([
+        [[first.id], firstSeenAt], [[first.id], firstSeenAt], [[second.id], secondSeenAt],
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it.each([false, true])('retains only visible deleted rows when reduced motion is %s', (reducedMotion) => {

@@ -465,6 +465,17 @@
     "yesterday": "Hier"
   },
   "chat": {
+    "disappearing": {
+      "title": "Messages éphémères",
+      "off": "Désactivés",
+      "duration_30": "30 secondes",
+      "duration_300": "5 minutes",
+      "duration_3600": "1 heure",
+      "duration_86400": "24 heures",
+      "duration_604800": "7 jours",
+      "hint": "S’applique aux nouveaux messages texte envoyés depuis cet appareil. Votre délai commence à l’envoi. Celui de votre contact commence quand il voit le message.",
+      "save_failed": "Impossible d’enregistrer le délai. Réessayez."
+    },
     "input_placeholder": "Écrivez un message",
     "add_to_contacts": "Ajouter aux contacts",
     "block": "Bloquer",

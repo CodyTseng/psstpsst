@@ -58,7 +58,7 @@ function buildMessages(
     };
     return {
       accountPubkey,
-      deleted: false,
+      deleted: false, disappearAfterSeconds: null, expiresAt: null,
       id,
       conversationKey: conversation.pubkey,
       senderPubkey,

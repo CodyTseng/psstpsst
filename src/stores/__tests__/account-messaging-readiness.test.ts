@@ -18,7 +18,7 @@ jest.mock('@/services/account/account.service', () => ({
   migrateNip46BunkerSecrets: jest.fn(), setAccountEncryptionPubkey: jest.fn(),
   clearActiveAccountPubkey: jest.fn(), setActiveAccountPubkey: jest.fn(),
 }));
-jest.mock('@/services/dm/dm.service', () => ({ dmService: { init: jest.fn(), destroy: jest.fn() } }));
+jest.mock('@/services/dm/dm.service', () => ({ dmService: { init: jest.fn(), destroy: jest.fn(), expireDisappearingMessages: jest.fn(async () => null) } }));
 jest.mock('@/services/dm/encryption-key-rotation.service', () => ({ rotateEncryptionKeyIfDue: jest.fn() }));
 jest.mock('@/services/relay/relay-pool', () => ({ relayPool: { destroy: jest.fn() } }));
 jest.mock('@/services/relay/relay-list.service', () => ({
@@ -61,6 +61,18 @@ beforeEach(() => {
   resolveMetadata.mockResolvedValue(metadata());
 });
 afterEach(async () => { await useActiveAccount.getState().signOut(); });
+
+it('holds local history behind the cold-start expiry sweep', async () => {
+  const pending = hold<null>();
+  jest.mocked(dmService.expireDisappearingMessages).mockReturnValueOnce(pending.promise);
+  const opening = useActiveAccount.getState().loadFromStorage();
+  await flush();
+  expect(dmService.expireDisappearingMessages).toHaveBeenCalledWith('account');
+  expect(useActiveAccount.getState()).toMatchObject({ activePubkey: null, status: 'loading' });
+  pending.resolve(null);
+  await opening;
+  expect(useActiveAccount.getState()).toMatchObject({ activePubkey: 'account', status: 'ready' });
+});
 
 it('shows local history while awaiting metadata but does not initialize receiving', async () => {
   const pending = hold<MessagingMetadata>();

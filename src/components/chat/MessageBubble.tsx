@@ -1,6 +1,6 @@
 import { Reply as CornerUpLeft } from '@solar-icons/react-native/category/arrows-action/Linear/Reply';
 import type { ComponentProps, ComponentType } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { InteractivePressable as Pressable } from '@/components/common/InteractivePressable';
@@ -21,7 +21,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { messageBodyLayout, useMessageRowWidth, type MessageBodyLayout } from './message-row-layout';
+import { messageBodyLayout, useMessageRowWidth, type MessageBodyLayout, type MessageCellFrame } from './message-row-layout';
 import { SelectionDot } from '@/components/common/SelectionDot';
 import { Avatar } from '@/components/common/Avatar';
 import { AppButton } from '@/components/common/AppButton';
@@ -132,6 +132,8 @@ type Props = {
   /** Fired with the bubble's measured screen rect, to anchor the action menu. */
   onLongPress?: (rect: BubbleRect) => void;
   onShowDelivery?: () => void;
+  /** Layout of a direct-message bubble from the bottom of its timeline cell. */
+  onBodyFrame?: (messageId: string, frame: MessageCellFrame | null) => void;
   /** Tap the quoted reply preview → scroll to the referenced message. */
   onPressReply?: () => void;
   /** Briefly flash the row (e.g. after jumping to it from a reply). */
@@ -190,6 +192,7 @@ function MessageBubbleBase({
   onSwipeReply,
   onLongPress,
   onShowDelivery,
+  onBodyFrame,
   onPressReply,
   highlighted,
   highlightTick,
@@ -217,6 +220,19 @@ function MessageBubbleBase({
   // only as its source hover target and anchors the menu to the pointer.
   const messageVisualRef = useRef<View>(null);
   const bubbleRef = useRef<View>(null);
+  const measuredHeights = useRef({ body: 0, cluster: 0 });
+  const reportBodyFrame = onBodyFrame && rumorId ? (part: 'body' | 'cluster', height: number) => {
+    const heights = measuredHeights.current;
+    heights[part] = height;
+    if (heights.body > 0 && heights.cluster >= heights.body) {
+      // Inverted FlatList puts this first child at the bottom of its cell.
+      // The direct-message cluster starts at the bubble and ends with reactions.
+      onBodyFrame(rumorId, { y: heights.cluster - heights.body, height: heights.body });
+    }
+  } : undefined;
+  useLayoutEffect(() => () => {
+    if (onBodyFrame && rumorId) onBodyFrame(rumorId, null);
+  }, [onBodyFrame, rumorId]);
   const emitLongPress = useCallback((withImpact: boolean, pointer?: DesktopPointerPoint) => {
     const visualNode = messageVisualRef.current;
     const bodyNode = bubbleRef.current;
@@ -377,17 +393,14 @@ function MessageBubbleBase({
             BUBBLE_ROW_PADDING_HORIZONTAL +
             (!isSelf && groupSenderPubkey ? GROUP_SENDER_COLUMN_WIDTH : 0),
           paddingEnd: BUBBLE_ROW_PADDING_HORIZONTAL,
-          marginTop: separatorAbove
-            ? 0
-            : groupStart
-              ? BUBBLE_GROUP_GAP
-              : BUBBLE_GAP,
+          marginTop: separatorAbove ? 0 : groupStart ? BUBBLE_GROUP_GAP : BUBBLE_GAP,
           backgroundColor: rowBackground ?? 'transparent',
         }}
       >
         <Reanimated.View
           ref={messageVisualRef}
           collapsable={false}
+          onLayout={onBodyFrame ? ({ nativeEvent }) => reportBodyFrame?.('cluster', nativeEvent.layout.height) : undefined}
           style={[
             {
               alignSelf: isSelf ? 'flex-end' : 'flex-start',
@@ -439,7 +452,11 @@ function MessageBubbleBase({
             ) : null}
 
             <Reanimated.View style={bubbleSlide}>
-              <View ref={bubbleRef} collapsable={false}>
+              <View
+                ref={bubbleRef}
+                collapsable={false}
+                onLayout={onBodyFrame ? ({ nativeEvent }) => reportBodyFrame?.('body', nativeEvent.layout.height) : undefined}
+              >
                 {body}
               </View>
             </Reanimated.View>
@@ -702,6 +719,7 @@ function areEqual(a: Props, b: Props): boolean {
     a.interactive !== b.interactive ||
     a.remoteContentMode !== b.remoteContentMode ||
     a.rumorId !== b.rumorId ||
+    a.onBodyFrame !== b.onBodyFrame ||
     a.attachmentSenderPubkey !== b.attachmentSenderPubkey ||
     a.highlighted !== b.highlighted ||
     a.highlightTick !== b.highlightTick ||

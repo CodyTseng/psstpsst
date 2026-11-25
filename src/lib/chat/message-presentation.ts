@@ -2,6 +2,7 @@ import { shortCustomEmojiMessage } from '@/lib/emoji/custom-message';
 import { shortEmojiMessage } from '@/lib/emoji/short-message';
 import { customEmojisFromMessageTags } from '@/lib/nostr/custom-emoji';
 import { embeddedMediaByUrl, type EmbeddedMedia } from '@/lib/nostr/embedded-media';
+import { disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
 import { findFileMeta } from '@/lib/nostr/file-tags';
 import {
   parseMessageSegments,
@@ -27,6 +28,7 @@ export type PreparedMessagePresentation = {
   invoice: ReturnType<typeof parseInvoiceMessage>;
   invoiceDescription: string | null;
   attachment: ReturnType<typeof findFileMeta>;
+  disappearing: boolean;
 };
 
 type PrepareParams = {
@@ -34,6 +36,7 @@ type PrepareParams = {
   kind: number;
   content: string;
   tags?: string[][] | null;
+  disappearing?: boolean;
 };
 
 const MAX_PREPARED_MESSAGES = 2048;
@@ -49,7 +52,7 @@ function contentBlocks(
   return splitMessageContentBlocks(segments, new Set(embeddedMedia.keys()));
 }
 
-function buildPresentation({ kind, content, tags }: PrepareParams): PreparedMessagePresentation {
+function buildPresentation({ kind, content, tags, disappearing = false }: PrepareParams): PreparedMessagePresentation {
   const customEmojis = customEmojisFromMessageTags(tags);
   const customEmojiMap = new Map(
     customEmojis.map((emoji) => [emoji.shortcode.toLowerCase(), emoji] as const),
@@ -58,13 +61,14 @@ function buildPresentation({ kind, content, tags }: PrepareParams): PreparedMess
   const shortEmoji = shortEmojiMessage(content);
   const shortEmojiContent = shortEmoji?.content ?? null;
   const segments = shortEmojiContent ? [] : parseMessageSegments(content);
-  const embeddedMedia = embeddedMediaByUrl(
+  const embeddedMedia = disappearing ? new Map<string, EmbeddedMedia>() : embeddedMediaByUrl(
     segments.flatMap((segment) => (segment.type === 'url' ? [segment.href] : [])),
     tags ?? [],
   );
 
   return {
     customEmojiMap,
+    disappearing,
     shortCustomEmojis,
     shortEmoji,
     segments,
@@ -84,6 +88,9 @@ function buildPresentation({ kind, content, tags }: PrepareParams): PreparedMess
 export function prepareMessagePresentation(
   params: PrepareParams,
 ): PreparedMessagePresentation {
+  const disappearing = params.disappearing ??
+    (disappearingMessageDuration({ kind: params.kind, tags: params.tags ?? [] }) !== null);
+  if (disappearing) return buildPresentation({ ...params, disappearing });
   if (!params.messageId) return buildPresentation(params);
   const cached = preparedByMessageId.get(params.messageId);
   if (cached) {

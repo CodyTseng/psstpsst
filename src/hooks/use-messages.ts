@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import { useLiveQuery } from '@/db/use-live-query';
 import {
   startTransition,
@@ -24,6 +24,7 @@ import {
   getWarmedMessageTailPresentation,
   invalidateWarmedMessageTail,
   replaceWarmedMessageTail,
+  subscribeToMessageDeadlines,
   subscribeToMessageDeletions,
   type PreparedBubbleRenderItem,
   type PreparedMessageTail,
@@ -48,6 +49,10 @@ export { MESSAGES_PAGE_SIZE } from '@/lib/message-window';
  * media bubbles) and shows it immediately; both sides then page on demand as the
  * reader scrolls (`loadOlder` / `loadNewer`). */
 export const ANCHOR_PAGE_SIZE = 10;
+
+// Use SQLite's clock on every execution, including live-query replays.
+const unexpired = sql`(${messages.expiresAt} IS NULL OR ${messages.expiresAt} >
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000 + CAST(substr(strftime('%f', 'now'), 4) AS INTEGER))`;
 
 type MessageRow = typeof messages.$inferSelect;
 export type MessageBoundary = Pick<MessageRow, 'createdAt' | 'senderPubkey'>;
@@ -225,6 +230,18 @@ export function useMessages(
     [sessionKey],
   );
   const [, bumpReplyTargetVersion] = useState(0);
+  const [seenDeadlines, setSeenDeadlines] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const [expiryNow, setExpiryNow] = useState(Date.now);
+  useLayoutEffect(() => subscribeToMessageDeadlines((account, conversation, updated) => {
+    if (account !== accountPubkey || conversation !== conversationKey) return;
+    setSeenDeadlines(current => {
+      const next = new Map(current);
+      for (const { id, expiresAt } of updated) if (expiresAt !== null) next.set(id, expiresAt);
+      return next;
+    });
+    setExpiryNow(Date.now());
+  }), [accountPubkey, conversationKey]);
+
   const [observedDeletions, setObservedDeletions] = useState(EMPTY_DELETED_IDS);
   useEffect(() => subscribeToMessageDeletions((account, conversation, id) => {
     if (account === accountPubkey && conversation === conversationKey) {
@@ -240,6 +257,7 @@ export function useMessages(
   if (previousSessionKey !== sessionKey) {
     setPreviousSessionKey(sessionKey);
     setObservedDeletions(EMPTY_DELETED_IDS);
+    setSeenDeadlines(new Map());
     setAnchor(null);
     setTailHistory([]);
     setTailOlderPrefetch([]);
@@ -257,6 +275,7 @@ export function useMessages(
         eq(messages.conversationKey, conversationKey),
         inArray(messages.kind, KINDS),
         eq(messages.deleted, false),
+        unexpired,
       ),
     [accountPubkey, conversationKey],
   );
@@ -267,6 +286,7 @@ export function useMessages(
         eq(messages.conversationKey, conversationKey),
         inArray(messages.kind, [14, 15]),
         eq(messages.deleted, false),
+        unexpired,
       ),
     [accountPubkey, conversationKey],
   );
@@ -446,6 +466,7 @@ export function useMessages(
             and(
               eq(messages.accountPubkey, accountPubkey),
               inArray(messages.id, targetIds),
+              unexpired,
             ),
           );
         resolvedTargets.push(...targets);
@@ -813,11 +834,50 @@ export function useMessages(
     };
   }, [accountPubkey, replyTargetCache]);
 
+  // A suspended JS timer may resume after the deadline. Recheck the live
+  // viewport clock on foreground entry before waiting for SQLite cleanup.
+  const { deletedMessageIds, nextDeadline } = useMemo(() => {
+    let expired: Set<string> | undefined;
+    let nextDeadline = Infinity;
+    const check = (id: string, deadline: number | null | undefined) => {
+      if (deadline == null || observedDeletions.has(id)) return;
+      if (deadline <= expiryNow) {
+        expired ??= new Set(observedDeletions);
+        expired.add(id);
+      } else {
+        nextDeadline = Math.min(nextDeadline, deadline);
+      }
+    };
+    for (const row of retainedAscending) check(row.id, row.expiresAt);
+    for (const [id, deadline] of seenDeadlines) check(id, deadline);
+    return { deletedMessageIds: expired ?? observedDeletions, nextDeadline };
+  }, [expiryNow, observedDeletions, retainedAscending, seenDeadlines]);
+  const hasRunningDeadline = Number.isFinite(nextDeadline);
+  useLayoutEffect(() => {
+    if (!hasRunningDeadline) return;
+    const refresh = () => setExpiryNow(Date.now());
+    const offAppState = platform.appState.addChangeListener(state => {
+      if (state === 'active') refresh();
+    });
+    const offReturn = platform.notifications.addUserReturnedListener(refresh);
+    return () => { offAppState(); offReturn(); };
+  }, [hasRunningDeadline]);
+  useLayoutEffect(() => {
+    if (!Number.isFinite(nextDeadline)) return;
+    const remaining = nextDeadline - Date.now();
+    if (remaining <= 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hide newly loaded stale rows before paint
+      setExpiryNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setExpiryNow(Date.now()), remaining);
+    return () => clearTimeout(timer);
+  }, [expiryNow, nextDeadline]);
   const ascending = useMemo(
-    () => observedDeletions.size
-      ? retainedAscending.filter((row) => !observedDeletions.has(row.id))
+    () => deletedMessageIds.size
+      ? retainedAscending.filter((row) => !deletedMessageIds.has(row.id))
       : retainedAscending,
-    [observedDeletions, retainedAscending],
+    [deletedMessageIds, retainedAscending],
   );
   const bubbleMessages = useMemo(
     () => !anchor && tailWindow.prepared?.rowsAscending === ascending
@@ -1177,7 +1237,7 @@ export function useMessages(
     presentationsByMessageId,
     bubbleRenderItemsById,
     replyTargetsById: replyTargetCache.values(),
-    deletedMessageIds: observedDeletions,
+    deletedMessageIds,
     loadOlder,
     loadNewer,
     hasMore,

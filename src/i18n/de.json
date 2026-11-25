@@ -462,6 +462,17 @@
     "yesterday": "Gestern"
   },
   "chat": {
+    "disappearing": {
+      "title": "Selbstlöschende Nachrichten",
+      "off": "Aus",
+      "duration_30": "30 Sekunden",
+      "duration_300": "5 Minuten",
+      "duration_3600": "1 Stunde",
+      "duration_86400": "24 Stunden",
+      "duration_604800": "7 Tage",
+      "hint": "Gilt für neue Textnachrichten, die du von diesem Gerät sendest. Dein Timer startet beim Senden. Der Timer der anderen Person startet, sobald sie die Nachricht sieht.",
+      "save_failed": "Der Timer konnte nicht gespeichert werden. Versuche es erneut."
+    },
     "input_placeholder": "Nachricht schreiben",
     "add_to_contacts": "Zu Kontakten hinzufügen",
     "block": "Blockieren",

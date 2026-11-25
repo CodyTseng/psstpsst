@@ -259,6 +259,7 @@ async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
       const metadata = await profileAsync(profile, 'account.initializeLocally', () =>
         initializeGeneratedAccount(pubkey, signal),
       );
+      await dmService.expireDisappearingMessages(pubkey);
       checkBootstrap(signal);
       useActiveAccount.setState({
         activePubkey: pubkey, status: 'ready', bootPhase: null, switchingTo: null,
@@ -274,6 +275,7 @@ async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
     checkBootstrap(signal);
     if (currentKey != null) {
       await profileAsync(profile, 'holdAtLeast', () => holdAtLeast(startedAt, minHoldMs));
+      await dmService.expireDisappearingMessages(pubkey);
       checkBootstrap(signal);
       useActiveAccount.setState({
         activePubkey: pubkey,
@@ -307,6 +309,8 @@ async function comeOnline(pubkey: string, minHoldMs = 0): Promise<void> {
       });
       outcome = 'need-sync';
     } else {
+      await dmService.expireDisappearingMessages(pubkey);
+      checkBootstrap(signal);
       completeMessagingSendPreparation(pubkey);
       useActiveAccount.setState({
         activePubkey: pubkey,
@@ -545,6 +549,8 @@ export const useActiveAccount = create<State>((set, get) => ({
         set({ status: 'need_sync', bootPhase: null });
         return;
       }
+      await dmService.expireDisappearingMessages(pk);
+      checkBootstrap(signal);
       completeMessagingSendPreparation(pk);
       set({ activePubkey: pk, status: 'ready', bootPhase: null, syncTargetPubkey: null });
     } catch (e) {

@@ -14,6 +14,7 @@ export const relayOutboxJobs = sqliteTable(
     }).notNull(),
     recipientPubkey: text('recipient_pubkey'),
     createdAt: integer('created_at').notNull(),
+    nextAttemptAt: integer('next_attempt_at').notNull().default(0),
   },
   (t) => [
     index('idx_relay_outbox_fifo').on(t.accountPubkey, t.id),

@@ -21,6 +21,8 @@ type RawMessageRow = {
   sender_pubkey: string;
   kind: number;
   content: string;
+  disappear_after_seconds: number | null;
+  expires_at: number | null;
   created_at: number;
   order_at: number;
   reply_to_id: string | null;
@@ -106,6 +108,8 @@ function decodeRow(row: RawMessageRow): MessageRow {
     senderPubkey: row.sender_pubkey,
     kind: row.kind,
     content: row.content,
+    disappearAfterSeconds: row.disappear_after_seconds,
+    expiresAt: row.expires_at,
     deleted: false,
     createdAt: row.created_at,
     orderAt: row.order_at,
@@ -133,6 +137,7 @@ function prepareTail(
     if (row.kind === 7) continue;
     presentationsByMessageId[row.id] = prepareMessagePresentation({
       messageId: row.id,
+      disappearing: row.disappearAfterSeconds != null,
       kind: row.kind,
       content: row.content,
       tags: row.tags,
@@ -173,6 +178,7 @@ export function buildBubbleRenderItems(
       presentationsByMessageId[message.id] ??
       prepareMessagePresentation({
         messageId: message.id,
+        disappearing: message.disappearAfterSeconds != null,
         kind: message.kind,
         content: message.content,
         tags: message.tags,
@@ -230,10 +236,7 @@ export function getWarmedMessageTail(
   conversationKey: string,
 ): MessageRow[] | null {
   if (!accountPubkey || !conversationKey) return null;
-  return (
-    cache.get(cacheKey(accountPubkey, conversationKey))?.prepared
-      .rowsNewestFirst ?? null
-  );
+  return getWarmedMessageTailPresentation(accountPubkey, conversationKey)?.rowsNewestFirst ?? null;
 }
 
 /** Read the render-ready conversation window without cloning, filtering, or
@@ -246,7 +249,7 @@ export function getWarmedMessageTailPresentation(
 ): PreparedMessageTail | null {
   if (!accountPubkey || !conversationKey) return null;
   const entry = cache.get(cacheKey(accountPubkey, conversationKey));
-  if (!entry) return null;
+  if (!entry || entry.prepared.rowsNewestFirst.some(row => row.expiresAt != null && row.expiresAt <= Date.now())) return null;
   if (!proximity && (!selfPubkey || selfPubkey === entry.accountPubkey)) {
     return entry.prepared;
   }
@@ -295,6 +298,24 @@ export function invalidateWarmedMessageTail(
   cache.delete(key);
 }
 
+type MessageDeadlineListener = (
+  accountPubkey: string, conversationKey: string, updated: { id: string; expiresAt: number | null }[],
+) => void;
+
+const deadlineListeners = new Set<MessageDeadlineListener>();
+
+export function subscribeToMessageDeadlines(listener: MessageDeadlineListener): () => void {
+  deadlineListeners.add(listener);
+  return () => deadlineListeners.delete(listener);
+}
+
+export function emitMessageDeadlines(
+  accountPubkey: string, conversationKey: string, updated: { id: string; expiresAt: number | null }[],
+): void {
+  invalidateWarmedMessageTail(accountPubkey, conversationKey);
+  for (const listener of deadlineListeners) listener(accountPubkey, conversationKey, updated);
+}
+
 type MessageDeletionListener = (accountPubkey: string, conversationKey: string, messageId: string) => void;
 
 const deletionListeners = new Set<MessageDeletionListener>();
@@ -331,14 +352,15 @@ export async function warmMessageTail(
   const promise = (async () => {
     try {
       const rows = await platform.database.rawQuery<RawMessageRow>(
-        `SELECT account_pubkey, id, conversation_key, sender_pubkey, kind, content,
+        `SELECT account_pubkey, id, conversation_key, sender_pubkey, kind, content, disappear_after_seconds, expires_at,
                 created_at, order_at, reply_to_id, subject, tags, rumor,
                 delivery_status, source_relays
            FROM messages
           WHERE account_pubkey = ? AND conversation_key = ? AND kind IN (14, 15, 7) AND deleted = 0
+            AND (expires_at IS NULL OR expires_at > ?)
           ORDER BY order_at DESC, id ASC
           LIMIT ?`,
-        [accountPubkey, conversationKey, MESSAGES_PAGE_SIZE],
+        [accountPubkey, conversationKey, Date.now(), MESSAGES_PAGE_SIZE],
       );
       if (generationFor(key) !== generation) return;
       storeSnapshot(key, accountPubkey, rows.map(decodeRow));

@@ -32,6 +32,8 @@ export type RelayPublishResult = { url: string; outcome: PublishOutcome };
 export type PublishEventOpts = {
   relays: string[];
   event: Event;
+  /** Stop sending once this absolute Unix millisecond deadline is reached. */
+  expiresAt?: number;
   /** Identity signer used for NIP-42 auth-required responses. */
   signer?: Signer;
   /** Lower-level alternative to signer. Takes precedence when both are given. */
@@ -156,6 +158,7 @@ class RelayPool {
         const result = await this.managed.publishToRelay({
           url,
           event: opts.event,
+          expiresAt: opts.expiresAt,
           signAuth,
           timeoutMs: opts.timeoutMs,
           abort: opts.abort,

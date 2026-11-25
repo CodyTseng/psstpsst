@@ -63,7 +63,7 @@ function messageRow(
   overrides: Partial<MessageRow> = {},
 ): MessageRow {
   return {
-    deleted: false,
+    deleted: false, disappearAfterSeconds: null, expiresAt: null,
     accountPubkey: 'account',
     id,
     conversationKey,

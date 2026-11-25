@@ -1,3 +1,4 @@
+import { DISAPPEAR_AFTER_TAG } from '@/lib/nostr/disappearing-message';
 import type { CommandContext } from '@/lib/nostr/commands';
 import * as DocumentPicker from 'expo-document-picker';
 import { Image as ExpoImage } from 'expo-image';
@@ -28,7 +29,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View } from 'react-native';
-import Reanimated, { Easing, FadeIn, ReduceMotion, useSharedValue } from 'react-native-reanimated';
+import Reanimated, { Easing, FadeIn, ReduceMotion, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ComposerInsets } from './composer-panel-scheduling';
@@ -301,6 +302,7 @@ export default function ChatPageRuntime() {
   const insets = useSafeAreaInsets();
   const composerInset = useSharedValue(0);
   const settledComposerInset = useSharedValue(0);
+  const composerOcclusionExtra = useSharedValue(0);
   const composerInsets = useMemo<ComposerInsets | undefined>(() => IS_ELECTRON
     ? undefined
     : { live: composerInset, settled: settledComposerInset }, [composerInset, settledComposerInset]);
@@ -744,6 +746,7 @@ export default function ChatPageRuntime() {
                   onFileDropEnabledChange={setFileDropEnabled}
                   onGraduate={handleGraduate}
                   composerInsets={composerInsets}
+                  composerOcclusionExtra={composerOcclusionExtra}
                   topInset={contentTopInset}
                   topOccluderRef={topNoticeRef}
                   liveDataReady={liveDataReady}
@@ -764,6 +767,7 @@ export default function ChatPageRuntime() {
               <ChatInput
                 key={`composer:${accountPubkey}:${conversationKey}`}
                 composerInsets={composerInsets}
+                composerOcclusionExtra={composerOcclusionExtra}
                 aboveInput={<ForwardConversationBanner accountPubkey={accountPubkey}
                   sourceConversationKey={conversationKey} />}
                 commandPeer={peerPubkey || undefined}
@@ -785,6 +789,7 @@ export default function ChatPageRuntime() {
               />
             ) : composerModel.gateStatus ? (
               <ChatComposerGate
+                composerOcclusionExtra={composerOcclusionExtra}
                 aboveInput={<ForwardConversationBanner accountPubkey={accountPubkey}
                   sourceConversationKey={conversationKey} />}
                 status={composerModel.gateStatus}
@@ -830,6 +835,7 @@ type ChatPageContentProps = {
   onFileDropEnabledChange: (enabled: boolean) => void;
   onGraduate: () => void;
   composerInsets?: ComposerInsets;
+  composerOcclusionExtra: SharedValue<number>;
   topInset: number;
   topOccluderRef: MutableRefObject<View | null>;
   liveDataReady: boolean;
@@ -854,6 +860,7 @@ function ChatPageContent({
   onFileDropEnabledChange,
   onGraduate,
   composerInsets,
+  composerOcclusionExtra,
   topInset,
   topOccluderRef,
   liveDataReady,
@@ -1117,12 +1124,16 @@ function ChatPageContent({
   const attachmentStagingRef = useRef(pendingAttachmentSendService.staging);
 
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
+  const markDisappearingMessagesSeen = useCallback((ids: string[], seenAt: number) =>
+    accountPubkey ? dmService.markDisappearingMessagesSeen(accountPubkey, conversationKey, ids, seenAt) : Promise.resolve(),
+  [accountPubkey, conversationKey]);
   const messageListRef = useRef<MessageListHandle | null>(null);
   const [replyFocusRequestVersion, setReplyFocusRequestVersion] = useState(0);
   const [pendingReplyTarget, setPendingReplyTarget] = useState<MessageRow | null>(null);
   // Long-press action-menu target: the message, its measured rect, and a
   // ready-to-render lifted copy. Cleared on dismiss.
   const [menuTarget, setMenuTarget] = useState<MessageRow | null>(null);
+  const [liftedTimedId, setLiftedTimedId] = useState<string | null>(null);
   const [pendingMenuTarget, setPendingMenuTarget] = useState<PendingAttachment | null>(null);
   // The lifted bubble's screen rect + render data, set/cleared as one (the menu
   // is shown while this is non-null). `menuTarget` is tracked separately because
@@ -1166,6 +1177,7 @@ function ChatPageContent({
     emoji: QuickReaction;
   } | null>(null);
   const [detailRumorId, setDetailRumorId] = useState<string | null>(null);
+  const [detailTimedId, setDetailTimedId] = useState<string | null>(null);
   // "Info" was tapped: wait for the lifted copy to finish closing before the
   // detail sheet can change focus and move its source message.
   const [pendingDetailId, setPendingDetailId] = useState<string | null>(null);
@@ -1193,6 +1205,28 @@ function ChatPageContent({
     emoji: CustomEmoji;
     coordinate?: string;
   } | null>(null);
+
+  const expiredMenu = liftedTimedId != null && deletedMessageIds.has(liftedTimedId);
+  const expiredDetail = detailTimedId != null && deletedMessageIds.has(detailTimedId);
+  useEffect(() => {
+    if (!expiredMenu) return;
+    setMenuTarget(null);
+    setMenuAnchor(null);
+    setLiftedTimedId(null);
+    setPendingReplyTarget(null);
+    setPendingReaction(null);
+    setPendingPicker(false);
+    setPendingPickerAnchor(null);
+    setPendingSelectId(null);
+    setPendingDeletion(null);
+    setPendingDetailId(null);
+    setPendingPackPickerEmoji(null);
+  }, [expiredMenu]);
+  useEffect(() => {
+    if (!expiredDetail) return;
+    setDetailRumorId(null);
+    setDetailTimedId(null);
+  }, [expiredDetail]);
 
   const messageIds = loadedMessageIds;
 
@@ -1444,10 +1478,14 @@ function ChatPageContent({
       tags.push(...emojiTags);
     } else {
       tags.push(...emojiTags);
+      if (!isProximity && conversation?.disappearAfterSeconds != null) {
+        tags.push([DISAPPEAR_AFTER_TAG, String(conversation.disappearAfterSeconds)]);
+      }
       if (replyToId) tags.push(['e', replyToId]);
       if (!isProximity && conversation?.name) tags.push(['subject', conversation.name]);
     }
     tags = withMessageOrderTag(tags, timestamp.millisecond);
+    const duration = !isProximity && !isGroup ? conversation?.disappearAfterSeconds ?? null : null;
     const template = {
       kind: 14,
       content: text,
@@ -1466,6 +1504,8 @@ function ChatPageContent({
       senderPubkey: isProximity ? proximitySelfPubkey! : accountPubkey,
       kind: 14,
       content: text,
+      disappearAfterSeconds: duration,
+      expiresAt: duration === null ? null : timestamp.orderAt + duration * 1000,
       createdAt: timestamp.createdAt,
       orderAt: timestamp.orderAt,
       replyToId: replyToId ?? null,
@@ -1495,7 +1535,10 @@ function ChatPageContent({
             extraTags: emojiTags,
             timestamp,
           })
-          .then(() => {
+          .then(({ rumorId }) => {
+            if (rumorId !== optimisticRow.id || (optimisticRow.expiresAt != null && optimisticRow.expiresAt <= Date.now())) {
+              setOptimistic((prev) => prev.filter((row) => row.id !== optimisticRow.id));
+            }
             // Persist the immutable rumor and outbox entry before connection
             // recovery. A declined or unavailable peer therefore leaves a
             // visible queued message instead of restoring it to the composer.
@@ -1884,6 +1927,7 @@ function ChatPageContent({
     setPendingReplyTarget(null);
     setPendingMenuTarget(null);
     setMenuTarget(message);
+    setLiftedTimedId(message.disappearAfterSeconds != null ? message.id : null);
     openMeasuredMenu(rect, bubble);
   }
 
@@ -1895,6 +1939,7 @@ function ChatPageContent({
     setPendingReplyTarget(null);
     setMenuTarget(null);
     setPendingMenuTarget(pending);
+    setLiftedTimedId(null);
     openMeasuredMenu(rect, bubble);
   }
 
@@ -1934,7 +1979,7 @@ function ChatPageContent({
   function forwardSelected() {
     const order = new Map(windowRows.map((m, i) => [m.id, i] as const));
     const picked = windowRows
-      .filter((m) => selectedIds.has(m.id))
+      .filter((m) => selectedIds.has(m.id) && m.disappearAfterSeconds == null)
       .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
       .map((m) => ({ kind: m.kind, content: m.content, tags: m.tags }));
     if (picked.length === 0) return;
@@ -2008,10 +2053,18 @@ function ChatPageContent({
     setPendingPicker(true);
   }
 
+  function openMessageDetail(id: string) {
+    if (deletedMessageIds.has(id)) return;
+    const target = displayMessages.find(message => message.id === id);
+    setDetailTimedId(target?.disappearAfterSeconds != null ? id : null);
+    setDetailRumorId(id);
+  }
+
   /** Fired once the action menu has fully closed + unmounted — now safe to mutate
    * the row (react) or present another modal (picker) without the lifted copy
    * still on screen. */
   function handleMenuClosed() {
+    setLiftedTimedId(null);
     if (pendingReplyTarget) {
       const target = pendingReplyTarget;
       setPendingReplyTarget(null);
@@ -2036,7 +2089,7 @@ function ChatPageContent({
     if (pendingDetailId) {
       const id = pendingDetailId;
       setPendingDetailId(null);
-      setDetailRumorId(id);
+      openMessageDetail(id);
     }
     if (pendingSelectId) {
       const id = pendingSelectId;
@@ -2312,7 +2365,7 @@ function ChatPageContent({
                 } as MessageMenuAction,
               ]
             : []),
-          {
+          ...(menuTarget.disappearAfterSeconds == null ? [{
             key: 'forward',
             label: t('chat.actions.forward'),
             icon: <Forward size={MESSAGE_ACTION_MENU_ICON_SIZE} color={c.text} />,
@@ -2329,7 +2382,7 @@ function ChatPageContent({
               }
               closeMenu();
             },
-          },
+          } as MessageMenuAction] : []),
           {
             key: 'select',
             label: t('chat.actions.select'),
@@ -2376,12 +2429,15 @@ function ChatPageContent({
         .map((reaction) => quickReactionKey(reaction.customEmoji ?? reaction.emoji))
         .filter((reactionKey) => quickReactionKeys.has(reactionKey))
     : [];
+
   const composerReplyTo = replyingTo
     ? {
         senderName: replySenderDisplayName,
         contentPreview:
           deletedMessageIds.has(replyingTo.id)
             ? t('chat.message_delete.deleted')
+            : replyingTo.disappearAfterSeconds != null
+            ? t('chat.disappearing.title')
             : replyingTo.kind === 15
             ? attachmentLabel(replyingTo.tags, attachmentLabels)
             : replyingTo.content,
@@ -2489,7 +2545,7 @@ function ChatPageContent({
           onLongPress={handleLongPress}
           onLongPressPending={handlePendingLongPress}
           onTapReaction={proximityHistoryReadOnly ? () => {} : handleTapReaction}
-          onShowDelivery={setDetailRumorId}
+          onShowDelivery={openMessageDetail}
           onStopPending={handleStopPending}
           onRetryPending={handleRetryPending}
           onCancelPending={handleCancelPending}
@@ -2497,10 +2553,12 @@ function ChatPageContent({
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           composerInsets={composerInsets}
+          composerOcclusionExtra={composerOcclusionExtra}
           bottomInset={composerClearance}
           topInset={topInset}
           liveDataEnabled={liveDataReady && routeActive}
           interactive={liveDataReady}
+          onDisappearingMessagesVisible={isGroup || isProximity ? undefined : markDisappearingMessagesSeen}
         />
         {/* While the attachment tray is open, a tap anywhere on the messages
             closes it (like tapping to dismiss a keyboard). Transparent, only
@@ -2511,6 +2569,7 @@ function ChatPageContent({
         <SelectionActionBar
           count={selectedIds.size}
           onForward={forwardSelected}
+          forwardDisabled={selectedMessages.length !== selectedIds.size || selectedMessages.some(row => row.disappearAfterSeconds != null)}
           onDelete={isProximity ? undefined : deleteSelected}
           deleteDisabled={!canDeleteSelection}
         />
@@ -2603,7 +2662,7 @@ function ChatPageContent({
               }
             />
           ) : null}
-          <MessageActionMenu
+          {!expiredMenu ? <MessageActionMenu
             visible={!!menuAnchor}
             rect={menuAnchor?.rect ?? null}
             bubble={menuAnchor?.bubble ?? null}
@@ -2617,7 +2676,7 @@ function ChatPageContent({
             onClose={closeMenu}
             onClosed={handleMenuClosed}
             hideReactions={proximityHistoryReadOnly}
-          />
+          /> : null}
           <AddEmojiToPackSheet
             visible={packPickerVisible}
             emoji={packPickerEmoji}
@@ -2662,9 +2721,9 @@ function ChatPageContent({
               onConfirm={sendContactCard}
             />
           ) : null}
-          <MessageDetailSheet
+          {!expiredDetail ? <MessageDetailSheet
             accountPubkey={accountPubkey}
-            rumorId={detailRumorId}
+            rumorId={detailRumorId && !deletedMessageIds.has(detailRumorId) ? detailRumorId : null}
             rumor={detailMessage?.rumor ?? null}
             isSelf={
               detailMessage
@@ -2696,7 +2755,7 @@ function ChatPageContent({
                   }
             }
             onClose={() => setDetailRumorId(null)}
-          />
+          /> : null}
           {isProximity ? (
             <NearbyOutgoingRequestSheet
               peerPubkey={conversationKey}

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Modal, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useOverlayPresentation } from '@/hooks/use-overlay-presentation';
 import { IS_ELECTRON } from '@/lib/platform';
 import { platform } from '@/platform';
 import { iconStrokeWidth } from '@/theme/icons';
@@ -47,6 +48,9 @@ export function PhotoCaptureModal({
   const deniedMessageRef = useRef(permissionDeniedMessage);
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
+  const [dismissed, setDismissed] = useState(!visible);
+  if (IS_ELECTRON && visible && dismissed) setDismissed(false);
+  useOverlayPresentation(visible || (IS_ELECTRON && !dismissed));
 
   useEffect(() => {
     closeRef.current = onClose;
@@ -96,7 +100,12 @@ export function PhotoCaptureModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+      onDismiss={() => { if (!visible) setDismissed(true); }}
+    >
       <View style={{ flex: 1, backgroundColor: c.background }}>
         {visible && permission?.granted ? (
           <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front" />

@@ -468,6 +468,17 @@
     "yesterday": "Wczoraj"
   },
   "chat": {
+    "disappearing": {
+      "title": "Znikające wiadomości",
+      "off": "Wyłączone",
+      "duration_30": "30 sekund",
+      "duration_300": "5 minut",
+      "duration_3600": "1 godzina",
+      "duration_86400": "24 godziny",
+      "duration_604800": "7 dni",
+      "hint": "Dotyczy nowych wiadomości tekstowych wysyłanych z tego urządzenia. Twój licznik rusza w chwili wysłania, a licznik odbiorcy, gdy zobaczy wiadomość.",
+      "save_failed": "Nie udało się zapisać ustawienia czasu. Spróbuj ponownie."
+    },
     "input_placeholder": "Napisz wiadomość",
     "add_to_contacts": "Dodaj do kontaktów",
     "block": "Zablokuj",

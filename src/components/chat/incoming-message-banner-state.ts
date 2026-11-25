@@ -21,7 +21,8 @@ export function selectIncomingNotification(
   const { conversation, message } = latest;
   return {
     conversation: { ...conversation, lastMessageId: message.id, lastMessageAt: message.createdAt, lastMessageOrderAt: message.orderAt },
-    lastMessageContent: message.content, lastMessageKind: message.kind,
-    lastMessageTags: message.tags, lastMessageSenderPubkey: message.senderPubkey,
+    lastMessageContent: message.disappearAfterSeconds == null ? message.content : null,
+    lastMessageKind: message.disappearAfterSeconds == null ? message.kind : null,
+    lastMessageTags: message.disappearAfterSeconds == null ? message.tags : null, lastMessageSenderPubkey: message.senderPubkey,
   };
 }

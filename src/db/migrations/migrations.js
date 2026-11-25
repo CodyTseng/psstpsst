@@ -1,3 +1,4 @@
+import m0092 from './0092_disappearing-messages.sql';
 import m0091 from './0091_pending-message-deletions.sql';
 import m0090 from './0090_message-deletions.sql';
 import m0089 from './0089_routing-settings-edit-time.sql';
@@ -189,6 +190,7 @@ m0087,
 m0088,
 m0089,
 m0090,
-m0091
+m0091,
+m0092
     }
   }

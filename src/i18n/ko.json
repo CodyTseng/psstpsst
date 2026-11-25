@@ -462,6 +462,17 @@
     "yesterday": "어제"
   },
   "chat": {
+    "disappearing": {
+      "title": "사라지는 메시지",
+      "off": "끔",
+      "duration_30": "30초",
+      "duration_300": "5분",
+      "duration_3600": "1시간",
+      "duration_86400": "24시간",
+      "duration_604800": "7일",
+      "hint": "이 기기에서 보내는 새 텍스트 메시지에 적용됩니다. 내 타이머는 전송할 때 시작되고 상대방의 타이머는 메시지를 볼 때 시작됩니다.",
+      "save_failed": "타이머를 저장하지 못했습니다. 다시 시도해 주세요."
+    },
     "input_placeholder": "메시지 입력",
     "add_to_contacts": "연락처에 추가",
     "block": "차단",

@@ -1,3 +1,4 @@
+import { dmService } from '@/services/dm/dm.service';
 import { useDateTimeLoaded } from '@/stores/date-time.store';
 import { loadDateTimePreferences, watchSystemDateTime } from '@/services/preferences/date-time-preferences';
 import 'react-native-get-random-values';
@@ -375,6 +376,11 @@ function RootLayoutContent() {
       console.warn('[attachments] Failed to restore pending uploads.', error);
     });
   }, [activePubkey, migrationsApplied]);
+
+  useEffect(() => {
+    if (!migrationsApplied || !secureStorageReady || !activePubkey || status !== 'ready') return;
+    return dmService.watchDisappearingMessages(activePubkey);
+  }, [activePubkey, migrationsApplied, secureStorageReady, status]);
 
   // A previously initialized Nearby identity stays discoverable while the app
   // is foregrounded. Each foreground session also performs one bounded scan so

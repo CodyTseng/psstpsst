@@ -5,7 +5,7 @@ import { MessageListData, MessageListRowCache } from '../message-list-data';
 
 type Row = typeof messages.$inferSelect;
 const row = (orderAt: number, overrides: Partial<Row> = {}): Row => ({
-  deleted: false,
+  deleted: false, disappearAfterSeconds: null, expiresAt: null,
   accountPubkey: 'account', conversationKey: 'conversation', id: `id-${orderAt}`,
   senderPubkey: 'peer', kind: 14, content: '', createdAt: 1, orderAt,
   replyToId: null, subject: null, tags: [], rumor: {} as Row['rumor'],

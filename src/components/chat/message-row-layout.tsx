@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import { ImageVisibilityStoreContext, type ImageVisibilityStore } from '@/components/common/VisibilityAwareImage';
 
@@ -6,7 +6,11 @@ import { ATTACHMENT_FAILURE_TARGET_SIZE } from './attachment-layout';
 import { BUBBLE_MAX_WIDTH } from './bubble-layout';
 
 export type MessageCellFrame = { y: number; height: number };
-export const MessageCellFrameContext = createContext<((key: string, frame: MessageCellFrame | null) => void) | null>(null);
+type CellFrameReporter = (key: string, frame: MessageCellFrame | null) => void;
+export const MessageCellFrameContext = createContext<{
+  report: CellFrameReporter;
+  timedOnly: boolean;
+} | null>(null);
 
 const MessageViewportWidth = createContext<number | undefined>(undefined);
 const BUBBLE_WIDTH_FRACTION = parseFloat(BUBBLE_MAX_WIDTH) / 100;
@@ -29,16 +33,20 @@ export function messageBodyLayout(
 }
 
 /** Measure the conversation pane once, rather than measuring every virtualized row. */
-export function MessageLayoutViewport({ children, imageVisibility = null, onCellFrame = null }: {
+export function MessageLayoutViewport({ children, imageVisibility = null, onCellFrame = null, timedCellFramesOnly = false }: {
   children: ReactNode;
   imageVisibility?: ImageVisibilityStore | null;
-  onCellFrame?: ((key: string, frame: MessageCellFrame | null) => void) | null;
+  onCellFrame?: CellFrameReporter | null;
+  timedCellFramesOnly?: boolean;
 }) {
   const [width, setWidth] = useState(0);
+  const frameReporter = useMemo(() => onCellFrame ? {
+    report: onCellFrame, timedOnly: timedCellFramesOnly,
+  } : null, [onCellFrame, timedCellFramesOnly]);
   return (
     <View style={{ flex: 1 }} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
       <MessageViewportWidth.Provider value={width}>
-        <MessageCellFrameContext value={onCellFrame}>
+        <MessageCellFrameContext value={frameReporter}>
           <ImageVisibilityStoreContext value={imageVisibility}>{children}</ImageVisibilityStoreContext>
         </MessageCellFrameContext>
       </MessageViewportWidth.Provider>

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull } from 'drizzle-orm';
 import { useLiveQuery } from '@/db/use-live-query';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -56,6 +56,7 @@ function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean
       and(
         eq(messages.accountPubkey, conversations.accountPubkey),
         eq(messages.id, conversations.lastMessageId),
+        isNull(messages.disappearAfterSeconds),
       ),
     )
     .where(
