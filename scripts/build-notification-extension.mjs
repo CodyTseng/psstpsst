@@ -36,7 +36,7 @@ export async function buildNotificationExtension(output = resolve(root, 'ios-not
           return { loader: 'json', contents: JSON.stringify({
             notifications: catalog.notifications,
             group: catalog.group,
-            conversations: Object.fromEntries(Object.entries(catalog.conversations).filter(([key]) => key.startsWith('attachment_'))),
+            conversations: Object.fromEntries(Object.entries(catalog.conversations).filter(([key]) => key.startsWith('attachment_') || key.startsWith('reaction_preview'))),
           }) };
         });
         builder.onResolve({ filter: /^(react($|\/)|react-native($|-|\/)|react-i18next$|expo($|-|\/)|@expo\/)/ }, ({ path }) => {

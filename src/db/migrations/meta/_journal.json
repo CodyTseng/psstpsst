@@ -652,6 +652,13 @@
       "when": 1794960000000,
       "tag": "0092_disappearing-messages",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "6",
+      "when": 1795046400000,
+      "tag": "0093_reaction-previews",
+      "breakpoints": true
     }
   ]
 }

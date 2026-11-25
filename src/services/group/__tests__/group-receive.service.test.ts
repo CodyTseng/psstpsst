@@ -857,3 +857,128 @@ describe('private message deletions', () => {
   });
 
 });
+
+
+it('only notifies for reactions to the local member’s own message, with no change to unread', async () => {
+  const h = 'own-reaction-notification';
+  const own = rumor('9', ACCOUNT, 100, [['p', BOB], ['p', CAROL], ['h', h]], 'my message');
+  own.id = 'ab'.repeat(32);
+  const peer = { ...own, pubkey: BOB, id: 'bc'.repeat(32), created_at: 101,
+    tags: [['p', ACCOUNT], ['p', CAROL], ['h', h]], content: 'peer message' };
+  const react = (id: string, author: string, target: string) => ({
+    ...peer, id: id.repeat(32), kind: 7, pubkey: author, created_at: 102,
+    tags: [['p', ACCOUNT], ['p', BOB], ['p', CAROL], ['h', h], ['e', target]], content: '👍',
+  });
+  const receive = (message: Rumor, active = false) => groupReceiveService.receive({
+    accountPubkey: ACCOUNT, rumor: message, intake: 'live', active,
+    userPresent: true, senderBlocked: false, syncCursor: null,
+  });
+  await receive(own);
+  await receive(peer);
+  for (const ignored of [react('de', CAROL, peer.id), react('df', ACCOUNT, own.id)]) {
+    await expect(receive(ignored)).resolves.toMatchObject({ stored: true });
+    expect(hasEvent(ignored)).toBe(false);
+  }
+  const incoming = react('cd', CAROL, own.id);
+  await expect(receive(incoming)).resolves.toMatchObject({ stored: true });
+  expect(hasEvent(incoming)).toBe(true);
+  const readState = () => mockDatabase!.sqlite.prepare(`
+    SELECT unread_count, last_message_id, updated_order_at, reaction_preview_event_id, reaction_preview_pending
+    FROM conversations WHERE account_pubkey = ? AND group_id = ?
+  `).get(ACCOUNT, h);
+  expect(readState()).toEqual({
+    unread_count: 1, last_message_id: peer.id, updated_order_at: 101000,
+    reaction_preview_event_id: incoming.id, reaction_preview_pending: 1,
+  });
+
+  const whileActive = { ...react('ce', BOB, own.id), created_at: 103 };
+  await expect(receive(whileActive, true)).resolves.toMatchObject({ stored: true });
+  expect(hasEvent(whileActive)).toBe(false);
+  expect(readState()).toEqual({
+    unread_count: 1, last_message_id: peer.id, updated_order_at: 101000,
+    reaction_preview_event_id: whileActive.id, reaction_preview_pending: 0,
+  });
+});
+
+
+it('does not promote a quarantined reaction from a removed member', async () => {
+  const group = 'pending-reaction-from-removed-member';
+  const own = recoveryRumor(group, 'my message');
+  own.pubkey = ACCOUNT;
+  own.tags = [['p', BOB], ['p', CAROL], ['h', group]];
+  const removal = recoveryRumor(group, '');
+  removal.created_at = 501;
+  removal.tags.push(['action', 'remove', CAROL]);
+  const incoming = recoveryRumor(group, '👍');
+  incoming.pubkey = CAROL;
+  incoming.kind = 7;
+  incoming.created_at = 502;
+  incoming.tags.push(['e', own.id]);
+  const receive = (message: Rumor) => groupReceiveService.receive({
+    accountPubkey: ACCOUNT, rumor: message, intake: 'live', active: false,
+    userPresent: true, senderBlocked: false, syncCursor: null,
+  });
+  await expect(receive(removal)).resolves.toMatchObject({ stored: false });
+  await expect(receive(incoming)).resolves.toMatchObject({ stored: false });
+  const result = await receive(own);
+  expect(result.stored).toBe(true);
+  expect(result.promoted.map(candidate => candidate.id)).toContain(removal.id);
+  expect(result.promoted.map(candidate => candidate.id)).not.toContain(incoming.id);
+  expect(hasEvent(incoming)).toBe(false);
+});
+
+it('uses current route presence instead of a stale group intake snapshot for reactions', async () => {
+  const group = 'reaction-presence-change';
+  const own = recoveryRumor(group, 'my message');
+  own.pubkey = ACCOUNT;
+  own.tags = [['p', BOB], ['p', CAROL], ['h', group]];
+  const incoming = recoveryRumor(group, '👍');
+  incoming.kind = 7;
+  incoming.created_at = 501;
+  incoming.tags.push(['e', own.id]);
+  const opts = {
+    accountPubkey: ACCOUNT, intake: 'live' as const, active: true,
+    userPresent: true, senderBlocked: false, syncCursor: null,
+    reactionPresence: () => ({ userPresent: true, activeConversation: null }),
+  };
+  await groupReceiveService.receive({ ...opts, rumor: own });
+  await expect(groupReceiveService.receive({ ...opts, rumor: incoming })).resolves.toMatchObject({ stored: true });
+  expect(hasEvent(incoming)).toBe(true);
+});
+
+it('keeps a live group reaction silent when it is promoted after its target arrives', async () => {
+  const group = 'late-target-reaction';
+  const own = recoveryRumor(group, 'my message');
+  own.pubkey = ACCOUNT;
+  own.tags = [['p', BOB], ['p', CAROL], ['h', group]];
+  const incoming = recoveryRumor(group, '👍');
+  incoming.kind = 7;
+  incoming.created_at = 501;
+  incoming.tags.push(['e', own.id]);
+  const receive = (message: Rumor) => groupReceiveService.receive({
+    accountPubkey: ACCOUNT, rumor: message, intake: 'live', active: false,
+    userPresent: true, senderBlocked: false, syncCursor: null,
+  });
+  await expect(receive(incoming)).resolves.toMatchObject({ stored: false });
+  const result = await receive(own);
+  expect(result.promoted).toEqual([incoming]);
+  expect(hasEvent(incoming)).toBe(false);
+  expect(mockDatabase!.sqlite.prepare(
+    'SELECT reaction_preview_pending FROM conversations WHERE account_pubkey = ? AND group_id = ?',
+  ).get(ACCOUNT, group)).toEqual({ reaction_preview_pending: 0 });
+});
+
+
+it('skips a queued group write when its receive session is cancelled before acquiring the writer lock', async () => {
+  const group = 'cancelled-historical-group';
+  const incoming = recoveryRumor(group);
+  let current = true;
+  const received = groupReceiveService.receive({
+    accountPubkey: ACCOUNT, rumor: incoming, intake: 'history', active: false,
+    senderBlocked: false, syncCursor: null, isCurrent: () => current,
+  });
+  current = false;
+  await expect(received).resolves.toMatchObject({ handled: true, stored: false });
+  expect(mockDatabase!.sqlite.prepare('SELECT group_id FROM conversations WHERE account_pubkey = ? AND group_id = ?')
+    .get(ACCOUNT, group)).toBeUndefined();
+});

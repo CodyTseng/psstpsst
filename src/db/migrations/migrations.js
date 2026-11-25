@@ -1,3 +1,4 @@
+import m0093 from './0093_reaction-previews.sql';
 import m0092 from './0092_disappearing-messages.sql';
 import m0091 from './0091_pending-message-deletions.sql';
 import m0090 from './0090_message-deletions.sql';
@@ -191,6 +192,7 @@ m0088,
 m0089,
 m0090,
 m0091,
-m0092
+m0092,
+m0093
     }
   }

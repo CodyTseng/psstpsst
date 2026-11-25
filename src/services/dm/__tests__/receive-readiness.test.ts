@@ -241,7 +241,7 @@ it('recovers stored reconnect messages while backgrounded and delivers them with
       filter: expect.objectContaining({ since: now - 49 * 3600 }),
     }));
     expect(store.mock.calls[0]?.slice(0, 3)).toEqual([rumor, self, ['wss://fresh.example']]);
-    expect(store.mock.calls[0]?.[4]).toEqual({ intake: 'recovery' });
+    expect(store.mock.calls[0]?.[4]).toEqual({ intake: 'recovery', isCurrent: expect.any(Function) });
     expect(onNewMessage).toHaveBeenCalledTimes(1);
     expect(onNewMessage).toHaveBeenCalledWith(rumor);
     expect(markGiftWrapProcessed).toHaveBeenCalledWith(wrap.id, self);
@@ -1123,11 +1123,77 @@ it('routes a wrapped message deletion without publishing a new-message arrival',
   try {
     live().onEvent(wrap, 'wss://fresh.example');
     await flush();
-    expect(apply).toHaveBeenCalledWith(self, rumor, true);
+    expect(apply).toHaveBeenCalledWith(self, rumor, true, expect.any(Function));
     expect(markGiftWrapProcessed).toHaveBeenCalledWith(wrap.id, self);
     expect(onNewMessage).not.toHaveBeenCalled();
   } finally {
     stop();
     apply.mockRestore();
+  }
+});
+
+it.each([false, true])('writes each history envelope before decoding the next and checkpoints only on success (write failure=%s)', async fail => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  const relay = 'wss://fresh.example';
+  const events = [14, 7, 5].map((kind, index) => ({
+    id: `wrap-${kind}`, kind: 1059, created_at: 900 - index, tags: [['p', self]],
+  } as Event));
+  const rumors = new Map(events.map((wrap, index) => [wrap.id, {
+    id: `rumor-${index}`, pubkey: self, kind: [14, 7, 5][index],
+    created_at: 850 + index, content: '', tags: [['p', oldKey]],
+  } as Rumor]));
+  const writes: number[] = [];
+  const settled = deferred<void>();
+  const receiver = dmService as unknown as {
+    applyMessageDeletion(account: string, rumor: Rumor, keepPending: boolean, isCurrent: () => boolean): Promise<boolean>;
+    storeRumor(rumor: Rumor): Promise<boolean>;
+  };
+  const apply = jest.spyOn(receiver, 'applyMessageDeletion').mockImplementation(async (_account, rumor) => {
+    expect(unwrapGiftWrapForAccount).toHaveBeenCalledTimes(3);
+    writes.push(rumor.kind);
+    return true;
+  });
+  const store = jest.spyOn(receiver, 'storeRumor').mockImplementation(async rumor => {
+    expect(unwrapGiftWrapForAccount).toHaveBeenCalledTimes(writes.length + 1);
+    writes.push(rumor.kind);
+    if (fail && rumor.kind === 7) {
+      settled.resolve();
+      throw new Error('Reaction write interrupted');
+    }
+    return true;
+  });
+  jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 999, backwardUntil: 0 });
+  jest.mocked(setPendingForwardScan).mockImplementation(async (_account, _relay, scan) => {
+    if (scan.nextUntil === 898) settled.resolve();
+  });
+  jest.mocked(unwrapGiftWrapForAccount).mockImplementation(async wrap => ({
+    status: 'decrypted', value: { giftWrap: wrap, seal: wrap, rumor: rumors.get(wrap.id)!, senderEncryptionPubkey: oldKey },
+  }));
+  jest.mocked(relayPool.query).mockImplementationOnce(async opts => {
+    changeAppState('background');
+    opts.onComplete?.({ eosed: true, status: 'complete', relays: [{ url: relay, status: 'eose', received: 3 }] });
+    return events;
+  });
+  const onNewMessage = jest.fn();
+  const stop = dmService.addListener({ onNewMessage });
+  try {
+    mockAppState = 'active';
+    await dmService.init(options);
+    await settled.promise;
+    await flush();
+    expect(writes).toEqual(fail ? [14, 7] : [14, 7, 5]);
+    expect(mockProcessedIds).toEqual(new Set(fail ? ['wrap-14'] : events.map(event => event.id)));
+    expect(onNewMessage).not.toHaveBeenCalled();
+    if (fail) {
+      expect(setPendingForwardScan).toHaveBeenCalledTimes(1);
+      expect(setForwardSince).not.toHaveBeenCalled();
+    } else {
+      expect(setForwardSince).toHaveBeenCalledWith(self, relay, 1000);
+    }
+  } finally {
+    stop();
+    apply.mockRestore();
+    store.mockRestore();
+    clock.mockRestore();
   }
 });

@@ -1,3 +1,4 @@
+import { recordReactionPreview } from '@/services/conversation/reaction-preview.service';
 import { recordNotificationEvent } from '@/services/notifications/notification-events.service';
 import { and, asc, desc, eq, inArray, isNotNull, like } from 'drizzle-orm';
 import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
@@ -2824,7 +2825,8 @@ class ProximityService {
   }
 
   private async handleMessage(context: EndpointContext, payload: Uint8Array): Promise<void> {
-    if (!this.identity || !this.accountPubkey || !context.peerPubkey || context.phase !== 'ready') {
+    const { identity, accountPubkey } = this;
+    if (!identity || !accountPubkey || !context.peerPubkey || context.phase !== 'ready') {
       throw new Error('Message before ready');
     }
     let rumor: Rumor;
@@ -2856,12 +2858,12 @@ class ProximityService {
     if (
       recipientTags.length !== 1 ||
       recipientTags[0].length < 2 ||
-      recipientTags[0][1] !== this.identity.proximityPubkey ||
+      recipientTags[0][1] !== identity.proximityPubkey ||
       isRumorTooFarInFuture(rumor) ||
       (replyToId !== undefined && !validPubkey(replyToId)) ||
       !validReaction ||
       !validFile ||
-      !(await this.hasTrustedPeer(this.accountPubkey, context.peerPubkey))
+      !(await this.hasTrustedPeer(accountPubkey, context.peerPubkey))
     ) {
       await this.sendMessageAck(
         context,
@@ -2871,6 +2873,7 @@ class ProximityService {
       );
       return;
     }
+    if (this.accountPubkey !== accountPubkey || this.identity !== identity) return;
     try {
       const inserted = await this.storeRumor(rumor, context.peerPubkey);
       if (inserted === null) {
@@ -3381,6 +3384,7 @@ class ProximityService {
     const activePeer = archive ? null : this.activePeer;
     const markRead = archive?.importing || !incoming || activePeer === peerPubkey;
     const reaction = rumor.kind === KIND_REACTION;
+    let wakeSystemNotifications = false;
     const stored = await db.transaction(async (tx) => {
       const existing = await tx
         .select()
@@ -3425,7 +3429,16 @@ class ProximityService {
       } else if (rumor.kind === KIND_CHAT) {
         await recordEmbeddedMedia(tx, rumor, accountPubkey, peerPubkey);
       }
-      if (reaction) return true;
+      if (reaction) {
+        if (!archive && incoming) {
+          wakeSystemNotifications = await recordReactionPreview(
+            tx, { accountPubkey, conversationKey: peerPubkey }, rumor, orderAt,
+            () => ({ userPresent: !platform.notifications.shouldNotifyNow(), activeConversation: null }),
+            'proximity',
+          );
+        }
+        return true;
+      }
       const storedPeer = await tx
         .select()
         .from(proximityPeers)
@@ -3495,7 +3508,7 @@ class ProximityService {
             ),
           );
       }
-      if (!archive && incoming && !reaction) {
+      if (!archive && incoming) {
         const [after] = await tx.select().from(conversations).where(and(
           eq(conversations.accountPubkey, accountPubkey), eq(conversations.conversationKey, peerPubkey),
         )).limit(1);
@@ -3507,6 +3520,13 @@ class ProximityService {
       }
       return true;
     });
+    if (wakeSystemNotifications) {
+      void Promise.resolve().then(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- avoid initializing the notification manager from Nearby startup
+        const { notificationService } = require('@/services/notifications/notification.service') as typeof import('@/services/notifications/notification.service');
+        return notificationService.notifyNewRumors([rumor], { accountPubkey, deliveryKind: 'proximity' });
+      }).catch((error) => console.warn('[nearby] Could not deliver a reaction notification.', error));
+    }
     if (stored) {
       // The write already holds every column — merge into the warm tail instead
       // of invalidating it and queueing a full window re-read.

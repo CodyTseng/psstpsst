@@ -60,7 +60,9 @@ The receiver validates the rumor ID, authenticated author, sole recipient,
 supported content, timestamp, and trust relationship before storage. It sends
 `STORED` only after commit and `DUPLICATE` only for an already committed rumor.
 Profile updates change the durable peer and conversation label without creating
-a message or unread state.
+a message or unread state. A reaction to the local proximity identity's
+visible message can create a list preview and a notification using the shared
+arrival policy. Delivery still depends on a live Nearby session.
 
 Every Nearby conversation and message records the local proximity identity that
 owns it. Replacing that identity leaves old history readable but read-only;

@@ -7,12 +7,14 @@ import { getActiveAccountPubkey } from '@/services/account/account.service';
 import { getMainInboxUnreadCount, unreadCountService } from '@/services/conversation/unread-count.service';
 import { invalidateAllWarmedMessageTails } from '@/services/conversation/message-tail-cache';
 import { observedPeerKeyService } from '@/services/dm/observed-peer-key.service';
+import { KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
 import { dmService } from '@/services/dm/dm.service';
 import { receiveSessionStore } from '@/services/dm/receive-session';
 import { retryUnreadIndicator } from '@/services/unread-indicator.service';
 import { isMessageOrderNewer, messageOrderAt } from '@/lib/nostr/message-order';
 
 import { registerBackgroundPoll, unregisterBackgroundPoll } from './background-task';
+import type { NotificationCandidate, NotificationConversation } from './notification-filter';
 import { evaluateNotificationRumors, buildNotificationContent } from './notification-policy';
 import { discardNotificationEvents } from './notification-events.service';
 import { pushRegistrationService } from './push-registration.service';
@@ -54,6 +56,7 @@ type ScheduledFlush = {
 type NotifyOptions = {
   /** Cold polls do not establish a live DM session. */
   accountPubkey?: string;
+  deliveryKind?: NotificationConversation['deliveryKind'];
   /** A bounded background-task batch is already complete; deliver it without
    * waiting on an RN timer that may not receive Choreographer frames. */
   flushImmediately?: boolean;
@@ -101,12 +104,15 @@ class NotificationService {
    * from notification aggregation. */
   private backgroundMessagingQueue: Promise<void> = Promise.resolve();
   /** Qualifying messages seen since the user last returned to the app. */
+  private pendingAccountPubkey: string | null = null;
   private pendingCount = 0;
   private pendingRequestCount = 0;
-  private latestPendingAcceptedRumor: Rumor | null = null;
+  private pendingReactionCount = 0;
+  private pendingRequestReactionCount = 0;
+  private latestPendingAccepted: NotificationCandidate | null = null;
   /** The newest qualifying message in the current aggregate. Keeping one rumor
    * bounds preview memory even during a very large background burst. */
-  private latestPendingRumor: Rumor | null = null;
+  private latestPending: NotificationCandidate | null = null;
   /** A fixed-window flush timer. New messages join the existing window rather
    * than resetting it, so a continuous stream can never postpone delivery. */
   private scheduledFlush: ScheduledFlush | null = null;
@@ -276,27 +282,39 @@ class NotificationService {
 
     const accountPubkey = options.accountPubkey ?? dmService.getAccountPubkey();
     if (!accountPubkey) return;
-    if (this.isReceiveBlocked(accountPubkey)) return;
+    if (options.accountPubkey && options.accountPubkey !== await getActiveAccountPubkey()) return;
+    const canReceive = () => options.deliveryKind === 'proximity' || !this.isRelayReceiveBlocked(accountPubkey);
+    if (!canReceive()) return;
 
     let flushPromise: Promise<void> | null = null;
     await this.enqueue(async () => {
       if (epoch !== this.notificationEpoch) return;
-      const qualifying = await evaluateNotificationRumors(rumors, accountPubkey, !platform.notifications.shouldNotifyNow());
-      if (epoch !== this.notificationEpoch || this.isReceiveBlocked(accountPubkey)) return;
+      const qualifying = await evaluateNotificationRumors(
+        rumors, accountPubkey, !platform.notifications.shouldNotifyNow(), options.deliveryKind,
+      );
+      if (epoch !== this.notificationEpoch || !canReceive()) return;
       if (qualifying.length === 0) return;
 
       // Settings or presence can change while filtering waits on SQLite.
       if (epoch !== this.notificationEpoch || !this.enabled || !platform.notifications.shouldNotifyNow()) return;
 
+      if (this.pendingAccountPubkey !== accountPubkey) {
+        this.resetAggregate();
+        this.pendingAccountPubkey = accountPubkey;
+      }
       this.pendingCount += qualifying.length;
       for (const candidate of qualifying) {
         const rumor = candidate.rumor;
-        if (candidate.kind === 'request') this.pendingRequestCount += 1;
-        else if (!this.latestPendingAcceptedRumor || this.isNewer(rumor, this.latestPendingAcceptedRumor)) {
-          this.latestPendingAcceptedRumor = rumor;
+        if (rumor.kind === KIND_REACTION) {
+          this.pendingReactionCount += 1;
+          if (candidate.kind === 'request') this.pendingRequestReactionCount += 1;
         }
-        if (!this.latestPendingRumor || this.isNewer(rumor, this.latestPendingRumor)) {
-          this.latestPendingRumor = rumor;
+        if (candidate.kind === 'request') this.pendingRequestCount += 1;
+        else if (!this.latestPendingAccepted || this.isNewer(rumor, this.latestPendingAccepted.rumor)) {
+          this.latestPendingAccepted = candidate;
+        }
+        if (!this.latestPending || this.isNewer(rumor, this.latestPending.rumor)) {
+          this.latestPending = candidate;
         }
       }
       flushPromise = this.scheduleFlush();
@@ -321,7 +339,7 @@ class NotificationService {
     return this.enabled;
   }
 
-  private isReceiveBlocked(accountPubkey: string | null): boolean {
+  private isRelayReceiveBlocked(accountPubkey: string | null): boolean {
     const session = receiveSessionStore.getState();
     return (session.status === 'key-required' && session.accountPubkey === accountPubkey) ||
       (session.status === 'ready' && session.accountPubkey !== accountPubkey);
@@ -423,10 +441,7 @@ class NotificationService {
     // Quiet hours may have started during the aggregation window: drop the
     // pending aggregate so it is not delivered after the window ends.
     if (await isDndActiveNow()) {
-      this.pendingCount = 0;
-      this.pendingRequestCount = 0;
-      this.latestPendingAcceptedRumor = null;
-      this.latestPendingRumor = null;
+      this.resetAggregate();
       return;
     }
     // The user may have revoked the OS grant since enabling the preference —
@@ -440,17 +455,28 @@ class NotificationService {
     // a queued request alert or discard unrelated accepted-message alerts.
     if (this.pendingRequestCount > 0 && await getQuietMessageRequests()) {
       this.pendingCount -= this.pendingRequestCount;
+      this.pendingReactionCount -= this.pendingRequestReactionCount;
+      this.pendingRequestReactionCount = 0;
       this.pendingRequestCount = 0;
-      this.latestPendingRumor = this.latestPendingAcceptedRumor;
+      this.latestPending = this.latestPendingAccepted;
       if (this.pendingCount === 0) return;
     }
     const count = this.pendingCount;
     await this.ensureContentPreferencesLoaded();
     const accountPubkey = await getActiveAccountPubkey();
-    const latestPendingRumor = this.latestPendingRumor;
-    if (!accountPubkey || !latestPendingRumor) return;
+    const latestPending = this.latestPending;
+    if (!accountPubkey || accountPubkey !== this.pendingAccountPubkey) {
+      this.resetAggregate();
+      return;
+    }
+    if (!latestPending) return;
     const { title, subtitle, body, avatarUrl, communication } = await buildNotificationContent(
-      latestPendingRumor, count, accountPubkey, this.contentPreferences,
+      latestPending.rumor, count, accountPubkey,
+      {
+        conversation: latestPending.conversation,
+        preferences: this.contentPreferences,
+        hasReactions: this.pendingReactionCount > 0,
+      },
     );
 
     // This app owns a single notification surface. Clearing first also removes
@@ -464,7 +490,11 @@ class NotificationService {
     const badgeCount = accountPubkey && (await getUnreadIndicatorsEnabled())
       ? await getMainInboxUnreadCount(accountPubkey)
       : 0;
-    if (epoch !== this.notificationEpoch || this.isReceiveBlocked(accountPubkey)) return;
+    const currentAccountPubkey = await getActiveAccountPubkey();
+    if (epoch !== this.notificationEpoch ||
+      (latestPending.conversation.deliveryKind === 'relay' && this.isRelayReceiveBlocked(accountPubkey)) ||
+      !platform.notifications.shouldNotifyNow() ||
+      accountPubkey !== currentAccountPubkey) return;
     const presented = await platform.notifications.present({
       title,
       subtitle,
@@ -488,10 +518,17 @@ class NotificationService {
       this.scheduledFlush.resolve();
       this.scheduledFlush = null;
     }
+    this.resetAggregate();
+  }
+
+  private resetAggregate(): void {
+    this.pendingAccountPubkey = null;
     this.pendingCount = 0;
     this.pendingRequestCount = 0;
-    this.latestPendingAcceptedRumor = null;
-    this.latestPendingRumor = null;
+    this.pendingReactionCount = 0;
+    this.pendingRequestReactionCount = 0;
+    this.latestPendingAccepted = null;
+    this.latestPending = null;
   }
 
   private async handlePermissionLoss(): Promise<void> {

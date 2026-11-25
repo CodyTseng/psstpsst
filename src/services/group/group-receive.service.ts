@@ -37,8 +37,10 @@ import {
 } from '@/services/files/media-index.service';
 import { canReceiveForAccount } from '@/services/account/account-receive-guard';
 import { getSyncCursor, type SyncCursor } from '@/services/dm/sync-store';
+import type { ConversationPresence } from '@/services/dm/active-conversation';
 import { resolvePendingMessageDeletions } from '@/services/dm/message-deletions';
 import { mergeStoredMessageIntoTail } from '@/services/conversation/message-tail-cache';
+import { recordReactionPreview } from '@/services/conversation/reaction-preview.service';
 
 import {
   replayMembershipActions,
@@ -55,8 +57,10 @@ export type ReceiveGroupRumorOptions = {
   intake: GroupRumorIntake;
   active: boolean;
   userPresent?: boolean;
+  reactionPresence?: () => ConversationPresence;
   senderBlocked: boolean;
   checkAccountOwnership?: boolean;
+  isCurrent?: () => boolean;
   /** Coverage snapshot captured when the envelope was first seen. */
   syncCursor?: SyncCursor | null;
 };
@@ -720,6 +724,7 @@ async function releasePrebootstrapRumors(
   const appliedIds = new Set(
     replay.actions.filter((action) => action.applied).map((action) => action.id),
   );
+  const currentMembers = new Set(replay.members);
   const promoted: Rumor[] = [];
 
   for (const row of pending) {
@@ -739,7 +744,7 @@ async function releasePrebootstrapRumors(
       });
     } else {
       const acceptable =
-        baselineSet.has(row.senderPubkey) &&
+        (row.rumor.kind === KIND_REACTION ? currentMembers : baselineSet).has(row.senderPubkey) &&
         (parsed.status === 'none' ||
           (parsed.status === 'valid' && parsed.action.type === 'rename'));
       if (!acceptable) {
@@ -867,6 +872,7 @@ class GroupReceiveService {
     const transactionResult = await db.transaction(async (tx) => {
       let before: typeof conversations.$inferSelect | null = null;
       const persist = async (): Promise<ReceiveGroupRumorResult> => {
+        if (options.isCurrent?.() === false) return { handled: true, stored: false, conversationKey, promoted: [] };
         if (options.checkAccountOwnership && !await canReceiveForAccount(accountPubkey, tx)) {
           return { handled: true, stored: false, conversationKey, promoted: [] };
         }
@@ -880,6 +886,7 @@ class GroupReceiveService {
             ),
           )
           .limit(1);
+        if (options.isCurrent?.() === false) return { handled: true, stored: false, conversationKey, promoted: [] };
         before = conversation ?? null;
         if (conversation?.groupId && conversation.groupId !== groupId) {
           return { handled: true, stored: false, conversationKey, promoted: [] };
@@ -1046,7 +1053,7 @@ class GroupReceiveService {
         );
         if (!stored) return { handled: true, stored: false, conversationKey, promoted: [] };
         await updateNameState(tx, accountPubkey, conversationKey, rumor, finalized);
-        if (!hiddenIds.has(rumor.id)) {
+        if (!hiddenIds.has(rumor.id) && rumor.kind !== KIND_REACTION) {
           await refreshConversationMessageState(tx, options, conversationKey);
         }
         return { handled: true, stored: true, conversationKey, promoted: [] };
@@ -1063,12 +1070,21 @@ class GroupReceiveService {
           for (const candidate of delivered.values()) {
             if (hiddenIds.has(candidate.id)) continue;
             const current = candidate.id === rumor.id;
+            if (candidate.kind === KIND_REACTION) {
+              if (current) await recordReactionPreview(
+                tx, { accountPubkey, conversationKey }, candidate, messageOrderAt(candidate),
+                options.reactionPresence ?? (() => ({
+                  userPresent: options.active || options.userPresent === true,
+                  activeConversation: options.active ? { accountPubkey, conversationKey } : null,
+                })),
+              );
+              continue;
+            }
             await recordNotificationEvent(tx, {
               accountPubkey, conversationKey, rumor: candidate,
               before: current ? before : { ...after, lastMessageId: after.lastMessageId ?? candidate.id! },
               after, incoming: candidate.pubkey !== accountPubkey,
-              eligible: (intake === 'live' || intake === 'recovery') &&
-                (current || arrivalCandidates.get(candidate) === true),
+              eligible: current || arrivalCandidates.get(candidate) === true,
               userPresent: options.userPresent ?? false,
             });
           }

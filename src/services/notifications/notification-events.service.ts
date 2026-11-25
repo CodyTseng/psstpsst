@@ -4,13 +4,14 @@ import { db, type Database } from '@/db/client';
 import { conversations, devicePreferences, messages, notificationEvents, type Rumor } from '@/db/schema';
 import { IS_IOS } from '@/lib/platform';
 import { isMessageOrderNewer } from '@/lib/nostr/message-order';
+import { reactionTargetsOwnVisibleMessage } from '@/services/conversation/reaction-target';
 import {
   DND_WINDOW_KEY, ENABLED_KEY, QUIET_MESSAGE_REQUESTS_KEY, UNREAD_INDICATORS_KEY,
   isMinuteInDndWindow, parseDndWindow,
 } from './notification-prefs';
 
 export type NotificationTarget = 'foreground' | 'system';
-export type NotificationKind = 'message' | 'request';
+export type NotificationKind = 'message' | 'request' | 'reaction';
 export type NotificationConversationState = Pick<typeof conversations.$inferSelect,
   'deleted' | 'hasReplied' | 'lastMessageId' | 'unreadCount' | 'muted'>;
 export type ClaimedNotificationEvent = {
@@ -29,9 +30,12 @@ export function notificationKindForTransition(input: {
   eligible: boolean;
   incoming: boolean;
   messageKind: number;
+  reactionToOwnMessage?: boolean;
 }): NotificationKind | null {
   const { before, after, eligible, incoming, messageKind } = input;
-  if (!eligible || !incoming || messageKind === 7 || after.deleted || after.muted || after.unreadCount <= 0) return null;
+  if (!eligible || !incoming || after.deleted || after.muted) return null;
+  if (messageKind === 7) return input.reactionToOwnMessage ? 'reaction' : null;
+  if (after.unreadCount <= 0) return null;
   if (after.hasReplied) return 'message';
   return !before || (!before.deleted && before.lastMessageId === null) ? 'request' : null;
 }
@@ -62,22 +66,30 @@ export async function recordNotificationEvent(tx: Database, input: {
   incoming: boolean;
   userPresent: boolean;
   systemSupported?: boolean;
-}): Promise<void> {
+  reactionToOwnMessage?: boolean;
+}): Promise<boolean> {
   const kind = notificationKindForTransition({ ...input, messageKind: input.rumor.kind });
-  if (!kind) return;
+  if (!kind) return false;
   const target = input.userPresent ? 'foreground' : 'system';
-  if (target === 'system' && input.systemSupported === false) return;
+  if (target === 'system' && input.systemSupported === false) return false;
   const policy = await deliveryPolicy(tx, target);
-  if (!policy.enabled || (kind === 'request' && !policy.requests)) return;
+  const request = kind === 'request' || (kind === 'reaction' && !input.after.hasReplied);
+  if (!policy.enabled || (request && !policy.requests)) return false;
   await tx.insert(notificationEvents).values({
     accountPubkey: input.accountPubkey, conversationKey: input.conversationKey,
     messageId: input.rumor.id!, kind, target, createdAt: Date.now(),
   }).onConflictDoNothing();
+  return true;
 }
 
-function stillUnread(row: ClaimedNotificationEvent): boolean {
+async function stillEligible(tx: Database, row: ClaimedNotificationEvent): Promise<boolean> {
   const { conversation, message, event } = row;
-  if (conversation.deleted || conversation.muted || conversation.unreadCount <= 0) return false;
+  if (conversation.deleted || conversation.muted || message.deleted) return false;
+  if (event.kind === 'reaction') {
+    return conversation.reactionPreviewPending &&
+      await reactionTargetsOwnVisibleMessage(tx, conversation, message.rumor);
+  }
+  if (conversation.unreadCount <= 0) return false;
   if ((event.kind === 'message') !== conversation.hasReplied) return false;
   return conversation.lastReadOrderAt == null || isMessageOrderNewer(
     { orderAt: message.orderAt, id: message.id },
@@ -92,6 +104,7 @@ export async function takeNotificationEvents(
   accountPubkey: string,
   target: NotificationTarget,
   throughId?: number,
+  deliveryKind?: typeof conversations.$inferSelect.deliveryKind,
 ): Promise<{ events: ClaimedNotificationEvent[]; more: boolean; throughId: number }> {
   return db.transaction(async tx => {
     const oldestEligibleAt = Date.now() - EVENT_TTL_MS;
@@ -112,15 +125,22 @@ export async function takeNotificationEvents(
       .innerJoin(messages, and(eq(messages.accountPubkey, notificationEvents.accountPubkey),
         eq(messages.id, notificationEvents.messageId)))
       .where(and(eq(notificationEvents.accountPubkey, accountPubkey), eq(notificationEvents.target, target),
-        lte(notificationEvents.id, through), gte(notificationEvents.createdAt, oldestEligibleAt)))
+        lte(notificationEvents.id, through), gte(notificationEvents.createdAt, oldestEligibleAt),
+        deliveryKind === undefined ? undefined : eq(conversations.deliveryKind, deliveryKind)))
       .orderBy(asc(notificationEvents.id)).limit(BATCH_SIZE);
     if (rows.length === 0) return { events: [], more: false, throughId: through };
     await tx.delete(notificationEvents).where(inArray(notificationEvents.id, rows.map(row => row.event.id)));
     // Settings can change between receipt and delivery. Disallowed events are
     // consumed rather than queued for catch-up when the setting changes again.
     const policy = await deliveryPolicy(tx, target);
+    const events: ClaimedNotificationEvent[] = [];
+    if (policy.enabled) {
+      for (const row of rows) {
+        if ((policy.requests || row.conversation.hasReplied) && await stillEligible(tx, row)) events.push(row);
+      }
+    }
     return {
-      events: policy.enabled ? rows.filter(row => stillUnread(row) && (policy.requests || row.event.kind !== 'request')) : [],
+      events,
       more: rows.length === BATCH_SIZE && rows[rows.length - 1].event.id < through,
       throughId: through,
     };

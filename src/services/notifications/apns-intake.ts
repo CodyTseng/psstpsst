@@ -1,5 +1,5 @@
 import type { NotificationCommunication } from '@/platform/ports/notifications';
-import type { Rumor } from '@/db/schema/types';
+import { KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
 import { DmService, type GiftWrapReceiveContext } from '@/services/dm/dm.service';
 import { loadEncryptionKeypair } from '@/services/dm/encryption-key.service';
 import { messageOrderAt, isMessageOrderNewer } from '@/lib/nostr/message-order';
@@ -20,7 +20,7 @@ export type ApnsIntakeResult = {
 /** APNs only adapts delivery inputs; validation and persistence are the DM receiver's. */
 export async function processApnsGiftWrap(
   payload: unknown,
-  runtime: Pick<GiftWrapReceiveContext, 'userPresent' | 'activeConversation' | 'isCurrent'>,
+  runtime: Pick<GiftWrapReceiveContext, 'userPresent' | 'activeConversation' | 'isCurrent' | 'getCurrentPresence'>,
 ): Promise<ApnsIntakeResult | null> {
   const receiver = new DmService();
   for (const input of await resolveApnsGiftWrap(payload)) {
@@ -32,16 +32,20 @@ export async function processApnsGiftWrap(
       encryptionKeypair,
       sourceRelays: [input.sourceRelay],
     });
-    const qualifying = await evaluateNotificationRumors(rumors, input.accountPubkey, runtime.userPresent);
+    const userPresent = runtime.getCurrentPresence?.().userPresent ?? runtime.userPresent;
+    const qualifying = await evaluateNotificationRumors(rumors, input.accountPubkey, userPresent, 'relay');
     if (!runtime.isCurrent() || qualifying.length === 0) continue;
-    const latest = qualifying.map(candidate => candidate.rumor).reduce((current: Rumor, candidate) =>
+    const latest = qualifying.reduce((current, candidate) =>
       isMessageOrderNewer(
-        { orderAt: messageOrderAt(candidate), id: candidate.id },
-        { orderAt: messageOrderAt(current), id: current.id },
+        { orderAt: messageOrderAt(candidate.rumor), id: candidate.rumor.id },
+        { orderAt: messageOrderAt(current.rumor), id: current.rumor.id },
       ) ? candidate : current);
-    const content = await buildNotificationContent(latest, qualifying.length, input.accountPubkey);
+    const content = await buildNotificationContent(latest.rumor, qualifying.length, input.accountPubkey, {
+      conversation: latest.conversation,
+      hasReactions: qualifying.some(candidate => candidate.rumor.kind === KIND_REACTION),
+    });
     if (!runtime.isCurrent()) return null;
-    return { accountPubkey: input.accountPubkey, rumorId: latest.id, ...content };
+    return { accountPubkey: input.accountPubkey, rumorId: latest.rumor.id, ...content };
   }
   return null;
 }

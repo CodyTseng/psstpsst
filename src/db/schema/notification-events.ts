@@ -8,7 +8,7 @@ export const notificationEvents = sqliteTable('notification_events', {
   accountPubkey: text('account_pubkey').notNull(),
   conversationKey: text('conversation_key').notNull(),
   messageId: text('message_id').notNull(),
-  kind: text('kind', { enum: ['message', 'request'] }).notNull(),
+  kind: text('kind', { enum: ['message', 'request', 'reaction'] }).notNull(),
   target: text('target', { enum: ['foreground', 'system'] }).notNull(),
   createdAt: integer('created_at').notNull(),
 }, (t) => [

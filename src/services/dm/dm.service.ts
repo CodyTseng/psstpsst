@@ -76,6 +76,7 @@ import type { Signer } from '../signer/signer.interface';
 import { isBlocked, loadBlockedIntoCache } from './block.service';
 
 import { emitMessageDeadlines, emitMessageDeletion, mergeStoredMessageIntoTail } from '../conversation/message-tail-cache';
+import { clearReactionPreviewForDeletedTarget, recordReactionPreview } from '../conversation/reaction-preview.service';
 import { encryptionKeyWatcher } from './encryption-key-watcher';
 import {
   getClientPubkeyFromEvent,
@@ -99,7 +100,7 @@ import {
   setForwardSince,
   setPendingForwardScan,
 } from './sync-store';
-import { isActiveConversationVisible } from './active-conversation';
+import { isActiveConversationVisible, type ConversationPresence } from './active-conversation';
 import { receiveSessionStore } from './receive-session';
 import { pollRecentGiftWraps } from './notification-poll';
 import { readGiftWrapPage } from './gift-wrap-pager';
@@ -152,6 +153,7 @@ export type GiftWrapReceiveContext = {
   sourceRelays: string[];
   userPresent: boolean;
   activeConversation: { accountPubkey: string; conversationKey: string } | null;
+  getCurrentPresence?: () => ConversationPresence;
   isCurrent(): boolean;
 };
 
@@ -303,6 +305,7 @@ export class DmService {
     timer: ReturnType<typeof setTimeout> | undefined;
   } | null = null;
   private receivePresence: boolean | undefined;
+  private receiveCurrentPresence?: () => ConversationPresence;
   private activeConversation: { accountPubkey: string; conversationKey: string } | null = null;
   /** Incoming gift wraps are processed through this queue rather than all at
    * once. On (re)connect a relay replays the whole history matching the
@@ -1074,13 +1077,16 @@ export class DmService {
     accountPubkey: string,
     rumor: Rumor,
     keepPending = false,
+    isCurrent?: () => boolean,
   ): Promise<boolean | null> {
     const targets = rumor.tags.filter((tag) => tag[0] === 'e');
     if (targets.length !== 1 || !/^[a-f0-9]{64}$/.test(targets[0][1] ?? '')) return null;
     const targetId = targets[0][1];
     const affectedConversation = await db.transaction(async (tx) => {
+      if (isCurrent?.() === false) return null;
       if (this.independentReceiver && !await canReceiveForAccount(accountPubkey, tx)) return null;
       const target = await this.findDeletionTarget(tx, accountPubkey, targetId);
+      if (isCurrent?.() === false) return null;
       if (target) return this.storeMessageDeletion(tx, accountPubkey, target, rumor, false);
       if (!keepPending) return null;
       const inserted = await tx.insert(messageDeletions).values({
@@ -1171,6 +1177,7 @@ export class DmService {
     ));
 
     const conversation = target.conversation;
+    await clearReactionPreviewForDeletedTarget(tx, conversation, target.id);
     const conversationScope = and(
       eq(conversations.accountPubkey, accountPubkey),
       eq(conversations.conversationKey, target.conversationKey),
@@ -1233,6 +1240,7 @@ export class DmService {
           deletedOrderAt,
           hasReplied: false,
           unreadCount: 0,
+          reactionPreviewPending: false,
         })
         .where(
           and(
@@ -1263,6 +1271,13 @@ export class DmService {
       conversationKey,
       this.receivePresence ?? !platform.notifications.shouldNotifyNow(),
     );
+  }
+
+  private currentReactionPresence(): ConversationPresence {
+    return this.receiveCurrentPresence?.() ?? {
+      userPresent: this.receivePresence ?? !platform.notifications.shouldNotifyNow(),
+      activeConversation: this.activeConversation,
+    };
   }
 
   /** Queue a kind-7 reaction through the durable relay outbox. */
@@ -1578,6 +1593,7 @@ export class DmService {
     receiver.encryptionKeypair = context.encryptionKeypair;
     receiver.activeConversation = context.activeConversation;
     receiver.receivePresence = context.userPresent;
+    receiver.receiveCurrentPresence = context.getCurrentPresence;
     receiver.independentReceiver = true;
     for (const relay of normalizeRelayUrls(context.sourceRelays)) receiver.recordGiftWrapSeen(giftWrap.id, relay);
     await loadBlockedIntoCache(context.accountPubkey);
@@ -1714,28 +1730,38 @@ export class DmService {
         outcome = unwrap.reason;
         return null;
       }
-      const result = unwrap.value;
-      let stored: Rumor[] | null = null;
-      if (isRumorTooFarInFuture(result.rumor)) {
+      const { rumor, senderEncryptionPubkey } = unwrap.value;
+      if (isRumorTooFarInFuture(rumor)) {
         await profileAsync(profile, 'db.markProcessed', () =>
           this.markProcessedGiftWrap(giftWrap.id, accountPubkey),
         );
         outcome = 'future-rumor';
         return null;
       }
+      let stored: Rumor[] | null = null;
+      const deletion = rumor.kind === KIND_MESSAGE_DELETION;
+      // Enqueue an authenticated deletion before metadata I/O so a
+      // concurrent relay cannot overtake it with the target.
+      if (deletion) {
+        await this.applyMessageDeletion(accountPubkey, rumor, true, isCurrent);
+        if (!isCurrent()) {
+          outcome = 'stale';
+          return null;
+        }
+      }
       const blocked = profileSync(profile, 'block.isBlocked', () =>
-        isBlocked(accountPubkey, result.rumor.pubkey),
+        isBlocked(accountPubkey, rumor.pubkey),
       );
-      if (!blocked && result.rumor.pubkey !== accountPubkey) {
+      if (!blocked && rumor.pubkey !== accountPubkey) {
         // The decoder verified the identity-signed seal and bound it to this
         // rumor author. Advance the account-scoped reply key by authenticated
         // message order, never by relay arrival order.
         await profileAsync(profile, 'db.rememberSenderKey', () =>
           observedPeerKeyService.rememberVerifiedSealKey({
-            peerPubkey: result.rumor.pubkey,
-            encryptionPubkey: result.senderEncryptionPubkey,
-            evidenceId: result.rumor.id!,
-            evidenceCreatedAt: messageOrderAt(result.rumor),
+            peerPubkey: rumor.pubkey,
+            encryptionPubkey: senderEncryptionPubkey,
+            evidenceId: rumor.id!,
+            evidenceCreatedAt: messageOrderAt(rumor),
           }),
         );
       }
@@ -1743,9 +1769,8 @@ export class DmService {
         outcome = 'stale';
         return null;
       }
-      if (result.rumor.kind === KIND_MESSAGE_DELETION) {
-        await this.applyMessageDeletion(accountPubkey, result.rumor, true);
-        if (isCurrent()) await this.markProcessedGiftWrap(giftWrap.id, accountPubkey);
+      if (deletion) {
+        await this.markProcessedGiftWrap(giftWrap.id, accountPubkey);
         outcome = 'message-deletion';
         return null;
       }
@@ -1753,29 +1778,31 @@ export class DmService {
       // rumor. Group and direct storage both persist this same source snapshot.
       const entry = this.giftWrapSeenOn.get(giftWrap.id);
       if (entry) {
-        entry.rumorId = result.rumor.id;
-        this.rumorToGiftWrap.set(result.rumor.id!, giftWrap.id);
+        entry.rumorId = rumor.id;
+        this.rumorToGiftWrap.set(rumor.id!, giftWrap.id);
       }
       const sourceRelays = entry ? Array.from(entry.relays) : context.sourceRelays;
-      const groupId = firstGroupId(result.rumor.tags);
+      const groupId = firstGroupId(rumor.tags);
       if (groupId) {
         const conversationKey = groupConversationKey(groupId);
         const groupResult = await groupReceiveService.receive({
           accountPubkey,
-          rumor: result.rumor,
+          rumor,
           sourceRelays,
           intake,
           userPresent: context.userPresent,
+          reactionPresence: () => this.currentReactionPresence(),
           active: this.isConversationActive(accountPubkey, conversationKey),
           senderBlocked: blocked,
           checkAccountOwnership: this.independentReceiver,
+          isCurrent,
           syncCursor,
         });
         if (groupResult.handled) {
           if ((groupResult.stored || groupResult.promoted.length > 0) && isCurrent()) {
             const visibleRumors = Array.from(
               new Map(
-                [...(groupResult.stored ? [result.rumor] : []), ...groupResult.promoted].map((visible) => [visible.id!, visible]),
+                [...(groupResult.stored ? [rumor] : []), ...groupResult.promoted].map((visible) => [visible.id!, visible]),
               ).values(),
             ).filter(
               (visible) => !groupResult.hiddenIds?.has(visible.id),
@@ -1787,7 +1814,10 @@ export class DmService {
             }
             if (visibleRumors.length > 0) stored = visibleRumors;
           }
-          if (!isCurrent()) return null;
+          if (!isCurrent()) {
+            outcome = 'stale';
+            return null;
+          }
           await profileAsync(profile, 'db.markProcessed', () =>
             this.markProcessedGiftWrap(giftWrap.id, accountPubkey),
           );
@@ -1811,25 +1841,28 @@ export class DmService {
       // by) to the rumor id (what the UI looks up) so relays that arrive *after*
       // this first store still union into the live "received from" set.
       const inserted = await this.storeRumor(
-        result.rumor,
+        rumor,
         accountPubkey,
         sourceRelays,
         profile,
-        { intake },
+        { intake, isCurrent },
       );
       if (inserted === true && isCurrent()) {
         if (intake !== 'history' && intake !== 'archive') {
-          for (const l of this.listeners) l.onNewMessage?.(result.rumor);
+          for (const l of this.listeners) l.onNewMessage?.(rumor);
         }
-        stored = [result.rumor];
+        stored = [rumor];
       }
-      if (!isCurrent()) return null;
+      if (!isCurrent()) {
+        outcome = 'stale';
+        return null;
+      }
       await profileAsync(profile, 'db.markProcessed', () =>
         this.markProcessedGiftWrap(giftWrap.id, accountPubkey),
       );
-      outcome = stored ? 'stored' : inserted === 'hidden' ? 'stored-hidden' : 'duplicate-or-unsupported';
       // The freshly-stored rumor (or null when re-seen/blocked/undecryptable) lets
       // the background poll count how many *new* messages to notify about.
+      outcome = stored ? 'stored' : inserted === 'hidden' ? 'stored-hidden' : 'duplicate-or-unsupported';
       return stored;
     } finally {
       profile?.end({ result: outcome });
@@ -1901,6 +1934,7 @@ export class DmService {
       receiver.accountPubkey = accountPubkey;
       receiver.encryptionKeypair = currentKey;
       receiver.activeConversation = this.activeConversation;
+      receiver.receiveCurrentPresence = () => this.currentReactionPresence();
       if (this.accountPubkey !== accountPubkey) {
         // Cold workers have no self-event stream. Keep key invalidation active
         // throughout paging, including a rotation after the metadata snapshot.
@@ -2224,6 +2258,16 @@ export class DmService {
     return false;
   }
 
+  private async persistHistoryPage(page: Event[], epoch: number): Promise<void> {
+    const processedIds = await getProcessedGiftWrapIds(page.map(event => event.id));
+    for (const event of page) {
+      if (this.syncEpoch !== epoch) return;
+      if (processedIds.has(event.id)) continue;
+      await this.processGiftWrap(event, 'history');
+      await yieldToUi();
+    }
+  }
+
   /** Page only one replica, with bounded memory and a UI yield per new envelope.
    * Wire and timeout EOSE finish a page; CLOSED and failed connections do not.
    * Re-read a timestamp boundary with a fixed page size before crossing it. */
@@ -2246,15 +2290,7 @@ export class DmService {
         isCurrent: () => this.syncEpoch === epoch,
         signAuth: this.signAuth ?? undefined,
         onReceived: (url, id) => this.recordGiftWrapSeen(id, url),
-        onPage: async (page) => {
-          const processedIds = await getProcessedGiftWrapIds(page.map(event => event.id));
-          for (const event of page) {
-            if (this.syncEpoch !== epoch) return;
-            if (processedIds.has(event.id)) continue;
-            await this.processGiftWrap(event, 'history');
-            await yieldToUi();
-          }
-        },
+        onPage: page => this.persistHistoryPage(page, epoch),
       });
       if (result.status !== 'page') return result.status;
       until = result.nextUntil;
@@ -2417,7 +2453,7 @@ export class DmService {
     accountPubkey: string,
     sourceRelays?: string[],
     profile?: PerfSpan | null,
-    options: { enqueueRelay?: boolean; intake: RumorIntake } = { intake: 'live' },
+    options: { enqueueRelay?: boolean; intake: RumorIntake; isCurrent?: () => boolean } = { intake: 'live' },
   ): Promise<boolean | 'hidden' | null> {
     const pTags = getPTags(rumor.tags);
     const conversationKey = profileSync(profile, 'store.deriveConversation', () =>
@@ -2438,6 +2474,7 @@ export class DmService {
     const stored = await profileAsync(profile, 'db.storeTransaction', () =>
       db.transaction(async (tx) => {
         if (this.independentReceiver && !await canReceiveForAccount(accountPubkey, tx)) return false;
+        if (options.isCurrent?.() === false) return false;
         const pendingDeletion = await resolvePendingMessageDeletions(tx, accountPubkey, rumor, false);
         const expired = expiresAt !== null && expiresAt <= Date.now();
         const deleted = pendingDeletion !== null || expired;
@@ -2488,6 +2525,17 @@ export class DmService {
           });
         }
 
+        // Reactions have an independent cursor and never modify ordinary conversation state.
+        if (rumor.kind === KIND_REACTION) {
+          if (!deleted && (options.intake === 'live' || options.intake === 'recovery')) {
+            await recordReactionPreview(
+              tx, { accountPubkey, conversationKey }, rumor, orderAt,
+              () => this.currentReactionPresence(),
+            );
+          }
+          return deleted ? 'hidden' : true;
+        }
+
         // Index every media URL at the persistence choke point. Kind-15 has one
         // encrypted attachment; kind-14 may contain several direct media URLs.
         if (rumor.kind === 15) {
@@ -2501,13 +2549,11 @@ export class DmService {
         }
 
       const isOutgoing = rumor.pubkey === accountPubkey;
-      const isReaction = rumor.kind === 7;
-      const isVisibleMessage = !isReaction && !deleted;
+      const isVisibleMessage = !deleted;
       const isActive = this.isConversationActive(accountPubkey, conversationKey);
       // Advance the read cursor to this message when we've evidently seen up to
       // it: our own send (incl. one synced from another device — we replied
       // there), or any message arriving while we're viewing the conversation.
-      // Reactions don't move it (the cursor tracks real kind-14/15 messages).
       const advanceRead = (isOutgoing || isActive) && isVisibleMessage;
       // A message that adds to the unread badge: from the peer, not a reaction,
       // and not while we're viewing the conversation. Independent of arrival
@@ -2636,13 +2682,11 @@ export class DmService {
             tx
               .update(conversations)
               .set({
-                lastMessageAt: isNewest && !isReaction ? rumor.created_at : conv.lastMessageAt,
+                lastMessageAt: isNewest ? rumor.created_at : conv.lastMessageAt,
                 lastMessageOrderAt:
-                  isNewest && !isReaction ? orderAt : conv.lastMessageOrderAt,
-                lastMessageId: isNewest && !isReaction ? rumor.id! : conv.lastMessageId,
-                ...(isNewest && !isReaction
-                  ? { updatedAt: rumor.created_at, updatedOrderAt: orderAt }
-                  : {}),
+                  isNewest ? orderAt : conv.lastMessageOrderAt,
+                lastMessageId: isNewest ? rumor.id! : conv.lastMessageId,
+                ...(isNewest ? { updatedAt: rumor.created_at, updatedOrderAt: orderAt } : {}),
                 unreadCount: unread,
                 lastReadAt: nextCursor?.orderAt === orderAt ? rumor.created_at : conv.lastReadAt,
                 lastReadOrderAt: newCursorOrderAt,
@@ -2663,7 +2707,7 @@ export class DmService {
             deleted: isNewest ? false : conv.deleted,
             hasReplied: repliedNow || conv.hasReplied, muted: conv.muted,
             unreadCount: unread,
-            lastMessageId: isNewest && !isReaction ? rumor.id! : conv.lastMessageId,
+            lastMessageId: isNewest ? rumor.id! : conv.lastMessageId,
           };
         }
       }

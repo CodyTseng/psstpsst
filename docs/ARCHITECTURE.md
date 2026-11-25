@@ -70,7 +70,10 @@ local state. Only production consumes production updates.
 - Conversations are read models. The last-message ID and both conversation
   timestamps follow the same message, or the creation timestamps when there
   is no preview. Update them atomically. Draft and metadata writes do not
-  change chronology.
+  change chronology. Incoming reactions to the local author's visible messages
+  have a separate device-local preview cursor. Only arrival intake advances it.
+  Viewing the conversation clears the pending flag while retaining the cursor.
+  Reactions leave ordinary unread counts and list ordering untouched.
 - Relay direct chats key by counterparty. Relay groups key by a hash of the
   stable group ID. Nearby rows preserve their owning local proximity identity.
   A conversation key alone does not identify a recipient or establish write
@@ -129,7 +132,9 @@ local state. Only production consumes production updates.
   state at claim, and deliver best-effort after claim. Historical work stays
   silent, including later promotion from quarantine. A request can alert on
   its first real message only. Deletion and resurrection preserve that
-  distinction. Quiet hours suppress delivery without catch-up.
+  distinction. A valid incoming reaction to the local author's visible message
+  can alert while its reaction preview is pending, independently of message
+  unread state. Quiet hours suppress system delivery without catch-up.
 - The unread total is a database-derived, service-owned read model shared by
   UI and badges. Presence gates automatic read advancement and foreground
   delivery. The currently viewed conversation stays out of that total while

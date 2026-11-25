@@ -23,6 +23,8 @@ decoration. Reserve expressive media and emoji for user content.
 - Reserve danger for destructive actions, errors, and blocking prerequisites.
   Unread indicators use notification colours. Conversation-list metadata and
   secondary status marks use `textMuted` without additional opacity.
+  A pending reaction to the user's own message uses the notification colour
+  and ordinary preview weight. Drafts take precedence.
 - Chats badges count unread messages. Contacts badges count unread request
   conversations, and each request row counts its unread messages. Quiet
   requests use dots in both places.

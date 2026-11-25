@@ -66,7 +66,10 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('@/components/common/Avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/chat/MessagePreviewText', () => ({ MessagePreviewText: () => null }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string, options?: { emoji: string }) =>
+    options ? `${key} ${options.emoji}` : key }),
+}));
 jest.mock('@/stores/theme.store', () => ({
   useThemeStore: (selector: (state: unknown) => unknown) => selector({ accent: 'blue', preference: mockPreference }),
 }));
@@ -258,4 +261,15 @@ it('allows request notices on Chats and clears them when quiet mode is enabled',
   render(true, null, { chatsVisible: true, quietRequests: true });
   render(true, null, { chatsVisible: true });
   expect(renderer.toJSON()).toBeNull();
+});
+
+
+it('shows the reaction copy for a notification with zero unread messages', async () => {
+  render();
+  mockArrival = { ...message('reaction', 0), lastMessageKind: 7, lastMessageContent: '👍' };
+  render();
+  const notice = renderer.root.findByType(InteractivePressable);
+  expect(notice.props.accessibilityLabel).toBe('Alice: conversations.reaction_preview_emoji 👍');
+  await act(() => { notice.props.onPress(); });
+  expect(onOpen).toHaveBeenCalledWith('/chat/alice');
 });

@@ -130,12 +130,15 @@ jest.mock('@/services/conversation/unread-count.service', () => ({
 }));
 
 jest.mock('../notification-filter', () => ({
-  filterNotifiableMessages: jest.fn(async (rumors: Rumor[]) =>
+  filterNotifiableMessages: jest.fn(async (rumors: Rumor[], _account: string, deliveryKind = 'relay') =>
     mockFilterAllows ? rumors.filter(rumor => {
       if (mockClaimedIds.has(rumor.id!)) return false;
       mockClaimedIds.add(rumor.id!);
       return true;
-    }).map(rumor => ({ rumor, kind: mockRequestIds.has(rumor.id!) ? 'request' : 'message' })) : [],
+    }).map(rumor => ({
+      rumor, kind: mockRequestIds.has(rumor.id!) ? 'request' : 'message',
+      conversation: { conversationKey: rumor.pubkey, deliveryKind, groupId: null },
+    })) : [],
   ),
 }));
 
@@ -506,6 +509,18 @@ describe('notificationService funnel', () => {
     });
     expect(mockOps).toEqual([]);
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('delivers Nearby reactions while the Relay key requires synchronization', async () => {
+    const service = await initService();
+    receiveSession().setState({
+      status: 'key-required', accountPubkey: 'account-pubkey', encryptionPubkey: 'new-key',
+    }, true);
+    const nearby = rumor('nearby-reaction', { kind: 7, tags: [['h', 'unrelated-group']] });
+    await service.notifyNewRumors([nearby], {
+      accountPubkey: 'account-pubkey', deliveryKind: 'proximity', flushImmediately: true,
+    });
+    expect(mockPresentedContents.at(-1)).toMatchObject({ title: 'notifications.new_reaction', badgeCount: 7 });
   });
 
   it('does not start a resident service if a key changes during periodic-task registration', async () => {

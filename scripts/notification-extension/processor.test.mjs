@@ -81,8 +81,8 @@ function fixture(content = 'private message', { invalidRumorId = false, disappea
   const event = finalizeEvent({ kind: 1059, created_at: rumor.created_at, tags: [['p', account]],
     content: nip44.v2.encrypt(JSON.stringify(seal), nip44.v2.utils.getConversationKey(ephemeral, getPublicKey(encryption))),
   }, ephemeral);
-  function followup(content) {
-    const nextRumor = { ...rumor, content };
+  function followup(content, { kind = rumor.kind, tags = rumor.tags } = {}) {
+    const nextRumor = { ...rumor, content, kind, tags };
     nextRumor.id = getEventHash(nextRumor);
     const nextSeal = finalizeEvent({ kind: 13, created_at: rumor.created_at,
       tags: [['n', getPublicKey(senderEncryption)]],
@@ -120,7 +120,9 @@ async function database(input, { enabled = true, accepted = true, muted = false,
   return sqlite;
 }
 
-async function receive(sqlite, input, payload, { present = false, http } = {}) {
+async function receive(sqlite, input, payload, {
+  present = false, http, getPresence = () => ({ userPresent: present, activeConversation: null }),
+} = {}) {
   const vault = new LocalKeyVault({ getItem: async key => input.keys.get(key) ?? null,
     setItem: async (key, value) => { input.keys.set(key, value); }, deleteItem: async key => { input.keys.delete(key); } });
   const timers = new Set();
@@ -128,7 +130,7 @@ async function receive(sqlite, input, payload, { present = false, http } = {}) {
   const completed = new Promise((resolve) => { finish = resolve; });
   const context = createContext({
     __locale: 'en', __deadlineTime: Date.now() + 24000,
-    __receiveContext: { userPresent: present, activeConversation: null },
+    __getReceiveContext: getPresence,
     __complete: (value) => finish(JSON.parse(value)),
     __encodeUTF8: (value) => [...Buffer.from(value, 'utf8')],
     __decodeUTF8: (value) => Buffer.from(value).toString('utf8'),
@@ -419,5 +421,42 @@ test('foreground extension intake leaves a durable arrival for the app instead o
       [{ message_id: input.rumor.id, kind: 'request', target: 'foreground' }]);
     await receive(sqlite, input, { type: 'event', data: input.event }, { present: true });
     assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM notification_events').get().n, 1);
+  } finally { sqlite.close(); }
+});
+
+
+test('system reaction notification uses only the reaction and leaves unread and chronology unchanged', async () => {
+  const input = fixture();
+  const sqlite = await database(input, { preview: true });
+  try {
+    const targetId = '12'.repeat(32);
+    const target = {
+      id: targetId, kind: 14, created_at: 1, content: 'private original',
+      pubkey: input.account, tags: [['p', input.rumor.pubkey]],
+    };
+    sqlite.prepare(`INSERT INTO messages (account_pubkey, id, conversation_key, sender_pubkey,
+       kind, content, created_at, order_at, tags, rumor) VALUES (?, ?, ?, ?, 14, ?, 1, 1000, ?, ?)`)
+      .run(input.account, targetId, input.rumor.pubkey, input.account, target.content,
+        JSON.stringify(target.tags), JSON.stringify(target));
+    sqlite.prepare('UPDATE conversations SET last_message_id = ?, last_message_at = 1, last_message_order_at = 1000')
+      .run(targetId);
+    const wrongTarget = input.followup('👎', { kind: 7, tags: [...input.rumor.tags, ['e', '34'.repeat(32)]] });
+    assert.equal((await receive(sqlite, input, { type: 'event', data: wrongTarget })).status, 'suppress');
+    const reaction = input.followup('👍', { kind: 7, tags: [...input.rumor.tags, ['e', targetId]] });
+    let snapshots = 0;
+    const result = await receive(sqlite, input, { type: 'event', data: reaction }, {
+      getPresence: () => snapshots++ === 0
+        ? { userPresent: true, activeConversation: { accountPubkey: input.account, conversationKey: input.rumor.pubkey } }
+        : { userPresent: false, activeConversation: null },
+    });
+    assert.equal(result.status, 'notify');
+    assert.equal(result.title, 'New reaction');
+    assert.equal(result.body, 'Reacted to your message with 👍');
+    assert.deepEqual({ ...sqlite.prepare(`SELECT last_message_id, updated_order_at,
+      unread_count, reaction_preview_event_id, reaction_preview_pending FROM conversations`).get() }, {
+      last_message_id: targetId, updated_order_at: 1000, unread_count: 0,
+      reaction_preview_event_id: result.rumorId, reaction_preview_pending: 1,
+    });
+    assert.equal((await receive(sqlite, input, { type: 'event', data: reaction })).status, 'suppress');
   } finally { sqlite.close(); }
 });

@@ -6,12 +6,16 @@ import { contacts, conversations, profiles } from '@/db/schema';
 import type { Rumor } from '@/db/schema/types';
 import i18n from '@/i18n';
 import { resolveDisplayName, resolveName } from '@/lib/nostr/display-name';
+import { KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
+import { parseReactionPreview, reactionPreviewText } from '@/lib/nostr/reaction-preview';
 import { attachmentLabel } from '@/lib/nostr/attachment-label';
 import {
   firstGroupId,
   groupConversationKey,
   parseGroupAction,
 } from '@/lib/nostr/group-messaging';
+
+import type { NotificationConversation } from './notification-filter';
 
 const KIND_FILE = 15;
 
@@ -57,9 +61,12 @@ async function resolveIdentity(accountPubkey: string, pubkey: string) {
 export async function getNotificationPreview(
   rumor: Rumor,
   accountPubkey: string,
-  options: { includeIdentity: boolean } = { includeIdentity: true },
+  options: { includeIdentity: boolean; conversation?: NotificationConversation } = { includeIdentity: true },
 ): Promise<NotificationPreview> {
-  const groupId = firstGroupId(rumor.tags);
+  const groupId = options.conversation ? options.conversation.groupId : firstGroupId(rumor.tags);
+  const conversationKey = options.conversation?.conversationKey ?? (groupId ? groupConversationKey(groupId) : rumor.pubkey);
+  const reaction = rumor.kind === KIND_REACTION ? parseReactionPreview(rumor.content, rumor.tags) : null;
+  const reactionText = reaction ? reactionPreviewText(i18n.t, reaction) : null;
   if (groupId) {
     const action = parseGroupAction(rumor.tags);
     let groupName: string | null = null;
@@ -72,7 +79,7 @@ export async function getNotificationPreview(
         .where(
           and(
             eq(conversations.accountPubkey, accountPubkey),
-            eq(conversations.conversationKey, groupConversationKey(groupId)),
+            eq(conversations.conversationKey, conversationKey),
           ),
         )
         .limit(1);
@@ -126,7 +133,7 @@ export async function getNotificationPreview(
             video: i18n.t('conversations.attachment_video_preview'),
             voice: i18n.t('conversations.attachment_voice_preview'),
           })
-        : rumor.content.trim() || null;
+        : rumor.kind === KIND_REACTION ? reactionText : rumor.content.trim() || null;
     }
     return {
       displayName: groupName,
@@ -140,6 +147,8 @@ export async function getNotificationPreview(
   const [row] = options.includeIdentity
     ? await db
         .select({
+          nearbyName: conversations.name,
+          deliveryKind: conversations.deliveryKind,
           petname: contacts.petname,
           profileDisplayName: profiles.displayName,
           profileName: profiles.name,
@@ -157,13 +166,13 @@ export async function getNotificationPreview(
         .where(
           and(
             eq(conversations.accountPubkey, accountPubkey),
-            eq(conversations.conversationKey, rumor.pubkey),
+            eq(conversations.conversationKey, conversationKey),
           ),
         )
         .limit(1)
     : [];
 
-  const displayName = resolveName({
+  const displayName = row?.deliveryKind === 'proximity' ? row.nearbyName : resolveName({
     petname: row?.petname,
     displayName: row?.profileDisplayName,
     name: row?.profileName,
@@ -176,11 +185,13 @@ export async function getNotificationPreview(
           video: i18n.t('conversations.attachment_video_preview'),
           voice: i18n.t('conversations.attachment_voice_preview'),
         })
-      : disappearingMessageDuration(rumor) === null ? rumor.content.trim() || null : null;
+      : rumor.kind === KIND_REACTION
+        ? reactionText
+        : disappearingMessageDuration(rumor) === null ? rumor.content.trim() || null : null;
 
   return {
     displayName,
     messageContent,
-    avatarUrl: row?.picture ?? null,
+    avatarUrl: row?.deliveryKind === 'proximity' ? null : row?.picture ?? null,
   };
 }

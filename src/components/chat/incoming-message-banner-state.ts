@@ -11,7 +11,7 @@ export function selectIncomingNotification(
   let latest: ClaimedNotificationEvent | null = null;
   for (const row of events) {
     if (row.conversation.conversationKey === activeConversationKey ||
-      (row.event.kind === 'request' ? options.quietRequests : options.chatsVisible)) continue;
+      (row.conversation.hasReplied ? options.chatsVisible : options.quietRequests)) continue;
     if (!latest || isMessageOrderNewer(
       { id: row.message.id, orderAt: row.message.orderAt },
       { id: latest.message.id, orderAt: latest.message.orderAt },

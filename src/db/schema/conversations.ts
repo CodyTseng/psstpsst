@@ -20,6 +20,10 @@ export const conversations = sqliteTable(
     lastMessageAt: integer('last_message_at'),
     lastMessageOrderAt: integer('last_message_order_at'),
     lastMessageId: text('last_message_id'),
+    /** The latest eligible reaction remains the cursor after seeing its preview. */
+    reactionPreviewEventId: text('reaction_preview_event_id'),
+    reactionPreviewOrderAt: integer('reaction_preview_order_at'),
+    reactionPreviewPending: integer('reaction_preview_pending', { mode: 'boolean' }).notNull().default(false),
     unreadCount: integer('unread_count').notNull().default(0),
     /** Accepted into the main inbox, not necessarily replied to. Incoming
      * messages from saved contacts set this to true without a reply. */

@@ -149,6 +149,7 @@ import { unreadCountService } from '@/services/conversation/unread-count.service
 import { blockUser, getSessionCachedBlockedStatus, unblockUser } from '@/services/dm/block.service';
 import { buildRumor, KIND_CHAT, KIND_FILE } from '@/services/crypto/nip17-gift-wrap';
 import { dmService } from '@/services/dm/dm.service';
+import { watchReactionPreviewWhileViewing } from '@/services/conversation/reaction-preview.service';
 import { nextRumorTimestamp } from '@/services/dm/rumor-clock';
 import { pendingAttachmentSendService, UPLOAD_PREPARING_PERCENT } from '@/services/files/pending-attachment-send.service';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -593,6 +594,11 @@ export default function ChatPageRuntime() {
     unreadCountService.setActiveConversation({ accountPubkey, conversationKey });
     return () => unreadCountService.setActiveConversation(null);
   }, [accountPubkey, conversationKey]);
+
+  useEffect(() => {
+    if (!routeActive || !accountPubkey || !conversationKey) return;
+    return watchReactionPreviewWhileViewing(accountPubkey, conversationKey);
+  }, [accountPubkey, conversationKey, routeActive]);
 
   useEffect(() => {
     if (params.from !== 'requests') return;

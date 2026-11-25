@@ -2,8 +2,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { db } from '@/db/client';
-import { conversations, savedGroups } from '@/db/schema';
-import { useMainInboxConversations, useRequestConversations } from '../use-conversations';
+import { conversations, messages, savedGroups } from '@/db/schema';
+import { useMainInboxConversations, useRequestConversations, type ConversationWithLast } from '../use-conversations';
 import { useCommonGroups, useSavedGroups } from '../use-common-groups';
 
 jest.mock('@/db/client', () => {
@@ -48,7 +48,7 @@ describe('conversation preview ordering', () => {
   let keys: string[];
 
   beforeEach(() => {
-    sqlite.exec('DELETE FROM conversations; DELETE FROM saved_groups');
+    sqlite.exec('DELETE FROM messages; DELETE FROM conversations; DELETE FROM saved_groups');
     keys = [];
   });
   afterEach(() => {
@@ -105,4 +105,47 @@ describe('conversation preview ordering', () => {
         : ['pinned', 'empty-newer', 'monday', 'old-draft', 'empty-older', 'old-delayed']);
     },
   );
+
+  it.each([true, false])('looks up the pending reaction in the owning account only (accepted=%s)', async accepted => {
+    const firstAccount = 'reaction-first';
+    const otherAccount = 'reaction-other';
+    for (const accountPubkey of [firstAccount, otherAccount]) {
+      for (const [conversationKey, orderAt] of [['older', 100000], ['newer', 200000]] as const) {
+        await db.insert(conversations).values({
+          accountPubkey, conversationKey, createdAt: 100, createdOrderAt: 100000,
+          updatedAt: orderAt / 1000, updatedOrderAt: orderAt, hasReplied: accepted,
+          lastMessageId: conversationKey === 'older' ? 'message' : null,
+          reactionPreviewPending: accountPubkey === firstAccount && conversationKey === 'older',
+          reactionPreviewEventId: conversationKey === 'older' ? 'reaction' : null,
+          reactionPreviewOrderAt: conversationKey === 'older' ? 300000 : null,
+        });
+      }
+      for (const [id, content, kind] of [
+        ['message', 'Original message', 14],
+        ['reaction', accountPubkey === firstAccount ? '👍' : '👎', 7],
+      ] as const) {
+        const rumor = { id, content, kind, pubkey: 'older', created_at: 100, tags: [] };
+        await db.insert(messages).values({
+          accountPubkey, conversationKey: 'older', id, content, kind, senderPubkey: 'older',
+          createdAt: 100, orderAt: 100000, tags: [], rumor,
+        });
+      }
+    }
+
+    let rows: ConversationWithLast[] = [];
+    function Harness({ account }: { account: string }) {
+      const inbox = useMainInboxConversations(account);
+      const requests = useRequestConversations(account);
+      rows = accepted ? inbox.conversations : requests.conversations;
+      return null;
+    }
+    await act(async () => { renderer = create(<Harness account={firstAccount} />); });
+    expect(rows.map(({ conversation }) => conversation.conversationKey)).toEqual(['newer', 'older']);
+    expect(rows[1].reactionPreviewEvent).toEqual({ content: '👍', tags: [] });
+    expect(rows[1].lastMessageContent).toBe('Original message');
+    await act(async () => { renderer?.update(<Harness account={otherAccount} />); });
+    expect(rows.map(({ conversation }) => conversation.accountPubkey)).toEqual([otherAccount, otherAccount]);
+    expect(rows[1].reactionPreviewEvent).toBeNull();
+  });
+
 });

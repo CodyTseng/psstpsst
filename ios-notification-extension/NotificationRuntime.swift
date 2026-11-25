@@ -102,7 +102,8 @@ final class NotificationRuntime: NSObject, URLSessionDataDelegate, URLSessionWeb
 
   private func installBridge(_ context: JSContext) {
     context.setObject(deadline.timeIntervalSince1970 * 1000, forKeyedSubscript: "__deadlineTime" as NSString)
-    context.setObject(SharedNotificationContext.snapshot(), forKeyedSubscript: "__receiveContext" as NSString)
+    let getReceiveContext: @convention(block) () -> [String: Any] = { SharedNotificationContext.snapshot() }
+    context.setObject(getReceiveContext, forKeyedSubscript: "__getReceiveContext" as NSString)
     context.setObject(Locale.preferredLanguages.first ?? "en", forKeyedSubscript: "__locale" as NSString)
     let complete: @convention(block) (String) -> Void = { [weak self] value in
       guard let data = value.data(using: .utf8), let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { self?.finish(nil); return }

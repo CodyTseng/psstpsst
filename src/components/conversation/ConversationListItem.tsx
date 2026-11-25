@@ -53,6 +53,7 @@ import {
 } from '@/lib/gestures';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { createDraftPreviewSelector } from '@/lib/chat/draft-preview';
+import { parseReactionPreview, reactionPreviewText } from '@/lib/nostr/reaction-preview';
 import { parseGroupAction } from '@/lib/nostr/group-messaging';
 import type { ComposerFile } from '@/lib/attachments/composer-file';
 import { IS_ELECTRON, type DesktopContextMenuEvent } from '@/lib/platform';
@@ -76,6 +77,7 @@ type Props = {
   lastMessageTags?: string[][] | null;
   lastMessageFromSelf?: boolean;
   lastMessageSenderPubkey?: string | null;
+  reactionPreviewEvent?: { content: string; tags: string[][] } | null;
   updatedAt: number | null;
   /** Current unix-minute bucket, used to refresh and calculate relative time. */
   currentMinute?: number;
@@ -273,6 +275,7 @@ function ConversationListItemBase({
   lastMessageTags,
   lastMessageFromSelf,
   lastMessageSenderPubkey,
+  reactionPreviewEvent,
   updatedAt,
   currentMinute,
   unreadCount,
@@ -533,6 +536,9 @@ function ConversationListItemBase({
   const draft = useDraftsStore(selectDraftPreview);
   const groupWritable = !isGroup || groupMemberPubkeys?.includes(accountPubkey) === true;
   const draftText = groupWritable && draft ? draft.replace(/\s+/g, ' ').trim() : '';
+  const reactionPreview = reactionPreviewEvent
+    ? parseReactionPreview(reactionPreviewEvent.content, reactionPreviewEvent.tags)
+    : null;
 
   // Leading (left→right) swipe: read/unread toggle then pin toggle. Each is
   // shown only where its handler is supplied (both are inbox-only). null when
@@ -800,6 +806,10 @@ function ConversationListItemBase({
                         </AppText>
                         {draftText}
                       </>
+                    </AppText>
+                  ) : reactionPreview ? (
+                    <AppText variant="body" numberOfLines={1} style={{ flex: 1, color: c.notification }}>
+                      {reactionPreviewText(t, reactionPreview)}
                     </AppText>
                   ) : (
                     actionPreview ? (

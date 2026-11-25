@@ -1,6 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { Event } from 'nostr-tools';
 
 import type { Rumor } from '@/db/schema';
+import { unwrapGiftWrapForAccount } from '@/services/crypto/nip17-gift-wrap';
+import { watchReactionPreviewWhileViewing } from '@/services/conversation/reaction-preview.service';
+import { takeNotificationEvents } from '@/services/notifications/notification-events.service';
 
 let mockDatabase: { sqlite: DatabaseSync; db: unknown } | undefined;
 
@@ -56,6 +60,9 @@ jest.mock('@/db/client', () => {
 });
 
 let mockUserPresent = false;
+const mockReturnListeners = new Set<() => void>();
+type DatabaseListener = (event: { external: boolean; tableName?: string }) => void;
+const mockDatabaseListeners = new Set<DatabaseListener>();
 let mockNetworkConnected = false;
 const mockAppStateListeners = new Set<(state: string) => void>();
 let mockNetworkListener: ((state: { isConnected: boolean }) => void) | undefined;
@@ -69,6 +76,10 @@ jest.mock('../dm-backup-storage', () => ({
 jest.mock('@/platform', () => ({
   platform: {
     database: {
+      addChangeListener: (listener: DatabaseListener) => {
+        mockDatabaseListeners.add(listener);
+        return () => mockDatabaseListeners.delete(listener);
+      },
       rawQuery: async (query: string, params: string[]) => mockDatabase!.sqlite.prepare(query).all(...params),
       rawQueryEach: (query: string, params: string[]) => mockDatabase!.sqlite.prepare(query).iterate(...params),
     },
@@ -96,7 +107,13 @@ jest.mock('@/platform', () => ({
         return () => mockAppStateListeners.delete(listener);
       },
     },
-    notifications: { shouldNotifyNow: () => !mockUserPresent, addUserReturnedListener: () => () => {} },
+    notifications: {
+      shouldNotifyNow: () => !mockUserPresent,
+      addUserReturnedListener: (listener: () => void) => {
+        mockReturnListeners.add(listener);
+        return () => mockReturnListeners.delete(listener);
+      },
+    },
     networkState: {
       getState: async () => ({ isConnected: mockNetworkConnected }),
       addStateListener: (listener: typeof mockNetworkListener) => { mockNetworkListener = listener; },
@@ -107,6 +124,7 @@ jest.mock('@/services/conversation/message-tail-cache', () => ({ mergeStoredMess
 jest.mock('@/services/crypto/nip17-gift-wrap', () => ({
   KIND_CHAT: 14, KIND_FILE: 15, KIND_REACTION: 7, KIND_MESSAGE_DELETION: 5,
   createGiftWrappedMessage: (...args: unknown[]) => mockWrapForRelay(...args),
+  unwrapGiftWrapForAccount: jest.fn(),
   buildRumor: (template: Omit<Rumor, 'id' | 'pubkey'>, pubkey: string) => {
     const rumor = { ...template, pubkey };
     return { ...rumor, id: jest.requireActual('nostr-tools').getEventHash(rumor) };
@@ -123,7 +141,7 @@ jest.mock('@/services/dm/encryption-key.service', () => ({}));
 jest.mock('@/services/dm/notification-poll', () => ({}));
 jest.mock('@/services/dm/messaging-metadata', () => ({}));
 jest.mock('@/services/dm/relay-message-outbox', () => ({ relayMessageOutbox: { wake: jest.fn() } }));
-jest.mock('@/services/dm/observed-peer-key.service', () => ({}));
+jest.mock('@/services/dm/observed-peer-key.service', () => ({ observedPeerKeyService: { rememberVerifiedSealKey: jest.fn() } }));
 jest.mock('@/services/dm/peer-encryption-key.service', () => ({}));
 jest.mock('@/services/group/group-receive.service', () => ({}));
 jest.mock('@/services/group/group.service', () => ({}));
@@ -559,4 +577,283 @@ it('publishes queued expiry after network recovery and retries an unacknowledged
     mockNetworkConnected = false;
     jest.useRealTimers();
   }
+});
+
+
+it('keeps targets hidden when their history deletions are processed first', async () => {
+  const historyPeer = 'cd'.repeat(32);
+  const history = new DmService() as unknown as {
+    accountPubkey: string;
+    encryptionKeypair: object;
+    persistHistoryPage(page: Event[], epoch: number): Promise<void>;
+  };
+  history.accountPubkey = ACCOUNT;
+  history.encryptionKeypair = {};
+  const message = (id: string): Rumor => ({
+    id: id.repeat(32), kind: 14, pubkey: ACCOUNT, created_at: 100, content: 'Original',
+    tags: [['p', historyPeer]],
+  });
+  const deletion = (id: string, target: string): Rumor => ({
+    id: id.repeat(32), kind: 5, pubkey: ACCOUNT, created_at: 101, content: '',
+    tags: [['p', ACCOUNT], ['e', target], ['k', '14']],
+  });
+  const first = message('c1');
+  const later = message('c2');
+  const visible = message('c3');
+  const reaction: Rumor = {
+    id: 'c4'.repeat(32), kind: 7, pubkey: historyPeer, created_at: 102, content: '👍',
+    tags: [['p', ACCOUNT], ['e', visible.id]],
+  };
+  const rumors = [first, later, visible, reaction, deletion('c5', first.id), deletion('c6', later.id)];
+  const lookup = new Map(rumors.map(rumor => [`history-${rumor.id}`, rumor]));
+  let releaseDecode!: () => void;
+  const blockedDecode = new Promise<void>(resolve => { releaseDecode = resolve; });
+  let startDecode!: () => void;
+  const decodeStarted = new Promise<void>(resolve => { startDecode = resolve; });
+  const unwrap = jest.mocked(unwrapGiftWrapForAccount).mockImplementation(async wrap => {
+    if (wrap.id === 'unverified-tail') {
+      startDecode();
+      await blockedDecode;
+      return { status: 'unsupported', reason: 'missing-encryption-key-tag' };
+    }
+    return {
+      status: 'decrypted',
+      value: { giftWrap: wrap, seal: wrap, rumor: lookup.get(wrap.id)!, senderEncryptionPubkey: historyPeer },
+    };
+  });
+  const page = (...items: Rumor[]): Event[] => items.map((rumor, index) => ({
+    id: `history-${rumor.id}`, kind: 1059, pubkey: historyPeer, created_at: 200 - index,
+    content: '', sig: '', tags: [['p', ACCOUNT]],
+  }));
+  const sqlite = mockDatabase!.sqlite;
+  // Detect a transient visible insert, even if a later write eventually hides it.
+  sqlite.exec(`
+    CREATE TEMP TRIGGER require_history_target_hidden BEFORE INSERT ON messages
+    WHEN new.id IN ('${first.id}', '${later.id}') AND new.deleted = 0
+      AND NOT EXISTS (SELECT 1 FROM messages WHERE account_pubkey = new.account_pubkey AND id = new.id)
+    BEGIN SELECT raise(ABORT, 'history target became visible'); END
+  `);
+  const firstPage = page(rumors[4], rumors[5], reaction, visible);
+  const relayA = history.persistHistoryPage([
+    ...firstPage, { ...firstPage[0], id: 'unverified-tail' },
+  ], 0);
+  try {
+    await decodeStarted;
+    // Relay B finishes its page while Relay A is still verifying its tail.
+    await history.persistHistoryPage(page(first), 0);
+    expect(messageRow(first.id)?.deleted).toBe(1);
+    releaseDecode();
+    await relayA;
+    expect(messageRow(later.id)).toBeUndefined();
+    expect(sqlite.prepare('SELECT reply_to_id FROM messages WHERE account_pubkey = ? AND id = ?')
+      .get(ACCOUNT, reaction.id)).toEqual({ reply_to_id: visible.id });
+    expect(hasEvent(reaction)).toBe(false);
+    expect(sqlite.prepare(`
+      SELECT last_message_id, reaction_preview_pending FROM conversations
+      WHERE account_pubkey = ? AND conversation_key = ?
+    `).get(ACCOUNT, historyPeer)).toEqual({
+      last_message_id: visible.id, reaction_preview_pending: 0,
+    });
+    await history.persistHistoryPage(page(later), 0);
+    expect(messageRow(later.id)?.deleted).toBe(1);
+  } finally {
+    releaseDecode();
+    await relayA.catch(() => {});
+    sqlite.exec('DROP TRIGGER require_history_target_hidden');
+    unwrap.mockReset();
+  }
+});
+
+it('rechecks cancellation when a queued Relay deletion or message receives the writer lock', async () => {
+  const history = new DmService() as unknown as {
+    applyMessageDeletion(account: string, rumor: Rumor, keepPending: boolean, isCurrent: () => boolean): Promise<boolean | null>;
+    storeRumor(
+      rumor: Rumor, account: string, sourceRelays: undefined, profile: undefined,
+      options: { intake: 'history'; isCurrent: () => boolean },
+    ): Promise<boolean>;
+  };
+  const target: Rumor = { id: 'd7'.repeat(32), kind: 14, pubkey: ACCOUNT, created_at: 1,
+    tags: [['p', PEER]], content: 'Stale history' };
+  const deletion: Rumor = { id: 'd8'.repeat(32), kind: 5, pubkey: ACCOUNT, created_at: 2,
+    tags: [['p', ACCOUNT], ['e', target.id], ['k', '14']], content: '' };
+  let current = true;
+  const isCurrent = () => current;
+  const deleted = history.applyMessageDeletion(ACCOUNT, deletion, true, isCurrent);
+  const stored = history.storeRumor(target, ACCOUNT, undefined, undefined, { intake: 'history', isCurrent });
+  current = false;
+  await expect(deleted).resolves.toBeNull();
+  await expect(stored).resolves.toBe(false);
+  expect(messageRow(target.id)).toBeUndefined();
+  expect(mockDatabase!.sqlite.prepare('SELECT id FROM message_deletions WHERE account_pubkey = ? AND id = ?')
+    .get(ACCOUNT, deletion.id)).toBeUndefined();
+});
+
+const REACTION_PEER = '2'.repeat(64);
+const REACTION_TARGET = 'f1'.repeat(32);
+
+function directReaction(id: string, at: number, overrides: Partial<Rumor> = {}): Rumor {
+  return {
+    id: id.repeat(32), pubkey: REACTION_PEER, kind: 7, created_at: at,
+    content: '👍', tags: [['p', ACCOUNT], ['e', REACTION_TARGET], ['ms', '123']],
+    ...overrides,
+  };
+}
+
+function readReactionPreview(account = ACCOUNT) {
+  return mockDatabase!.sqlite.prepare(`
+    SELECT reaction_preview_event_id, reaction_preview_order_at, reaction_preview_pending
+    FROM conversations WHERE account_pubkey = ? AND conversation_key = ?
+  `).get(account, REACTION_PEER);
+}
+
+function receiveReaction(rumor: Rumor, intake: Intake = 'live') {
+  return receiver.storeRumor(rumor, ACCOUNT, undefined, undefined, { intake });
+}
+
+describe('direct reaction previews', () => {
+  beforeEach(async () => {
+    const sqlite = mockDatabase!.sqlite;
+    sqlite.prepare('DELETE FROM notification_events WHERE account_pubkey = ? AND conversation_key = ?').run(ACCOUNT, REACTION_PEER);
+    sqlite.prepare('DELETE FROM messages WHERE account_pubkey = ? AND conversation_key = ?').run(ACCOUNT, REACTION_PEER);
+    sqlite.prepare('DELETE FROM conversations WHERE account_pubkey = ? AND conversation_key = ?').run(ACCOUNT, REACTION_PEER);
+    await receiveReaction({
+      id: REACTION_TARGET, pubkey: ACCOUNT, kind: 14, created_at: 400,
+      content: 'Private target text', tags: [['p', REACTION_PEER]],
+    }, 'local');
+  });
+
+  it('updates an independent preview cursor for valid reactions to an own message, including recovery', async () => {
+    await dmService.markConversationAsUnread(ACCOUNT, REACTION_PEER);
+    const ordinaryState = () => mockDatabase!.sqlite.prepare(`
+      SELECT unread_count, last_read_order_at, last_message_id, last_message_at, updated_order_at
+      FROM conversations WHERE account_pubkey = ? AND conversation_key = ?
+    `).get(ACCOUNT, REACTION_PEER);
+    const before = ordinaryState();
+    for (const [reaction, intake] of [
+      [directReaction('f2', 599), 'history'],
+      [directReaction('f3', 598), 'archive'],
+      [directReaction('f4', 597, { pubkey: ACCOUNT, tags: [['p', REACTION_PEER], ['e', REACTION_TARGET]] }), 'live'],
+      [directReaction('f5', 596, { content: 'arbitrary text 👍' }), 'live'],
+      [directReaction('f6', 595, { pubkey: PEER }), 'live'],
+    ] as const) {
+      await receiveReaction(reaction, intake);
+      expect(hasEvent(reaction)).toBe(false);
+    }
+    expect(readReactionPreview()?.reaction_preview_pending).toBe(0);
+    const first = directReaction('ed', 500);
+    const sameTime = directReaction('dc', 500, { content: '👎' });
+    await receiveReaction(first, 'recovery');
+    await receiveReaction(sameTime);
+    expect(readReactionPreview()).toEqual({
+      reaction_preview_event_id: sameTime.id, reaction_preview_order_at: 500123,
+      reaction_preview_pending: 1,
+    });
+    expect(ordinaryState()).toEqual(before);
+    const system = await takeNotificationEvents(ACCOUNT, 'system');
+    expect(system.events.filter(row => row.event.kind === 'reaction').map(row => row.message.id))
+      .toEqual([first.id, sameTime.id]);
+  });
+
+  it('clears on window activation, keeps the cursor across reopen, and suppresses active receipts', async () => {
+    await receiveReaction(directReaction('ea', 500));
+    const prior = readReactionPreview();
+    const stop = watchReactionPreviewWhileViewing(ACCOUNT, REACTION_PEER);
+    try {
+      // An unfocused detail is still routed but the user has not seen it.
+      expect(readReactionPreview()).toEqual(prior);
+      mockUserPresent = true;
+      for (const returned of mockReturnListeners) returned();
+      // Queue a real write through the same executor to wait for the clear.
+      await dmService.markConversationAsUnread(ACCOUNT, REACTION_PEER);
+      expect(readReactionPreview()).toEqual({ ...prior, reaction_preview_pending: 0 });
+      const active = directReaction('c9', 600);
+      await receiveReaction(active);
+      expect(hasEvent(active)).toBe(false);
+      expect(readReactionPreview()).toEqual({
+        reaction_preview_event_id: active.id, reaction_preview_order_at: 600123,
+        reaction_preview_pending: 0,
+      });
+    } finally {
+      stop();
+      mockUserPresent = false;
+    }
+    const restarted = new DmService() as unknown as typeof receiver;
+    expect(await restarted.storeRumor(directReaction('ca', 600), ACCOUNT, undefined, undefined, { intake: 'recovery' })).toBe(true);
+    expect(await restarted.storeRumor(directReaction('c9', 600), ACCOUNT, undefined, undefined, { intake: 'recovery' })).toBe(false);
+    expect(readReactionPreview()?.reaction_preview_pending).toBe(0);
+  });
+
+  it('suppresses a preview during concurrent open and removes it if the target is deleted', async () => {
+    mockUserPresent = true;
+    let stop: (() => void) | undefined;
+    try {
+      const receive = receiveReaction(directReaction('ab', 701));
+      stop = watchReactionPreviewWhileViewing(ACCOUNT, REACTION_PEER);
+      await receive;
+      expect(readReactionPreview()?.reaction_preview_pending).toBe(0);
+      // Simulate a stale presence snapshot in an independent intake runtime.
+      mockDatabase!.sqlite.prepare(`
+        UPDATE conversations SET reaction_preview_pending = 1
+        WHERE account_pubkey = ? AND conversation_key = ?
+      `).run(ACCOUNT, REACTION_PEER);
+      for (const change of mockDatabaseListeners) change({ external: true, tableName: 'conversations' });
+      await dmService.markConversationAsUnread(ACCOUNT, REACTION_PEER);
+      expect(readReactionPreview()?.reaction_preview_pending).toBe(0);
+      stop();
+      stop = undefined;
+
+      const pending = directReaction('ac', 702);
+      await receiveReaction(pending);
+      expect(readReactionPreview()?.reaction_preview_pending).toBe(1);
+      expect(hasEvent(pending)).toBe(true);
+      await dmService.deleteMessage(ACCOUNT, REACTION_TARGET, false);
+      expect(readReactionPreview()).toEqual({
+        reaction_preview_event_id: pending.id, reaction_preview_order_at: 702123,
+        reaction_preview_pending: 0,
+      });
+      await receiveReaction(directReaction('ad', 703));
+      expect(readReactionPreview()?.reaction_preview_event_id).toBe(pending.id);
+      const claimed = await takeNotificationEvents(ACCOUNT, 'foreground');
+      expect(claimed.events.map(row => row.message.id)).not.toContain(pending.id);
+    } finally {
+      stop?.();
+      mockUserPresent = false;
+    }
+  });
+
+  it('keeps an arrival when the routed chat is closed before a queued clear can run', async () => {
+    mockUserPresent = true;
+    try {
+      const reaction = directReaction('ad', 702);
+      const receive = receiveReaction(reaction);
+      const stop = watchReactionPreviewWhileViewing(ACCOUNT, REACTION_PEER);
+      stop();
+      await receive;
+      await dmService.markConversationAsUnread(ACCOUNT, REACTION_PEER);
+      expect(readReactionPreview()?.reaction_preview_pending).toBe(1);
+      expect(hasEvent(reaction)).toBe(true);
+    } finally {
+      mockUserPresent = false;
+    }
+  });
+
+  it('does not show or notify on an already expired target', async () => {
+    mockDatabase!.sqlite.prepare(`
+      UPDATE messages SET disappear_after_seconds = 30, expires_at = ?
+      WHERE account_pubkey = ? AND id = ?
+    `).run(Date.now() - 1, ACCOUNT, REACTION_TARGET);
+    const expired = directReaction('ae', 500);
+    await receiveReaction(expired);
+    expect(readReactionPreview()?.reaction_preview_event_id).toBeNull();
+    expect(hasEvent(expired)).toBe(false);
+  });
+
+  it('keeps the preview for a muted conversation without queuing a notification', async () => {
+    mockDatabase!.sqlite.prepare('UPDATE conversations SET muted = 1 WHERE account_pubkey = ? AND conversation_key = ?')
+      .run(ACCOUNT, REACTION_PEER);
+    const muted = directReaction('af', 500);
+    await receiveReaction(muted);
+    expect(readReactionPreview()?.reaction_preview_event_id).toBe(muted.id);
+    expect(hasEvent(muted)).toBe(false);
+  });
 });

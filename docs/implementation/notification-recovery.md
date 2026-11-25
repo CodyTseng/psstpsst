@@ -15,6 +15,16 @@ the watermark and clear the checkpoint in one write after completion.
 Foreground throttling can skip a fresh forward scan on eligible platforms.
 It leaves interrupted windows and unfinished backward history eligible to run.
 
+Verify and store each history envelope as it is processed. Keep authenticated
+deletion requests with absent targets pending and check them in the target's
+insert transaction. A deletion received after its target can hide a message
+already shown, including when both arrive in the same page. Reactions can be
+stored before their targets and appear when the matching visible message is
+loaded. History reactions and group reactions promoted from quarantine do not
+create previews or notifications. Checkpoint after the page has been processed.
+Retries deduplicate committed rumors. Receive transactions recheck session
+ownership after waiting for the writer lock.
+
 Reconnect recovery has its own recent window and one task per relay. It
 coalesces repeat reconnects and uses normal arrival intake. Reconnect and
 notification recovery leave durable history coverage untouched. Account or

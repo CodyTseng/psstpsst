@@ -3,10 +3,10 @@ import i18n from '@/i18n';
 import type { NotificationCommunication } from '@/platform/ports/notifications';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
-import { firstGroupId } from '@/lib/nostr/group-messaging';
+import { KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
 
 import { discardNotificationEvents } from './notification-events.service';
-import { filterNotifiableMessages, type NotificationCandidate } from './notification-filter';
+import { filterNotifiableMessages, type NotificationCandidate, type NotificationConversation } from './notification-filter';
 import { getNotificationPreview } from './notification-preview';
 import {
   getNotificationContentPreferences,
@@ -18,12 +18,13 @@ export async function evaluateNotificationRumors(
   rumors: Rumor[],
   accountPubkey: string,
   userPresent: boolean,
+  deliveryKind?: NotificationConversation['deliveryKind'],
 ): Promise<NotificationCandidate[]> {
   if (userPresent) {
     await discardNotificationEvents(accountPubkey, 'system');
     return [];
   }
-  return filterNotifiableMessages(rumors, accountPubkey);
+  return filterNotifiableMessages(rumors, accountPubkey, deliveryKind);
 }
 
 /** Resolve the same private-by-default presentation in every runtime. */
@@ -31,16 +32,24 @@ export async function buildNotificationContent(
   latest: Rumor,
   count: number,
   accountPubkey: string,
-  preferences?: NotificationContentPreferences,
+  options: {
+    preferences?: NotificationContentPreferences;
+    hasReactions?: boolean;
+    conversation: NotificationConversation;
+  },
 ): Promise<{ title: string; subtitle?: string; body?: string; avatarUrl?: string; communication?: NotificationCommunication }> {
-  const contentPreferences = preferences ?? await getNotificationContentPreferences();
-  const genericTitle = count <= 1
-    ? i18n.t(firstGroupId(latest.tags) ? 'group.new_message' : 'notifications.new_message')
-    : i18n.t('notifications.new_messages', { count });
+  const contentPreferences = options.preferences ?? await getNotificationContentPreferences();
+  const reaction = latest.kind === KIND_REACTION;
+  const hasReactions = options.hasReactions ?? reaction;
+  const genericTitle = count > 1
+    ? hasReactions ? i18n.t('notifications.new_activity') : i18n.t('notifications.new_messages', { count })
+    : reaction ? i18n.t('notifications.new_reaction')
+      : i18n.t(options.conversation.groupId ? 'group.new_message' : 'notifications.new_message');
   const showMessageContent = contentPreferences.showMessageContent && disappearingMessageDuration(latest) === null;
   const preview = contentPreferences.showSender || showMessageContent
     ? await getNotificationPreview(latest, accountPubkey, {
         includeIdentity: contentPreferences.showSender,
+        conversation: options.conversation,
       })
     : null;
   const title = contentPreferences.showSender && preview?.displayName
@@ -57,7 +66,7 @@ export async function buildNotificationContent(
       senderId: latest.pubkey,
       senderName: preview?.senderName ?? preview?.displayName ?? resolveDisplayName(latest.pubkey),
       recipientId: accountPubkey,
-      conversationId: `${accountPubkey}:${firstGroupId(latest.tags) ?? latest.pubkey}`,
+      conversationId: `${accountPubkey}:${options.conversation.conversationKey}`,
       groupName: preview?.group ? preview.displayName ?? undefined : undefined,
     } : undefined,
     avatarUrl: contentPreferences.showSender ? preview?.avatarUrl ?? undefined : undefined,

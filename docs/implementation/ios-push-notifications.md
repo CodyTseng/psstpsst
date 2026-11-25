@@ -67,9 +67,10 @@ recreating account rows during cleanup.
    insertion across processes and envelopes. Failed or unavailable decryption
    is not permanently marked processed.
 7. Only freshly inserted eligible rumors reach the shared notification policy:
-   enabled preference, user presence, quiet hours, accepted conversations, mute,
-   self-message and reaction rules. Disabled/muted/quiet-hours messages still
-   persist; blocked messages do not. There is no later quiet-hours catch-up alert.
+   enabled preference, user presence, quiet hours, conversation acceptance,
+   mute, and authorship. A valid reaction alerts only for a visible message authored
+   by the local account, with no change to message unread counts. Muted,
+   disabled, or quiet-hours arrivals still persist; blocked messages do not. There is no later quiet-hours catch-up alert.
 8. The shared preview builder applies sender/content opt-ins and localization.
    The extension returns the allowed content to iOS or empty content to suppress
    delivery. A foreground delegate also suppresses foreground presentation.

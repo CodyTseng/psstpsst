@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gt, isNull } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { useLiveQuery } from '@/db/use-live-query';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -13,6 +14,7 @@ export type ConversationWithLast = {
   lastMessageKind: number | null;
   lastMessageTags: string[][] | null;
   lastMessageSenderPubkey: string | null;
+  reactionPreviewEvent?: { content: string; tags: string[][] } | null;
 };
 
 /**
@@ -38,6 +40,8 @@ export function useContactConversations(accountPubkey: string) {
   return data ?? [];
 }
 
+const previewReaction = alias(messages, 'preview_reaction');
+
 function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean) {
   return db
     .select({
@@ -46,6 +50,7 @@ function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean
       lastMessageKind: messages.kind,
       lastMessageTags: messages.tags,
       lastMessageSenderPubkey: messages.senderPubkey,
+      reactionPreviewEvent: { content: previewReaction.content, tags: previewReaction.tags },
     })
     .from(conversations)
     // Match the owning account too: the same `lastMessageId` can exist under a
@@ -57,6 +62,16 @@ function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean
         eq(messages.accountPubkey, conversations.accountPubkey),
         eq(messages.id, conversations.lastMessageId),
         isNull(messages.disappearAfterSeconds),
+      ),
+    )
+    .leftJoin(
+      previewReaction,
+      and(
+        eq(conversations.reactionPreviewPending, true),
+        eq(previewReaction.accountPubkey, conversations.accountPubkey),
+        eq(previewReaction.conversationKey, conversations.conversationKey),
+        eq(previewReaction.id, conversations.reactionPreviewEventId),
+        eq(previewReaction.deleted, false),
       ),
     )
     .where(
@@ -120,6 +135,8 @@ function sameConversationWithLast(a: ConversationWithLast, b: ConversationWithLa
     a.lastMessageContent !== b.lastMessageContent ||
     a.lastMessageKind !== b.lastMessageKind ||
     a.lastMessageSenderPubkey !== b.lastMessageSenderPubkey ||
+    a.reactionPreviewEvent?.content !== b.reactionPreviewEvent?.content ||
+    JSON.stringify(a.reactionPreviewEvent?.tags) !== JSON.stringify(b.reactionPreviewEvent?.tags) ||
     JSON.stringify(a.lastMessageTags) !== JSON.stringify(b.lastMessageTags)
   ) {
     return false;
@@ -169,28 +186,10 @@ function reconcileConversationList(
 
 /** Conversations the user has actively engaged with (replied) — the main inbox. */
 export function useMainInboxConversations(accountPubkey: string): ConversationListResult {
-  const { data, updatedAt } = useLiveQuery(selectConversationsWithLast(accountPubkey, true), [
-    accountPubkey,
-    'replied',
-  ]);
-  // `useLiveQuery` keeps the *previous* account's `data` across an account change
-  // until the new query resolves, and `updatedAt` never resets — so neither alone
-  // tells us the live result is for *this* account. A content check can't either
-  // (an account that's genuinely empty is indistinguishable from "not loaded").
-  // So track which account the live result is for: `updatedAt` changes on every
-  // (re)resolve, and the latest closure carries the account it resolved for.
-  const [liveAccount, setLiveAccount] = useState<string | null>(null);
-  useEffect(() => {
-    // Mirror the live query's resolved-for account into render state — a
-    // legitimate external-sync effect (the query resolves asynchronously).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (updatedAt !== undefined) setLiveAccount(accountPubkey);
-    // Keyed on `updatedAt` only — on purpose. Adding `accountPubkey` would fire on
-    // switch with the *stale* (still-defined) `updatedAt` and mark the new account
-    // loaded before its query has actually run.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updatedAt]);
-  const liveReady = liveAccount === accountPubkey;
+  const { data, isResolved: liveReady } = useLiveQuery(
+    selectConversationsWithLast(accountPubkey, true),
+    [accountPubkey, 'replied'],
+  );
   // Until the live query resolves for this account, reuse only a session-warm
   // result. A cold account returns the standard quiet loading placeholder.
   const conversationList = useMemo(() => {
@@ -209,16 +208,16 @@ export function useMainInboxConversations(accountPubkey: string): ConversationLi
 
 /** Conversations the user has not yet replied to — message requests. */
 export function useRequestConversations(accountPubkey: string): ConversationListResult {
-  const { data, updatedAt } = useLiveQuery(selectConversationsWithLast(accountPubkey, false), [
+  const { data, isResolved } = useLiveQuery(selectConversationsWithLast(accountPubkey, false), [
     accountPubkey,
     'request',
   ]);
   const conversationList = useMemo(() => {
-    const resolved = data ?? [];
+    const resolved = isResolved ? data : [];
     rememberConversationList(resolved);
     return resolved;
-  }, [data]);
-  return { conversations: conversationList, loaded: updatedAt !== undefined };
+  }, [data, isResolved]);
+  return { conversations: conversationList, loaded: isResolved };
 }
 
 /**

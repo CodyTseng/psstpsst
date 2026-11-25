@@ -16,6 +16,8 @@ import { MessagePreviewText } from '@/components/chat/MessagePreviewText';
 import type { ConversationWithLast } from '@/hooks/use-conversations';
 import { useIncomingMessageArrival } from '@/hooks/use-message-arrivals';
 import { useDisplayName } from '@/hooks/use-display-name';
+import { KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
+import { parseReactionPreview, reactionPreviewText } from '@/lib/nostr/reaction-preview';
 import { attachmentLabel } from '@/lib/nostr/attachment-label';
 import { messageArrivalFeedback } from '@/lib/haptics';
 import { platform } from '@/platform';
@@ -146,6 +148,7 @@ function IncomingMessageBannerContent({
   attachmentLabels: Parameters<typeof attachmentLabel>[1];
 }) {
   const conversation = item.conversation;
+  const { t } = useTranslation();
   const reducedMotion = useReducedMotion();
   const translateY = useSharedValue(0);
   const startY = useSharedValue(0);
@@ -218,8 +221,12 @@ function IncomingMessageBannerContent({
     conversation.deliveryKind === 'relay',
   );
   const displayName = conversation.name || resolvedName;
-  const preview =
-    item.lastMessageKind === 15
+  const reaction = item.lastMessageKind === KIND_REACTION
+    ? parseReactionPreview(item.lastMessageContent ?? '', item.lastMessageTags ?? [])
+    : null;
+  const preview = reaction
+    ? reactionPreviewText(t, reaction)
+    : item.lastMessageKind === 15
       ? attachmentLabel(item.lastMessageTags, attachmentLabels)
       : (item.lastMessageContent ?? '');
 

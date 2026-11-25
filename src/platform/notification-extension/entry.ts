@@ -8,7 +8,12 @@ declare const __nativeCall: (method: string, args: unknown[], callback: (error: 
 declare const __complete: (result: string) => void;
 declare const __locale: string;
 declare const __deadlineTime: number;
-declare const __receiveContext: { userPresent: boolean; activeConversation?: { accountPubkey: string; conversationKey: string } };
+declare const __getReceiveContext: () => { userPresent: boolean; activeConversation?: { accountPubkey: string; conversationKey: string } };
+
+function currentPresence() {
+  const context = __getReceiveContext();
+  return { userPresent: context.userPresent, activeConversation: context.activeConversation ?? null };
+}
 
 function call<T>(method: string, ...args: unknown[]): Promise<T> {
   return new Promise((resolve, reject) => __nativeCall(method, args,
@@ -135,8 +140,8 @@ export async function receive(serializedPayload: string): Promise<void> {
     const language = await getDevicePreference('language.preference');
     if (language && LANGUAGES.some((candidate) => candidate === language)) await i18n.changeLanguage(language);
     const result = await processApnsGiftWrap(payload, {
-      userPresent: __receiveContext.userPresent,
-      activeConversation: __receiveContext.activeConversation ?? null,
+      ...currentPresence(),
+      getCurrentPresence: currentPresence,
       isCurrent: () => Date.now() < __deadlineTime,
     });
     __complete(JSON.stringify({ status: result ? 'notify' : 'suppress', ...result }));

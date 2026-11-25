@@ -3,6 +3,11 @@ export type ActiveConversation = {
   conversationKey: string;
 };
 
+export type ConversationPresence = {
+  userPresent: boolean;
+  activeConversation: ActiveConversation | null;
+};
+
 /** A routed chat is being viewed only while the user is actually present. */
 export function isActiveConversationVisible(
   active: ActiveConversation | null,
