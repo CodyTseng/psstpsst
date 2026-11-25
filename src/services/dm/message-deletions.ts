@@ -1,9 +1,10 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import type { db } from '@/db/client';
 import { messageDeletions, type Rumor } from '@/db/schema';
+import { reactionRetractionTarget } from '@/lib/nostr/reaction-retraction';
 import { parseGroupAction } from '@/lib/nostr/group-messaging';
-import { KIND_CHAT, KIND_FILE, KIND_MESSAGE_DELETION } from '@/services/crypto/nip17-gift-wrap';
+import { KIND_CHAT, KIND_FILE, KIND_MESSAGE_DELETION, KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -12,8 +13,18 @@ export function isDeletableMessage(kind: number, tags: string[][], isGroup: bool
     (!isGroup || parseGroupAction(tags).status !== 'valid');
 }
 
-export function deletionAuthorMatches(accountPubkey: string, messageAuthor: string, requestAuthor: string): boolean {
-  return requestAuthor === accountPubkey || requestAuthor === messageAuthor;
+export function canApplyMessageDeletion(
+  accountPubkey: string,
+  target: { id: string; kind: number; tags: string[][]; senderPubkey: string },
+  request: Rumor,
+  isGroup: boolean,
+): boolean {
+  if (target.kind === KIND_REACTION) {
+    return request.pubkey === target.senderPubkey && reactionRetractionTarget(request) === target.id;
+  }
+  return !request.tags.some(([key, kind]) => key === 'k' && kind === String(KIND_REACTION)) &&
+    isDeletableMessage(target.kind, target.tags, isGroup) &&
+    (request.pubkey === accountPubkey || request.pubkey === target.senderPubkey);
 }
 
 export function isSelfAddressedMessageDeletion(rumor: Rumor, accountPubkey: string): boolean {
@@ -33,21 +44,21 @@ export async function resolvePendingMessageDeletions(
     eq(messageDeletions.accountPubkey, accountPubkey),
     eq(messageDeletions.pendingTargetId, rumor.id),
   );
-  const pending = await tx.select({ id: messageDeletions.id }).from(messageDeletions)
-    .where(scope).limit(1).get();
-  if (!pending) return null;
-  if (!isDeletableMessage(rumor.kind, rumor.tags, isGroup)) {
-    await tx.delete(messageDeletions).where(scope);
-    return null;
+  const pending = await tx.select({ id: messageDeletions.id, rumor: messageDeletions.rumor })
+    .from(messageDeletions).where(scope);
+  const target = { ...rumor, senderPubkey: rumor.pubkey };
+  const valid = pending.filter(row => canApplyMessageDeletion(accountPubkey, target, row.rumor, isGroup));
+  const validIds = new Set(valid.map(row => row.id));
+  const invalid = pending.filter(row => !validIds.has(row.id));
+  for (let i = 0; i < invalid.length; i += 250) {
+    await tx.delete(messageDeletions).where(and(scope,
+      inArray(messageDeletions.id, invalid.slice(i, i + 250).map(row => row.id))));
   }
-  const requestAuthor = sql`json_extract(${messageDeletions.rumor}, '$.pubkey')`;
-  await tx.delete(messageDeletions).where(and(
-    scope,
-    sql`${requestAuthor} NOT IN (${accountPubkey}, ${rumor.pubkey})`,
-  ));
-  const applied = await tx.update(messageDeletions).set({ pendingTargetId: null }).where(scope)
-    .returning({ rumor: messageDeletions.rumor });
-  return applied.length > 0 ? {
-    selfAddressed: applied.some(({ rumor }) => isSelfAddressedMessageDeletion(rumor, accountPubkey)),
+  for (let i = 0; i < valid.length; i += 250) {
+    await tx.update(messageDeletions).set({ pendingTargetId: null }).where(and(scope,
+      inArray(messageDeletions.id, valid.slice(i, i + 250).map(row => row.id))));
+  }
+  return valid.length > 0 ? {
+    selfAddressed: valid.some(row => isSelfAddressedMessageDeletion(row.rumor, accountPubkey)),
   } : null;
 }

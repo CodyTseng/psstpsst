@@ -502,6 +502,7 @@
       "unavailable": "Önizleme kullanılamıyor",
       "open_external": "Başka uygulamada aç"
     },
+    "reaction_retract_failed": "Tepki kaldırılamadı.",
     "message_delete": {
       "title": "Mesaj silinsin mi?",
       "description": "Bu mesaj sohbet geçmişinizden gizlenecek.",

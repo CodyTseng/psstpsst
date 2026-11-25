@@ -156,7 +156,8 @@ function areReactionRowsEqual(a: Props, b: Props): boolean {
       left.emoji !== right.emoji ||
       left.customEmoji?.url !== right.customEmoji?.url ||
       left.count !== right.count ||
-      left.selfReacted !== right.selfReacted
+      left.selfReacted !== right.selfReacted ||
+      left.selfReactionId !== right.selfReactionId
     ) {
       return false;
     }

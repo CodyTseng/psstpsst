@@ -62,6 +62,9 @@ decoration. Reserve expressive media and emoji for user content.
 - Use equal-width action slots and fixed selection-indicator slots. Preserve
   control and content geometry as loading, selection, and feedback change.
 - Keep chat reactions directly below the bubble at the same logical edge.
+  Tap a highlighted reaction chip below the message to withdraw your reaction.
+  The quick and full emoji pickers add reactions. Picking the same emoji again
+  in either picker leaves the existing reaction in place.
   Keep sender, reply, and delivery metadata legible without shifting bubble
   geometry. Centre system events at their chronological position and keep
   them visually distinct from message content.

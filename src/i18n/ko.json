@@ -502,6 +502,7 @@
       "unavailable": "미리보기 사용 불가",
       "open_external": "다른 앱에서 열기"
     },
+    "reaction_retract_failed": "반응을 취소하지 못했어요.",
     "message_delete": {
       "title": "메시지를 삭제할까요?",
       "description": "내 채팅 기록에서 이 메시지를 숨깁니다.",

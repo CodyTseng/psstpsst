@@ -722,6 +722,48 @@ describe('direct reaction previews', () => {
     }, 'local');
   });
 
+  it('clears only the retracted reaction and the preview that still points to it', async () => {
+    const older = directReaction('f2', 598);
+    const newer = directReaction('f3', 599, { content: '👎' });
+    await receiveReaction(older);
+    await receiveReaction(newer);
+    const remove = (target: Rumor, pubkey = REACTION_PEER, created_at = 600): Rumor => ({
+      id: (created_at.toString(16).padStart(64, '0')), pubkey, kind: 5, created_at,
+      content: '', tags: [['p', ACCOUNT], ['e', target.id], ['k', '7']],
+    });
+    await expect(dmService.importRumors(ACCOUNT, [remove(newer, ACCOUNT)])).resolves.toMatchObject({ invalid: 1 });
+    await expect(dmService.importRumors(ACCOUNT, [remove(older)])).resolves.toMatchObject({ inserted: 1 });
+    expect(readReactionPreview()).toMatchObject({ reaction_preview_event_id: newer.id, reaction_preview_pending: 1 });
+
+    const sqlite = mockDatabase!.sqlite;
+    const stored = sqlite.prepare('SELECT deleted FROM messages WHERE account_pubkey = ? AND id = ?');
+    expect(stored.get(ACCOUNT, older.id)?.deleted).toBe(1);
+    expect(stored.get(ACCOUNT, newer.id)?.deleted).toBe(0);
+    expect(hasEvent(newer)).toBe(true);
+
+    await expect(dmService.importRumors(ACCOUNT, [remove(newer, REACTION_PEER, 601)]))
+      .resolves.toMatchObject({ inserted: 1 });
+    expect(readReactionPreview()).toMatchObject({ reaction_preview_event_id: newer.id, reaction_preview_pending: 0 });
+    expect(hasEvent(newer)).toBe(false);
+    expect(stored.get(ACCOUNT, REACTION_TARGET)?.deleted).toBe(0);
+    expect(stored.get(ACCOUNT, newer.id)?.deleted).toBe(1);
+  });
+
+  it('stores a reaction retracted before Relay delivery without surfacing it', async () => {
+    const reaction = directReaction('f4', 600);
+    const request: Rumor = {
+      id: 'f5'.repeat(32), pubkey: REACTION_PEER, kind: 5, created_at: 601, content: '',
+      tags: [['p', ACCOUNT], ['e', reaction.id], ['k', '7']],
+    };
+    const incoming = dmService as unknown as {
+      applyMessageDeletion(account: string, rumor: Rumor, keepPending: boolean): Promise<boolean | null>;
+    };
+    await incoming.applyMessageDeletion(ACCOUNT, request, true);
+    expect(await receiveReaction(reaction)).toBe('hidden');
+    expect(readReactionPreview()?.reaction_preview_event_id).toBeNull();
+    expect(hasEvent(reaction)).toBe(false);
+  });
+
   it('updates an independent preview cursor for valid reactions to an own message, including recovery', async () => {
     await dmService.markConversationAsUnread(ACCOUNT, REACTION_PEER);
     const ordinaryState = () => mockDatabase!.sqlite.prepare(`

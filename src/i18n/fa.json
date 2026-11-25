@@ -502,6 +502,7 @@
       "unavailable": "پیش‌نمایش در دسترس نیست",
       "open_external": "باز کردن در برنامه‌ای دیگر"
     },
+    "reaction_retract_failed": "واکنش حذف نشد.",
     "message_delete": {
       "title": "پیام حذف شود؟",
       "description": "این پیام در تاریخچهٔ گفت‌وگوی شما پنهان می‌شود.",

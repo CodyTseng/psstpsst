@@ -189,13 +189,23 @@ File records are valid only when capability bit `2` was selected.
 
 `MESSAGE` contains one unsigned Nostr rumor serialized as canonical JSON. It
 MUST contain exactly `id`, `pubkey`, `created_at`, `kind`, `tags`, and `content`.
-The supported kinds are `14`, `15`, and `7`. It MUST have exactly one valid `p`
-recipient tag. The authenticated sender MUST equal `pubkey`, and the receiving
+The supported kinds are `14`, `15`, `7`, and `5`. Each rumor MUST have exactly
+one valid `p` recipient tag. The authenticated sender MUST equal `pubkey`,
+and the receiving
 peer MUST equal the `p` recipient. The `id` MUST be the NIP-01 hash of the
 rumor. The payload MUST be compact UTF-8 JSON whose parsed value serializes to
 the same bytes under ECMAScript `JSON.stringify`. Content is limited to 60 KiB
 of UTF-8, a rumor to 256 tags, a tag to 16 parts, and each tag part to 4 KiB of
 UTF-8.
+
+A kind `5` rumor uses the standard message exchange. It MUST have empty
+content, exactly one `e` tag identifying
+the reaction and exactly one `k` tag whose value is `7`. It MAY carry the
+standard `ms` tag. A receiver MUST hide only a kind `7` target sent by the
+same authenticated author in this Nearby conversation. It retains a valid
+request whose target is missing in a known conversation and applies the
+same checks when the target arrives. The request is never a timeline entry
+and leaves other messages and reactions intact.
 
 The receiver validates and stores the rumor before replying:
 

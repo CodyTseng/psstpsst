@@ -1,14 +1,15 @@
+import type { Rumor } from '@/db/schema/types';
 import { db } from '@/db/client';
 import { relayOutboxJobs } from '@/db/schema';
 import { relayPool } from '../../relay/relay-pool';
 import { relayMessageOutbox } from '../relay-message-outbox';
 
-jest.mock('@/db/client', () => ({ db: { transaction: jest.fn(), select: jest.fn() } }));
+jest.mock('@/db/client', () => ({ db: { transaction: jest.fn(), select: jest.fn(), delete: jest.fn() } }));
 jest.mock('@/platform', () => ({ platform: {} }));
 jest.mock('../../account/account.service', () => ({ buildSigner: jest.fn() }));
 jest.mock('../../relay/relay-pool', () => ({ relayPool: { publishEvent: jest.fn() } }));
 jest.mock('../peer-encryption-key.service', () => ({ resolvePeerMessagingMetadata: jest.fn() }));
-jest.mock('../../crypto/nip17-gift-wrap', () => ({ KIND_CHAT: 14, KIND_FILE: 15 }));
+jest.mock('../../crypto/nip17-gift-wrap', () => ({ KIND_CHAT: 14, KIND_FILE: 15, KIND_REACTION: 7 }));
 
 const originalRumor = {
   id: 'original-id', pubkey: 'self', kind: 14, content: 'from another device',
@@ -112,4 +113,54 @@ it('prepares and publishes a resend to peer and self from the original stored ru
   expect(relayPool.publishEvent).toHaveBeenCalledWith(expect.objectContaining({
     relays: ['wss://self.example/'], event: { id: 'fresh-self-wrap' },
   }));
+});
+
+it('retains a retraction job when its selected recipient has no relay target yet', async () => {
+  const harness = relayMessageOutbox as unknown as {
+    processJob(job: unknown, session: unknown, generation: number): Promise<boolean>;
+    loadTargets(): Promise<unknown[]>;
+    prepareAllTargets(): Promise<unknown[]>;
+    deferDeletion(): Promise<void>;
+  };
+  const retraction: Rumor = {
+    ...originalRumor, kind: 5, content: '', tags: [['p', 'peer'], ['e', 'a'.repeat(64)], ['k', '7']],
+  };
+  const query = {
+    from: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+    get: jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce({ rumor: retraction }),
+  };
+  jest.mocked(db.select).mockReturnValue(query as never);
+  jest.spyOn(harness, 'loadTargets').mockResolvedValue([]);
+  const prepare = jest.spyOn(harness, 'prepareAllTargets').mockResolvedValue([]);
+  const defer = jest.spyOn(harness, 'deferDeletion').mockResolvedValue();
+  jest.mocked(db.delete).mockClear();
+  const job = { id: 1, accountPubkey: 'self', messageId: retraction.id, scope: 'selected_copy', recipientPubkey: 'peer' };
+  expect(await harness.processJob(job, {}, 0)).toBe(true);
+  expect(prepare).toHaveBeenCalledWith(job, retraction, false, {}, 0);
+  expect(defer).toHaveBeenCalledWith(job);
+  expect(db.delete).not.toHaveBeenCalled();
+});
+
+it('does not publish an original reaction retracted while preparing its wrap', async () => {
+  const harness = relayMessageOutbox as unknown as {
+    processJob(job: unknown, session: unknown, generation: number): Promise<boolean>;
+    loadTargets(): Promise<unknown[]>;
+    ensurePayloads(): Promise<void>;
+    isCurrent(): boolean;
+  };
+  const original = { ...originalRumor, kind: 7, content: '👍' };
+  const query = {
+    from: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+    get: jest.fn().mockResolvedValueOnce({ rumor: original }).mockResolvedValueOnce(undefined),
+    all: jest.fn().mockResolvedValue([{ recipientPubkey: 'peer', giftWrap: { id: 'stale' } }]),
+  };
+  jest.mocked(db.select).mockReturnValue(query as never);
+  jest.mocked(db.delete).mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) } as never);
+  jest.spyOn(harness, 'loadTargets').mockResolvedValue([{ recipientPubkey: 'peer', relayUrl: 'wss://peer.example/', nextAttemptAt: 0 }]);
+  jest.spyOn(harness, 'ensurePayloads').mockResolvedValue();
+  jest.spyOn(harness, 'isCurrent').mockReturnValue(true);
+  jest.mocked(relayPool.publishEvent).mockClear();
+  const job = { id: 1, accountPubkey: 'self', messageId: original.id, scope: 'all_recipient_relays' };
+  expect(await harness.processJob(job, {}, 0)).toBe(true);
+  expect(relayPool.publishEvent).not.toHaveBeenCalled();
 });

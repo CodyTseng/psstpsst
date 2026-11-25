@@ -505,6 +505,7 @@
       "unavailable": "Pré-visualização indisponível",
       "open_external": "Abrir noutra aplicação"
     },
+    "reaction_retract_failed": "Não foi possível remover a reação.",
     "message_delete": {
       "title": "Eliminar mensagem?",
       "description": "A mensagem ficará oculta no seu histórico de conversas.",

@@ -505,6 +505,7 @@
       "unavailable": "Anteprima non disponibile",
       "open_external": "Apri in un’altra app"
     },
+    "reaction_retract_failed": "Impossibile rimuovere la reazione.",
     "message_delete": {
       "title": "Eliminare il messaggio?",
       "description": "Il messaggio verrà nascosto dalla tua cronologia.",

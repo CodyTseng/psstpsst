@@ -502,6 +502,7 @@
       "unavailable": "प्रीव्यू उपलब्ध नहीं है",
       "open_external": "दूसरे ऐप में खोलें"
     },
+    "reaction_retract_failed": "प्रतिक्रिया हटाई नहीं जा सकी।",
     "message_delete": {
       "title": "संदेश हटाएँ?",
       "description": "यह संदेश आपकी चैट के इतिहास से छिप जाएगा।",

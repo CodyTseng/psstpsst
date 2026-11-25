@@ -49,6 +49,9 @@ export const messages = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.accountPubkey, t.id] }),
     index('idx_msg_expiry').on(t.accountPubkey, t.expiresAt).where(sql`${t.expiresAt} IS NOT NULL`),
+    index('idx_msg_reaction_retractions')
+      .on(t.accountPubkey, t.conversationKey, t.replyToId, t.senderPubkey)
+      .where(sql`${t.kind} = 5`),
     index('idx_msg_conv_time').on(t.accountPubkey, t.conversationKey, t.orderAt, t.id),
   ],
 );

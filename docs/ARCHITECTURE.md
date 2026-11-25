@@ -73,7 +73,9 @@ local state. Only production consumes production updates.
   change chronology. Incoming reactions to the local author's visible messages
   have a separate device-local preview cursor. Only arrival intake advances it.
   Viewing the conversation clears the pending flag while retaining the cursor.
-  Reactions leave ordinary unread counts and list ordering untouched.
+  Retracting a reaction clears the pending flag and any queued notification
+  for that event while preserving a newer preview. Reactions leave ordinary
+  unread counts and list ordering untouched.
 - Relay direct chats key by counterparty. Relay groups key by a hash of the
   stable group ID. Nearby rows preserve their owning local proximity identity.
   A conversation key alone does not identify a recipient or establish write
@@ -134,7 +136,8 @@ local state. Only production consumes production updates.
   its first real message only. Deletion and resurrection preserve that
   distinction. A valid incoming reaction to the local author's visible message
   can alert while its reaction preview is pending, independently of message
-  unread state. Quiet hours suppress system delivery without catch-up.
+  unread state. Recheck the reaction before presenting a claimed aggregate.
+  Quiet hours suppress system delivery without catch-up.
 - The unread total is a database-derived, service-owned read model shared by
   UI and badges. Presence gates automatic read advancement and foreground
   delivery. The currently viewed conversation stays out of that total while

@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, gt, isNull, lte, notExists, or } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, isNull, lte, ne, notExists, or } from 'drizzle-orm';
 import type { Event, EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -12,6 +12,7 @@ import {
 } from '@/db/schema';
 import type { DeliveryRelayRecord } from '@/db/schema/message-delivery-copies';
 import type { Rumor } from '@/db/schema/types';
+import { reactionRetractionTarget } from '@/lib/nostr/reaction-retraction';
 import { normalizeRelayUrl } from '@/lib/nostr/relay-url';
 import { getPTags } from '@/lib/nostr/tags';
 import { platform } from '@/platform';
@@ -21,6 +22,7 @@ import {
   createGiftWrappedMessage,
   KIND_CHAT,
   KIND_FILE,
+  KIND_REACTION,
   type SignSeal,
 } from '../crypto/nip17-gift-wrap';
 import { MAX_RELAY_RETRY_TIMER_MS, RELAY_RATE_LIMIT_BACKOFF_MS, relayRetryDeadline } from '../relay/publish-retry';
@@ -55,13 +57,16 @@ type RelayOutboxSession = {
   signSeal: SignSeal;
 };
 
-const DISAPPEARING_DELETION_RETRY_MS = 60_000;
+const DELETION_RETRY_MS = 60_000;
 
 function canPublishMessage() {
-  return or(isNull(messages.disappearAfterSeconds), and(
-    eq(messages.deleted, false),
-    or(isNull(messages.expiresAt), gt(messages.expiresAt, Date.now())),
-  ));
+  return and(
+    or(ne(messages.kind, KIND_REACTION), eq(messages.deleted, false)),
+    or(isNull(messages.disappearAfterSeconds), and(
+      eq(messages.deleted, false),
+      or(isNull(messages.expiresAt), gt(messages.expiresAt, Date.now())),
+    )),
+  );
 }
 
 type RelayJob = typeof relayOutboxJobs.$inferSelect;
@@ -410,7 +415,7 @@ class RelayMessageOutbox {
       .from(messages)
       .where(and(eq(messages.accountPubkey, job.accountPubkey), eq(messages.id, targetId)))
       .get() : undefined;
-    const retryDeletion = target?.duration != null;
+    const retryDeletion = !!reactionRetractionTarget(rumor) || target?.duration != null;
     const durable = isDurableDelivery(rumor.kind);
     let targets = await this.loadTargets(job.id);
     if (
@@ -422,13 +427,13 @@ class RelayMessageOutbox {
         targets = await this.prepareAllTargets(job, rumor, durable, session, generation);
       } catch (error) {
         if (!this.isCurrent(session, generation) || !this.online) return false;
-        if (retryDeletion) await this.deferDisappearingDeletion(job);
+        if (retryDeletion) await this.deferDeletion(job);
         else await this.failBeforePublish(job, durable, messageError(error));
         return true;
       }
     }
     if (targets.length === 0) {
-      if (retryDeletion) await this.deferDisappearingDeletion(job);
+      if (retryDeletion) await this.deferDeletion(job);
       else await this.finishEmptyJob(job, durable);
       return true;
     }
@@ -442,7 +447,7 @@ class RelayMessageOutbox {
       await this.ensurePayloads(job, rumor, targets, session, generation, retryDeletion);
     } catch (error) {
       if (!this.isCurrent(session, generation) || !this.online) return false;
-      if (retryDeletion) await this.deferDisappearingDeletion(job);
+      if (retryDeletion) await this.deferDeletion(job);
       else await this.failBeforePublish(job, durable, messageError(error), true);
       return true;
     }
@@ -461,6 +466,16 @@ class RelayMessageOutbox {
       .from(relayOutboxPayloads)
       .where(eq(relayOutboxPayloads.jobId, job.id))
       .all();
+    if (rumor.kind === KIND_REACTION) {
+      const current = await db.select({ id: messages.id }).from(messages).where(and(
+        eq(messages.accountPubkey, job.accountPubkey), eq(messages.id, job.messageId), eq(messages.deleted, false),
+      )).get();
+      if (!current) {
+        await db.delete(relayOutboxJobs).where(eq(relayOutboxJobs.id, job.id));
+        return true;
+      }
+      if (!this.isCurrent(session, generation) || !this.online) return false;
+    }
     if (message?.expiresAt != null && message.expiresAt <= Date.now()) {
       await db.delete(relayOutboxJobs).where(eq(relayOutboxJobs.id, job.id));
       return true;
@@ -541,9 +556,9 @@ class RelayMessageOutbox {
     }
   }
 
-  private async deferDisappearingDeletion(job: RelayJob): Promise<void> {
+  private async deferDeletion(job: RelayJob): Promise<void> {
     await db.update(relayOutboxJobs)
-      .set({ nextAttemptAt: Date.now() + DISAPPEARING_DELETION_RETRY_MS })
+      .set({ nextAttemptAt: Date.now() + DELETION_RETRY_MS })
       .where(eq(relayOutboxJobs.id, job.id));
   }
 
@@ -934,7 +949,7 @@ class RelayMessageOutbox {
         }
         if (!outcome.ok && retryDeletion) {
           await tx.update(relayOutboxJobTargets).set({
-            nextAttemptAt: relayRetryDeadline(Date.now(), Math.max(DISAPPEARING_DELETION_RETRY_MS, outcome.retryAfterMs ?? 0)),
+            nextAttemptAt: relayRetryDeadline(Date.now(), Math.max(DELETION_RETRY_MS, outcome.retryAfterMs ?? 0)),
           }).where(and(
             eq(relayOutboxJobTargets.jobId, job.id),
             eq(relayOutboxJobTargets.recipientPubkey, recipientPubkey),

@@ -18,7 +18,12 @@ jest.mock('../push-registration.service', () => ({
 
 const mockClaimedIds = new Set<string>();
 const mockRequestIds = new Set<string>();
-jest.mock('../notification-events.service', () => ({ discardNotificationEvents: jest.fn(async () => {}) }));
+const mockRetractedIds = new Set<string>();
+jest.mock('../notification-events.service', () => ({
+  discardNotificationEvents: jest.fn(async () => {}),
+  getLiveNotificationReactionIds: jest.fn(async (_account: string, ids: string[]) =>
+    new Set(ids.filter(id => !mockRetractedIds.has(id)))),
+}));
 
 let mockEnabledPref = true;
 let mockQuietRequests = false;
@@ -249,6 +254,7 @@ async function initService(): Promise<NotificationServiceModule['notificationSer
 describe('notificationService funnel', () => {
   beforeEach(() => {
     mockClaimedIds.clear();
+    mockRetractedIds.clear();
     mockRequestIds.clear();
     jest.useFakeTimers();
     jest.resetModules();
@@ -587,6 +593,19 @@ describe('notificationService funnel', () => {
 
     expect(mockOps).toEqual(['present:notifications.new_messages:2']);
     expect(mockDismissAllCount).toBe(1);
+  });
+
+  it.each([false, true])('prunes a retraction after claim and preserves ordinary alerts = %s', async (mixed) => {
+    const service = await initService();
+    const reaction = rumor('withdrawn', { kind: 7, created_at: 1_700_000_001 });
+    const pending = service.notifyNewRumors(mixed ? [rumor('ordinary'), reaction] : [reaction]);
+    await drainMicrotasks();
+    expect(mockClaimedIds.has(reaction.id)).toBe(true);
+    mockRetractedIds.add(reaction.id);
+    await flushAggregation();
+    await pending;
+
+    expect(mockOps).toEqual(mixed ? ['present:notifications.new_message'] : []);
   });
 
   it('cancels an unflushed aggregate when the user returns', async () => {

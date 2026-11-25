@@ -39,6 +39,7 @@ import {
   profileSync,
   type PerfSpan,
 } from '@/lib/perf/profiler';
+import { reactionRetractionTarget } from '@/lib/nostr/reaction-retraction';
 import { getPTags, getReplyToId, getSubject } from '@/lib/nostr/tags';
 
 import {
@@ -54,7 +55,7 @@ import {
   type SignSeal,
 } from '../crypto/nip17-gift-wrap';
 import { nextRumorTimestamp, rumorTimestampFromOrderAt, type RumorTimestamp } from './rumor-clock';
-import { deletionAuthorMatches, isDeletableMessage, isSelfAddressedMessageDeletion, resolvePendingMessageDeletions } from './message-deletions';
+import { canApplyMessageDeletion, isDeletableMessage, isSelfAddressedMessageDeletion, resolvePendingMessageDeletions } from './message-deletions';
 import { buildSigner } from '../account/account.service';
 import { canReceiveForAccount } from '../account/account-receive-guard';
 import {
@@ -906,6 +907,16 @@ export class DmService {
   }
 
   async deleteMessages(accountPubkey: string, messageIds: readonly string[], forEveryone: boolean): Promise<void> {
+    await this.deleteRelayTargets(accountPubkey, messageIds, forEveryone);
+  }
+
+  async retractReaction(accountPubkey: string, conversationKey: string, reactionId: string): Promise<void> {
+    await this.deleteRelayTargets(accountPubkey, [reactionId], true, conversationKey);
+  }
+
+  private async deleteRelayTargets(
+    accountPubkey: string, messageIds: readonly string[], forEveryone: boolean, reactionConversationKey?: string,
+  ): Promise<void> {
     const deleted = await db.transaction(async (tx) => {
       if (this.independentReceiver && !await canReceiveForAccount(accountPubkey, tx)) return [];
       const ids = [...new Set(messageIds)];
@@ -921,8 +932,11 @@ export class DmService {
       const changes: { id: string; conversationKey: string }[] = [];
       for (const id of ids) {
         const target = await this.findDeletionTarget(tx, accountPubkey, id);
-        if (!target || target.deleted || target.conversation.deliveryKind !== 'relay' ||
-            !isDeletableMessage(target.kind, target.tags, !!target.conversation.groupId)) continue;
+        if (!target || target.deleted || target.conversation.deliveryKind !== 'relay') continue;
+        if (reactionConversationKey !== undefined) {
+          if (target.kind !== KIND_REACTION || target.senderPubkey !== accountPubkey ||
+              target.conversationKey !== reactionConversationKey) continue;
+        } else if (!isDeletableMessage(target.kind, target.tags, !!target.conversation.groupId)) continue;
 
         const timestamp = rumorTimestampFromOrderAt(
           Math.max(nextRumorTimestamp().orderAt, target.orderAt + 1),
@@ -1113,12 +1127,19 @@ export class DmService {
     }).onConflictDoNothing().returning({ id: messageDeletions.id });
     if (!inserted.length) return false;
     if (enqueue) {
-      await tx.insert(relayOutboxJobs).values({
-        accountPubkey,
-        messageId: rumor.id,
-        scope: 'all_recipient_relays',
-        createdAt: Math.floor(Date.now() / 1000),
-      });
+      const createdAt = Math.floor(Date.now() / 1000);
+      if (reactionRetractionTarget(rumor)) {
+        // Each original recipient completes independently; one missing key or
+        // relay list must neither drop that recipient nor delay the others.
+        const participants = new Set([accountPubkey, ...getPTags(rumor.tags)]);
+        await tx.insert(relayOutboxJobs).values(Array.from(participants, recipientPubkey => ({
+          accountPubkey, messageId: rumor.id, scope: 'selected_copy' as const, recipientPubkey, createdAt,
+        })));
+      } else {
+        await tx.insert(relayOutboxJobs).values({
+          accountPubkey, messageId: rumor.id, scope: 'all_recipient_relays', createdAt,
+        });
+      }
     }
     return true;
   }
@@ -1131,8 +1152,7 @@ export class DmService {
     enqueue: boolean,
   ): Promise<string | boolean | null> {
     if (target.conversation.deliveryKind !== 'relay' ||
-        !isDeletableMessage(target.kind, target.tags, !!target.conversation.groupId) ||
-        !deletionAuthorMatches(accountPubkey, target.senderPubkey, rumor.pubkey)) return null;
+        !canApplyMessageDeletion(accountPubkey, target, rumor, !!target.conversation.groupId)) return null;
 
     if (!await this.recordMessageDeletion(tx, accountPubkey, rumor, enqueue)) return false;
     if (target.deleted) return true;
@@ -1178,6 +1198,12 @@ export class DmService {
 
     const conversation = target.conversation;
     await clearReactionPreviewForDeletedTarget(tx, conversation, target.id);
+    if (target.kind === KIND_REACTION) {
+      await tx.delete(relayOutboxJobs).where(and(
+        eq(relayOutboxJobs.accountPubkey, accountPubkey), eq(relayOutboxJobs.messageId, target.id),
+      ));
+      return target.conversationKey;
+    }
     const conversationScope = and(
       eq(conversations.accountPubkey, accountPubkey),
       eq(conversations.conversationKey, target.conversationKey),

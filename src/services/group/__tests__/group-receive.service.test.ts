@@ -805,6 +805,55 @@ describe('private message deletions', () => {
       wake.mockRestore();
     }
   });
+  it('retracts only an owned group reaction and uses its original audience', async () => {
+    const h = 'retract-group-reaction';
+    const tags = [['p', BOB], ['p', CAROL], ['h', h]];
+    const source = buildRumor({ kind: 14, content: 'Group original', tags, created_at: 910 }, ACCOUNT);
+    const mine = buildRumor({
+      kind: 7, content: '👍', tags: [...tags, ['e', source.id]], created_at: 911,
+    }, ACCOUNT);
+    const theirs = buildRumor({
+      kind: 7, content: '👍', tags: [['p', ACCOUNT], ['p', CAROL], ['h', h], ['e', source.id]],
+      created_at: 911,
+    }, BOB);
+    expect(await dmService.importRumors(ACCOUNT, [source, mine, theirs])).toMatchObject({ inserted: 3 });
+    const sqlite = mockDatabase!.sqlite;
+    const key = groupConversationKey(h);
+    sqlite.prepare('UPDATE conversations SET member_pubkeys = ? WHERE account_pubkey = ? AND conversation_key = ?')
+      .run(JSON.stringify([ACCOUNT, BOB, DAVE]), ACCOUNT, key);
+    sqlite.prepare("INSERT INTO relay_outbox_jobs (account_pubkey,message_id,scope,created_at) VALUES (?,?,'all_recipient_relays',0)")
+      .run(ACCOUNT, mine.id);
+    const wake = jest.spyOn(relayMessageOutbox, 'wake').mockImplementation(() => {});
+    try {
+      await dmService.retractReaction(ACCOUNT, key, theirs.id);
+      await dmService.retractReaction(ACCOUNT, key, source.id);
+      await dmService.retractReaction(ACCOUNT, 'other-group', mine.id);
+      expect(wake).not.toHaveBeenCalled();
+      await dmService.retractReaction(ACCOUNT, key, mine.id);
+      expect(wake).toHaveBeenCalledWith(ACCOUNT);
+      const row = sqlite.prepare(`SELECT d.rumor FROM relay_outbox_jobs j
+        JOIN message_deletions d ON d.account_pubkey = j.account_pubkey AND d.id = j.message_id
+        WHERE j.account_pubkey = ? ORDER BY j.id DESC LIMIT 1`).get(ACCOUNT);
+      const request = JSON.parse(String(row?.rumor)) as Rumor;
+      expect(request.tags.filter(([name]) => name === 'p')).toEqual([['p', BOB], ['p', CAROL]]);
+      expect(request.tags).toEqual(expect.arrayContaining([['e', mine.id], ['k', '7']]));
+      expect(sqlite.prepare('SELECT scope, recipient_pubkey FROM relay_outbox_jobs WHERE account_pubkey = ? AND message_id = ? ORDER BY recipient_pubkey')
+        .all(ACCOUNT, request.id)).toEqual([ACCOUNT, BOB, CAROL].map(recipient_pubkey => ({ scope: 'selected_copy', recipient_pubkey })));
+      expect(sqlite.prepare('SELECT id FROM relay_outbox_jobs WHERE account_pubkey = ? AND message_id = ?')
+        .get(ACCOUNT, mine.id)).toBeUndefined();
+      const stored = sqlite.prepare('SELECT deleted FROM messages WHERE account_pubkey = ? AND id = ?');
+      expect(stored.get(ACCOUNT, mine.id)?.deleted).toBe(1);
+      expect(stored.get(ACCOUNT, theirs.id)?.deleted).toBe(0);
+      expect(stored.get(ACCOUNT, source.id)?.deleted).toBe(0);
+      expect(await dmService.importRumors(BOB, [source, mine, theirs, request])).toMatchObject({ inserted: 4 });
+      expect(stored.get(BOB, mine.id)?.deleted).toBe(1);
+      expect(stored.get(BOB, theirs.id)?.deleted).toBe(0);
+      expect(stored.get(BOB, source.id)?.deleted).toBe(0);
+    } finally {
+      wake.mockRestore();
+    }
+  });
+
   it('scopes an entire mixed-author selection to the requesting account', async () => {
     const wake = jest.spyOn(relayMessageOutbox, 'wake').mockImplementation(() => {});
     try {

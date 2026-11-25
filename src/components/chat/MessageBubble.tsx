@@ -778,7 +778,8 @@ function areEqual(a: Props, b: Props): boolean {
       x.emoji !== y.emoji ||
       x.customEmoji?.url !== y.customEmoji?.url ||
       x.count !== y.count ||
-      x.selfReacted !== y.selfReacted
+      x.selfReacted !== y.selfReacted ||
+      x.selfReactionId !== y.selfReactionId
     ) {
       return false;
     }

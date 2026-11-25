@@ -2,6 +2,7 @@ import { schnorr } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import type { Rumor } from '@/db/schema/types';
+import { reactionRetractionTarget } from '@/lib/nostr/reaction-retraction';
 
 export const PROXIMITY_VERSION = 1;
 export const PROXIMITY_CAPABILITY_MESSAGE = 1n;
@@ -790,7 +791,7 @@ export function validateRumor(value: unknown): asserts value is Rumor {
     !Number.isSafeInteger(rumor.created_at) ||
     (rumor.created_at as number) < 0 ||
     !Number.isSafeInteger(rumor.kind) ||
-    (rumor.kind !== 14 && rumor.kind !== 15 && rumor.kind !== 7) ||
+    (rumor.kind !== 14 && rumor.kind !== 15 && rumor.kind !== 7 && rumor.kind !== 5) ||
     typeof rumor.content !== 'string' ||
     textEncoder.encode(rumor.content).length > PROXIMITY_MAX_CONTENT_BYTES ||
     !Array.isArray(rumor.tags) ||
@@ -818,6 +819,9 @@ export function validateRumor(value: unknown): asserts value is Rumor {
     !isHex(recipientTags[0][1], 32)
   ) {
     throw new Error('Invalid rumor recipient');
+  }
+  if (rumor.kind === 5 && !reactionRetractionTarget(rumor as Rumor)) {
+    throw new Error('Invalid reaction retraction');
   }
 }
 

@@ -508,6 +508,7 @@
       "unavailable": "Podgląd niedostępny",
       "open_external": "Otwórz w innej aplikacji"
     },
+    "reaction_retract_failed": "Nie udało się usunąć reakcji.",
     "message_delete": {
       "title": "Usunąć wiadomość?",
       "description": "Wiadomość zostanie ukryta w Twojej historii czatu.",

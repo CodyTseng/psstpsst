@@ -187,6 +187,7 @@ type DiscoveryVisibilityHarness = {
     },
     type: ProximityPacketType,
     payload: Uint8Array,
+    shouldSeal?: () => boolean,
   ) => Promise<void>;
   signalPeerPubkeys: Map<string, string>;
   references: number;
@@ -1762,6 +1763,34 @@ describe('Nearby discovery visibility', () => {
       send.mockRestore();
       service.endpointSends.clear();
       service.endpointContexts.clear();
+    }
+  });
+
+  it('skips a withdrawn reaction waiting to seal without consuming a record sequence', async () => {
+    const transport = platform.proximityTransport;
+    const available = jest.spyOn(transport, 'isAvailable').mockReturnValue(true);
+    const send = jest.spyOn(transport, 'sendAsync').mockResolvedValue();
+    let releaseFirst!: (record: Uint8Array) => void;
+    const firstRecord = new Promise<Uint8Array>(resolve => { releaseFirst = resolve; });
+    const seal = jest.fn()
+      .mockReturnValueOnce(firstRecord)
+      .mockResolvedValueOnce(Uint8Array.of(1));
+    const context = { endpointId: 'c:device', phase: 'ready' as const, secure: { seal } };
+    service.endpointContexts.set(context.endpointId, context);
+    try {
+      let valid = true;
+      const first = service.sendSecure(context, ProximityPacketType.Ping, new Uint8Array());
+      const withdrawn = service.sendSecure(context, ProximityPacketType.Message, Uint8Array.of(9), () => valid);
+      const next = service.sendSecure(context, ProximityPacketType.Pong, new Uint8Array());
+      valid = false;
+      releaseFirst(Uint8Array.of(0));
+      await Promise.all([first, withdrawn, next]);
+
+      expect(seal.mock.calls.map(([type]) => type)).toEqual([ProximityPacketType.Ping, ProximityPacketType.Pong]);
+      expect(send.mock.calls.map(([, record]) => record[0])).toEqual([0, 1]);
+    } finally {
+      available.mockRestore();
+      send.mockRestore();
     }
   });
 

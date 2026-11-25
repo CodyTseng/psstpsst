@@ -502,6 +502,7 @@
       "unavailable": "Preview unavailable",
       "open_external": "Open in another app"
     },
+    "reaction_retract_failed": "Could not remove reaction.",
     "message_delete": {
       "title": "Delete message?",
       "description": "This removes the message from your chat history.",

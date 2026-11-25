@@ -502,6 +502,7 @@
       "unavailable": "プレビューできません",
       "open_external": "別のアプリで開く"
     },
+    "reaction_retract_failed": "リアクションを取り消せませんでした。",
     "message_delete": {
       "title": "メッセージを削除しますか？",
       "description": "このメッセージはあなたのチャット履歴から非表示になります。",

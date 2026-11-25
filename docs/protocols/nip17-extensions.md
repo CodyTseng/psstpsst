@@ -237,8 +237,8 @@ This extension does not deliver earlier rumors to a newly invited member.
 
 ## Message deletion
 
-A kind `5` rumor requests that a client hide a Relay chat message or
-file message. The rumor has empty content, one `e` tag referencing the target's
+A kind `5` rumor requests that a client hide a Relay chat message,
+file message, or reaction. The rumor has empty content, one `e` tag referencing the target's
 rumor ID, and a `k` tag naming the target kind. It may carry the standard
 `ms` tag. The same envelope and timestamp checks apply.
 
@@ -257,6 +257,16 @@ can hide any eligible target. For requests authenticated as another account,
 the target author must match the deletion author. The receiver discards
 requests that fail these checks. A deletion request does not affect group
 membership or create a timeline entry.
+
+For a reaction retraction, the `k` tag must be `7` and the requester must
+be the reaction author, including when the receiving account is the requester.
+The `e` tag identifies the reaction itself. Deliver the request to the original
+recipients of the reaction and to its author for device sync. Store an
+authenticated request that arrives before its reaction and check authorship
+when the reaction arrives. Stop sending any queued copy of the withdrawn
+reaction. Retry its deletion independently per original recipient so missing
+routing metadata for one recipient does not stop delivery to the others.
+A retraction leaves the original chat message and other reactions intact.
 
 ## Private saved groups
 

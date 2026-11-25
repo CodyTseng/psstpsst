@@ -458,5 +458,15 @@ test('system reaction notification uses only the reaction and leaves unread and 
       reaction_preview_event_id: result.rumorId, reaction_preview_pending: 1,
     });
     assert.equal((await receive(sqlite, input, { type: 'event', data: reaction })).status, 'suppress');
+    const retraction = input.followup('', {
+      kind: 5, tags: [...input.rumor.tags, ['e', result.rumorId], ['k', '7']],
+    });
+    assert.equal((await receive(sqlite, input, { type: 'event', data: retraction })).status, 'suppress');
+    const stored = sqlite.prepare('SELECT deleted FROM messages WHERE account_pubkey = ? AND id = ?');
+    assert.equal(stored.get(input.account, result.rumorId).deleted, 1);
+    assert.equal(stored.get(input.account, targetId).deleted, 0);
+    assert.deepEqual({ ...sqlite.prepare('SELECT reaction_preview_event_id, reaction_preview_pending FROM conversations').get() }, {
+      reaction_preview_event_id: result.rumorId, reaction_preview_pending: 0,
+    });
   } finally { sqlite.close(); }
 });

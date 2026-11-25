@@ -505,6 +505,7 @@
       "unavailable": "Vista previa no disponible",
       "open_external": "Abrir en otra app"
     },
+    "reaction_retract_failed": "No se pudo quitar la reacción.",
     "message_delete": {
       "title": "¿Eliminar el mensaje?",
       "description": "El mensaje se ocultará de tu historial de chat.",

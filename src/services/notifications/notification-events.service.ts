@@ -55,6 +55,21 @@ async function deliveryPolicy(tx: Database, target: NotificationTarget): Promise
   return { enabled: !window.enabled || !isMinuteInDndWindow(now.getHours() * 60 + now.getMinutes(), window), requests };
 }
 
+/** A claimed reaction can be retracted while waiting for presentation. */
+export async function getLiveNotificationReactionIds(accountPubkey: string, ids: readonly string[]): Promise<Set<string>> {
+  const live = new Set<string>();
+  for (let offset = 0; offset < ids.length; offset += 250) {
+    const rows = await db.select({ id: messages.id }).from(messages).where(and(
+      eq(messages.accountPubkey, accountPubkey),
+      eq(messages.kind, 7),
+      eq(messages.deleted, false),
+      inArray(messages.id, ids.slice(offset, offset + 250)),
+    ));
+    for (const { id } of rows) live.add(id);
+  }
+  return live;
+}
+
 /** Called inside the successful message transaction, never after commit. */
 export async function recordNotificationEvent(tx: Database, input: {
   accountPubkey: string;

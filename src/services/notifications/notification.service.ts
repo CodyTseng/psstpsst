@@ -16,7 +16,7 @@ import { isMessageOrderNewer, messageOrderAt } from '@/lib/nostr/message-order';
 import { registerBackgroundPoll, unregisterBackgroundPoll } from './background-task';
 import type { NotificationCandidate, NotificationConversation } from './notification-filter';
 import { evaluateNotificationRumors, buildNotificationContent } from './notification-policy';
-import { discardNotificationEvents } from './notification-events.service';
+import { discardNotificationEvents, getLiveNotificationReactionIds } from './notification-events.service';
 import { pushRegistrationService } from './push-registration.service';
 import {
   DEFAULT_NOTIFICATION_CONTENT_PREFERENCES,
@@ -107,11 +107,9 @@ class NotificationService {
   private pendingAccountPubkey: string | null = null;
   private pendingCount = 0;
   private pendingRequestCount = 0;
-  private pendingReactionCount = 0;
-  private pendingRequestReactionCount = 0;
+  private pendingReactions = new Map<string, NotificationCandidate>();
   private latestPendingAccepted: NotificationCandidate | null = null;
-  /** The newest qualifying message in the current aggregate. Keeping one rumor
-   * bounds preview memory even during a very large background burst. */
+  /** Only the newest ordinary messages are needed to render their aggregate. */
   private latestPending: NotificationCandidate | null = null;
   /** A fixed-window flush timer. New messages join the existing window rather
    * than resetting it, so a continuous stream can never postpone delivery. */
@@ -302,13 +300,13 @@ class NotificationService {
         this.resetAggregate();
         this.pendingAccountPubkey = accountPubkey;
       }
-      this.pendingCount += qualifying.length;
       for (const candidate of qualifying) {
         const rumor = candidate.rumor;
         if (rumor.kind === KIND_REACTION) {
-          this.pendingReactionCount += 1;
-          if (candidate.kind === 'request') this.pendingRequestReactionCount += 1;
+          this.pendingReactions.set(rumor.id, candidate);
+          continue;
         }
+        this.pendingCount += 1;
         if (candidate.kind === 'request') this.pendingRequestCount += 1;
         else if (!this.latestPendingAccepted || this.isNewer(rumor, this.latestPendingAccepted.rumor)) {
           this.latestPendingAccepted = candidate;
@@ -434,7 +432,7 @@ class NotificationService {
   /** Post one privacy-configured notification for everything in the window. */
   private async flushAggregate(): Promise<void> {
     const epoch = this.notificationEpoch;
-    if (this.pendingCount === 0) return;
+    if (this.pendingCount === 0 && this.pendingReactions.size === 0) return;
     if (!platform.notifications.isAvailable()) return;
     // The user may return during the aggregation window.
     if (!platform.notifications.shouldNotifyNow()) return;
@@ -451,64 +449,73 @@ class NotificationService {
       return;
     }
 
-    // A request preference change during the aggregation window must not send
-    // a queued request alert or discard unrelated accepted-message alerts.
-    if (this.pendingRequestCount > 0 && await getQuietMessageRequests()) {
+    // A request preference change during the window leaves accepted alerts intact.
+    const hasRequests = this.pendingRequestCount > 0 ||
+      [...this.pendingReactions.values()].some(candidate => candidate.kind === 'request');
+    const quietRequests = hasRequests && await getQuietMessageRequests();
+    if (quietRequests) {
       this.pendingCount -= this.pendingRequestCount;
-      this.pendingReactionCount -= this.pendingRequestReactionCount;
-      this.pendingRequestReactionCount = 0;
       this.pendingRequestCount = 0;
       this.latestPending = this.latestPendingAccepted;
-      if (this.pendingCount === 0) return;
     }
-    const count = this.pendingCount;
     await this.ensureContentPreferencesLoaded();
     const accountPubkey = await getActiveAccountPubkey();
-    const latestPending = this.latestPending;
     if (!accountPubkey || accountPubkey !== this.pendingAccountPubkey) {
       this.resetAggregate();
       return;
     }
-    if (!latestPending) return;
-    const { title, subtitle, body, avatarUrl, communication } = await buildNotificationContent(
-      latestPending.rumor, count, accountPubkey,
-      {
+
+    if (quietRequests) {
+      for (const [id, candidate] of this.pendingReactions) {
+        if (candidate.kind === 'request') this.pendingReactions.delete(id);
+      }
+    }
+    await this.pruneRetractedReactions(accountPubkey);
+    if (this.pendingCount === 0 && this.pendingReactions.size === 0) return;
+
+    const badgeCount = await getUnreadIndicatorsEnabled() ? await getMainInboxUnreadCount(accountPubkey) : 0;
+    let dismissed = false;
+    for (;;) {
+      let latestPending = this.latestPending;
+      for (const candidate of this.pendingReactions.values()) {
+        if (!latestPending || this.isNewer(candidate.rumor, latestPending.rumor)) latestPending = candidate;
+      }
+      const count = this.pendingCount + this.pendingReactions.size;
+      if (!latestPending || count === 0) return;
+      const content = await buildNotificationContent(latestPending.rumor, count, accountPubkey, {
         conversation: latestPending.conversation,
         preferences: this.contentPreferences,
-        hasReactions: this.pendingReactionCount > 0,
-      },
-    );
+        hasReactions: this.pendingReactions.size > 0,
+      });
+      if (!dismissed) {
+        // Replace the single notification surface owned by this app.
+        await platform.notifications.dismissAll();
+        dismissed = true;
+      }
+      const currentAccountPubkey = await getActiveAccountPubkey();
+      // A delete committed during preview I/O can change both the count and
+      // the latest valid candidate. Each retry removes at least one reaction.
+      if (await this.pruneRetractedReactions(accountPubkey)) continue;
+      if (epoch !== this.notificationEpoch ||
+        (latestPending.conversation.deliveryKind === 'relay' && this.isRelayReceiveBlocked(accountPubkey)) ||
+        !platform.notifications.shouldNotifyNow() ||
+        accountPubkey !== currentAccountPubkey) return;
+      if (IS_DEVELOPMENT_BUILD && process.env.NODE_ENV !== 'test') {
+        console.info(`[notifications] Presenting aggregate; count = ${count}`);
+      }
+      const presented = await platform.notifications.present({ ...content, badgeCount });
+      // Presentation can fail transiently on desktop. Disable only if the grant is gone.
+      if (!presented && !(await platform.notifications.hasPermission())) await this.handlePermissionLoss();
+      return;
+    }
+  }
 
-    // This app owns a single notification surface. Clearing first also removes
-    // a stale aggregate left by a previous JS process, so replacement does not
-    // depend on an in-memory notification id.
-    await platform.notifications.dismissAll();
-    if (!platform.notifications.shouldNotifyNow()) return;
-    if (IS_DEVELOPMENT_BUILD && process.env.NODE_ENV !== 'test') {
-      console.info(`[notifications] Presenting aggregate; count = ${count}`);
-    }
-    const badgeCount = accountPubkey && (await getUnreadIndicatorsEnabled())
-      ? await getMainInboxUnreadCount(accountPubkey)
-      : 0;
-    const currentAccountPubkey = await getActiveAccountPubkey();
-    if (epoch !== this.notificationEpoch ||
-      (latestPending.conversation.deliveryKind === 'relay' && this.isRelayReceiveBlocked(accountPubkey)) ||
-      !platform.notifications.shouldNotifyNow() ||
-      accountPubkey !== currentAccountPubkey) return;
-    const presented = await platform.notifications.present({
-      title,
-      subtitle,
-      body,
-      avatarUrl,
-      communication,
-      badgeCount,
-    });
-    // Presentation can fail transiently on desktop. Only persistently disable
-    // the preference when the OS grant is actually gone; otherwise the next
-    // message remains eligible for another delivery attempt.
-    if (!presented && !(await platform.notifications.hasPermission())) {
-      await this.handlePermissionLoss();
-    }
+  private async pruneRetractedReactions(accountPubkey: string): Promise<boolean> {
+    if (this.pendingReactions.size === 0) return false;
+    const ids = [...this.pendingReactions.keys()];
+    const live = await getLiveNotificationReactionIds(accountPubkey, ids);
+    for (const id of ids) if (!live.has(id)) this.pendingReactions.delete(id);
+    return live.size !== ids.length;
   }
 
   private clearPendingState(): void {
@@ -525,8 +532,7 @@ class NotificationService {
     this.pendingAccountPubkey = null;
     this.pendingCount = 0;
     this.pendingRequestCount = 0;
-    this.pendingReactionCount = 0;
-    this.pendingRequestReactionCount = 0;
+    this.pendingReactions.clear();
     this.latestPendingAccepted = null;
     this.latestPending = null;
   }

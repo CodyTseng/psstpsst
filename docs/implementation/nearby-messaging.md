@@ -62,7 +62,12 @@ supported content, timestamp, and trust relationship before storage. It sends
 Profile updates change the durable peer and conversation label without creating
 a message or unread state. A reaction to the local proximity identity's
 visible message can create a list preview and a notification using the shared
-arrival policy. Delivery still depends on a live Nearby session.
+arrival policy. A retraction of an authored reaction queues a hidden request in
+the same transaction as the local change and drops any unfinished send of
+the withdrawn reaction. Send the request as a regular kind `5` rumor.
+Keep retraction acknowledgements and retries independent of ordinary message
+delivery so an older peer can continue chatting. Delivery still depends on a
+live Nearby session.
 
 Every Nearby conversation and message records the local proximity identity that
 owns it. Replacing that identity leaves old history readable but read-only;

@@ -311,6 +311,7 @@
       "unavailable": "المعاينة غير متاحة",
       "open_external": "فتح في تطبيق آخر"
     },
+    "reaction_retract_failed": "تعذّر إزالة التفاعل.",
     "message_delete": {
       "title": "هل تريد حذف الرسالة؟",
       "description": "ستُخفى الرسالة من سجل محادثتك.",

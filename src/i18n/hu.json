@@ -502,6 +502,7 @@
       "unavailable": "Az előnézet nem érhető el",
       "open_external": "Megnyitás másik alkalmazásban"
     },
+    "reaction_retract_failed": "Nem sikerült eltávolítani a reakciót.",
     "message_delete": {
       "title": "Törli az üzenetet?",
       "description": "Az üzenet eltűnik a saját csevegési előzményeiből.",

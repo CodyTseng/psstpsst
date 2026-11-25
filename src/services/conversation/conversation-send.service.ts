@@ -151,6 +151,19 @@ class ConversationSendService {
     });
   }
 
+  async retractReaction(opts: {
+    accountPubkey: string;
+    target: ConversationSendTarget;
+    reactionId: string;
+  }): Promise<void> {
+    const { accountPubkey, target, reactionId } = opts;
+    if (target.deliveryKind === 'proximity') {
+      await proximityService.retractReaction({ accountPubkey, peerPubkey: target.conversationKey, reactionId });
+    } else {
+      await dmService.retractReaction(accountPubkey, target.conversationKey, reactionId);
+    }
+  }
+
   async forwardMessage(opts: ForwardMessageOptions): Promise<{ rumorId: string }> {
     if (opts.kind === 15) {
       const offer = parseNearbyFileOffer(opts.content, opts.contentTags);

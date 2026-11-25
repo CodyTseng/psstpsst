@@ -2013,32 +2013,30 @@ function ChatPageContent({
     if (canDeleteSelection) openMessageDeletion(selectedMessages, true);
   }
 
-  /** Send the reaction. Reactions are **not** retractable — an un-react could
-   * only delete our local copy, but the kind-7 event stays on the relay so the
-   * peer would still see it; a fake local-only retract would mislead. So
-   * reacting again with an emoji we already used is a no-op. Shared by the pill,
-   * the full picker, and the in-list chip tap. */
-  async function applyReaction(targetMessage: MessageRow, emoji: string | CustomEmoji) {
-    if (!accountPubkey) return;
-    if (isProximity && (!proximityOwnershipLoaded || proximityHistoryReadOnly)) return;
-    const selectedReactionKey = quickReactionKey(emoji);
-    const alreadyReacted = reactionsByMessageId[targetMessage.id]?.some(
-      (reaction) =>
-        reaction.selfReacted &&
-        quickReactionKey(reaction.customEmoji ?? reaction.emoji) === selectedReactionKey,
+  function getReactionContext(message: MessageRow) {
+    if (!accountPubkey || message.accountPubkey !== accountPubkey ||
+        message.conversationKey !== conversationKey) return null;
+    if (isProximity && (!proximityOwnershipLoaded || proximityHistoryReadOnly)) return null;
+    return { accountPubkey, target: { deliveryKind, conversationKey, group: isGroup } } as const;
+  }
+
+  async function addReaction(message: MessageRow, emoji: string | CustomEmoji) {
+    const context = getReactionContext(message);
+    if (!context) return;
+    const key = quickReactionKey(emoji);
+    const alreadyReacted = reactionsByMessageId[message.id]?.some(reaction =>
+      reaction.selfReacted && quickReactionKey(reaction.customEmoji ?? reaction.emoji) === key,
     );
     if (alreadyReacted) return;
-    // Reacting counts as engaging, like a reply: it graduates a request out of
-    // the inbox gate (storeRumor sets hasReplied for the outgoing kind-7), so
-    // backing out should land on the Chats home, not the Requests list.
-    onGraduate();
-    await conversationSendService.sendReaction({
-      accountPubkey,
-      target: { deliveryKind, conversationKey, group: isGroup },
-      targetMessageId: targetMessage.id,
-      emoji,
-    });
-    recoverProximityDelivery();
+
+    try {
+      // A new reaction graduates the request out of the inbox gate.
+      onGraduate();
+      await conversationSendService.sendReaction({ ...context, targetMessageId: message.id, emoji });
+      recoverProximityDelivery();
+    } catch {
+      showToast(t('delivery.failed'), { variant: 'error', target: 'detail' });
+    }
   }
 
   function handleReactFromMenu(emoji: QuickReaction) {
@@ -2079,7 +2077,7 @@ function ChatPageContent({
     if (pendingReaction) {
       const { target, emoji } = pendingReaction;
       setPendingReaction(null);
-      void applyReaction(target, emoji);
+      void addReaction(target, emoji);
     }
     if (pendingPicker) {
       setPendingPicker(false);
@@ -2165,7 +2163,7 @@ function ChatPageContent({
     const target = menuTarget;
     setEmojiPickerOpen(false);
     setMenuTarget(null);
-    if (target) void applyReaction(target, emoji);
+    if (target) void addReaction(target, emoji);
   }
 
   function editPackWithEmoji(coordinate?: string) {
@@ -2189,10 +2187,20 @@ function ChatPageContent({
     });
   }
 
-  /** Tapping an existing reaction chip adds your own; if you already reacted
-   * with it, applyReaction no-ops (reactions aren't retractable). */
-  function handleTapReaction(message: MessageRow, reaction: ReactionAggregate) {
-    void applyReaction(message, reaction.customEmoji ?? reaction.emoji);
+  async function handleTapReaction(message: MessageRow, reaction: ReactionAggregate) {
+    if (!reaction.selfReacted) {
+      await addReaction(message, reaction.customEmoji ?? reaction.emoji);
+      return;
+    }
+    const context = getReactionContext(message);
+    if (!context || !reaction.selfReactionId) return;
+
+    try {
+      await conversationSendService.retractReaction({ ...context, reactionId: reaction.selfReactionId });
+      recoverProximityDelivery();
+    } catch {
+      showToast(t('chat.reaction_retract_failed'), { variant: 'error', target: 'detail' });
+    }
   }
 
   // The message backing the detail sheet (open only while detailRumorId is set).

@@ -105,7 +105,7 @@ export async function clearReactionPreviewForDeletedTarget(
   tx: Database, conversation: Conversation, targetId: string,
 ): Promise<void> {
   if (!conversation.reactionPreviewPending || !conversation.reactionPreviewEventId) return;
-  const reaction = await tx.select({ id: messages.id }).from(messages).where(and(
+  const reaction = conversation.reactionPreviewEventId === targetId || await tx.select({ id: messages.id }).from(messages).where(and(
     eq(messages.accountPubkey, conversation.accountPubkey),
     eq(messages.conversationKey, conversation.conversationKey),
     eq(messages.id, conversation.reactionPreviewEventId),
@@ -113,6 +113,6 @@ export async function clearReactionPreviewForDeletedTarget(
   )).get();
   if (reaction) {
     await tx.update(conversations).set({ reactionPreviewPending: false })
-      .where(conversationScope(conversation)).run();
+      .where(and(conversationScope(conversation), eq(conversations.reactionPreviewEventId, conversation.reactionPreviewEventId))).run();
   }
 }

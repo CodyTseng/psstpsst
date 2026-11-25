@@ -505,6 +505,7 @@
       "unavailable": "Aperçu indisponible",
       "open_external": "Ouvrir dans une autre app"
     },
+    "reaction_retract_failed": "Impossible de retirer la réaction.",
     "message_delete": {
       "title": "Supprimer le message ?",
       "description": "Ce message sera masqué dans votre historique.",

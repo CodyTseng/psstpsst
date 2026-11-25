@@ -1,6 +1,6 @@
-import { recordReactionPreview } from '@/services/conversation/reaction-preview.service';
+import { clearReactionPreviewForDeletedTarget, recordReactionPreview } from '@/services/conversation/reaction-preview.service';
 import { recordNotificationEvent } from '@/services/notifications/notification-events.service';
-import { and, asc, desc, eq, inArray, isNotNull, like } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, like, lte, ne, or, sql } from 'drizzle-orm';
 import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
 
 import { db } from '@/db/client';
@@ -8,6 +8,7 @@ import {
   conversations,
   messages,
   outbox,
+  notificationEvents,
   proximityPeers,
   type PendingPublishPayload,
   type Rumor,
@@ -20,6 +21,7 @@ import {
   customEmojisFromMessageTags,
   type CustomEmoji,
 } from '@/lib/nostr/custom-emoji';
+import { reactionRetractionTarget } from '@/lib/nostr/reaction-retraction';
 import { normalizeBareNostrUris } from '@/lib/nostr/normalize-content';
 import { findFileMeta } from '@/lib/nostr/file-tags';
 import { getPTags, getReplyToId, getSubject } from '@/lib/nostr/tags';
@@ -32,10 +34,10 @@ import {
 import { resolveDisplayName } from '@/lib/nostr/display-name';
 import { platform } from '@/platform';
 import type { ProximityTransportPort, ProximityTransportSubscription } from '@/platform';
-import { mergeStoredMessageIntoTail } from '@/services/conversation/message-tail-cache';
+import { emitMessageDeletion, mergeStoredMessageIntoTail } from '@/services/conversation/message-tail-cache';
 import { deliveryStatusStore } from '@/services/dm/delivery-status';
-import { nextRumorTimestamp, type RumorTimestamp } from '@/services/dm/rumor-clock';
-import { buildRumor, KIND_CHAT, KIND_FILE, KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
+import { nextRumorTimestamp, rumorTimestampFromOrderAt, type RumorTimestamp } from '@/services/dm/rumor-clock';
+import { buildRumor, KIND_CHAT, KIND_FILE, KIND_MESSAGE_DELETION, KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
 import { recordAttachmentMedia, recordEmbeddedMedia } from '@/services/files/media-index.service';
 import {
   nearbyFileUploadService,
@@ -1150,7 +1152,7 @@ class ProximityService {
 
   private async enqueueSend(
     context: EndpointContext,
-    packet: Uint8Array | Promise<Uint8Array>,
+    packet: Uint8Array | Promise<Uint8Array | null>,
   ): Promise<void> {
     const endpointId = context.endpointId;
     const queueKey = `${endpointId}:${context.generation}`;
@@ -1166,9 +1168,10 @@ class ProximityService {
       ) {
         throw new StaleEndpointContextError();
       }
+      const encoded = await packetResult;
+      if (!encoded) return;
       const native = nativeModule();
       if (!native) throw new Error('Nearby transport is unavailable');
-      const encoded = await packetResult;
       if (IS_DEVELOPMENT_BUILD)
         console.info(
           `[nearby] trace outbound begin endpoint=${endpointId} generation=${context.generation} phase=${context.phase} type=${packetTypeForLog(encoded)} bytes=${encoded.length}`,
@@ -1191,6 +1194,7 @@ class ProximityService {
     context: EndpointContext,
     type: ProximityPacketType,
     payload: Uint8Array,
+    shouldSeal?: () => boolean,
   ): Promise<void> {
     const queueKey = `${context.endpointId}:${context.generation}`;
     const previous = this.endpointSecureSends.get(queueKey) ?? Promise.resolve();
@@ -1214,6 +1218,8 @@ class ProximityService {
         typeof secure.shouldRotateBeforeSend === 'function'
           ? await secure.shouldRotateBeforeSend(queuedPayload.length)
           : false;
+      // A withdrawn reaction has no record and consumes no Noise sequence.
+      if (shouldSeal?.() === false) return null;
       if (type !== ProximityPacketType.Close && shouldRotate) {
         rotationRequired = true;
         return secure.seal(
@@ -2933,83 +2939,62 @@ class ProximityService {
   }
 
   private async handleMessageAck(context: EndpointContext, payload: Uint8Array): Promise<void> {
-    if (!this.accountPubkey || !context.peerPubkey || context.phase !== 'ready') return;
+    const accountPubkey = this.accountPubkey;
+    if (!accountPubkey || !context.peerPubkey || context.phase !== 'ready') return;
     const ack = decodeMessageAck(payload);
     const rumorId = bytesToHex(ack.rumorId);
     const pending = this.pendingMessages.get(rumorId);
-    if (
-      !pending ||
-      pending.peerPubkey !== context.peerPubkey ||
-      pending.endpointId !== context.endpointId
-    )
-      return;
-    const [row] = await db
-      .select()
-      .from(outbox)
-      .where(
-        and(
-          eq(outbox.messageId, rumorId),
-          eq(outbox.accountPubkey, this.accountPubkey),
-          eq(outbox.deliveryKind, 'proximity'),
-          eq(outbox.conversationKey, context.peerPubkey),
-        ),
-      )
-      .limit(1);
-    if (
-      !row ||
-      row.pendingPayload?.deliveryKind !== 'proximity' ||
-      row.pendingPayload.rumor.id !== rumorId
-    )
-      return;
-    this.pendingMessages.delete(rumorId);
-    const timer = this.ackTimers.get(rumorId);
-    if (timer) clearTimeout(timer);
-    this.ackTimers.delete(rumorId);
-    if (ack.status === ProximityMessageStatus.Rejected) {
-      if (
-        ack.errorCode === ProximityErrorCode.StorageFailed ||
-        ack.errorCode === ProximityErrorCode.RateLimited
-      ) {
-        await this.defer(rumorId, row.attempts, `Nearby error ${ack.errorCode}`);
-      } else {
-        await db.transaction(async (tx) => {
-          await tx
-            .update(outbox)
-            .set({
-              status: 'failed',
-              lastError: `Nearby error ${ack.errorCode}`,
-              updatedAt: Math.floor(Date.now() / 1000),
-            })
-            .where(eq(outbox.messageId, rumorId));
-          await tx
-            .update(messages)
-            .set({ deliveryStatus: 'failed' })
-            .where(
-              and(
-                eq(messages.accountPubkey, this.accountPubkey!),
-                eq(messages.id, rumorId),
-              ),
-            );
-        });
-        deliveryStatusStore.getState().setProximityPhase(rumorId, 'failed');
+    if (!pending || pending.peerPubkey !== context.peerPubkey || pending.endpointId !== context.endpointId) return;
+
+    try {
+      const scope = and(
+        eq(outbox.messageId, rumorId), eq(outbox.accountPubkey, accountPubkey),
+        eq(outbox.deliveryKind, 'proximity'), eq(outbox.conversationKey, context.peerPubkey),
+      );
+      const row = await db.select().from(outbox).where(scope).get();
+      if (row?.pendingPayload?.deliveryKind !== 'proximity' ||
+          row.pendingPayload.rumor.id !== rumorId ||
+          this.pendingMessages.get(rumorId) !== pending) return;
+      const rejected = ack.status === ProximityMessageStatus.Rejected;
+      const error = `Nearby error ${ack.errorCode}`;
+      if (rejected && (ack.errorCode === ProximityErrorCode.StorageFailed ||
+          ack.errorCode === ProximityErrorCode.RateLimited)) {
+        await this.defer(rumorId, row.attempts, error);
+        return;
       }
-      return;
+
+      const phase = rejected ? 'failed' : 'sent';
+      const settled = await db.transaction(async tx => {
+        if (this.pendingMessages.get(rumorId) !== pending) return false;
+        const attempt = and(scope, eq(outbox.attempts, row.attempts),
+          inArray(outbox.status, ['sending', 'awaiting_ack']));
+        const changed = rejected
+          ? await tx.update(outbox).set({ status: 'failed', lastError: error, updatedAt: Math.floor(Date.now() / 1000) })
+            .where(attempt).returning({ id: outbox.messageId })
+          : await tx.delete(outbox).where(attempt).returning({ id: outbox.messageId });
+        if (!changed.length) return false;
+        await tx.update(messages).set({ deliveryStatus: phase }).where(and(
+          eq(messages.accountPubkey, accountPubkey), eq(messages.id, rumorId),
+        ));
+        return true;
+      });
+      if (!settled) return;
+      const current = this.pendingMessages.get(rumorId);
+      if (!current || current === pending) this.clearPendingMessage(rumorId);
+      deliveryStatusStore.getState().setProximityPhase(rumorId, phase);
+      void this.drain();
+      if (!rejected) void this.stopIfIdle();
+    } catch (error) {
+      // Leave the in-flight attempt and its timeout intact until the ACK commits.
+      console.warn('[nearby] Could not store message acknowledgement.', error);
     }
-    await db.transaction(async (tx) => {
-      await tx
-        .update(messages)
-        .set({ deliveryStatus: 'sent' })
-        .where(
-          and(
-            eq(messages.accountPubkey, this.accountPubkey!),
-            eq(messages.id, rumorId),
-          ),
-        );
-      await tx.delete(outbox).where(eq(outbox.messageId, rumorId));
-    });
-    deliveryStatusStore.getState().setProximityPhase(rumorId, 'sent');
-    void this.drain();
-    void this.stopIfIdle();
+  }
+
+  private clearPendingMessage(messageId: string): void {
+    this.pendingMessages.delete(messageId);
+    const timer = this.ackTimers.get(messageId);
+    if (timer) clearTimeout(timer);
+    this.ackTimers.delete(messageId);
   }
 
   async assertConversationWritable(
@@ -3150,7 +3135,8 @@ class ProximityService {
       .filter(
         (rumor) =>
           !isRumorTooFarInFuture(rumor) &&
-          (rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE || rumor.kind === KIND_REACTION),
+          (rumor.kind === KIND_CHAT || rumor.kind === KIND_FILE || rumor.kind === KIND_REACTION ||
+            !!reactionRetractionTarget(rumor)),
       )
       .map((rumor) => {
         const currentPeer = currentPubkey ? archivedProximityPeer(rumor, currentPubkey) : null;
@@ -3160,7 +3146,7 @@ class ProximityService {
           owner: currentPeer ? currentPubkey! : proximityAccountPubkey,
         };
       })
-      .sort((a, b) => a.rumor.created_at - b.rumor.created_at);
+      .sort((a, b) => messageOrderAt(a.rumor) - messageOrderAt(b.rumor) || b.rumor.id.localeCompare(a.rumor.id));
     invalid += rumors.length - candidates.length;
     for (const candidate of candidates) {
       if (!candidate.peer) {
@@ -3228,6 +3214,94 @@ class ProximityService {
       ),
       created_at: timestamp.createdAt,
     });
+  }
+
+  async retractReaction(opts: {
+    accountPubkey: string;
+    peerPubkey: string;
+    reactionId: string;
+  }): Promise<void> {
+    const { accountPubkey, peerPubkey, reactionId } = opts;
+    const identity = await this.assertConversationWritable(accountPubkey, peerPubkey);
+    const localPubkey = identity.proximityPubkey;
+    const target = await db.select({ orderAt: messages.orderAt }).from(messages).where(and(
+      eq(messages.accountPubkey, accountPubkey),
+      eq(messages.conversationKey, peerPubkey),
+      eq(messages.id, reactionId),
+      eq(messages.senderPubkey, localPubkey),
+      eq(messages.kind, KIND_REACTION),
+      eq(messages.deleted, false),
+    )).get();
+    if (!target) return;
+
+    const timestamp = rumorTimestampFromOrderAt(Math.max(nextRumorTimestamp().orderAt, target.orderAt + 1));
+    const rumor = buildRumor({
+      kind: KIND_MESSAGE_DELETION,
+      content: '',
+      tags: withMessageOrderTag([
+        ['p', peerPubkey], ['e', reactionId], ['k', String(KIND_REACTION)],
+      ], timestamp.millisecond),
+      created_at: timestamp.createdAt,
+    }, localPubkey);
+    const stored = await this.storeReactionRetraction(accountPubkey, peerPubkey, localPubkey, rumor, true);
+    if (!stored) return;
+    if (this.accountPubkey && this.accountPubkey !== accountPubkey) await this.stop(true);
+    this.accountPubkey = accountPubkey;
+    this.identity = identity;
+    deliveryStatusStore.getState().setProximityPhase(rumor.id, 'queued');
+    void this.drain();
+  }
+
+  private async storeReactionRetraction(
+    accountPubkey: string, peerPubkey: string, localPubkey: string, rumor: Rumor, enqueue: boolean,
+  ): Promise<boolean | null> {
+    const targetId = reactionRetractionTarget(rumor);
+    if (!targetId) return null;
+    const conversationScope = and(
+      eq(conversations.accountPubkey, accountPubkey),
+      eq(conversations.conversationKey, peerPubkey),
+      eq(conversations.deliveryKind, 'proximity'),
+      eq(conversations.proximityAccountPubkey, localPubkey),
+    );
+    const result = await db.transaction(async tx => {
+      const conversation = await tx.select().from(conversations).where(conversationScope).get();
+      if (!conversation) return null;
+      const targetScope = and(eq(messages.accountPubkey, accountPubkey), eq(messages.id, targetId));
+      const target = await tx.select().from(messages).where(targetScope).get();
+      if (target && (target.kind !== KIND_REACTION || target.senderPubkey !== rumor.pubkey ||
+          target.conversationKey !== peerPubkey)) return null;
+      if (enqueue && (!target || target.deleted || rumor.pubkey !== localPubkey)) return false;
+      const inserted = await tx.insert(messages).values({
+        accountPubkey, conversationKey: peerPubkey, id: rumor.id, senderPubkey: rumor.pubkey,
+        kind: rumor.kind, content: rumor.content, tags: rumor.tags, rumor, replyToId: targetId,
+        createdAt: rumor.created_at, orderAt: messageOrderAt(rumor), deleted: true,
+        deliveryStatus: enqueue ? 'queued' : null,
+      }).onConflictDoNothing().returning({ id: messages.id });
+      if (!inserted.length) return false;
+      if (enqueue) {
+        const now = Math.floor(Date.now() / 1000);
+        await tx.insert(outbox).values({
+          accountPubkey, conversationKey: peerPubkey, messageId: rumor.id, deliveryKind: 'proximity',
+          status: 'queued', attempts: 0, nextAttemptAt: now, updatedAt: now,
+          pendingPayload: { version: 1, deliveryKind: 'proximity', rumor },
+        });
+      }
+      if (!target || target.deleted) return true;
+      await tx.update(messages).set({ deleted: true }).where(targetScope);
+      await tx.delete(outbox).where(and(
+        eq(outbox.accountPubkey, accountPubkey), eq(outbox.messageId, targetId),
+      ));
+      await tx.delete(notificationEvents).where(and(
+        eq(notificationEvents.accountPubkey, accountPubkey), eq(notificationEvents.messageId, targetId),
+      ));
+      await clearReactionPreviewForDeletedTarget(tx, conversation, targetId);
+      return 'removed';
+    });
+    if (result === 'removed') {
+      this.clearPendingMessage(targetId);
+      emitMessageDeletion(accountPubkey, peerPubkey, targetId);
+    }
+    return result === 'removed' ? true : result;
   }
 
   async forwardMessage(opts: {
@@ -3335,7 +3409,10 @@ class ProximityService {
       rumor,
     };
     const now = Math.floor(Date.now() / 1000);
-    await db.transaction(async (tx) => {
+    const queued = await db.transaction(async (tx) => {
+      if (rumor.kind === KIND_REACTION && !await tx.select({ id: messages.id }).from(messages).where(and(
+        eq(messages.accountPubkey, accountPubkey), eq(messages.id, rumor.id), eq(messages.deleted, false),
+      )).get()) return false;
       await tx
         .insert(outbox)
         .values({
@@ -3359,9 +3436,12 @@ class ProximityService {
             eq(messages.id, rumor.id!),
           ),
         );
+      return true;
     });
-    deliveryStatusStore.getState().setProximityPhase(rumor.id!, 'queued');
-    void this.drain();
+    if (queued) {
+      deliveryStatusStore.getState().setProximityPhase(rumor.id, 'queued');
+      void this.drain();
+    }
     return rumor;
   }
 
@@ -3377,6 +3457,9 @@ class ProximityService {
     const accountPubkey = archive?.accountPubkey ?? this.accountPubkey;
     const localPubkey = archive?.proximityAccountPubkey ?? this.identity?.proximityPubkey;
     if (!accountPubkey || !localPubkey) return false;
+    if (rumor.kind === KIND_MESSAGE_DELETION) {
+      return this.storeReactionRetraction(accountPubkey, peerPubkey, localPubkey, rumor, false);
+    }
     const orderAt = messageOrderAt(rumor);
     const replyToId = getReplyToId(rumor.tags) ?? null;
     const subject = getSubject(rumor.tags) ?? null;
@@ -3385,6 +3468,7 @@ class ProximityService {
     const markRead = archive?.importing || !incoming || activePeer === peerPubkey;
     const reaction = rumor.kind === KIND_REACTION;
     let wakeSystemNotifications = false;
+    let deleted = false;
     const stored = await db.transaction(async (tx) => {
       const existing = await tx
         .select()
@@ -3403,6 +3487,14 @@ class ProximityService {
       )
         return null;
       if (!existing && reaction) return null;
+      if (reaction) {
+        // An authenticated request can precede the target in a restored archive.
+        deleted = !!await tx.select({ id: messages.id }).from(messages).where(and(
+          eq(messages.accountPubkey, accountPubkey), eq(messages.conversationKey, peerPubkey),
+          sql`${messages.kind} = 5`, eq(messages.replyToId, rumor.id),
+          eq(messages.senderPubkey, rumor.pubkey),
+        )).get();
+      }
       const inserted = await tx
         .insert(messages)
         .values({
@@ -3412,6 +3504,7 @@ class ProximityService {
           senderPubkey: rumor.pubkey,
           kind: rumor.kind,
           content: rumor.content,
+          deleted,
           createdAt: rumor.created_at,
           orderAt,
           replyToId,
@@ -3430,7 +3523,7 @@ class ProximityService {
         await recordEmbeddedMedia(tx, rumor, accountPubkey, peerPubkey);
       }
       if (reaction) {
-        if (!archive && incoming) {
+        if (!archive && incoming && !deleted) {
           wakeSystemNotifications = await recordReactionPreview(
             tx, { accountPubkey, conversationKey: peerPubkey }, rumor, orderAt,
             () => ({ userPresent: !platform.notifications.shouldNotifyNow(), activeConversation: null }),
@@ -3527,7 +3620,7 @@ class ProximityService {
         return notificationService.notifyNewRumors([rumor], { accountPubkey, deliveryKind: 'proximity' });
       }).catch((error) => console.warn('[nearby] Could not deliver a reaction notification.', error));
     }
-    if (stored) {
+    if (stored && !deleted) {
       // The write already holds every column — merge into the warm tail instead
       // of invalidating it and queueing a full window re-read.
       mergeStoredMessageIntoTail(accountPubkey, {
@@ -3577,14 +3670,22 @@ class ProximityService {
           and(
             eq(outbox.accountPubkey, accountPubkey),
             eq(outbox.deliveryKind, 'proximity'),
+            or(ne(messages.kind, KIND_REACTION), eq(messages.deleted, false)),
             inArray(outbox.status, ['queued', 'sending', 'awaiting_ack']),
           ),
         )
         .orderBy(asc(messages.orderAt), desc(messages.id));
       const conversationsSeen = new Set<string>();
+      const retractionsSeen = new Set<string>();
       for (const { entry: row } of rows) {
-        if (conversationsSeen.has(row.conversationKey)) continue;
-        conversationsSeen.add(row.conversationKey);
+        const payload = row.pendingPayload;
+        // An older peer may ignore a retraction. Await its acknowledgement
+        // independently so it cannot hold up later chat messages.
+        const seen = payload?.deliveryKind === 'proximity' && payload.rumor.kind === KIND_MESSAGE_DELETION
+          ? retractionsSeen
+          : conversationsSeen;
+        if (seen.has(row.conversationKey)) continue;
+        seen.add(row.conversationKey);
         if (row.status !== 'queued') continue;
         if (row.nextAttemptAt != null && row.nextAttemptAt > now) {
           this.scheduleRetryAt(row.nextAttemptAt * 1000);
@@ -3596,7 +3697,6 @@ class ProximityService {
           await this.defer(row.messageId, row.attempts + 1);
           continue;
         }
-        const payload = row.pendingPayload;
         if (!payload || payload.deliveryKind !== 'proximity') {
           await db.transaction(async (tx) => {
             await tx
@@ -3619,29 +3719,36 @@ class ProximityService {
           });
           continue;
         }
-        await db
+        const started = await db
           .update(outbox)
           .set({
             status: 'sending',
             attempts: row.attempts + 1,
             updatedAt: now,
           })
-          .where(eq(outbox.messageId, row.messageId));
+          .where(and(eq(outbox.messageId, row.messageId), eq(outbox.status, 'queued')))
+          .returning({ id: outbox.messageId });
+        if (!started.length) continue;
         deliveryStatusStore.getState().setProximityPhase(row.messageId, 'sending');
         try {
-          this.pendingMessages.set(row.messageId, {
-            peerPubkey: row.conversationKey,
-            endpointId: context.endpointId,
-          });
-          await this.sendSecure(context, ProximityPacketType.Message, encodeRumor(payload.rumor));
-          await db
+          const attempt = { peerPubkey: row.conversationKey, endpointId: context.endpointId };
+          this.pendingMessages.set(row.messageId, attempt);
+          await this.sendSecure(
+            context, ProximityPacketType.Message, encodeRumor(payload.rumor),
+            payload.rumor.kind === KIND_REACTION
+              ? () => this.pendingMessages.get(row.messageId) === attempt
+              : undefined,
+          );
+          const waiting = await db
             .update(outbox)
             .set({
               status: 'awaiting_ack',
               lastError: null,
               updatedAt: Math.floor(Date.now() / 1000),
             })
-            .where(eq(outbox.messageId, row.messageId));
+            .where(and(eq(outbox.messageId, row.messageId), eq(outbox.status, 'sending')))
+            .returning({ id: outbox.messageId });
+          if (!waiting.length) continue;
           deliveryStatusStore.getState().setProximityPhase(row.messageId, 'awaiting_ack');
           const previous = this.ackTimers.get(row.messageId);
           if (previous) clearTimeout(previous);
@@ -3667,10 +3774,7 @@ class ProximityService {
   }
 
   private async defer(messageId: string, attempts: number, error?: string): Promise<void> {
-    this.pendingMessages.delete(messageId);
-    const timer = this.ackTimers.get(messageId);
-    if (timer) clearTimeout(timer);
-    this.ackTimers.delete(messageId);
+    const pending = this.pendingMessages.get(messageId);
     const delay = RETRY_SECONDS[Math.min(Math.max(0, attempts - 1), RETRY_SECONDS.length - 1)];
     const nextAttemptAt = Math.floor(Date.now() / 1000) + delay;
     const updated = await db
@@ -3682,8 +3786,12 @@ class ProximityService {
         lastError: error ?? null,
         updatedAt: Math.floor(Date.now() / 1000),
       })
-      .where(eq(outbox.messageId, messageId))
+      .where(and(eq(outbox.messageId, messageId), lte(outbox.attempts, attempts),
+        inArray(outbox.status, ['queued', 'sending', 'awaiting_ack'])))
       .returning({ id: outbox.messageId });
+    if (this.pendingMessages.get(messageId) === pending && (updated.length > 0 || !pending)) {
+      this.clearPendingMessage(messageId);
+    }
     if (updated.length === 0) return;
     deliveryStatusStore.getState().setProximityPhase(messageId, 'queued');
     this.scheduleRetryAt(Date.now() + delay * 1000);
