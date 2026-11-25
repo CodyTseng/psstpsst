@@ -722,6 +722,38 @@ describe('direct reaction previews', () => {
     }, 'local');
   });
 
+  it('surfaces new forward-caught reactions without alerting or surfacing overlap history', async () => {
+    const history = new DmService() as unknown as {
+      accountPubkey: string;
+      encryptionKeypair: object;
+      persistHistoryPage(page: Event[], epoch: number, previewSince?: number): Promise<void>;
+    };
+    history.accountPubkey = ACCOUNT;
+    history.encryptionKeypair = {};
+    const old = directReaction('f2', 599);
+    const missed = directReaction('f3', 601);
+    const lookup = new Map([old, missed].map(rumor => [`forward-${rumor.id}`, rumor]));
+    const unwrap = jest.mocked(unwrapGiftWrapForAccount).mockImplementation(async wrap => ({
+      status: 'decrypted',
+      value: { giftWrap: wrap, seal: wrap, rumor: lookup.get(wrap.id)!, senderEncryptionPubkey: REACTION_PEER },
+    }));
+    const envelope = (rumor: Rumor): Event => ({
+      id: `forward-${rumor.id}`, kind: 1059, pubkey: REACTION_PEER, created_at: 500,
+      content: '', sig: '', tags: [['p', ACCOUNT]],
+    });
+    try {
+      await history.persistHistoryPage([envelope(old)], 0, 600);
+      expect(readReactionPreview()?.reaction_preview_pending).toBe(0);
+      await history.persistHistoryPage([envelope(missed)], 0, 600);
+      expect(readReactionPreview()).toMatchObject({
+        reaction_preview_event_id: missed.id, reaction_preview_pending: 1,
+      });
+      expect(hasEvent(missed)).toBe(false);
+    } finally {
+      unwrap.mockReset();
+    }
+  });
+
   it('clears only the retracted reaction and the preview that still points to it', async () => {
     const older = directReaction('f2', 598);
     const newer = directReaction('f3', 599, { content: '👎' });

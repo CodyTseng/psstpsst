@@ -947,6 +947,17 @@ it('only notifies for reactions to the local member’s own message, with no cha
     unread_count: 1, last_message_id: peer.id, updated_order_at: 101000,
     reaction_preview_event_id: whileActive.id, reaction_preview_pending: 0,
   });
+
+  const caughtUp = { ...react('cf', BOB, own.id), created_at: 104 };
+  await expect(groupReceiveService.receive({
+    accountPubkey: ACCOUNT, rumor: caughtUp, intake: 'history', recoveryPreview: true,
+    active: false, senderBlocked: false, syncCursor: null,
+  })).resolves.toMatchObject({ stored: true });
+  expect(hasEvent(caughtUp)).toBe(false);
+  expect(readState()).toMatchObject({
+    unread_count: 1, last_message_id: peer.id, updated_order_at: 101000,
+    reaction_preview_event_id: caughtUp.id, reaction_preview_pending: 1,
+  });
 });
 
 

@@ -3527,7 +3527,7 @@ class ProximityService {
           wakeSystemNotifications = await recordReactionPreview(
             tx, { accountPubkey, conversationKey: peerPubkey }, rumor, orderAt,
             () => ({ userPresent: !platform.notifications.shouldNotifyNow(), activeConversation: null }),
-            'proximity',
+            { deliveryKind: 'proximity' },
           );
         }
         return true;

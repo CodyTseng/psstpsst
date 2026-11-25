@@ -62,11 +62,11 @@ export async function recordReactionPreview(
   rumor: Rumor,
   orderAt: number,
   getPresence: () => ConversationPresence,
-  deliveryKind: Conversation['deliveryKind'] = 'relay',
+  options: { deliveryKind?: Conversation['deliveryKind']; notify?: boolean } = {},
 ): Promise<boolean> {
   if (rumor.kind !== KIND_REACTION || !parseReactionPreview(rumor.content, rumor.tags)) return false;
   const conversation = await tx.select().from(conversations).where(conversationScope(scope)).get();
-  if (!conversation || conversation.deleted || conversation.deliveryKind !== deliveryKind) return false;
+  if (!conversation || conversation.deleted || conversation.deliveryKind !== (options.deliveryKind ?? 'relay')) return false;
   const { accountPubkey, conversationKey } = conversation;
 
   const { reactionPreviewEventId, reactionPreviewOrderAt } = conversation;
@@ -85,7 +85,7 @@ export async function recordReactionPreview(
     reactionPreviewOrderAt: orderAt,
     reactionPreviewPending: !active,
   }).where(conversationScope(conversation)).run();
-  if (active) return false;
+  if (active || options.notify === false) return false;
   const queued = await recordNotificationEvent(tx, {
     accountPubkey,
     conversationKey,

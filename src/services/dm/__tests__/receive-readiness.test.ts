@@ -1012,12 +1012,12 @@ it('rechecks the inclusive lower boundary second before completing forward cover
   } finally { clock.mockRestore(); }
 });
 
-it('resumes a fixed forward window after interruption, then catches up to the new pass cutoff', async () => {
+it('resumes an interrupted forward window and catches up before overlapping deep history', async () => {
   mockAppState = 'active';
   const relay = 'wss://fresh.example';
   const clock = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
   try {
-    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 0 });
+    jest.mocked(getRelaySyncCursor).mockResolvedValue({ forwardSince: 1, backwardUntil: 950 });
     for (const id of ['confirmed-forward', 'partial-forward']) mockProcessedIds.add(id);
     jest.mocked(relayPool.query)
       .mockImplementationOnce(async opts => {
@@ -1035,6 +1035,8 @@ it('resumes a fixed forward window after interruption, then catches up to the ne
       .toEqual([{ ...checkpoint, nextUntil: 1000 }, checkpoint]);
     expect(getProcessedGiftWrapIds).toHaveBeenCalledWith(['partial-forward']);
     expect(setForwardSince).not.toHaveBeenCalled();
+    expect(relayPool.query).toHaveBeenCalledTimes(2);
+    expect(setBackwardUntil).not.toHaveBeenCalled();
 
     // Restart with a later clock and the persisted page checkpoint.
     dmService.destroy();
@@ -1043,11 +1045,12 @@ it('resumes a fixed forward window after interruption, then catches up to the ne
     await dmService.init(options);
     await flush();
     expect(jest.mocked(relayPool.query).mock.calls.map(([opts]) => opts.filter?.until))
-      .toEqual([1000, 900, 900, 2000]);
+      .toEqual([1000, 900, 900, 2000, 950]);
     expect(jest.mocked(setForwardSince).mock.calls)
       .toEqual([[self, relay, 1000], [self, relay, 2000]]);
     expect(jest.mocked(setPendingForwardScan).mock.calls.at(-1)?.[2])
       .toEqual({ through: 2000, floor: 0, nextUntil: 2000 });
+    expect(setBackwardUntil).toHaveBeenCalledWith(self, relay, 0);
   } finally { clock.mockRestore(); }
 });
 

@@ -1671,6 +1671,7 @@ export class DmService {
     giftWrap: Event,
     intake: RumorIntake,
     syncCursor?: ReturnType<typeof peekSyncCursor>,
+    previewSince?: number,
   ): Promise<Rumor[] | null> {
     const accountPubkey = this.accountPubkey;
     if (!accountPubkey) return Promise.resolve(null);
@@ -1682,7 +1683,7 @@ export class DmService {
       userPresent: !platform.notifications.shouldNotifyNow(),
       activeConversation: this.activeConversation,
       isCurrent: () => this.syncEpoch === epoch && this.accountPubkey === accountPubkey,
-    }, syncCursor);
+    }, syncCursor, previewSince);
     this.inFlightGiftWrapTasks.add(task);
     const forget = () => this.inFlightGiftWrapTasks.delete(task);
     task.then(forget, forget);
@@ -1700,6 +1701,7 @@ export class DmService {
     intake: RumorIntake,
     context: GiftWrapReceiveContext,
     syncCursor?: ReturnType<typeof peekSyncCursor>,
+    previewSince?: number,
   ): Promise<Rumor[] | null> {
     const profile = createPerfSpan('dm.processGiftWrap', { kind: giftWrap.kind });
     let outcome = 'unknown';
@@ -1808,6 +1810,10 @@ export class DmService {
         this.rumorToGiftWrap.set(rumor.id!, giftWrap.id);
       }
       const sourceRelays = entry ? Array.from(entry.relays) : context.sourceRelays;
+      // Gift wraps can be backdated. Compare the authenticated inner event
+      // to the previous forward checkpoint, outside the history overlap.
+      const recoveryPreview = intake === 'history' && rumor.kind === KIND_REACTION &&
+        previewSince !== undefined && messageOrderAt(rumor) >= previewSince * 1000;
       const groupId = firstGroupId(rumor.tags);
       if (groupId) {
         const conversationKey = groupConversationKey(groupId);
@@ -1818,6 +1824,7 @@ export class DmService {
           intake,
           userPresent: context.userPresent,
           reactionPresence: () => this.currentReactionPresence(),
+          ...(recoveryPreview ? { recoveryPreview } : {}),
           active: this.isConversationActive(accountPubkey, conversationKey),
           senderBlocked: blocked,
           checkAccountOwnership: this.independentReceiver,
@@ -1871,7 +1878,7 @@ export class DmService {
         accountPubkey,
         sourceRelays,
         profile,
-        { intake, isCurrent },
+        { intake, isCurrent, ...(recoveryPreview ? { recoveryPreview } : {}) },
       );
       if (inserted === true && isCurrent()) {
         if (intake !== 'history' && intake !== 'archive') {
@@ -2228,21 +2235,18 @@ export class DmService {
     const forwardComplete = skipForward || await this.recoverForwardHistory(
       accountPubkey, relayUrl, cursor.forwardSince, through, epoch,
     );
-    if (this.syncEpoch !== epoch) return false;
-    let backwardComplete = cursor.backwardUntil === BACKFILL_DONE;
-    if (!backwardComplete) {
-      const backward = await this.drainWindow(
-        accountPubkey, relayUrl, cursor.backwardUntil ?? through, BACKFILL_DONE, epoch,
-        until => setBackwardUntil(accountPubkey, relayUrl, until),
-      );
-      if (this.syncEpoch !== epoch) return false;
-      if (backward === 'drained') {
-        await setBackwardUntil(accountPubkey, relayUrl, BACKFILL_DONE);
-        backwardComplete = true;
-      }
-    }
-    if (this.syncEpoch !== epoch) return false;
-    return forwardComplete && backwardComplete;
+    // Deep history shares the processed IDs and could claim an overlapping
+    // reaction before forward recovery has a chance to surface its preview.
+    if (this.syncEpoch !== epoch || !forwardComplete) return false;
+    if (cursor.backwardUntil === BACKFILL_DONE) return true;
+
+    const backward = await this.drainWindow(
+      accountPubkey, relayUrl, cursor.backwardUntil ?? through, BACKFILL_DONE, epoch,
+      until => setBackwardUntil(accountPubkey, relayUrl, until),
+    );
+    if (this.syncEpoch !== epoch || backward !== 'drained') return false;
+    await setBackwardUntil(accountPubkey, relayUrl, BACKFILL_DONE);
+    return this.syncEpoch === epoch;
   }
 
   /** Finish a durable fixed window before admitting the next recent gap.
@@ -2271,6 +2275,7 @@ export class DmService {
       const result = window.floor === window.through ? 'drained' : await this.drainWindow(
         accountPubkey, relayUrl, window.nextUntil, window.floor, epoch,
         nextUntil => setPendingForwardScan(accountPubkey, relayUrl, { ...window, nextUntil }),
+        forwardSince ?? undefined,
       );
       if (this.syncEpoch !== epoch || result !== 'drained') return false;
       await setForwardSince(accountPubkey, relayUrl, window.through);
@@ -2284,12 +2289,12 @@ export class DmService {
     return false;
   }
 
-  private async persistHistoryPage(page: Event[], epoch: number): Promise<void> {
+  private async persistHistoryPage(page: Event[], epoch: number, previewSince?: number): Promise<void> {
     const processedIds = await getProcessedGiftWrapIds(page.map(event => event.id));
     for (const event of page) {
       if (this.syncEpoch !== epoch) return;
       if (processedIds.has(event.id)) continue;
-      await this.processGiftWrap(event, 'history');
+      await this.processGiftWrap(event, 'history', undefined, previewSince);
       await yieldToUi();
     }
   }
@@ -2304,6 +2309,7 @@ export class DmService {
     floor: number,
     epoch: number,
     onPageAdvance?: (until: number) => void | Promise<void>,
+    previewSince?: number,
   ): Promise<'drained' | 'interrupted' | 'aborted'> {
     while (this.syncEpoch === epoch && until >= floor) {
       const result = await readGiftWrapPage({
@@ -2316,7 +2322,7 @@ export class DmService {
         isCurrent: () => this.syncEpoch === epoch,
         signAuth: this.signAuth ?? undefined,
         onReceived: (url, id) => this.recordGiftWrapSeen(id, url),
-        onPage: page => this.persistHistoryPage(page, epoch),
+        onPage: page => this.persistHistoryPage(page, epoch, previewSince),
       });
       if (result.status !== 'page') return result.status;
       until = result.nextUntil;
@@ -2479,7 +2485,7 @@ export class DmService {
     accountPubkey: string,
     sourceRelays?: string[],
     profile?: PerfSpan | null,
-    options: { enqueueRelay?: boolean; intake: RumorIntake; isCurrent?: () => boolean } = { intake: 'live' },
+    options: { enqueueRelay?: boolean; intake: RumorIntake; isCurrent?: () => boolean; recoveryPreview?: boolean } = { intake: 'live' },
   ): Promise<boolean | 'hidden' | null> {
     const pTags = getPTags(rumor.tags);
     const conversationKey = profileSync(profile, 'store.deriveConversation', () =>
@@ -2553,10 +2559,12 @@ export class DmService {
 
         // Reactions have an independent cursor and never modify ordinary conversation state.
         if (rumor.kind === KIND_REACTION) {
-          if (!deleted && (options.intake === 'live' || options.intake === 'recovery')) {
+          const arrival = options.intake === 'live' || options.intake === 'recovery';
+          if (!deleted && (arrival || options.recoveryPreview)) {
             await recordReactionPreview(
               tx, { accountPubkey, conversationKey }, rumor, orderAt,
               () => this.currentReactionPresence(),
+              { notify: arrival },
             );
           }
           return deleted ? 'hidden' : true;

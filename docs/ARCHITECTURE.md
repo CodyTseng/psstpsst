@@ -71,7 +71,8 @@ local state. Only production consumes production updates.
   timestamps follow the same message, or the creation timestamps when there
   is no preview. Update them atomically. Draft and metadata writes do not
   change chronology. Incoming reactions to the local author's visible messages
-  have a separate device-local preview cursor. Only arrival intake advances it.
+  have a separate device-local preview cursor. Arrival intake and newly caught-up
+  reactions beyond a prior forward checkpoint can advance it.
   Viewing the conversation clears the pending flag while retaining the cursor.
   Retracting a reaction clears the pending flag and any queued notification
   for that event while preserving a newer preview. Reactions leave ordinary

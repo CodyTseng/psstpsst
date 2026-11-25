@@ -58,6 +58,7 @@ export type ReceiveGroupRumorOptions = {
   active: boolean;
   userPresent?: boolean;
   reactionPresence?: () => ConversationPresence;
+  recoveryPreview?: boolean;
   senderBlocked: boolean;
   checkAccountOwnership?: boolean;
   isCurrent?: () => boolean;
@@ -1059,7 +1060,8 @@ class GroupReceiveService {
         return { handled: true, stored: true, conversationKey, promoted: [] };
       };
       const result = await persist();
-      if ((intake === 'live' || intake === 'recovery') && (result.stored || result.promoted.length > 0)) {
+      const arrival = intake === 'live' || intake === 'recovery';
+      if ((arrival || options.recoveryPreview) && (result.stored || result.promoted.length > 0)) {
         const [after] = await tx.select().from(conversations).where(and(
           eq(conversations.accountPubkey, accountPubkey), eq(conversations.conversationKey, conversationKey),
         )).limit(1);
@@ -1077,9 +1079,11 @@ class GroupReceiveService {
                   userPresent: options.active || options.userPresent === true,
                   activeConversation: options.active ? { accountPubkey, conversationKey } : null,
                 })),
+                { notify: arrival },
               );
               continue;
             }
+            if (!arrival) continue;
             await recordNotificationEvent(tx, {
               accountPubkey, conversationKey, rumor: candidate,
               before: current ? before : { ...after, lastMessageId: after.lastMessageId ?? candidate.id! },

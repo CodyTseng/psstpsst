@@ -13,15 +13,20 @@ the gift-wrap randomization window and deduplicates by envelope ID. Persist a
 fixed window and its page checkpoint, resume it before a newer gap, and advance
 the watermark and clear the checkpoint in one write after completion.
 Foreground throttling can skip a fresh forward scan on eligible platforms.
-It leaves interrupted windows and unfinished backward history eligible to run.
+Resume interrupted forward windows before scanning deep history. Both scans
+share processed IDs, so deep history could otherwise store a recent reaction
+silently before forward recovery sees it.
 
 Verify and store each history envelope as it is processed. Keep authenticated
 deletion requests with absent targets pending and check them in the target's
 insert transaction. A deletion received after its target can hide a message
 already shown, including when both arrive in the same page. Reactions can be
 stored before their targets and appear when the matching visible message is
-loaded. History reactions and group reactions promoted from quarantine do not
-create previews or notifications. Checkpoint after the page has been processed.
+loaded. On an existing account, forward sync can update the list preview for a
+newly stored reaction whose authenticated timestamp reaches the previous forward
+checkpoint. Initial backfill, older overlap, and reactions promoted from
+quarantine stay silent. Forward history does not enqueue arrival notifications.
+Checkpoint after the page has been processed.
 Retries deduplicate committed rumors. Receive transactions recheck session
 ownership after waiting for the writer lock.
 
