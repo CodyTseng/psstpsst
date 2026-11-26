@@ -34,12 +34,17 @@ describe('Nip05Label layout', () => {
     renderer = undefined;
   });
 
-  it('truncates both identifier segments without shrinking the status icon', () => {
+  it.each([
+    { weight: undefined, nameTone: undefined, expectedNameTone: 'muted' },
+    { weight: 'semibold', nameTone: 'default', expectedNameTone: 'default' },
+  ] as const)('uses weight $weight and name tone $expectedNameTone', ({ weight, nameTone, expectedNameTone }) => {
     act(() => {
       renderer = create(
         <Nip05Label
           nip05="a-very-long-local-name@a-very-long-domain.example"
           pubkey="pubkey"
+          weight={weight}
+          nameTone={nameTone}
         />,
       );
     });
@@ -49,7 +54,9 @@ describe('Nip05Label layout', () => {
     const badgeContainer = root.findAllByType(View)[1];
 
     expect(root.props.style).toMatchObject({ flexShrink: 1, minWidth: 0 });
+    expect(local.props.tone).toBe(expectedNameTone);
     for (const segment of [local, domain]) {
+      expect(segment.props.weight).toBe(weight);
       expect(segment.props).toMatchObject({ numberOfLines: 1, ellipsizeMode: 'tail' });
       expect(segment.props.style).toMatchObject({ flexShrink: 1, minWidth: 0 });
     }

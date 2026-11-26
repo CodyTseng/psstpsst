@@ -387,7 +387,9 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
                 icon={<AtSign size={22} color={c.text} strokeWidth={iconStrokeWidth.default} />}
                 title={t('profile.nip05')}
                 value={nip05}
-                belowValue={<Nip05Label nip05={nip05} pubkey={pubkey} />}
+                belowValue={
+                  <Nip05Label nip05={nip05} pubkey={pubkey} weight="semibold" nameTone="default" />
+                }
                 valueTone="default"
                 valuePlacement="below"
                 valueEllipsizeMode="middle"

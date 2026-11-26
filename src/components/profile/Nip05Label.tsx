@@ -6,7 +6,7 @@ import { View } from 'react-native';
 import { AppText } from '@/components/common/AppText';
 import { queryNip05Profile } from '@/lib/nostr/nip05';
 import { iconStrokeWidth } from '@/theme/icons';
-import { spacing, useThemeColors } from '@/theme';
+import { spacing, useThemeColors, type FontWeight } from '@/theme';
 
 type Status = 'pending' | 'verified' | 'failed';
 
@@ -21,7 +21,17 @@ const cache = new Map<string, boolean>();
  * the profile's. Verified uses an accent check badge; failed/unreachable uses
  * a muted question mark of the same size. Used on both the user's own and others' profiles.
  */
-export function Nip05Label({ nip05, pubkey }: { nip05: string; pubkey: string }) {
+export function Nip05Label({
+  nip05,
+  pubkey,
+  weight,
+  nameTone = 'muted',
+}: {
+  nip05: string;
+  pubkey: string;
+  weight?: FontWeight;
+  nameTone?: 'default' | 'muted';
+}) {
   const c = useThemeColors();
   const cacheKey = `${nip05.toLowerCase()}|${pubkey}`;
   const [status, setStatus] = useState<Status>(() =>
@@ -76,7 +86,8 @@ export function Nip05Label({ nip05, pubkey }: { nip05: string; pubkey: string })
       {showLocal ? (
         <AppText
           variant="body"
-          tone="muted"
+          weight={weight}
+          tone={nameTone}
           numberOfLines={1}
           ellipsizeMode="tail"
           style={{ flexShrink: 1, minWidth: 0 }}
@@ -97,6 +108,7 @@ export function Nip05Label({ nip05, pubkey }: { nip05: string; pubkey: string })
       </View>
       <AppText
         variant="body"
+        weight={weight}
         numberOfLines={1}
         ellipsizeMode="tail"
         style={{ color: accentColor, flexShrink: 1, minWidth: 0 }}
