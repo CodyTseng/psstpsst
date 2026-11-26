@@ -5,7 +5,6 @@ import { BellOff } from '@solar-icons/react-native/category/notifications/Linear
 import { DirectionalChevron as ChevronRight } from '@/components/common/DirectionalChevron';
 import { ChatRound as MessageCircle } from '@solar-icons/react-native/category/messages/Linear/ChatRound';
 import { Pen as Pencil } from '@solar-icons/react-native/category/messages/Linear/Pen';
-import Timer from 'lucide-react-native/icons/timer';
 import Check from 'lucide-react-native/icons/check';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
 import { ForbiddenCircle as Ban } from '@solar-icons/react-native/category/ui/Linear/ForbiddenCircle';
@@ -36,9 +35,9 @@ import { BottomSheet } from '@/components/common/BottomSheet';
 import { InputDialog } from '@/components/common/InputDialog';
 import { IconButton } from '@/components/common/IconButton';
 import { ListGroup } from '@/components/common/ListGroup';
-import { RadioIndicator } from '@/components/common/radio-indicator';
 import { ListRow } from '@/components/common/ListRow';
 import { ChatWallpaperRow } from '@/components/settings/chat-wallpaper-row';
+import { MessageExpirySetting } from '@/components/settings/message-expiry-setting';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { SelfBadge } from '@/components/common/SelfBadge';
 import { Nip05Label } from '@/components/profile/Nip05Label';
@@ -53,13 +52,12 @@ import { useCommonGroups } from '@/hooks/use-common-groups';
 import { useProfile } from '@/hooks/use-profile';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { resolveName } from '@/lib/nostr/display-name';
-import { DISAPPEARING_DURATIONS } from '@/lib/nostr/disappearing-message';
 import { pubkeyToNpub } from '@/lib/nostr/keys';
 import { IS_ELECTRON } from '@/lib/platform';
 import { shareContactContent } from '@/lib/share/contact-card';
 import { platform } from '@/platform';
 import { addContact, removeContact, setPetname } from '@/services/contact/contact.service';
-import { setConversationDisappearingDuration, setConversationMuted } from '@/services/conversation/conversation-prefs.service';
+import { setConversationMuted } from '@/services/conversation/conversation-prefs.service';
 import { KIND_CHAT } from '@/services/crypto/nip17-gift-wrap';
 import { blockUser, unblockUser } from '@/services/dm/block.service';
 import { useActiveAccount } from '@/stores/active-account.store';
@@ -117,10 +115,6 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
     resolveName({ petname, displayName: profile?.displayName, name: profile?.name }) ??
     t('profile.unnamed');
 
-  const duration = conversation?.disappearAfterSeconds ?? null;
-  const [durationOpen, setDurationOpen] = useState(false);
-  const [savingDuration, setSavingDuration] = useState(false);
-  const [durationError, setDurationError] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [petnameInput, setPetnameInput] = useState('');
@@ -129,20 +123,6 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
   const [busyContact, setBusyContact] = useState(false);
   const [busyBlock, setBusyBlock] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-
-  async function saveDuration(seconds: number | null) {
-    if (savingDuration) return;
-    setSavingDuration(true);
-    setDurationError(false);
-    try {
-      await setConversationDisappearingDuration(accountPubkey, conversationKey, seconds);
-      setDurationOpen(false);
-    } catch {
-      setDurationError(true);
-    } finally {
-      setSavingDuration(false);
-    }
-  }
 
   async function copyNpub() {
     await copyText(npub, 'npub');
@@ -446,13 +426,8 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
           <View style={{ marginTop: spacing.xl }}>
             <ListGroup>
               <ChatWallpaperRow conversationKey={conversationKey} />
-              <ListRow
-                icon={<Timer size={22} color={c.text} />}
-                title={t('chat.disappearing.title')}
-                value={conversationLoaded ? t(duration === null ? 'chat.disappearing.off' : `chat.disappearing.duration_${duration}`) : undefined}
-                trailing={<ChevronRight size={18} color={c.textMuted} />}
-                onPress={conversationLoaded ? () => { setDurationError(false); setDurationOpen(true); } : undefined}
-              />
+              <MessageExpirySetting accountPubkey={accountPubkey} conversationKey={conversationKey}
+                legacyDuration={conversation?.disappearAfterSeconds} disabled={!conversationLoaded} />
               {hasConversationContent ? (
                 <ListRow
                   icon={<Search size={22} color={c.text} />}
@@ -486,6 +461,8 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
           <View style={{ marginTop: spacing['2xl'] }}>
             <ListGroup>
               <ChatWallpaperRow conversationKey={conversationKey} />
+              <MessageExpirySetting accountPubkey={accountPubkey} conversationKey={conversationKey}
+                legacyDuration={conversation?.disappearAfterSeconds} disabled={!conversationLoaded} />
               {commonGroupsLoaded && commonGroups.length > 0 ? (
                 <ListRow
                   icon={<Users size={22} color={c.text} strokeWidth={iconStrokeWidth.default} />}
@@ -570,30 +547,6 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
         name={profileName}
         nip05={profile?.nip05}
       />
-
-      {!isSelf ? (
-        <BottomSheet
-          visible={durationOpen}
-          title={t('chat.disappearing.title')}
-          onClose={() => setDurationOpen(false)}
-          contentStyle={{ gap: spacing.md }}
-        >
-          <AppText variant="caption" tone="muted">{t('chat.disappearing.hint')}</AppText>
-          <ListGroup>
-            {[null, ...DISAPPEARING_DURATIONS].map(seconds => (
-              <ListRow
-                key={seconds ?? 'off'}
-                title={t(seconds === null ? 'chat.disappearing.off' : `chat.disappearing.duration_${seconds}`)}
-                active={duration === seconds}
-                selectionMode="single"
-                trailing={<RadioIndicator selected={duration === seconds} />}
-                onPress={savingDuration ? undefined : () => void saveDuration(seconds)}
-              />
-            ))}
-          </ListGroup>
-          {durationError ? <AppText tone="muted">{t('chat.disappearing.save_failed')}</AppText> : null}
-        </BottomSheet>
-      ) : null}
 
       <ReportUserSheet
         visible={reportOpen}

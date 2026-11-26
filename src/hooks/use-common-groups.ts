@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { db } from '@/db/client';
 import { conversations, messages, savedGroups } from '@/db/schema';
 import { useLiveQuery } from '@/db/use-live-query';
-import type { ConversationWithLast } from '@/hooks/use-conversations';
+import { conversationLastMessageJoin, type ConversationWithLast } from '@/hooks/use-conversations';
 import { rememberConversationSnapshot } from '@/lib/conversation/conversation-snapshot-cache';
 
 function selectSavedGroups(accountPubkey: string) {
@@ -24,13 +24,7 @@ function selectSavedGroups(accountPubkey: string) {
         eq(conversations.groupId, savedGroups.groupId),
       ),
     )
-    .leftJoin(
-      messages,
-      and(
-        eq(messages.accountPubkey, conversations.accountPubkey),
-        eq(messages.id, conversations.lastMessageId),
-      ),
-    )
+    .leftJoin(messages, conversationLastMessageJoin)
     .where(eq(savedGroups.accountPubkey, accountPubkey))
     .orderBy(
       desc(conversations.pinned),
@@ -88,13 +82,7 @@ export function useCommonGroups(
         lastMessageSenderPubkey: messages.senderPubkey,
       })
       .from(conversations)
-      .leftJoin(
-        messages,
-        and(
-          eq(messages.accountPubkey, conversations.accountPubkey),
-          eq(messages.id, conversations.lastMessageId),
-        ),
-      )
+      .leftJoin(messages, conversationLastMessageJoin)
       .where(
         and(
           eq(conversations.accountPubkey, accountPubkey),

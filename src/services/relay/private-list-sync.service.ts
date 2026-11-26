@@ -3,7 +3,6 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db, type Database } from '@/db/client';
 import { privateListSyncState } from '@/db/schema';
 
-import { buildSigner } from '../account/account.service';
 import type { Signer } from '../signer/signer.interface';
 import { enqueueConfigurationEvent } from './configuration-publish.service';
 import { getReplaceableEvent } from './replaceable-events.service';
@@ -32,6 +31,7 @@ type Publication = {
   title?: string;
   readTags?: (tx: Database) => Promise<string[][]>;
   validateTags?: (tags: string[][]) => string[][];
+  reconcileCachedEvent?: (event: import('nostr-tools').Event, signer: Signer) => Promise<void>;
   onCommitted?: (event: import('nostr-tools').Event) => void;
   signer?: Signer;
   eventTags?: string[][];
@@ -69,18 +69,31 @@ export function queuePrivateListPublication(publication: Publication): void {
 
 async function publish(publication: Publication): Promise<void> {
   const { accountPubkey, dTag, kind = 30000 } = publication;
-  const signer = publication.signer ?? (await buildSigner(accountPubkey));
+  let signer = publication.signer;
+  if (!signer) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- the account service also initializes config consumers
+    const { buildSigner } = require('../account/account.service') as typeof import('../account/account.service');
+    signer = await buildSigner(accountPubkey);
+  }
   if (!signer.nip44Encrypt) return;
-  const snapshot = await db.transaction(async (tx) => {
+  const readSnapshot = () => db.transaction(async (tx) => {
     const state = await readPrivateListState(accountPubkey, dTag, tx, kind);
     if (!state?.dirty) return null;
     const tags = state.draft ?? await publication.readTags?.(tx);
     return tags ? { state, tags: publication.validateTags?.(tags) ?? tags } : null;
   });
+  let snapshot = await readSnapshot();
   if (!snapshot) return;
   const previous = await getReplaceableEvent({ pubkey: accountPubkey, kind, dTag });
   if (previous && publication.sourceEventId && previous.id !== publication.sourceEventId) return;
-  const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(snapshot.tags));
+  if (previous && publication.reconcileCachedEvent && previous.id !== snapshot.state.eventId) {
+    // Startup can cache a remote event before applying its plaintext.
+    await publication.reconcileCachedEvent(previous, signer);
+    snapshot = await readSnapshot();
+    if (!snapshot) return;
+  }
+  const { state, tags } = snapshot;
+  const content = await signer.nip44Encrypt(accountPubkey, JSON.stringify(tags));
   const event = await signer.signEvent({
     kind,
     tags: publication.eventTags ?? [['d', dTag], ...(publication.title ? [['title', publication.title]] : [])],
@@ -89,11 +102,11 @@ async function publish(publication: Publication): Promise<void> {
   });
   if (event.pubkey !== accountPubkey) throw new Error('Private-list signer does not match the account.');
   const committed = await enqueueConfigurationEvent(event, async (_event, tx) => {
-    if ((await readPrivateListState(accountPubkey, dTag, tx, kind))?.revision !== snapshot.state.revision) {
+    if ((await readPrivateListState(accountPubkey, dTag, tx, kind))?.revision !== state.revision) {
       throw new Error('Private-list revision changed while signing.');
     }
     await tx.update(privateListSyncState).set({ dirty: false, eventId: event.id, draft: null,
-      ...(snapshot.state.draft ? { snapshot: { eventId: event.id, tags: snapshot.tags } } : {}) }).where(and(
+      ...(state.draft ? { snapshot: { eventId: event.id, tags } } : {}) }).where(and(
       eq(privateListSyncState.accountPubkey, accountPubkey),
       eq(privateListSyncState.kind, kind),
       eq(privateListSyncState.dTag, dTag),

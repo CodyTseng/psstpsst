@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "Nachrichteninfo",
     "time": "Zeit",
+    "expires_at": "Verschwindet am",
     "received_from": "Empfangen von",
     "received_from_unknown": "Nicht aufgezeichnet",
     "delivered_to": "Zugestellt an",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Selbstlöschende Nachrichten",
+      "title": "Nachrichtenablauf",
+      "default_title": "Standard-Nachrichtenablauf",
+      "use_default": "Standard verwenden ({{duration}})",
+      "custom": "Benutzerdefinierte Dauer",
       "off": "Aus",
-      "duration_30": "30 Sekunden",
-      "duration_300": "5 Minuten",
-      "duration_3600": "1 Stunde",
-      "duration_86400": "24 Stunden",
-      "duration_604800": "7 Tage",
-      "hint": "Gilt für neue Textnachrichten, die du von diesem Gerät sendest. Dein Timer startet beim Senden. Der Timer der anderen Person startet, sobald sie die Nachricht sieht.",
+      "hint": "Neue Nachrichten in Einzelchats laufen nach dieser Zeit ab dem Senden ab. Die Einstellungen werden verschlüsselt zwischen deinen Geräten synchronisiert.",
       "save_failed": "Der Timer konnte nicht gespeichert werden. Versuche es erneut."
     },
     "input_placeholder": "Nachricht schreiben",

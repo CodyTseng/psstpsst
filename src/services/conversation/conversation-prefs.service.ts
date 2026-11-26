@@ -1,10 +1,9 @@
-import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import type { Event } from 'nostr-tools';
 
 import { db, type Database } from '@/db/client';
 import { conversations } from '@/db/schema';
-import { DISAPPEARING_DURATIONS } from '@/lib/nostr/disappearing-message';
-import { groupConversationKey, isValidGroupId, isValidMemberPubkey } from '@/lib/nostr/group-messaging';
+import { groupConversationKey, isValidGroupId } from '@/lib/nostr/group-messaging';
 import { canApplyConfigurationEvent } from '../relay/configuration-publish.service';
 import { markPrivateListDirty, queuePrivateListPublication } from '../relay/private-list-sync.service';
 import type { Signer } from '../signer/signer.interface';
@@ -244,31 +243,4 @@ export async function applyMutedEvent(
       sourceEventId: event.id,
     });
   }
-}
-
-/** The default applies only to future text authored on this device. */
-export async function setConversationDisappearingDuration(
-  accountPubkey: string,
-  peer: string,
-  seconds: number | null,
-): Promise<void> {
-  if (!accountPubkey || accountPubkey === peer || !isValidMemberPubkey(peer) ||
-      (seconds !== null && !DISAPPEARING_DURATIONS.some(duration => duration === seconds))) {
-    throw new Error('Invalid disappearing message preference');
-  }
-  const now = Date.now();
-  await db.insert(conversations).values({
-    accountPubkey,
-    conversationKey: peer,
-    createdAt: Math.floor(now / 1000),
-    createdOrderAt: now,
-    updatedAt: Math.floor(now / 1000),
-    updatedOrderAt: now,
-    deleted: true,
-    disappearAfterSeconds: seconds,
-  }).onConflictDoUpdate({
-    target: [conversations.accountPubkey, conversations.conversationKey],
-    set: { disappearAfterSeconds: seconds },
-    setWhere: and(eq(conversations.deliveryKind, 'relay'), isNull(conversations.groupId)),
-  });
 }

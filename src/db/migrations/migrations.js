@@ -1,3 +1,4 @@
+import m0096 from './0096_disable-group-message-expiry.sql';
 import m0095 from './0095_repair-relay-settings.sql';
 import m0094 from './0094_reaction-retractions.sql';
 import m0093 from './0093_reaction-previews.sql';
@@ -197,6 +198,7 @@ m0091,
 m0092,
 m0093,
 m0094,
-m0095
+m0095,
+m0096
     }
   }

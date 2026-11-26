@@ -99,7 +99,8 @@ export async function recordNotificationEvent(tx: Database, input: {
 
 async function stillEligible(tx: Database, row: ClaimedNotificationEvent): Promise<boolean> {
   const { conversation, message, event } = row;
-  if (conversation.deleted || conversation.muted || message.deleted) return false;
+  if (conversation.deleted || conversation.muted || message.deleted ||
+      (message.expiresAt != null && message.expiresAt <= Date.now())) return false;
   if (event.kind === 'reaction') {
     return conversation.reactionPreviewPending &&
       await reactionTargetsOwnVisibleMessage(tx, conversation, message.rumor);

@@ -1,3 +1,4 @@
+import { isExpiredMessage, messageExpiration } from '@/lib/nostr/disappearing-message';
 import type { Rumor } from '@/db/schema/types';
 import i18n from '@/i18n';
 import { scheduleBackgroundDeadline } from '@/lib/background-deadline';
@@ -107,7 +108,7 @@ class NotificationService {
   private pendingAccountPubkey: string | null = null;
   private pendingCount = 0;
   private pendingRequestCount = 0;
-  private pendingReactions = new Map<string, NotificationCandidate>();
+  private pendingTracked = new Map<string, NotificationCandidate>();
   private latestPendingAccepted: NotificationCandidate | null = null;
   /** Only the newest ordinary messages are needed to render their aggregate. */
   private latestPending: NotificationCandidate | null = null;
@@ -302,8 +303,8 @@ class NotificationService {
       }
       for (const candidate of qualifying) {
         const rumor = candidate.rumor;
-        if (rumor.kind === KIND_REACTION) {
-          this.pendingReactions.set(rumor.id, candidate);
+        if (rumor.kind === KIND_REACTION || messageExpiration(rumor, candidate.conversation.deliveryKind) !== null) {
+          this.pendingTracked.set(rumor.id, candidate);
           continue;
         }
         this.pendingCount += 1;
@@ -432,7 +433,7 @@ class NotificationService {
   /** Post one privacy-configured notification for everything in the window. */
   private async flushAggregate(): Promise<void> {
     const epoch = this.notificationEpoch;
-    if (this.pendingCount === 0 && this.pendingReactions.size === 0) return;
+    if (this.pendingCount === 0 && this.pendingTracked.size === 0) return;
     if (!platform.notifications.isAvailable()) return;
     // The user may return during the aggregation window.
     if (!platform.notifications.shouldNotifyNow()) return;
@@ -451,7 +452,7 @@ class NotificationService {
 
     // A request preference change during the window leaves accepted alerts intact.
     const hasRequests = this.pendingRequestCount > 0 ||
-      [...this.pendingReactions.values()].some(candidate => candidate.kind === 'request');
+      [...this.pendingTracked.values()].some(candidate => candidate.kind === 'request');
     const quietRequests = hasRequests && await getQuietMessageRequests();
     if (quietRequests) {
       this.pendingCount -= this.pendingRequestCount;
@@ -466,26 +467,26 @@ class NotificationService {
     }
 
     if (quietRequests) {
-      for (const [id, candidate] of this.pendingReactions) {
-        if (candidate.kind === 'request') this.pendingReactions.delete(id);
+      for (const [id, candidate] of this.pendingTracked) {
+        if (candidate.kind === 'request') this.pendingTracked.delete(id);
       }
     }
-    await this.pruneRetractedReactions(accountPubkey);
-    if (this.pendingCount === 0 && this.pendingReactions.size === 0) return;
+    await this.pruneUnavailableMessages(accountPubkey);
+    if (this.pendingCount === 0 && this.pendingTracked.size === 0) return;
 
     const badgeCount = await getUnreadIndicatorsEnabled() ? await getMainInboxUnreadCount(accountPubkey) : 0;
     let dismissed = false;
     for (;;) {
       let latestPending = this.latestPending;
-      for (const candidate of this.pendingReactions.values()) {
+      for (const candidate of this.pendingTracked.values()) {
         if (!latestPending || this.isNewer(candidate.rumor, latestPending.rumor)) latestPending = candidate;
       }
-      const count = this.pendingCount + this.pendingReactions.size;
+      const count = this.pendingCount + this.pendingTracked.size;
       if (!latestPending || count === 0) return;
       const content = await buildNotificationContent(latestPending.rumor, count, accountPubkey, {
         conversation: latestPending.conversation,
         preferences: this.contentPreferences,
-        hasReactions: this.pendingReactions.size > 0,
+        hasReactions: [...this.pendingTracked.values()].some(candidate => candidate.rumor.kind === KIND_REACTION),
       });
       if (!dismissed) {
         // Replace the single notification surface owned by this app.
@@ -493,9 +494,9 @@ class NotificationService {
         dismissed = true;
       }
       const currentAccountPubkey = await getActiveAccountPubkey();
-      // A delete committed during preview I/O can change both the count and
-      // the latest valid candidate. Each retry removes at least one reaction.
-      if (await this.pruneRetractedReactions(accountPubkey)) continue;
+      // A deletion or expiry during preview I/O can change the count and
+      // the latest valid candidate. Each retry removes at least one entry.
+      if (await this.pruneUnavailableMessages(accountPubkey)) continue;
       if (epoch !== this.notificationEpoch ||
         (latestPending.conversation.deliveryKind === 'relay' && this.isRelayReceiveBlocked(accountPubkey)) ||
         !platform.notifications.shouldNotifyNow() ||
@@ -510,12 +511,20 @@ class NotificationService {
     }
   }
 
-  private async pruneRetractedReactions(accountPubkey: string): Promise<boolean> {
-    if (this.pendingReactions.size === 0) return false;
-    const ids = [...this.pendingReactions.keys()];
-    const live = await getLiveNotificationReactionIds(accountPubkey, ids);
-    for (const id of ids) if (!live.has(id)) this.pendingReactions.delete(id);
-    return live.size !== ids.length;
+  private async pruneUnavailableMessages(accountPubkey: string): Promise<boolean> {
+    if (this.pendingTracked.size === 0) return false;
+    const reactionIds = [...this.pendingTracked.values()]
+      .filter(candidate => candidate.rumor.kind === KIND_REACTION).map(candidate => candidate.rumor.id);
+    const live = reactionIds.length ? await getLiveNotificationReactionIds(accountPubkey, reactionIds) : null;
+    let removed = false;
+    for (const [id, candidate] of this.pendingTracked) {
+      if (isExpiredMessage(candidate.rumor, candidate.conversation.deliveryKind) ||
+          (candidate.rumor.kind === KIND_REACTION && !live?.has(id))) {
+        this.pendingTracked.delete(id);
+        removed = true;
+      }
+    }
+    return removed;
   }
 
   private clearPendingState(): void {
@@ -532,7 +541,7 @@ class NotificationService {
     this.pendingAccountPubkey = null;
     this.pendingCount = 0;
     this.pendingRequestCount = 0;
-    this.pendingReactions.clear();
+    this.pendingTracked.clear();
     this.latestPendingAccepted = null;
     this.latestPending = null;
   }

@@ -2,7 +2,7 @@ import { shortCustomEmojiMessage } from '@/lib/emoji/custom-message';
 import { shortEmojiMessage } from '@/lib/emoji/short-message';
 import { customEmojisFromMessageTags } from '@/lib/nostr/custom-emoji';
 import { embeddedMediaByUrl, type EmbeddedMedia } from '@/lib/nostr/embedded-media';
-import { disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
+import { isDisappearingMessage } from '@/lib/nostr/disappearing-message';
 import { findFileMeta } from '@/lib/nostr/file-tags';
 import {
   parseMessageSegments,
@@ -89,7 +89,7 @@ export function prepareMessagePresentation(
   params: PrepareParams,
 ): PreparedMessagePresentation {
   const disappearing = params.disappearing ??
-    (disappearingMessageDuration({ kind: params.kind, tags: params.tags ?? [] }) !== null);
+    isDisappearingMessage({ kind: params.kind, tags: params.tags ?? [] });
   if (disappearing) return buildPresentation({ ...params, disappearing });
   if (!params.messageId) return buildPresentation(params);
   const cached = preparedByMessageId.get(params.messageId);

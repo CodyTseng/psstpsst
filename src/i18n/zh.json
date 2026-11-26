@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "消息详情",
     "time": "时间",
+    "expires_at": "过期时间",
     "received_from": "来源中继",
     "received_from_unknown": "未记录",
     "delivered_to": "送达至",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "阅后即焚",
+      "title": "消息有效期",
+      "default_title": "默认消息有效期",
+      "use_default": "使用默认值（{{duration}}）",
+      "custom": "自定义时长",
       "off": "关闭",
-      "duration_30": "30 秒",
-      "duration_300": "5 分钟",
-      "duration_3600": "1 小时",
-      "duration_86400": "24 小时",
-      "duration_604800": "7 天",
-      "hint": "适用于你从此设备发送的新文字消息。你的倒计时从发送时开始，对方的倒计时从看到消息时开始。",
+      "hint": "你在一对一聊天中发送的新消息从发送时开始计时，到期后隐藏。设置会加密同步到你的设备。",
       "save_failed": "无法保存倒计时，请重试。"
     },
     "input_placeholder": "输入消息",

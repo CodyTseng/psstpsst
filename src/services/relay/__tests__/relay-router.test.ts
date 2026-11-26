@@ -193,6 +193,12 @@ it('also routes key announcements to current inbox relays', async () => {
     .toEqual(['wss://dm.example/', 'wss://write.example/', 'wss://empty-marker.example/', ...DISCOVERY_RELAYS.map(normalizeRelayUrl)]);
 });
 
+it('publishes encrypted message expiry settings only to configured write relays', async () => {
+  expect(await configurationPublishRelays({
+    ...event('alice'), kind: 30078, tags: [['d', 'psstpsst-message-expiry']],
+  })).toEqual(['wss://write.example/', 'wss://empty-marker.example/']);
+});
+
 it('publishes a write-relay edit to its old and new write relays plus discovery', async () => {
   expect(await configurationPublishRelays({ ...event('alice'), kind: 10002, tags: [['r', 'wss://new.example/', 'write']] }))
     .toEqual(['wss://write.example/', 'wss://empty-marker.example/', 'wss://new.example/', ...DISCOVERY_RELAYS.map(normalizeRelayUrl)]);

@@ -68,6 +68,8 @@ type Props<ItemT = never> = {
    * close/title/action header below the grabber. Omit only for a short,
    * self-explanatory action sheet. */
   title?: string;
+  /** Show a back button in the header when a step can return inside the sheet. */
+  onHeaderBack?: () => void;
   /** One optional title-bar action or passive account identity indicator. */
   headerAction?: ReactNode;
   /** Optional non-scrolling business content below the standard header. It
@@ -183,6 +185,7 @@ function BottomSheetSurface<ItemT = never>({
   showHandle = true,
   maxWidth = contentWidth.sheet,
   title,
+  onHeaderBack,
   headerAction,
   fixedSubheader,
   fixedFooter,
@@ -584,7 +587,7 @@ function BottomSheetSurface<ItemT = never>({
       {title != null ? (
         <GestureDetector gesture={sheetHeaderPan}>
           <View>
-            <SheetHeader title={title} onClose={onClose} action={headerAction} showHandle={showHandle} />
+            <SheetHeader title={title} onClose={onClose} onBack={onHeaderBack} action={headerAction} showHandle={showHandle} />
           </View>
         </GestureDetector>
       ) : null}

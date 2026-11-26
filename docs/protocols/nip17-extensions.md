@@ -14,7 +14,7 @@ announcement and synchronization are specified separately in the
 | kind `13` seal | `n` tag | Identify the sender's encryption key |
 | kind `1059` gift wrap | identity-key `p` tag | Route a split-key envelope |
 | message rumor | `ms` tag | Add the millisecond component of creation time |
-| direct text rumor | `disappear-after` tag | Set a local lifetime on each side |
+| direct chat, file, and reaction rumors | NIP-40 `expiration` tag | Set an absolute expiry deadline |
 | group rumor | `h` tag | Keep one group identity across membership changes |
 | group rumor | `action` tag | Express creation, membership changes, and renaming |
 
@@ -287,35 +287,22 @@ Clients that ignore `h` and `action` can still decrypt ordinary NIP-17 content,
 but may split one stable group into multiple rooms when its `p` tags change and
 may display empty action rumors as messages.
 
-## Disappearing direct messages
+## Message expiration
 
-A non-empty kind `14` rumor addressed to one other account may carry a timer
-inside its encrypted tags:
+A direct kind `14` chat, kind `15` file, or kind `7` reaction may carry a
+[NIP-40](https://github.com/nostr-protocol/nips/blob/master/40.md)
+`["expiration", "<unix seconds>"]` tag. PsstPsst puts the deadline in the
+encrypted rumor. Relay envelope metadata remains unchanged. The same deadline
+applies to the sender, recipient, and their other devices. Nearby messages use
+the same inner tag. Senders omit the expiration tag from group rumors and
+receivers ignore it on all group rumors, including text, files, and reactions.
 
-```text
-["disappear-after", "<seconds>"]
-```
+Receivers discard rumors at or after their deadline before inserting a message
+row. Clients that already stored the rumor hide it at its deadline and clear
+local content and derived state. Automatic expiry creates no kind `5` event.
+Explicit deletion continues to follow the ordinary rules. Clients can still
+read legacy direct text carrying the relative `disappear-after` tag, including
+its existing first-view semantics for recipients. New messages only use NIP-40.
 
-Use the first tag. The value is a decimal integer from 1 through 604800 with
-no leading zero. Clients ignore malformed values and ignore this extension
-for groups, notes to self, files, reactions, and Nearby messages.
-
-The sender's deadline is the rumor's authenticated creation time, including
-`ms`, plus the duration. The recipient starts its own deadline on first
-sighting in the unobstructed foreground chat. The sighting occurs as soon as
-the visible portion of the bubble reaches half the smaller of the bubble
-height and the available chat viewport height. Receipt, notifications and
-conversation-list previews do not start that deadline. Each device persists
-its own absolute deadline. Clients do not exchange read receipts or use the
-NIP-40 expiration tag for these messages.
-
-At expiration, each account removes the local content and sends the ordinary
-kind `5` deletion request with itself as the sole `p` recipient. Manual deletion
-scoped to that account uses the same format. Other devices apply the ordinary
-deletion author checks, even when the request precedes the original message.
-Archives retain self-addressed requests independently of the original.
-The other party receives no deletion request when this account's timer ends.
-
-A client that ignores the timer can still render the original text. The
-extension does not revoke already published encrypted envelopes or copies
-made outside a participating client.
+The deadline is enforced by participating clients. It does not revoke published
+encrypted envelopes or copies made outside those clients.

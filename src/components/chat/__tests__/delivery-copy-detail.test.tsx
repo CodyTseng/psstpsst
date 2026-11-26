@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppButton } from '@/components/common/AppButton';
 import { AppText } from '@/components/common/AppText';
@@ -8,6 +8,7 @@ import { EdgeFade } from '@/components/common/EdgeFade';
 import type { DeliveryCopy, MessageDelivery } from '@/stores/delivery-status.store';
 import { useMessageDelivery } from '@/hooks/use-message-deliveries';
 import { spacing, uiDensity } from '@/theme';
+import { darkPalette, lightPalette } from '@/theme/palette';
 
 import {
   DeliveryCopyDetail,
@@ -27,6 +28,10 @@ jest.mock('lucide-react-native/icons/chevron-up', () => ({
   default: () => null,
 }), { virtual: true });
 jest.mock('lucide-react-native/icons/check', () => ({
+  __esModule: true,
+  default: () => null,
+}), { virtual: true });
+jest.mock('lucide-react-native/icons/timer', () => ({
   __esModule: true,
   default: () => null,
 }), { virtual: true });
@@ -56,12 +61,13 @@ jest.mock('@/hooks/use-message-deliveries', () => ({
 jest.mock('@/hooks/use-clipboard', () => ({
   useClipboard: () => ({ copyText: jest.fn(), copied: false, resetCopied: jest.fn() }),
 }));
-jest.mock('@/lib/time', () => ({ formatDetailTimestamp: () => '' }));
+jest.mock('@/lib/time', () => ({ formatDetailTimestamp: (seconds: number) => `time ${seconds}` }));
+let mockThemePreference: 'light' | 'dark' = 'dark';
 jest.mock('@/stores/theme.store', () => ({
   useThemeStore: (selector: (state: {
     accent: 'blue';
-    preference: 'dark';
-  }) => unknown) => selector({ accent: 'blue', preference: 'dark' }),
+    preference: 'light' | 'dark';
+  }) => unknown) => selector({ accent: 'blue', preference: mockThemePreference }),
 }));
 jest.mock('@/hooks/use-profile', () => ({ useProfile: () => null }));
 jest.mock('@/hooks/use-contacts', () => ({ useContact: () => null }));
@@ -169,6 +175,46 @@ describe('DeliverySummaryRow', () => {
         .some((button) => button.props.label === 'delivery.resend'),
     ).toBe(false);
   });
+});
+
+it.each([
+  ['light', lightPalette],
+  ['dark', darkPalette],
+] as const)('uses matching rows with the disappearance deadline first in %s mode', (preference, palette) => {
+  mockThemePreference = preference;
+  const rumor = { id: 'timed', pubkey: 'peer', kind: 14, tags: [], content: 'hello', created_at: 100 };
+  const render = (rumorId: string | null, expiresAt: number | null) => (
+    <MessageDetailSheet accountPubkey="self" rumorId={rumorId} rumor={rumor}
+      expiresAt={expiresAt} isSelf={false} onClose={jest.fn()} />
+  );
+  let renderer!: ReactTestRenderer;
+  act(() => { renderer = create(render(rumor.id, null)); });
+  const text = () => renderer.root.findAllByType(AppText).map(node => node.props.children);
+  try {
+    expect(text()).not.toContain('message_detail.expires_at');
+    act(() => renderer.update(render(rumor.id, 130_000)));
+    expect(text().slice(0, 4)).toEqual([
+      'message_detail.expires_at', 'time 130', 'message_detail.time', 'time 100',
+    ]);
+    const timestampRows = renderer.root.findAllByType(View).filter(
+      node => StyleSheet.flatten(node.props.style)?.backgroundColor === palette.surfaceMuted,
+    );
+    expect(timestampRows.slice(0, 2).map(row => ({
+      direction: StyleSheet.flatten(row.props.style).flexDirection,
+      text: row.findAllByType(AppText).map(node => node.props.children),
+      tone: row.findAllByType(AppText)[1].props.tone,
+    }))).toEqual([
+      { direction: 'row', text: ['message_detail.expires_at', 'time 130'], tone: 'danger' },
+      { direction: 'row', text: ['message_detail.time', 'time 100'], tone: 'subtle' },
+    ]);
+    act(() => renderer.update(render(null, null)));
+    expect(text()).toContain('time 130');
+    act(() => renderer.update(render('ordinary', null)));
+    expect(text()).not.toContain('message_detail.expires_at');
+  } finally {
+    act(() => renderer.unmount());
+    mockThemePreference = 'dark';
+  }
 });
 
 describe('persistent message resend', () => {

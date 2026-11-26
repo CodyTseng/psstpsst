@@ -58,6 +58,10 @@ let mockAppState: 'active' | 'background' = 'active';
 
 const fakeSigner = { nip44Encrypt: jest.fn(), nip44Decrypt: jest.fn() };
 
+jest.mock('../../conversation/message-expiry-sync', () => ({
+  applyMessageExpirySettingsEvent: jest.fn(async () => {}),
+  resumeMessageExpiryPublication: jest.fn(async () => {}),
+}));
 jest.mock('../../relay/configuration-publish.service', () => ({ canApplyConfigurationEvent: async () => true }));
 
 jest.mock('@/platform', () => ({
@@ -296,6 +300,7 @@ describe('selfEventStream', () => {
     mockHealthySubscriptions.add('self.write');
     expect(stream.isHealthy()).toBe(false);
     mockHealthySubscriptions.add('self.discovery');
+    mockHealthySubscriptions.add('self.message-expiry');
     expect(stream.isHealthy()).toBe(true);
     stream.destroy();
     expect(stream.isHealthy()).toBe(false);
@@ -311,6 +316,7 @@ describe('selfEventStream', () => {
       'self.dm.keys',
       'self.write',
       'self.discovery',
+      'self.message-expiry',
     ]);
 
     // URLs are normalized (trailing slash dropped) before set arithmetic.
@@ -345,6 +351,10 @@ describe('selfEventStream', () => {
       { kinds: [10002, 10050], authors: [SELF] },
     ]);
 
+    const expiry = findSub('self.message-expiry')!;
+    expect(expiry.relays).toEqual(['wss://shared.example/', 'wss://write-b.example/']);
+    expect(expiry.filters).toEqual([{ kinds: [30078], authors: [SELF], '#d': ['psstpsst-message-expiry'] }]);
+
     const discovery = findSub('self.discovery')!;
     expect(discovery.relays).toEqual([...DISCOVERY_RELAYS]);
     expect(discovery.filters).toEqual([
@@ -364,7 +374,7 @@ describe('selfEventStream', () => {
     mockLoadAccountWriteRelays = jest.fn(async () => [...DISCOVERY_RELAYS]);
     await startStream();
 
-    expect(mockSubscribeCalls.map((c) => c.label)).toEqual(['self.dm']);
+    expect(mockSubscribeCalls.map((c) => c.label)).toEqual(['self.dm', 'self.message-expiry']);
     expect(findSub('self.dm')!.filters).toContainEqual({ kinds: [30267], authors: [SELF], '#d': ['psstpsst-my-apps'] });
     const favorites = makeEvent(30267, 100, [['d', 'psstpsst-my-apps']]);
     deliver('self.dm', favorites); await flush();
@@ -425,6 +435,8 @@ describe('selfEventStream', () => {
     const blocked = makeEvent(30000, 100, [['d', 'psstpsst-blocked']]);
     const favorites = makeEvent(30267, 100, [['d', 'psstpsst-my-apps']]);
     const savedGroups = makeEvent(30078, 100, [['d', 'psstpsst-saved-groups']]);
+    const expiry = makeEvent(30078, 100, [['d', 'psstpsst-message-expiry']]);
+    deliver('self.message-expiry', expiry);
     const emoji = makeEvent(10030, 100);
     const media = makeEvent(10063, 100);
     for (const event of [favorites, muted, contacts, blocked, savedGroups, emoji, media]) {
@@ -439,6 +451,8 @@ describe('selfEventStream', () => {
     expect(mockApplyContactsEvent).toHaveBeenCalledTimes(1);
     expect(mockReplStore.has(JSON.stringify([SELF, 30078, 'psstpsst-saved-groups']))).toBe(false);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith(SELF, emoji);
+    expect(jest.requireMock('../../conversation/message-expiry-sync').applyMessageExpirySettingsEvent)
+      .toHaveBeenCalledWith(SELF, expiry, fakeSigner);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith(SELF, media);
   });
 
@@ -577,7 +591,7 @@ describe('selfEventStream', () => {
 
   it('re-starting unsubscribes the old REQs and reopens on the fresh relay sets', async () => {
     const stream = await startStream();
-    expect(mockSubscribeCalls).toHaveLength(4);
+    expect(mockSubscribeCalls).toHaveLength(5);
     const firstUnsubs = [...mockUnsubscribes];
     const staleOnEvent = mockSubscribeCalls.find((c) => c.label === 'self.dm')!.onEvent;
 
@@ -585,11 +599,12 @@ describe('selfEventStream', () => {
     await stream.start();
 
     for (const unsub of firstUnsubs) expect(unsub).toHaveBeenCalledTimes(1);
-    expect(mockSubscribeCalls).toHaveLength(7);
-    expect(mockSubscribeCalls.slice(4).map((c) => c.label)).toEqual([
+    expect(mockSubscribeCalls).toHaveLength(9);
+    expect(mockSubscribeCalls.slice(5).map((c) => c.label)).toEqual([
       'self.dm',
       'self.write',
       'self.discovery',
+      'self.message-expiry',
     ]);
     expect(findSub('self.dm')!.relays).toEqual(['wss://dm-c.example/']);
 
@@ -635,7 +650,7 @@ describe('selfEventStream', () => {
     deliver('self.dm', makeEvent(4455, 100));
     stream.destroy();
 
-    expect(mockUnsubscribes).toHaveLength(4);
+    expect(mockUnsubscribes).toHaveLength(5);
     for (const unsub of mockUnsubscribes) expect(unsub).toHaveBeenCalledTimes(1);
 
     deliver('self.dm', makeEvent(4454, 100));

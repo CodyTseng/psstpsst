@@ -1,4 +1,8 @@
 import { clearReactionPreviewForDeletedTarget, recordReactionPreview } from '@/services/conversation/reaction-preview.service';
+import { authoredExpirationTags } from '@/services/conversation/message-expiry-preference';
+import {
+  DISAPPEAR_AFTER_TAG, MESSAGE_EXPIRATION_TAG, isExpiredMessage, messageExpiryFields,
+} from '@/lib/nostr/disappearing-message';
 import { recordNotificationEvent } from '@/services/notifications/notification-events.service';
 import { and, asc, desc, eq, inArray, isNotNull, like, lte, ne, or, sql } from 'drizzle-orm';
 import { getEventHash, type Event, type EventTemplate } from 'nostr-tools';
@@ -3400,7 +3404,11 @@ class ProximityService {
     if (this.accountPubkey && this.accountPubkey !== accountPubkey) await this.stop(true);
     this.accountPubkey = accountPubkey;
     this.identity = identity;
-    const rumor = buildRumor(template, identity.proximityPubkey);
+    const expiration = await authoredExpirationTags(accountPubkey, peerPubkey, template.created_at);
+    const tags = template.tags.filter(([key]) => key !== DISAPPEAR_AFTER_TAG && key !== MESSAGE_EXPIRATION_TAG);
+    const orderTagIndex = tags.findIndex(([key]) => key === 'ms');
+    tags.splice(orderTagIndex === -1 ? tags.length : orderTagIndex, 0, ...expiration);
+    const rumor = buildRumor({ ...template, tags }, identity.proximityPubkey);
     if ((await this.storeRumor(rumor, peerPubkey)) !== true)
       throw new Error('Could not store Nearby message');
     const pendingPayload: PendingPublishPayload = {
@@ -3410,6 +3418,7 @@ class ProximityService {
     };
     const now = Math.floor(Date.now() / 1000);
     const queued = await db.transaction(async (tx) => {
+      if (isExpiredMessage(rumor, 'proximity')) return false;
       if (rumor.kind === KIND_REACTION && !await tx.select({ id: messages.id }).from(messages).where(and(
         eq(messages.accountPubkey, accountPubkey), eq(messages.id, rumor.id), eq(messages.deleted, false),
       )).get()) return false;
@@ -3460,6 +3469,8 @@ class ProximityService {
     if (rumor.kind === KIND_MESSAGE_DELETION) {
       return this.storeReactionRetraction(accountPubkey, peerPubkey, localPubkey, rumor, false);
     }
+    if (isExpiredMessage(rumor, 'proximity')) return false;
+    const expiry = messageExpiryFields(rumor, 'proximity');
     const orderAt = messageOrderAt(rumor);
     const replyToId = getReplyToId(rumor.tags) ?? null;
     const subject = getSubject(rumor.tags) ?? null;
@@ -3470,6 +3481,7 @@ class ProximityService {
     let wakeSystemNotifications = false;
     let deleted = false;
     const stored = await db.transaction(async (tx) => {
+      if (isExpiredMessage(rumor, 'proximity')) return false;
       const existing = await tx
         .select()
         .from(conversations)
@@ -3503,6 +3515,7 @@ class ProximityService {
           conversationKey: peerPubkey,
           senderPubkey: rumor.pubkey,
           kind: rumor.kind,
+          ...expiry,
           content: rumor.content,
           deleted,
           createdAt: rumor.created_at,
@@ -3519,7 +3532,7 @@ class ProximityService {
       if (inserted.length === 0) return false;
       if (rumor.kind === KIND_FILE) {
         await recordAttachmentMedia(tx, rumor, accountPubkey, peerPubkey);
-      } else if (rumor.kind === KIND_CHAT) {
+      } else if (rumor.kind === KIND_CHAT && expiry.expiresAt === null) {
         await recordEmbeddedMedia(tx, rumor, accountPubkey, peerPubkey);
       }
       if (reaction) {
@@ -3625,8 +3638,7 @@ class ProximityService {
       // of invalidating it and queueing a full window re-read.
       mergeStoredMessageIntoTail(accountPubkey, {
         deleted: false,
-        disappearAfterSeconds: null,
-        expiresAt: null,
+        ...expiry,
         accountPubkey,
         id: rumor.id!,
         conversationKey: peerPubkey,
@@ -3679,6 +3691,7 @@ class ProximityService {
       const retractionsSeen = new Set<string>();
       for (const { entry: row } of rows) {
         const payload = row.pendingPayload;
+        if (payload?.deliveryKind === 'proximity' && isExpiredMessage(payload.rumor, 'proximity')) continue;
         // An older peer may ignore a retraction. Await its acknowledgement
         // independently so it cannot hold up later chat messages.
         const seen = payload?.deliveryKind === 'proximity' && payload.rumor.kind === KIND_MESSAGE_DELETION
@@ -3735,9 +3748,8 @@ class ProximityService {
           this.pendingMessages.set(row.messageId, attempt);
           await this.sendSecure(
             context, ProximityPacketType.Message, encodeRumor(payload.rumor),
-            payload.rumor.kind === KIND_REACTION
-              ? () => this.pendingMessages.get(row.messageId) === attempt
-              : undefined,
+            () => !isExpiredMessage(payload.rumor, 'proximity') &&
+              (payload.rumor.kind !== KIND_REACTION || this.pendingMessages.get(row.messageId) === attempt),
           );
           const waiting = await db
             .update(outbox)

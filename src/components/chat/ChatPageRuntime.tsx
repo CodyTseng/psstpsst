@@ -1,4 +1,6 @@
-import { DISAPPEAR_AFTER_TAG } from '@/lib/nostr/disappearing-message';
+import { messageExpirationTag } from '@/lib/nostr/disappearing-message';
+import { useMessageExpirySettings } from '@/hooks/use-message-expiry-settings';
+import { DEFAULT_MESSAGE_EXPIRY_SLOT, messageExpiryDuration } from '@/services/conversation/message-expiry-preference';
 import type { CommandContext } from '@/lib/nostr/commands';
 import * as DocumentPicker from 'expo-document-picker';
 import { Image as ExpoImage } from 'expo-image';
@@ -930,6 +932,7 @@ function ChatPageContent({
     conversationKey,
     routeActive && (liveDataReady || routeIsProximity),
   );
+  const { values: expirySettings } = useMessageExpirySettings(accountPubkey ?? '');
   const isProximity =
     routeIsProximity || conversation?.deliveryKind === 'proximity';
   const isGroup =
@@ -1476,6 +1479,11 @@ function ChatPageContent({
     // threaded into sendMessage so the optimistic bubble and stored rumor share it.
     const timestamp = nextRumorTimestamp();
     const emojiTags = customEmojis.map(buildEmojiTag);
+    const seconds = isGroup ? 0 : (
+      messageExpiryDuration(expirySettings, conversationKey, conversation?.disappearAfterSeconds) ??
+      expirySettings?.get(DEFAULT_MESSAGE_EXPIRY_SLOT) ?? 0
+    );
+    const duration = seconds > 0 ? seconds : null;
     let tags: string[][] = counterparties.map((r) => ['p', r]);
     if (isGroup && conversation?.groupId) {
       tags.push(['h', conversation.groupId]);
@@ -1484,14 +1492,11 @@ function ChatPageContent({
       tags.push(...emojiTags);
     } else {
       tags.push(...emojiTags);
-      if (!isProximity && conversation?.disappearAfterSeconds != null) {
-        tags.push([DISAPPEAR_AFTER_TAG, String(conversation.disappearAfterSeconds)]);
-      }
       if (replyToId) tags.push(['e', replyToId]);
       if (!isProximity && conversation?.name) tags.push(['subject', conversation.name]);
     }
+    if (duration !== null) tags.push(messageExpirationTag(timestamp.createdAt, duration));
     tags = withMessageOrderTag(tags, timestamp.millisecond);
-    const duration = !isProximity && !isGroup ? conversation?.disappearAfterSeconds ?? null : null;
     const template = {
       kind: 14,
       content: text,
@@ -1511,7 +1516,7 @@ function ChatPageContent({
       kind: 14,
       content: text,
       disappearAfterSeconds: duration,
-      expiresAt: duration === null ? null : timestamp.orderAt + duration * 1000,
+      expiresAt: duration === null ? null : (timestamp.createdAt + duration) * 1000,
       createdAt: timestamp.createdAt,
       orderAt: timestamp.orderAt,
       replyToId: replyToId ?? null,
@@ -2739,6 +2744,7 @@ function ChatPageContent({
             accountPubkey={accountPubkey}
             rumorId={detailRumorId && !deletedMessageIds.has(detailRumorId) ? detailRumorId : null}
             rumor={detailMessage?.rumor ?? null}
+            expiresAt={detailMessage?.expiresAt ?? null}
             isSelf={
               detailMessage
                 ? isProximity

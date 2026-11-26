@@ -1,7 +1,9 @@
 import X from 'lucide-react-native/icons/x';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { useDirectionalIconStyle } from '@/i18n/direction';
 import { iconStrokeWidth } from '@/theme/icons';
 import { spacing, uiDensity, useThemeColors } from '@/theme';
 
@@ -11,6 +13,7 @@ import { IconButton } from './IconButton';
 type Props = {
   title: string;
   onClose: () => void;
+  onBack?: () => void;
   showHandle?: boolean;
   /** One optional title-bar action or passive account identity indicator. */
   action?: React.ReactNode;
@@ -20,9 +23,11 @@ type Props = {
  * Fixed task/detail-sheet chrome. The title is centered against the full sheet,
  * independently of the close and trailing-action widths, matching ScreenHeader.
  */
-export function SheetHeader({ title, onClose, action, showHandle = true }: Props) {
+export function SheetHeader({ title, onClose, onBack, action, showHandle = true }: Props) {
   const { t } = useTranslation();
   const c = useThemeColors();
+  const directionalIconStyle = useDirectionalIconStyle();
+  const LeadingIcon = onBack ? ChevronLeft : X;
   // The compact grabber already occupies sm + xs above this header.
   const topInset = showHandle ? spacing.xs : spacing.lg;
 
@@ -76,9 +81,10 @@ export function SheetHeader({ title, onClose, action, showHandle = true }: Props
         <IconButton
           variant="secondary"
           size={uiDensity.headerActionSize}
-          onPress={onClose}
-          icon={<X strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize} color={c.text} />}
-          accessibilityLabel={t('common.close')}
+          onPress={onBack ?? onClose}
+          icon={<LeadingIcon strokeWidth={iconStrokeWidth.default} size={uiDensity.headerActionIconSize}
+            color={c.text} style={onBack ? directionalIconStyle : undefined} />}
+          accessibilityLabel={t(onBack ? 'common.back' : 'common.close')}
         />
         {action ? (
           <View style={{ height: uiDensity.headerActionSize, justifyContent: 'center' }}>

@@ -81,31 +81,29 @@ target is already present, and discards archive requests with missing targets.
 Older importers may store the deletion as an ordinary rumor and restore the
 original message as visible.
 
-## Disappearing message deadlines
+## Message expiration
 
-The conversation setting is device-local and applies to newly authored Relay
-direct text. The account bootstrap clears overdue rows before opening its chat
-state. A foreground sweep and a timer for the nearest persisted deadline
-handle subsequent expiry without waiting for connectivity. Loaded chat rows and
-open message surfaces check their deadlines on the foreground transition
-before waiting for the database write. A busy database delays persistence of
-the first visible time. The chat queues observations during a retry delay and
-keeps them when the rows leave the viewport.
+A per-account global setting and per-conversation overrides apply to newly
+authored one-to-one Relay and Nearby chat, file, and reaction rumors. A positive
+duration becomes an absolute NIP-40 deadline based on the rumor's creation time.
+Conversation overrides can inherit the global default or turn expiration off.
+Group conversations have no expiration setting and ignore expiration tags.
+The existing legacy direct-text settings are used until a synced settings
+document exists.
 
-Relay delivery checks the original's deadline at each attempt to write the
-event to a connected relay, including after NIP-42 authentication.
+Inbound expired rumors are dropped. The account bootstrap sweeps overdue rows
+before opening chat state. The foreground sweep runs at the earliest known
+deadline or at the next periodic wake. Loaded chat rows apply deadlines
+directly, so they hide at expiry even before the cleanup transaction commits.
+Relays and Nearby recheck the deadline before dispatching queued messages.
 
-Each expiry transaction scrubs the local body and rumor payload, updates the
-conversation preview and unread count, removes notification and outbox work
-for the original, and records a self-addressed deletion with its durable
-delivery job. The original's ID remains reserved for deduplication. An
-offline worker sends the deletion when connectivity returns. Transient
-delivery failures back off without discarding the deletion job.
+Cleanup scrubs the local body and rumor payload, updates the preview and unread
+count, clears reaction previews, and removes local notification, media index,
+and outbox work for the expired message. It leaves a scrubbed row for local
+deduplication. Expiry does not enqueue or publish a deletion event.
 
-Disappearing text stays out of chat archives, full-text search, notification
-previews, conversation previews, and quoted excerpts. Embedded media links
-appear as links in the bubble and do not enter the media gallery. Archives
-retain self-addressed expiry confirmations, including those waiting for
-their targets. An authenticated shared deletion of timed text produces a local
-self marker for the archive so a later relay replay remains blocked. Ordinary message deletions retain their existing archive and
-reply behaviour.
+Expiring message bodies stay out of chat archives and full-text search.
+Messages with an absolute deadline appear in conversation previews until expiry.
+Legacy read-triggered messages remain hidden in previews. Expiring text stays
+out of notification previews, quoted excerpts, and the media gallery.
+Explicit deletion handling is unchanged.

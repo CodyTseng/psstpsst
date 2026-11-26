@@ -148,4 +148,49 @@ describe('conversation preview ordering', () => {
     expect(rows[1].reactionPreviewEvent).toBeNull();
   });
 
+  it('includes previews and files with a future deadline and excludes expired and legacy timed messages', async () => {
+    const accountPubkey = 'expiry-previews';
+    const now = Math.floor(Date.now() / 1000);
+    for (const [key, kind, expiresAt, tags] of [
+      ['active-text', 14, now + 3600, [['expiration', String(now + 3600)]]],
+      ['active-file', 15, now + 3600, [['expiration', String(now + 3600)]]],
+      ['expired', 14, now - 1, [['expiration', String(now - 1)]]],
+      ['legacy', 14, now + 3600, [['disappear-after', '3600']]],
+    ] as const) {
+      const messageTags = tags.map(tag => [...tag]);
+      await db.insert(conversations).values({
+        accountPubkey, conversationKey: key, createdAt: now, createdOrderAt: now * 1000,
+        updatedAt: now, updatedOrderAt: now * 1000, lastMessageId: key,
+        hasReplied: key !== 'active-file', groupId: key, membersBootstrapEventId: `bootstrap-${key}`,
+        memberPubkeys: [accountPubkey, 'peer'],
+      });
+      await db.insert(savedGroups).values({ accountPubkey, groupId: key });
+      await db.insert(messages).values({
+        accountPubkey, conversationKey: key, id: key, content: key, kind, senderPubkey: accountPubkey,
+        createdAt: now, orderAt: now * 1000, tags: messageTags,
+        disappearAfterSeconds: 3600, expiresAt: expiresAt * 1000,
+        rumor: { id: key, content: key, kind, pubkey: accountPubkey, created_at: now, tags: messageTags },
+      });
+    }
+
+    let lists: ConversationWithLast[][] = [];
+    function Harness() {
+      lists = [
+        useMainInboxConversations(accountPubkey).conversations,
+        useRequestConversations(accountPubkey).conversations,
+        useSavedGroups(accountPubkey).groups,
+        useCommonGroups(accountPubkey, 'peer').groups,
+      ];
+      return null;
+    }
+    await act(async () => { renderer = create(<Harness />); });
+    expect(lists.map(list => Object.fromEntries(list.map(row => [
+      row.conversation.conversationKey, [row.lastMessageKind, row.lastMessageContent],
+    ])))).toEqual([
+      { 'active-text': [14, 'active-text'], expired: [null, null], legacy: [null, null] },
+      { 'active-file': [15, 'active-file'] },
+      { 'active-text': [14, 'active-text'], 'active-file': [15, 'active-file'], expired: [null, null], legacy: [null, null] },
+      { 'active-text': [14, 'active-text'], 'active-file': [15, 'active-file'], expired: [null, null], legacy: [null, null] },
+    ]);
+  });
 });

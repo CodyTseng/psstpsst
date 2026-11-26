@@ -4,6 +4,7 @@ import type { Event } from 'nostr-tools';
 import { db } from '@/db/client';
 import { replaceableEvents } from '@/db/schema';
 import { DISCOVERY_RELAYS, normalizeRelayUrl } from '@/lib/nostr/relay-url';
+import { MESSAGE_EXPIRY_SETTINGS_D, MESSAGE_EXPIRY_SETTINGS_KIND } from '@/lib/nostr/disappearing-message';
 
 import { KIND_RELAY_LIST_METADATA } from '../crypto/nip17-gift-wrap';
 import { relayPool, type QueryCompletion } from './relay-pool';
@@ -51,6 +52,9 @@ export async function configurationPublishRelays(event: Event): Promise<string[]
     readRoutingSettingsEdit(event.pubkey, KIND_RELAY_LIST_METADATA),
   ]);
   const write = edit?.urls ?? (metadata ? parseRelayListMetadata(metadata).write : []);
+  if (event.kind === MESSAGE_EXPIRY_SETTINGS_KIND && event.tags.find(([key]) => key === 'd')?.[1] === MESSAGE_EXPIRY_SETTINGS_D) {
+    return Array.from(new Set((write.length ? write : NORMALIZED_DISCOVERY).map(normalizeRelayUrl)));
+  }
   const editedWrite = event.kind === KIND_RELAY_LIST_METADATA ? parseRelayListMetadata(event).write : [];
   const urls = [...inbox, ...write, ...editedWrite, ...NORMALIZED_DISCOVERY];
   return Array.from(new Set(urls.map(normalizeRelayUrl)));

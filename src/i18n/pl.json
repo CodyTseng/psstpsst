@@ -447,6 +447,7 @@
   "message_detail": {
     "title": "Informacje o wiadomości",
     "time": "Czas",
+    "expires_at": "Znika o",
     "received_from": "Odebrano od",
     "received_from_unknown": "Nie zarejestrowano",
     "delivered_to": "Dostarczono do",
@@ -471,14 +472,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Znikające wiadomości",
+      "title": "Wygasanie wiadomości",
+      "default_title": "Domyślne wygasanie wiadomości",
+      "use_default": "Użyj ustawienia domyślnego ({{duration}})",
+      "custom": "Własny czas",
       "off": "Wyłączone",
-      "duration_30": "30 sekund",
-      "duration_300": "5 minut",
-      "duration_3600": "1 godzina",
-      "duration_86400": "24 godziny",
-      "duration_604800": "7 dni",
-      "hint": "Dotyczy nowych wiadomości tekstowych wysyłanych z tego urządzenia. Twój licznik rusza w chwili wysłania, a licznik odbiorcy, gdy zobaczy wiadomość.",
+      "hint": "Nowe wiadomości w rozmowach indywidualnych wygasają po upływie tego czasu od wysłania. Ustawienia są synchronizowane w postaci zaszyfrowanej między urządzeniami.",
       "save_failed": "Nie udało się zapisać ustawienia czasu. Spróbuj ponownie."
     },
     "input_placeholder": "Napisz wiadomość",

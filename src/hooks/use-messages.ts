@@ -870,7 +870,7 @@ export function useMessages(
       setExpiryNow(Date.now());
       return;
     }
-    const timer = setTimeout(() => setExpiryNow(Date.now()), remaining);
+    const timer = setTimeout(() => setExpiryNow(Date.now()), Math.min(remaining, 2_147_483_647));
     return () => clearTimeout(timer);
   }, [expiryNow, nextDeadline]);
   const ascending = useMemo(

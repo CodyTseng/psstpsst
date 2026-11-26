@@ -60,6 +60,8 @@ jest.mock('../relay-list.service', () => ({
   loadAccountWriteRelays: jest.fn((pubkey: string) => mockLoadAccountWriteRelays(pubkey)),
 }));
 
+jest.mock('../../conversation/message-expiry-sync', () => ({ applyMessageExpirySettingsEvent: jest.fn(async () => {}) }));
+
 jest.mock('../../account/account.service', () => ({
   buildSigner: jest.fn((...args: unknown[]) => mockBuildSigner(...args)),
 }));
@@ -195,7 +197,8 @@ describe('syncPersonalConfigs', () => {
     const muted = makeEvent('self', 30000, 100, 'psstpsst-muted');
     const contacts = makeEvent('self', 30000, 100, 'psstpsst-contacts');
     const media = makeEvent('self', 10063, 100);
-    mockQuery.mockResolvedValue([muted, contacts, media]);
+    const expiry = makeEvent('self', 30078, 100, 'psstpsst-message-expiry');
+    mockQuery.mockResolvedValue([muted, contacts, media, expiry]);
 
     await service.syncPersonalConfigs('self');
     await jest.runAllTimersAsync();
@@ -208,6 +211,7 @@ describe('syncPersonalConfigs', () => {
       { kinds: [10030, 10063], authors: ['self'] },
       { kinds: [30267], authors: ['self'], '#d': ['psstpsst-my-apps'] },
       { kinds: [30000], authors: ['self'], '#d': ALL_D_TAGS },
+      { kinds: [30078], authors: ['self'], '#d': ['psstpsst-message-expiry'] },
     ]);
 
     // Received events are persisted; missed keys get a negative-cache mark.
@@ -224,6 +228,8 @@ describe('syncPersonalConfigs', () => {
     expect(mockMigrateLocalSavedGroups).toHaveBeenCalledWith('self', fakeSigner);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith('self', media);
     expect(mockApplyUserEmojiListEvent).toHaveBeenCalledWith('self', null);
+    expect(jest.requireMock('../../conversation/message-expiry-sync').applyMessageExpirySettingsEvent)
+      .toHaveBeenCalledWith('self', expiry, fakeSigner);
   });
 
   it('sends no relay query when every row is fresh and still reconciles from the cache', async () => {
@@ -239,6 +245,7 @@ describe('syncPersonalConfigs', () => {
     seedFresh(contacts, 'psstpsst-contacts');
     seedFresh(blocked, 'psstpsst-blocked');
     seedFresh(makeEvent('self', 30267, 100, 'psstpsst-my-apps'), 'psstpsst-my-apps');
+    seedFresh(makeEvent('self', 30078, 100, 'psstpsst-message-expiry'), 'psstpsst-message-expiry');
 
     await service.syncPersonalConfigs('self');
     await jest.runAllTimersAsync();

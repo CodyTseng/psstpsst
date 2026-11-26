@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { useLiveQuery } from '@/db/use-live-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { db } from '@/db/client';
 import { conversations, messages } from '@/db/schema';
 import { rememberConversationSnapshot } from '@/lib/conversation/conversation-snapshot-cache';
+import { MESSAGE_EXPIRATION_TAG } from '@/lib/nostr/disappearing-message';
 import { useUnreadCount, useUnreadIndicatorsEnabled } from '@/stores/unread-count.store';
 
 export type ConversationWithLast = {
@@ -41,6 +42,21 @@ export function useContactConversations(accountPubkey: string) {
 }
 
 const previewReaction = alias(messages, 'preview_reaction');
+const currentTimeMs = sql`unixepoch() * 1000`;
+
+// Match the owning account: two accounts can share the same rumor ID.
+// Legacy read-triggered timers keep their original preview privacy.
+export const conversationLastMessageJoin = and(
+  eq(messages.accountPubkey, conversations.accountPubkey),
+  eq(messages.id, conversations.lastMessageId),
+  eq(messages.deleted, false),
+  or(isNull(messages.expiresAt), gt(messages.expiresAt, currentTimeMs)),
+  or(
+    isNull(messages.disappearAfterSeconds),
+    sql`exists (select 1 from json_each(${messages.tags}) as preview_tag
+      where json_extract(preview_tag.value, '$[0]') = ${MESSAGE_EXPIRATION_TAG})`,
+  ),
+);
 
 function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean) {
   return db
@@ -53,17 +69,7 @@ function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean
       reactionPreviewEvent: { content: previewReaction.content, tags: previewReaction.tags },
     })
     .from(conversations)
-    // Match the owning account too: the same `lastMessageId` can exist under a
-    // different account (two accounts DMing each other share a rumor id), so an
-    // id-only join could pull the wrong account's row.
-    .leftJoin(
-      messages,
-      and(
-        eq(messages.accountPubkey, conversations.accountPubkey),
-        eq(messages.id, conversations.lastMessageId),
-        isNull(messages.disappearAfterSeconds),
-      ),
-    )
+    .leftJoin(messages, conversationLastMessageJoin)
     .leftJoin(
       previewReaction,
       and(
@@ -72,6 +78,7 @@ function selectConversationsWithLast(accountPubkey: string, onlyReplied: boolean
         eq(previewReaction.conversationKey, conversations.conversationKey),
         eq(previewReaction.id, conversations.reactionPreviewEventId),
         eq(previewReaction.deleted, false),
+        or(isNull(previewReaction.expiresAt), gt(previewReaction.expiresAt, currentTimeMs)),
       ),
     )
     .where(

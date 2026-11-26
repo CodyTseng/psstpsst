@@ -92,6 +92,25 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+it.each([false, true])('honors Nearby reaction deadlines with a group tag present: %s', async withGroupTag => {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const expiring = (deadline: number) => buildRumor({
+    kind: 7, content: '👍', created_at: timestamp - 10,
+    tags: [['p', localIdentity], ['e', 'aa'.repeat(32)], ['expiration', String(deadline)],
+      ...(withGroupTag ? [['h', 'unrelated-group']] : [])],
+  }, peer);
+  const stale = expiring(timestamp);
+  await runtime.handleMessage(endpoint, encodeRumor(stale));
+  expect(sqlite.prepare('SELECT id FROM messages WHERE id = ?').get(stale.id)).toBeUndefined();
+  expect((await takeNotificationEvents(account, 'foreground')).events).toHaveLength(0);
+
+  const fresh = expiring(timestamp + 60);
+  await runtime.handleMessage(endpoint, encodeRumor(fresh));
+  expect(sqlite.prepare('SELECT expires_at FROM messages WHERE id = ?').get(fresh.id))
+    .toEqual({ expires_at: (timestamp + 60) * 1000 });
+  expect((await takeNotificationEvents(account, 'foreground')).events.map(event => event.message.id)).toEqual([fresh.id]);
+});
+
 it('authenticates Nearby reactions against the local proximity identity and uses both delivery paths', async () => {
   const ack = jest.mocked(runtime.sendMessageAck);
   for (const target of ['bb', 'cc']) {

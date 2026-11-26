@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import Check from 'lucide-react-native/icons/check';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import { AppText } from '../AppText';
 import { IconButton } from '../IconButton';
 import { SheetHeader } from '../SheetHeader';
@@ -10,6 +11,7 @@ let mockPreference: 'light' | 'dark' = 'light';
 
 jest.mock('lucide-react-native/icons/x', () => 'XIcon');
 jest.mock('lucide-react-native/icons/check', () => 'CheckIcon');
+jest.mock('lucide-react-native/icons/chevron-left', () => 'ChevronLeftIcon');
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -77,6 +79,20 @@ describe('SheetHeader', () => {
     const buttons = renderer!.root.findAllByType(IconButton);
     expect(buttons).toHaveLength(2);
     expect(buttons[1].props.accessibilityLabel).toBe('Done');
+  });
+
+  it('uses the back action in place of close for a sheet step', () => {
+    const onBack = jest.fn();
+    const onClose = jest.fn();
+    act(() => {
+      renderer = create(<SheetHeader title="Custom duration" onClose={onClose} onBack={onBack} />);
+    });
+    const button = renderer!.root.findByType(IconButton);
+    expect(button.props.accessibilityLabel).toBe('common.back');
+    expect(button.props.icon.type).toBe(ChevronLeft);
+    act(() => { button.props.onPress(); });
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it.each([

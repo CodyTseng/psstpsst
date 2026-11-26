@@ -1,10 +1,13 @@
 import { applyFavoritesEvent, queueFavoritesPublication } from '../explore/favorites';
 import { MY_APPS_D, KIND_APP_FAVORITES } from '../explore/favorites-protocol';
 import { KIND_USER_EMOJI_LIST } from '@/lib/nostr/custom-emoji';
+import { MESSAGE_EXPIRY_SETTINGS_D, MESSAGE_EXPIRY_SETTINGS_KIND } from '@/lib/nostr/disappearing-message';
+
 
 import { buildSigner } from '../account/account.service';
 import { applyContactsEvent, CONTACTS_D, migrateLocalSavedGroups } from '../contact/contact.service';
 import { applyMutedEvent, MUTED_D } from '../conversation/conversation-prefs.service';
+import { applyMessageExpirySettingsEvent } from '../conversation/message-expiry-sync';
 import { applyBlockedEvent, BLOCKED_D } from '../dm/block.service';
 import { applyUserEmojiListEvent } from '../emoji/custom-emoji.service';
 import {
@@ -13,6 +16,7 @@ import {
 } from '../files/media-server.service';
 import type { Signer } from '../signer/signer.interface';
 import { loadAccountWriteRelays } from './relay-list.service';
+import { relayPool } from './relay-pool';
 import {
   ensureReplaceableFresh,
   getReplaceableEvents,
@@ -41,6 +45,7 @@ export async function syncPersonalConfigs(accountPubkey: string): Promise<void> 
     { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: MUTED_D },
     { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: CONTACTS_D },
     { pubkey: accountPubkey, kind: KIND_FOLLOW_SET, dTag: BLOCKED_D },
+    { pubkey: accountPubkey, kind: MESSAGE_EXPIRY_SETTINGS_KIND, dTag: MESSAGE_EXPIRY_SETTINGS_D },
   ];
   // The private sets need the account's decryption key; without it (unknown
   // account, or a remote signer mid-teardown) skip them but still apply the
@@ -57,9 +62,12 @@ export async function syncPersonalConfigs(accountPubkey: string): Promise<void> 
   await ensureReplaceableFresh(keys, {
     ttlSeconds: REPLACEABLE_DEFAULT_TTL_SECONDS,
     relays,
+    ...(signer ? { query: (urls, filters) => relayPool.query({
+      label: 'personal-configs', relays: urls, filters, signAuth: template => signer.signEvent(template),
+    }) } : {}),
   });
 
-  const [favorites, userEmojiList, mediaServers, muted, contacts, blocked] =
+  const [favorites, userEmojiList, mediaServers, muted, contacts, blocked, expiry] =
     await getReplaceableEvents(keys);
 
   await Promise.all([
@@ -71,6 +79,7 @@ export async function syncPersonalConfigs(accountPubkey: string): Promise<void> 
           applyMutedEvent(accountPubkey, muted, signer),
           applyContactsEvent(accountPubkey, contacts, signer),
           applyBlockedEvent(accountPubkey, blocked, signer),
+          applyMessageExpirySettingsEvent(accountPubkey, expiry, signer),
         ]
       : []),
   ]);

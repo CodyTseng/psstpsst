@@ -1,4 +1,6 @@
 import { dateTimePreferences } from '@/services/preferences/date-time-state';
+import Check from 'lucide-react-native/icons/check';
+import Timer from 'lucide-react-native/icons/timer';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { StyleSheet, View } from 'react-native';
@@ -19,6 +21,7 @@ import { MessageMetaOverlay } from '../MessageMetaOverlay';
 import { QuotedReply } from '../QuotedReply';
 
 jest.mock('lucide-react-native/icons/check', () => ({ __esModule: true, default: () => null }));
+jest.mock('lucide-react-native/icons/timer', () => ({ __esModule: true, default: () => null }));
 jest.mock('../AttachmentAudio', () => ({ AttachmentAudio: () => null }));
 jest.mock('../AttachmentFile', () => ({ AttachmentFile: () => null }));
 jest.mock('../AttachmentImage', () => ({ AttachmentImage: () => null }));
@@ -133,6 +136,38 @@ it.each([
   expect(spacers()[0].length).toBe(originalWidth);
   act(() => renderer.unmount());
 });
+
+it.each(['signing', 'queued', 'sending', 'awaiting_ack', 'partial', 'failed', 'sent', null] as const)(
+  'uses a single metadata icon for an own disappearing message in phase %s', (phase) => {
+    const presentation = {
+      segments: [{ type: 'text', value: 'Hello' }],
+      customEmojiMap: new Map(), embeddedMedia: new Map(),
+    };
+    const persistedDelivery = phase === null ? null : { rumorId: 'message', phase, copies: [] };
+    const render = (disappearing: boolean) => (
+      <BubbleBody content="Hello" isSelf createdAt={0} persistedDelivery={persistedDelivery}
+        presentation={{ ...presentation, disappearing } as never} />
+    );
+    let renderer!: ReactTestRenderer;
+    act(() => { renderer = create(render(false)); });
+    try {
+      const spacer = () => renderer.root.findAll(node => typeof node.props.children === 'string' &&
+        node.props.children.startsWith('\u200b\u2007')).at(0)?.props.children;
+      const ordinarySpacer = spacer();
+      expect(ordinarySpacer).toBeDefined();
+      expect(renderer.root.findAllByType(Timer)).toHaveLength(0);
+
+      act(() => renderer.update(render(true)));
+      const replacesCheck = phase === null || phase === 'sent';
+      expect(renderer.root.findAllByType(Timer)).toHaveLength(replacesCheck ? 1 : 0);
+      expect(renderer.root.findAllByType(Check)).toHaveLength(0);
+      expect(renderer.root.findAllByType(MessageDeliveryStatus)).toHaveLength(replacesCheck ? 0 : 1);
+      expect(spacer()).toBe(ordinarySpacer);
+    } finally {
+      act(() => renderer.unmount());
+    }
+  },
+);
 
 describe.each(['light', 'dark'] as const)('%s quoted message layout', (scheme) => {
   it.each([false, true].flatMap(isSelf => [false, true].flatMap(rtl =>

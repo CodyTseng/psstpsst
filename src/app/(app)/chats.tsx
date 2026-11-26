@@ -13,7 +13,9 @@ import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { Toggle } from '@/components/common/Toggle';
 import { NostrEventUrlSetting } from '@/components/settings/NostrEventUrlSetting';
+import { MessageExpirySetting } from '@/components/settings/message-expiry-setting';
 import { IS_ELECTRON } from '@/lib/platform';
+import { useActiveAccount } from '@/stores/active-account.store';
 import { useChatPrefsStore } from '@/stores/chat-prefs.store';
 import { useScrolled } from '@/hooks/use-scrolled';
 import { spacing, useThemeColors } from '@/theme';
@@ -24,6 +26,7 @@ export default function ChatsSettings() {
   const { t } = useTranslation();
   const c = useThemeColors();
   const titleClearance = useScreenHeaderClearance();
+  const accountPubkey = useActiveAccount(state => state.activePubkey);
   const enterToSend = useChatPrefsStore((s) => s.enterToSend);
   const setEnterToSend = useChatPrefsStore((s) => s.setEnterToSend);
 
@@ -61,6 +64,7 @@ export default function ChatsSettings() {
             onPress={() => router.push('/emoji-packs')}
           />
           <NostrEventUrlSetting />
+          {accountPubkey ? <MessageExpirySetting accountPubkey={accountPubkey} /> : null}
         </ListGroup>
       </ScrollView>
       <ScreenHeader bordered={scrolled} title={t('settings.chats')} />

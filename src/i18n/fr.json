@@ -444,6 +444,7 @@
   "message_detail": {
     "title": "Infos sur le message",
     "time": "Heure",
+    "expires_at": "Disparaît le",
     "received_from": "Reçu de",
     "received_from_unknown": "Non enregistré",
     "delivered_to": "Livré à",
@@ -468,14 +469,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Messages éphémères",
+      "title": "Expiration des messages",
+      "default_title": "Expiration par défaut des messages",
+      "use_default": "Utiliser la valeur par défaut ({{duration}})",
+      "custom": "Durée personnalisée",
       "off": "Désactivés",
-      "duration_30": "30 secondes",
-      "duration_300": "5 minutes",
-      "duration_3600": "1 heure",
-      "duration_86400": "24 heures",
-      "duration_604800": "7 jours",
-      "hint": "S’applique aux nouveaux messages texte envoyés depuis cet appareil. Votre délai commence à l’envoi. Celui de votre contact commence quand il voit le message.",
+      "hint": "Les nouveaux messages des discussions individuelles expirent après ce délai à compter de leur envoi. Les réglages sont synchronisés de façon chiffrée entre vos appareils.",
       "save_failed": "Impossible d’enregistrer le délai. Réessayez."
     },
     "input_placeholder": "Écrivez un message",

@@ -1,3 +1,4 @@
+import { signalStoredMessageExpiry } from './message-expiry-signal';
 import type { messages } from '@/db/schema';
 import {
   prepareMessagePresentation,
@@ -405,6 +406,7 @@ export function mergeStoredMessageIntoTail(accountPubkey: string, row: MessageRo
   // Keep the cached window's contract: the warm query selects kinds 14/15/7.
   if (!accountPubkey || !row.conversationKey) return;
   if (row.kind !== 14 && row.kind !== 15 && row.kind !== 7) return;
+  if (!row.deleted && row.expiresAt != null) signalStoredMessageExpiry(accountPubkey);
   const key = cacheKey(accountPubkey, row.conversationKey);
   const entry = cache.get(key);
   if (!entry) {

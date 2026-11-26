@@ -1,4 +1,4 @@
-import { disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
+import { isDisappearingMessage } from '@/lib/nostr/disappearing-message';
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/db/client';
@@ -187,7 +187,8 @@ export async function getNotificationPreview(
         })
       : rumor.kind === KIND_REACTION
         ? reactionText
-        : disappearingMessageDuration(rumor) === null ? rumor.content.trim() || null : null;
+        : !isDisappearingMessage(rumor, options.conversation?.deliveryKind ?? row?.deliveryKind)
+          ? rumor.content.trim() || null : null;
 
   return {
     displayName,

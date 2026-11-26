@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Event } from 'nostr-tools';
 
 import type { Rumor } from '@/db/schema';
-import { unwrapGiftWrapForAccount } from '@/services/crypto/nip17-gift-wrap';
+import { buildRumor, unwrapGiftWrapForAccount } from '@/services/crypto/nip17-gift-wrap';
 import { watchReactionPreviewWhileViewing } from '@/services/conversation/reaction-preview.service';
 import { takeNotificationEvents } from '@/services/notifications/notification-events.service';
 
@@ -63,11 +63,7 @@ let mockUserPresent = false;
 const mockReturnListeners = new Set<() => void>();
 type DatabaseListener = (event: { external: boolean; tableName?: string }) => void;
 const mockDatabaseListeners = new Set<DatabaseListener>();
-let mockNetworkConnected = false;
 const mockAppStateListeners = new Set<(state: string) => void>();
-let mockNetworkListener: ((state: { isConnected: boolean }) => void) | undefined;
-const mockPublishRelay = jest.fn();
-const mockWrapForRelay = jest.fn();
 const mockArchiveMessages = new Map<string, string>();
 jest.mock('../dm-backup-storage', () => ({
   BACKUP_CACHE_DIRECTORY_NAME: 'archives',
@@ -114,16 +110,11 @@ jest.mock('@/platform', () => ({
         return () => mockReturnListeners.delete(listener);
       },
     },
-    networkState: {
-      getState: async () => ({ isConnected: mockNetworkConnected }),
-      addStateListener: (listener: typeof mockNetworkListener) => { mockNetworkListener = listener; },
-    },
   },
 }));
 jest.mock('@/services/conversation/message-tail-cache', () => ({ mergeStoredMessageIntoTail: jest.fn(), emitMessageDeletion: jest.fn(), emitMessageDeadlines: jest.fn() }));
 jest.mock('@/services/crypto/nip17-gift-wrap', () => ({
   KIND_CHAT: 14, KIND_FILE: 15, KIND_REACTION: 7, KIND_MESSAGE_DELETION: 5,
-  createGiftWrappedMessage: (...args: unknown[]) => mockWrapForRelay(...args),
   unwrapGiftWrapForAccount: jest.fn(),
   buildRumor: (template: Omit<Rumor, 'id' | 'pubkey'>, pubkey: string) => {
     const rumor = { ...template, pubkey };
@@ -131,10 +122,10 @@ jest.mock('@/services/crypto/nip17-gift-wrap', () => ({
   },
 }));
 jest.mock('@/services/account/account.service', () => ({}));
-jest.mock('@/services/files/media-index.service', () => ({ recordEmbeddedMedia: jest.fn() }));
+jest.mock('@/services/files/media-index.service', () => ({ recordAttachmentMedia: jest.fn(), recordEmbeddedMedia: jest.fn() }));
 jest.mock('@/services/files/file-attachment.service', () => ({ deleteConversationAttachments: jest.fn(async () => {}) }));
 jest.mock('@/services/relay/relay-list.service', () => ({}));
-jest.mock('@/services/relay/relay-pool', () => ({ relayPool: { publishEvent: (...args: unknown[]) => mockPublishRelay(...args) } }));
+jest.mock('@/services/relay/relay-pool', () => ({ relayPool: {} }));
 jest.mock('@/services/self-events/self-event-stream.service', () => ({}));
 jest.mock('@/services/dm/encryption-key-watcher', () => ({}));
 jest.mock('@/services/dm/encryption-key.service', () => ({}));
@@ -352,25 +343,16 @@ it('starts only on foreground visibility, keeps the deadline across service rest
     mockUserPresent = false;
     clock.mockReturnValue(now + 30_001);
     await reopened.expireDisappearingMessages(ACCOUNT);
-    expect(messageRow(message.id)).toMatchObject({ deleted: 1, content: '', tags: '[]', expires_at: null });
+    expect(messageRow(message.id)).toMatchObject({ deleted: 1, content: '', tags: '[]', expires_at: now + 30_000 });
     expect(JSON.parse(messageRow(message.id)?.rumor as string)).toMatchObject({ content: '', tags: [] });
     expect(hasEvent(message)).toBe(false);
     expect(mockDatabase!.sqlite.prepare(`
       SELECT last_message_id, unread_count FROM conversations WHERE account_pubkey = ? AND conversation_key = ?
     `).get(ACCOUNT, TIMED_PEER)).toEqual({ last_message_id: null, unread_count: 0 });
-    const queued = mockDatabase!.sqlite.prepare(`
-      SELECT d.rumor FROM message_deletions d JOIN relay_outbox_jobs j
-      ON j.message_id = d.id AND j.account_pubkey = d.account_pubkey
-      WHERE d.account_pubkey = ? AND d.rumor LIKE ?
-    `);
-    const jobs = () => queued.all(ACCOUNT, `%${message.id}%`);
-    expect(jobs()).toHaveLength(1);
-    const deletion = JSON.parse(jobs()[0].rumor as string) as Rumor;
-    expect(deletion).toMatchObject({ kind: 5, pubkey: ACCOUNT, content: '' });
-    expect(deletion.tags).not.toContainEqual(['disappearing']);
-    expect(deletion.tags.filter(([tag]) => tag === 'p')).toEqual([['p', ACCOUNT]]);
+    const deletions = mockDatabase!.sqlite.prepare('SELECT id FROM message_deletions WHERE rumor LIKE ?');
+    expect(deletions.get(`%${message.id}%`)).toBeUndefined();
     await reopened.expireDisappearingMessages(ACCOUNT);
-    expect(jobs()).toHaveLength(1);
+    expect(deletions.get(`%${message.id}%`)).toBeUndefined();
     expect(await receiver.storeRumor(message, ACCOUNT, undefined, undefined, { intake: 'history' })).toBe(false);
     expect(messageRow(message.id)).toMatchObject({ deleted: 1, content: '' });
   } finally {
@@ -459,7 +441,7 @@ it.each([true, false])('uses the same account-only deletion format for timed and
   expect(messageRow(message.id)).toMatchObject({ deleted: 1, content: timed ? '' : message.content });
 });
 
-it('snapshots the current chat timer only into newly authored text', async () => {
+it('snapshots the current chat timer into newly authored text, files and reactions', async () => {
   const peer = 'd'.repeat(64);
   const sqlite = mockDatabase!.sqlite;
   const send = (content: string) => dmService.sendMessage({ accountPubkey: ACCOUNT, recipientPubkeys: [peer], content });
@@ -467,12 +449,27 @@ it('snapshots the current chat timer only into newly authored text', async () =>
   sqlite.prepare('UPDATE conversations SET disappear_after_seconds = 300 WHERE account_pubkey = ? AND conversation_key = ?')
     .run(ACCOUNT, peer);
   const expiring = await send('timed');
+  const file = await dmService.forwardMessage({
+    accountPubkey: ACCOUNT, recipientPubkeys: [peer], kind: 15, content: 'https://example.com/file', contentTags: [],
+  });
+  const reaction = await dmService.sendReaction({
+    accountPubkey: ACCOUNT, recipientPubkeys: [peer], targetMessageId: ordinary.rumorId, emoji: '👍',
+  });
   sqlite.prepare('UPDATE conversations SET disappear_after_seconds = NULL WHERE account_pubkey = ? AND conversation_key = ?')
     .run(ACCOUNT, peer);
   const afterDisabled = await send('ordinary again');
 
   expect(messageRow(ordinary.rumorId)).toMatchObject({ expires_at: null });
-  expect(JSON.parse(messageRow(expiring.rumorId)?.tags as string)).toContainEqual(['disappear-after', '300']);
+  const expiringRow = messageRow(expiring.rumorId)!;
+  const rumor = JSON.parse(expiringRow.rumor as string) as Rumor;
+  expect(rumor.tags).toContainEqual(['expiration', String(rumor.created_at + 300)]);
+  expect(rumor.tags.some(([key]) => key === 'disappear-after')).toBe(false);
+  for (const id of [file.rumorId, reaction.rumorId]) {
+    const row = messageRow(id)!;
+    const outgoing = JSON.parse(row.rumor as string) as Rumor;
+    expect(outgoing.tags).toContainEqual(['expiration', String(outgoing.created_at + 300)]);
+    expect(row.expires_at).toBe((outgoing.created_at + 300) * 1000);
+  }
   expect(messageRow(expiring.rumorId)?.expires_at).toBeGreaterThan(Date.now());
   expect(messageRow(afterDisabled.rumorId)).toMatchObject({ expires_at: null });
 });
@@ -521,64 +518,45 @@ it('keeps the original and deletion atomic if a cleanup write fails', async () =
   expect(messageRow(message.id)).toMatchObject({ deleted: 1, content: '' });
 });
 
-it('publishes queued expiry after network recovery and retries an unacknowledged relay', async () => {
-  const { relayMessageOutbox } = jest.requireActual('../relay-message-outbox') as typeof import('../relay-message-outbox');
-  const account = 'c'.repeat(64);
-  const sqlite = mockDatabase!.sqlite;
-  sqlite.prepare("INSERT INTO accounts (pubkey, signer_type, added_at, sort_order) VALUES (?, 'nsec', 1, 0)").run(account);
-  const message = timedMessage('9', account);
-  await receiver.storeRumor(message, account, undefined, undefined, { intake: 'live' });
-  sqlite.prepare('UPDATE messages SET expires_at = 1 WHERE account_pubkey = ? AND id = ?').run(account, message.id);
-  const jobs = () => sqlite.prepare('SELECT id FROM relay_outbox_jobs WHERE account_pubkey = ?').all(account);
-  const now = Date.now();
-  jest.useFakeTimers({ now });
+it.each([14, 15, 7])('retains an absolute NIP-40 deadline and drops expired kind %s messages on receipt', async kind => {
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  const timestamp = now / 1000;
+  const message = timedMessage(String(20 + kind));
+  const live: Rumor = {
+    ...message, kind, created_at: timestamp - 20, tags: [['p', ACCOUNT], ['expiration', String(timestamp + 10)]],
+  };
+  const past = { ...live, id: String(40 + kind).padStart(64, '0'), tags: [['p', ACCOUNT], ['expiration', String(timestamp)]] };
   try {
-    await dmService.expireDisappearingMessages(account);
-    const deletionJob = jobs();
-    expect(deletionJob).toHaveLength(1);
-    mockWrapForRelay.mockResolvedValue({ giftWrap: { id: 'wrapped' } });
-    mockPublishRelay
-      .mockImplementationOnce(async ({ onRelay, relays }) => onRelay(relays[0], { ok: false, reason: 'connection interrupted' }))
-      .mockImplementationOnce(async ({ onRelay, relays }) => onRelay(relays[0], { ok: true }));
+    await receiver.storeRumor(live, ACCOUNT, undefined, undefined, { intake: 'live' });
+    expect(messageRow(live.id)).toMatchObject({ expires_at: now + 10_000 });
+    await expect(receiver.storeRumor(past, ACCOUNT, undefined, undefined, { intake: 'live' })).resolves.toBe(false);
+    expect(messageRow(past.id)).toBeUndefined();
+    expect(hasEvent(past)).toBe(false);
 
-    relayMessageOutbox.activate({
-      accountPubkey: account,
-      dmRelays: ['wss://self.example/'],
-      encryptionKeypair: { pubkey: account, key: { account, role: 'messaging' }, createdAt: 1 },
-      signSeal: jest.fn(),
-    });
-    await relayMessageOutbox.waitForIdle();
-    expect(mockPublishRelay).not.toHaveBeenCalled();
-    expect(jobs()).toEqual(deletionJob);
-
-    mockUserPresent = true;
-    mockNetworkConnected = true;
-    mockNetworkListener?.({ isConnected: true });
-    await jest.advanceTimersByTimeAsync(1);
-    await relayMessageOutbox.waitForIdle();
-    expect(mockPublishRelay).toHaveBeenCalledTimes(1);
-    expect(jobs()).toEqual(deletionJob);
-    expect(mockWrapForRelay).toHaveBeenCalledWith(expect.objectContaining({
-      recipientIdentityPubkey: account,
-      rumorTemplate: expect.objectContaining({
-        kind: 5,
-        content: '',
-        tags: expect.not.arrayContaining([['disappearing']]),
-      }),
-    }));
-
-    await jest.advanceTimersByTimeAsync(60_000);
-    await relayMessageOutbox.waitForIdle();
-    expect(mockPublishRelay).toHaveBeenCalledTimes(2);
-    expect(jobs()).toEqual([]);
+    clock.mockReturnValue(now + 10_001);
+    await dmService.expireDisappearingMessages(ACCOUNT);
+    expect(messageRow(live.id)).toMatchObject({ deleted: 1, content: '', expires_at: now + 10_000 });
+    expect(mockDatabase!.sqlite.prepare('SELECT id FROM message_deletions WHERE rumor LIKE ?').get(`%${live.id}%`)).toBeUndefined();
+    expect(await receiver.storeRumor(past, ACCOUNT, undefined, undefined, { intake: 'history' })).toBe(false);
   } finally {
-    relayMessageOutbox.deactivate();
-    mockUserPresent = false;
-    mockNetworkConnected = false;
-    jest.useRealTimers();
+    clock.mockRestore();
   }
 });
 
+it('honors direct message expiration when a group tag cannot establish a group', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const peer = '38'.repeat(32);
+  const make = (deadline: number) => buildRumor({
+    kind: 14, content: 'Direct message with an empty group tag', created_at: now - 10,
+    tags: [['p', ACCOUNT], ['h', ''], ['expiration', String(deadline)]],
+  }, peer);
+  const expired = make(now - 1);
+  const live = make(now + 300);
+  await expect(dmService.importRumors(ACCOUNT, [expired, live])).resolves.toMatchObject({ inserted: 1 });
+  expect(messageRow(expired.id)).toBeUndefined();
+  expect(messageRow(live.id)).toMatchObject({ expires_at: (now + 300) * 1000, deleted: 0 });
+});
 
 it('keeps targets hidden when their history deletions are processed first', async () => {
   const historyPeer = 'cd'.repeat(32);

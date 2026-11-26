@@ -444,6 +444,7 @@
   "message_detail": {
     "title": "Info messaggio",
     "time": "Ora",
+    "expires_at": "Scompare il",
     "received_from": "Ricevuto da",
     "received_from_unknown": "Non registrato",
     "delivered_to": "Consegnato a",
@@ -468,14 +469,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Messaggi effimeri",
+      "title": "Scadenza dei messaggi",
+      "default_title": "Scadenza predefinita dei messaggi",
+      "use_default": "Usa impostazione predefinita ({{duration}})",
+      "custom": "Durata personalizzata",
       "off": "Disattivati",
-      "duration_30": "30 secondi",
-      "duration_300": "5 minuti",
-      "duration_3600": "1 ora",
-      "duration_86400": "24 ore",
-      "duration_604800": "7 giorni",
-      "hint": "Si applica ai nuovi messaggi di testo inviati da questo dispositivo. Il tuo timer parte all’invio. Quello dell’altra persona parte quando vede il messaggio.",
+      "hint": "I nuovi messaggi nelle chat individuali scadono dopo questo intervallo dall’invio. Le impostazioni vengono sincronizzate in forma cifrata tra i tuoi dispositivi.",
       "save_failed": "Impossibile salvare il timer. Riprova."
     },
     "input_placeholder": "Scrivi un messaggio",

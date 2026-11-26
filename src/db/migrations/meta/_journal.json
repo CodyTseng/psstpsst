@@ -673,6 +673,13 @@
       "when": 1795219200000,
       "tag": "0095_repair-relay-settings",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1795305600000,
+      "tag": "0096_disable-group-message-expiry",
+      "breakpoints": true
     }
   ]
 }

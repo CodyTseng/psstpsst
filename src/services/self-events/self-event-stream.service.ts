@@ -6,10 +6,12 @@ import type { Event, Filter } from 'nostr-tools';
 
 import { KIND_USER_EMOJI_LIST } from '@/lib/nostr/custom-emoji';
 import { DISCOVERY_RELAYS, normalizeRelayUrl } from '@/lib/nostr/relay-url';
+import { MESSAGE_EXPIRY_SETTINGS_D, MESSAGE_EXPIRY_SETTINGS_KIND } from '@/lib/nostr/disappearing-message';
 import { platform } from '@/platform';
 
 import { applyContactsEvent, CONTACTS_D } from '../contact/contact.service';
 import { applyMutedEvent, MUTED_D } from '../conversation/conversation-prefs.service';
+import { applyMessageExpirySettingsEvent, resumeMessageExpiryPublication } from '../conversation/message-expiry-sync';
 import {
   KIND_CLIENT_KEY_ANNOUNCEMENT,
   KIND_DM_RELAY_LIST,
@@ -79,6 +81,7 @@ type Route =
   | 'key-transfer'
   | 'key-announcement'
   | 'favorites'
+  | 'message-expiry'
   | 'contacts'
   | 'muted'
   | 'blocked'
@@ -237,6 +240,10 @@ class SelfEventStream {
     if (dmMetadata.length) subscribe('self.dm.keys', dmKeysOnly, keys);
     subscribe('self.write', writeOnly, [keyAnnouncementFilter, ...keySyncFilters, ...ownListFilters]);
     subscribe('self.discovery', discoveryOnly, [keyAnnouncementFilter, ...ownListFilters]);
+    subscribe('self.message-expiry', [...write], [{
+      kinds: [MESSAGE_EXPIRY_SETTINGS_KIND], authors: [self], '#d': [MESSAGE_EXPIRY_SETTINGS_D],
+    }]);
+    void resumeMessageExpiryPublication(self).catch(() => {});
   }
 
   /** Recovery polls may skip metadata refresh only while its live watchers work. */
@@ -296,6 +303,13 @@ class SelfEventStream {
         this.enqueue('favorites', async () => {
           const signer = await this.loadSigner(config);
           if (signer) await applyFavoritesEvent(config.accountPubkey, event, signer);
+        });
+        return;
+      case MESSAGE_EXPIRY_SETTINGS_KIND:
+        if (dTagOf(event) !== MESSAGE_EXPIRY_SETTINGS_D || event.pubkey !== config.accountPubkey) return;
+        this.enqueue('message-expiry', async () => {
+          const signer = await this.loadSigner(config);
+          if (signer && this.config === config) await applyMessageExpirySettingsEvent(config.accountPubkey, event, signer);
         });
         return;
       case KIND_FOLLOW_SET:

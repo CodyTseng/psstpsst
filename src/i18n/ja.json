@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "メッセージ情報",
     "time": "時刻",
+    "expires_at": "消える時刻",
     "received_from": "受信元",
     "received_from_unknown": "記録なし",
     "delivered_to": "配信先",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "消えるメッセージ",
+      "title": "メッセージの有効期限",
+      "default_title": "メッセージの既定の有効期限",
+      "use_default": "既定を使う（{{duration}}）",
+      "custom": "カスタム期間",
       "off": "オフ",
-      "duration_30": "30秒",
-      "duration_300": "5分",
-      "duration_3600": "1時間",
-      "duration_86400": "24時間",
-      "duration_604800": "7日間",
-      "hint": "この端末から送信する新しいテキストメッセージに適用されます。自分のタイマーは送信時に、相手のタイマーはメッセージを見たときに開始します。",
+      "hint": "1対1のチャットでは、新しいメッセージは送信からこの時間が経つと期限切れになります。設定は暗号化して端末間で同期されます。",
       "save_failed": "タイマーを保存できませんでした。もう一度お試しください。"
     },
     "input_placeholder": "メッセージを入力",

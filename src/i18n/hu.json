@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "Üzenet adatai",
     "time": "Idő",
+    "expires_at": "Eltűnés ideje",
     "received_from": "Fogadva innen:",
     "received_from_unknown": "Nincs rögzítve",
     "delivered_to": "Kézbesítve ide:",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Eltűnő üzenetek",
+      "title": "Üzenetek lejárata",
+      "default_title": "Üzenetek alapértelmezett lejárata",
+      "use_default": "Alapértelmezett használata ({{duration}})",
+      "custom": "Egyéni időtartam",
       "off": "Kikapcsolva",
-      "duration_30": "30 másodperc",
-      "duration_300": "5 perc",
-      "duration_3600": "1 óra",
-      "duration_86400": "24 óra",
-      "duration_604800": "7 nap",
-      "hint": "Az erről az eszközről küldött új szöveges üzenetekre vonatkozik. A te időzítőd a küldéskor, a másik félé az üzenet megtekintésekor indul.",
+      "hint": "A kétszemélyes csevegésekben az új üzenetek a küldéstől számított idő elteltével járnak le. A beállítások titkosítva szinkronizálódnak az eszközeid között.",
       "save_failed": "Az időzítőt nem sikerült menteni. Próbáld újra."
     },
     "input_placeholder": "Írj üzenetet",

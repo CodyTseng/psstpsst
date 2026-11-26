@@ -1,5 +1,6 @@
 import { buildRumor } from '@/services/crypto/nip17-gift-wrap';
 import { groupConversationKey } from '@/lib/nostr/group-messaging';
+import { isDisappearingMessage } from '@/lib/nostr/disappearing-message';
 import { messageOrderAt } from '@/lib/nostr/message-order';
 import { filterNotifiableMessages } from '@/services/notifications/notification-filter';
 import type { DatabaseSync } from 'node:sqlite';
@@ -110,6 +111,35 @@ beforeAll(() => {
 
 afterAll(() => mockDatabase?.sqlite.close());
 
+it('ignores expiry tags when receiving group text, files, and reactions', async () => {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const h = 'expiry-group';
+  const text = recoveryRumor(h, 'Group message with an elapsed deadline');
+  const file = recoveryRumor(h, 'https://example.com/group-file');
+  file.kind = 15;
+  file.tags.push(...buildFileTags({
+    url: file.content, mime: 'application/octet-stream',
+    decryptionKeyHex: '1'.repeat(64), decryptionNonceHex: '2'.repeat(24),
+    cipherSha256Hex: '3'.repeat(64),
+  }));
+  const reaction = recoveryRumor(h, '+');
+  reaction.kind = 7;
+  reaction.tags.push(['e', text.id]);
+  const receive = (event: Rumor) => groupReceiveService.receive({
+    accountPubkey: ACCOUNT, rumor: event, intake: 'history', active: false, senderBlocked: false, syncCursor: null,
+  });
+  const sqlite = mockDatabase!.sqlite;
+  for (const [index, event] of [text, file, reaction].entries()) {
+    event.created_at = timestamp - 10 + index;
+    event.tags.push(['expiration', String(index === 1 ? timestamp + 300 : timestamp - 1)]);
+    await expect(receive(event)).resolves.toMatchObject({ handled: true, stored: true });
+    expect(isDisappearingMessage(event)).toBe(false);
+    const row = sqlite.prepare('SELECT expires_at, disappear_after_seconds, rumor FROM messages WHERE id = ?').get(event.id);
+    expect(row).toMatchObject({ expires_at: null, disappear_after_seconds: null });
+    expect(JSON.parse(String(row?.rumor))).toEqual(event);
+  }
+});
+
 let recoveryId = 0;
 function recoveryRumor(h: string, content = 'Recovered message'): Rumor {
   return {
@@ -117,6 +147,78 @@ function recoveryRumor(h: string, content = 'Recovered message'): Rumor {
     id: (++recoveryId).toString(16).padStart(64, '0'),
   };
 }
+
+it('never tags new group text, files, or reactions with expiry', async () => {
+  const { dmService } = jest.requireActual('@/services/dm/dm.service') as typeof import('@/services/dm/dm.service');
+  const { relayMessageOutbox } = jest.requireActual('@/services/dm/relay-message-outbox') as typeof import('@/services/dm/relay-message-outbox');
+  const wake = jest.spyOn(relayMessageOutbox, 'wake').mockImplementation(() => {});
+  const sqlite = mockDatabase!.sqlite;
+  const slot = 'psstpsst-message-expiry';
+  sqlite.prepare('INSERT INTO private_list_sync_state (account_pubkey, kind, d_tag, draft) VALUES (?, 30078, ?, ?)')
+    .run(ACCOUNT, slot, JSON.stringify([['v', '1'], ['default', '300']]));
+  try {
+    const { conversationKey } = await groupService.createLocalGroup(ACCOUNT, [BOB, CAROL]);
+    const incomingTags = [['expiration', '100'], ['disappear-after', '30']];
+    const text = await dmService.sendGroupMessage({
+      accountPubkey: ACCOUNT, conversationKey, content: 'Group text', contentTags: incomingTags,
+    });
+    const file = await dmService.sendGroupMessage({
+      accountPubkey: ACCOUNT, conversationKey, kind: 15, content: 'https://example.com/group-file',
+      contentTags: [...incomingTags, ...buildFileTags({
+        url: 'https://example.com/group-file', mime: 'application/octet-stream',
+        decryptionKeyHex: '1'.repeat(64), decryptionNonceHex: '2'.repeat(24),
+        cipherSha256Hex: '3'.repeat(64),
+      })],
+    });
+    const reaction = await dmService.sendGroupReaction({
+      accountPubkey: ACCOUNT, conversationKey, targetMessageId: text.rumorId, emoji: '👍',
+    });
+    for (const { rumorId } of [text, file, reaction]) {
+      const row = sqlite.prepare('SELECT tags, expires_at FROM messages WHERE account_pubkey = ? AND id = ?')
+        .get(ACCOUNT, rumorId);
+      expect(row?.expires_at).toBeNull();
+      const names = JSON.parse(String(row?.tags)).map(([key]: string[]) => key);
+      expect(names).not.toContain('expiration');
+      expect(names).not.toContain('disappear-after');
+    }
+  } finally {
+    sqlite.prepare('DELETE FROM private_list_sync_state WHERE account_pubkey = ? AND kind = 30078 AND d_tag = ?').run(ACCOUNT, slot);
+    wake.mockRestore();
+  }
+});
+
+it('clears old group deadlines during upgrade while preserving direct message deadlines and content', async () => {
+  const { dmService } = jest.requireActual('@/services/dm/dm.service') as typeof import('@/services/dm/dm.service');
+  const { migrateDatabase } = jest.requireActual('@/db/use-live-query') as typeof import('@/db/use-live-query');
+  const { default: migrations } = jest.requireActual('@/db/migrations/migrations') as typeof import('@/db/migrations/migrations');
+  const now = Math.floor(Date.now() / 1000);
+  const deadline = (now + 300) * 1000;
+  const group = recoveryRumor('prior-build-expiry', 'Still readable');
+  const direct = buildRumor({
+    kind: 14, created_at: now, content: 'Still expires',
+    tags: [['p', ACCOUNT], ['expiration', String(now + 300)]],
+  }, '1234abcd'.repeat(8));
+  await groupReceiveService.receive({
+    accountPubkey: ACCOUNT, rumor: group, intake: 'history', active: false, senderBlocked: false, syncCursor: null,
+  });
+  await expect(dmService.importRumors(ACCOUNT, [direct])).resolves.toMatchObject({ inserted: 1 });
+  const sqlite = mockDatabase!.sqlite;
+  sqlite.prepare('UPDATE messages SET disappear_after_seconds = 300, expires_at = ? WHERE account_pubkey = ? AND id = ?')
+    .run(deadline, ACCOUNT, group.id);
+  sqlite.prepare('UPDATE conversations SET disappear_after_seconds = 300 WHERE account_pubkey = ? AND group_id = ?')
+    .run(ACCOUNT, 'prior-build-expiry');
+
+  await migrateDatabase(mockDatabase!.db as Parameters<typeof migrateDatabase>[0], {
+    ...migrations, journal: { entries: migrations.journal.entries.filter(entry => entry.idx === 96) },
+  });
+  const message = sqlite.prepare('SELECT content, expires_at, disappear_after_seconds FROM messages WHERE account_pubkey = ? AND id = ?');
+  expect(message.get(ACCOUNT, group.id))
+    .toEqual({ content: group.content, expires_at: null, disappear_after_seconds: null });
+  expect(message.get(ACCOUNT, direct.id))
+    .toEqual({ content: direct.content, expires_at: deadline, disappear_after_seconds: 300 });
+  expect(sqlite.prepare('SELECT disappear_after_seconds FROM conversations WHERE account_pubkey = ? AND group_id = ?')
+    .get(ACCOUNT, 'prior-build-expiry')).toEqual({ disappear_after_seconds: null });
+});
 
 it.each(['live', 'recovery', 'history', 'archive'] as const)(
   'recovers an unknown group from ordinary content during %s without its first message',

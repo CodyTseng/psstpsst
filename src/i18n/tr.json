@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "Mesaj bilgisi",
     "time": "Zaman",
+    "expires_at": "Kaybolma zamanı",
     "received_from": "Alındığı yer",
     "received_from_unknown": "Kaydedilmedi",
     "delivered_to": "Teslim edildiği yer",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Kaybolan mesajlar",
+      "title": "Mesajların sona ermesi",
+      "default_title": "Varsayılan mesaj süresi",
+      "use_default": "Varsayılanı kullan ({{duration}})",
+      "custom": "Özel süre",
       "off": "Kapalı",
-      "duration_30": "30 saniye",
-      "duration_300": "5 dakika",
-      "duration_3600": "1 saat",
-      "duration_86400": "24 saat",
-      "duration_604800": "7 gün",
-      "hint": "Bu cihazdan gönderdiğin yeni metin mesajları için geçerlidir. Senin süren gönderdiğinde, karşı tarafın süresi mesajı gördüğünde başlar.",
+      "hint": "Bire bir sohbetlerde yeni mesajların süresi gönderildikten bu kadar zaman sonra dolar. Ayarlar cihazların arasında şifreli olarak eşitlenir.",
       "save_failed": "Süre kaydedilemedi. Tekrar dene."
     },
     "input_placeholder": "Bir mesaj yaz",

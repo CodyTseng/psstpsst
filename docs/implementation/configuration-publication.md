@@ -15,6 +15,28 @@ server lists (10063).
 Messages, key-transfer exchanges, and wallet requests retain their own delivery
 semantics and do not enter this queue.
 
+## Message expiration settings
+
+The account's message expiration settings use one NIP-78 kind `30078` event at
+`d=psstpsst-message-expiry`. Its NIP-44 content is encrypted to the account's
+identity. The plaintext is a versioned JSON tag array: `["v","1"]`,
+`["default","<seconds>"]`, and zero or more
+`["conversation","<conversation key>","<seconds>"]` entries. A missing
+one-to-one conversation inherits the account default, and zero turns expiry off.
+The default and overrides apply to Relay direct messages and Nearby chats.
+Clients ignore obsolete group overrides. The public event exposes only the
+document identifier.
+
+The private-list revision queue commits local edits before signing. The
+configuration outbox publishes the signed document to the account's write
+relays. The self-event stream watches the exact account and document coordinate
+on those relays with NIP-42 authentication. Startup reconciliation also applies
+the latest decryptable snapshot. A local draft keeps its edited values when a
+remote snapshot arrives. Before signing, publication reconciles a cached remote
+event that has not been applied to the local revision. If decryption fails,
+the draft stays pending. Signed snapshots follow the normal Nostr replaceable
+event ordering.
+
 ## Replacement and completion
 
 - The unique coordinate is `(account_pubkey, kind, d_tag)`. Plain replaceable

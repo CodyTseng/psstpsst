@@ -2,6 +2,7 @@ import { useDateTimePreferences } from '@/stores/date-time.store';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import Check from 'lucide-react-native/icons/check';
+import Timer from 'lucide-react-native/icons/timer';
 import { Copy } from '@solar-icons/react-native/category/ui/Linear/Copy';
 import { DangerCircle as CircleAlert } from '@solar-icons/react-native/category/ui/Linear/DangerCircle';
 import { ClockCircle as Clock } from '@solar-icons/react-native/category/time/Linear/ClockCircle';
@@ -46,6 +47,8 @@ type Props = {
   rumorId: string | null;
   /** The message's full rumor — powers the time and the raw-JSON block. */
   rumor?: Rumor | null;
+  /** Device-local disappearance deadline in milliseconds, once the timer starts. */
+  expiresAt?: number | null;
   /** Our own message → show delivery status; peer's → show source relays. */
   isSelf: boolean;
   /** Relays this (incoming) message was received from. */
@@ -445,6 +448,7 @@ export function MessageDetailSheet({
   accountPubkey,
   rumorId,
   rumor,
+  expiresAt,
   isSelf,
   sourceRelays,
   transport,
@@ -467,6 +471,7 @@ export function MessageDetailSheet({
   const snapRef = useRef<{
     rumorId: string;
     rumor: Rumor | null;
+    expiresAt: number | null;
     isSelf: boolean;
     sourceRelays: string[] | null;
     persistedDelivery: MessageDelivery | null;
@@ -476,6 +481,7 @@ export function MessageDetailSheet({
     snapRef.current = {
       rumorId,
       rumor: rumor ?? null,
+      expiresAt: expiresAt ?? null,
       isSelf,
       sourceRelays: sourceRelays ?? null,
       persistedDelivery: persistedDelivery ?? null,
@@ -552,6 +558,11 @@ export function MessageDetailSheet({
   }
 
   const sentAt = shownRumor?.created_at ?? null;
+  const deadline = snap?.expiresAt ?? null;
+  const timestamps = [
+    { key: 'message_detail.expires_at', time: deadline === null ? null : deadline / 1000, Icon: Timer, tone: 'danger' },
+    { key: 'message_detail.time', time: sentAt, Icon: Clock, tone: 'subtle' },
+  ] as const;
 
   return (
     <BottomSheet
@@ -560,29 +571,29 @@ export function MessageDetailSheet({
       title={t('message_detail.title')}
       contentStyle={{ gap: spacing.lg }}
     >
-      {/* Time */}
-      {sentAt != null ? (
+      {timestamps.map(({ key, time, Icon, tone }) => time === null ? null : (
         <View
+          key={key}
           style={{
             direction,
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 10,
+            gap: spacing.md,
             backgroundColor: c.surfaceMuted,
-            borderRadius: 12,
+            borderRadius: radius.md,
             paddingHorizontal: uiDensity.detailRowHorizontalPadding,
             paddingVertical: uiDensity.detailRowVerticalPadding,
           }}
         >
-          <Clock size={18} color={c.textMuted} />
+          <Icon size={18} color={c.textMuted} />
           <AppText variant="body" style={{ flex: 1 }}>
-            {t('message_detail.time')}
+            {t(key)}
           </AppText>
-          <AppText variant="body" tone="subtle">
-            {formatDetailTimestamp(sentAt, dateTimeFormatPreferences)}
+          <AppText variant="body" tone={tone} align="end" style={{ flexShrink: 1 }}>
+            {formatDetailTimestamp(time, dateTimeFormatPreferences)}
           </AppText>
         </View>
-      ) : null}
+      ))}
 
       {/* Self: delivery status. */}
       {shownIsSelf ? (

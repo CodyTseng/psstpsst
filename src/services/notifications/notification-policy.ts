@@ -2,7 +2,7 @@ import type { Rumor } from '@/db/schema/types';
 import i18n from '@/i18n';
 import type { NotificationCommunication } from '@/platform/ports/notifications';
 import { resolveDisplayName } from '@/lib/nostr/display-name';
-import { disappearingMessageDuration } from '@/lib/nostr/disappearing-message';
+import { isDisappearingMessage } from '@/lib/nostr/disappearing-message';
 import { KIND_REACTION } from '@/services/crypto/nip17-gift-wrap';
 
 import { discardNotificationEvents } from './notification-events.service';
@@ -45,7 +45,8 @@ export async function buildNotificationContent(
     ? hasReactions ? i18n.t('notifications.new_activity') : i18n.t('notifications.new_messages', { count })
     : reaction ? i18n.t('notifications.new_reaction')
       : i18n.t(options.conversation.groupId ? 'group.new_message' : 'notifications.new_message');
-  const showMessageContent = contentPreferences.showMessageContent && disappearingMessageDuration(latest) === null;
+  const showMessageContent = contentPreferences.showMessageContent &&
+    !isDisappearingMessage(latest, options.conversation.deliveryKind);
   const preview = contentPreferences.showSender || showMessageContent
     ? await getNotificationPreview(latest, accountPubkey, {
         includeIdentity: contentPreferences.showSender,

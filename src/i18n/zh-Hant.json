@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "訊息資訊",
     "time": "時間",
+    "expires_at": "到期時間",
     "received_from": "接收來源",
     "received_from_unknown": "未記錄",
     "delivered_to": "傳遞至",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "閱後即焚",
+      "title": "訊息有效期",
+      "default_title": "預設訊息有效期",
+      "use_default": "使用預設值（{{duration}}）",
+      "custom": "自訂時長",
       "off": "關閉",
-      "duration_30": "30 秒",
-      "duration_300": "5 分鐘",
-      "duration_3600": "1 小時",
-      "duration_86400": "24 小時",
-      "duration_604800": "7 天",
-      "hint": "適用於你從此裝置傳送的新文字訊息。你的倒數計時從傳送時開始，對方的倒數計時從看到訊息時開始。",
+      "hint": "你在一對一聊天中傳送的新訊息從傳送時開始計時，到期後隱藏。設定會加密同步到你的裝置。",
       "save_failed": "無法儲存倒數計時，請再試一次。"
     },
     "input_placeholder": "輸入訊息",

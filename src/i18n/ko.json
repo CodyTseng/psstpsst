@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "메시지 정보",
     "time": "시간",
+    "expires_at": "사라지는 시간",
     "received_from": "수신처",
     "received_from_unknown": "기록되지 않음",
     "delivered_to": "전달 대상",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "사라지는 메시지",
+      "title": "메시지 만료",
+      "default_title": "기본 메시지 만료",
+      "use_default": "기본값 사용 ({{duration}})",
+      "custom": "사용자 지정 기간",
       "off": "끔",
-      "duration_30": "30초",
-      "duration_300": "5분",
-      "duration_3600": "1시간",
-      "duration_86400": "24시간",
-      "duration_604800": "7일",
-      "hint": "이 기기에서 보내는 새 텍스트 메시지에 적용됩니다. 내 타이머는 전송할 때 시작되고 상대방의 타이머는 메시지를 볼 때 시작됩니다.",
+      "hint": "1:1 채팅의 새 메시지는 보낸 후 이 시간이 지나면 만료됩니다. 설정은 기기 간에 암호화되어 동기화됩니다.",
       "save_failed": "타이머를 저장하지 못했습니다. 다시 시도해 주세요."
     },
     "input_placeholder": "메시지 입력",

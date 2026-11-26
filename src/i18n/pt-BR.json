@@ -444,6 +444,7 @@
   "message_detail": {
     "title": "Informações da mensagem",
     "time": "Horário",
+    "expires_at": "Desaparece em",
     "received_from": "Recebida de",
     "received_from_unknown": "Não registrado",
     "delivered_to": "Entregue a",
@@ -468,14 +469,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Mensagens temporárias",
+      "title": "Expiração das mensagens",
+      "default_title": "Expiração padrão das mensagens",
+      "use_default": "Usar padrão ({{duration}})",
+      "custom": "Duração personalizada",
       "off": "Desativadas",
-      "duration_30": "30 segundos",
-      "duration_300": "5 minutos",
-      "duration_3600": "1 hora",
-      "duration_86400": "24 horas",
-      "duration_604800": "7 dias",
-      "hint": "Vale para novas mensagens de texto enviadas deste dispositivo. Seu temporizador começa no envio. O da outra pessoa começa quando ela vê a mensagem.",
+      "hint": "As novas mensagens em conversas individuais expiram após esse tempo contado do envio. As configurações são sincronizadas de forma criptografada entre seus dispositivos.",
       "save_failed": "Não foi possível salvar o temporizador. Tente novamente."
     },
     "input_placeholder": "Digite uma mensagem",

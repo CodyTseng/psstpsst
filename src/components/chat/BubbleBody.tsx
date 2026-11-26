@@ -170,6 +170,8 @@ function BubbleBodyBase({
       }),
     [attachment, content, preparedPresentation, rumorId, tags],
   );
+  const showTimer = presentation.disappearing &&
+    (!isSelf || delivery === null || delivery.phase === 'sent');
   const customEmojiMap = presentation.customEmojiMap;
   const shortCustomEmojis = presentation.shortCustomEmojis;
   const shortEmoji = presentation.shortEmoji;
@@ -228,10 +230,9 @@ function BubbleBodyBase({
         >
           {time}
         </AppText>
-        {presentation.disappearing ? (
+        {showTimer ? (
           <Timer accessibilityLabel={t('chat.disappearing.title')} size={MESSAGE_DELIVERY_ICON_SIZE} color={color} strokeWidth={iconStrokeWidth.compact} />
-        ) : null}
-        {isSelf ? (
+        ) : isSelf ? (
           delivery ? (
             <MessageDeliveryStatus delivery={delivery} color={color} />
           ) : (
@@ -319,9 +320,8 @@ function BubbleBodyBase({
   }
 
   function renderInlineText(bodySegments: InlineMessageSegment[], showMeta: boolean) {
-    const deliverySpacer = isSelf ? FIG.repeat(2) : '';
-    const timerSpacer = presentation.disappearing ? FIG.repeat(2) : '';
-    const metaWidthSpacer = `${FIG}${deliverySpacer}${timerSpacer}${timeWidthSpacer}`;
+    const iconSpacer = isSelf || showTimer ? FIG.repeat(2) : '';
+    const metaWidthSpacer = `${FIG}${iconSpacer}${timeWidthSpacer}`;
     const blockMetaSpacer = showMeta
       ? `${ZWSP}${isRTL ? `${RLI}${metaWidthSpacer}${PDI}` : metaWidthSpacer}`
       : '';

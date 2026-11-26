@@ -64,7 +64,7 @@ test('normalizes relay and Blossom URLs identically through the notification URL
   }
 });
 
-function fixture(content = 'private message', { invalidRumorId = false, disappearing = false } = {}) {
+function fixture(content = 'private message', { invalidRumorId = false, expirationOffset } = {}) {
   const identity = generateSecretKey();
   const encryption = generateSecretKey();
   const sender = generateSecretKey();
@@ -72,7 +72,7 @@ function fixture(content = 'private message', { invalidRumorId = false, disappea
   const ephemeral = generateSecretKey();
   const account = getPublicKey(identity);
   const rumor = { pubkey: getPublicKey(sender), kind: 14, content, tags: [['p', account]], created_at: Math.floor(Date.now() / 1000) };
-  if (disappearing) rumor.tags.push(['disappear-after', '30']);
+  if (expirationOffset != null) rumor.tags.push(['expiration', String(rumor.created_at + expirationOffset)]);
   rumor.id = invalidRumorId ? '0'.repeat(64) : getEventHash(rumor);
   const seal = finalizeEvent({ kind: 13, created_at: rumor.created_at,
     tags: [['n', getPublicKey(senderEncryption)]],
@@ -380,8 +380,8 @@ test('sender opt-in supplies communication identity and avatar without exposing 
   } finally { sqlite.close(); }
 });
 
-test('disappearing text never enters system previews or starts the timer on receipt', async () => {
-  const input = fixture('private timed message', { disappearing: true });
+test('expiring text keeps its authenticated deadline and stays out of system previews', async () => {
+  const input = fixture('private timed message', { expirationOffset: 300 });
   const sqlite = await database(input, { preview: true });
   try {
     const result = await receive(sqlite, input, { type: 'event', data: input.event });
@@ -389,8 +389,19 @@ test('disappearing text never enters system previews or starts the timer on rece
     assert.ok(!result.body.includes(input.rumor.content));
     const message = sqlite.prepare('SELECT content, disappear_after_seconds, expires_at FROM messages').get();
     assert.equal(message.content, input.rumor.content);
-    assert.equal(message.disappear_after_seconds, 30);
-    assert.equal(message.expires_at, null);
+    assert.equal(message.disappear_after_seconds, 300);
+    assert.equal(message.expires_at, (input.rumor.created_at + 300) * 1000);
+  } finally { sqlite.close(); }
+});
+
+test('expired rumors never alert or enter history', async () => {
+  const input = fixture('expired message', { expirationOffset: -1 });
+  const sqlite = await database(input, { preview: true });
+  try {
+    const result = await receive(sqlite, input, { type: 'event', data: input.event });
+    assert.equal(result.status, 'suppress');
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM messages').get().n, 0);
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM notification_events').get().n, 0);
   } finally { sqlite.close(); }
 });
 

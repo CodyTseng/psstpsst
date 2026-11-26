@@ -441,6 +441,7 @@
   "message_detail": {
     "title": "Message info",
     "time": "Time",
+    "expires_at": "Disappears at",
     "received_from": "Received from",
     "received_from_unknown": "Not recorded",
     "delivered_to": "Delivered to",
@@ -465,14 +466,12 @@
   },
   "chat": {
     "disappearing": {
-      "title": "Disappearing messages",
+      "title": "Message expiration",
+      "default_title": "Default message expiration",
+      "use_default": "Use default ({{duration}})",
+      "custom": "Custom duration",
       "off": "Off",
-      "duration_30": "30 seconds",
-      "duration_300": "5 minutes",
-      "duration_3600": "1 hour",
-      "duration_86400": "24 hours",
-      "duration_604800": "7 days",
-      "hint": "Applies to new text messages you send from this device. Your timer starts when you send. Their timer starts when they see the message.",
+      "hint": "New messages you send in one-to-one chats expire this long after sending. Settings sync encrypted across your devices.",
       "save_failed": "Could not save the timer. Try again."
     },
     "input_placeholder": "Message",

@@ -45,7 +45,7 @@ type Props = Omit<PressableProps, 'children' | 'style'> & {
   /** Artwork-led actions dim only their icons, keeping labels and canvas unchanged. */
   interactionFeedback?: 'surface' | 'iconOpacity';
   contentAlign?: 'center' | 'baseline';
-  contentJustify?: 'center' | 'start';
+  contentJustify?: 'center' | 'start' | 'between';
   fullWidth?: boolean;
   /** Corner radius: `sm` for compact desktop utility actions, `lg` (default, the standard button) or `full` (a pill that
    * hugs its content — pair with `fullWidth={false}`). Unframed artwork tiles
@@ -96,6 +96,7 @@ export function AppButton({
   ...rest
 }: Props) {
   const c = useThemeColors();
+  const stretchContent = contentJustify !== 'center';
   const iconOpacityFeedback = interactionFeedback === 'iconOpacity';
   const textChrome = variant === 'text' || variant === 'accentText';
   const size = sizeProp ?? 'md';
@@ -199,7 +200,7 @@ export function AppButton({
         // absolute child the same capsule radius leaves a visible ring between
         // the hover fill and a bordered control on React Native Web.
         overflow: 'hidden',
-        alignItems: contentJustify === 'start' ? 'stretch' : 'center',
+        alignItems: stretchContent ? 'stretch' : 'center',
         justifyContent: contentJustify === 'start' ? 'flex-start' : 'center',
         flexDirection: orientation === 'vertical' ? 'column' : 'row',
         maxWidth: '100%',
@@ -243,11 +244,12 @@ export function AppButton({
                 contentAlign === 'baseline' && orientation === 'horizontal'
                   ? 'baseline'
                   : 'center',
-              justifyContent: contentJustify === 'start' ? 'flex-start' : 'center',
+              justifyContent: contentJustify === 'between' ? 'space-between' :
+                contentJustify === 'start' ? 'flex-start' : 'center',
               gap: orientation === 'vertical' ? 4 : 8,
               maxWidth: '100%',
-              width: contentJustify === 'start' ? '100%' : undefined,
-              alignSelf: contentJustify === 'start' ? 'stretch' : undefined,
+              width: stretchContent ? '100%' : undefined,
+              alignSelf: stretchContent ? 'stretch' : undefined,
               opacity: loading ? 0 : 1,
             }}
           >
