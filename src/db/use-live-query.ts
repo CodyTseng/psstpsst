@@ -14,6 +14,7 @@ import { migrateApplicationFavorites } from './data-migrations/application-favor
 import { migrateExplore } from './data-migrations/explore';
 import { migrateSigningSources } from './data-migrations/signing-sources';
 import { migrateEventKeys } from './data-migrations/event-keys';
+import { ensureRoutingSettingsEditsTable, repairRelaySettings } from './data-migrations/repair-relay-settings';
 import { platform } from '@/platform';
 
 import type { Database } from './client';
@@ -31,7 +32,7 @@ type MigrationBundle = {
   migrations: Record<string, string>;
 };
 
-async function migrateDatabase(db: Database, bundle: MigrationBundle): Promise<void> {
+export async function migrateDatabase(db: Database, bundle: MigrationBundle): Promise<void> {
   const migrations = bundle.journal.entries.map((entry) => {
     const source = bundle.migrations[`m${entry.idx.toString().padStart(4, '0')}`];
     if (!source) throw new Error(`Missing migration: ${entry.tag}`);
@@ -59,11 +60,14 @@ async function migrateDatabase(db: Database, bundle: MigrationBundle): Promise<v
 
     for (const migration of migrations) {
       if (latestCreatedAt !== undefined && latestCreatedAt >= migration.createdAt) continue;
+      // A development database may have skipped the migration that creates this table.
+      if (migration.index === 89) await ensureRoutingSettingsEditsTable(tx);
       for (const statement of migration.statements) await tx.run(sql.raw(statement));
       if (migration.index === 61) await migrateSigningSources(tx);
       if (migration.index === 62) await migrateExplore(tx);
       if (migration.index === 71) await migrateApplicationFavorites(tx);
       if (migration.index === 77) await migrateEventKeys(tx);
+      if (migration.index === 95) await repairRelaySettings(tx);
       await tx.run(
         sql`INSERT INTO __drizzle_migrations (hash, created_at) VALUES (${''}, ${migration.createdAt})`,
       );

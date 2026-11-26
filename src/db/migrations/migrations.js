@@ -1,3 +1,4 @@
+import m0095 from './0095_repair-relay-settings.sql';
 import m0094 from './0094_reaction-retractions.sql';
 import m0093 from './0093_reaction-previews.sql';
 import m0092 from './0092_disappearing-messages.sql';
@@ -195,6 +196,7 @@ m0090,
 m0091,
 m0092,
 m0093,
-m0094
+m0094,
+m0095
     }
   }

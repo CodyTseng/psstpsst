@@ -666,6 +666,13 @@
       "when": 1795132800000,
       "tag": "0094_reaction-retractions",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1795219200000,
+      "tag": "0095_repair-relay-settings",
+      "breakpoints": true
     }
   ]
 }
