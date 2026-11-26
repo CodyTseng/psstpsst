@@ -31,6 +31,7 @@ import { ListRow } from '@/components/common/ListRow';
 import { ScreenHeader, useScreenHeaderClearance } from '@/components/common/ScreenHeader';
 import { PhotoCaptureModal } from '@/components/common/PhotoCaptureModal';
 import { ImageSourcePicker } from '@/components/profile/ImageSourcePicker';
+import { Nip05Label } from '@/components/profile/Nip05Label';
 import { Nip05ClaimForm } from '@/components/nip05/Nip05ClaimForm';
 import { resolveProfileNip05Action } from '@/components/nip05/profile-nip05-action';
 import { NpubQrSheet } from '@/components/profile/NpubQrSheet';
@@ -444,6 +445,11 @@ export function ProfileView({ pubkey }: { pubkey: string }) {
                 icon={<AtSign size={22} color={c.text} strokeWidth={iconStrokeWidth.default} />}
                 title={t('profile.nip05')}
                 value={nip05 || t('profile.not_set')}
+                belowValue={
+                  nip05 ? (
+                    <Nip05Label nip05={nip05} pubkey={pubkey} weight="semibold" nameTone="default" />
+                  ) : undefined
+                }
                 valueTone={nip05 ? 'default' : 'muted'}
                 valuePlacement="below"
                 valueEllipsizeMode="middle"
