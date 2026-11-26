@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from 'react';
+import { Children, isValidElement, type ReactNode } from 'react';
 import { StyleSheet, type StyleProp, View, type ViewStyle } from 'react-native';
 
 import { radius, useThemeColors } from '@/theme';
@@ -36,7 +36,7 @@ export function ListGroup({ children, style }: Props) {
         ]}
       >
         {rows.map((row, i) => (
-          <View key={i}>
+          <View key={isValidElement(row) ? row.key : i}>
             {i > 0 ? (
               <View
                 style={{

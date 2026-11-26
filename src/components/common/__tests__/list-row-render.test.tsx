@@ -55,6 +55,26 @@ describe('ListRow layout', () => {
     expect(value.props.style).toMatchObject({ flexShrink: 1 });
   });
 
+  it('keeps existing rows mounted when a conditional row appears above them', () => {
+    function group(showMedia: boolean) {
+      return (
+        <ListGroup>
+          {showMedia ? <ListRow title="Media" /> : null}
+          <ListRow title="Message expiration" />
+        </ListGroup>
+      );
+    }
+
+    act(() => { renderer = create(group(false)); });
+    const expiryRow = renderer!.root.findByType(ListRow);
+
+    act(() => { renderer!.update(group(true)); });
+    const rows = renderer!.root.findAllByType(ListRow);
+
+    expect(rows.map(row => row.props.title)).toEqual(['Media', 'Message expiration']);
+    expect(rows[1]).toBe(expiryRow);
+  });
+
   it('clips a full rectangular interaction layer to the outer card corners', () => {
     act(() => { renderer = create(<ListRow title="Publisher" active onPress={jest.fn()} />); });
     const row = renderer!.root.findByType(InteractivePressable);

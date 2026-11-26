@@ -427,9 +427,14 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
         {isSelf ? (
           <View style={{ marginTop: spacing.xl }}>
             <ListGroup>
-              <ChatWallpaperRow conversationKey={conversationKey} />
-              <MessageExpirySetting accountPubkey={accountPubkey} conversationKey={conversationKey}
-                legacyDuration={conversation?.disappearAfterSeconds} disabled={!conversationLoaded} />
+              {hasConversationContent ? (
+                <ListRow
+                  icon={<Images size={22} color={c.text} />}
+                  title={t('media.title')}
+                  trailing={<ChevronRight size={18} color={c.textMuted} />}
+                  onPress={() => router.push(`/media/${encodeURIComponent(conversationKey)}`)}
+                />
+              ) : null}
               {hasConversationContent ? (
                 <ListRow
                   icon={<Search size={22} color={c.text} />}
@@ -440,14 +445,9 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
                   }
                 />
               ) : null}
-              {hasConversationContent ? (
-                <ListRow
-                  icon={<Images size={22} color={c.text} />}
-                  title={t('media.title')}
-                  trailing={<ChevronRight size={18} color={c.textMuted} />}
-                  onPress={() => router.push(`/media/${encodeURIComponent(conversationKey)}`)}
-                />
-              ) : null}
+              <ChatWallpaperRow conversationKey={conversationKey} />
+              <MessageExpirySetting accountPubkey={accountPubkey} conversationKey={conversationKey}
+                legacyDuration={conversation?.disappearAfterSeconds} disabled={!conversationLoaded} />
               <ListRow
                 icon={<QrCode size={22} color={c.text} />}
                 title={t('profile.show_qr')}
@@ -462,9 +462,14 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
         {!isSelf ? (
           <View style={{ marginTop: spacing['2xl'] }}>
             <ListGroup>
-              <ChatWallpaperRow conversationKey={conversationKey} />
-              <MessageExpirySetting accountPubkey={accountPubkey} conversationKey={conversationKey}
-                legacyDuration={conversation?.disappearAfterSeconds} disabled={!conversationLoaded} />
+              {hasConversationContent ? (
+                <ListRow
+                  icon={<Images size={22} color={c.text} />}
+                  title={t('media.title')}
+                  trailing={<ChevronRight size={18} color={c.textMuted} />}
+                  onPress={() => router.push(`/media/${encodeURIComponent(conversationKey)}`)}
+                />
+              ) : null}
               {commonGroupsLoaded && commonGroups.length > 0 ? (
                 <ListRow
                   icon={<Users size={22} color={c.text} strokeWidth={iconStrokeWidth.default} />}
@@ -474,14 +479,9 @@ export function PeerProfile({ pubkey }: { pubkey: string }) {
                   onPress={() => router.push(`/common-groups/${encodeURIComponent(pubkey)}`)}
                 />
               ) : null}
-              {hasConversationContent ? (
-                <ListRow
-                  icon={<Images size={22} color={c.text} />}
-                  title={t('media.title')}
-                  trailing={<ChevronRight size={18} color={c.textMuted} />}
-                  onPress={() => router.push(`/media/${encodeURIComponent(conversationKey)}`)}
-                />
-              ) : null}
+              <ChatWallpaperRow conversationKey={conversationKey} />
+              <MessageExpirySetting accountPubkey={accountPubkey} conversationKey={conversationKey}
+                legacyDuration={conversation?.disappearAfterSeconds} disabled={!conversationLoaded} />
               <ListRow
                 icon={<Pencil size={22} color={c.text} />}
                 title={t('profile.set_petname')}

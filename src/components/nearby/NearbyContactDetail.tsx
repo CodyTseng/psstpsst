@@ -355,6 +355,14 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
 
             <View style={{ marginTop: spacing['2xl'] }}>
               <ListGroup>
+                {hasConversationContent ? (
+                  <ListRow
+                    icon={<Images size={22} color={c.text} />}
+                    title={t('media.title')}
+                    trailing={<ChevronRight size={18} color={c.textMuted} />}
+                    onPress={() => router.push(`/media/${encodeURIComponent(pubkey)}`)}
+                  />
+                ) : null}
                 <ChatWallpaperRow conversationKey={pubkey} />
                 <MessageExpirySetting accountPubkey={accountPubkey} conversationKey={pubkey}
                   legacyDuration={conversation?.disappearAfterSeconds} />
@@ -374,14 +382,6 @@ export function NearbyContactDetail({ pubkey, fallbackName }: Props) {
                   }
                   onPress={() => void copyPublicKey()}
                 />
-                {hasConversationContent ? (
-                  <ListRow
-                    icon={<Images size={22} color={c.text} />}
-                    title={t('media.title')}
-                    trailing={<ChevronRight size={18} color={c.textMuted} />}
-                    onPress={() => router.push(`/media/${encodeURIComponent(pubkey)}`)}
-                  />
-                ) : null}
                 <ListRow
                   icon={<Pencil size={22} color={c.text} />}
                   title={t('profile.set_petname')}
