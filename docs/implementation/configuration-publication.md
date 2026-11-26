@@ -32,10 +32,12 @@ configuration outbox publishes the signed document to the account's write
 relays. The self-event stream watches the exact account and document coordinate
 on those relays with NIP-42 authentication. Startup reconciliation also applies
 the latest decryptable snapshot. A local draft keeps its edited values when a
-remote snapshot arrives. Before signing, publication reconciles a cached remote
-event that has not been applied to the local revision. If decryption fails,
-the draft stays pending. Signed snapshots follow the normal Nostr replaceable
-event ordering.
+remote snapshot arrives. The subscription registers verified events for caching
+before waiting for the signer. Before signing, publication waits for those cache
+writes and reconciles an event that has not been applied to the local revision.
+A concurrent cache write prevents the stale revision from committing. If
+decryption fails, the draft stays pending. Signed snapshots follow the normal
+Nostr replaceable event ordering.
 
 ## Replacement and completion
 

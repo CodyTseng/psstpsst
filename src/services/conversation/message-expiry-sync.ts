@@ -13,6 +13,8 @@ import {
   type MessageExpiryValues, validExpiryConversationKey,
 } from './message-expiry-preference';
 
+const incomingCacheWrites = new Map<string, Promise<void>>();
+
 function encode(values: MessageExpiryValues): string[][] {
   return [['v', '1'], ['default', String(values.get(DEFAULT_MESSAGE_EXPIRY_SLOT) ?? 0)],
     ...Array.from(values).filter(([key]) => key !== DEFAULT_MESSAGE_EXPIRY_SLOT).sort(([a], [b]) => a.localeCompare(b))
@@ -22,6 +24,7 @@ function encode(values: MessageExpiryValues): string[][] {
 export function queueMessageExpiryPublication(accountPubkey: string, signer?: Signer): void {
   queuePrivateListPublication({
     accountPubkey, kind: MESSAGE_EXPIRY_SETTINGS_KIND, dTag: MESSAGE_EXPIRY_SETTINGS_D, signer,
+    pendingCacheWrite: () => incomingCacheWrites.get(accountPubkey),
     reconcileCachedEvent: (event, signer) => applyMessageExpirySettingsEvent(accountPubkey, event, signer, {
       throwOnDecryptError: true,
     }),
@@ -31,6 +34,22 @@ export function queueMessageExpiryPublication(accountPubkey: string, signer?: Si
       return encode(values);
     },
   });
+}
+
+/** Register a verified subscription event before yielding to a signer. */
+export function cacheMessageExpirySettingsEvent(event: Event): Promise<void> {
+  const accountPubkey = event.pubkey;
+  const prior = incomingCacheWrites.get(accountPubkey) ?? Promise.resolve();
+  const write = prior.catch(() => {}).then(async () => { await storeReplaceableEvent(event); });
+  incomingCacheWrites.set(accountPubkey, write);
+  const clear = () => {
+    if (incomingCacheWrites.get(accountPubkey) === write) incomingCacheWrites.delete(accountPubkey);
+  };
+  void write.then(() => {
+    clear();
+    return resumeMessageExpiryPublication(accountPubkey);
+  }, clear).catch(() => {});
+  return write;
 }
 
 export async function resumeMessageExpiryPublication(accountPubkey: string): Promise<void> {

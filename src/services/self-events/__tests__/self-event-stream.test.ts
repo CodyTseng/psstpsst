@@ -60,6 +60,7 @@ const fakeSigner = { nip44Encrypt: jest.fn(), nip44Decrypt: jest.fn() };
 
 jest.mock('../../conversation/message-expiry-sync', () => ({
   applyMessageExpirySettingsEvent: jest.fn(async () => {}),
+  cacheMessageExpirySettingsEvent: jest.fn(async () => {}),
   resumeMessageExpiryPublication: jest.fn(async () => {}),
 }));
 jest.mock('../../relay/configuration-publish.service', () => ({ canApplyConfigurationEvent: async () => true }));
@@ -454,6 +455,22 @@ describe('selfEventStream', () => {
     expect(jest.requireMock('../../conversation/message-expiry-sync').applyMessageExpirySettingsEvent)
       .toHaveBeenCalledWith(SELF, expiry, fakeSigner);
     expect(mockApplyMediaServersEvent).toHaveBeenCalledWith(SELF, media);
+  });
+
+  it('registers a live expiry snapshot before waiting for the signer', async () => {
+    await startStream();
+    const { cacheMessageExpirySettingsEvent, applyMessageExpirySettingsEvent } =
+      jest.requireMock('../../conversation/message-expiry-sync');
+    let release!: () => void;
+    cacheMessageExpirySettingsEvent.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve; }));
+    const expiry = makeEvent(30078, 100, [['d', 'psstpsst-message-expiry']]);
+    deliver('self.message-expiry', expiry);
+    expect(cacheMessageExpirySettingsEvent).toHaveBeenCalledWith(expiry);
+    await flush();
+    expect(mockGetSigner).not.toHaveBeenCalled();
+    release();
+    await flush();
+    expect(applyMessageExpirySettingsEvent).toHaveBeenCalledWith(SELF, expiry, fakeSigner);
   });
 
   it('dedups the same event id across REQs', async () => {

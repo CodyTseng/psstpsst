@@ -11,7 +11,11 @@ import { platform } from '@/platform';
 
 import { applyContactsEvent, CONTACTS_D } from '../contact/contact.service';
 import { applyMutedEvent, MUTED_D } from '../conversation/conversation-prefs.service';
-import { applyMessageExpirySettingsEvent, resumeMessageExpiryPublication } from '../conversation/message-expiry-sync';
+import {
+  applyMessageExpirySettingsEvent,
+  cacheMessageExpirySettingsEvent,
+  resumeMessageExpiryPublication,
+} from '../conversation/message-expiry-sync';
 import {
   KIND_CLIENT_KEY_ANNOUNCEMENT,
   KIND_DM_RELAY_LIST,
@@ -305,13 +309,16 @@ class SelfEventStream {
           if (signer) await applyFavoritesEvent(config.accountPubkey, event, signer);
         });
         return;
-      case MESSAGE_EXPIRY_SETTINGS_KIND:
+      case MESSAGE_EXPIRY_SETTINGS_KIND: {
         if (dTagOf(event) !== MESSAGE_EXPIRY_SETTINGS_D || event.pubkey !== config.accountPubkey) return;
+        const cached = cacheMessageExpirySettingsEvent(event);
         this.enqueue('message-expiry', async () => {
+          await cached;
           const signer = await this.loadSigner(config);
           if (signer && this.config === config) await applyMessageExpirySettingsEvent(config.accountPubkey, event, signer);
         });
         return;
+      }
       case KIND_FOLLOW_SET:
         this.dispatchFollowSet(config, event);
         return;

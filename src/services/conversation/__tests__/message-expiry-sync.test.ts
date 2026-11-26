@@ -8,7 +8,9 @@ import { enqueueConfigurationEvent } from '@/services/relay/configuration-publis
 import { storeReplaceableEvent } from '@/services/relay/replaceable-events.service';
 
 import { authoredExpirationTags, messageExpirySettingsQuery, readExpirySettings } from '../message-expiry-preference';
-import { applyMessageExpirySettingsEvent, resumeMessageExpiryPublication, setMessageExpirySetting } from '../message-expiry-sync';
+import {
+  applyMessageExpirySettingsEvent, cacheMessageExpirySettingsEvent, resumeMessageExpiryPublication, setMessageExpirySetting,
+} from '../message-expiry-sync';
 
 jest.mock('@/db/client', () => {
   const { applicationTestDatabase } = jest.requireActual('@/services/explore/testing/database');
@@ -104,27 +106,41 @@ it('encrypts the config for its own account, applies newer snapshots and rebases
   }
 });
 
-it.each([false, true])('merges a startup-cached snapshot before publication, decrypt retries: %s', async retry => {
+it.each(['startup', 'retry', 'live', 'signing'] as const)('merges an unapplied remote snapshot before publication: %s', async scenario => {
   jest.useFakeTimers({ now: 2_000_000 });
   const real = jest.requireActual<typeof import('@/services/relay/configuration-publish.service')>(
     '@/services/relay/configuration-publish.service',
   );
   const wake = jest.spyOn(real.configurationPublisher, 'wake').mockImplementation(() => {});
   const decrypt = jest.spyOn(mockSigner, 'nip44Decrypt');
+  const sign = jest.spyOn(mockSigner, 'signEvent');
   try {
-    let notify!: (accepted: boolean) => void;
-    const committed = new Promise<boolean>(resolve => { notify = resolve; });
+    let notify!: (event: Parameters<typeof finalizeEvent>[0]) => void;
+    const committed = new Promise<Parameters<typeof finalizeEvent>[0]>(resolve => { notify = resolve; });
     jest.mocked(enqueueConfigurationEvent).mockImplementation(async (...args) => {
       const accepted = await real.enqueueConfigurationEvent(...args);
-      notify(accepted);
+      if (accepted) notify(args[0]);
       return accepted;
     });
     await applyMessageExpirySettingsEvent(self, remote(1900, 60), mockSigner);
+    let finishSigning!: () => void;
+    if (scenario === 'signing') {
+      sign.mockImplementationOnce(async (template) => {
+        await new Promise<void>(resolve => { finishSigning = resolve; });
+        return finalizeEvent(template, secret);
+      });
+    }
     await setMessageExpirySetting(self, nearby, 45);
-    // The startup read has cached this event, but has not applied its plaintext.
+    if (scenario === 'signing') await jest.advanceTimersByTimeAsync(0);
     const incoming = remote(2100, 600, [['conversation', peer, '0']]);
-    await storeReplaceableEvent(incoming);
-    if (retry) {
+    if (scenario === 'live' || scenario === 'signing') {
+      // The subscription has received the event, but the live handler has no signer yet.
+      await cacheMessageExpirySettingsEvent(incoming);
+      if (scenario === 'signing') finishSigning();
+    } else {
+      await storeReplaceableEvent(incoming);
+    }
+    if (scenario === 'retry') {
       decrypt.mockRejectedValueOnce(new Error('Signer temporarily unavailable'));
       await jest.runAllTimersAsync();
       expect(enqueueConfigurationEvent).not.toHaveBeenCalled();
@@ -132,9 +148,9 @@ it.each([false, true])('merges a startup-cached snapshot before publication, dec
       await resumeMessageExpiryPublication(self);
     }
     await jest.runAllTimersAsync();
-    await expect(committed).resolves.toBe(true);
-    expect(enqueueConfigurationEvent).toHaveBeenCalledTimes(1);
-    const [published, , previous] = jest.mocked(enqueueConfigurationEvent).mock.calls[0];
+    const published = await committed;
+    expect(enqueueConfigurationEvent).toHaveBeenCalledTimes(scenario === 'signing' ? 2 : 1);
+    const [, , previous] = jest.mocked(enqueueConfigurationEvent).mock.lastCall!;
     expect(previous).toBe(incoming.id);
     expect(published.created_at).toBe(2101);
     expect(JSON.parse(await mockSigner.nip44Decrypt(self, published.content))).toEqual([
@@ -142,6 +158,7 @@ it.each([false, true])('merges a startup-cached snapshot before publication, dec
     ]);
     expect((await messageExpirySettingsQuery(self))[0]?.dirty).toBe(false);
   } finally {
+    sign.mockRestore();
     decrypt.mockRestore();
     wake.mockRestore();
     jest.useRealTimers();

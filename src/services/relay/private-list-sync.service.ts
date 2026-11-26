@@ -31,6 +31,7 @@ type Publication = {
   title?: string;
   readTags?: (tx: Database) => Promise<string[][]>;
   validateTags?: (tags: string[][]) => string[][];
+  pendingCacheWrite?: () => Promise<void> | undefined;
   reconcileCachedEvent?: (event: import('nostr-tools').Event, signer: Signer) => Promise<void>;
   onCommitted?: (event: import('nostr-tools').Event) => void;
   signer?: Signer;
@@ -84,6 +85,9 @@ async function publish(publication: Publication): Promise<void> {
   });
   let snapshot = await readSnapshot();
   if (!snapshot) return;
+  for (let write = publication.pendingCacheWrite?.(); write; write = publication.pendingCacheWrite?.()) {
+    await write;
+  }
   const previous = await getReplaceableEvent({ pubkey: accountPubkey, kind, dTag });
   if (previous && publication.sourceEventId && previous.id !== publication.sourceEventId) return;
   if (previous && publication.reconcileCachedEvent && previous.id !== snapshot.state.eventId) {
@@ -111,6 +115,7 @@ async function publish(publication: Publication): Promise<void> {
       eq(privateListSyncState.kind, kind),
       eq(privateListSyncState.dTag, dTag),
     ));
+    if (publication.pendingCacheWrite?.()) throw new Error('Private-list cache changed while signing.');
   }, previous?.id ?? null);
   if (committed) publication.onCommitted?.(event);
 }
