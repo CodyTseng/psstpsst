@@ -1,5 +1,17 @@
 # Changelog
 
+## [26.11.3]
+
+- Delete messages and set them to expire in private and Nearby chats.
+- See reactions in the chat list, get notified, and remove your own reactions.
+- Type `/` in chat for command suggestions.
+- Download attachments more reliably and save relay and media server settings offline.
+- Find Media faster in conversation profiles.
+
+### Android and iOS
+
+- Smoother keyboard transitions and more reliable message menus.
+
 ## [26.11.2]
 
 - Improved file upload reliability across media servers.
