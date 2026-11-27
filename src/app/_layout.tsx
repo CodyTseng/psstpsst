@@ -152,7 +152,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         <AppErrorScreen
           title={t('error.unexpected_title')}
           message={t('error.unexpected_message')}
-          retryLabel={t('common.try_again')}
+          retryLabel={t('common.retry')}
           homeLabel={t('error.return_to_chats')}
           exportLabel={t('error.export_diagnostics')}
           repeated={repeated}
@@ -479,7 +479,7 @@ function RootLayoutContent() {
             <AppText variant="body" align="center">
               {t('error.migration_failed', { error: storageMigration.error.message })}
             </AppText>
-            <AppButton label={t('common.try_again')} onPress={storageMigration.retry} />
+            <AppButton label={t('common.retry')} onPress={storageMigration.retry} />
           </View>
         </AppContentColumn>
       </AppScreen>
