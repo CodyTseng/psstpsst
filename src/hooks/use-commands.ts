@@ -17,8 +17,10 @@ export function useCommands(peer: string | undefined, context: CommandContext | 
     eq(replaceableEvents.pubkey, peer ?? ''), eq(replaceableEvents.kind, 10050), eq(replaceableEvents.dTag, ''),
   )).limit(1), [peer, enabled], { enabled: enabled && !!peer });
   const inbox = inboxRows?.[0];
-  const relays = useMemo(() => inbox?.pubkey === peer && inbox.event
-    ? capDeliveryRelays(normalizeRelayUrls(inbox.event.tags.filter(tag => tag[0] === 'relay').map(tag => tag[1]))) : [], [inbox, peer]);
+  const relays = useMemo(() => {
+    if (!inbox?.event || inbox.pubkey !== peer) return [];
+    return capDeliveryRelays(normalizeRelayUrls(inbox.event.tags.filter(tag => tag[0] === 'relay').map(tag => tag[1])));
+  }, [inbox, peer]);
   return useMemo(() => enabled && context ? availableCommands((definitions ?? []).flatMap(row =>
     row.pubkey === peer && row.kind === COMMAND_KIND && row.event?.pubkey === peer ? [row.event] : [],
   ), { ...context, relays }) : [], [context, enabled, peer, relays, definitions]);

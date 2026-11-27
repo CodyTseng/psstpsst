@@ -22,8 +22,8 @@ const author = fixture.pubkey;
 const context = {pubkey:'b'.repeat(64),kind:14,tags:[['p',author]]};
 let commands: Command[];
 let renderer: ReactTestRenderer | undefined;
-function Commands({peer=author,enabled=true}:{peer?:string;enabled?:boolean}) {
-  const result = useCommands(peer,context,enabled);
+function Commands({peer,enabled=true}:{peer?:string;enabled?:boolean}) {
+  const result = useCommands(peer, peer ? context : undefined, enabled);
   useLayoutEffect(()=>{commands=result;}); return null;
 }
 function Profile({enabled=true}:{enabled?:boolean}) { useProfile(author,enabled); return null; }
@@ -46,30 +46,38 @@ test('disabled profile lifecycle does not query commands',()=>{
   expect(fetchCommandDeclarations).not.toHaveBeenCalled();
 });
 
+test('a group or Nearby composer without a command peer can mount and become active', () => {
+  act(() => { renderer = create(<Commands enabled={false} />); });
+  expect(commands).toEqual([]);
+
+  act(() => renderer!.update(<Commands />));
+  expect(commands).toEqual([]);
+});
+
 test('old live rows never leak across conversations or when the route is inactive',()=>{
   mockCommands=[{pubkey:author,kind:31992,dTag:fixture.tags[0][1],event:fixture}];
-  act(()=>{renderer=create(<Commands/>);}); expect(commands).toHaveLength(1);
+  act(()=>{renderer=create(<Commands peer={author}/>);}); expect(commands).toHaveLength(1);
   act(()=>renderer!.update(<Commands peer={'c'.repeat(64)}/>)); expect(commands).toEqual([]);
-  act(()=>renderer!.update(<Commands enabled={false}/>)); expect(commands).toEqual([]);
+  act(()=>renderer!.update(<Commands peer={author} enabled={false}/>)); expect(commands).toEqual([]);
 });
 
 test('relay-scoped commands require current-peer cached delivery relays',()=>{
   mockCommands=[{pubkey:author,kind:31992,dTag:fixture.tags[0][1],event:{...fixture,tags:[...fixture.tags,['s','relay:wss://relay.example']]}}];
   mockInbox=[{pubkey:'c'.repeat(64),event:{tags:[['relay','wss://relay.example']]}}];
-  act(()=>{renderer=create(<Commands/>);});expect(commands).toEqual([]);
+  act(()=>{renderer=create(<Commands peer={author}/>);});expect(commands).toEqual([]);
   mockInbox=[{pubkey:author,event:{tags:[['relay','wss://relay.example']]}}];
-  act(()=>renderer!.update(<Commands/>));expect(commands).toHaveLength(1);
+  act(()=>renderer!.update(<Commands peer={author}/>));expect(commands).toHaveLength(1);
 });
 
 
 test('all current-peer declarations are available without a command list',()=>{
   const second={...fixture,id:'second',tags:fixture.tags.map(tag=>tag[0]==='command'?['command','ping']:tag[0]==='d'?['d','ping']:tag)};
   mockCommands=[{pubkey:author,kind:31992,dTag:fixture.tags[0][1],event:fixture},{pubkey:author,kind:31992,dTag:'ping',event:second}];
-  act(()=>{renderer=create(<Commands/>);});expect(commands.map(command=>command.command)).toEqual(['echo','ping']);
+  act(()=>{renderer=create(<Commands peer={author}/>);});expect(commands.map(command=>command.command)).toEqual(['echo','ping']);
 });
 
 test('foreign-author cached declarations never leak into peer suggestions',()=>{
   const foreign='c'.repeat(64);
   mockCommands=[{pubkey:foreign,kind:31992,dTag:fixture.tags[0][1],event:{...fixture,pubkey:foreign}}];
-  act(()=>{renderer=create(<Commands/>);});expect(commands).toEqual([]);
+  act(()=>{renderer=create(<Commands peer={author}/>);});expect(commands).toEqual([]);
 });
