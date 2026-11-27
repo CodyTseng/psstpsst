@@ -1,10 +1,11 @@
 # Changelog
 
-## [26.11.3]
+## [26.11.4]
 
+- Fixed missing translations on retry buttons.
 - Delete messages and set them to expire in private and Nearby chats.
 - See reactions in the chat list, get notified, and remove your own reactions.
-- Type `/` in chat for command suggestions.
+- Type `/` in private chats for command suggestions.
 - Download attachments more reliably and save relay and media server settings offline.
 - Find Media faster in conversation profiles.
 
